@@ -622,3 +622,45 @@ def test_successful_tool_calls(
 ) -> None:
     result = _bare_result(tool_calls_made=tool_calls_made, failed_tool_calls=failed_tool_calls)
     assert result.successful_tool_calls == expected
+
+
+class TestToDictTraceabilityGaps:
+    """Slice 195 D12 (#139): JSON carries what the parser recorded."""
+
+    def _result(self) -> ReviewResult:
+        return ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Line past end of file",
+                    description="",
+                    location="src/foo.py:9999",
+                    location_verified=False,
+                ),
+                ReviewFinding(severity=Severity.NOTE, title="No location", description=""),
+            ],
+            raw_output="raw",
+            template_name="code",
+            input_files={},
+        )
+
+    def test_structured_findings_carry_location_verified(self) -> None:
+        d = self._result().to_dict()
+        verified = [f["location_verified"] for f in d["structured_findings"]]  # type: ignore[index]
+        assert verified == [False, None]
+
+    def test_finding_scan_is_an_object_or_null(self) -> None:
+        from squadron.review.models import FindingScanCounts
+
+        result = self._result()
+        assert result.to_dict()["finding_scan"] is None
+
+        result.finding_scan = FindingScanCounts(total=5, in_fences=3, in_section=2, surviving=2)
+        assert result.to_dict()["finding_scan"] == {
+            "total": 5,
+            "in_fences": 3,
+            "in_section": 2,
+            "surviving": 2,
+        }
+        json.dumps(result.to_dict())

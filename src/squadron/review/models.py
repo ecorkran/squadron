@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
@@ -63,6 +63,8 @@ class StructuredFinding:
     category: str
     summary: str
     location: str | None = None
+    # Carried from ReviewFinding so JSON consumers see it (slice 195 D12, #139).
+    location_verified: bool | None = None
 
 
 @dataclass
@@ -188,8 +190,8 @@ class ReviewResult:
     recovery_turn_used: bool = False
     # Parse-scan facts (slice 917 Part 3). None means "not produced by the
     # parser" — a hand-built result — the same convention provenance uses.
-    # These feed the artifact's run digest (Part 6) and nothing else: no gate
-    # reads them, and they are absent from to_dict() and from frontmatter.
+    # These feed the artifact's run digest (Part 6); no gate reads them, and they
+    # are absent from frontmatter. finding_scan is also in to_dict() (slice 195 D12).
     summary_section_located: bool | None = None
     findings_section_located: bool | None = None
     finding_scan: FindingScanCounts | None = None
@@ -278,6 +280,7 @@ class ReviewResult:
                     "category": sf.category,
                     "summary": sf.summary,
                     "location": sf.location,
+                    "location_verified": sf.location_verified,
                 }
                 for sf in self.structured_findings
             ],
@@ -320,6 +323,8 @@ class ReviewResult:
             # Slice 195 D12: always present, null on the CLI.
             "run_id": self.run_id,
             "squadron_version": __version__,
+            # Slice 195 D12: the parse-scan counts, null for a hand-built result.
+            "finding_scan": asdict(self.finding_scan) if self.finding_scan else None,
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.
@@ -339,6 +344,7 @@ class ReviewResult:
                     category=f.category or "uncategorized",
                     summary=f.title,
                     location=f.location or f.file_ref,
+                    location_verified=f.location_verified,
                 )
             )
         return result
