@@ -1,0 +1,215 @@
+---
+docType: slice-design
+slice: serialize-concurrent-git-worktree-add-on-one-checkout
+project: squadron
+parent: user/architecture/900-slices.maintenance-and-refactoring.md
+dependencies: []
+interfaces: []
+dateCreated: 20260927
+dateUpdated: 20260927
+status: not_started
+---
+
+# Slice Design: Serialize Concurrent `git worktree add` on One Checkout
+
+## Overview
+
+Fixes [issue #133](https://github.com/ecorkran/squadron/issues/133). The v0.13.3 tag run failed `tests/load/test_worktree_concurrency.py::test_concurrent_worktree_creation_succeeds_with_non_colliding_paths` with:
+
+```
+fatal: failed to read .git/worktrees/github.com-acme-widgets-2-run2/commondir: Success
+```
+
+That is git reading a sibling worktree's admin directory (`.git/worktrees/<name>/`) while another git process is halfway through writing or deleting it. Git does not serialize its own worktree metadata across processes. The test is right. `ScratchWorktree` runs three kinds of git metadata mutation against a shared checkout with nothing around them, and two concurrent `sq review pr` runs can hit the same race in real use:
+
+- `git worktree add` in `__enter__` ([worktree.py:333](../../../src/squadron/codehost/worktree.py#L333))
+- `git worktree remove --force` and `git worktree prune` in `sweep_orphans` ([:253](../../../src/squadron/codehost/worktree.py#L253), [:266](../../../src/squadron/codehost/worktree.py#L266))
+- `git worktree remove --force` in `_remove`, run from `__exit__` ([:400](../../../src/squadron/codehost/worktree.py#L400))
+
+This slice puts an exclusive cross-process lock around each of those calls, and only those calls. The lock waits with a deadline, and a missed deadline is a loud, typed failure.
+
+## Value
+
+- `sq review pr` runs started in parallel against one repository (a batch, two terminals, a CI matrix) stop failing at random during worktree setup.
+- The load test goes back to being a real signal. Nobody learns to ignore it, and nobody hides it behind a retry that would also hide the production bug.
+- The race is shown to be gone, not just rarer. A deterministic test proves the calls never overlap, and the real-git load test runs enough rounds that the old failure rate would reliably trip it.
+
+## Technical Scope
+
+**Included**
+- One lock helper in `src/squadron/codehost/worktree.py`: an exclusive `fcntl.flock` on a lock file under the worktree root, polled against a deadline.
+- The lock wraps exactly four git calls: `worktree add`, the sweep's `worktree remove`, the sweep's `worktree prune`, and `_remove`'s `worktree remove`.
+- The lock timeout is observable. In `__enter__` it raises `WorktreeCreationError`. In the never-raise paths (sweep, exit removal) it logs a WARNING and skips that git call.
+- `review_pr.py`: render a `WorktreeError` from worktree setup as an error panel, not a traceback (D4).
+- Tests: deterministic no-overlap test, timeout tests for all three call sites, holder-death release test, and the load test repeated in one run.
+
+**Excluded**
+- The submodule fetch (`git submodule update --init --recursive`). It is the slow step, it works inside the new worktree's own directory, and it must stay concurrent. It runs outside the lock.
+- Non-squadron git processes. An operator's own `git worktree add` on the same repo is not serialized. The lock coordinates squadron with squadron, which is where the concurrency comes from.
+- Folding the claim/lock.json liveness scheme into the flock. Claims still cover the window between `add` and the `lock.json` write, which the per-call lock does not span. Merging the two is a separate refactor with no bug behind it.
+- Native Windows locking (see D5).
+- #88 (metrology suite runtime).
+
+## Dependencies
+
+### Prerequisites
+None. Everything this slice touches shipped with slice 382.
+
+### Interfaces Required
+- `ProcessRunner.run(argv, cwd=, timeout=)` and `ProcessTimedOutError`: unchanged.
+- `GIT_QUERY_TIMEOUT_SECONDS` from `squadron.codehost.refs`: bounds every git call the lock wraps, so it also bounds how long any one holder can keep the lock.
+
+## Architecture
+
+### Component Structure
+
+All changes live in `src/squadron/codehost/worktree.py`. It stays one module, because the lock exists only to protect this module's own git calls.
+
+| Element | Kind | Change |
+|---|---|---|
+| `_METADATA_LOCK_FILENAME` | constant | new: name of the lock file under the worktree root |
+| `METADATA_LOCK_TIMEOUT_SECONDS` | constant | new: how long a caller waits for the lock |
+| `_METADATA_LOCK_POLL_SECONDS` | constant | new: poll interval between non-blocking attempts |
+| `WorktreeLockError(WorktreeError)` | exception | new: lock not acquired (deadline passed, or `fcntl` unavailable); carries `lock_path` and `detail` |
+| `_git_metadata_lock(root)` | context manager | new: acquire, yield, release |
+| `sweep_orphans` | function | wraps each `remove` and the `prune` in the lock; catches `WorktreeLockError` |
+| `ScratchWorktree.__enter__` | method | wraps `add` in the lock; converts a timeout to `WorktreeCreationError` |
+| `ScratchWorktree._remove` | method | wraps `remove` in the lock; catches `WorktreeLockError` |
+
+### Data Flow
+
+```
+__enter__
+  sweep_orphans(...)                 per orphan: [lock] git worktree remove [unlock], rmtree
+                                     then:       [lock] git worktree prune [unlock]
+  write claim
+  [lock] git worktree add [unlock]   timeout -> WorktreeCreationError (claim dropped by existing handler)
+  write lock.json, drop claim
+  git submodule update ...           NOT locked: stays concurrent
+__exit__ -> _remove
+  [lock] git worktree remove [unlock], then rmtree fallback
+```
+
+Each hold covers one git subprocess, so one holder keeps the lock for at most `GIT_QUERY_TIMEOUT_SECONDS`. A normal hold takes milliseconds. The sweep takes and releases the lock once per git call and never holds it across the whole loop, so a backlog of orphans can't starve other runs.
+
+### State Management
+
+The only new state is one empty lock file, `<worktree root>/.git-metadata.flock`. It is created on first use and never deleted. Deleting a lock file that other processes may have open would let two holders lock two different inodes. The kernel owns the lock itself, so a holder that crashes or is killed releases it automatically. Unlike the claim and `lock.json` scheme, there is no stale-lock state to detect or sweep. `sweep_orphans` already skips non-directories, so it never touches the lock file.
+
+## Technical Decisions
+
+**D1: `fcntl.flock`, with a fresh open file per acquisition.** `flock` locks are owned by the open file description, not by the process. So two threads in one process that each `open()` the file conflict just like two processes do. That matters twice: the load test's contenders are threads in one process, and a future in-process batch would be too. Rejected alternatives:
+- `fcntl.lockf` / `fcntl.fcntl(F_SETLK)`: POSIX record locks are per process. Threads would never block each other, and the load test would keep failing.
+- A `threading.Lock`: covers threads only, not two `sq` processes.
+- The `filelock` package: a new dependency for roughly 15 lines of stdlib code.
+- `O_CREAT|O_EXCL` lock files: a crashed holder leaves the file behind, which brings back the stale-lock detection problem `flock` avoids.
+
+Because of the per-open-file rule, the helper must never cache or share its file descriptor. Each `with _git_metadata_lock(root):` opens the file, locks it, and closes it.
+
+**D2: One lock per worktree root, not per repository.** The race is on a repository's shared git directory (`git rev-parse --git-common-dir`). Linked worktrees of one repo share it: the main checkout and a `cf` worktree running `sq review pr` at the same time would both write the same `.git/worktrees/`. So a lock keyed on the checkout path would be wrong. A lock keyed on the common dir would be exact, but it costs a git subprocess per run plus path resolution. One lock file under the worktree root (`~/.config/squadron/worktrees/`) covers every repo, which serializes unrelated repos too. With holds in the milliseconds, that costs nothing measurable. It needs no git call and nothing to resolve, and it matches where the scratch worktrees already live. Tests that pass `root=` get their own lock under their own root, which is the isolation they need.
+
+**D3: Wait with a deadline, by polling.** `flock` has no timeout, so the helper retries `LOCK_EX | LOCK_NB` every `_METADATA_LOCK_POLL_SECONDS` (0.05) until `METADATA_LOCK_TIMEOUT_SECONDS` runs out, then raises `WorktreeLockError`. The poll loop reads `time.monotonic()`.
+
+`METADATA_LOCK_TIMEOUT_SECONDS = 2 * GIT_QUERY_TIMEOUT_SECONDS` (60s). That is a derived constant, defined once. One holder can keep the lock for at most one `GIT_QUERY_TIMEOUT_SECONDS`, and killed holders release instantly. So a waiter only runs out of time behind a live holder that is stopped (`SIGSTOP`, a suspended laptop), or behind a queue of holders each hitting their own git timeout. Both are real faults, and a loud failure is the right result for either. Normal queues of milliseconds per holder never come close.
+
+**D4: How each call site reports a timeout.**
+- `__enter__`: the `add` is inside the existing `try` whose `except BaseException` drops the claim. A `WorktreeLockError` is logged at ERROR and re-raised as `WorktreeCreationError(path, detail, fix_hint=...)` chained `from` it. The detail carries the lock error's own detail (the seconds waited, or the missing platform support). The fix hint says another squadron process is holding the worktree lock and gives the path. **Found:** `review_pr.py` does not catch anything from the `with ScratchWorktree(...)` block ([review_pr.py:426](../../../src/squadron/cli/commands/review_pr.py#L426)). Every `WorktreeError` from `__enter__` (an `add` failure, a submodule failure, and now a lock timeout) escapes as a raw traceback. This slice wraps that block's entry in `except WorktreeError` → `render_code_host_error(exc)` → `typer.Exit(1)`, the same pattern as the fetch handler at [:355](../../../src/squadron/cli/commands/review_pr.py#L355). Only entry is wrapped, not the review run inside the block.
+- `sweep_orphans`: already documented as never raising. On a timeout it logs a WARNING and skips the entry. It must not fall through to `rmtree`, which would delete a directory git still registers. The next run retries. A timeout on the final `prune` is logged at WARNING, the same as the existing prune `ProcessTimedOutError` branch.
+- `_remove`: already never raises (the documented `__exit__` exception). On a timeout it logs a WARNING and falls through to the existing `rmtree` fallback. That matches how it handles a git remove timeout today: the admin directory is left for a later `prune`.
+
+Each `except WorktreeLockError` gets a comment naming the never-raise contract it serves, per the exception-handling rule.
+
+**D5: POSIX only, imported lazily.** `docs/QUICKSTART.md` supports installing `sq` on Windows, and `review_pr.py` imports `worktree` at module level. A top-level `import fcntl` would therefore break the whole CLI on Windows. `fcntl` is imported inside `_git_metadata_lock`. The limit adds nothing new: `ScratchWorktree.__enter__` already shells out to `ps -o lstart=` before any git call (`_current_process_start_time`), so the tools path of `sq review pr` already fails on Windows. The limit is documented in the module docstring. If `fcntl` is missing, the helper raises `WorktreeLockError` with a detail naming the platform, and every call site handles it exactly like a timeout (D4). Anything that reaches it on Windows fails loudly, not silently unlocked.
+
+**D6: The test proves "gone", not "rare".** A deterministic test proves the property the fix provides: no two wrapped git calls ever overlap. It uses real threads and a `FakeProcessRunner`-style runner that records how many `git worktree` calls are in flight and sleeps briefly inside each one. It asserts the maximum is 1. This fails on the current code every time, independent of git's timing.
+
+The real-git load test stays as the acceptance test. It runs repeated rounds of 8 concurrent creations in one test invocation. The round count comes from a measured pre-fix failure rate (see Implementation Notes), not a guess.
+
+### Patterns and Conventions
+- Named constants for the lock filename, timeout, and poll interval, each defined once in `worktree.py`. Tests patch `worktree.METADATA_LOCK_TIMEOUT_SECONDS` down the same way the load test already patches `GIT_FETCH_TIMEOUT_SECONDS`.
+- The error hierarchy stays under `WorktreeError` → `CodeHostError`, so `fix_hint` renders through the existing CLI path.
+
+## Integration Points
+
+### Provides to Other Slices
+Nothing new is exported. `_git_metadata_lock` stays private to `worktree.py`. Any future code that mutates the scratch worktrees' git metadata should take the same lock.
+
+### Consumes from Other Slices
+`sq review pr` ([review_pr.py:426](../../../src/squadron/cli/commands/review_pr.py#L426)) is the only production caller of `ScratchWorktree`. It gets the `WorktreeError` rendering fix from D4.
+
+## Success Criteria
+
+### Functional Requirements
+- No two squadron-issued `git worktree add|remove|prune` calls whose worktree root is the same ever run at the same time, across threads or processes.
+- `sq review pr` reports a worktree setup failure as an error panel with its fix hint and exit code 1.
+- `git submodule update` runs outside the lock. Two runs' submodule fetches still overlap.
+- A caller that can't get the lock within `METADATA_LOCK_TIMEOUT_SECONDS`:
+  - in `__enter__`: raises `WorktreeCreationError` naming the lock file, and leaves no claim file behind;
+  - in `sweep_orphans`: logs one WARNING, leaves the entry on disk, and does not raise;
+  - in `_remove`: logs one WARNING, falls through to `rmtree`, and does not raise.
+- A holder process killed while holding the lock does not block later callers.
+
+### Technical Requirements
+- `fcntl` is imported only inside the lock helper. `import squadron.codehost.worktree` has no POSIX-only top-level import.
+- ruff format, ruff check, and pyright are clean. `worktree.py` stays within the file-size guideline, or the lock helper moves to `codehost/metadata_lock.py` if it doesn't.
+- Tests:
+  - the deterministic no-overlap test (D6);
+  - one timeout test per call site, with the lock held by the test and the timeout patched down;
+  - a holder-death test (a `python -c` subprocess takes the lock, gets killed, then the test acquires within the poll interval plus a margin);
+  - the repeated-rounds load test.
+
+### Integration Requirements
+- `sq review pr` behaves identically for a single successful run. A worktree setup failure renders as a code-host error panel with exit 1, not a traceback. A CLI test covers this with a `ScratchWorktree` whose entry raises `WorktreeCreationError`.
+- The existing `tests/codehost/test_worktree.py` suite passes unchanged, apart from the new tests.
+
+### Verification Walkthrough
+
+1. **Reproduce the race before the fix.** On the current `main`, run the load test repeatedly and record the failure count:
+   ```bash
+   for i in $(seq 1 50); do
+     uv run pytest -q tests/load/test_worktree_concurrency.py \
+       -k concurrent_worktree_creation 2>&1 | tail -1
+   done | sort | uniq -c
+   ```
+   Expect some `1 failed` lines with the `commondir` fatal. If none show up locally, raise the test's `concurrency` in a scratch copy until they do, and record the setting that reproduces. That number sets the round count in step 4.
+
+2. **Deterministic proof.** After the fix:
+   ```bash
+   uv run pytest -q tests/codehost/test_worktree.py -k "overlap or metadata_lock"
+   ```
+   Expected: all pass. Temporarily removing the `with _git_metadata_lock(...)` around `add` makes the no-overlap test fail with a max-in-flight above 1. Revert after checking.
+
+3. **Loud timeout.** Hold the lock from a second shell, then start a PR review with the timeout left at its default. It fails after about 60s with `WorktreeCreationError` naming `~/.config/squadron/worktrees/.git-metadata.flock`:
+   ```bash
+   python - <<'EOF' &
+   import fcntl, time, pathlib
+   p = pathlib.Path.home() / ".config/squadron/worktrees/.git-metadata.flock"
+   p.parent.mkdir(parents=True, exist_ok=True)
+   f = open(p, "a"); fcntl.flock(f, fcntl.LOCK_EX); time.sleep(120)
+   EOF
+   sq review pr <number> --model opus
+   ```
+   Expected: an error panel for the worktree creation failure, with a fix hint pointing at the lock file. The command doesn't hang past the deadline. Kill the holder (`kill %1`), rerun, and the review proceeds.
+
+4. **Acceptance.** Repeat step 1's loop against the fixed code, plus one full run of the load file:
+   ```bash
+   uv run pytest -q tests/load/test_worktree_concurrency.py
+   ```
+   Expected: zero failures across the loop, and the in-file repeated-rounds test passes.
+
+5. **Real parallel use.** In one repo, start two `sq review pr` runs against different PRs at the same moment (two terminals). Both reach the review phase, and neither reports a `commondir` error.
+
+## Implementation Notes
+
+### Development Approach
+1. Measure the pre-fix failure rate (walkthrough step 1) and write it in the DEVLOG. This is the baseline that shows the fix is doing something.
+2. Write the deterministic no-overlap test and watch it fail on current code.
+3. Add the constants, `WorktreeLockError`, and `_git_metadata_lock`, with the lazy `fcntl` import.
+4. Wrap the four git calls (D4) and add the per-site timeout tests and the holder-death test. Add the `except WorktreeError` rendering in `review_pr.py` and its CLI test.
+5. Turn the load test's single round into `ROUNDS` rounds of 8 inside the one test function. Pick `ROUNDS` so the measured pre-fix rate would fail the test with high probability. For example, if one round failed 1 run in 20, then 60 rounds fail pre-fix about 95% of the time. Keep the test's added runtime to a few seconds, since `tests/load/` runs on every invocation. If the pre-fix rate is too low to reach that within a few seconds, raise per-round concurrency instead of rounds. Record the chosen numbers and the reasoning in the test's docstring.
+6. Update the module docstring to describe the metadata lock and the POSIX limit.
+
+### Special Considerations
+- Lock ordering: a thread never holds the metadata lock while waiting on a claim or `lock.json`, and never takes it twice. Every hold is one git call with nothing nested, so there is no deadlock path.
+- The load test's `elapsed` budget (`GIT_QUERY_TIMEOUT_SECONDS * BUDGET_TOLERANCE`) still holds. Serialization adds milliseconds per creation, not seconds.
+- Effort: 2/5, unchanged from the plan.

@@ -460,6 +460,8 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 **Fix:** hold an exclusive cross-process lock for the `git worktree add` call and the orphan sweep's git mutations on the same checkout, scoped to the git metadata step only (not the submodule fetch, which is the slow part and must stay concurrent). Design picks the lock (e.g. `fcntl.flock` on a file under the worktree root, with a Windows equivalent or a documented limit) and its timeout, and the timeout must be observable as a `WorktreeCreationError`, not a hang. The existing load test is the acceptance test; repeat it enough times in one run to show the race is gone, not just rare.
 **Not in scope:** #88 (metrology suite runtime). Dependencies: none. Risk: Low-Medium (adds a lock to the PR-review startup path; a stuck holder must time out loudly). Effort: 2/5
 
+**Slice design:** `user/slices/929-slice.serialize-concurrent-git-worktree-add-on-one-checkout.md` (20260927). The fix is one `fcntl.flock` per worktree root, not per repo, since linked worktrees share `.git/worktrees`. It takes a fresh open file per acquisition, so threads also serialize. It wraps `add`, both `remove` paths, and `prune`, each on its own. The deadline is `2 × GIT_QUERY_TIMEOUT_SECONDS`. Also fixes `review_pr` letting `WorktreeError` escape as a traceback.
+
 ---
 
 ## Future Slices

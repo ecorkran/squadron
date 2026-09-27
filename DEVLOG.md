@@ -12,6 +12,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260927
 
+### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Design Complete
+
+The design is at `user/slices/929-slice.serialize-concurrent-git-worktree-add-on-one-checkout.md`, and the validator passes. The slice plan entry now points to it.
+
+- **Lock:**
+  - `fcntl.flock` on `<worktree root>/.git-metadata.flock`, opening a fresh file per acquisition so threads serialize too. `lockf` would not serialize threads (D1).
+  - One lock per root, not per repo: linked worktrees share `.git/worktrees` (D2).
+  - Polled against a deadline of `2 × GIT_QUERY_TIMEOUT_SECONDS` (D3).
+- **Scope:** the lock wraps `add`, both `remove` paths, and `prune`, each on its own. The submodule fetch stays concurrent. A timeout raises `WorktreeCreationError` on entry and logs a WARNING in the sweep and exit paths (D4). `fcntl` is imported lazily because `sq` installs on Windows (D5).
+- **Found:** `review_pr.py` lets any `WorktreeError` from `ScratchWorktree` entry escape as a traceback. It gets fixed in this slice.
+- **Proof:**
+  - a deterministic no-overlap test;
+  - the load test repeated in rounds, with the round count set from a measured pre-fix failure rate that goes in the DEVLOG at implementation (D6).
+
 ### Slice 928: Codex Parity for Skill Packs and Provider Access — Design Complete
 
 The design is at `user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md`, and the validator passes. The slice plan entry now points to it.
