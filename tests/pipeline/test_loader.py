@@ -7,7 +7,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from squadron.pipeline.loader import discover_pipelines, load_pipeline
+from squadron.data import data_dir
+from squadron.pipeline.loader import discover_pipelines, load_pipeline, pipeline_identity
 from squadron.pipeline.models import PipelineDefinition
 
 
@@ -101,13 +102,9 @@ class TestDiscoverPipelines:
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
-        names = [p.name for p in pipelines]
-        assert "slice" in names
-        assert "review" in names
-        assert "implement" in names
-        assert "slices-plan" in names
-        assert "tasks-plan" in names
-        assert len(pipelines) >= 4
+        # Every shipped file is listed under its file name; no hand-kept list (#147).
+        shipped = {pipeline_identity(p) for p in (data_dir() / "pipelines").glob("*.yaml")}
+        assert {p.name for p in pipelines} == shipped
 
     def test_builtin_source_label(self) -> None:
         pipelines = discover_pipelines(
@@ -178,11 +175,10 @@ class TestLoadPipelineCaseNormalisation:
 
     def test_direct_file_path_not_normalised(self, tmp_path: Path) -> None:
         """load_pipeline("/path/to/My-Pipeline.yaml") loads the exact path."""
-        # Write a file with a mixed-case filename; it should be loaded as-is
+        # The path is used as given; the identity is its lowercased stem (#147).
         mixed_path = _write_pipeline_yaml(tmp_path, "My-Pipeline")
         defn = load_pipeline(str(mixed_path))
-        # The name inside the YAML is "My-Pipeline" (as written by the helper)
-        assert defn.name == "My-Pipeline"
+        assert defn.name == "my-pipeline"
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +218,41 @@ class TestDiscoverPipelinesNormalisation:
         names = [p.name for p in pipelines]
         assert "mypipeline" in names
         assert "MyPipeline" not in names
+
+
+class TestIdentityIsFileName:
+    """A name: field that disagrees with the file name is ignored (#147)."""
+
+    def _write(self, directory: Path, stem: str, name_field: str) -> Path:
+        import yaml
+
+        directory.mkdir(parents=True, exist_ok=True)
+        path = directory / f"{stem}.yaml"
+        data = {"name": name_field, "steps": [{"design": {"phase": 4}}]}
+        path.write_text(yaml.dump(data))
+        return path
+
+    def test_load_by_name_uses_file_name(self, tmp_path: Path) -> None:
+        self._write(tmp_path, "p4", "slice-design")
+        defn = load_pipeline("p4", project_dir=tmp_path, user_dir=Path("/nonexistent"))
+        assert defn.name == "p4"
+
+    def test_mixed_case_file_found_by_lowercase_name(self, tmp_path: Path) -> None:
+        # P4.yaml ships in the package; on a case-sensitive filesystem a lookup that
+        # builds "p4.yaml" misses it. Only CI on Linux can fail this.
+        self._write(tmp_path, "P4", "anything")
+        defn = load_pipeline("P4", project_dir=tmp_path, user_dir=Path("/nonexistent"))
+        assert defn.name == "p4"
+
+    def test_discover_lists_file_name(self, tmp_path: Path) -> None:
+        self._write(tmp_path, "p4", "slice-design")
+        self._write(tmp_path, "test-p4", "p4")
+        names = [
+            p.name
+            for p in discover_pipelines(project_dir=tmp_path, user_dir=Path("/nonexistent"))
+            if p.source == "project"
+        ]
+        assert sorted(names) == ["p4", "test-p4"]
 
 
 # ---------------------------------------------------------------------------

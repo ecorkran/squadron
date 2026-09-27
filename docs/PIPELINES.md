@@ -30,11 +30,11 @@ sq run example 152 --dry-run          # show the step plan without executing any
 
 ## YAML Grammar Reference
 
-Each pipeline is a YAML file with a fixed top-level structure:
+Each pipeline is a YAML file with a fixed top-level structure. The pipeline's name is its file name: `sq run my-loop` runs `my-loop.yaml` (case-insensitive), and that name is what `sq run --list`, commit messages, DEVLOG entries, batch reports and summary files use.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | yes | Pipeline name (case-insensitive, used in `sq run <name>`) |
+| `name` | string | no | A label for people reading the file. Ignored by squadron; the file name is the pipeline's name |
 | `description` | string | yes | One-line description shown in `sq run --list` |
 | `params` | map | no | Parameter declarations (`name: required` or `name: default-value`) |
 | `model` | string | no | Pipeline-level default model alias |

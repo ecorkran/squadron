@@ -44,7 +44,10 @@ class PipelineSchema(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str
+    # A label for humans reading the file, and nothing else. A pipeline's identity is its
+    # file name (#147): ``sq run X`` loads ``X.yaml``, and a second name that could
+    # disagree with it is how --list and summary keys pointed at the wrong pipelines.
+    name: str | None = None
     description: str = ""
     params: dict[str, str] = {}
     model: str | None = None
@@ -120,21 +123,25 @@ class PipelineSchema(BaseModel):
             raise ValueError(msg)
         return self
 
-    def to_definition(self) -> PipelineDefinition:
-        """Convert validated schema to runtime PipelineDefinition."""
+    def to_definition(self, name: str) -> PipelineDefinition:
+        """Convert validated schema to runtime PipelineDefinition.
+
+        *name* is the pipeline's identity, supplied by the loader from the file name.
+        The document's own ``name:`` field is not consulted (#147).
+        """
         steps: list[StepConfig] = []
         for index, step in enumerate(self.steps):
-            name = step.name if step.name else f"{step.step_type}-{index}"
+            step_name = step.name if step.name else f"{step.step_type}-{index}"
             steps.append(
                 StepConfig(
                     step_type=step.step_type,
-                    name=name,
+                    name=step_name,
                     config=dict(step.config),
                 )
             )
 
         return PipelineDefinition(
-            name=self.name,
+            name=name,
             description=self.description,
             params=dict(self.params),
             steps=steps,

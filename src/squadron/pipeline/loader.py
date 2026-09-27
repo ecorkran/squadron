@@ -39,6 +39,25 @@ class PipelineInfo:
     path: Path
 
 
+def pipeline_identity(path: Path) -> str:
+    """A pipeline's name: its file stem, lowercased as lookup and run state do (#147)."""
+    return path.stem.lower()
+
+
+def _find_by_identity(directory: Path, identity: str) -> Path | None:
+    """The pipeline file in *directory* whose identity is *identity*, if any.
+
+    Matched on ``pipeline_identity`` rather than by building ``{identity}.yaml``, so
+    ``P4.yaml`` is found as ``p4`` on a case-sensitive filesystem too.
+    """
+    if not directory.is_dir():
+        return None
+    for path in sorted(directory.glob("*.yaml")):
+        if path.is_file() and pipeline_identity(path) == identity:
+            return path
+    return None
+
+
 def _load_yaml(path: Path) -> PipelineDefinition:
     """Read a YAML file, validate via PipelineSchema, return PipelineDefinition.
 
@@ -49,7 +68,7 @@ def _load_yaml(path: Path) -> PipelineDefinition:
         raw = yaml.safe_load(f)
 
     schema = PipelineSchema.model_validate(raw)
-    return schema.to_definition()
+    return schema.to_definition(pipeline_identity(path))
 
 
 def load_pipeline(
@@ -76,8 +95,8 @@ def load_pipeline(
     # Search directories: project (highest priority) → user → built-in
     search_dirs = _search_dirs(project_dir=project_dir, user_dir=user_dir)
     for search_dir in search_dirs:
-        yaml_path = search_dir / f"{name_or_path}.yaml"
-        if yaml_path.is_file():
+        yaml_path = _find_by_identity(search_dir, name_or_path)
+        if yaml_path is not None:
             return _load_yaml(yaml_path)
 
     raise FileNotFoundError(
@@ -135,7 +154,7 @@ def discover_pipelines(
                 with open(yaml_path, encoding="utf-8") as f:
                     raw = yaml.safe_load(f)
                 schema = PipelineSchema.model_validate(raw)
-                pipeline_name = schema.name.lower()
+                pipeline_name = pipeline_identity(yaml_path)
                 found[pipeline_name] = PipelineInfo(
                     name=pipeline_name,
                     description=schema.description,

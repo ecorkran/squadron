@@ -6,18 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from squadron.pipeline.loader import load_pipeline, validate_pipeline
+from squadron.data import data_dir
+from squadron.pipeline.loader import load_pipeline, pipeline_identity, validate_pipeline
 from squadron.pipeline.models import PipelineDefinition
 
-_BUILTIN_NAMES = [
-    "slice",
-    "review",
-    "implement",
-    "slices-plan",
-    "tasks-plan",
-    "tasks",
-    "judge-cycle",
-]
+# Every shipped pipeline, discovered from the directory rather than listed by hand, so a
+# rename needs no test edit and a new pipeline can't skip load/validate coverage (#147).
+_BUILTIN_NAMES = sorted(pipeline_identity(p) for p in (data_dir() / "pipelines").glob("*.yaml"))
 
 _NONEXISTENT = Path("/nonexistent")
 

@@ -84,10 +84,10 @@ class TestStepShorthandExpansion:
 class TestPipelineSchemaValidation:
     """Invalid structures raise pydantic.ValidationError."""
 
-    def test_missing_name_raises(self) -> None:
+    def test_name_is_optional(self) -> None:
+        # name: is a human label only; the file name is the identity (#147).
         raw = {"steps": [{"design": {"phase": 4}}]}
-        with pytest.raises(ValidationError, match="name"):
-            PipelineSchema.model_validate(raw)
+        assert PipelineSchema.model_validate(raw).name is None
 
     def test_empty_steps_raises(self) -> None:
         raw = {"name": "empty", "steps": []}
@@ -113,7 +113,7 @@ class TestPipelineSchemaValidation:
 
 
 class TestToDefinition:
-    """PipelineSchema.to_definition() produces correct PipelineDefinition."""
+    """PipelineSchema.to_definition("test") produces correct PipelineDefinition."""
 
     def test_returns_pipeline_definition(self) -> None:
         raw = {
@@ -127,10 +127,11 @@ class TestToDefinition:
             ],
         }
         schema = PipelineSchema.model_validate(raw)
-        defn = schema.to_definition()
+        defn = schema.to_definition("from-file-name")
 
         assert isinstance(defn, PipelineDefinition)
-        assert defn.name == "my-pipeline"
+        # The identity comes from the caller (the file name), never the name: field (#147).
+        assert defn.name == "from-file-name"
         assert defn.description == "desc"
         assert defn.model == "opus"
         assert defn.params == {"slice": "required"}
@@ -149,7 +150,7 @@ class TestToDefinition:
                 {"compact": None},
             ],
         }
-        defn = PipelineSchema.model_validate(raw).to_definition()
+        defn = PipelineSchema.model_validate(raw).to_definition("test")
         assert defn.steps[0].name == "design-0"
         assert defn.steps[1].name == "tasks-1"
         assert defn.steps[2].name == "compact-2"
@@ -160,7 +161,7 @@ class TestToDefinition:
             "name": "test",
             "steps": [{"design": {"phase": 4, "name": "my-design"}}],
         }
-        defn = PipelineSchema.model_validate(raw).to_definition()
+        defn = PipelineSchema.model_validate(raw).to_definition("test")
         assert defn.steps[0].name == "my-design"
         # The name should not leak into config
         assert "name" not in defn.steps[0].config
@@ -176,15 +177,15 @@ class TestAuthPolicyField:
         return {"name": "test", "steps": [{"dispatch": {"model": "sonnet"}}], **extra}
 
     def test_auth_policy_strict_loads(self) -> None:
-        defn = PipelineSchema.model_validate(self._raw(auth_policy="strict")).to_definition()
+        defn = PipelineSchema.model_validate(self._raw(auth_policy="strict")).to_definition("test")
         assert defn.auth_policy == "strict"
 
     def test_auth_policy_lazy_loads(self) -> None:
-        defn = PipelineSchema.model_validate(self._raw(auth_policy="lazy")).to_definition()
+        defn = PipelineSchema.model_validate(self._raw(auth_policy="lazy")).to_definition("test")
         assert defn.auth_policy == "lazy"
 
     def test_auth_policy_absent_defaults_none(self) -> None:
-        defn = PipelineSchema.model_validate(self._raw()).to_definition()
+        defn = PipelineSchema.model_validate(self._raw()).to_definition("test")
         assert defn.auth_policy is None
 
     def test_auth_policy_invalid_raises(self) -> None:
