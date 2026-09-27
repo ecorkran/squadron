@@ -10,7 +10,7 @@ import pytest
 from squadron.core.models import AgentConfig, Message
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.actions.protocol import Action
-from squadron.pipeline.models import ActionContext
+from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
 from squadron.providers.base import ProfileName
 from squadron.providers.errors import ProviderError
@@ -653,3 +653,93 @@ async def test_sdk_profile_does_not_receive_cwd(action: DispatchAction) -> None:
         await action.execute(ctx)
 
     assert mock_registry.spawn.call_args[0][0].cwd is None
+
+
+# --- feedback: review (slice 195 D8) ---
+
+
+def _review_result(input_file: str | None) -> ActionResult:
+    return ActionResult(
+        success=True,
+        action_type="review",
+        outputs={"input_file": input_file} if input_file else {},
+        verdict="CONCERNS",
+        findings=[
+            {"severity": "concern", "summary": "Plan argument is ignored", "location": "sources.py:12"}
+        ],
+    )
+
+
+def _build_context_result(stdout: str) -> ActionResult:
+    return ActionResult(
+        success=True,
+        action_type="cf-op",
+        outputs={"operation": "build_context", "stdout": stdout},
+    )
+
+
+_DESIGN = "project-documents/user/slices/923-slice.isolation.md"
+
+
+class TestFeedbackReview:
+    def test_prompt_has_findings_and_reviewed_file(self, action: DispatchAction) -> None:
+        ctx = _make_context(
+            params={"feedback": "review"},
+            prior_outputs={"0-review-0": _review_result(_DESIGN)},
+        )
+
+        prompt = action._resolve_prompt(ctx)
+
+        assert "[concern] Plan argument is ignored (sources.py:12)" in prompt
+        assert f"Revise `{_DESIGN}` in place; do not create a new file." in prompt
+
+    def test_step_prompt_comes_first(self, action: DispatchAction) -> None:
+        ctx = _make_context(
+            params={"feedback": "review", "prompt": "Keep the API section."},
+            prior_outputs={"0-review-0": _review_result(_DESIGN)},
+        )
+
+        prompt = action._resolve_prompt(ctx)
+
+        assert prompt.startswith("Keep the API section.")
+        assert "Plan argument is ignored" in prompt
+
+    def test_build_context_output_is_not_used(self, action: DispatchAction) -> None:
+        ctx = _make_context(
+            params={"feedback": "review"},
+            prior_outputs={
+                "0-review-0": _review_result(_DESIGN),
+                "1-cf-op-2": _build_context_result("Create a slice design for 923."),
+            },
+        )
+
+        prompt = action._resolve_prompt(ctx)
+
+        assert "Create a slice design" not in prompt
+        assert "Plan argument is ignored" in prompt
+
+    @pytest.mark.asyncio
+    async def test_no_review_in_scope_fails(self, action: DispatchAction) -> None:
+        ctx = _make_context(
+            params={"feedback": "review"},
+            prior_outputs={"1-cf-op-2": _build_context_result("Create a slice design.")},
+        )
+
+        result = await action.execute(ctx)
+
+        assert result.success is False
+        assert result.error == "feedback: review but no prior review in scope"
+
+
+class TestDispatchStepFeedback:
+    def test_feedback_passes_through_and_validates(self) -> None:
+        from squadron.pipeline.models import StepConfig
+        from squadron.pipeline.steps.dispatch import DispatchStepType
+
+        step = DispatchStepType()
+        good = StepConfig(step_type="dispatch", name="revise", config={"feedback": "review"})
+        bad = StepConfig(step_type="dispatch", name="revise", config={"feedback": "judge"})
+
+        assert step.validate(good) == []
+        assert [e.field for e in step.validate(bad)] == ["feedback"]
+        assert step.expand(good) == [("dispatch", {"feedback": "review"})]

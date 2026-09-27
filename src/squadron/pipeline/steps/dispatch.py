@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from squadron.pipeline.actions.dispatch import DispatchFeedback
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 from squadron.pipeline.steps.utils import validate_allowed_tools
@@ -53,6 +54,17 @@ class DispatchStepType:
                 )
             )
 
+        feedback = cfg.get("feedback")
+        if feedback is not None and feedback not in DispatchFeedback.__members__.values():
+            valid = [f.value for f in DispatchFeedback]
+            errors.append(
+                ValidationError(
+                    field="feedback",
+                    message=f"'feedback' must be one of {valid}, got: {feedback!r}",
+                    action_type=self.step_type,
+                )
+            )
+
         errors.extend(validate_allowed_tools(config, self.step_type))
 
         return errors
@@ -71,6 +83,8 @@ class DispatchStepType:
             action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
         if "allowed_tools" in cfg:
             action_config["allowed_tools"] = cfg["allowed_tools"]
+        if "feedback" in cfg:
+            action_config["feedback"] = cfg["feedback"]
 
         return [("dispatch", action_config)]
 

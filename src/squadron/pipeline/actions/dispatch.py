@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -180,6 +181,16 @@ async def one_shot_dispatch_with_telemetry(
     return "".join(response_parts), telemetry
 
 
+class DispatchFeedback(StrEnum):
+    """What a dispatch revises against (slice 195 D8)."""
+
+    REVIEW = "review"
+
+
+class DispatchFeedbackError(ValueError):
+    """A ``feedback:`` dispatch has nothing in scope to revise against."""
+
+
 class DispatchAction:
     """Pipeline action that dispatches a prompt to a language model.
 
@@ -206,6 +217,9 @@ class DispatchAction:
         """
         try:
             return await self._dispatch(context)
+        except DispatchFeedbackError as exc:
+            _logger.warning("dispatch: step %s: %s", context.step_name, exc)
+            return ActionResult(success=False, action_type=self.action_type, outputs={}, error=str(exc))
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
             return ActionResult(
                 success=False,
@@ -335,7 +349,9 @@ class DispatchAction:
         the resolved prompt so the model treats it as a directive.
         """
         explicit = context.params.get("prompt")
-        if explicit is not None:
+        if context.params.get("feedback") is not None:
+            prompt = self._resolve_feedback_prompt(context, explicit)
+        elif explicit is not None:
             prompt = str(explicit)
         else:
             # Search prior outputs for a build_context cf-op result (reverse
@@ -367,40 +383,70 @@ class DispatchAction:
         return self._apply_pre_emption_fragment(context, self._apply_override(context, prompt))
 
     @staticmethod
-    def _resolve_prompt_from_prior_review(context: ActionContext) -> str | None:
-        """Build a fix prompt from the most recent prior ``review`` action.
-
-        Returns None if no prior review action result is present, or if it
-        has no findings (e.g. a clean PASS with nothing to act on — in that
-        case an initial improvement pass reads better than an empty list).
-        """
+    def _latest_review(context: ActionContext) -> ActionResult | None:
+        """The most recent ``review`` action result in scope, if any."""
         for key in reversed(list(context.prior_outputs)):
             result = context.prior_outputs[key]
-            if result.action_type != ActionType.REVIEW:
-                continue
-
-            findings: list[dict[str, object]] = [
-                cast(dict[str, object], f) for f in result.findings if isinstance(f, dict)
-            ]
-            if not findings:
-                return (
-                    "The prior review found no actionable findings. Perform "
-                    "an initial improvement pass on the artifact."
-                )
-
-            lines = [
-                f"Address the following findings from the prior review (verdict: {result.verdict}):",
-                "",
-            ]
-            for finding in findings:
-                severity = finding.get("severity", "NOTE")
-                summary = finding.get("summary", "")
-                location = finding.get("location")
-                loc_suffix = f" ({location})" if location else ""
-                lines.append(f"- [{severity}] {summary}{loc_suffix}")
-            return "\n".join(lines)
-
+            if result.action_type == ActionType.REVIEW:
+                return result
         return None
+
+    @staticmethod
+    def _findings_block(review: ActionResult) -> str:
+        """A fix prompt listing *review*'s findings.
+
+        A review with no findings (e.g. a clean PASS with nothing to act on)
+        yields an initial-improvement instruction rather than an empty list.
+        """
+        findings: list[dict[str, object]] = [
+            cast(dict[str, object], f) for f in review.findings if isinstance(f, dict)
+        ]
+        if not findings:
+            return (
+                "The prior review found no actionable findings. Perform "
+                "an initial improvement pass on the artifact."
+            )
+        lines = [
+            f"Address the following findings from the prior review (verdict: {review.verdict}):",
+            "",
+        ]
+        for finding in findings:
+            severity = finding.get("severity", "NOTE")
+            summary = finding.get("summary", "")
+            location = finding.get("location")
+            loc_suffix = f" ({location})" if location else ""
+            lines.append(f"- [{severity}] {summary}{loc_suffix}")
+        return "\n".join(lines)
+
+    @classmethod
+    def _resolve_prompt_from_prior_review(cls, context: ActionContext) -> str | None:
+        """Build a fix prompt from the most recent prior ``review`` action,
+        or None if there is none."""
+        review = cls._latest_review(context)
+        return cls._findings_block(review) if review is not None else None
+
+    @classmethod
+    def _resolve_feedback_prompt(cls, context: ActionContext, explicit: object) -> str:
+        """``feedback: review`` (slice 195 D8): the step's prompt, then the
+        latest in-scope review's findings and the file it reviewed.
+
+        Takes precedence over a ``build_context`` output, which inside a batch
+        item is the original "create a design" prompt — a revise round must
+        not redesign from scratch.
+
+        Raises:
+            DispatchFeedbackError: when no review result is in scope.
+        """
+        DispatchFeedback(str(context.params["feedback"]))
+        review = cls._latest_review(context)
+        if review is None:
+            raise DispatchFeedbackError("feedback: review but no prior review in scope")
+        parts = [str(explicit)] if explicit is not None else []
+        parts.append(cls._findings_block(review))
+        input_file = review.outputs.get("input_file")
+        if input_file:
+            parts.append(f"Revise `{input_file}` in place; do not create a new file.")
+        return "\n\n".join(parts)
 
     @staticmethod
     def _apply_override(context: ActionContext, prompt: str) -> str:
