@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
 import logging
+import os
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import patch
@@ -10,6 +13,52 @@ from unittest.mock import patch
 import pytest
 
 from squadron.config import Settings
+from tests import _hermetic
+
+
+@pytest.fixture(scope="session")
+def hermetic_git_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    """The git config that stands in for the host's global config, written once."""
+    return _hermetic.write_git_config(tmp_path_factory.mktemp("hermetic") / "gitconfig")
+
+
+@pytest.fixture(autouse=True)
+def hermetic_environment(
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    hermetic_git_config: Path,
+) -> None:
+    """Give every test pinned machine state instead of the developer's (issue #47).
+
+    A test that needs a different value sets it itself with ``monkeypatch``;
+    autouse fixtures run first, so the test's value wins. ``host_cf`` tests get
+    the real home back, because they run the real ``cf`` against its registry.
+    """
+    if request.node.get_closest_marker("host_cf"):
+        home = _hermetic.REAL_HOME
+    else:
+        home = tmp_path / "home"
+        home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hermetic_git_config))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    monkeypatch.setenv("TZ", _hermetic.PINNED_TZ)
+    time.tzset()
+    monkeypatch.setenv("COLUMNS", _hermetic.PINNED_COLUMNS)
+
+    for var in _hermetic.credential_env_vars() | set(_hermetic.SCRUBBED_ENV_VARS):
+        monkeypatch.delenv(var, raising=False)
+    for var in [v for v in os.environ if v.startswith(_hermetic.SCRUBBED_ENV_PREFIXES)]:
+        monkeypatch.delenv(var)
+
+    # CliRunner runs the root callback with cwd at the repo root; the checkout's
+    # .env must not reach tests. The real loader is covered by its own test.
+    # import_module, not a dotted string: ``squadron.cli.app`` as an attribute
+    # is the Typer object the package re-exports, not the module.
+    cli_app_module = importlib.import_module("squadron.cli.app")
+    monkeypatch.setattr(cli_app_module, "_load_env_file", lambda: None)
 
 
 @pytest.fixture
