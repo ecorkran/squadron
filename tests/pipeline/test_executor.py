@@ -198,6 +198,30 @@ class TestResolvePlaceholders:
 # ---------------------------------------------------------------------------
 
 
+class TestMetByVerdict:
+    @pytest.mark.parametrize(
+        ("condition", "verdict", "expected"),
+        [
+            ("review.pass", "PASS", True),
+            ("review.pass", "CONCERNS", False),
+            ("review.pass", "FAIL", False),
+            ("review.concerns_or_better", "PASS", True),
+            ("review.concerns_or_better", "CONCERNS", True),
+            ("review.concerns_or_better", "FAIL", False),
+        ],
+    )
+    def test_verdict_sets(self, condition: str, verdict: str, expected: bool) -> None:
+        from squadron.pipeline.executor import LoopCondition
+
+        assert LoopCondition(condition).met_by_verdict(verdict) is expected
+
+    def test_action_success_has_no_verdict_meaning(self) -> None:
+        from squadron.pipeline.executor import LoopCondition
+
+        with pytest.raises(ValueError, match="action.success"):
+            LoopCondition.ACTION_SUCCESS.met_by_verdict("PASS")
+
+
 class TestEvaluateCondition:
     def test_review_pass_with_pass_verdict(self) -> None:
         from squadron.pipeline.executor import LoopCondition, evaluate_condition

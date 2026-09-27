@@ -35,6 +35,7 @@ from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
+from squadron.review.models import Verdict
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -232,6 +233,20 @@ class LoopCondition(StrEnum):
     REVIEW_CONCERNS_OR_BETTER = "review.concerns_or_better"
     ACTION_SUCCESS = "action.success"
 
+    def met_by_verdict(self, verdict: str) -> bool:
+        """Whether a review *verdict* meets this threshold — the single
+        definition of the verdict sets (slice 195 D7).
+
+        Raises ValueError for ``action.success``, which has no verdict meaning.
+        """
+        match self:
+            case LoopCondition.REVIEW_PASS:
+                return verdict == Verdict.PASS
+            case LoopCondition.REVIEW_CONCERNS_OR_BETTER:
+                return verdict in (Verdict.PASS, Verdict.CONCERNS)
+            case LoopCondition.ACTION_SUCCESS:
+                raise ValueError(f"{self.value} is not a review verdict threshold")
+
 
 def evaluate_condition(
     condition: LoopCondition,
@@ -241,18 +256,14 @@ def evaluate_condition(
 
     Returns False if no matching results are found (e.g. no review action).
     """
-    match condition:
-        case LoopCondition.REVIEW_PASS:
-            last_review = _last_with_verdict(action_results)
-            return last_review is not None and last_review.verdict == "PASS"
-        case LoopCondition.REVIEW_CONCERNS_OR_BETTER:
-            last_review = _last_with_verdict(action_results)
-            return last_review is not None and last_review.verdict in {
-                "PASS",
-                "CONCERNS",
-            }
-        case LoopCondition.ACTION_SUCCESS:
-            return bool(action_results) and all(r.success for r in action_results)
+    if condition is LoopCondition.ACTION_SUCCESS:
+        return bool(action_results) and all(r.success for r in action_results)
+    last_review = _last_with_verdict(action_results)
+    return (
+        last_review is not None
+        and last_review.verdict is not None
+        and condition.met_by_verdict(last_review.verdict)
+    )
 
 
 def _last_with_verdict(results: list[ActionResult]) -> ActionResult | None:
