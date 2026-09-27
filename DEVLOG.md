@@ -12,6 +12,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260927
 
+### Slice 928: Codex Parity for Skill Packs and Provider Access — Design Complete
+
+The design is at `user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md`, and the validator passes. The slice plan entry now points to it.
+
+- **Part A (#125):** a pack supports Codex by shipping an `agents/` directory of skill dirs. Squadron never converts a pack, and an agents install of a pack without that directory exits 1 (D2). Skill names and frontmatter are validated before anything is written (D3). The bundled `analysis` pack's skills move to `commands/analysis/agents/`, so the rule has no bundled special case (D4). Receipt names generalize to base + target + scope, and every existing receipt name stays the same (D5).
+- **Part B (#127):** the rule goes in its own `~/.codex/rules/squadron.rules`, because Codex appends its own approvals to `default.rules` (D9). The docs must say that `allow` runs matching commands outside the sandbox entirely. No doctor check (D11). Instead, the `sq-review`, `sq-run`, and `sq-pr` skills name the sandbox when Codex blocks a command (D12).
+- **Probe evidence:** under `codex sandbox`, `sq pr show` fails with `HostUnreachableError`, while `sq models list` and `sq auth status` run fine. The daemon-client commands still need a probe with `sq serve` running (D10).
+- **Found:** both `review` command files tell the model to run `sq model list`, which doesn't exist. It gets fixed in this slice.
+- Effort revised from 2/5 to 3/5.
+
 ### Slice 924: Recover a Review the Model Reasoned Out but Never Emitted — Design Complete
 
 The design is at `user/slices/924-slice.recover-a-review-the-model-reasoned-out-but-never-emitted.md`, and the validator passes. The slice plan entry now points to it.
