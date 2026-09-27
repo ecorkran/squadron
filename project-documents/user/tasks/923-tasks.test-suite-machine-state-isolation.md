@@ -414,9 +414,9 @@ merges.
       entirely. This is the "drop the patch" step B.3 deferred — it is
       only safe now that Task C.3's per-test home exists to catch a test
       that turns out to still depend on the real value.
-- [ ] Run `uv run pytest -q 2>&1 | tail -1`; confirm counts unchanged from
+- [x] Run `uv run pytest -q 2>&1 | tail -1`; confirm counts unchanged from
       Task D.4's checkpoint.
-- [ ] Commit as its own checkpoint.
+- [x] Commit as its own checkpoint.
 
 ---
 
@@ -424,36 +424,36 @@ merges.
 
 ### Task E.1 — Get the hostile script to zero failures
 
-- [ ] Effort: 2/5
-- [ ] Run `scripts/test-hostile-env` (no `ref`, defaults to current tip).
-- [ ] If it reports any failure, route the fix through Task D.4's pattern
+- [x] Effort: 2/5
+- [x] Run `scripts/test-hostile-env` (no `ref`, defaults to current tip).
+- [x] If it reports any failure, route the fix through Task D.4's pattern
       (fix at cause) or Task D.5 (mark `host_cf` if genuinely a real-cf
       dependency) — do not add ad hoc skips.
-- [ ] Confirm the run reports zero failures, with passed/skipped counts
+- [x] Confirm the run reports zero failures, with passed/skipped counts
       consistent with Task D.7's checkpoint, plus a nonzero deselected
       `host_cf` count matching Task D.5's marked tests.
-- [ ] Commit: none expected if the script is already green; if a fix was
+- [x] Commit: none expected if the script is already green; if a fix was
       needed, it commits under whichever of D.4/D.5's checkpoints applies,
       same as Task D.6.
 
 ### Task E.2 — Real-home hostility walkthrough
 
-- [ ] Effort: 1/5
-- [ ] Manually append a hostile key to the real
+- [x] Effort: 1/5
+- [x] Manually append a hostile key to the real
       `~/.config/squadron/config.toml` (back it up first), run
       `uv run pytest -q 2>&1 | tail -1`, confirm identical counts to a
       clean run, then restore the backup.
-- [ ] This is a manual verification step (per the design's Verification
+- [x] This is a manual verification step (per the design's Verification
       Walkthrough step 7) — no code changes; record the result in the
       commit message of the next task.
 
 ### Task E.3 — Add the `hermetic` CI job
 
-- [ ] Effort: 2/5
-- [ ] In `.github/workflows/ci.yml`, add a `hermetic` job that runs
+- [x] Effort: 2/5
+- [x] In `.github/workflows/ci.yml`, add a `hermetic` job that runs
       `scripts/test-hostile-env` on one Python version, alongside the
       existing test job (not blocking it).
-- [ ] Set a `timeout-minutes` bound on the job so a hang fails the job
+- [x] Set a `timeout-minutes` bound on the job so a hang fails the job
       instead of stalling the workflow.
 - [ ] The workflow's current triggers are `push: branches: [main]` and
       `pull_request: branches: [main]` — pushing this slice branch (or
@@ -463,7 +463,7 @@ merges.
       against `main` (draft is fine; it does not need to merge yet) and
       confirm the `hermetic` job goes green there, alongside the existing
       `test` job.
-- [ ] Commit the CI change; this is the slice's final checkpoint.
+- [x] Commit the CI change; this is the slice's final checkpoint.
 
 ---
 
@@ -471,19 +471,19 @@ merges.
 
 ### Task F.1 — Full verification pass
 
-- [ ] Effort: 1/5
-- [ ] Run `ruff format`, `ruff check`, and `pyright` across the repo;
+- [x] Effort: 1/5
+- [x] Run `ruff format`, `ruff check`, and `pyright` across the repo;
       confirm zero errors from all three (per project-wide gate).
-- [ ] Confirm `sq config list` (or a provider auth check) still reads
+- [x] Confirm `sq config list` (or a provider auth check) still reads
       `.env` correctly when run from a directory with a temp `.env` —
       re-run the design's Verification Walkthrough step 4.
-- [ ] Confirm the suite's passed/skipped counts are at or above Task
+- [x] Confirm the suite's passed/skipped counts are at or above Task
       A.1's original baseline.
 
 ### Task F.2 — DEVLOG entry and slice closeout
 
-- [ ] Effort: 1/5
-- [ ] Write a DEVLOG entry summarizing: the negative-control failure count
+- [x] Effort: 1/5
+- [x] Write a DEVLOG entry summarizing: the negative-control failure count
       from Task A.3, the number of tests fixed under Part D, the final
       `host_cf` marked-test count, and confirmation the `hermetic` CI job
       is green.
