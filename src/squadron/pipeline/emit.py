@@ -23,9 +23,12 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+
 # Default directory for pipeline summary files written without an explicit path.
 # Convention: ~/.config/squadron/runs/summaries/{project}-{pipeline}.md
-_DEFAULT_SUMMARIES_DIR = Path.home() / ".config" / "squadron" / "runs" / "summaries"
+def _default_summaries_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "runs" / "summaries"
+
 
 __all__ = [
     "EmitKind",
@@ -113,8 +116,9 @@ async def _emit_file(text: str, dest: EmitDestination, ctx: ActionContext) -> Em
         # No explicit path — write to the conventional summaries location.
         project = str(ctx.params.get("_project") or "unknown")
         pipeline = ctx.pipeline_name or "unknown"
-        _DEFAULT_SUMMARIES_DIR.mkdir(parents=True, exist_ok=True)
-        path = _DEFAULT_SUMMARIES_DIR / f"{project}-{pipeline}.md"
+        summaries_dir = _default_summaries_dir()
+        summaries_dir.mkdir(parents=True, exist_ok=True)
+        path = summaries_dir / f"{project}-{pipeline}.md"
 
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

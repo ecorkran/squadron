@@ -21,8 +21,10 @@ from squadron.pipeline.summary_render import (
 
 _logger = logging.getLogger(__name__)
 
+
 # Conventional directory where pipeline summary files are stored.
-_SUMMARIES_DIR = Path.home() / ".config" / "squadron" / "runs" / "summaries"
+def _summaries_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "runs" / "summaries"
 
 
 def summary_instructions(
@@ -162,7 +164,7 @@ def _handle_restore(cwd: str, key: str | None = None) -> None:
         raise typer.Exit(code=1)
 
     matches = sorted(
-        _SUMMARIES_DIR.glob(f"{project}-*.md"),
+        _summaries_dir().glob(f"{project}-*.md"),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
     )

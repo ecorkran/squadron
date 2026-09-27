@@ -23,11 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A code review's saved artifact now says whether the diff was truncated before it reached the model (`diffTruncated`, plus a `**Diff:** truncated: X of Y characters` line and matching JSON fields). A truncated diff that got a clean PASS with no tool use is now flagged CONCERNS instead, with a finding explaining what was never read (#135)
 - `aiModel` in a saved review now names the model that actually answered, not just the one that was requested. If a different model answered — a fallback, a remapped route — `requestedModel` appears alongside it with a warning, instead of the artifact silently naming a model that never ran (#134)
 
+### Changed
+- Importing squadron as a library no longer loads `.env` from the current directory or resolves home-directory paths at import time. Running `sq` still loads `.env` from the current directory (#47)
+
 ### Fixed
 - A `loop:` step inside `each` now runs. It used to complete immediately with no rounds run (#136)
 - `cf.unfinished_slices("{plan}")` now reads the plan it's given; it used to ignore the argument and read the active plan. The argument must be an architecture index such as `"900"` (#136)
 - Phase steps set cf's slice before its phase, as cf requires; it was phase first (#136)
 - `sq review … --output json` stdout is now pure JSON: "Saved review to …" goes to stderr (#139)
+- The test suite no longer passes or fails based on the developer's machine: user config, git config, timezone, terminal width, credentials and `PATH` are pinned per test, and a new CI job runs the suite under a deliberately hostile environment (#47)
 
 ### Removed
 - The `design-batch` pipeline. Use `design-plan` (#136)

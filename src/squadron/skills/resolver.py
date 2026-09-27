@@ -8,7 +8,9 @@ from pathlib import Path
 
 from squadron.skills.models import PackEntry, SkillSourceError
 
-_USER_CONFIG_DIR = Path.home() / ".config" / "squadron"
+
+def _user_config_dir() -> Path:
+    return Path.home() / ".config" / "squadron"
 
 
 def resolve_source(entry: PackEntry, pack_name: str) -> Path:
@@ -101,7 +103,7 @@ def _resolve_absolute(path: Path, pack_name: str) -> Path:
 
 
 def _resolve_relative(source: str, pack_name: str) -> Path:
-    resolved = (_USER_CONFIG_DIR / source).resolve()
+    resolved = (_user_config_dir() / source).resolve()
     if not resolved.exists() or not resolved.is_dir():
         raise SkillSourceError(
             f"Relative source path '{source}' for pack '{pack_name}' "

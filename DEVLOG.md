@@ -167,6 +167,102 @@ saying so. OpenAI-direct judges will change metrology identity once, to the date
 Deferred: diff ordering and `--stat` (#137), and truncation of file bodies and `CLAUDE.md` (#138).
 Validator PASS. Next: Phase 5 task breakdown.
 
+### Slice 923 implementation — Test Suite Machine-State Isolation (Phase 6)
+
+Branch `923-slice.test-suite-machine-state-isolation`, forked from `squadron-9143`.
+
+**Results**
+
+| Run | Result |
+|---|---|
+| Hostile run, pre-slice | 139 failed, 184 errors |
+| Hostile run, slice tip | 4461 passed, 8 skipped, 0 failed, 6 deselected (`host_cf`) |
+| Local suite | 4481 passed, 4 skipped (baseline 4461/4, plus 20 new tests) |
+| Real-home hostility (`sq config set review.max_file_size_bytes 1`) | Identical counts |
+
+`ruff format`, `ruff check` and `pyright` report zero errors.
+
+**`src/` changes**
+
+- The 19 home paths that were bound at import are now functions.
+- `.env` now loads in the root CLI callback instead of at import.
+- `tests/test_import_purity.py` guards both. Run against the pre-slice source it flags exactly those 20 sites (the 19 paths plus `load_dotenv`).
+
+**Tests**
+
+- Pins and the scrub list live in `tests/_hermetic.py`. The root `hermetic_environment` autouse fixture applies them to every test.
+- 6 tests are marked `host_cf`. Each runs the real `cf`, and under an empty home `cf` reports `PROJECT_NOT_FOUND`.
+- Removed as redundant with the per-test home:
+  - the per-directory config, model and template fixtures in the review and cli conftests
+  - the root `isolate_review_debug_log`
+  - 4 patches that only redirected home paths
+
+**Tests fixed at their cause**
+
+- Isolated run (10 failures):
+  - 6 were real-`cf` dependents, now marked `host_cf`.
+  - 2 list-files tests found the per-test home inside `tmp_path`. The home now lives beside `tmp_path` instead; this departs from the design, and FR3 is updated to match.
+  - 2 worktree sweep tests parsed their `lstart` epoch at import under the host timezone.
+- Hostile run (6 failures):
+  - The doctor `gh` test inherited `cf` from the host `PATH`.
+  - 4 `--diff main` review tests needed the checkout's local `main`. They now use a fixture repo.
+  - 1 assertion broke where Rich wrapped a long temp path mid-filename.
+
+**Findings**
+
+- The walkthrough's `>>` append to the real config creates a duplicate TOML key. Pytest then aborts at collection, because `test_cf_contract_live.py` probes the live server at import. The walkthrough now uses `sq config set`.
+- The `hermetic` CI job gives the PR merge commit a branch before cloning. Without one, a `--no-local` clone would not contain that commit.
+
+### Slice 923 implementation — negative control measured (#47)
+
+`scripts/test-hostile-env` runs a fresh clone under a hostile machine: a squadron config
+setting `review.max_file_size_bytes = 1`, a colliding `llama-3-70b` alias, a user
+template with a `profile:` override, gitconfig with `init.defaultBranch = trunk` and gpg
+signing through `/nonexistent`, sentinel keys, `CLAUDECODE=1`, `FORCE_COLOR=1`,
+`COLUMNS=20`, `TZ=Pacific/Chatham`, and no `cf` on `PATH`. Both preconditions passed.
+
+Result at the pre-slice commit `2f2c5d60`: **139 failed, 184 errors**, 4124 passed,
+8 skipped. The biggest groups:
+- 32 in `test_run.py` (`CLAUDECODE`)
+- 14 in `test_model_list.py` (user aliases)
+- about 150 errors in fixtures that build git repos: `review_pr*`, `pr_create*`,
+  `test_resolution`, `test_audit_harness`, `test_commit`, `pr/test_inputs` and others.
+  Their bare commits hit the host gitconfig (signing, default branch).
+
+The rest are spread across the CLI suites for config, metrology, auth and skills.
+
+### Slice 923 design — Test Suite Machine-State Isolation (Phase 4 complete)
+
+Written first because 914 now depends on it for sequencing. While measuring for the design,
+three live leaks turned up that #47 did not list:
+
+- An AST scan found 19 `src/` constants that call `Path.home()` at import time, so a
+  per-test `HOME` cannot reach them. They become functions that look the path up when
+  called, and `tests/test_import_purity.py` fails the suite if a module-level call comes back.
+- `cli/app.py` runs `load_dotenv(cwd/.env)` at import, which puts the real provider keys
+  into every test process. The call moves into the root CLI callback, and tests stub it out.
+- `CLAUDECODE=1` is set in agent-run suites. The product check is correct, so only the
+  tests change: the variable is removed per test.
+
+Fixing the first two in `src/` also removes the need to redirect `HOME` before import.
+All isolation now happens per test through `monkeypatch`. Effort goes from 3/5 to 4/5.
+
+What the design settles:
+
+- Git config is pinned with `GIT_CONFIG_GLOBAL` and `NOSYSTEM`. The pinned default branch
+  is deliberately not `main`.
+- `TZ=Asia/Kolkata` and `COLUMNS=80` are pinned. With `43416df7` there are now two
+  terminal-width instances, which is enough to justify a global pin.
+- The credential scrub list is built from the provider profiles.
+- A `host_cf` marker is the only way back to the real home, and only for tests that need
+  cf's registry in `~/.config/context-forge`.
+
+Part B shrank. All `shutil.which` callers are already stubbed, so the hostile run's reduced
+`PATH` proves this by running the tests instead of re-auditing them. Part C adds
+`scripts/test-hostile-env` and a `hermetic` CI job. Its negative control runs against the
+pre-slice commit, which finishes the measurement #47 never completed. Next step: Phase 5
+task breakdown for 923.
+
 ### Release 0.14.0
 
 Minor bump because `sq review pr` artifact names changed (slice 926, #124). Also ships the

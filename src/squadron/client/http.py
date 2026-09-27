@@ -9,7 +9,6 @@ from typing import Any
 
 import httpx
 
-_DEFAULT_SOCKET = str(Path.home() / ".squadron" / "daemon.sock")
 _DEFAULT_BASE_URL = "http://127.0.0.1:7862"
 _TIMEOUT = 300.0
 
@@ -29,10 +28,10 @@ class DaemonClient:
 
     def __init__(
         self,
-        socket_path: str = _DEFAULT_SOCKET,
+        socket_path: str | None = None,
         base_url: str = _DEFAULT_BASE_URL,
     ) -> None:
-        self._socket_path = socket_path
+        self._socket_path = socket_path or str(Path.home() / ".squadron" / "daemon.sock")
         self._base_url = base_url
         self._client: httpx.AsyncClient | None = None
 

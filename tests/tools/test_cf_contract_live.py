@@ -83,6 +83,7 @@ def test_sent_argument_exists_in_schema(mcp_tool: str, argument: str) -> None:
     assert argument in properties, f"context-forge '{mcp_tool}' no longer accepts '{argument}'"
 
 
+@pytest.mark.host_cf  # live cf MCP call resolves the project via cf's project registry
 @pytest.mark.asyncio
 async def test_live_workflow_status_round_trip() -> None:
     """The full path — descriptor, config, transport, mapping — against the real server."""

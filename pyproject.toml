@@ -83,6 +83,7 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "network: marks tests that require network access (deselect with '-m \"not network\"')",
+    "host_cf: test needs cf's real project registry under the host's home (deselect with '-m \"not host_cf\"')",
 ]
 
 [tool.pyright]

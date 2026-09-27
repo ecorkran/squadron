@@ -13,11 +13,11 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import tomli_w
 
+from squadron.config.manager import user_config_path
 from squadron.metrology.models import (
     AuditCategory,
     AuditEffort,
@@ -201,16 +201,17 @@ def _init_repo(path: Path) -> None:
 
 
 @pytest.fixture
-def isolated_user_config(tmp_path: Path) -> Iterator[Path]:
-    """Redirect the user-level config file to an empty temp file.
+def isolated_user_config() -> Path:
+    """The user-level config file path, under the per-test home.
 
-    Without this, ``get_config`` merges the real user config, which could
-    supply a ``metrology.project_id`` and mask the no-identity path.
+    The root ``hermetic_environment`` fixture already points ``HOME`` at a fresh
+    directory, so the real config can never merge in (it could otherwise supply a
+    ``metrology.project_id`` and mask the no-identity path). This fixture hands
+    the path to tests that write to it.
     """
-    user_file = tmp_path / "user-config" / "config.toml"
+    user_file = user_config_path()
     user_file.parent.mkdir(parents=True, exist_ok=True)
-    with patch("squadron.config.manager.user_config_path", return_value=user_file):
-        yield user_file
+    return user_file
 
 
 @pytest.fixture

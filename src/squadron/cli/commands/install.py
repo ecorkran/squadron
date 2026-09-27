@@ -14,7 +14,7 @@ import typer
 from rich import print as rprint
 
 from squadron.skills.models import InstallReceipt
-from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, read_receipt, write_receipt
+from squadron.skills.receipts import default_receipts_dir, read_receipt, write_receipt
 from squadron.skills.targets import (
     DELIVERIES,
     CommandTarget,
@@ -89,10 +89,10 @@ def install_commands(
         "--local",
         help="Install into this project rather than for the whole machine",
     ),
-    receipts_dir: Path = typer.Option(
-        DEFAULT_RECEIPTS_DIR,
+    receipts_dir: Path | None = typer.Option(
+        None,
         "--receipts-dir",
-        help="Directory holding the install receipt",
+        help="Directory holding the install receipt (default: ~/.config/squadron/receipts)",
     ),
 ) -> None:
     """Install squadron's commands for Claude Code or an agent-skills runtime."""
@@ -119,7 +119,7 @@ def install_for_target(
     """
     delivery = DELIVERIES[command_target]
     if receipts_dir is None:
-        receipts_dir = DEFAULT_RECEIPTS_DIR
+        receipts_dir = default_receipts_dir()
 
     source = get_commands_source()
     target_dir, local_honored = _resolve_destination(delivery, target, local=local)
@@ -213,13 +213,14 @@ def uninstall_commands(
         "--local",
         help="Uninstall from this project rather than from the whole machine",
     ),
-    receipts_dir: Path = typer.Option(
-        DEFAULT_RECEIPTS_DIR,
+    receipts_dir: Path | None = typer.Option(
+        None,
         "--receipts-dir",
-        help="Directory holding the install receipt",
+        help="Directory holding the install receipt (default: ~/.config/squadron/receipts)",
     ),
 ) -> None:
     """Remove squadron's commands from Claude Code or an agent-skills runtime."""
+    receipts_dir = receipts_dir or default_receipts_dir()
     command_target = _parse_target(ide)
 
     # `--target` overrides `--local` on install, and the receipt is named for the

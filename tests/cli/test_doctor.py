@@ -192,7 +192,11 @@ def test_doctor_help() -> None:
 
 
 def test_doctor_exits_zero_when_gh_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The gh rows are not required, so a WARN must not fail the command."""
+    """The gh rows are not required, so a WARN must not fail the command.
+
+    ``cf`` is a required check, so it is stubbed present rather than inherited
+    from the host's PATH.
+    """
     import shutil as _shutil
 
     real_which = _shutil.which
@@ -200,6 +204,8 @@ def test_doctor_exits_zero_when_gh_is_absent(monkeypatch: pytest.MonkeyPatch) ->
     def _which(name: str, *args: object, **kwargs: object) -> str | None:
         if name == "gh":
             return None
+        if name == "cf":
+            return "/usr/local/bin/cf"
         return real_which(name, *args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(_shutil, "which", _which)

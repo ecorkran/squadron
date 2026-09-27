@@ -22,8 +22,11 @@ from squadron.pipeline.schema import PipelineSchema
 _logger = logging.getLogger(__name__)
 
 _BUILTIN_DIR = data_dir() / "pipelines"
-_USER_DIR = Path.home() / ".config" / "squadron" / "pipelines"
 _PROJECT_PIPELINES_REL = Path("project-documents/user/pipelines")
+
+
+def _user_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "pipelines"
 
 
 @dataclass
@@ -94,7 +97,7 @@ def _search_dirs(
     proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
     dirs.append(proj)
 
-    user = user_dir if user_dir is not None else _USER_DIR
+    user = user_dir if user_dir is not None else _user_dir()
     dirs.append(user)
 
     dirs.append(_BUILTIN_DIR)
@@ -116,7 +119,7 @@ def discover_pipelines(
         (_BUILTIN_DIR, "built-in"),
     ]
 
-    user = user_dir if user_dir is not None else _USER_DIR
+    user = user_dir if user_dir is not None else _user_dir()
     source_dirs.append((user, "user"))
 
     proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)

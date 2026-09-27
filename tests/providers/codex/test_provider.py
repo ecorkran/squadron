@@ -81,15 +81,11 @@ class TestCreateAgent:
         provider: CodexProvider,
         agent_config: AgentConfig,
         monkeypatch: pytest.MonkeyPatch,
-        tmp_path: pytest.TempPathFactory,
     ) -> None:
+        # The per-test home has no ~/.codex/auth.json.
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        with patch(
-            "squadron.providers.codex.auth._CODEX_AUTH_FILE",
-            tmp_path / "nonexistent" / "auth.json",  # type: ignore[operator]
-        ):
-            with pytest.raises(ProviderAuthError, match="No Codex credentials"):
-                asyncio.run(provider.create_agent(agent_config))
+        with pytest.raises(ProviderAuthError, match="No Codex credentials"):
+            asyncio.run(provider.create_agent(agent_config))
 
 
 class TestValidateCredentials:

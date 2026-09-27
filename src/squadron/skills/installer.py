@@ -11,7 +11,7 @@ from squadron.skills.models import (
     SkillSourceError,
     SurfaceType,
 )
-from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, write_receipt
+from squadron.skills.receipts import default_receipts_dir, write_receipt
 from squadron.skills.resolver import clone_github, resolve_source
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def install_pack(
         source_path = resolve_source(entry, pack_name)
         result = _install_from_path(pack_name, entry, commands_dir, source_path)
 
-    _write_install_receipt(entry, result, receipts_dir or DEFAULT_RECEIPTS_DIR)
+    _write_install_receipt(entry, result, receipts_dir or default_receipts_dir())
     return result
 
 

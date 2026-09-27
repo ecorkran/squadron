@@ -3,10 +3,10 @@ docType: slice-design
 slice: strict-type-checking-over-the-test-suite
 project: squadron
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
-dependencies: [913]
+dependencies: [913, 923]
 interfaces: []
 dateCreated: 20260817
-dateUpdated: 20260817
+dateUpdated: 20260926
 status: not_started
 ---
 
@@ -23,6 +23,10 @@ a comment in `pyproject.toml` deferring the widening to issue #50.
 This slice widens the include to `["src", "tests"]` under the existing
 `typeCheckingMode = "strict"`, resolves every error the widening surfaces, and
 leaves the deferral comment deleted.
+
+**Sequencing:** runs after 913 and after 923. 923's Part A adds an autouse root
+fixture to `tests/conftest.py` and moves fixtures out of `tests/review/conftest.py`;
+running 914 first would type those fixtures and then have 923 rewrite them.
 
 The slice plan flagged three questions to resolve before task breakdown: one
 sweep versus per-directory; whether `MagicMock` noise warrants a narrower rule
@@ -100,6 +104,13 @@ By directory: `tests/pipeline` 234 (31 files), `tests/cli` 125 (18),
 Zero errors are reported in `src` — widening the include does not disturb the
 existing production baseline.
 
+**Re-measured 20260926 at `bb65ac9`:** 1208 errors across 139 test files, `src`
+still 0. The per-rule and per-file tables above are from `03cdd73` and are
+superseded by Part A's re-measurement; the decisions below do not depend on the
+exact figures. The same run with `enableTypeIgnoreComments = false` reports
+1650 test errors across 151 files — 442 errors are currently hidden behind
+`# type: ignore` comments (see D8).
+
 ## Technical Decisions
 
 ### D1 — `MagicMock` noise is not the problem; no narrower rule set for `tests/`
@@ -139,14 +150,27 @@ only at the last one. This is the same principle as 913's D7 (no commit has a
 rule live and failing), applied to a config key instead of a rule set.
 
 Mechanically, `include` is widened to `["src", "tests"]` in the **first**
-commit, with `exclude` simultaneously listing every test directory that still
-has errors. Each subsequent commit fixes one directory and deletes its line from
-`exclude`. The final commit deletes the last entry, leaving `exclude` holding
-only its pre-existing production entry.
+commit, with `exclude` simultaneously listing every test **file** that still has
+errors — one entry per file, no directory entries. Each subsequent part fixes
+its files and deletes their lines from `exclude`. The final commit deletes the
+last entry, leaving `exclude` holding only its pre-existing production entry.
 
-**Ordering runs highest-value-first.** `exclude` accepts file paths, not only
-directories, so the heaviest files can be their own part regardless of where
-they live:
+File granularity is required, not stylistic. `exclude` is a list of globs with
+no negation: a directory entry keeps every file under it excluded regardless of
+file-level entries, so a part that deletes file lines while a directory entry
+remains would pass its gate without pyright ever checking its files. A
+temporary exclude list of ~140 lines is the cost of every part's gate being
+real. Part A's re-measurement produces the list; the first commit must report
+0 errors with it in place.
+
+Excluded files imported by included files do not report diagnostics (verified
+20260926 with a two-file probe: an excluded module with a planted error,
+imported by an included one, yields 0 errors). The cross-test import graph
+(`tests/cli/conftest.py`, `tests/codehost/fake_runner.py`) therefore places no
+ordering constraint on the parts.
+
+**Ordering runs highest-value-first.** Because entries are per file, the
+heaviest files can be their own part regardless of where they live:
 
 | Part | Target | Errors | Files |
 |------|--------|-------:|------:|
@@ -298,14 +322,36 @@ than a null result.
 ### D7 — The gate runs at every part boundary
 
 Same discipline as 913. At the close of each part: `uv run ruff format`, `uv run
-ruff check`, `uv run pyright` (0 errors), `uv run pytest`. The pytest count must
-not drop below the 3021-passed / 2-skipped baseline established at `03cdd73`; a
-drop means an annotation changed behavior, which is a bug in the change.
+ruff check`, `uv run pyright` (0 errors), `uv run pytest`. Part A records the
+passed/skipped counts on the tree it starts from; no later part may drop below
+them. A drop means an annotation changed behavior, which is a bug in the change.
+
+### D8 — Existing `# type: ignore` comments in `tests/` are in scope
+
+`tests/` carries 257 `# type: ignore` comments across 67 files (measured
+20260926), mostly mypy-coded (`[attr-defined]` 76, `[union-attr]` 37,
+`[arg-type]` 25, `[no-untyped-def]` 24, …). Pyright honors them, so they
+suppress 442 errors that no baseline above counts. Leaving them would make the
+walkthrough's suppression audit (step 5) fail on a population the slice
+measured around.
+
+**Decision:** each part dispositions every `# type: ignore` in its files, same
+bar as every other suppression: fix the underlying error and delete the comment,
+or convert it to a single-line `# pyright: ignore[rule]` with a justifying
+comment. Many resolve for free — the `[no-untyped-def]` sites on `_invoke`
+helpers go away with D5's Helper 1. Part A's re-measurement counts the hidden
+errors per file (via `enableTypeIgnoreComments = false`, run once, not
+committed) so each part's workload is known.
+
+`enableTypeIgnoreComments` stays at its default. Turning it off is global and
+would surface 147 errors hidden in `src`, which is out of scope; the walkthrough
+grep enforces the `tests/` rule instead.
 
 ## Scope
 
 **In scope:** `[tool.pyright] include`/`exclude` in `pyproject.toml`; type
-annotations and typed helpers across all 104 erroring test files; deletion of
+annotations and typed helpers across every erroring test file; disposition of
+every `# type: ignore` in `tests/` (D8); deletion of
 genuinely dead test helpers; renaming private production symbols public and
 updating their call sites; deletion of the stale deferral comment in
 `pyproject.toml`.
@@ -341,10 +387,12 @@ covered by the existing suite and gated per part.
    exists (D1).
 4. `typeCheckingMode = "strict"` is unchanged.
 5. The deferral comment above `include` in `pyproject.toml` is deleted.
-6. `uv run pytest` passes at ≥3021 passed / 2 skipped.
+6. `uv run pytest` passes with no drop from Part A's recorded passed/skipped
+   counts (D7).
 7. `uv run ruff check` and `uv run ruff format --check` pass.
 8. Every retained `# pyright: ignore` carries a justifying comment, and the
-   audit task has read each one individually.
+   audit task has read each one individually. `grep -rn "type: ignore" tests/`
+   returns nothing (D8).
 9. Every `reportPrivateUsage` site is resolved by renaming the symbol public,
    or — where a public name reads wrong — by a justified single-line
    suppression recorded in the completion summary. None by bulk suppression.
@@ -381,8 +429,9 @@ so the analyzed-file count is the real signal, not the error count.
 uv run pyright --outputjson | python3 -c "import json,sys; d=json.load(sys.stdin); print(d['summary'])"
 ```
 
-`filesAnalyzed` should be ~444, not ~210. A number near 210 means `tests` is not
-being analyzed and the slice has not done its job.
+`filesAnalyzed` should be roughly double the `src`-only count (575 vs 244 at
+`bb65ac9`). A number near the `src`-only count means `tests` is not being
+analyzed and the slice has not done its job.
 
 **3. The suite still passes, and nothing was silently disabled:**
 
@@ -472,9 +521,10 @@ Mitigated by the kept-private exception path and by recording every rename in
 the completion summary for review.
 
 **Churn hiding a behavior change.** Dead-helper deletions and symbol renames can
-alter behavior. Mitigated by the per-part gate and the pytest floor of 3021 —
-but the floor only catches what the suite covers.
+alter behavior. Mitigated by the per-part gate and Part A's recorded pytest
+floor — but the floor only catches what the suite covers.
 
-**Baseline drift.** The 905/104 figures are measured at `03cdd73`. Any slice
-merged before 914 starts will move them. Part A re-measures before seeding
-`exclude` rather than trusting this document's numbers.
+**Baseline drift.** The figures have already moved once (905/104 at `03cdd73`,
+1208/139 at `bb65ac9`) and 923 will move them again. Part A re-measures errors,
+hidden `# type: ignore` errors, and the pytest counts before seeding `exclude`
+rather than trusting this document's numbers.

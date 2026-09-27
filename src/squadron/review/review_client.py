@@ -592,7 +592,8 @@ def _inject_glob_files(
             break
 
 
-_PROMPT_LOG_DIR = Path.home() / ".config" / "squadron" / "logs"
+def _prompt_log_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "logs"
 
 
 def _write_prompt_log(
@@ -609,7 +610,7 @@ def _write_prompt_log(
 
     Returns the path of the written file.
     """
-    target_dir = log_dir or _PROMPT_LOG_DIR
+    target_dir = log_dir or _prompt_log_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now(tz=UTC)

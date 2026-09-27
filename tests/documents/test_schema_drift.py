@@ -22,6 +22,8 @@ import tokenize
 import uuid
 from pathlib import Path
 
+import pytest
+
 from squadron.documents.schema import MACHINE_ARTIFACT_DOC_TYPES, DocType, DocumentStatus
 
 _DOC_ROOT = Path("project-documents/user")
@@ -85,12 +87,14 @@ def _universal_fields(doc_type: str, status: str) -> dict[str, str]:
     }
 
 
+@pytest.mark.host_cf  # real `cf validate` resolves this checkout via cf's project registry
 def test_cf_accepts_every_status_squadron_writes() -> None:
     _assert_cf_accepts(
         [_universal_fields(_WRITTEN_DOC_TYPE, member.value) for member in DocumentStatus]
     )
 
 
+@pytest.mark.host_cf  # real `cf validate` resolves this checkout via cf's project registry
 def test_cf_accepts_machine_artifacts_squadron_writes() -> None:
     """Machine artifacts carry only docType and dateCreated — no status, and no
     dateUpdated, which a validator reading one file cannot justify requiring."""
@@ -102,6 +106,7 @@ def test_cf_accepts_machine_artifacts_squadron_writes() -> None:
     )
 
 
+@pytest.mark.host_cf  # real `cf validate` resolves this checkout via cf's project registry
 def test_cf_rejects_a_bad_status() -> None:
     """Harness sanity: a value cf should refuse produces a finding on a checked
     file. Without this, a cf that checked nothing would pass every test above."""

@@ -765,10 +765,10 @@ def test_no_test_touches_the_real_receipts_directory() -> None:
     real, and a receipt written to the user's own directory would make their next real
     uninstall act on files a test invented.
     """
-    from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR
+    from squadron.skills.receipts import default_receipts_dir
 
-    assert _receipts_dir(Path("/tmp/pytest-example/target")) != DEFAULT_RECEIPTS_DIR
-    assert DEFAULT_RECEIPTS_DIR not in _receipts_dir(Path("/tmp/pytest-example/target")).parents
+    assert _receipts_dir(Path("/tmp/pytest-example/target")) != default_receipts_dir()
+    assert default_receipts_dir() not in _receipts_dir(Path("/tmp/pytest-example/target")).parents
 
 
 # ---------------------------------------------------------------------------

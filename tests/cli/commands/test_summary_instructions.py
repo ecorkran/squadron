@@ -59,8 +59,8 @@ class TestRestoreFlag:
                 return_value={"project": "myproject"},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             result = runner.invoke(
@@ -87,8 +87,8 @@ class TestRestoreFlag:
                 return_value={"project": "myproject"},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             result = runner.invoke(
@@ -112,8 +112,8 @@ class TestRestoreFlag:
                 return_value={"project": "myproject"},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             result = runner.invoke(
@@ -138,8 +138,8 @@ class TestRestoreFlag:
                 return_value={"project": "myproject"},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             result = runner.invoke(
@@ -161,8 +161,8 @@ class TestRestoreFlag:
                 return_value={},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             result = runner.invoke(
@@ -189,8 +189,8 @@ class TestRestoreKey:
                 return_value={"project": "myproject"},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             return runner.invoke(
@@ -350,8 +350,8 @@ class TestRestoreSiblingExclusion:
                 return_value={"project": project},
             ),
             patch(
-                "squadron.cli.commands.summary_instructions._SUMMARIES_DIR",
-                summaries,
+                "squadron.cli.commands.summary_instructions._summaries_dir",
+                return_value=summaries,
             ),
         ):
             return runner.invoke(

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -19,6 +18,7 @@ from squadron.pipeline.batch_report import ItemOutcome
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult, execute_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.sources import SOURCE_REGISTRY
+from squadron.pipeline.state import _default_runs_dir  # pyright: ignore[reportPrivateUsage]
 from squadron.pipeline.steps import register_step_type
 
 _OK = ActionResult(success=True, action_type="dispatch", outputs={})
@@ -182,10 +182,8 @@ class TestItemFailureReason:
 
 class TestBatchReportWiring:
     @pytest.mark.asyncio
-    async def test_mixed_run_writes_report_with_counts(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
-        # conftest points the default runs dir at tmp_path / "runs".
+    async def test_mixed_run_writes_report_with_counts(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # The hermetic HOME fixture (conftest) keeps the default runs dir per test.
         outcomes = {"1": _OK, "2": _fail("provider quota exceeded")}
         result, _ = await _run(
             monkeypatch,
@@ -196,7 +194,7 @@ class TestBatchReportWiring:
 
         report = result.step_results[0].batch_report
         assert report is not None
-        path = report.path(tmp_path / "runs")
+        path = report.path(_default_runs_dir())
         assert path.is_file()
         assert path.name.endswith(".slices.report.md")
         assert read_frontmatter(path) == {
@@ -215,7 +213,7 @@ class TestBatchReportWiring:
 
     @pytest.mark.asyncio
     async def test_report_written_when_every_item_is_flagged(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+        self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         result, ran = await _run(
             monkeypatch, _items("1", "2"), lambda i: _fail("boom"), policy="continue"
@@ -225,16 +223,14 @@ class TestBatchReportWiring:
         assert report is not None
         assert ran == ["1", "2"]
         assert report.count(ItemOutcome.FLAGGED) == 2
-        assert report.path(tmp_path / "runs").is_file()
+        assert report.path(_default_runs_dir()).is_file()
 
     @pytest.mark.asyncio
-    async def test_stopped_run_still_writes_report(
-        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-    ) -> None:
+    async def test_stopped_run_still_writes_report(self, monkeypatch: pytest.MonkeyPatch) -> None:
         result, _ = await _run(monkeypatch, _items("1", "2"), lambda i: _fail("boom"))
 
         report = result.step_results[0].batch_report
         assert result.status == ExecutionStatus.FAILED
         assert report is not None
         assert [r.index for r in report.records] == ["1"]
-        assert report.path(tmp_path / "runs").is_file()
+        assert report.path(_default_runs_dir()).is_file()

@@ -14,55 +14,6 @@ from squadron.review.git_utils import DEFAULT_DIFF_BASE
 
 
 @pytest.fixture(autouse=True)
-def _isolated_user_config(tmp_path: Path) -> Iterator[Path]:
-    """Redirect the user-level config file to an empty temp file.
-
-    Without this, a developer's real ``~/.config/squadron/config.toml``
-    leaks into every test that reads config. The size-cap tests are the
-    ones that actually break: they size their fixtures from the *default*
-    ``review.max_file_size_bytes`` while the code resolves the user's
-    override, so a raised local cap silently stops the file from being
-    large enough to truncate. Mirrors the same fixture in
-    ``tests/metrology/conftest.py``.
-    """
-    user_file = tmp_path / "user-config" / "config.toml"
-    user_file.parent.mkdir(parents=True, exist_ok=True)
-    with patch("squadron.config.manager.user_config_path", return_value=user_file):
-        yield user_file
-
-
-@pytest.fixture(autouse=True)
-def _isolated_model_registry(tmp_path: Path) -> Iterator[Path]:
-    """Redirect the alias registry to an empty temp file.
-
-    ``resolve_model_alias``/``get_all_aliases`` read the developer's real
-    ``~/.config/squadron/models.toml`` (no caching), so without this the
-    unknown-alias guard tests depend on a name like ``llama-3-70b`` happening
-    not to be defined locally — a machine that defines it fails the suite.
-    Mirrors ``_isolated_user_config`` in ``tests/review/conftest.py``.
-    """
-    registry = tmp_path / "model-registry" / "models.toml"
-    registry.parent.mkdir(parents=True, exist_ok=True)
-    registry.write_text("", encoding="utf-8")
-    with patch("squadron.models.aliases.models_toml_path", return_value=registry):
-        yield registry
-
-
-@pytest.fixture(autouse=True)
-def _isolated_user_templates(tmp_path: Path) -> Iterator[Path]:
-    """Redirect user template overrides to an empty temp dir.
-
-    ``load_all_templates`` merges ``~/.config/squadron/templates``; a developer
-    override that sets ``profile:`` on a template would legitimately suppress
-    the unknown-alias guard and fail these tests for the wrong reason.
-    """
-    templates = tmp_path / "user-templates"
-    templates.mkdir(parents=True, exist_ok=True)
-    with patch("squadron.review.templates.USER_TEMPLATES_DIR", templates):
-        yield templates
-
-
-@pytest.fixture(autouse=True)
 def _pinned_diff_base() -> Iterator[str]:
     """Pin the slice diff base so tests never read live CF config.
 
@@ -70,8 +21,8 @@ def _pinned_diff_base() -> Iterator[str]:
     to ``cf config get git.integration_branch``, so without this any test
     that resolves a diff range inherits whatever the developer's machine
     has configured — passing on a repo that leaves the key empty and
-    failing on one that sets it. Same class of leak as
-    ``_isolated_user_config`` above.
+    failing on one that sets it. The per-test home in the root conftest
+    cannot cover this: cf reads the checkout's project config, not ``HOME``.
 
     Tests that exercise base resolution deliberately either patch
     ``resolve_diff_base`` themselves or pass ``base=`` explicitly, both of

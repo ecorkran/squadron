@@ -20,8 +20,11 @@ import yaml
 
 _logger = logging.getLogger(__name__)
 
+
 #: Where ``gh`` keeps its hosts file when ``GH_CONFIG_DIR`` is unset.
-_DEFAULT_GH_CONFIG_DIR = Path.home() / ".config" / "gh"
+def _default_gh_config_dir() -> Path:
+    return Path.home() / ".config" / "gh"
+
 
 #: The file within that directory listing authenticated hosts as top-level keys.
 _HOSTS_FILENAME = "hosts.yml"
@@ -34,7 +37,7 @@ def gh_hosts_file_path() -> Path:
     config — resolves somewhere other than the real home directory.
     """
     config_dir = os.environ.get("GH_CONFIG_DIR")
-    base = Path(config_dir) if config_dir else _DEFAULT_GH_CONFIG_DIR
+    base = Path(config_dir) if config_dir else _default_gh_config_dir()
     return base / _HOSTS_FILENAME
 
 

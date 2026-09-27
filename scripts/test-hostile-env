@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+# Run the test suite in a fresh clone under a deliberately hostile machine
+# environment (slice 923, issue #47). It passes only if the suite's own
+# isolation wins over every host value planted here.
+#
+# Usage: scripts/test-hostile-env [ref]     (ref defaults to HEAD)
+#
+# The hostile values deliberately differ from the pins in tests/_hermetic.py,
+# so a test that reads host state instead of the pinned state fails here.
+set -euo pipefail
+
+fail() {
+    echo "hostile-env: $1 failed" >&2
+    exit 1
+}
+
+ref="${1:-HEAD}"
+src_repo="$(git rev-parse --show-toplevel)" || fail "locate-repo"
+sha="$(git -C "$src_repo" rev-parse --verify "${ref}^{commit}")" || fail "resolve-ref"
+uv_bin="$(command -v uv)" || fail "locate-uv"
+
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+clone="$work/repo"
+hostile_home="$work/home"
+
+# 1. Fresh clone: full history, no refs/squadron/** (clone copies only
+#    branches and tags).
+git clone --quiet --no-local "$src_repo" "$clone" || fail "clone"
+git -C "$clone" checkout --quiet --detach "$sha" || fail "checkout"
+
+# Sync the venv under the real HOME, before the swap below, so uv reuses the
+# real cache and its managed Python installs.
+(cd "$clone" && env -u VIRTUAL_ENV "$uv_bin" sync --frozen --quiet) || fail "uv-sync"
+
+# 2. Hostile HOME.
+sq_config="$hostile_home/.config/squadron"
+mkdir -p "$sq_config/templates"
+cat > "$sq_config/config.toml" <<'EOF'
+"review.max_file_size_bytes" = 1
+EOF
+cat > "$sq_config/models.toml" <<'EOF'
+[aliases."llama-3-70b"]
+profile = "openrouter"
+model = "meta-llama/llama-3-70b-instruct"
+EOF
+# User override of the built-in code template, adding a profile.
+{ cat "$clone/src/squadron/data/templates/code.yaml"; echo "profile: openrouter"; } \
+    > "$sq_config/templates/code.yaml"
+cat > "$hostile_home/.gitconfig" <<'EOF'
+[init]
+    defaultBranch = trunk
+[commit]
+    gpgsign = true
+[gpg]
+    program = /nonexistent
+EOF
+
+# 3. Sentinel credentials, derived from the provider registry in the clone.
+cred_vars="$("$clone/.venv/bin/python" -c '
+from squadron.providers.profiles import BUILT_IN_PROFILES
+names = {p.api_key_env for p in BUILT_IN_PROFILES.values() if p.api_key_env}
+names.add("OPENAI_API_KEY")
+print(" ".join(sorted(names)))
+')" || fail "credential-list"
+
+hostile_vars=(CLAUDECODE=1 FORCE_COLOR=1 COLUMNS=20 TZ=Pacific/Chatham)
+for var in $cred_vars; do
+    hostile_vars+=("$var=hostile-sentinel")
+done
+printf '%s\n' "${hostile_vars[@]}" > "$clone/.env"
+
+# 4. Minimal PATH: the clone's venv, then system dirs only.
+hostile_env=(
+    env -i
+    HOME="$hostile_home"
+    PATH="$clone/.venv/bin:/usr/bin:/bin"
+    "${hostile_vars[@]}"
+)
+
+# Precondition: cf must not be reachable.
+if "${hostile_env[@]}" sh -c 'command -v cf' >/dev/null; then
+    fail "cf-still-visible"
+fi
+
+# Precondition: the hostile config must actually be live. The hostile
+# COLUMNS would wrap the output line, so the probe gets a wide terminal.
+probe="$(cd "$clone" && "${hostile_env[@]}" COLUMNS=1000 sq config get review.max_file_size_bytes)" \
+    || fail "hostile-config-probe"
+# FORCE_COLOR is hostile too, so strip ANSI codes before reading the value.
+esc=$'\033'
+probe_value="$(sed -E -e "s/${esc}\[[0-9;]*m//g" -e 's/^[^=]*=[[:space:]]*([^[:space:]]+).*/\1/' <<<"$probe")"
+[[ "$probe_value" == "1" ]] || { echo "$probe" >&2; fail "hostile-config-probe"; }
+
+# 5. Run the suite. host_cf tests need cf's real registry, so they are left
+#    to the main CI job. --color=no keeps the log readable; the hostile
+#    FORCE_COLOR still reaches the code under test.
+echo "hostile-env: running pytest at $sha"
+set +e
+(cd "$clone" && "${hostile_env[@]}" pytest -q -p no:cacheprovider --color=no -m "not host_cf") 2>&1 \
+    | tee "$work/pytest.log"
+status="${PIPESTATUS[0]}"
+set -e
+
+summary="$(tail -n 1 "$work/pytest.log")"
+deselected="$(grep -oE '[0-9]+ deselected' <<<"$summary" || echo "0 deselected")"
+echo "hostile-env: result: $summary"
+echo "hostile-env: host_cf ${deselected}"
+exit "$status"

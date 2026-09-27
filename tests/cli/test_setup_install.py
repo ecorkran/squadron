@@ -308,8 +308,6 @@ def test_command_installers_run_in_process(
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
-    monkeypatch.setattr("squadron.skills.receipts.DEFAULT_RECEIPTS_DIR", tmp_path / "receipts")
-    monkeypatch.setattr("squadron.cli.commands.install.DEFAULT_RECEIPTS_DIR", tmp_path / "receipts")
 
     outcome = _install_sq_commands(command_target)
 
