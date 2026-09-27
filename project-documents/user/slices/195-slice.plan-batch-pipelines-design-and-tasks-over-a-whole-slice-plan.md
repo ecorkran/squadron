@@ -184,6 +184,8 @@ The cf switching sequence is fixed:
 
 `cf set plan` and `cf build --slice/--phase` are not used for switching.
 
+This relies on each arch having exactly one slice plan. That has held for the project's whole history, and the design does not handle the multi-plan case.
+
 - `CfOperation.SET_ARCH` with a `plan` (arch index) param:
   1. Resolve the plan's filename from `cf list slices {plan} --json` → `slicePlan`.
   2. Read that plan file's frontmatter `parent:` (the arch document).
