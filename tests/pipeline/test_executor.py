@@ -1684,7 +1684,7 @@ class TestCfUnfinishedSlices:
     @pytest.mark.asyncio
     async def test_filters_complete_slices(self) -> None:
         from squadron.integrations.context_forge import SliceEntry
-        from squadron.pipeline.executor import _cf_unfinished_slices
+        from squadron.pipeline.sources import _cf_unfinished_slices
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
@@ -1703,24 +1703,24 @@ class TestCfUnfinishedSlices:
 
 class TestParseSource:
     def test_valid_source(self) -> None:
-        from squadron.pipeline.executor import _parse_source
+        from squadron.pipeline.sources import parse_source
 
-        ns, fn, args = _parse_source('cf.unfinished_slices("myplan")')
+        ns, fn, args = parse_source('cf.unfinished_slices("myplan")')
         assert ns == "cf"
         assert fn == "unfinished_slices"
         assert args == ["myplan"]
 
     def test_unrecognized_source_raises(self) -> None:
-        from squadron.pipeline.executor import _parse_source
+        from squadron.pipeline.sources import parse_source
 
         with pytest.raises(ValueError, match="Unknown source"):
-            _parse_source("cf.nonexistent_fn()")
+            parse_source("cf.nonexistent_fn()")
 
     def test_malformed_source_raises(self) -> None:
-        from squadron.pipeline.executor import _parse_source
+        from squadron.pipeline.sources import parse_source
 
         with pytest.raises(ValueError):
-            _parse_source("not-a-source")
+            parse_source("not-a-source")
 
 
 class TestEachExecution:

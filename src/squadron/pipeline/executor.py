@@ -15,7 +15,7 @@ import os
 import re
 import sys
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -30,6 +30,7 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
+from squadron.pipeline.sources import SOURCE_REGISTRY, parse_source
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
@@ -431,68 +432,6 @@ def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
         strategy=strategy if isinstance(strategy, str) else None,
         commit_each_iteration=loop_dict.get("commit_each_iteration") is True,
     )
-
-
-# ---------------------------------------------------------------------------
-# Source registry (for `each` step type)
-# ---------------------------------------------------------------------------
-
-SourceFn = Callable[
-    [list[str], "ContextForgeClient", dict[str, object]],
-    Awaitable[list[dict[str, object]]],
-]
-
-_SOURCE_REGISTRY: dict[tuple[str, str], SourceFn] = {}
-
-_SOURCE_RE = re.compile(r"(\w+)\.(\w+)\(([^)]*)\)")
-
-
-async def _cf_unfinished_slices(
-    args: list[str],
-    cf_client: ContextForgeClient,
-    params: dict[str, object],
-) -> list[dict[str, object]]:
-    """Return slices whose status is not 'complete'."""
-    slices = cf_client.list_slices()
-    return [
-        {
-            "index": str(entry.index),
-            "name": entry.name,
-            "status": entry.status,
-            "design_file": entry.design_file or "",
-        }
-        for entry in slices
-        if entry.status != "complete"
-    ]
-
-
-_SOURCE_REGISTRY[("cf", "unfinished_slices")] = _cf_unfinished_slices
-
-
-def _parse_source(
-    source_str: str,
-) -> tuple[str, str, list[str]]:
-    """Parse a source string like ``cf.unfinished_slices("{plan}")``.
-
-    Returns (namespace, function, args_list).
-    Raises ValueError for unknown namespace/function combinations.
-    """
-    match = _SOURCE_RE.fullmatch(source_str.strip())
-    if not match:
-        raise ValueError(
-            f"Invalid source string {source_str!r}. Expected format: namespace.function(args)"
-        )
-    namespace = match.group(1)
-    function = match.group(2)
-    args_raw = match.group(3).strip()
-    args = [a.strip().strip("\"'") for a in args_raw.split(",") if a.strip()] if args_raw else []
-
-    key = (namespace, function)
-    if key not in _SOURCE_REGISTRY:
-        raise ValueError(
-            f"Unknown source '{namespace}.{function}'. Registered sources: {list(_SOURCE_REGISTRY)}"
-        )
-    return namespace, function, args
 
 
 # ---------------------------------------------------------------------------
@@ -1486,8 +1425,8 @@ async def _execute_each_step(
     # Resolve placeholders in source string
     source_resolved = _resolve_str(source_str, merged_params)
 
-    namespace, function, args = _parse_source(source_resolved)
-    source_fn = _SOURCE_REGISTRY[(namespace, function)]
+    namespace, function, args = parse_source(source_resolved)
+    source_fn = SOURCE_REGISTRY[(namespace, function)]
 
     items = await source_fn(args, cf_client, merged_params)
 
