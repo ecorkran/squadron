@@ -175,22 +175,21 @@ merges.
       when run normally — this is the one behavior this task must not
       change.
 
-### Task B.3 — Update the ~44 existing test patch references
+### Task B.3 — Retarget the ~44 existing test patch references
 
 - [ ] Effort: 3/5
 - [ ] Search all 13 test files that patch the 19 renamed constants by name
-      (per the design's D1 count: ~44 references). For each reference:
-      - if the test patches the constant to redirect a path, and the
-        per-test home (added in Part A/C below) will already cover it,
-        drop the patch entirely;
-      - otherwise, switch the patch target to the new function name.
+      (per the design's D1 count: ~44 references). For every reference,
+      switch the patch target to the new function name (e.g. patch
+      `squadron.skills.manifest._user_manifest` instead of
+      `squadron.skills.manifest.USER_MANIFEST`). Do **not** drop any patch
+      in this task, even one that looks redundant — the per-test home does
+      not exist until Task C.3, so a dropped patch here would leak the
+      developer's real `HOME` with no isolation net yet to catch it.
 - [ ] Run `uv run pytest -q 2>&1 | tail -1` and confirm the suite is still
-      green (same or better than Task A.1's baseline) before moving on —
-      this task must not be deferred past Part C, since the renamed
-      symbols would otherwise break these tests with no isolation net yet
-      to catch it.
+      green (same or better than Task A.1's baseline) before moving on.
 - [ ] Commit Tasks B.1–B.3 together (`src/` changes and their direct test
-      patch updates land as one buildable checkpoint).
+      patch retargets land as one buildable checkpoint).
 
 ### Task B.4 — Add the import-purity guard
 
@@ -205,6 +204,14 @@ merges.
       built in the test itself) asserting the scanner actually flags a
       module-level `Path.home()` call — the guard must be shown to fail
       before it's trusted to pass.
+- [ ] Run the design's walkthrough step 3 import-cleanliness check
+      directly, not just via the AST guard: `uv run python -c "import
+      squadron.cli.app, os; print('OPENROUTER_API_KEY' in os.environ)"`
+      with the shell not exporting that var, and confirm it prints
+      `False`. The AST guard only catches a literal module-level
+      `Path.home()`/`load_dotenv` call; this confirms Task B.2's
+      `_load_env_file()` isn't itself invoked at import time, which the
+      guard cannot detect on its own.
 - [ ] Commit as its own checkpoint.
 
 ---
@@ -290,6 +297,8 @@ merges.
       afterward. Clean up the env var at the end of the test.
 - [ ] This is the only test in the suite that exercises the unpached
       loader — everywhere else the autouse fixture's no-op patch applies.
+- [ ] Commit: rides with Task C.1–C.4's checkpoint (same commit, added
+      before that commit lands).
 
 ---
 
@@ -349,6 +358,9 @@ merges.
       fix that failure per Task D.4's pattern instead.
 - [ ] Confirm no test outside these four files needed the marker; if one
       does, add it here with the same justification comment.
+- [ ] Commit: its own checkpoint, separate from D.1–D.4 (marker additions
+      are easy to revert independently if a marking judgment turns out
+      wrong).
 
 ### Task D.6 — Confirm the `shutil.which`/git host-probe sweep (D8)
 
@@ -363,14 +375,26 @@ merges.
       `test_frontmatter_gate.py` (or add it there if not already covered).
 - [ ] No code change expected in this task — it is a verification step.
       If a failure surfaces, route it to Task D.4 or D.5 as appropriate.
+- [ ] Commit: none expected (verification-only); if a fix is needed, it
+      commits under whichever of D.4/D.5's checkpoints it was routed to.
 
-### Task D.7 — Consolidate redundant per-directory fixtures
+### Task D.7 — Consolidate redundant per-directory fixtures, drop redundant patches
 
-- [ ] Effort: 2/5
+- [ ] Effort: 3/5
 - [ ] Delete `_isolated_user_config`, `_isolated_model_registry`, and
       `_isolated_user_templates` from `tests/review/conftest.py` — the
       per-test home from Task C.3 now covers all three since Task B.1 made
       their underlying paths call-time.
+- [ ] Delete the same duplicated fixtures from `tests/cli/conftest.py`:
+      `_isolated_model_registry` (patches
+      `squadron.models.aliases.models_toml_path`, ~line 24) and
+      `_isolated_user_templates` (patches
+      `squadron.review.templates.USER_TEMPLATES_DIR`, ~line 41) — both are
+      now redundant with the per-test home for the same reason as their
+      `tests/review/conftest.py` copies. Leave `isolate_reviews_dir` (or
+      equivalently-named fixture) in that file untouched if it patches the
+      repo-relative `REVIEWS_DIR` — that path is not home-derived and the
+      per-test home does not cover it.
 - [ ] Delete `isolate_review_debug_log` from `tests/conftest.py` for the
       same reason.
 - [ ] Keep `_pinned_diff_base` (pins `cf`'s *project* config, read from the
@@ -383,6 +407,13 @@ merges.
       `non_repo_dir`, `second_audited_repo`, and direct users) keep the
       same fixture name and `Path` return type — no consumer call sites
       change.
+- [ ] Sweep the ~44 patch references retargeted (not dropped) in Task B.3:
+      for each one, if the per-test home now makes the patch redundant
+      (i.e. the patch exists only to redirect a path under `HOME` that the
+      autouse fixture from Task C.3 already redirects), delete the patch
+      entirely. This is the "drop the patch" step B.3 deferred — it is
+      only safe now that Task C.3's per-test home exists to catch a test
+      that turns out to still depend on the real value.
 - [ ] Run `uv run pytest -q 2>&1 | tail -1`; confirm counts unchanged from
       Task D.4's checkpoint.
 - [ ] Commit as its own checkpoint.
@@ -401,6 +432,9 @@ merges.
 - [ ] Confirm the run reports zero failures, with passed/skipped counts
       consistent with Task D.7's checkpoint, plus a nonzero deselected
       `host_cf` count matching Task D.5's marked tests.
+- [ ] Commit: none expected if the script is already green; if a fix was
+      needed, it commits under whichever of D.4/D.5's checkpoints applies,
+      same as Task D.6.
 
 ### Task E.2 — Real-home hostility walkthrough
 
@@ -421,8 +455,14 @@ merges.
       existing test job (not blocking it).
 - [ ] Set a `timeout-minutes` bound on the job so a hang fails the job
       instead of stalling the workflow.
-- [ ] Push the slice branch and confirm the `hermetic` job goes green
-      alongside the existing main test job.
+- [ ] The workflow's current triggers are `push: branches: [main]` and
+      `pull_request: branches: [main]` — pushing this slice branch (or
+      merging into the project's configured integration branch, which is
+      not `main`) fires nothing. The only trigger that runs the new job is
+      a pull request targeting `main`. Open a PR from this slice branch
+      against `main` (draft is fine; it does not need to merge yet) and
+      confirm the `hermetic` job goes green there, alongside the existing
+      `test` job.
 - [ ] Commit the CI change; this is the slice's final checkpoint.
 
 ---

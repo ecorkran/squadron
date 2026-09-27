@@ -279,7 +279,11 @@ Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Pyt
 4. `sq` still loads `.env` from the current directory at runtime.
 5. `scripts/test-hostile-env` passes on the slice's final commit with zero failures.
 6. The same script against the pre-slice parent commit fails, and the failures are recorded in DEVLOG (negative control).
-7. The `hermetic` CI job is green on the slice branch push.
+7. The `hermetic` CI job is green on a pull-request run against `main` —
+   the workflow's triggers (`push`/`pull_request` on `main` only) do not
+   fire on a plain slice-branch push or on a merge into a non-`main`
+   integration branch, so a PR run is the only trigger that produces this
+   evidence.
 
 ### Technical Requirements
 
