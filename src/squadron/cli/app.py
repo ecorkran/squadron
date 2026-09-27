@@ -38,8 +38,6 @@ from squadron.cli.commands.summary_instructions import summary_instructions
 from squadron.cli.commands.summary_run import summary_run
 from squadron.cli.commands.task import task
 
-load_dotenv(dotenv_path=Path.cwd() / ".env")
-
 app = typer.Typer(
     name="squadron",
     help="Multi-agent squadron CLI",
@@ -72,6 +70,15 @@ app.command("_summary-run", hidden=True)(summary_run)
 app.command("_dispatch-run", hidden=True)(dispatch_run)
 
 
+def _load_env_file() -> None:
+    """Load ``.env`` from the current directory into the process environment.
+
+    Called when the CLI runs, never at import, so importing squadron does not
+    read the working directory's credentials.
+    """
+    load_dotenv(dotenv_path=Path.cwd() / ".env")
+
+
 def version_callback(value: bool) -> None:
     if value:
         print(f"squadron {importlib.metadata.version('squadron-ai')}")
@@ -89,3 +96,4 @@ def main(
     ),
 ) -> None:
     """Multi-agent squadron CLI."""
+    _load_env_file()

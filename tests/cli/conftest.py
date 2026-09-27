@@ -47,7 +47,7 @@ def _isolated_user_templates(tmp_path: Path) -> Iterator[Path]:
     """
     templates = tmp_path / "user-templates"
     templates.mkdir(parents=True, exist_ok=True)
-    with patch("squadron.review.templates.USER_TEMPLATES_DIR", templates):
+    with patch("squadron.review.templates.user_templates_dir", return_value=templates):
         yield templates
 
 

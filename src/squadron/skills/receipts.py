@@ -13,7 +13,10 @@ import tomli_w
 
 from squadron.skills.models import InstallReceipt
 
-DEFAULT_RECEIPTS_DIR: Path = Path.home() / ".config" / "squadron" / "receipts"
+
+def default_receipts_dir() -> Path:
+    """Return the user-level directory holding install receipts."""
+    return Path.home() / ".config" / "squadron" / "receipts"
 
 
 def write_receipt(receipt: InstallReceipt, receipts_dir: Path) -> None:

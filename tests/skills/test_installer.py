@@ -14,7 +14,7 @@ def _isolate_receipts(  # pyright: ignore[reportUnusedFunction]
 ) -> Path:
     """Redirect the default receipts dir into tmp so installs never touch $HOME."""
     receipts_dir = tmp_path / "_receipts"
-    monkeypatch.setattr(installer_mod, "DEFAULT_RECEIPTS_DIR", receipts_dir)
+    monkeypatch.setattr(installer_mod, "default_receipts_dir", lambda: receipts_dir)
     return receipts_dir
 
 
@@ -181,11 +181,11 @@ class TestReceiptWriting:
         assert read_receipt("mypack", receipts_dir) is None
 
     def test_install_without_receipts_dir_uses_default(self, tmp_path: Path) -> None:
-        # The autouse fixture redirects DEFAULT_RECEIPTS_DIR into tmp.
+        # The autouse fixture redirects default_receipts_dir() into tmp.
         src = _make_source(tmp_path, ["skill.md"])
         commands_dir = tmp_path / "commands"
         entry = PackEntry(source=str(src), prefix="mypack")
 
         install_pack("mypack", entry, commands_dir)
 
-        assert read_receipt("mypack", installer_mod.DEFAULT_RECEIPTS_DIR) is not None
+        assert read_receipt("mypack", installer_mod.default_receipts_dir()) is not None

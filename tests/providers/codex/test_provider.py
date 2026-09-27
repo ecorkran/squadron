@@ -85,8 +85,8 @@ class TestCreateAgent:
     ) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with patch(
-            "squadron.providers.codex.auth._CODEX_AUTH_FILE",
-            tmp_path / "nonexistent" / "auth.json",  # type: ignore[operator]
+            "squadron.providers.codex.auth._codex_auth_file",
+            return_value=tmp_path / "nonexistent" / "auth.json",  # type: ignore[operator]
         ):
             with pytest.raises(ProviderAuthError, match="No Codex credentials"):
                 asyncio.run(provider.create_agent(agent_config))

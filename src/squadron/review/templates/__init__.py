@@ -186,7 +186,9 @@ def clear_registry() -> None:
     _TEMPLATES.clear()
 
 
-USER_TEMPLATES_DIR = Path.home() / ".config" / "squadron" / "templates"
+def user_templates_dir() -> Path:
+    """Return the directory holding user review-template overrides."""
+    return Path.home() / ".config" / "squadron" / "templates"
 
 
 def load_all_templates(
@@ -208,9 +210,9 @@ def load_all_templates(
             register_template(template)
 
     # User templates (override built-in by name)
-    user_templates_dir = user_dir or USER_TEMPLATES_DIR
-    if user_templates_dir.is_dir():
-        for yaml_file in sorted(user_templates_dir.glob("*.yaml")):
+    user_templates = user_dir or user_templates_dir()
+    if user_templates.is_dir():
+        for yaml_file in sorted(user_templates.glob("*.yaml")):
             template = load_template(yaml_file)
             register_template(template)
 

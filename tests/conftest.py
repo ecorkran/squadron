@@ -76,7 +76,9 @@ def isolate_review_debug_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     whenever it falls back; without this every review-shaped test leaves a line in the
     real file (8,600+ of them had accumulated).
     """
-    monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", tmp_path / "review-debug.jsonl")
+    monkeypatch.setattr(
+        "squadron.review.parsers._debug_log_path", lambda: tmp_path / "review-debug.jsonl"
+    )
 
 
 @pytest.fixture(autouse=True)

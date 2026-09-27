@@ -26,7 +26,10 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 _PROJECT_MANIFEST_REL = Path("project-documents/user/events.yaml")
-_USER_MANIFEST = Path.home() / ".config" / "squadron" / "events.yaml"
+
+
+def _user_manifest() -> Path:
+    return Path.home() / ".config" / "squadron" / "events.yaml"
 
 
 @dataclass(frozen=True)
@@ -80,7 +83,7 @@ def _resolve_manifest_path(
     if project.is_file():
         return project
 
-    user = user_path if user_path is not None else _USER_MANIFEST
+    user = user_path if user_path is not None else _user_manifest()
     if user.is_file():
         return user
 

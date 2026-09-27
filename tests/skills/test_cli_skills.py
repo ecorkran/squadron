@@ -11,7 +11,7 @@ from squadron.cli.app import app
 
 runner = CliRunner()
 
-_USER_MANIFEST_ATTR = "squadron.skills.manifest.USER_MANIFEST"
+_USER_MANIFEST_ATTR = "squadron.skills.manifest.user_manifest_path"
 _EFFECTIVE_MANIFEST_ATTR = "squadron.skills.manifest.load_effective"
 
 
@@ -25,7 +25,7 @@ class TestListNoManifest:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # No user manifest — shipped default provides the analysis pack.
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, tmp_path / "no-such.toml")
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: tmp_path / "no-such.toml")
         result = runner.invoke(app, ["skills", "list", "--commands-dir", str(tmp_path / "commands")])
         assert result.exit_code == 0, result.output
         assert "analysis" in result.output
@@ -34,7 +34,7 @@ class TestListNoManifest:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # Patch out both user manifest and shipped default to assert the None path.
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, tmp_path / "no-such.toml")
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: tmp_path / "no-such.toml")
         monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
         result = runner.invoke(app, ["skills", "list", "--commands-dir", str(tmp_path / "commands")])
         assert result.exit_code == 1
@@ -47,7 +47,7 @@ class TestInstallNotFound:
     ) -> None:
         manifest_file = tmp_path / "skills.toml"
         _write_manifest(manifest_file, '[packs.existing]\nsource = "bundled"\nprefix = "existing"\n')
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: manifest_file)
 
         result = runner.invoke(
             app, ["skills", "install", "nonexistent", "--commands-dir", str(tmp_path / "commands")]
@@ -72,7 +72,7 @@ class TestInstallLocalPack:
             manifest_file,
             f'[packs.testpack]\nsource = "{src}"\nprefix = "testpack"\n',
         )
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: manifest_file)
 
         commands_dir = tmp_path / "commands"
         result = runner.invoke(
@@ -108,7 +108,7 @@ class TestUninstall:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         manifest_file = self._manifest_with_local_pack(tmp_path)
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: manifest_file)
 
         commands_dir = tmp_path / "commands"
         receipts_dir = tmp_path / "receipts"
@@ -131,7 +131,7 @@ class TestUninstall:
 
     def test_unrelated_file_not_removed(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         manifest_file = self._manifest_with_local_pack(tmp_path)
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: manifest_file)
 
         commands_dir = tmp_path / "commands"
         receipts_dir = tmp_path / "receipts"
@@ -173,7 +173,7 @@ class TestUninstall:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         manifest_file = self._manifest_with_local_pack(tmp_path)
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: manifest_file)
 
         commands_dir = tmp_path / "commands"
         receipts_dir = tmp_path / "receipts"
@@ -209,7 +209,7 @@ class TestListWithStatus:
             f'[packs.alpha]\nsource = "{src}"\nprefix = "alpha"\n'
             f'[packs.beta]\nsource = "{src}"\nprefix = "beta"\n',
         )
-        monkeypatch.setattr(_USER_MANIFEST_ATTR, manifest_file)
+        monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: manifest_file)
 
         commands_dir = tmp_path / "commands"
         # Only install alpha

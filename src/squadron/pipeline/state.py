@@ -159,15 +159,18 @@ class RunState(BaseModel):
 # StateManager
 # ---------------------------------------------------------------------------
 
-_DEFAULT_RUNS_DIR = Path.home() / ".config" / "squadron" / "runs"
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _default_runs_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "runs"
 
 
 class StateManager:
     """Manages pipeline run state files on disk."""
 
     def __init__(self, runs_dir: Path | None = None) -> None:
-        self._runs_dir = runs_dir if runs_dir is not None else _DEFAULT_RUNS_DIR
+        self._runs_dir = runs_dir if runs_dir is not None else _default_runs_dir()
         self._runs_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------

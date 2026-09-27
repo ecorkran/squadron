@@ -118,8 +118,10 @@ _LOCATION_RE = re.compile(r"^location:[ \t]*(.*)$", re.IGNORECASE | re.MULTILINE
 # Existing file_ref pattern: -> path/to/file.py:123
 _FILE_REF_RE = re.compile(r"^->\s*(.+)$", re.MULTILINE)
 
+
 # Debug log path
-_DEBUG_LOG_PATH = Path.home() / ".config" / "squadron" / "logs" / "review-debug.jsonl"
+def _debug_log_path() -> Path:
+    return Path.home() / ".config" / "squadron" / "logs" / "review-debug.jsonl"
 
 
 def _extract_verdict(text: str) -> Verdict:
@@ -880,7 +882,8 @@ def _write_debug_log(
 ) -> None:
     """Append a debug entry to the review debug log."""
     try:
-        _DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        log_path = _debug_log_path()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
             "ts": datetime.now(tz=UTC).isoformat(),
             "template": template,
@@ -890,7 +893,7 @@ def _write_debug_log(
             "degraded": degraded,
             "raw_output": raw_output,
         }
-        with _DEBUG_LOG_PATH.open("a") as f:
+        with log_path.open("a") as f:
             f.write(json.dumps(entry) + "\n")
     except OSError as exc:
         print(f"[squadron] Warning: could not write debug log: {exc}", file=sys.stderr)

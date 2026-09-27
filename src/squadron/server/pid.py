@@ -7,16 +7,18 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_DEFAULT_DIR = Path.home() / ".squadron"
+
+def _default_dir() -> Path:
+    return Path.home() / ".squadron"
 
 
 @dataclass
 class DaemonConfig:
     """Configuration for the daemon process."""
 
-    socket_path: str = field(default_factory=lambda: str(_DEFAULT_DIR / "daemon.sock"))
+    socket_path: str = field(default_factory=lambda: str(_default_dir() / "daemon.sock"))
     port: int = 7862
-    pid_path: str = field(default_factory=lambda: str(_DEFAULT_DIR / "daemon.pid"))
+    pid_path: str = field(default_factory=lambda: str(_default_dir() / "daemon.pid"))
 
 
 def write_pid_file(path: str) -> None:

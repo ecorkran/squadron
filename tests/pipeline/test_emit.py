@@ -303,7 +303,7 @@ async def test_emit_file_default_path_uses_project_and_pipeline(
     ctx.params = {"_project": "myproject"}
     ctx.pipeline_name = "P4"
 
-    with patch.object(emit_module, "_DEFAULT_SUMMARIES_DIR", summaries_dir):
+    with patch.object(emit_module, "_default_summaries_dir", return_value=summaries_dir):
         result = await _emit_file("summary text", dest, ctx)
 
     assert result.ok is True
@@ -330,7 +330,7 @@ async def test_emit_file_default_path_no_project_falls_back_to_unknown(
     ctx.params = {}
     ctx.pipeline_name = "P4"
 
-    with patch.object(emit_module, "_DEFAULT_SUMMARIES_DIR", summaries_dir):
+    with patch.object(emit_module, "_default_summaries_dir", return_value=summaries_dir):
         result = await _emit_file("text", dest, ctx)
 
     assert result.ok is True

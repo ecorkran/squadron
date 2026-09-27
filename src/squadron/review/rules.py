@@ -9,7 +9,7 @@ from pathlib import Path
 
 from squadron.config.manager import get_config
 from squadron.review.git_utils import run_git
-from squadron.review.templates import USER_TEMPLATES_DIR
+from squadron.review.templates import user_templates_dir
 
 # Frontmatter YAML block at start of file
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
@@ -79,13 +79,7 @@ def resolve_rules_dir(
     # only where the resolver previously returned None, so every input that
     # resolved to a path before still resolves to the same one. User review
     # templates live beside user models and pipelines under ~/.config/squadron.
-    #
-    # Derived from Path.home() here rather than read off the module-level
-    # constant: the constant is bound at import time, so a test patching
-    # Path.home() could never reach this branch — it would pass by skipping
-    # rather than by resolving. The templates package still owns the canonical
-    # location; USER_TEMPLATES_DIR.name keeps the directory spelled once.
-    user_templates = Path.home() / ".config" / "squadron" / USER_TEMPLATES_DIR.name
+    user_templates = user_templates_dir()
     if user_templates.is_dir():
         return user_templates, RulesSource.TEMPLATE
 

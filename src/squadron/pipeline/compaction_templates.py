@@ -17,7 +17,9 @@ import yaml
 from squadron.data import data_dir
 from squadron.pipeline.compact_render import LenientDict
 
-_USER_COMPACTION_DIR = Path.home() / ".config" / "squadron" / "compaction"
+
+def _user_compaction_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "compaction"
 
 
 @dataclass
@@ -45,7 +47,7 @@ def load_compaction_template(
         FileNotFoundError: If no template with the given name exists.
     """
     filename = f"{template_name}.yaml"
-    user_templates = user_dir or _USER_COMPACTION_DIR
+    user_templates = user_dir or _user_compaction_dir()
 
     # User override takes precedence
     user_path = user_templates / filename

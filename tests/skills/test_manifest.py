@@ -81,7 +81,9 @@ class TestMerge:
 class TestLoadEffective:
     def test_no_files_returns_none(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         # Patch out both user manifest and shipped default so we can assert the None path.
-        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", tmp_path / "no-such.toml")
+        monkeypatch.setattr(
+            "squadron.skills.manifest.user_manifest_path", lambda: tmp_path / "no-such.toml"
+        )
         monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
         result = load_effective(cwd=tmp_path)
         assert result is None
@@ -91,7 +93,7 @@ class TestLoadEffective:
     ) -> None:
         user_file = tmp_path / "skills.toml"
         user_file.write_text(VALID_TOML)
-        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest.user_manifest_path", lambda: user_file)
         monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
         result = load_effective(cwd=tmp_path)
         assert result is not None
@@ -100,7 +102,7 @@ class TestLoadEffective:
     def test_both_files_returns_merged(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         user_file = tmp_path / "skills-user.toml"
         user_file.write_text('[packs.user_pack]\nsource = "bundled"\nprefix = "user"\n')
-        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest.user_manifest_path", lambda: user_file)
         monkeypatch.setattr("squadron.skills.manifest._load_shipped_default", lambda: None)
 
         project_dir = tmp_path / "project"
@@ -124,7 +126,9 @@ class TestLoadEffectiveWithDefault:
     ) -> None:
         # With no user or project manifest, load_effective() returns the analysis pack
         # from the shipped default.
-        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", tmp_path / "no-such.toml")
+        monkeypatch.setattr(
+            "squadron.skills.manifest.user_manifest_path", lambda: tmp_path / "no-such.toml"
+        )
         result = load_effective(cwd=tmp_path)
         assert result is not None
         assert "analysis" in result.packs
@@ -136,7 +140,7 @@ class TestLoadEffectiveWithDefault:
         # User manifest with a different analysis entry wins; other shipped packs survive.
         user_file = tmp_path / "skills.toml"
         user_file.write_text('[packs.analysis]\nsource = "bundled"\nprefix = "custom-analysis"\n')
-        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest.user_manifest_path", lambda: user_file)
 
         result = load_effective(cwd=tmp_path)
         assert result is not None
@@ -148,7 +152,7 @@ class TestLoadEffectiveWithDefault:
     ) -> None:
         user_file = tmp_path / "skills.toml"
         user_file.write_text('[packs.extra]\nsource = "bundled"\nprefix = "extra"\n')
-        monkeypatch.setattr("squadron.skills.manifest.USER_MANIFEST", user_file)
+        monkeypatch.setattr("squadron.skills.manifest.user_manifest_path", lambda: user_file)
 
         result = load_effective(cwd=tmp_path)
         assert result is not None

@@ -27,9 +27,12 @@ SECTION_INTEGRATIONS = "Integrations"
 SECTION_SKILLS = "Skill Packs"
 SECTION_CONFIG = "Configuration"
 
+
 # Default install location for skill packs. Defined locally (rather than imported
 # from cli.commands.skills) to keep the pure check layer free of CLI coupling.
-_DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
+def _default_commands_dir() -> Path:
+    return Path.home() / ".claude" / "commands"
+
 
 #: The npm package providing the ``cf`` binary. Defined once and referenced
 #: everywhere so a rename cannot leave a stale name in one surface — the
@@ -432,7 +435,7 @@ def check_skill_packs(
     WARN (informational + actionable), not a MISSING — no pack is required.
     """
     if commands_dir is None:
-        commands_dir = _DEFAULT_COMMANDS_DIR
+        commands_dir = _default_commands_dir()
 
     manifest = load_effective(cwd=cwd or Path.cwd())
     if manifest is None:

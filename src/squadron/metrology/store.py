@@ -38,7 +38,9 @@ _logger = logging.getLogger(__name__)
 _SCHEMA_VERSION = 1
 _SUPPORTED_SCHEMA_VERSIONS = {1}
 
-_DEFAULT_STORE_DIR = Path.home() / ".config" / "squadron" / "metrology"
+
+def _default_store_dir() -> Path:
+    return Path.home() / ".config" / "squadron" / "metrology"
 
 
 class SchemaVersionError(Exception):
@@ -58,7 +60,7 @@ def resolve_store_dir(cwd: str = ".") -> Path:
     configured = get_config("metrology.store_dir", cwd=cwd)
     if isinstance(configured, str) and configured.strip():
         return Path(configured).expanduser()
-    return _DEFAULT_STORE_DIR
+    return _default_store_dir()
 
 
 def generate_sample_id(now: datetime | None = None) -> str:
@@ -105,7 +107,7 @@ class MetrologyStore:
     """Manages metrology record files on disk."""
 
     def __init__(self, store_dir: Path | None = None) -> None:
-        self._store_dir = store_dir if store_dir is not None else _DEFAULT_STORE_DIR
+        self._store_dir = store_dir if store_dir is not None else _default_store_dir()
         try:
             self._store_dir.mkdir(parents=True, exist_ok=True)
         except OSError as exc:

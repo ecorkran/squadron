@@ -335,7 +335,7 @@ class TestDiagnosticLogging:
     ) -> None:
         """CONCERNS + empty findings → log file written."""
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+        monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
         text = "## Summary\nCONCERNS\n\nSome unstructured content.\n"
         parse_review_output(text, "slice", {}, model="minimax")
         assert log_file.exists()
@@ -356,7 +356,7 @@ class TestDiagnosticLogging:
         failure with nothing else to reconstruct from was the least recoverable.
         """
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+        monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
         raw = "The model rambled without a summary section or any findings.\n"
 
         parse_review_output(raw, "slice", {}, model="minimax")
@@ -376,7 +376,7 @@ class TestDiagnosticLogging:
     ) -> None:
         """Nothing was derived or fabricated, so the result's own flag stays False."""
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+        monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
 
         result = parse_review_output("no summary, no findings\n", "slice", {})
 
@@ -394,7 +394,7 @@ class TestDiagnosticLogging:
         field is a serialized public contract and is unchanged.
         """
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+        monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
 
         result = parse_review_output("no summary, no findings\n", "slice", {})
 
@@ -413,7 +413,7 @@ class TestDiagnosticLogging:
     ) -> None:
         """PASS with findings → no log write."""
         log_file = tmp_path / "review-debug.jsonl"
-        monkeypatch.setattr("squadron.review.parsers._DEBUG_LOG_PATH", log_file)
+        monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
         text = "## Summary\nPASS\n\n### [PASS] Clean code\nLooks good.\n"
         parse_review_output(text, "code", {})
         assert not log_file.exists()

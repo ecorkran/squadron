@@ -13,14 +13,17 @@ from rich.table import Table
 from squadron.skills.installer import install_pack
 from squadron.skills.manifest import (
     PROJECT_MANIFEST_NAME,
-    USER_MANIFEST,
     load,
     load_effective,
+    user_manifest_path,
 )
 from squadron.skills.models import SkillSourceError, SurfaceType
-from squadron.skills.receipts import DEFAULT_RECEIPTS_DIR, read_receipt
+from squadron.skills.receipts import default_receipts_dir, read_receipt
 
-_DEFAULT_COMMANDS_DIR = Path.home() / ".claude" / "commands"
+
+def _default_commands_dir() -> Path:
+    return Path.home() / ".claude" / "commands"
+
 
 skills_app = typer.Typer(name="skills", help="Manage skill packs.", no_args_is_help=True)
 
@@ -37,18 +40,19 @@ def _require_manifest() -> NoReturn:
 @skills_app.command()
 def install(
     pack_name: str = typer.Argument(..., help="Name of the pack to install"),
-    commands_dir: Path = typer.Option(
-        _DEFAULT_COMMANDS_DIR,
+    commands_dir: Path | None = typer.Option(
+        None,
         "--commands-dir",
-        help="Destination directory for installed commands",
+        help="Destination directory for installed commands (default: ~/.claude/commands)",
     ),
-    receipts_dir: Path = typer.Option(
-        DEFAULT_RECEIPTS_DIR,
+    receipts_dir: Path | None = typer.Option(
+        None,
         "--receipts-dir",
-        help="Directory where the install receipt is written",
+        help="Directory where the install receipt is written (default: ~/.config/squadron/receipts)",
     ),
 ) -> None:
     """Install a skill pack from the active manifest."""
+    commands_dir = commands_dir or _default_commands_dir()
     try:
         manifest = load_effective(cwd=Path.cwd())
     except ValueError as exc:
@@ -76,18 +80,20 @@ def install(
 @skills_app.command()
 def uninstall(
     pack_name: str = typer.Argument(..., help="Name of the pack to uninstall"),
-    commands_dir: Path = typer.Option(
-        _DEFAULT_COMMANDS_DIR,
+    commands_dir: Path | None = typer.Option(
+        None,
         "--commands-dir",
-        help="Directory the pack was installed into",
+        help="Directory the pack was installed into (default: ~/.claude/commands)",
     ),
-    receipts_dir: Path = typer.Option(
-        DEFAULT_RECEIPTS_DIR,
+    receipts_dir: Path | None = typer.Option(
+        None,
         "--receipts-dir",
-        help="Directory holding the install receipt",
+        help="Directory holding the install receipt (default: ~/.config/squadron/receipts)",
     ),
 ) -> None:
     """Remove a skill pack's installed files using its install receipt."""
+    commands_dir = commands_dir or _default_commands_dir()
+    receipts_dir = receipts_dir or default_receipts_dir()
     try:
         receipt = read_receipt(pack_name, receipts_dir)
     except ValueError as exc:
@@ -124,13 +130,14 @@ def uninstall(
 
 @skills_app.command(name="list")
 def list_packs(
-    commands_dir: Path = typer.Option(
-        _DEFAULT_COMMANDS_DIR,
+    commands_dir: Path | None = typer.Option(
+        None,
         "--commands-dir",
-        help="Commands directory to check for installed packs",
+        help="Commands directory to check for installed packs (default: ~/.claude/commands)",
     ),
 ) -> None:
     """List skill packs from the active manifest with install status."""
+    commands_dir = commands_dir or _default_commands_dir()
     try:
         manifest = load_effective(cwd=Path.cwd())
     except ValueError as exc:
@@ -175,9 +182,10 @@ def _detect_origin(pack_name: str) -> str:
     user_m = None
     proj_m = None
 
-    if USER_MANIFEST.exists():
+    user_path = user_manifest_path()
+    if user_path.exists():
         try:
-            user_m = load(USER_MANIFEST)
+            user_m = load(user_path)
         except (ValueError, OSError):
             pass  # best-effort; load_effective already validated on the main path
 

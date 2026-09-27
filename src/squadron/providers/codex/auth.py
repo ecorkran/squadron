@@ -12,8 +12,10 @@ if TYPE_CHECKING:
     from squadron.core.models import AgentConfig
     from squadron.providers.profiles import ProviderProfile
 
+
 # Default location for Codex CLI cached credentials.
-_CODEX_AUTH_FILE = Path.home() / ".codex" / "auth.json"
+def _codex_auth_file() -> Path:
+    return Path.home() / ".codex" / "auth.json"
 
 
 class OAuthFileStrategy:
@@ -30,7 +32,7 @@ class OAuthFileStrategy:
     """
 
     def __init__(self, auth_file: Path | None = None) -> None:
-        self._auth_file = auth_file or _CODEX_AUTH_FILE
+        self._auth_file = auth_file or _codex_auth_file()
 
     @classmethod
     def from_config(

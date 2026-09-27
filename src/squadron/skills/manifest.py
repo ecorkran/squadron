@@ -8,7 +8,12 @@ from pydantic import BaseModel, ValidationError
 
 from squadron.skills.models import PackEntry
 
-USER_MANIFEST = Path.home() / ".config" / "squadron" / "skills.toml"
+
+def user_manifest_path() -> Path:
+    """Return the path to the user-level skills manifest."""
+    return Path.home() / ".config" / "squadron" / "skills.toml"
+
+
 PROJECT_MANIFEST_NAME = ".squadron/skills.toml"
 
 # Origin string for the shipped default manifest (used in CLI display).
@@ -72,8 +77,9 @@ def load_effective(cwd: Path | None = None) -> SkillsManifest | None:
     user_manifest: SkillsManifest | None = None
     project_manifest: SkillsManifest | None = None
 
-    if USER_MANIFEST.exists():
-        user_manifest = load(USER_MANIFEST)
+    user_path = user_manifest_path()
+    if user_path.exists():
+        user_manifest = load(user_path)
 
     if cwd is not None:
         project_path = cwd / PROJECT_MANIFEST_NAME
