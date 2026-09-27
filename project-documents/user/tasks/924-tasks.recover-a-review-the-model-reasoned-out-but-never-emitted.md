@@ -220,5 +220,5 @@ Order is A → C → B. Part C reuses A's `budget_exhausted` and `recoveryTurn`.
   - [x] Set `status: complete` in this file and in the slice design. Check the 924 entry in the slice plan.
   - [x] Commit: `docs: complete slice 924`
 
-- [ ] **F.5 — Merge**
-  - [ ] Re-read the target with `cf config get git.integration_branch`. Then `git checkout <target>` and `git merge 924-slice.recover-a-review-the-model-reasoned-out-but-never-emitted`. If either command fails, stop and ask the Project Manager.
+- [x] **F.5 — Merge**
+  - [x] Re-read the target with `cf config get git.integration_branch`. Then `git checkout <target>` and `git merge 924-slice.recover-a-review-the-model-reasoned-out-but-never-emitted`. If either command fails, stop and ask the Project Manager.
