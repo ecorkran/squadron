@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, cast
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -27,6 +28,7 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
+from squadron.pipeline.batch_report import BatchReport
 from squadron.pipeline.classification import (
     ClassificationError,
     PipelineClassification,
@@ -576,6 +578,19 @@ def _display_result(result: PipelineResult) -> None:
         rprint(f"    {sr.step_name}: {sr.status.value}{verdict_str}")
         if error_msg:
             rprint(f"      [red]Error: {error_msg}[/red]")
+
+    for sr in result.step_results:
+        if sr.batch_report is not None:
+            _display_batch_report(sr.batch_report)
+
+
+def _display_batch_report(report: BatchReport) -> None:
+    """One line of counts, the flagged items, and where the report is (D9)."""
+    rprint(f"\n[bold]{escape(report.summary_line())}[/bold]")
+    for record in report.flagged():
+        rprint(f"  [yellow]FLAGGED[/yellow] {escape(record.render_line()[2:])}")
+    if report.written_to is not None:
+        rprint(f"  Report: {report.written_to}")
 
 
 # ---------------------------------------------------------------------------

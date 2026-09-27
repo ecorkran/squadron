@@ -1621,3 +1621,48 @@ class TestExplainCommand:
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0
         assert "↳" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# Slice 195 D9 — batch report summary
+# ---------------------------------------------------------------------------
+
+
+def test_display_result_summarizes_batch_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from squadron.cli.commands.run import _display_result
+    from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, ItemOutcome
+    from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
+
+    report = BatchReport(
+        pipeline="design-plan",
+        run_id="3f9c2a1b7d10",
+        step_name="slices",
+        plan="900",
+        records=[
+            BatchItemRecord("923", "Isolation", ItemOutcome.PASSED),
+            BatchItemRecord("929", "Serialize", ItemOutcome.FLAGGED, reason="step design failed"),
+        ],
+    )
+    report_path = report.write(tmp_path)
+    result = PipelineResult(
+        pipeline_name="design-plan",
+        status=ExecutionStatus.COMPLETED,
+        step_results=[
+            StepResult(
+                step_name="slices",
+                step_type="each",
+                status=ExecutionStatus.COMPLETED,
+                action_results=[],
+                batch_report=report,
+            )
+        ],
+    )
+
+    _display_result(result)
+
+    out = capsys.readouterr().out
+    assert "design-plan slices: 2 items — 1 passed, 0 accepted, 1 flagged" in out
+    assert "FLAGGED 929 Serialize — step design failed" in out
+    assert str(report_path) in out.replace("\n", "")

@@ -111,6 +111,7 @@ class BatchReport:
     step_name: str
     plan: str | None = None
     records: list[BatchItemRecord] = field(default_factory=lambda: [])
+    written_to: Path | None = None
 
     def count(self, outcome: ItemOutcome) -> int:
         return sum(1 for record in self.records if record.outcome is outcome)
@@ -156,4 +157,5 @@ class BatchReport:
         """Write the report beside the run state file; return its path."""
         target = self.path(runs_dir)
         target.write_text(self.render(), encoding="utf-8")
+        self.written_to = target
         return target
