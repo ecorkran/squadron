@@ -80,6 +80,17 @@ def isolate_review_debug_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.fixture(autouse=True)
+def isolate_default_runs_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep run artifacts out of the developer's ``~/.config/squadron/runs``.
+
+    Every ``each`` step writes a batch report beside the run state file
+    (slice 195 D9); a test that runs one without ``runs_dir`` would otherwise
+    leave a report in the real directory on every run.
+    """
+    monkeypatch.setattr("squadron.pipeline.state._DEFAULT_RUNS_DIR", tmp_path / "runs")
+
+
+@pytest.fixture(autouse=True)
 def restore_agent_logger_state() -> Iterator[None]:
     """Undo the global logger mutation ``sq review -v`` performs.
 

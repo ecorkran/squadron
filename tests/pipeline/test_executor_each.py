@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from squadron.documents.frontmatter import read_frontmatter
+from squadron.pipeline.batch_report import ItemOutcome
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult, execute_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.sources import SOURCE_REGISTRY
@@ -175,3 +178,63 @@ class TestItemFailureReason:
         from squadron.pipeline.executor import _item_failure_reason
 
         assert _item_failure_reason(self._failed(None, [_fail(None)])) == "step design failed"
+
+
+class TestBatchReportWiring:
+    @pytest.mark.asyncio
+    async def test_mixed_run_writes_report_with_counts(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        # conftest points the default runs dir at tmp_path / "runs".
+        outcomes = {"1": _OK, "2": _fail("provider quota exceeded")}
+        result, _ = await _run(
+            monkeypatch,
+            _items("1", "2", "3", f3="no design review found"),
+            lambda i: outcomes[i],
+            policy="continue",
+        )
+
+        report = result.step_results[0].batch_report
+        assert report is not None
+        path = report.path(tmp_path / "runs")
+        assert path.is_file()
+        assert path.name.endswith(".slices.report.md")
+        assert read_frontmatter(path) == {
+            "docType": "batch-report",
+            "pipeline": "each-policy",
+            "runId": report.run_id,
+            "passed": 1,
+            "accepted": 0,
+            "flagged": 2,
+        }
+        assert [(r.index, r.outcome.value, r.reason) for r in report.records] == [
+            ("1", "passed", None),
+            ("2", "flagged", "provider quota exceeded"),
+            ("3", "flagged", "no design review found"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_report_written_when_every_item_is_flagged(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        result, ran = await _run(
+            monkeypatch, _items("1", "2"), lambda i: _fail("boom"), policy="continue"
+        )
+
+        report = result.step_results[0].batch_report
+        assert report is not None
+        assert ran == ["1", "2"]
+        assert report.count(ItemOutcome.FLAGGED) == 2
+        assert report.path(tmp_path / "runs").is_file()
+
+    @pytest.mark.asyncio
+    async def test_stopped_run_still_writes_report(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        result, _ = await _run(monkeypatch, _items("1", "2"), lambda i: _fail("boom"))
+
+        report = result.step_results[0].batch_report
+        assert result.status == ExecutionStatus.FAILED
+        assert report is not None
+        assert [r.index for r in report.records] == ["1"]
+        assert report.path(tmp_path / "runs").is_file()

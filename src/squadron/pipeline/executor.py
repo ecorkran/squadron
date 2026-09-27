@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, cast
 from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
+from squadron.pipeline.batch_report import BatchItemRecord, BatchReport
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
@@ -158,6 +159,8 @@ class StepResult:
     error: str | None = None
     # A loop that exhausted its rounds but met accept_if (slice 195 D6).
     accepted: bool = False
+    # Per-item outcomes of an `each` step (slice 195 D9); None for other steps.
+    batch_report: BatchReport | None = None
 
 
 @dataclass
@@ -1503,50 +1506,67 @@ async def _execute_each_step(
     inner_steps = _unpack_body(resolved_config)
     policy = ItemFailurePolicy(resolved_config.get("on_item_failure", ItemFailurePolicy.STOP))
     all_action_results: list[ActionResult] = []
+    report = BatchReport(pipeline_name, run_id, step.name, plan=args[0] if args else None)
+    status = ExecutionStatus.COMPLETED
 
-    for item in items:
-        # A failed precondition, not an execution failure: flagged under both
-        # policies, body never run (D5).
-        if flag_reason := item.get("flag_reason"):
-            _warn_item_flagged(step.name, item, str(flag_reason))
-            continue
-        item_results = await _run_each_item(
-            inner_steps=inner_steps,
-            item_params={**merged_params, as_name: item},
-            step_index=step_index,
-            prior_outputs=prior_outputs,
-            step_outputs=step_outputs,
-            pipeline_name=pipeline_name,
-            run_id=run_id,
-            cwd=cwd,
-            resolver=resolver,
-            cf_client=cf_client,
-            sdk_session=sdk_session,
-            get_step_type_fn=get_step_type_fn,
-            get_action_fn=get_action_fn,
-            runs_dir=runs_dir,
-        )
-        for inner_result in item_results:
-            all_action_results.extend(inner_result.action_results)
-        final_status = item_results[-1].status if item_results else ExecutionStatus.COMPLETED
-        if final_status == ExecutionStatus.FAILED and policy is ItemFailurePolicy.CONTINUE:
-            _warn_item_flagged(step.name, item, _item_failure_reason(item_results[-1]))
-            continue
-        # PAUSED stops the run under both policies: resume depends on it.
-        if final_status in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):
-            return StepResult(
-                step_name=step.name,
-                step_type=step.step_type,
-                status=final_status,
-                action_results=all_action_results,
+    for position, item in enumerate(items):
+        item_results: list[StepResult] = []
+        # A pre-flagged item is a failed precondition, not an execution
+        # failure: flagged under both policies, body never run (D5).
+        reason = str(item["flag_reason"]) if item.get("flag_reason") else None
+        if reason is None:
+            item_results = await _run_each_item(
+                inner_steps=inner_steps,
+                item_params={**merged_params, as_name: item},
+                step_index=step_index,
+                prior_outputs=prior_outputs,
+                step_outputs=step_outputs,
+                pipeline_name=pipeline_name,
+                run_id=run_id,
+                cwd=cwd,
+                resolver=resolver,
+                cf_client=cf_client,
+                sdk_session=sdk_session,
+                get_step_type_fn=get_step_type_fn,
+                get_action_fn=get_action_fn,
+                runs_dir=runs_dir,
             )
+            for inner_result in item_results:
+                all_action_results.extend(inner_result.action_results)
+            reason, status = _item_outcome(item_results, policy)
+        if reason is not None:
+            _warn_item_flagged(step.name, item, reason)
+        report.records.append(BatchItemRecord.from_item(item, position, item_results, reason))
+        if status is not ExecutionStatus.COMPLETED:
+            break
 
+    from squadron.pipeline.state import StateManager
+
+    # Written on every exit, including an all-flagged or stopped batch (D9).
+    report_path = report.write(StateManager(runs_dir=runs_dir).runs_dir)
+    _logger.info("%s; report: %s", report.summary_line(), report_path)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,
-        status=ExecutionStatus.COMPLETED,
+        status=status,
         action_results=all_action_results,
+        batch_report=report,
     )
+
+
+def _item_outcome(
+    item_results: list[StepResult], policy: ItemFailurePolicy
+) -> tuple[str | None, ExecutionStatus]:
+    """An item's flag reason (None when it succeeded) and the ``each`` step's
+    status after it. PAUSED stops the run under both policies — resume
+    depends on it; FAILED stops it only under STOP (D5)."""
+    final = item_results[-1] if item_results else None
+    if final is None or final.status not in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):
+        return None, ExecutionStatus.COMPLETED
+    if final.status is ExecutionStatus.PAUSED:
+        return f"paused at step {final.step_name}", ExecutionStatus.PAUSED
+    stop = policy is ItemFailurePolicy.STOP
+    return _item_failure_reason(final), ExecutionStatus.FAILED if stop else ExecutionStatus.COMPLETED
 
 
 def _item_failure_reason(failed: StepResult) -> str:
