@@ -23,7 +23,7 @@ Three commands to verify the system works before reading further:
 ```bash
 sq run --list                         # show all available pipelines with descriptions
 sq run slice 152                      # run the full slice lifecycle for slice 152
-sq run example 152 --dry-run          # show the step plan without executing anything
+sq run example 152 --dry-run          # show the step plan, and the items each "each" step would select, without executing
 ```
 
 ---

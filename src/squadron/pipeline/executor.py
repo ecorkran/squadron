@@ -1345,6 +1345,19 @@ async def _execute_loop_body(
     )
 
 
+async def evaluate_each_source(
+    source: str, params: dict[str, object], cf_client: Any
+) -> tuple[list[str], list[dict[str, object]]]:
+    """Resolve an ``each`` source's placeholders, parse it, and run it.
+
+    Returns the parsed source arguments and the items. Shared by execution and
+    ``sq run --dry-run``, so a preview selects exactly what a run would.
+    """
+    namespace, function, args = parse_source(_resolve_str(source, params))
+    items = await SOURCE_REGISTRY[(namespace, function)](args, cf_client, params)
+    return args, items
+
+
 async def _execute_each_step(
     *,
     step: Any,
@@ -1364,16 +1377,10 @@ async def _execute_each_step(
     runs_dir: Path | None = None,
 ) -> StepResult:
     """Execute an `each` collection step."""
-    source_str = str(resolved_config.get("source", ""))
     as_name = str(resolved_config.get("as", ""))
-
-    # Resolve placeholders in source string
-    source_resolved = _resolve_str(source_str, merged_params)
-
-    namespace, function, args = parse_source(source_resolved)
-    source_fn = SOURCE_REGISTRY[(namespace, function)]
-
-    items = await source_fn(args, cf_client, merged_params)
+    args, items = await evaluate_each_source(
+        str(resolved_config.get("source", "")), merged_params, cf_client
+    )
 
     inner_steps = _unpack_body(resolved_config)
     policy = ItemFailurePolicy(resolved_config.get("on_item_failure", ItemFailurePolicy.STOP))

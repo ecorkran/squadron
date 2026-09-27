@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import typer
 from rich import print as rprint
@@ -18,6 +18,7 @@ from rich.table import Table
 if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
 
+from squadron.cli.commands.run_dry_run import render_steps
 from squadron.events import EventType, bootstrap_event_actions
 from squadron.events.contexts import PostActionContext
 from squadron.events.discovery import PluginLoadError
@@ -61,7 +62,6 @@ from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionE
 from squadron.pipeline.sdk_session import SDKExecutionSession
 from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError, StateManager
 from squadron.pipeline.steps.phase import PhaseStepType
-from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _logger = logging.getLogger(__name__)
 
@@ -74,9 +74,6 @@ _STATUS_COLORS: dict[str, str] = {
     "failed": "red",
     "paused": "yellow",
 }
-
-_DRY_RUN_NO_UNTIL_DISPLAY = "no until — completes after first iteration"
-_DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX = ", commit_each_iteration: true"
 
 
 # ---------------------------------------------------------------------------
@@ -1125,24 +1122,7 @@ def run(
         rprint(f"[bold]Description:[/bold] {definition.description}")
         rprint(f"[bold]Params:[/bold] {params}")
         rprint("\n[bold]Steps:[/bold]")
-        for step in definition.steps:
-            rprint(f"  {step.name} ({step.step_type})")
-            if step.step_type == "loop":
-                max_val = step.config.get("max")
-                until_val = step.config.get("until", _DRY_RUN_NO_UNTIL_DISPLAY)
-                on_exhaust_val = step.config.get("on_exhaust")
-                loop_line = f"    max: {max_val}, until: {until_val}, on_exhaust: {on_exhaust_val}"
-                if step.config.get("commit_each_iteration"):
-                    loop_line += _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX
-                rprint(loop_line)
-                raw_inner: object = step.config.get("steps", [])
-                if isinstance(raw_inner, list):
-                    raw_inner_list = cast(list[object], raw_inner)
-                    inner_dicts = [
-                        cast(dict[str, object], s) for s in raw_inner_list if isinstance(s, dict)
-                    ]
-                    for inner in unpack_inner_steps(inner_dicts):
-                        rprint(f"    {inner.name} ({inner.step_type})")
+        render_steps(definition.steps, params, ContextForgeClient())
         raise typer.Exit(0)
 
     # ---- --resume ----

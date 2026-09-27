@@ -5,7 +5,8 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import typer
@@ -13,11 +14,14 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.cli.commands.run import (
-    _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX,
-    _DRY_RUN_NO_UNTIL_DISPLAY,
     _assemble_params,
     _check_cf,
     _resolve_target,
+)
+from squadron.cli.commands.run_dry_run import (
+    DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX,
+    DRY_RUN_NO_ITEMS_DISPLAY,
+    DRY_RUN_NO_UNTIL_DISPLAY,
 )
 from squadron.integrations.context_forge import (
     ContextForgeError,
@@ -460,7 +464,7 @@ class TestRunPipeline:
         ):
             result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
         assert result.exit_code == 0
-        assert _DRY_RUN_NO_UNTIL_DISPLAY in result.output
+        assert DRY_RUN_NO_UNTIL_DISPLAY in result.output
 
     def test_dry_run_loop_with_commit_each_iteration_shows_line(self) -> None:
         """--dry-run on a loop: step with commit_each_iteration: true renders it."""
@@ -485,7 +489,7 @@ class TestRunPipeline:
         ):
             result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
         assert result.exit_code == 0
-        assert _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX in result.output
+        assert DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX in result.output
 
     def test_dry_run_loop_without_commit_each_iteration_omits_line(self) -> None:
         """--dry-run on a loop: step without the key renders no such line."""
@@ -509,7 +513,71 @@ class TestRunPipeline:
         ):
             result = runner.invoke(app, ["run", "--dry-run", "test", "191"])
         assert result.exit_code == 0
-        assert _DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX not in result.output
+        assert DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX not in result.output
+
+    @staticmethod
+    def _each_definition() -> PipelineDefinition:
+        return _make_definition(
+            params={"plan": "required", "rounds": "2"},
+            steps=[
+                StepConfig(
+                    step_type="each",
+                    name="slices",
+                    config={
+                        "source": 'cf.undesigned_slices("{plan}")',
+                        "as": "slice",
+                        "on_item_failure": "continue",
+                        "steps": [
+                            {"dispatch": {"name": "design"}},
+                            {"loop": {"max": "{rounds}", "steps": [{"dispatch": {}}]}},
+                        ],
+                    },
+                )
+            ],
+        )
+
+    def _dry_run_each(self, source_result: object) -> Any:
+        mock = (
+            AsyncMock(side_effect=source_result)
+            if isinstance(source_result, BaseException)
+            else AsyncMock(return_value=source_result)
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=self._each_definition()),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run_dry_run.evaluate_each_source", new=mock),
+        ):
+            result = runner.invoke(app, ["run", "--dry-run", "test", "900"])
+        return result, mock
+
+    def test_dry_run_each_lists_source_items_and_nested_body(self) -> None:
+        """--dry-run expands an each step: source, selected items, and its body (#149)."""
+        items = [
+            {"index": "924", "name": "Recover a review"},
+            {"index": "914", "name": "Strict types", "flag_reason": "no design review found"},
+        ]
+        result, mock = self._dry_run_each((["900"], items))
+        assert result.exit_code == 0, result.output
+        out = " ".join(result.output.split())
+        assert 'source: cf.undesigned_slices("900"), as: slice' in out
+        assert "- 924 Recover a review" in out
+        assert "- 914 Strict types [flagged: no design review found]" in out
+        # The body, including a loop nested in it with its params resolved.
+        assert "design (dispatch)" in out
+        assert "max: 2" in out
+        assert mock.await_args is not None
+        assert mock.await_args.args[0] == 'cf.undesigned_slices("900")'
+
+    def test_dry_run_each_with_no_items_says_so(self) -> None:
+        result, _ = self._dry_run_each((["900"], []))
+        assert result.exit_code == 0, result.output
+        assert DRY_RUN_NO_ITEMS_DISPLAY in result.output
+
+    def test_dry_run_each_source_error_exits_1(self) -> None:
+        """A source that can't be evaluated fails the preview, as it would fail the run."""
+        result, _ = self._dry_run_each(ContextForgeError("cf is not configured"))
+        assert result.exit_code == 1
+        assert "could not evaluate source: cf is not configured" in " ".join(result.output.split())
 
     def test_missing_pipeline_via_cli_exits_1(self) -> None:
         """sq run <missing> exits 1 with error message."""
