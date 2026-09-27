@@ -12,6 +12,26 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260927
 
+### Slice 928: Codex Parity for Skill Packs and Provider Access — Tasks Complete
+
+- **Task file:** `user/tasks/928-tasks.codex-parity-for-skill-packs-and-provider-access.md`, 13 tasks, 415 lines.
+- **Review findings folded into the tasks rather than reopening the design (verdict CONCERNS, 928-review):**
+  F001 (D7's two incompatible removal claims) resolves as: `remove_receipt_files` never removes
+  `receipt.destination` itself; the Claude-prefix-directory removal already in `skills.py` stays a
+  separate step layered after it, not merged into it. F002 (D8's "ships no Codex content" needing source
+  resolution inside a check that must stay pure) resolves as: the classification only runs for sources
+  `resolve_source` can read without a subprocess (`bundled`, relative, absolute paths); `github:` sources
+  skip it and get the plain pre-D8 "not installed" row. F003 (walkthrough expects WARN rows on bare
+  `sq doctor`) is corrected to `sq doctor -v` in the live-verification task. F004 (missing 340-arch
+  amendment) is now Task 11. F005 (`sq model list` undercount) is corrected to six sites, not two. F006
+  (hint placement vs. the #126 waiting-rule equality test) is resolved as: insert after the closing `---`
+  of "## Waiting on the command," never inside it; `sq-task` stays out of scope per the design's own
+  success criteria.
+- **Ordering follows the design's own Development Approach:** receipt/removal refactor → analysis-skill
+  move → `PACK_LAYOUTS` (Claude, then agents + D3 validation) → CLI flags → doctor rows → live sandbox
+  probe → docs (rule + hint) → typo fix → architecture amendment → validation → live Codex verification.
+- **Next:** Phase 6 implementation, starting with Task 1.
+
 ### Slice 914: Strict Type Checking Over the Test Suite — Tasks Complete
 
 - **Commit:** `96a7340e` — task breakdown, 3 files, 920 lines.
