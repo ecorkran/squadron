@@ -119,19 +119,6 @@ def test_settings() -> Settings:
 
 
 @pytest.fixture(autouse=True)
-def isolate_review_debug_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Keep the review parser's debug log out of the developer's home directory.
-
-    ``parse_review_output`` appends to ``~/.config/squadron/logs/review-debug.jsonl``
-    whenever it falls back; without this every review-shaped test leaves a line in the
-    real file (8,600+ of them had accumulated).
-    """
-    monkeypatch.setattr(
-        "squadron.review.parsers._debug_log_path", lambda: tmp_path / "review-debug.jsonl"
-    )
-
-
-@pytest.fixture(autouse=True)
 def restore_agent_logger_state() -> Iterator[None]:
     """Undo the global logger mutation ``sq review -v`` performs.
 

@@ -8,16 +8,6 @@ from squadron.skills.models import PackEntry, SkillSourceError, SurfaceType
 from squadron.skills.receipts import read_receipt
 
 
-@pytest.fixture(autouse=True)
-def _isolate_receipts(  # pyright: ignore[reportUnusedFunction]
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> Path:
-    """Redirect the default receipts dir into tmp so installs never touch $HOME."""
-    receipts_dir = tmp_path / "_receipts"
-    monkeypatch.setattr(installer_mod, "default_receipts_dir", lambda: receipts_dir)
-    return receipts_dir
-
-
 def _make_source(tmp_path: Path, files: list[str]) -> Path:
     src = tmp_path / "source"
     src.mkdir()
@@ -181,7 +171,7 @@ class TestReceiptWriting:
         assert read_receipt("mypack", receipts_dir) is None
 
     def test_install_without_receipts_dir_uses_default(self, tmp_path: Path) -> None:
-        # The autouse fixture redirects default_receipts_dir() into tmp.
+        # The root hermetic fixture puts default_receipts_dir() under a per-test home.
         src = _make_source(tmp_path, ["skill.md"])
         commands_dir = tmp_path / "commands"
         entry = PackEntry(source=str(src), prefix="mypack")
