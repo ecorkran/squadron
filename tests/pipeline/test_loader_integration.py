@@ -14,6 +14,8 @@ _BUILTIN_NAMES = [
     "review",
     "implement",
     "design-batch",
+    "design-plan",
+    "tasks-plan",
     "tasks",
     "judge-cycle",
 ]
@@ -80,6 +82,25 @@ class TestBuiltInPipelineStructure:
         )
         assert len(defn.steps) == 1
         assert defn.steps[0].step_type == "each"
+
+    @pytest.mark.parametrize(
+        ("name", "source", "phase_step"),
+        [
+            ("design-plan", 'cf.undesigned_slices("{plan}")', "design"),
+            ("tasks-plan", 'cf.untasked_slices("{plan}", "{accept-threshold}")', "tasks"),
+        ],
+    )
+    def test_plan_batch_shape(self, name: str, source: str, phase_step: str) -> None:
+        defn = load_pipeline(name, project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
+        assert validate_pipeline(defn) == []
+        assert len(defn.steps) == 1
+        each = defn.steps[0]
+        # The step name names the report file: {run_id}.slices.report.md.
+        assert (each.step_type, each.name) == ("each", "slices")
+        assert each.config["source"] == source
+        assert each.config["on_item_failure"] == "continue"
+        body = [next(iter(s)) for s in each.config["steps"]]
+        assert body == [phase_step, "loop"]
 
     def test_judge_cycle_shape(self) -> None:
         defn = load_pipeline(
