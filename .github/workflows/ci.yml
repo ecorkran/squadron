@@ -37,6 +37,23 @@ jobs:
       - run: cf validate frontmatter
       - run: uv run pytest
 
+  # The suite in a fresh clone under a deliberately hostile HOME, env and PATH
+  # (issue #47). Runs alongside `test`, not after it.
+  hermetic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - run: git fetch origin main:main || true
+      # A PR checkout is a detached merge commit on no branch; the script's
+      # clone copies only branches and tags, so give HEAD a branch.
+      - run: git checkout -B hermetic-under-test
+      - uses: astral-sh/setup-uv@v9.0.0
+      - run: uv python install 3.12
+      - run: scripts/test-hostile-env
+
   publish:
     needs: test
     if: startsWith(github.ref, 'refs/tags/v')
