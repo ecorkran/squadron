@@ -40,7 +40,7 @@ Sources: issue #136 and its Phase 5 addendum comment, and issue #139.
 ### Included
 
 1. **Plan-aware slice sources.** `cf.undesigned_slices(plan)`, `cf.untasked_slices(plan, accept)`, and a fix so `cf.unfinished_slices(plan)` actually uses its `plan` argument.
-2. **Plan alignment.** A new cf-op `set_plan` points cf at the plan and at that plan's parent architecture document. It's emitted by the phase step when that step carries a `plan:` key.
+2. **Plan alignment.** A new cf-op `set_arch` runs `cf set arch` with the plan's parent architecture document, which switches the initiative and sets the plan. It's emitted by the phase step when that step carries a `plan:` key.
 3. **Unified step dispatch.** One `_execute_step()` routes every step type (once, loop sub-field, `loop:` body, `each`, `fan_out`). The top level, `each` bodies, and `loop:` bodies all call it. This makes `loop:` inside `each` actually run.
 4. **`each` inner-step validation.** `each` validates its body with each inner step type's own `validate()`, and bans nested `each`.
 5. **Per-item isolation in `each`:**
@@ -100,8 +100,8 @@ pipeline/
   batch_report.py    NEW   ItemOutcome, BatchItemRecord, BatchReport, render + write
   steps/collection.py      CHANGED validate inner steps, on_item_failure, nested-each ban
   steps/loop.py            CHANGED accept_if / skip_if_met validation, placeholder tolerance
-  steps/phase.py           CHANGED optional plan: key → cf-op set_plan ahead of set_phase
-  actions/cf_op.py         CHANGED CfOperation.SET_PLAN
+  steps/phase.py           CHANGED optional plan: key → cf-op set_arch; order becomes arch → slice → phase
+  actions/cf_op.py         CHANGED CfOperation.SET_ARCH
   actions/dispatch.py      CHANGED feedback: review
   actions/review.py        CHANGED outputs["input_file"], run_id onto ReviewResult
 data/pipelines/
@@ -125,8 +125,8 @@ sq run design-plan 900
   step slices        each source=cf.undesigned_slices("900"), on_item_failure=continue
     per item (slice record {index,name,status,design_file[,flag_reason]}):
       fresh item scope: prior_outputs copy, step_outputs copy
-      design:  set_plan 900 (→ cf plan=900-slices.…, arch from plan's parent:) → set_phase 4
-               → set_slice {index} → build_context → dispatch → review(slice) → commit
+      design:  set_arch (plan 900's parent: → cf set arch, which sets the plan)
+               → set_slice {index} → set_phase 4 → build_context → dispatch → review(slice) → commit
                (FAILED here — no design written, provider failure — → item FLAGGED, next item)
       loop:    skip_if_met → until met by design's review? → 0 rounds, done
                else up to {max-tries} rounds:
@@ -149,7 +149,7 @@ The source marks a slice with a `flag_reason` when its design review is missing 
 
 ### State Management
 
-- **cf project state is changed deliberately.** `set_plan` changes the active plan and arch. `set_phase` and `set_slice` change the phase and slice on every item, as P4 and P5 already do today. After the run, cf points at the batch's plan, at the last item's slice, and at the batch's phase. The run doesn't restore the previous state. The report's header records the plan the batch ran over.
+- **cf project state is changed deliberately.** `set_arch` changes the active arch and, through cf, the plan. `set_slice` and `set_phase` change the phase and slice on every item, as P4 and P5 already do today. After the run, cf points at the batch's plan, at the last item's slice, and at the batch's phase. The run doesn't restore the previous state. The report's header records the plan the batch ran over.
 - **Item scope is discarded after each item.** Item N+1 never sees item N's review. Without isolation, slice 924's revise dispatch would take its findings from slice 923's review.
 - **Resume.** An interrupted run is rerun, not resumed mid-item. Selection is by artifact presence (a design file or a task file), so a rerun picks only what's left. A slice flagged after a design file was written is not re-selected by `design-plan`. `tasks-plan` then flags it again for "design review below threshold", so it keeps showing up in reports and never drops out silently. `sq run --resume` of a paused batch restarts the `each` step from the top, which has the same effect.
 - **Report.** One Markdown file per `each` step per run: `{runs_dir}/{run_id}.{step_name}.report.md`, next to `{run_id}.json`.
@@ -173,16 +173,26 @@ The status exclusion set is `{complete, deferred}`, defined once as a `CfSliceSt
 
 ### D2: Plan alignment is an explicit, state-changing cf-op
 
-The `cf build --slice` override does not persist, and it also does not switch the plan. Tested: `cf build --slice 923 --phase 4` rendered "Slice Plan: 180-slices.pipeline-intelligence". `cf set plan` changes `fileSlicePlan` and leaves `fileArch` where it was, also tested. Review input resolution (`resolve_slice_info`) reads the active plan's slices and the active arch file. A batch over a non-active plan therefore has to point cf at both, or its dispatches and reviews run against the wrong documents.
+Review input resolution (`resolve_slice_info`) reads the active plan's slices and the active arch file. `cf set slice` only accepts a slice in the current initiative and plan. A batch over a non-active plan therefore has to switch the initiative first, or its dispatches and reviews run against the wrong documents.
 
-- `CfOperation.SET_PLAN` with a `plan` (arch index) param:
+The cf switching sequence is fixed:
+
+1. `cf set arch {arch}` switches the initiative and sets the plan automatically.
+2. `cf set slice {slice}`, which must be in that plan.
+3. `cf set phase {phase}`, always after the slice.
+4. `cf build` with no parameter overrides. It renders from the state set above.
+
+`cf set plan` and `cf build --slice/--phase` are not used for switching.
+
+- `CfOperation.SET_ARCH` with a `plan` (arch index) param:
   1. Resolve the plan's filename from `cf list slices {plan} --json` → `slicePlan`.
   2. Read that plan file's frontmatter `parent:` (the arch document).
-  3. Run `cf set plan {slicePlan}`, then `cf set arch {parent stem}`.
+  3. Run `cf set arch {parent stem}`.
   4. If the plan has no `parent:`, fail with an error that names the file.
-- **Where it runs.** There is no top-level `cf-op` step type (the `StepTypeName` members are design, tasks, implement, dispatch, compact, summary, review, each, fan_out, loop, devlog, and gate). The phase step (`design:`, `tasks:`, `implement:`) gains an optional `plan:` key. When it's present, `PhaseStepType.expand()` emits `cf-op set_plan` first, ahead of `set_phase` and `set_slice`. Plan alignment then sits beside the slice and phase setting the phase step already does, with no new step type.
+- **Where it runs.** There is no top-level `cf-op` step type (the `StepTypeName` members are design, tasks, implement, dispatch, compact, summary, review, each, fan_out, loop, devlog, and gate). The phase step (`design:`, `tasks:`, `implement:`) gains an optional `plan:` key. When it's present, `PhaseStepType.expand()` emits `cf-op set_arch` first. Initiative switching then sits beside the slice and phase setting the phase step already does, with no new step type.
   - It runs once per item. It's idempotent and costs a few cf calls, which is small next to a dispatch.
   - The loop's review, later in the same item, resolves against the plan the design step set.
+- **Order fix.** `PhaseStepType.expand()` emits `set_phase` before `set_slice` today (phase.py:156-157). This slice flips it to `set_arch` (when `plan:` is present) → `set_slice` → `set_phase` → `build_context`, and updates the exact-equality `expand()` tests to match. This applies to every phase step, not just batch pipelines.
 - It's a state change like the `set_phase` and `set_slice` P4 already performs.
 - **Rejected: requiring the plan to already be active.** It makes `plan` a redundant assertion, and it's a manual step in an unattended flow.
 - **Rejected: a new `cf-op` step type.** It adds a step type for one operation, which the phase step can carry.
@@ -313,8 +323,8 @@ steps:
 
 ### Patterns and Conventions
 
-- Every new comparison value is a StrEnum: `CfSliceStatus`, `ItemFailurePolicy`, `ItemOutcome`, `DispatchFeedback`, and `CfOperation.SET_PLAN`. Nothing branches on display strings.
-- Every new failure is observable. A flagged item logs at WARNING with its reason and appears in the report. A source failure (cf error, bad plan argument) fails the step with the cf error text. A `set_plan` without `parent:` fails, and the error names the file.
+- Every new comparison value is a StrEnum: `CfSliceStatus`, `ItemFailurePolicy`, `ItemOutcome`, `DispatchFeedback`, and `CfOperation.SET_ARCH`. Nothing branches on display strings.
+- Every new failure is observable. A flagged item logs at WARNING with its reason and appears in the report. A source failure (cf error, bad plan argument) fails the step with the cf error text. A `set_arch` on a plan without `parent:` fails, and the error names the file.
 - Placeholder tolerance in validation follows the existing `_validate_model_alias` convention: skip at load time if the value contains `{`, and validate at run time.
 
 ## Implementation Details
@@ -389,7 +399,7 @@ flagged: 1
 1. `cf.undesigned_slices("900")` returns 923, 924, 928, and 929 on today's 900 plan. It excludes 907 (deferred) and 914 (designed).
 2. `cf.untasked_slices("900", "review.concerns_or_better")` returns 914 with `flag_reason: "no design review found"`, and nothing else, on today's 900 plan.
 3. `cf.unfinished_slices("900")` reads plan 900 while the active plan is 180.
-4. `set_plan` leaves `cf get` reporting `fileSlicePlan` and `fileArch` for the requested plan, with the arch taken from the plan's `parent:`.
+4. `set_arch` leaves `cf get` reporting `fileArch` from the plan's `parent:` and `fileSlicePlan` for the requested plan. A phase step's expanded actions run in the order `set_arch` → `set_slice` → `set_phase` → `build_context`.
 5. A `loop:` inside `each` runs its rounds. The pre-slice behavior (zero actions, COMPLETED) is pinned as fixed by a test.
 6. With `on_item_failure: continue`:
    - A FAILED item is recorded as FLAGGED, and the next item runs.
@@ -478,7 +488,7 @@ Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local
    ```
    A provider-failure artifact from step 5 carries `providerFailure: true` in its frontmatter.
 
-9. **Restore cf state** if needed: `cf set plan 180-slices.pipeline-intelligence` and `cf set arch 180-arch.pipeline-intelligence`.
+9. **Restore cf state** if needed: `cf set arch 180-arch.pipeline-intelligence`, then `cf set slice` and `cf set phase` back to their prior values.
 
 ## Risk Assessment
 
@@ -500,7 +510,7 @@ Each part is its own commit, so any one of them can be reverted:
 
 1. **Router extraction.** `_execute_step` is extracted, with top-level, `each`, and `loop` bodies routed through it. Refactor only, and the full suite stays green.
 2. **Source module.** Move the registry to `sources.py`. Add `list_slices(plan)` and `list_tasks(plan)`. Fix `unfinished_slices`. Add `undesigned_slices`, `untasked_slices`, and `LoopCondition.met_by_verdict`.
-3. **`set_plan` cf-op,** plus the phase step's `plan:` key.
+3. **`set_arch` cf-op,** plus the phase step's `plan:` key and the arch → slice → phase order fix.
 4. **`each` changes:** inner-step validation, nested-each ban, per-item isolation, `on_item_failure`, `flag_reason`, and the pinning test for the old loop-in-each no-op.
 5. **Loop options:** `accept_if`, `skip_if_met`, param-sourced values, and `StepResult.accepted`.
 6. **`feedback: review`** and the review action's `input_file` output.

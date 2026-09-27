@@ -20,7 +20,7 @@ It adds two pipelines, `design-plan` and `tasks-plan`, which replace `design-bat
 general engine pieces:
 
 - plan-aware `cf.*` sources
-- a `set_plan` cf-op, carried by the phase step's `plan:` key
+- a `set_arch` cf-op, carried by the phase step's `plan:` key, and a phase step order fix (arch → slice → phase)
 - one `_execute_step` router
 - per-item isolation and `on_item_failure: continue` in `each`
 - `accept_if` and `skip_if_met` on `loop`
@@ -35,9 +35,9 @@ What turned up while reading the code and testing cf:
 - `each` passes the same pre-step outputs to every item and never isolates them.
 - A revise dispatch after a `design:` step would reuse its "create a design" build prompt instead of
   the review findings.
-- `cf build --slice` doesn't persist, but it doesn't switch plans either. `cf set plan` leaves
-  `fileArch` unchanged, and review input resolution reads the active plan and arch, so the batch
-  sets both.
+- Review input resolution reads the active plan and arch, so the batch switches with `cf set arch`
+  (which sets the plan), then `cf set slice`, then `cf set phase`. The phase step set phase before
+  slice. That's fixed too.
 
 Next: Phase 5 task breakdown. `--prompt-only` not rendering `each` or `loop:` steps is out of
 scope and logged as #145.
