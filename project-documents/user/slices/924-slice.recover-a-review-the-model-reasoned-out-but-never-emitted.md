@@ -30,6 +30,7 @@ Issue [#92](https://github.com/ecorkran/squadron/issues/92): a complete, well-gr
   - what happens when the stop reason is an exhausted output budget, where the shipped code asks again regardless;
   - whether the recovery turn keeps its tools. The shipped code keeps them. The plan entry leaned the other way, and this design records why the evidence favors keeping them.
 - **Part B is unchanged and still open.** No request under `providers/openai/` sets an output budget.
+- **Part C (added 20260927) covers a second shape of the same bug that the shipped recovery never sees.** The model reasons, then ends its final turn with no text and no tool calls. The OpenAI-compatible agent refuses that turn in `_require_final_content` ([agent.py:67](../../../src/squadron/providers/openai/agent.py#L67)) by raising `ProviderError`. The exception leaves `run_review_with_profile` before the `ended_mid_task` check runs, so the review becomes a failure artifact. Live capture: slice 928's design review under glmflash failed this way twice in a row (`finish_reason='stop', reasoning_chars=1022`), which flagged 928 in the `slices-plan 900` batch run.
 
 ## Value
 
@@ -37,6 +38,7 @@ Issue [#92](https://github.com/ecorkran/squadron/issues/92): a complete, well-gr
 - **No wasted turn on a spent budget.** When the model ran out of output budget, asking again repeats the failure and spends another turn. The artifact should name the budget as the cause.
 - **Output budgets become explicit.** The budget moves from an unknown backend default to a per-model value squadron sends and records. The #84 follow-up has waited on this, and without it the digest's `Stop reason: length` has no number to point at.
 - **The `tool_use = false` gate works in pipeline reviews.** It never has. The budget has to take the same route, and fixing that route fixes the gate too (see D6).
+- **An empty final turn gets the same one follow-up turn as a mid-task ending.** Today it stops a batch item outright. After this slice it is recovered, and flagged `recoveryTurn: true` like any other recovery.
 
 ## Technical Scope
 
@@ -50,6 +52,9 @@ Issue [#92](https://github.com/ecorkran/squadron/issues/92): a complete, well-gr
 - **B3:** the budget is recorded in the Run Digest and JSON.
 - **B4:** the pipeline review action resolves through `resolve_full()`. This carries the budget and fixes the `tool_use` gate as a side effect.
 - **B5:** set budget values on the built-in OpenRouter reasoning-model aliases.
+- **C1:** `EmptyFinalTurnError(ProviderError)`, raised by `_require_final_content` in place of the bare `ProviderError`. It carries the turn's `finish_reason`, `reasoning_chars`, `tool_calls_made`, and `failed_tool_calls`.
+- **C2:** the OpenAI-compatible agent does not append an empty turn to its history.
+- **C3:** `run_review_with_profile` catches `EmptyFinalTurnError` on the first turn, folds its telemetry into the capture, and runs the shipped recovery turn. The D2 budget skip applies to it too.
 
 **Excluded**
 
@@ -59,6 +64,7 @@ Issue [#92](https://github.com/ecorkran/squadron/issues/92): a complete, well-gr
 - Budgets for the Claude SDK and Codex agents. They get a warning, not an implementation.
 - `metrology/audit.py` and `review/addressed/judge.py`. They call `run_review_with_profile` without a resolved alias, and they keep today's behavior.
 - A second recovery attempt. One bounded turn remains the contract.
+- Recovering an empty final turn in dispatch and summary actions. They receive the new subclass as a `ProviderError` and behave exactly as today.
 
 ## Dependencies
 
@@ -94,6 +100,9 @@ Issue [#92](https://github.com/ecorkran/squadron/issues/92): a complete, well-gr
 | `core/models.py` | `AgentConfig.max_output_tokens: int \| None = None`. |
 | `providers/openai/agent.py` | `_stream_turn` sends `max_completion_tokens` when set and `omit` otherwise. |
 | `providers/sdk/agent.py`, `providers/codex/agent.py` | Log a WARNING when `max_output_tokens` is set, because they cannot apply it. |
+| `providers/errors.py` | Adds `EmptyFinalTurnError(ProviderError)` with `finish_reason`, `reasoning_chars`, and `failed_tool_calls` attributes (`tool_calls_made` is inherited). |
+| `providers/openai/agent.py` (Part C) | `_require_final_content` raises `EmptyFinalTurnError` with the same message text. Both call sites skip `_append_history` for an empty turn. |
+| `review/review_client.py` (Part C) | The first `collect_turn` catches `EmptyFinalTurnError`, folds its telemetry into `TurnCapture`, and joins the recovery decision below. |
 
 ### Data Flow
 
@@ -112,11 +121,17 @@ models.toml [aliases.kimi3] max_output_tokens
 **Recovery decision** (review_client, after the first turn is parsed):
 
 ```
-ended_mid_task(result)?
-  no  → done
-  yes → budget_exhausted(capture)?
-          yes → no second turn; result.output_budget_exhausted = True; WARNING log
-          no  → FINISH_REVIEW_PROMPT turn (as shipped); recovery_turn_used = True
+first turn raised EmptyFinalTurnError?            (Part C)
+  yes → fold error telemetry into capture; treat as "ended mid-task"
+  no  → parse; ended_mid_task(result)?
+          no  → done
+ended mid-task (either way):
+  budget_exhausted(capture)?
+    yes → no second turn; WARNING log
+          · from an empty turn: re-raise the EmptyFinalTurnError (failure artifact, as today)
+          · from a parsed turn: result.output_budget_exhausted = True
+    no  → FINISH_REVIEW_PROMPT turn (as shipped); recovery_turn_used = True
+          · if the recovery turn also raises EmptyFinalTurnError, it propagates (failure artifact)
 ```
 
 `output_budget_exhausted` is set from the **final** stop reason on every run, not only the skip path. A recovery turn that itself ends on `length` is reported the same way.
@@ -184,6 +199,18 @@ The result: a `tool_use = false` alias has never been gated in a pipeline review
 
 The `except ModelResolutionError` fallback to `template.model` switches the same way.
 
+### D7 — An empty final turn is recovered like a mid-task ending (Architect; Part C)
+
+An empty final turn has the same cause as the #92 captures: the model did the work in reasoning and ended its turn before writing the review. It gets the same single `FINISH_REVIEW_PROMPT` turn. It is not retried as a fresh request, because that would throw away the tool results already in history.
+
+- **Typed, not string-matched.** `EmptyFinalTurnError` subclasses `ProviderError`, so every existing `except ProviderError` (the pipeline review action's failure artifact, the CLI, dispatch, summary) keeps working unchanged. `review_client` catches only the subclass. The message text stays byte-identical, because tests and failure artifacts already quote it.
+- **Telemetry survives the exception.** `collect_turn` folds counts only after its `async for` completes, so a raise loses turn 1's numbers. The error carries `finish_reason`, `reasoning_chars`, `tool_calls_made`, and `failed_tool_calls`. `review_client` writes them into `TurnCapture` before deciding, so `stop_reason` feeds `budget_exhausted` and the counts sum across both turns as they do for the shipped recovery.
+- **No empty assistant entry in history.** Today the agent appends `{"role": "assistant", "content": ""}` before raising. Whether a backend accepts an empty assistant message on the next request has not been verified for any backend. Consecutive user messages are accepted by the OpenAI chat schema, so dropping the empty entry takes the unverified case off the table. An empty turn carries nothing worth keeping.
+- **Budget skip applies.** An empty turn with `finish_reason='length'` spent its budget on reasoning. D2's rule holds: no second turn, and the original `EmptyFinalTurnError` is re-raised so the failure artifact reads exactly as it does today.
+- **One turn, still.** If the recovery turn also comes back empty, its `EmptyFinalTurnError` propagates. The WARNING logged before the recovery turn names the first failure, so the log shows both.
+- **Provenance.** A recovered empty turn sets `recovery_turn_used`, so it gets `recoveryTurn: true` (D1).
+- **Observable signal.** The existing `_require_final_content` WARNING still fires for each empty turn. `review_client` logs one WARNING before asking again: `review (model=…) returned an empty final turn (stop reason: …, reasoning chars: …); asking once more for the review`.
+
 ### Patterns and Conventions
 
 - Stop-reason comparison values live only in `OUTPUT_BUDGET_STOP_REASONS`, not inline strings (project rule against scattered comparison values).
@@ -243,6 +270,11 @@ max_output_tokens = <from OpenRouter's listing, see B5>
 6. The digest shows `Output budget: N tokens` or `Output budget: backend default`, and JSON carries `max_output_tokens`.
 7. A `sq run` pipeline review step using an alias with `tool_use = false` runs without tools, and one with `max_output_tokens` sends the budget. Both match `sq review` for the same alias.
 8. The SDK and Codex agents log a WARNING when handed a `max_output_tokens` they cannot apply.
+9. A review whose first turn ends empty with stop reason `stop` (the 928 capture) makes exactly one recovery turn. If that turn writes a review, the artifact is a normal review with `recoveryTurn: true`, and its tool-call count and reasoning chars include turn 1.
+10. A review whose first turn ends empty with stop reason `length` makes no second call and produces the same failure artifact it does today.
+11. A review whose recovery turn also ends empty produces a failure artifact carrying the recovery turn's error.
+12. After an empty turn, the agent's history has no assistant entry with empty content.
+13. Dispatch and summary actions that hit an empty final turn fail exactly as today.
 
 ### Technical Requirements
 
@@ -254,7 +286,9 @@ max_output_tokens = <from OpenRouter's listing, see B5>
   - `tests/review/test_persistence.py`: `recoveryTurn` present and absent, budget digest line in both forms, skip line;
   - alias loader tests for the new field;
   - an OpenAI agent test asserting `max_completion_tokens` is passed, or `omit` when unset;
-  - a pipeline review action test asserting `resolve_full` feeds both `model_allows_tools` and `max_output_tokens`.
+  - a pipeline review action test asserting `resolve_full` feeds both `model_allows_tools` and `max_output_tokens`;
+  - `tests/providers/openai/test_agentic_loop.py`: the empty-turn test asserts `EmptyFinalTurnError` with its four attributes (it still matches `ProviderError`), and history has no empty assistant entry afterward, on both the tools and no-tools paths;
+  - `tests/review/test_review_client.py`: empty-then-review recovers with summed telemetry; empty on `length` re-raises with no second call; empty-then-empty propagates the second error.
 
 ### Integration Requirements
 
@@ -296,6 +330,11 @@ These steps are drafted before implementation and get refined in Phase 6.
    Remove the alias afterward.
 4. **Recovery provenance reaches frontmatter.** A live mid-task ending cannot be triggered on demand. Confirm with the unit test (`pytest tests/review/test_persistence.py -k recovery`), then grep any recovered artifact that turns up in normal use for `recoveryTurn: true`.
 5. **Pipeline parity.** Run a pipeline whose review step names an alias with `tool_use = false`. The artifact's frontmatter shows `toolsSuppressedReason` and no `toolCallsMade`, the same as `sq review --model <that alias>`. Before this slice, the pipeline artifact showed tools offered.
+6. **Empty final turn is recovered (Part C).** Rerun the review that failed live:
+   ```bash
+   sq review slice 928 --model glmflash -v
+   ```
+   If stderr shows the "returned an empty final turn … asking once more" WARNING, the artifact is a normal review with `recoveryTurn: true`. If the model answers on the first turn this time, the run proves nothing about Part C; rely on the unit tests (`pytest tests/review/test_review_client.py -k empty`), and grep future batch reports for the WARNING.
 
 ## Risk Assessment
 
@@ -324,9 +363,12 @@ These steps are drafted before implementation and get refined in Phase 6.
    - Pipeline review action switched to `resolve_full` (D6).
    - Digest budget line and JSON, with snapshot fixture updates.
    - B5 values from OpenRouter's listing.
-3. File the context-forge issue for `recoveryTurn` and the dispatch/summary budget follow-up issue. Link both from the slice plan entry.
+3. **Part C, after Part A** (it reuses A2's `budget_exhausted` and A1's `recoveryTurn`).
+   - `EmptyFinalTurnError` in `providers/errors.py`, raised by `_require_final_content`; drop the empty history append at both call sites.
+   - `review_client` catches it on the first turn, folds its telemetry, and joins the recovery decision.
+4. File the context-forge issue for `recoveryTurn` and the dispatch/summary budget follow-up issue. Link both from the slice plan entry.
 
-The effort stays at 3/5: Part A shrinks, and D6 adds a call-site change of about the same size.
+Effort moves to 3.5/5: Part A shrinks, D6 adds a call-site change of about the same size, and Part C adds one error type and one catch branch.
 
 ### Special Considerations
 
