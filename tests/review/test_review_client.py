@@ -12,6 +12,7 @@ import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.providers.base import ProviderCapabilities
+from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import ReviewResult
 from squadron.review.review_client import InjectedPrompt, _write_prompt_log, run_review_with_profile
@@ -1118,8 +1119,11 @@ class TestRecoveryTurn:
     """#92: a reply that ends mid-task gets exactly one follow-up on the same agent."""
 
     def _scripted_provider(
-        self, replies: list[str], metadata: list[dict[str, object]] | None = None
+        self,
+        replies: list[str | EmptyFinalTurnError],
+        metadata: list[dict[str, object]] | None = None,
     ) -> tuple[MagicMock, list[str]]:
+        """Each reply is text to yield, or an ``EmptyFinalTurnError`` to raise."""
         sent: list[str] = []
         agent = MagicMock()
         agent.state = AgentState.idle
@@ -1128,10 +1132,13 @@ class TestRecoveryTurn:
         async def _handle(message: Message) -> AsyncIterator[Message]:
             turn = len(sent)
             sent.append(message.content)
+            reply = replies[turn]
+            if isinstance(reply, EmptyFinalTurnError):
+                raise reply
             yield Message(
                 sender="mock-agent",
                 recipients=[],
-                content=replies[turn],
+                content=reply,
                 message_type=MessageType.chat,
                 metadata=(metadata or [{}] * len(replies))[turn],
             )
@@ -1278,3 +1285,79 @@ class TestRecoveryTurn:
         assert len(sent) == 2
         provider.create_agent.assert_awaited_once()
         assert seen[0] == seen[1]
+
+
+def _empty_turn(finish_reason: str | None = "stop") -> EmptyFinalTurnError:
+    return EmptyFinalTurnError(
+        f"Model returned an empty final turn (finish_reason={finish_reason!r}, "
+        "reasoning_chars=1022); no response to deliver.",
+        finish_reason=finish_reason,
+        reasoning_chars=1022,
+        tool_calls_made=3,
+        failed_tool_calls=0,
+    )
+
+
+class TestEmptyFinalTurnRecovery:
+    """Slice 924 D7: reasoning with no reply gets the same single recovery turn."""
+
+    _scripted_provider = TestRecoveryTurn._scripted_provider  # pyright: ignore[reportPrivateUsage]
+    _run = TestRecoveryTurn._run  # pyright: ignore[reportPrivateUsage]
+
+    @pytest.mark.asyncio
+    async def test_empty_first_turn_is_recovered_with_summed_telemetry(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.review.models import Verdict
+        from squadron.review.turn_capture import FINISH_REVIEW_PROMPT
+
+        provider, sent = self._scripted_provider(
+            [_empty_turn(), _SAMPLE_REVIEW_OUTPUT],
+            [
+                {},
+                {
+                    "tools_given": ["read_file"],
+                    "tool_calls_made": 2,
+                    "stop_reason": "end_turn",
+                    "reasoning_chars": 100,
+                },
+            ],
+        )
+        with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
+            result = await self._run(provider)
+
+        assert result.verdict is Verdict.PASS
+        assert result.recovery_turn_used is True
+        assert sent[1] == FINISH_REVIEW_PROMPT
+        assert result.stop_reason == "end_turn"
+        assert result.tool_calls_made == 5
+        assert result.reasoning_chars == 1122
+        assert result.failed_tool_calls == 0
+        assert any(
+            "returned an empty final turn (stop reason: stop, reasoning chars: 1022); "
+            "asking once more" in r.getMessage()
+            for r in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_empty_first_turn_on_a_spent_budget_reraises(self) -> None:
+        error = _empty_turn("length")
+        provider, sent = self._scripted_provider([error, _SAMPLE_REVIEW_OUTPUT])
+
+        with pytest.raises(EmptyFinalTurnError) as exc_info:
+            await self._run(provider)
+
+        assert exc_info.value is error
+        assert len(sent) == 1
+
+    @pytest.mark.asyncio
+    async def test_empty_recovery_turn_propagates(self) -> None:
+        second = _empty_turn()
+        provider, sent = self._scripted_provider([_empty_turn(), second])
+
+        with pytest.raises(EmptyFinalTurnError) as exc_info:
+            await self._run(provider)
+
+        assert exc_info.value is second
+        assert len(sent) == 2
+        provider.create_agent.return_value.shutdown.assert_awaited_once()

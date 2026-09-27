@@ -17,6 +17,28 @@ class ProviderError(Exception):
         self.tool_calls_made = tool_calls_made
 
 
+class EmptyFinalTurnError(ProviderError):
+    """The model ended its turn with no text and no tool calls.
+
+    The turn's telemetry rides the error because ``collect_turn`` cannot fold it after a
+    raise (slice 924 D7).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        finish_reason: str | None,
+        reasoning_chars: int,
+        tool_calls_made: int,
+        failed_tool_calls: int,
+    ) -> None:
+        super().__init__(message, tool_calls_made=tool_calls_made)
+        self.finish_reason = finish_reason
+        self.reasoning_chars = reasoning_chars
+        self.failed_tool_calls = failed_tool_calls
+
+
 class ProviderAuthError(ProviderError):
     """Authentication or credential errors."""
 

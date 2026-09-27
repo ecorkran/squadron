@@ -14,7 +14,7 @@ import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from squadron.config.manager import get_config
 from squadron.core.models import (
@@ -23,6 +23,7 @@ from squadron.core.models import (
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
 from squadron.providers.base import ProviderType
+from squadron.providers.errors import EmptyFinalTurnError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
 from squadron.providers.registry import get_provider
@@ -40,6 +41,7 @@ from squadron.review.turn_capture import (
     collect_turn,
     describe_budget,
     ended_mid_task,
+    fold_empty_turn,
 )
 from squadron.tools import resolve_effective_tools
 
@@ -249,31 +251,18 @@ async def run_review_with_profile(
     # Create agent, send prompt, collect response, shut down
     agent = await provider.create_agent(config)
     capture = TurnCapture()
-    recovery_turn_used = False
     max_output_tokens: int | None = None
     try:
-        await collect_turn(agent, content=prompt, recipient=config.name, capture=capture)
-        result = parse(capture.raw_output)
-        if ended_mid_task(result) and budget_exhausted(capture.stop_reason):
-            # D2: a turn that ran out of output budget would run out again when asked
-            # for the whole review a second time.
-            _log_budget_skip(template.name, resolved_model, capture.stop_reason, max_output_tokens)
-        elif ended_mid_task(result):
-            # #92: the model ended its turn believing it had more to do — a narrated next
-            # step, or its own tool-call markup written as text — and no review was
-            # emitted. One more turn on the same conversation keeps the completed work.
-            _logger.warning(
-                "%s review (model=%s) ended its turn without writing the review "
-                "(stop reason: %s); asking once more for the review",
-                template.name,
-                resolved_model or "(default)",
-                capture.stop_reason or "not reported",
-            )
-            recovery_turn_used = True
-            await collect_turn(
-                agent, content=FINISH_REVIEW_PROMPT, recipient=config.name, capture=capture
-            )
-            result = parse(capture.raw_output)
+        result, recovery_turn_used = await _collect_review(
+            agent,
+            prompt=prompt,
+            recipient=config.name,
+            capture=capture,
+            parse=parse,
+            template_name=template.name,
+            model=resolved_model,
+            max_output_tokens=max_output_tokens,
+        )
     finally:
         await agent.shutdown()
 
@@ -334,6 +323,59 @@ async def run_review_with_profile(
         result.default_system_prompt_preset_used = uses_preset
 
     return result
+
+
+async def _collect_review(
+    agent: Any,
+    *,
+    prompt: str,
+    recipient: str,
+    capture: TurnCapture,
+    parse: Callable[[str], ReviewResult],
+    template_name: str,
+    model: str | None,
+    max_output_tokens: int | None,
+) -> tuple[ReviewResult, bool]:
+    """The first turn, then at most one recovery turn. Returns the result and whether
+    the recovery turn ran (#92; slice 924 D2, D7)."""
+    try:
+        await collect_turn(agent, content=prompt, recipient=recipient, capture=capture)
+    except EmptyFinalTurnError as error:
+        # D7: reasoning with no reply is the same stop as a mid-task ending. Only the
+        # first turn is caught; an empty recovery turn propagates.
+        fold_empty_turn(capture, error)
+        if budget_exhausted(capture.stop_reason):
+            _log_budget_skip(template_name, model, capture.stop_reason, max_output_tokens)
+            raise
+        _logger.warning(
+            "%s review (model=%s) returned an empty final turn (stop reason: %s, "
+            "reasoning chars: %s); asking once more for the review",
+            template_name,
+            model or "(default)",
+            capture.stop_reason or "not reported",
+            error.reasoning_chars,
+        )
+    else:
+        result = parse(capture.raw_output)
+        if not ended_mid_task(result):
+            return result, False
+        # D2: a turn that ran out of output budget would run out again when asked for
+        # the whole review a second time.
+        if budget_exhausted(capture.stop_reason):
+            _log_budget_skip(template_name, model, capture.stop_reason, max_output_tokens)
+            return result, False
+        # #92: the model ended its turn believing it had more to do — a narrated next
+        # step, or its own tool-call markup written as text — and no review was
+        # emitted. One more turn on the same conversation keeps the completed work.
+        _logger.warning(
+            "%s review (model=%s) ended its turn without writing the review "
+            "(stop reason: %s); asking once more for the review",
+            template_name,
+            model or "(default)",
+            capture.stop_reason or "not reported",
+        )
+    await collect_turn(agent, content=FINISH_REVIEW_PROMPT, recipient=recipient, capture=capture)
+    return parse(capture.raw_output), True
 
 
 def _log_budget_skip(

@@ -22,6 +22,7 @@ from squadron.core.models import (
     Message,
     MessageType,
 )
+from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.models import ReviewResult, Verdict
 
 #: SDK message kinds that narrate the run rather than carry review prose. SDK providers emit
@@ -83,8 +84,8 @@ def ended_mid_task(result: ReviewResult) -> bool:
     """Did the model say something, yet emit no review the parser could read? (#92)
 
     Every captured case ended with a clean stop partway through the work: a narrated next
-    step, or the model's own tool-call markup written as text. An empty response is not
-    this — the provider already fails that turn (#84).
+    step, or the model's own tool-call markup written as text. An empty response never
+    reaches the parser: the provider raises ``EmptyFinalTurnError`` (#84, slice 924 D7).
     """
     return result.verdict is Verdict.UNKNOWN and not result.findings and bool(result.raw_output.strip())
 
@@ -94,6 +95,14 @@ def _add(total: int | None, value: int | None) -> int | None:
     if value is None:
         return total
     return (total or 0) + value
+
+
+def fold_empty_turn(capture: TurnCapture, error: EmptyFinalTurnError) -> None:
+    """Fold an empty turn's telemetry, which rode the error, into ``capture`` (D7)."""
+    capture.stop_reason = error.finish_reason
+    capture.reasoning_chars = _add(capture.reasoning_chars, error.reasoning_chars)
+    capture.tool_calls_made = _add(capture.tool_calls_made, error.tool_calls_made)
+    capture.failed_tool_calls = _add(capture.failed_tool_calls, error.failed_tool_calls)
 
 
 async def collect_turn(agent: Any, *, content: str, recipient: str, capture: TurnCapture) -> None:

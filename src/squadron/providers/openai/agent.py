@@ -24,6 +24,7 @@ from squadron.config.keys import CONFIG_KEYS
 from squadron.core.models import AgentState, Message
 from squadron.logging import get_logger
 from squadron.providers.errors import (
+    EmptyFinalTurnError,
     ProviderAPIError,
     ProviderAuthError,
     ProviderError,
@@ -64,7 +65,9 @@ def _int_key_default(key: str) -> int:
     return default
 
 
-def _require_final_content(turn: TurnResult, *, tool_calls_made: int = 0) -> None:
+def _require_final_content(
+    turn: TurnResult, *, tool_calls_made: int = 0, failed_tool_calls: int = 0
+) -> None:
     """Refuse a final turn that carries neither text nor tool calls.
 
     ``translation.build_messages`` yields no Message for empty text, so without this
@@ -80,10 +83,13 @@ def _require_final_content(turn: TurnResult, *, tool_calls_made: int = 0) -> Non
         turn.finish_reason,
         turn.reasoning_chars,
     )
-    raise ProviderError(
+    raise EmptyFinalTurnError(
         f"Model returned an empty final turn (finish_reason={turn.finish_reason!r}, "
         f"reasoning_chars={turn.reasoning_chars}); no response to deliver.",
+        finish_reason=turn.finish_reason,
+        reasoning_chars=turn.reasoning_chars,
         tool_calls_made=tool_calls_made,
+        failed_tool_calls=failed_tool_calls,
     )
 
 
@@ -233,10 +239,13 @@ class OpenAICompatibleAgent:
             if not self._tool_executors:
                 turn = await self._stream_turn(self._history, tool_schemas=None)
                 self._record_answering_model(turn.model)
-                self._append_history(
-                    translation.build_assistant_history_entry(turn.text, turn.tool_calls)
-                )
-                _require_final_content(turn, tool_calls_made=0)
+                # D7: an empty assistant entry carries nothing, and no backend is
+                # verified to accept one on the next request.
+                if not turn.is_empty():
+                    self._append_history(
+                        translation.build_assistant_history_entry(turn.text, turn.tool_calls)
+                    )
+                _require_final_content(turn, tool_calls_made=0, failed_tool_calls=0)
                 messages = translation.build_messages(
                     turn.text, turn.tool_calls, self._name, self._model
                 )
@@ -461,10 +470,16 @@ class OpenAICompatibleAgent:
 
             turn = await self._stream_turn(self._history, tool_schemas=turn_tool_schemas)
             self._record_answering_model(turn.model)
-            self._append_history(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
+            # D7: an empty turn leaves no assistant entry behind (see handle_message).
+            if not turn.is_empty():
+                self._append_history(
+                    translation.build_assistant_history_entry(turn.text, turn.tool_calls)
+                )
 
             if not turn.tool_calls:
-                _require_final_content(turn, tool_calls_made=tool_calls_made)
+                _require_final_content(
+                    turn, tool_calls_made=tool_calls_made, failed_tool_calls=failed_tool_calls
+                )
                 messages = translation.build_messages(turn.text, [], self._name, self._model)
                 self._stamp_tool_telemetry(
                     messages,

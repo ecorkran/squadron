@@ -14,7 +14,7 @@ import pytest
 from openai import omit
 
 from squadron.core.models import Message, MessageType
-from squadron.providers.errors import ProviderError
+from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.openai.agent import (
     OpenAICompatibleAgent,
     TurnResult,
@@ -726,6 +726,67 @@ class TestEmptyFinalTurn:
                 pass
 
         assert exc_info.value.tool_calls_made == 0
+
+    @pytest.mark.asyncio
+    async def test_loop_error_is_typed_and_carries_the_turn_telemetry(self, tmp_path: Path) -> None:
+        """Slice 924 D7: review_client folds these after the raise."""
+        (tmp_path / "a.txt").write_text("A")
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(tool_chunk(0, "c1", "read_file", json.dumps({"path": "a.txt"}))),
+                _async_stream(tool_chunk(0, "c2", "read_file", json.dumps({"path": "missing"}))),
+                _async_stream(
+                    _openrouter_chunk(reasoning="thinking", content=None, finish_reason="stop")
+                ),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+
+        with pytest.raises(EmptyFinalTurnError, match="empty final turn") as exc_info:
+            async for _ in agent.handle_message(_USER_MSG):
+                pass
+
+        error = exc_info.value
+        assert error.finish_reason == "stop"
+        assert error.reasoning_chars == len("thinking")
+        assert error.tool_calls_made == 2
+        assert error.failed_tool_calls == 1
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        assert history[-1]["role"] == "tool"
+        assert {"role": "assistant", "content": ""} not in history
+
+    @pytest.mark.asyncio
+    async def test_no_tools_error_is_typed_and_leaves_no_empty_history_entry(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            return_value=_async_stream(
+                _openrouter_chunk(reasoning="thinking", content=None, finish_reason="stop")
+            )
+        )
+        agent = _make_agent(client=client)
+
+        with pytest.raises(EmptyFinalTurnError) as exc_info:
+            async for _ in agent.handle_message(_USER_MSG):
+                pass
+
+        assert exc_info.value.tool_calls_made == 0
+        assert exc_info.value.failed_tool_calls == 0
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        assert not [entry for entry in history if entry["role"] == "assistant"]
+        assert history[-1]["role"] == "user"
+
+    @pytest.mark.asyncio
+    async def test_non_empty_final_turn_is_still_appended_to_history(self) -> None:
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(return_value=_async_stream(text_chunk("answer")))
+        agent = _make_agent(client=client)
+
+        await _collect(agent, _USER_MSG)
+
+        history = agent._history  # pyright: ignore[reportPrivateUsage]
+        assert history[-1]["role"] == "assistant"
+        assert history[-1]["content"] == "answer"
 
 
 class TestStopReasonEvidence:
