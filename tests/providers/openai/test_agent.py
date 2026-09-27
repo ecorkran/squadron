@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import openai
-from openai import omit
 import pytest
+from openai import omit
 
 from squadron.core.models import AgentState, Message, MessageType
 from squadron.providers.errors import (
