@@ -50,7 +50,7 @@ Order is A → C → B. Part C reuses A's `budget_exhausted` and `recoveryTurn`.
   - [ ] Add a module constant `OUTPUT_BUDGET_STOP_REASONS = frozenset({"length", "max_tokens"})`, with a one-line comment naming which provider stamps each value.
   - [ ] Add `budget_exhausted(stop_reason: str | None) -> bool`. It returns True only when `stop_reason` is in the set, and `None` returns False.
   - [ ] Add `describe_budget(max_output_tokens: int | None) -> str`, which returns `"N tokens"` or `"backend default"`. This is the only place that wording lives. The WARNING, the skip line, and the B.14 digest line all call it.
-  - [ ] Success: `grep -rn '"length"\|"max_tokens"' src/` shows only this constant.
+  - [ ] Success: `grep -rnE '^[^#]*("length"|"max_tokens")' src/` shows only this constant. The pattern skips `#` comments, and two comments already quote `"length"` (`providers/openai/agent.py:102`, `review/models.py:178`). Leave those as they are.
 
 - [ ] **A.2 — Test the helpers** in `tests/review/test_turn_capture.py`. Create the file if it does not exist. (Effort 1/5)
   - [ ] `budget_exhausted` is True for `"length"` and `"max_tokens"`, and False for `"stop"`, `"end_turn"`, `"tool_calls"`, and `None`.
@@ -75,7 +75,7 @@ Order is A → C → B. Part C reuses A's `budget_exhausted` and `recoveryTurn`.
 - [ ] **A.6 — Test the skip and pin D3** in `tests/review/test_review_client.py` (Effort 2/5)
   - [ ] Use the file's existing fake agent. First turn ends mid-task with stop reason `length`: exactly one `handle_message` call, a WARNING containing `stop reason: length` and `backend default`, `recovery_turn_used` False, `output_budget_exhausted` True, verdict UNKNOWN.
   - [ ] Same for `max_tokens`.
-  - [ ] Stop reason `None` (Codex): two calls and `recovery_turn_used` True.
+  - [ ] Parametrize over stop reasons `None` (Codex), `"stop"`, and `"end_turn"`: two calls, `recovery_turn_used` True, `output_budget_exhausted` False.
   - [ ] Recovery turn itself ends on `length`: `output_budget_exhausted` True and `recovery_turn_used` True.
   - [ ] **D3:** the second `handle_message` runs on the same agent object, and the agent's tool set is unchanged between the calls.
   - [ ] Success: all pass, and the existing recovery tests pass unchanged.
@@ -207,7 +207,7 @@ Order is A → C → B. Part C reuses A's `budget_exhausted` and `recoveryTurn`.
 
 - [ ] **F.2 — Validation pass**
   - [ ] `uv run ruff format`, `uv run ruff check`, and `uv run pyright` (zero errors) are clean. `uv run pytest -q` is green, and the pass count is recorded.
-  - [ ] `grep -rn '"length"\|"max_tokens"' src/` shows only `OUTPUT_BUDGET_STOP_REASONS`.
+  - [ ] `grep -rnE '^[^#]*("length"|"max_tokens")' src/` shows only `OUTPUT_BUDGET_STOP_REASONS` (same gate as A.1).
 
 - [ ] **F.3 — Verification walkthrough** (design §Verification Walkthrough, steps 1–6)
   - [ ] Run steps 1–3 and 5 live. Step 4 is covered by the unit test. For step 6, run `sq review slice 928 --model glmflash -v` and record whether the empty-turn WARNING appeared and what the artifact shows.
