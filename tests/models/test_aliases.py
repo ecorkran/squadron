@@ -235,3 +235,12 @@ def test_max_output_tokens_is_none_when_unset(tmp_path: Path) -> None:
         assert model_max_output_tokens("budgeted") is None
         assert model_max_output_tokens("no-such-alias") is None
         assert model_max_output_tokens(None) is None
+
+
+def test_shipped_models_toml_loads_with_budgets() -> None:
+    """Slice 924 B5: the built-in file parses and carries OpenRouter budgets."""
+    builtin = load_builtin_aliases()
+
+    budgets = [alias.get("max_output_tokens") for alias in builtin.values()]
+    assert any(budget is not None for budget in budgets)
+    assert all(budget is None or budget >= 1 for budget in budgets)

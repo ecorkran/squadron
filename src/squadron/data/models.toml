@@ -13,7 +13,10 @@
 #                behavior. Set it on models whose tool calling is unreliable.
 #   max_output_tokens (optional) — integer >= 1; sent as max_completion_tokens
 #                on each request of an OpenAI-compatible agent. Absent means no
-#                budget is sent and the backend default applies.
+#                budget is sent and the backend default applies. Built-in
+#                OpenRouter values are top_provider.max_completion_tokens from
+#                https://openrouter.ai/api/v1/models, read 20260927; aliases
+#                the listing reports null or omits stay unset.
 #   [aliases.<name>.pricing]  (optional sub-table)
 #     input, output, cache_read, cache_write — USD per 1M tokens
 #
@@ -184,6 +187,7 @@ cache_write = 0.25
 [aliases.gemma4]
 profile = "openrouter"
 model = "google/gemma-4-31b-it"
+max_output_tokens = 16384
 private = true
 cost_tier = "cheap"
 
@@ -200,6 +204,7 @@ cache_write = 0.40
 [aliases.kimi27]
 profile = "openrouter"
 model = "moonshotai/kimi-k2.7-code"
+max_output_tokens = 235929
 private = true
 cost_tier = "moderate"
 notes = "1M context"
@@ -213,6 +218,7 @@ cache_write = 3.83
 [aliases.kimi3]
 profile = "openrouter"
 model = "moonshotai/kimi-k3"
+max_output_tokens = 943718
 private = true
 cost_tier = "high"
 notes = "1M context"
@@ -226,6 +232,7 @@ cache_write = 13.00
 [aliases.minimax]
 profile = "openrouter"
 model = "minimax/minimax-m3"
+max_output_tokens = 512000
 private = true
 cost_tier = "cheap"
 
@@ -238,6 +245,7 @@ cache_write = 1.20
 [aliases.glm52]
 profile = "openrouter"
 model = "z-ai/glm-5.2"
+max_output_tokens = 131072
 private = true
 cost_tier = "moderate"
 
@@ -250,6 +258,7 @@ cache_write = 3.15
 [aliases.glm53]
 profile = "openrouter"
 model = "z-ai/glm-5.3"
+max_output_tokens = 943717
 private = true
 cost_tier = "moderate"
 
@@ -262,6 +271,7 @@ cache_write = 4.40
 [aliases.glmflash]
 profile = "openrouter"
 model = "z-ai/glm-5.3-flash"
+max_output_tokens = 128000
 private = true
 cost_tier = "cheap"
 
@@ -274,6 +284,7 @@ cache_write = 0.25
 [aliases.deepseek4]
 profile = "openrouter"
 model = "deepseek/deepseek-v4-pro"
+max_output_tokens = 384000
 private = true
 cost_tier = "moderate"
 notes = "v4.1 sale 1.71/M"
@@ -287,6 +298,7 @@ cache_write = 3.06
 [aliases.deepseek4-flash]
 profile = "openrouter"
 model = "deepseek/deepseek-v4.1-flash"
+max_output_tokens = 384000
 private = true
 cost_tier = "cheap"
 
@@ -299,6 +311,7 @@ cache_write = 0.48
 [aliases.mimo]
 profile = "openrouter"
 model = "xiaomi/mimo-v2.6-pro"
+max_output_tokens = 131072
 private = true
 cost_tier = "cheap"
 
@@ -311,6 +324,7 @@ cache_write = 0.87
 [aliases.grok-code]
 profile = "openrouter"
 model = "x-ai/grok-build-0.1"
+max_output_tokens = 230400
 private = true
 cost_tier = "cheap"
 notes = "256K context"
@@ -324,6 +338,7 @@ cache_write = 2.00
 [aliases.grok47]
 profile = "openrouter"
 model = "x-ai/grok-4.7"
+max_output_tokens = 450000
 private = true
 cost_tier = "moderate"
 notes = "500k context"
@@ -350,6 +365,7 @@ cache_write = 0.00
 [aliases.qwen38-flash]
 profile = "openrouter"
 model = "qwen/qwen3.8-flash"
+max_output_tokens = 131072
 private = true
 cost_tier = "cheap"
 notes = "3.8 flash, AliBaba"
@@ -363,6 +379,7 @@ cache_write = 0.47
 [aliases.qwen38]
 profile = "openrouter"
 model = "qwen/qwen3.8-2.4t-a95b"
+max_output_tokens = 131072
 private = true
 cost_tier = "moderate"
 notes = "2.4T model"
@@ -376,6 +393,7 @@ cache_write = 6.00
 [aliases.qwen38-27b]
 profile = "openrouter"
 model = "qwen/qwen3.8-27b"
+max_output_tokens = 131072
 private = true
 cost_tier = "cheap"
 notes = "27b model"
@@ -389,6 +407,7 @@ cache_write = 2.20
 [aliases.trinity]
 profile = "openrouter"
 model = "arcee-ai/trinity-large-thinking"
+max_output_tokens = 80000
 private = true
 cost_tier = "cheap"
 
