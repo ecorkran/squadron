@@ -405,6 +405,10 @@ class ReviewAction:
         outputs: dict[str, object] = {"response": result.raw_output}
         if review_file_path is not None:
             outputs["review_file"] = review_file_path
+        # What was reviewed, so a `feedback: review` dispatch can name the file
+        # to revise in place (slice 195 D8).
+        if "input" in inputs:
+            outputs["input_file"] = inputs["input"]
 
         return ActionResult(
             success=True,

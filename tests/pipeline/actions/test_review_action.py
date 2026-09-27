@@ -467,6 +467,40 @@ class TestReviewPersistence:
     @pytest.mark.asyncio
     @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
     @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.resolve_slice_info")
+    async def test_slice_review_outputs_the_reviewed_file(
+        self,
+        mock_resolve_slice_info: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        """Slice 195 D8: `feedback: review` names the file to revise from here."""
+        design = "project-documents/user/slices/923-slice.isolation.md"
+        arch = "project-documents/user/architecture/900-arch.maintenance.md"
+        for rel in (design, arch):
+            (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+            (tmp_path / rel).write_text("# doc\n", encoding="utf-8")
+        mock_resolve_slice_info.return_value = {
+            "index": 923,
+            "name": "Isolation",
+            "slice_name": "isolation",
+            "design_file": design,
+            "task_files": [],
+            "arch_file": arch,
+            "project": "squadron",
+        }
+        mock_run_review.return_value = _make_review_result()
+
+        ctx = _make_context(params={"template": "slice", "slice": "923"}, cwd=str(tmp_path))
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is True, result.error
+        assert result.outputs["input_file"] == design
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
     async def test_review_file_persisted(
