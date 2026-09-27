@@ -113,6 +113,19 @@ def test_inner_step_with_loop_type_produces_nested_loop_error() -> None:
     assert any("type 'loop'" in m for m in _messages(errors))
 
 
+def test_inner_step_of_type_each_is_rejected() -> None:
+    """Ban (c), slice 195: each inside a loop: body."""
+    errors = _make().validate(
+        _step(
+            {
+                "max": 3,
+                "steps": [{"each": {"source": "cf.unfinished_slices()", "as": "s", "steps": []}}],
+            }
+        )
+    )
+    assert any("type 'each'" in m for m in _messages(errors))
+
+
 def test_valid_config_no_errors() -> None:
     """Minimal valid config — max, steps, no optional fields."""
     errors = _make().validate(_step({"max": 3, "steps": [{"review": {}}]}))

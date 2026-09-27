@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import re
+from enum import StrEnum
 from typing import cast
 
 from squadron.pipeline.models import StepConfig, ValidationError
-from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_type
 from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _SOURCE_PATTERN = re.compile(r"(\w+)\.(\w+)\([^)]*\)")
+
+
+class ItemFailurePolicy(StrEnum):
+    """What ``each`` does when an item's body fails (slice 195 D5)."""
+
+    STOP = "stop"
+    CONTINUE = "continue"
 
 
 class EachStepType:
@@ -74,7 +82,44 @@ class EachStepType:
                     action_type=StepTypeName.EACH,
                 )
             )
+        else:
+            errors.extend(self._validate_inner_steps(config))
 
+        policy = cfg.get("on_item_failure")
+        if policy is not None and policy not in ItemFailurePolicy.__members__.values():
+            valid = [p.value for p in ItemFailurePolicy]
+            errors.append(
+                ValidationError(
+                    field="on_item_failure",
+                    message=f"'on_item_failure' must be one of {valid}, got: {policy!r}",
+                    action_type=StepTypeName.EACH,
+                )
+            )
+
+        return errors
+
+    def _validate_inner_steps(self, config: StepConfig) -> list[ValidationError]:
+        """Validate each body step with its own step type (D3); ban nested each."""
+        errors: list[ValidationError] = []
+        for inner in self.inner_steps(config):
+            if inner.step_type == StepTypeName.EACH:
+                errors.append(
+                    ValidationError(
+                        field="steps",
+                        message=f"inner step '{inner.name}' may not be of type 'each'; "
+                        "nested each is not supported",
+                        action_type=StepTypeName.EACH,
+                    )
+                )
+                continue
+            try:
+                inner_impl = get_step_type(inner.step_type)
+            except KeyError as exc:
+                errors.append(
+                    ValidationError(field="steps", message=str(exc), action_type=StepTypeName.EACH)
+                )
+                continue
+            errors.extend(inner_impl.validate(inner))
         return errors
 
     def inner_steps(self, config: StepConfig) -> list[StepConfig]:

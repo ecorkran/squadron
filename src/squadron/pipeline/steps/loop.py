@@ -170,6 +170,18 @@ class LoopStepType:
                         action_type=step_type,
                     )
                 )
+            # Ban (c): inner step type is each (slice 195 D3)
+            if inner_type == StepTypeName.EACH:
+                errors.append(
+                    ValidationError(
+                        field="steps",
+                        message=(
+                            f"inner step '{inner_name}' may not be of type 'each'; "
+                            f"each inside a loop body is not supported"
+                        ),
+                        action_type=step_type,
+                    )
+                )
             # Ban (b): inner step type is loop
             if inner_type == StepTypeName.LOOP:
                 errors.append(
