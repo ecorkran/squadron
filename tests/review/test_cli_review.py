@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -25,6 +26,21 @@ from squadron.review.models import (
 @pytest.fixture
 def cli_runner() -> CliRunner:
     return CliRunner()
+
+
+@pytest.fixture
+def main_branch_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A committed repo on ``main``, made the cwd, for ``--diff main`` reviews.
+
+    ``--diff`` is validated against real refs in the cwd's repo; without this the
+    tests depend on the surrounding checkout happening to have a local ``main``.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for args in (["init", "-b", "main"], ["commit", "--allow-empty", "-m", "init"]):
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True)
+    monkeypatch.chdir(repo)
+    return repo
 
 
 @pytest.fixture
@@ -158,6 +174,7 @@ class TestReviewCode:
         result = cli_runner.invoke(app, ["review", "code", "--files", "src/**/*.py"])
         assert result.exit_code == 0
 
+    @pytest.mark.usefixtures("main_branch_repo")
     def test_with_diff_flag(
         self,
         cli_runner: CliRunner,
@@ -283,7 +300,8 @@ class TestInputFileGuard:
         result = cli_runner.invoke(app, ["review", "tasks", missing, "--against", against_doc])
         assert result.exit_code == 1
         assert "file not found" in result.output
-        assert "never-written.md" in result.output
+        # Rich wraps the path at the terminal width, possibly inside the filename.
+        assert "never-written.md" in result.output.replace("\n", "")
         patch_run_review.assert_not_called()
 
     def test_nonexistent_against_errors_before_review(
@@ -316,6 +334,7 @@ class TestInputFileGuard:
 class TestRulesWiring:
     """T13: Tests for language rules auto-detection and template rules wiring."""
 
+    @pytest.mark.usefixtures("main_branch_repo")
     def test_review_code_no_rules_flag_suppresses_injection(
         self,
         cli_runner: CliRunner,
@@ -374,6 +393,7 @@ class TestRulesWiring:
         assert call_kwargs["rules_content"] is not None
         assert "Slice-specific review guidance." in call_kwargs["rules_content"]
 
+    @pytest.mark.usefixtures("main_branch_repo")
     def test_review_code_explicit_and_auto_combined(
         self,
         cli_runner: CliRunner,
@@ -412,6 +432,7 @@ class TestRulesWiring:
         assert "Explicit custom rules." in rc
         assert "Python auto rules." in rc
 
+    @pytest.mark.usefixtures("main_branch_repo")
     def test_review_code_template_rules_not_duplicated(
         self,
         cli_runner: CliRunner,
