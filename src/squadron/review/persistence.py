@@ -347,6 +347,7 @@ def _review_frontmatter_lines(
     requested_model: str | None = None,
     run_id: str | None = None,
     squadron_version: str,
+    provider_failure: bool = False,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -381,6 +382,10 @@ def _review_frontmatter_lines(
         f"project: {project_name}",
         f"verdict: {verdict}",
     ]
+    # Slice 195 D12 (#139): marks the artifact as recording a provider failure, not a
+    # review. Absent from every other artifact.
+    if provider_failure:
+        lines.append("providerFailure: true")
     if verdict_source is not None:
         lines.append(f"verdictSource: {verdict_source.value}")
     lines.extend(
@@ -918,6 +923,7 @@ def format_provider_failure_markdown(
         tools_suppressed_reason=None,
         run_id=run_id,
         squadron_version=squadron_version,
+        provider_failure=True,
     )
     lines.append("---")
     lines.append("")

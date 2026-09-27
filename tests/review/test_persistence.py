@@ -1575,3 +1575,29 @@ class TestReviewTraceability:
         from squadron import __version__
 
         assert _make_result().to_dict()["squadron_version"] == __version__
+
+    def test_provider_failure_marked_directly_after_verdict(self) -> None:
+        markdown = format_provider_failure_markdown(
+            ProviderError(_FAILURE_MESSAGE), "slice", _failure_slice_info()
+        )
+        keys = _frontmatter_keys(markdown)
+
+        assert "providerFailure: true" in markdown
+        assert keys.index("verdict") + 1 == keys.index("providerFailure")
+
+    def test_review_artifact_has_no_provider_failure_key(self) -> None:
+        markdown = format_review_markdown(_make_result(), "slice", _make_slice_info())
+
+        assert "providerFailure" not in _frontmatter_keys(markdown)
+
+    def test_provider_failure_key_is_a_yaml_boolean(self, tmp_path: Path) -> None:
+        artifact = tmp_path / "failure.md"
+        artifact.write_text(
+            format_provider_failure_markdown(
+                ProviderError(_FAILURE_MESSAGE), "slice", _failure_slice_info()
+            )
+        )
+
+        frontmatter = read_frontmatter(artifact)
+        assert frontmatter is not None
+        assert frontmatter["providerFailure"] is True
