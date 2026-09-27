@@ -12,6 +12,24 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 923 implementation — negative control measured (#47)
+
+`scripts/test-hostile-env` runs a fresh clone under a hostile machine: a squadron config
+setting `review.max_file_size_bytes = 1`, a colliding `llama-3-70b` alias, a user
+template with a `profile:` override, gitconfig with `init.defaultBranch = trunk` and gpg
+signing through `/nonexistent`, sentinel keys, `CLAUDECODE=1`, `FORCE_COLOR=1`,
+`COLUMNS=20`, `TZ=Pacific/Chatham`, and no `cf` on `PATH`. Both preconditions passed.
+
+Result at the pre-slice commit `2f2c5d60`: **139 failed, 184 errors**, 4124 passed,
+8 skipped. The biggest groups:
+- 32 in `test_run.py` (`CLAUDECODE`)
+- 14 in `test_model_list.py` (user aliases)
+- about 150 errors in fixtures that build git repos: `review_pr*`, `pr_create*`,
+  `test_resolution`, `test_audit_harness`, `test_commit`, `pr/test_inputs` and others.
+  Their bare commits hit the host gitconfig (signing, default branch).
+
+The rest are spread across the CLI suites for config, metrology, auth and skills.
+
 ### Slice 923 design — Test Suite Machine-State Isolation (Phase 4 complete)
 
 Written first because 914 now depends on it for sequencing. While measuring for the design,
