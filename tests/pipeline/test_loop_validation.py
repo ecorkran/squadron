@@ -309,3 +309,40 @@ def test_loop_with_two_reviews_and_until_fails_full_pipeline_validation() -> Non
     assert any("verdict-bearing" in m for m in messages), (
         f"expected ambiguous-verdict error, got: {messages}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Slice 195 D6 — accept_if, skip_if_met, param-sourced values
+# ---------------------------------------------------------------------------
+
+
+def _loop_errors(**loop_cfg: object) -> list[str]:
+    cfg: dict[str, object] = {"max": 2, "steps": [{"review": {"template": "slice"}}], **loop_cfg}
+    definition = _pipeline_with_loop(cfg)
+    definition.params.update({"max-revisions": 3, "pass": "review.pass", "accept": "x"})
+    return [e.field for e in validate_pipeline(definition)]
+
+
+def test_accept_if_and_skip_if_met_with_until_validate_clean() -> None:
+    assert (
+        _loop_errors(until="review.pass", accept_if="review.concerns_or_better", skip_if_met=True) == []
+    )
+
+
+def test_accept_if_without_until_rejects() -> None:
+    assert "accept_if" in _loop_errors(accept_if="review.concerns_or_better")
+
+
+def test_skip_if_met_without_until_rejects() -> None:
+    assert "skip_if_met" in _loop_errors(skip_if_met=True)
+
+
+def test_bad_accept_if_value_rejects() -> None:
+    assert "accept_if" in _loop_errors(until="review.pass", accept_if="PASS")
+
+
+def test_placeholder_values_pass_load_time_validation() -> None:
+    assert (
+        _loop_errors(max="{max-revisions}", until="{pass}", accept_if="{accept}", skip_if_met=True)
+        == []
+    )

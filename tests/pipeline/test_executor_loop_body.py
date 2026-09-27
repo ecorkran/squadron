@@ -10,7 +10,7 @@ import pytest
 
 import squadron.pipeline.steps.loop  # noqa: F401 — trigger LoopStepType registration
 from squadron.pipeline.actions.dispatch import DispatchAction
-from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+from squadron.pipeline.executor import ExecutionStatus, StepResult, execute_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import StateManager
 from squadron.pipeline.steps import register_step_type
@@ -1757,3 +1757,95 @@ async def test_e2e_paused_at_round_2_of_3_resumes_at_round_2_not_round_1(
     # (would be impossible if the count restarted) and not round 4+ (would
     # be impossible if extra rounds were granted beyond max: 3).
     assert result2.step_results[0].iteration == 2
+
+
+# ---------------------------------------------------------------------------
+# Slice 195 D6 — skip_if_met, accept_if, param-sourced max
+# ---------------------------------------------------------------------------
+
+
+async def _run_after_prior_review(
+    prior_verdict: str, loop_cfg: dict[str, object], loop_verdicts: list[str]
+) -> tuple[list[StepResult], MagicMock]:
+    """A pre-loop review step, then a loop whose body is one review step."""
+    prior_st = _mock_step_type([("review", {})])
+    body_st = _mock_step_type([("review", {})])
+    register_step_type("_lb195_prior", prior_st)
+    register_step_type("_lb195_body", body_st)
+    review_action = _mock_action(
+        [_action_result(True, "review", verdict=v) for v in [prior_verdict, *loop_verdicts]]
+    )
+    pipeline = _pipeline(
+        [
+            StepConfig(step_type="_lb195_prior", name="design", config={}),
+            _loop_step("revise", {**loop_cfg, "steps": [{"_lb195_body": {}}]}),
+        ]
+    )
+    result = await execute_pipeline(
+        pipeline,
+        {"_project": "test"},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": review_action},
+    )
+    return result.step_results, review_action
+
+
+@pytest.mark.asyncio
+async def test_skip_if_met_runs_zero_rounds_after_a_passing_review() -> None:
+    steps, review = await _run_after_prior_review(
+        "PASS", {"max": 3, "until": "review.pass", "skip_if_met": True}, []
+    )
+    loop_result = steps[1]
+    assert loop_result.status == ExecutionStatus.COMPLETED
+    assert loop_result.iteration == 0
+    assert review.execute.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_skip_if_met_runs_rounds_when_prior_review_falls_short() -> None:
+    steps, review = await _run_after_prior_review(
+        "CONCERNS", {"max": 3, "until": "review.pass", "skip_if_met": True}, ["PASS"]
+    )
+    assert steps[1].iteration == 1
+    assert review.execute.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_accept_if_met_on_exhaust_completes_accepted() -> None:
+    steps, _ = await _run_after_prior_review(
+        "FAIL",
+        {"max": 2, "until": "review.pass", "accept_if": "review.concerns_or_better"},
+        ["FAIL", "CONCERNS"],
+    )
+    loop_result = steps[1]
+    assert loop_result.status == ExecutionStatus.COMPLETED
+    assert loop_result.accepted is True
+
+
+@pytest.mark.asyncio
+async def test_accept_if_not_met_on_exhaust_applies_on_exhaust() -> None:
+    steps, _ = await _run_after_prior_review(
+        "FAIL",
+        {"max": 2, "until": "review.pass", "accept_if": "review.concerns_or_better"},
+        ["FAIL", "FAIL"],
+    )
+    loop_result = steps[1]
+    assert loop_result.status == ExecutionStatus.FAILED
+    assert loop_result.accepted is False
+
+
+@pytest.mark.asyncio
+async def test_max_as_digit_string_resolves() -> None:
+    steps, review = await _run_after_prior_review(
+        "FAIL", {"max": "3", "until": "review.pass"}, ["FAIL", "FAIL", "PASS"]
+    )
+    assert steps[1].status == ExecutionStatus.COMPLETED
+    assert review.execute.await_count == 4
+
+
+def test_max_non_numeric_string_fails_naming_max() -> None:
+    from squadron.pipeline.executor import _parse_loop_config
+
+    with pytest.raises(ValueError, match="loop.max"):
+        _parse_loop_config({"max": "three"})

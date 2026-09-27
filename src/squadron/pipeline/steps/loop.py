@@ -18,6 +18,27 @@ _VERDICT_BEARING_ACTION_TYPES = frozenset({"review", "gate"})
 _COMMIT_ACTION_TYPE = "commit"
 
 
+def _is_placeholder(value: object) -> bool:
+    """A ``{param}`` value, validated once it resolves at run time — the
+    loader's ``_validate_model_alias`` convention."""
+    return isinstance(value, str) and "{" in value
+
+
+def _validate_condition_field(value: object, field: str, step_type: str) -> list[ValidationError]:
+    if value is None or _is_placeholder(value):
+        return []
+    valid = [c.value for c in LoopCondition]
+    if value in valid:
+        return []
+    return [
+        ValidationError(
+            field=field,
+            message=f"'{field}' must be one of {valid}, got: {value!r}",
+            action_type=step_type,
+        )
+    ]
+
+
 class LoopStepType:
     """Step type for multi-step loop bodies with retry semantics.
 
@@ -37,9 +58,12 @@ class LoopStepType:
         cfg = config.config
         step_type = self.step_type
 
-        # max: required positive integer (bool is a subclass of int — reject it)
+        # max: required positive integer (bool is a subclass of int — reject it).
+        # A {param} placeholder is checked when it resolves at run time (D6).
         max_val = cfg.get("max")
-        if isinstance(max_val, bool) or not isinstance(max_val, int) or max_val < 1:
+        if not _is_placeholder(max_val) and (
+            isinstance(max_val, bool) or not isinstance(max_val, int) or max_val < 1
+        ):
             errors.append(
                 ValidationError(
                     field="max",
@@ -48,18 +72,30 @@ class LoopStepType:
                 )
             )
 
-        # until: optional, must be a valid LoopCondition value
+        # until / accept_if: optional LoopCondition values
         until_val = cfg.get("until")
-        if until_val is not None:
-            valid_until = [c.value for c in LoopCondition]
-            if until_val not in valid_until:
+        for field in ("until", "accept_if"):
+            errors.extend(_validate_condition_field(cfg.get(field), field, step_type))
+
+        # accept_if and skip_if_met both qualify `until`; meaningless without it.
+        for field in ("accept_if", "skip_if_met"):
+            if cfg.get(field) is not None and until_val is None:
                 errors.append(
                     ValidationError(
-                        field="until",
-                        message=(f"'until' must be one of {valid_until}, got: {until_val!r}"),
+                        field=field,
+                        message=f"'{field}' requires 'until'",
                         action_type=step_type,
                     )
                 )
+        skip_if_met_val = cfg.get("skip_if_met")
+        if skip_if_met_val is not None and not isinstance(skip_if_met_val, bool):
+            errors.append(
+                ValidationError(
+                    field="skip_if_met",
+                    message="'skip_if_met' must be a boolean",
+                    action_type=step_type,
+                )
+            )
 
         # on_exhaust: optional, must be a valid ExhaustBehavior value
         on_exhaust_val = cfg.get("on_exhaust")

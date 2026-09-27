@@ -156,6 +156,8 @@ class StepResult:
     action_results: list[ActionResult]
     iteration: int = 0
     error: str | None = None
+    # A loop that exhausted its rounds but met accept_if (slice 195 D6).
+    accepted: bool = False
 
 
 @dataclass
@@ -309,6 +311,10 @@ class LoopConfig:
     on_exhaust: ExhaustBehavior = ExhaustBehavior.FAIL
     strategy: str | None = None
     commit_each_iteration: bool = False
+    # Second threshold, applied on exhaust (slice 195 D6).
+    accept_if: LoopCondition | None = None
+    # Skip every round when the verdict already in scope meets `until`.
+    skip_if_met: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -428,18 +434,14 @@ def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
 
     Raises ValueError for invalid ``until`` or ``on_exhaust`` values.
     """
-    max_iter = loop_dict.get("max")
-    if not isinstance(max_iter, int) or max_iter < 1:
-        raise ValueError(f"loop.max must be a positive integer, got: {max_iter!r}")
+    # A param-sourced max arrives as the placeholder's string (D6).
+    max_raw = loop_dict.get("max")
+    max_iter = int(max_raw) if isinstance(max_raw, str) and max_raw.isdecimal() else max_raw
+    if isinstance(max_iter, bool) or not isinstance(max_iter, int) or max_iter < 1:
+        raise ValueError(f"loop.max must be a positive integer, got: {max_raw!r}")
 
-    until_raw = loop_dict.get("until")
-    until: LoopCondition | None = None
-    if until_raw is not None:
-        try:
-            until = LoopCondition(until_raw)
-        except ValueError:
-            valid = [c.value for c in LoopCondition]
-            raise ValueError(f"Invalid loop.until value {until_raw!r}. Valid: {valid}") from None
+    until = _parse_loop_condition(loop_dict, "until")
+    accept_if = _parse_loop_condition(loop_dict, "accept_if")
 
     on_exhaust_raw = loop_dict.get("on_exhaust", ExhaustBehavior.FAIL.value)
     try:
@@ -456,7 +458,20 @@ def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
         on_exhaust=on_exhaust,
         strategy=strategy if isinstance(strategy, str) else None,
         commit_each_iteration=loop_dict.get("commit_each_iteration") is True,
+        accept_if=accept_if,
+        skip_if_met=loop_dict.get("skip_if_met") is True,
     )
+
+
+def _parse_loop_condition(loop_dict: dict[str, object], field: str) -> LoopCondition | None:
+    raw = loop_dict.get(field)
+    if raw is None:
+        return None
+    try:
+        return LoopCondition(raw)
+    except ValueError:
+        valid = [c.value for c in LoopCondition]
+        raise ValueError(f"Invalid loop.{field} value {raw!r}. Valid: {valid}") from None
 
 
 # ---------------------------------------------------------------------------
@@ -1022,19 +1037,49 @@ async def _execute_step_once(
     )
 
 
+def _loop_skip_result(
+    *, step: Any, loop_config: LoopConfig, prior_outputs: dict[str, ActionResult], start: int
+) -> StepResult | None:
+    """``skip_if_met`` (D6): COMPLETED with no rounds when the verdict already
+    in scope — the latest in *prior_outputs*' insertion order — meets
+    ``until``. Only before round 1; a resumed loop never skips."""
+    if not loop_config.skip_if_met or loop_config.until is None or start != 1:
+        return None
+    if not evaluate_condition(loop_config.until, list(prior_outputs.values())):
+        return None
+    _logger.info("loop step %s: %s already met; 0 rounds run", step.name, loop_config.until.value)
+    return StepResult(
+        step_name=step.name,
+        step_type=step.step_type,
+        status=ExecutionStatus.COMPLETED,
+        action_results=[],
+        iteration=0,
+    )
+
+
 def _loop_exhaust_result(
     *,
     step: Any,
-    on_exhaust: ExhaustBehavior,
+    loop_config: LoopConfig,
     action_results: list[ActionResult],
-    max_iter: int,
 ) -> StepResult:
-    """Build the exhaustion StepResult for the configured ``on_exhaust`` mode.
+    """Build the exhaustion StepResult: ACCEPTED when the final round meets
+    ``accept_if`` (D6), else the configured ``on_exhaust`` mode.
 
     Shared by ``_execute_loop_step`` (single-step body) and
     ``_execute_loop_body`` (multi-step body).
     """
-    match on_exhaust:
+    max_iter = loop_config.max
+    if loop_config.accept_if is not None and evaluate_condition(loop_config.accept_if, action_results):
+        return StepResult(
+            step_name=step.name,
+            step_type=step.step_type,
+            status=ExecutionStatus.COMPLETED,
+            action_results=action_results,
+            iteration=max_iter,
+            accepted=True,
+        )
+    match loop_config.on_exhaust:
         case ExhaustBehavior.FAIL:
             status = ExecutionStatus.FAILED
         case ExhaustBehavior.CHECKPOINT:
@@ -1159,6 +1204,10 @@ async def _execute_loop_step(
             start_iteration=start_iteration,
             loop_max=loop_config.max,
         )
+    if skipped := _loop_skip_result(
+        step=step, loop_config=loop_config, prior_outputs=prior_outputs, start=start_iteration
+    ):
+        return skipped
 
     last_result: StepResult | None = None
 
@@ -1211,12 +1260,7 @@ async def _execute_loop_step(
 
     # Max iterations exhausted
     final_results = last_result.action_results if last_result else []
-    return _loop_exhaust_result(
-        step=step,
-        on_exhaust=loop_config.on_exhaust,
-        action_results=final_results,
-        max_iter=loop_config.max,
-    )
+    return _loop_exhaust_result(step=step, loop_config=loop_config, action_results=final_results)
 
 
 def _unpack_body(resolved_config: dict[str, object]) -> list[Any]:
@@ -1292,6 +1336,10 @@ async def _execute_loop_body(
             start_iteration=start_iteration,
             loop_max=loop_config.max,
         )
+    if skipped := _loop_skip_result(
+        step=step, loop_config=loop_config, prior_outputs=prior_outputs, start=start_iteration
+    ):
+        return skipped
 
     for iteration in range(start_iteration, loop_config.max + 1):
         iteration_action_results = []
@@ -1418,10 +1466,7 @@ async def _execute_loop_body(
 
     # Max iterations exhausted
     return _loop_exhaust_result(
-        step=step,
-        on_exhaust=loop_config.on_exhaust,
-        action_results=iteration_action_results,
-        max_iter=loop_config.max,
+        step=step, loop_config=loop_config, action_results=iteration_action_results
     )
 
 
