@@ -475,8 +475,36 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_summary_non_sdk_profile_with_rotate_fails() -> None:
-    """Rotate emit + non-SDK profile fails before any provider call."""
+async def test_execute_summary_rotate_only_without_session_is_skipped() -> None:
+    """Rotate-only emit with no SDK session skips before any model call (#148)."""
+    from unittest.mock import patch
+
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve_full.return_value = ResolvedModel("minimax-01", "openrouter")
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(return_value=("SHOULD NOT REACH", {})),
+    ) as mock_oneshot:
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
+            action_type="summary",
+        )
+
+    assert result.success is True
+    assert result.outputs == {"skipped": "no SDK session to rotate"}
+    mock_oneshot.assert_not_called()
+    ctx.resolver.resolve_full.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_execute_summary_non_sdk_profile_with_rotate_and_file_fails() -> None:
+    """Rotate mixed with another emit still fails on a non-SDK profile: the file
+    output was asked for, so the step cannot be skipped, and rotate cannot run."""
     from unittest.mock import patch
 
     from squadron.pipeline.actions.summary import _execute_summary
@@ -492,14 +520,16 @@ async def test_execute_summary_non_sdk_profile_with_rotate_fails() -> None:
             context=ctx,
             instructions="summarize",
             summary_model_alias="minimax",
-            emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
+            emit_destinations=[
+                EmitDestination(kind=EmitKind.ROTATE),
+                EmitDestination(kind=EmitKind.FILE),
+            ],
             action_type="summary",
         )
 
     assert result.success is False
     assert result.error is not None
     assert "rotate" in result.error.lower()
-    assert "non-SDK" in result.error or "openrouter" in result.error
     mock_oneshot.assert_not_called()
 
 
@@ -969,3 +999,16 @@ async def test_sdk_summary_path_has_no_tools_keys() -> None:
 
     assert result.success is True
     assert "tools_given" not in result.metadata
+
+
+def test_item_reset_template_renders_its_fixed_line() -> None:
+    """The batch item-reset template (#148) loads and asks for its one line verbatim."""
+    from squadron.pipeline.compaction_templates import (
+        load_compaction_template,
+        render_instructions,
+    )
+
+    template = load_compaction_template("item-reset")
+    rendered = render_instructions(template, keep=None, summarize=False, pipeline_params={})
+    assert "Nothing from it carries forward" in rendered
+    assert "{" not in rendered

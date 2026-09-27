@@ -239,15 +239,25 @@ class TestDesignPlanIntegration:
                 (tmp_path / f"{slice_index}-slice.stub.md").write_text("# stub design")
             return ActionResult(success=True, action_type="dispatch", outputs={})
 
+        # The item-reset summary step (#148): one per item, before its design.
+        resets: list[str] = []
+
+        async def summary_execute(ctx: ActionContext) -> ActionResult:
+            resets.append(str(ctx.params["template"]))
+            return ActionResult(success=True, action_type="summary", outputs={})
+
         review = MagicMock()
         review.execute = review_execute
         dispatch = MagicMock()
         dispatch.execute = dispatch_execute
+        summary = MagicMock()
+        summary.execute = summary_execute
         ok = _mock_action_fn(success=True)
         registry: dict[str, object] = {
             "cf-op": ok,
             "dispatch": dispatch,
             "review": review,
+            "summary": summary,
             "checkpoint": ok,
             "commit": ok,
         }
@@ -273,5 +283,7 @@ class TestDesignPlanIntegration:
             ("928", ItemOutcome.FLAGGED),
         ]
         assert revise_calls == ["924", "924"]
+        # Every item resets, including the flagged one.
+        assert resets == ["item-reset"] * 3
         assert all(not remaining for remaining in reviews.values())
         assert (tmp_path / f"{run_id}.slices.report.md").is_file()

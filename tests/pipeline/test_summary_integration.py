@@ -151,8 +151,8 @@ class TestSummaryStep:
         assert result.status == ExecutionStatus.PAUSED
 
     @pytest.mark.asyncio
-    async def test_no_sdk_session_fails_summary_step(self) -> None:
-        """Summary step without SDK session → FAILED with descriptive error."""
+    async def test_no_sdk_session_skips_rotate_only_summary_step(self) -> None:
+        """Rotate-only summary step without an SDK session → skipped, run completes (#148)."""
         definition = _make_definition(
             [
                 StepConfig(
@@ -169,11 +169,30 @@ class TestSummaryStep:
             cf_client=MagicMock(),
             sdk_session=None,
         )
+        assert result.status == ExecutionStatus.COMPLETED
+        outputs = result.step_results[0].action_results[0].outputs
+        assert outputs == {"skipped": "no SDK session to rotate"}
+
+    async def test_no_sdk_session_fails_summary_step_with_file_emit(self) -> None:
+        """A summary that must produce output still fails without an SDK session."""
+        definition = _make_definition(
+            [
+                StepConfig(
+                    step_type="summary",
+                    name="s",
+                    config={"template": "minimal-sdk", "emit": ["rotate", "stdout"]},
+                )
+            ]
+        )
+        result = await execute_pipeline(
+            definition,
+            {},
+            resolver=_make_resolver(),
+            cf_client=MagicMock(),
+            sdk_session=None,
+        )
         assert result.status == ExecutionStatus.FAILED
-        failed = result.step_results[0]
-        # Error is in the action result, not propagated to StepResult.error
-        assert len(failed.action_results) >= 1
-        action_error = failed.action_results[0].error
+        action_error = result.step_results[0].action_results[0].error
         assert action_error is not None
         assert "SDK" in action_error
 

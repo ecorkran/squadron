@@ -16,6 +16,10 @@ steps:
       as: slice
       on_item_failure: continue
       steps:
+        # Each slice starts in a fresh SDK session carrying nothing from the previous one.
+        # First in the body so a failed item can't leak into the next. Skipped (no model
+        # call) when the model is non-SDK and there is no session (#148).
+        - summary: { template: item-reset, model: "{model}", emit: [rotate] }
         - design:
             phase: 4
             plan: "{plan}"

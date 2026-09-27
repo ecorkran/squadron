@@ -194,7 +194,23 @@ async def _execute_summary(
     Branches on profile:
     - SDK profile (or None): uses sdk_session.capture_summary()
     - Non-SDK profile: uses capture_summary_via_profile() via the provider registry
+
+    A rotate-only step with no SDK session is skipped: there is no session context to
+    reset, so there is nothing to summarize for (#148). This lets a batch body end in
+    ``summary: {emit: [rotate]}`` and still run on a non-SDK model.
     """
+    rotate_only = bool(emit_destinations) and all(d.kind is EmitKind.ROTATE for d in emit_destinations)
+    if context.sdk_session is None and rotate_only:
+        _logger.info(
+            "summary step '%s': rotate-only and no SDK session; nothing to reset, skipped",
+            context.step_name,
+        )
+        return ActionResult(
+            success=True,
+            action_type=action_type,
+            outputs={"skipped": "no SDK session to rotate"},
+        )
+
     # Resolve model alias and profile.
     model_id: str | None = None
     profile: str | None = None

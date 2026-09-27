@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cf.unfinished_slices("{plan}")` now reads the plan it's given; it used to ignore the argument and read the active plan. The argument must be an architecture index such as `"900"` (#136)
 - Phase steps set cf's slice before its phase, as cf requires; it was phase first (#136)
 - `sq review … --output json` stdout is now pure JSON: "Saved review to …" goes to stderr (#139)
+- `slices-plan` and `tasks-plan` on an SDK model (sonnet, opus) now start each slice in a fresh session. Every slice used to run in one session that held all the earlier slices' work. The reset is a visible `summary` step (`item-reset` template, `emit: [rotate]`) at the top of the loop body (#148)
+- A `summary` step whose only output is `rotate` is skipped when there's no SDK session to reset, instead of failing the run. It used to break any pipeline that used it with a non-SDK model (#148)
 - A pipeline's name is now its file name everywhere. `sq run --list`, commit messages, DEVLOG entries, batch reports and summary files used the `name:` field inside the file, so `P4` was listed as `slice-design` and saved its summaries under that key. `name:` is now optional and ignored. Pipelines whose `name:` differed from their file name save summaries under a new key from now on. `sq run P4` also now finds `P4.yaml` on case-sensitive filesystems (#147)
 - The test suite no longer passes or fails based on the developer's machine: user config, git config, timezone, terminal width, credentials and `PATH` are pinned per test, and a new CI job runs the suite under a deliberately hostile environment (#47)
 

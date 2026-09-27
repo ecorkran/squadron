@@ -189,6 +189,8 @@ The cf calls follow Context Forge's switching rule: arch (which switches the ini
 | `rotate` | Inject as compacted context and rotate the session |
 | `{file: path}` | Write to file (relative to project root) |
 
+A step whose only destination is `rotate` is skipped, with no model call, when the run has no SDK session (a non-SDK model, or prompt-only mode): there is no session context to reset. `rotate` combined with any other destination still requires an SDK session.
+
 **Example:**
 
 ```yaml
@@ -718,11 +720,12 @@ sq run slices-plan 900 -p max-revisions=2 -p review-model=minimax
 
 Per slice, `slices-plan`:
 
-1. switches cf to plan 900's arch, then the slice, then phase 4 (see [Phase steps](#phase-steps-design-tasks-implement));
-2. writes the design and reviews it, committing both;
-3. stops there if that review already meets `pass-threshold` (`skip_if_met`) — **PASSED**;
-4. otherwise runs up to `max-revisions` revise rounds: a `feedback: review` dispatch that revises the design in place against the findings, then a fresh review, committing each round;
-5. on a passing round — **PASSED**; if the rounds run out but the last review meets `accept-threshold` — **ACCEPTED**; otherwise — **FLAGGED**, and the next slice starts.
+1. starts a fresh SDK session (`summary` with the `item-reset` template and `emit: [rotate]`), so nothing from the previous slice is in context; skipped when the model is non-SDK;
+2. switches cf to plan 900's arch, then the slice, then phase 4 (see [Phase steps](#phase-steps-design-tasks-implement));
+3. writes the design and reviews it, committing both;
+4. stops there if that review already meets `pass-threshold` (`skip_if_met`) — **PASSED**;
+5. otherwise runs up to `max-revisions` revise rounds: a `feedback: review` dispatch that revises the design in place against the findings, then a fresh review, committing each round;
+6. on a passing round — **PASSED**; if the rounds run out but the last review meets `accept-threshold` — **ACCEPTED**; otherwise — **FLAGGED**, and the next slice starts.
 
 A design step that writes no design, a provider failure, or any other step failure also flags the slice and moves on.
 

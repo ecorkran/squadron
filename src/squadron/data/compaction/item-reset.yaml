@@ -1,0 +1,7 @@
+name: item-reset
+description: "Batch item boundary — rotate to a fresh session carrying nothing from the finished item"
+
+instructions: |
+  The work item in this conversation is finished, and the next item is independent of it.
+  Output exactly this line and nothing else:
+  The previous batch item is complete. Nothing from it carries forward; work only from the next prompt.

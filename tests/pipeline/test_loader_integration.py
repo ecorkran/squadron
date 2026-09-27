@@ -85,7 +85,10 @@ class TestBuiltInPipelineStructure:
         assert each.config["source"] == source
         assert each.config["on_item_failure"] == "continue"
         body = [next(iter(s)) for s in each.config["steps"]]
-        assert body == [phase_step, "loop"]
+        assert body == ["summary", phase_step, "loop"]
+        # Each item starts in a fresh SDK session; first so a failed item can't leak (#148).
+        reset = each.config["steps"][0]["summary"]
+        assert reset == {"template": "item-reset", "model": "{model}", "emit": ["rotate"]}
 
     def test_judge_cycle_shape(self) -> None:
         defn = load_pipeline(
