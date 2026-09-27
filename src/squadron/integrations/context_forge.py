@@ -137,9 +137,15 @@ class ContextForgeClient:
             return False
         return True
 
-    def list_slices(self) -> list[SliceEntry]:
-        """Return all slices from ``cf list slices --json``."""
-        data: dict[str, Any] = self._run_json(["list", "slices", "--json"])
+    @staticmethod
+    def _list_args(kind: str, plan: str | None) -> list[str]:
+        """``cf list {kind} [archIndex] --json`` — *plan* reads that plan
+        instead of the active one, without changing cf state."""
+        return ["list", kind, *([plan] if plan is not None else []), "--json"]
+
+    def list_slices(self, plan: str | None = None) -> list[SliceEntry]:
+        """Return all slices from ``cf list slices [plan] --json``."""
+        data: dict[str, Any] = self._run_json(self._list_args("slices", plan))
         raw_entries: list[dict[str, Any]] = data.get("entries", [])
         return [
             SliceEntry(
@@ -151,9 +157,9 @@ class ContextForgeClient:
             for e in raw_entries
         ]
 
-    def list_tasks(self) -> list[TaskEntry]:
-        """Return all task groups from ``cf list tasks --json``."""
-        raw_entries: list[dict[str, Any]] = self._run_json(["list", "tasks", "--json"])
+    def list_tasks(self, plan: str | None = None) -> list[TaskEntry]:
+        """Return all task groups from ``cf list tasks [plan] --json``."""
+        raw_entries: list[dict[str, Any]] = self._run_json(self._list_args("tasks", plan))
         return [
             TaskEntry(
                 index=int(e["index"]),

@@ -144,6 +144,27 @@ class TestListTasks:
             assert ContextForgeClient().list_tasks() == []
 
 
+class TestListPlanArgument:
+    """``plan`` passes through as cf's positional archIndex; unset, the
+    command is unchanged."""
+
+    @pytest.mark.parametrize(
+        ("method", "payload", "plan", "expected"),
+        [
+            ("list_slices", {"entries": []}, None, ["cf", "list", "slices", "--json"]),
+            ("list_slices", {"entries": []}, "900", ["cf", "list", "slices", "900", "--json"]),
+            ("list_tasks", [], None, ["cf", "list", "tasks", "--json"]),
+            ("list_tasks", [], "900", ["cf", "list", "tasks", "900", "--json"]),
+        ],
+    )
+    def test_command_args(
+        self, method: str, payload: object, plan: str | None, expected: list[str]
+    ) -> None:
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(payload))) as run:
+            getattr(ContextForgeClient(), method)(plan)
+        assert run.call_args.args[0] == expected
+
+
 # ---------------------------------------------------------------------------
 # T9 — get_project()
 # ---------------------------------------------------------------------------
