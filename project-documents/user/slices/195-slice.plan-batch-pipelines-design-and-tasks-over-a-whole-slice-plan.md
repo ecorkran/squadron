@@ -3,7 +3,7 @@ docType: slice-design
 slice: plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan
 project: squadron
 parent: project-documents/user/architecture/180-slices.pipeline-intelligence.md
-dependencies: [194, 181]
+dependencies: [194, 181, 909, 927]
 interfaces: []
 dateCreated: 20260926
 dateUpdated: 20260926
@@ -76,6 +76,7 @@ Sources: issue #136 and its Phase 5 addendum comment, and issue #139.
 - **194 (Loop Step Type for Multi-Step Bodies)**: complete. It provides the `loop:` step with `steps:`, `until`, `on_exhaust`, and `commit_each_iteration`.
 - **181 (Pool Resolver Integration)**: complete. `review-model: pool:review` resolves through `ModelResolver.resolve`, which the review action already calls ([review.py:174](../../../src/squadron/pipeline/actions/review.py#L174)).
 - **909 dispatch-artifact post-condition**: complete. A `design:` or `tasks:` step whose dispatch writes no artifact fails. That is what turns an empty design into a flagged item instead of a silent success.
+- **927 (Review Artifacts State What Happened)**: complete. D12's new frontmatter keys sit after its `diffTruncated`, and its snapshot fixtures get regenerated.
 - **Context Forge CLI**: `cf list slices {archIndex} --json` and `cf list tasks {archIndex} --json` read a plan other than the active one without changing any state. Both are verified against cf as installed.
 
 ### Interfaces Required
@@ -86,6 +87,8 @@ Sources: issue #136 and its Phase 5 addendum comment, and issue #139.
 - `squadron.__version__`: the version recorded in review artifacts.
 
 ## Architecture
+
+The 180 architecture says 140 code is not modified and grammar changes are out of scope. The 180 slice plan overrides that for 194 and 195, whose entries call for general engine pieces so each batch phase is a YAML file. 194 already added `loop:` to the grammar. This slice changes the executor, the step types and the actions directly, and adds grammar keys, under that same authorization.
 
 ### Component Structure
 
@@ -150,6 +153,7 @@ The source marks a slice with a `flag_reason` when its design review is missing 
 ### State Management
 
 - **cf project state is changed deliberately.** `set_arch` changes the active arch and, through cf, the plan. `set_slice` and `set_phase` change the phase and slice on every item, as P4 and P5 already do today. After the run, cf points at the batch's plan, at the last item's slice, and at the batch's phase. The run doesn't restore the previous state. The report's header records the plan the batch ran over.
+- **No concurrent cf use.** cf state is per-project, so any cf-consuming command run in the same project during a batch (`sq review slice`, a phase step, `cf build`) resolves against the batch's current arch, plan and slice. Don't run them while a batch is active.
 - **Item scope is discarded after each item.** Item N+1 never sees item N's review. Without isolation, slice 924's revise dispatch would take its findings from slice 923's review.
 - **Resume.** An interrupted run is rerun, not resumed mid-item. Selection is by artifact presence (a design file or a task file), so a rerun picks only what's left. A slice flagged after a design file was written is not re-selected by `design-plan`. `tasks-plan` then flags it again for "design review below threshold", so it keeps showing up in reports and never drops out silently. `sq run --resume` of a paused batch restarts the `each` step from the top, which has the same effect.
 - **Report.** One Markdown file per `each` step per run: `{runs_dir}/{run_id}.{step_name}.report.md`, next to `{run_id}.json`.
@@ -194,7 +198,7 @@ This relies on each arch having exactly one slice plan. That has held for the pr
 - **Where it runs.** There is no top-level `cf-op` step type (the `StepTypeName` members are design, tasks, implement, dispatch, compact, summary, review, each, fan_out, loop, devlog, and gate). The phase step (`design:`, `tasks:`, `implement:`) gains an optional `plan:` key. When it's present, `PhaseStepType.expand()` emits `cf-op set_arch` first. Initiative switching then sits beside the slice and phase setting the phase step already does, with no new step type.
   - It runs once per item. It's idempotent and costs a few cf calls, which is small next to a dispatch.
   - The loop's review, later in the same item, resolves against the plan the design step set.
-- **Order fix.** `PhaseStepType.expand()` emits `set_phase` before `set_slice` today (phase.py:156-157). This slice flips it to `set_arch` (when `plan:` is present) → `set_slice` → `set_phase` → `build_context`, and updates the exact-equality `expand()` tests to match. This applies to every phase step, not just batch pipelines.
+- **Order fix.** `PhaseStepType.expand()` emits `set_phase` before `set_slice` today (phase.py:156-157). This slice flips it to `set_arch` (when `plan:` is present) → `set_slice` → `set_phase` → `build_context`, and updates the exact-equality `expand()` tests to match. This applies to every phase step, not just batch pipelines. The arch → slice → phase sequence is the cf operating rule as stated by the PM, so the current phase-first order has been wrong in every pipeline, not just batches.
 - It's a state change like the `set_phase` and `set_slice` P4 already performs.
 - **Rejected: requiring the plan to already be active.** It makes `plan` a redundant assertion, and it's a manual step in an unattended flow.
 - **Rejected: a new `cf-op` step type.** It adds a step type for one operation, which the phase step can carry.
