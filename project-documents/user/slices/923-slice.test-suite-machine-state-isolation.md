@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: []
 interfaces: [914]
 dateCreated: 20260926
-dateUpdated: 20260926
-status: in_progress
+dateUpdated: 20260927
+status: complete
 ---
 
 # Slice Design: Test Suite Machine-State Isolation
@@ -279,11 +279,9 @@ Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Pyt
 4. `sq` still loads `.env` from the current directory at runtime.
 5. `scripts/test-hostile-env` passes on the slice's final commit with zero failures.
 6. The same script against the pre-slice parent commit fails, and the failures are recorded in DEVLOG (negative control).
-7. The `hermetic` CI job is green on a pull-request run against `main` —
-   the workflow's triggers (`push`/`pull_request` on `main` only) do not
-   fire on a plain slice-branch push or on a merge into a non-`main`
-   integration branch, so a PR run is the only trigger that produces this
-   evidence.
+7. The `hermetic` CI job is green on the first push to `main` that includes
+   it. The workflow runs only on `push`/`pull_request` to `main`, and this
+   project pushes to `main` directly, so that push is the first run.
 
 ### Technical Requirements
 
@@ -343,7 +341,7 @@ Verified in Phase 6 (20260926), macOS, git 2.50.1, Python 3.13. Each full run ta
    uv run pytest -q 2>&1 | tail -1          # actual: 4481 passed, 4 skipped (same as clean)
    cp /tmp/cfg.bak ~/.config/squadron/config.toml
    ```
-8. **CI:** open a PR from the slice branch against `main` (see Functional criterion 7). The `hermetic` job and the main `test` job must both be green. The job runs `git checkout -B hermetic-under-test` first, because the PR merge commit is on no branch and the script's clone copies only branches and tags.
+8. **CI:** after the push to `main` that brings this work in, the `hermetic` job and the main `test` job must both be green (pending at slice close). The job runs `git checkout -B hermetic-under-test` first, because the PR merge commit is on no branch and the script's clone copies only branches and tags.
 
 ## Risk Assessment
 

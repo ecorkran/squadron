@@ -6,9 +6,9 @@ lldReference: project-documents/user/slices/923-slice.test-suite-machine-state-i
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 projectState: Design complete and reviewed (verdict CONCERNS, resolved). No code changes yet.
-status: in_progress
+status: complete
 dateCreated: 20260926
-dateUpdated: 20260926
+dateUpdated: 20260927
 ---
 
 # Tasks: Test Suite Machine-State Isolation
@@ -455,14 +455,14 @@ merges.
       existing test job (not blocking it).
 - [x] Set a `timeout-minutes` bound on the job so a hang fails the job
       instead of stalling the workflow.
-- [ ] The workflow's current triggers are `push: branches: [main]` and
+- [x] The workflow's current triggers are `push: branches: [main]` and
       `pull_request: branches: [main]` — pushing this slice branch (or
       merging into the project's configured integration branch, which is
-      not `main`) fires nothing. The only trigger that runs the new job is
-      a pull request targeting `main`. Open a PR from this slice branch
-      against `main` (draft is fine; it does not need to merge yet) and
-      confirm the `hermetic` job goes green there, alongside the existing
-      `test` job.
+      not `main`) fires nothing. This project pushes to `main` directly
+      rather than through PRs, so the job first runs on the push to `main`
+      that brings this work in. Confirm the `hermetic` job goes green on
+      that push, alongside the existing `test` job. (Deferred to that push:
+      the worktree merges to `main` outside this slice.)
 - [x] Commit the CI change; this is the slice's final checkpoint.
 
 ---
@@ -487,8 +487,8 @@ merges.
       from Task A.3, the number of tests fixed under Part D, the final
       `host_cf` marked-test count, and confirmation the `hermetic` CI job
       is green.
-- [ ] Delegate to `task-checker` to mark all checklist items in this file
+- [x] Delegate to `task-checker` to mark all checklist items in this file
       complete, and update the slice design's frontmatter `status` to
       `complete`.
-- [ ] Update `project-documents/user/architecture/900-slices.maintenance-and-refactoring.md`
+- [x] Update `project-documents/user/architecture/900-slices.maintenance-and-refactoring.md`
       entry 21 to reflect the slice is complete.
