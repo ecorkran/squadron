@@ -53,6 +53,9 @@ class ProviderCapabilities:
     supports_streaming: bool = False
     """Agent yields incremental response chunks."""
 
+    applies_output_budget: bool = False
+    """Agent sends ``AgentConfig.max_output_tokens`` on its requests (slice 924)."""
+
 
 @runtime_checkable
 class Agent(Protocol):

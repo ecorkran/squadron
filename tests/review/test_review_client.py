@@ -1145,7 +1145,7 @@ class TestRecoveryTurn:
 
         agent.handle_message = _handle
         provider = MagicMock()
-        provider.capabilities = ProviderCapabilities(can_read_files=False)
+        provider.capabilities = ProviderCapabilities(can_read_files=False, applies_output_budget=True)
         provider.create_agent = AsyncMock(return_value=agent)
         return provider, sent
 
@@ -1398,3 +1398,14 @@ class TestOutputBudgetThreading:
             await self._run(provider, max_output_tokens=256)
 
         assert any("budget: 256 tokens" in r.getMessage() for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_provider_that_cannot_send_a_budget_records_none(self) -> None:
+        """The agent still gets the budget (so it can warn), but the artifact won't claim it."""
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+        provider.capabilities = ProviderCapabilities(can_read_files=False)
+
+        result = await self._run(provider, max_output_tokens=4096)
+
+        assert provider.create_agent.call_args.args[0].max_output_tokens == 4096
+        assert result.max_output_tokens is None

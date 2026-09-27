@@ -33,6 +33,7 @@ class OpenAICompatibleProvider:
             can_read_files=False,
             supports_system_prompt=True,
             supports_streaming=True,
+            applies_output_budget=True,
         )
 
     async def create_agent(self, config: AgentConfig) -> OpenAICompatibleAgent:
