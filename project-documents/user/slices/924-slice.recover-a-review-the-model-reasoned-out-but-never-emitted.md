@@ -7,7 +7,7 @@ dependencies: [918, 919, 927]
 interfaces: []
 dateCreated: 20260927
 dateUpdated: 20260927
-status: not_started
+status: complete
 ---
 
 # Slice Design: Recover a Review the Model Reasoned Out but Never Emitted
@@ -297,44 +297,74 @@ max_output_tokens = <from OpenRouter's listing, see B5>
 
 ### Verification Walkthrough
 
-These steps are drafted before implementation and get refined in Phase 6.
+Run on 20260927 from the slice branch. Use `uv run sq` from the checkout: a globally installed `sq` (a `uv tool` install) is a released build without this slice. Steps 1–3 and 6 call paid models. Steps 1 and 3 overwrite the slice's review artifact and archive the previous one, so copy it aside first if it matters.
 
 1. **Budget reaches the request and the artifact.**
    ```bash
-   sq review slice 924 --model kimi3 -v
+   uv run sq review slice 924 --model kimi3 -v
+   grep -E "Stop reason|Output budget" project-documents/user/reviews/924-review.slice.recover-a-review-the-model-reasoned-out-but-never-emitted.md
+   grep -A2 'model = "moonshotai/kimi-k3"' src/squadron/data/models.toml
    ```
-   Open `project-documents/user/reviews/924-review.slice.recover-a-review-the-model-reasoned-out-but-never-emitted.md`. The Run Digest shows `Output budget: <N> tokens`, where N matches `models.toml`.
+   Actual: `- Stop reason: stop`, then `- Output budget: 943718 tokens`, which matches `max_output_tokens = 943718` on `kimi3` in `models.toml`. Verdict PASS, `verdictSource: stated`.
 
-   Repeat with an alias that has no budget (for example `--model gemini`). The digest shows `Output budget: backend default`.
-2. **JSON carries the new fields.**
-   ```bash
-   sq review slice 924 --model kimi3 --output json | jq '{max_output_tokens, output_budget_exhausted, recovery_turn_used, verdictSource}'
+   For the no-budget case, every built-in OpenRouter alias now has a budget, and on 20260927 `gemini` and `gpt54-nano` both returned 429 (quota). Use a user alias with no budget (see step 3 for where to add it):
+   ```toml
+   [aliases.kimi3-nobudget]
+   profile = "openrouter"
+   model = "moonshotai/kimi-k3"
    ```
-   Expected: a number, `false`, `false`, and `"stated"` or `"derived"`.
-3. **A forced budget exhaustion skips recovery.** Add a user alias with a deliberately tiny budget in `~/.config/squadron/models.toml`:
+   Its JSON shows `"max_output_tokens": null` (step 2), and the digest renders `Output budget: backend default`, which the unit test `TestOutputBudgetDigestLine` pins.
+2. **JSON carries the new fields.** `--output json` sends errors to stdout too, so redirect to a file before `jq`:
+   ```bash
+   uv run sq review slice 924 --model kimi3-nobudget --no-save --output json > out.json
+   jq '{max_output_tokens, output_budget_exhausted, recovery_turn_used, verdictSource, stop_reason}' out.json
+   ```
+   Actual: `null`, `false`, `false`, `"stated"`, `"stop"`. With `--model kimi3` the first field is `943718`.
+3. **A spent budget skips recovery.** Back up `~/.config/squadron/models.toml`, then add:
    ```toml
    [aliases.kimi3-tiny]
    profile = "openrouter"
    model = "moonshotai/kimi-k3"
-   max_output_tokens = 256
+   max_output_tokens = 64
    ```
    ```bash
-   sq review slice 924 --model kimi3-tiny -v
+   uv run sq review slice 924 --model kimi3-tiny -v
    ```
-   Expected:
-   - stderr has one WARNING naming `stop reason: length` and `budget: 256 tokens`, and no "asking once more" line;
-   - the digest shows `Stop reason: length` and the skip line;
-   - the verdict is UNKNOWN;
-   - frontmatter has no `recoveryTurn` key.
+   Actual with 64 tokens (exit 1). This is the empty-turn branch of D2/D7, requirement 10:
+   - stderr: `Model returned an empty final turn (finish_reason='length', reasoning_chars=348)`, then one `ended without writing the review and its output budget ran out (stop reason: length; budget: 64 tokens); not asking again`. No "asking once more" line.
+   - The artifact is the usual provider-failure artifact: `verdict: UNKNOWN`, `providerFailure: true`.
 
-   Remove the alias afterward.
-4. **Recovery provenance reaches frontmatter.** A live mid-task ending cannot be triggered on demand. Confirm with the unit test (`pytest tests/review/test_persistence.py -k recovery`), then grep any recovered artifact that turns up in normal use for `recoveryTurn: true`.
-5. **Pipeline parity.** Run a pipeline whose review step names an alias with `tool_use = false`. The artifact's frontmatter shows `toolsSuppressedReason` and no `toolCallsMade`, the same as `sq review --model <that alias>`. Before this slice, the pipeline artifact showed tools offered.
+   **Caveat, and a gap the design does not cover.** At `max_output_tokens = 256` the model made 26 small tool-call turns, then wrote `## Summary` with PASS and was cut off at `length` before any findings. The parse succeeded, so no recovery was needed and none was skipped. The artifact is a clean `verdict: PASS` / `verdictSource: stated` with `Stop reason: length` in the digest and `output_budget_exhausted: true` in JSON. Nothing in frontmatter tells a gate the review was truncated. See the note after step 6.
+
+   A mid-task text ending on `length` (the skip line `Recovery turn: skipped — output budget exhausted (...)` in the digest) was not reproduced live. It is covered by `TestRecoveryTurn::test_spent_budget_skips_recovery` and `TestRecoveryTurnRendering::test_budget_skip_is_disclosed_in_the_digest`.
+
+   Restore the backed-up `models.toml` afterward.
+4. **Recovery provenance reaches frontmatter.** A live mid-task ending cannot be triggered on demand.
+   ```bash
+   uv run pytest tests/review/test_persistence.py -k "recovery or RecoveryTurn" -q
+   ```
+   Also verified: an artifact carrying `recoveryTurn: true`, placed under `project-documents/user/reviews/`, passes `cf validate frontmatter <path>` with "No inconsistencies found". cf validates only in-root files.
+5. **Pipeline parity.** `sq run` refuses to run inside Claude Code (#144), so the Project Manager runs this step. No built-in alias sets `tool_use = false`, so add a user alias:
+   ```toml
+   [aliases.kimi3-notools]
+   profile = "openrouter"
+   model = "moonshotai/kimi-k3"
+   tool_use = false
+   ```
+   ```bash
+   uv run sq run review 924 --model kimi3-notools -v
+   uv run sq review code 924 --model kimi3-notools -v
+   ```
+   Expected: both code-review artifacts show `toolsSuppressedReason` and no `toolsGiven`/`toolCallsMade`, and both digests show `Output budget: backend default`. Before this slice the pipeline artifact showed tools offered. Unit coverage: `TestReviewAliasParity` in `tests/pipeline/actions/test_review_action.py`.
 6. **Empty final turn is recovered (Part C).** Rerun the review that failed live:
    ```bash
-   sq review slice 928 --model glmflash -v
+   uv run sq review slice 928 --model glmflash -v
    ```
-   If stderr shows the "returned an empty final turn … asking once more" WARNING, the artifact is a normal review with `recoveryTurn: true`. If the model answers on the first turn this time, the run proves nothing about Part C; rely on the unit tests (`pytest tests/review/test_review_client.py -k empty`), and grep future batch reports for the WARNING.
+   If stderr shows the "returned an empty final turn … asking once more" WARNING, the artifact is a normal review with `recoveryTurn: true`. If the model answers on the first turn, the run proves nothing about Part C. In that case rely on the unit tests (`uv run pytest tests/review/test_review_client.py -k "Empty or empty" -q`) and grep future batch reports for the WARNING.
+
+   Actual (about 30 minutes, exit 0): answered on the first turn. `verdict: CONCERNS`, `verdictSource: stated`, 43 tool calls (the loop hit its 20-iteration cap and withdrew tools), `Stop reason: stop`, `Output budget: 128000 tokens`, and no empty-turn WARNING. Part C's live coverage is step 3's empty turn on `length`, the skip branch. The recover branch is unit-tested only.
+
+**Note: gap found in step 3.** A review cut off by its budget after writing a stated verdict saves as a clean PASS, and only the digest and JSON show the truncation. The design does not cover this case. It is filed as [#152](https://github.com/ecorkran/squadron/issues/152) rather than changed here.
 
 ## Risk Assessment
 

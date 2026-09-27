@@ -22,11 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Review artifacts record the pipeline run that wrote them (`runId`) and the squadron version (`squadronVersion`), and a provider-failure artifact is marked `providerFailure: true`. `--output json` includes `run_id`, `squadron_version`, `finding_scan`, and `location_verified` per finding (#139)
 - A code review's saved artifact now says whether the diff was truncated before it reached the model (`diffTruncated`, plus a `**Diff:** truncated: X of Y characters` line and matching JSON fields). A truncated diff that got a clean PASS with no tool use is now flagged CONCERNS instead, with a finding explaining what was never read (#135)
 - `aiModel` in a saved review now names the model that actually answered, not just the one that was requested. If a different model answered — a fallback, a remapped route — `requestedModel` appears alongside it with a warning, instead of the artifact silently naming a model that never ran (#134)
+- A review whose verdict came only after squadron asked a second time is marked `recoveryTurn: true` in its frontmatter (#92)
+- A model alias can set `max_output_tokens` in `models.toml`, sent as the per-request output budget. Built-in OpenRouter aliases ship with their published maximums. The Run Digest has a new `Output budget` line, and `--output json` adds `max_output_tokens` and `output_budget_exhausted`
 
 ### Changed
 - Importing squadron as a library no longer loads `.env` from the current directory or resolves home-directory paths at import time. Running `sq` still loads `.env` from the current directory (#47)
 
+### Removed
+- The `qwen36-free` alias. Its model is gone from OpenRouter, and the `cheap` pool no longer includes it
+
 ### Fixed
+- A review whose model reasoned and then replied with nothing now gets one follow-up turn instead of failing outright
+- A review that ran out of output budget no longer asks the model again for a reply that would run out the same way. The digest says the budget ran out
+- A pipeline `review` step now honors `tool_use = false` on its model alias, as `sq review` already did
 - A `loop:` step inside `each` now runs. It used to complete immediately with no rounds run (#136)
 - `cf.unfinished_slices("{plan}")` now reads the plan it's given; it used to ignore the argument and read the active plan. The argument must be an architecture index such as `"900"` (#136)
 - Phase steps set cf's slice before its phase, as cf requires; it was phase first (#136)
