@@ -1208,3 +1208,73 @@ class TestRecoveryTurn:
         # Both replies are kept, so the degraded artifact shows what each turn said.
         assert "<tool_call>" in result.raw_output
         assert "Let me write the findings now." in result.raw_output
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stop_reason", ["length", "max_tokens"])
+    async def test_spent_budget_skips_recovery(
+        self, stop_reason: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """D2: a turn that ran out of output budget would run out again."""
+        from squadron.review.models import Verdict
+
+        provider, sent = self._scripted_provider(
+            [_TEXT_TOOL_CALL_REPLY, _SAMPLE_REVIEW_OUTPUT], [{"stop_reason": stop_reason}, {}]
+        )
+        with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
+            result = await self._run(provider)
+
+        assert len(sent) == 1
+        assert result.verdict is Verdict.UNKNOWN
+        assert result.recovery_turn_used is False
+        assert result.output_budget_exhausted is True
+        messages = [r.getMessage() for r in caplog.records]
+        assert any(f"stop reason: {stop_reason}" in m and "backend default" in m for m in messages)
+        assert not any("asking once more" in m for m in messages)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stop_reason", [None, "stop", "end_turn"])
+    async def test_non_budget_stop_reason_still_recovers(self, stop_reason: str | None) -> None:
+        first: dict[str, object] = {} if stop_reason is None else {"stop_reason": stop_reason}
+        provider, sent = self._scripted_provider(
+            [_TEXT_TOOL_CALL_REPLY, _SAMPLE_REVIEW_OUTPUT], [first, {}]
+        )
+
+        result = await self._run(provider)
+
+        assert len(sent) == 2
+        assert result.recovery_turn_used is True
+        assert result.output_budget_exhausted is False
+
+    @pytest.mark.asyncio
+    async def test_recovery_turn_ending_on_budget_is_reported(self) -> None:
+        provider, _ = self._scripted_provider(
+            [_TEXT_TOOL_CALL_REPLY, "Let me write the findings now."],
+            [{"stop_reason": "stop"}, {"stop_reason": "length"}],
+        )
+
+        result = await self._run(provider)
+
+        assert result.recovery_turn_used is True
+        assert result.output_budget_exhausted is True
+
+    @pytest.mark.asyncio
+    async def test_recovery_turn_keeps_the_same_agent_and_tools(self) -> None:
+        """D3: the follow-up may still need to read, so it keeps its tools."""
+        provider, sent = self._scripted_provider([_TEXT_TOOL_CALL_REPLY, _SAMPLE_REVIEW_OUTPUT])
+        agent = provider.create_agent.return_value
+        agent.tools = ["read_file", "grep"]
+        seen: list[tuple[int, list[str]]] = []
+        scripted = agent.handle_message
+
+        async def _recording(message: Message) -> AsyncIterator[Message]:
+            seen.append((id(agent), list(agent.tools)))
+            async for response in scripted(message):
+                yield response
+
+        agent.handle_message = _recording
+
+        await self._run(provider)
+
+        assert len(sent) == 2
+        provider.create_agent.assert_awaited_once()
+        assert seen[0] == seen[1]

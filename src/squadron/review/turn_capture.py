@@ -36,6 +36,23 @@ FINISH_REVIEW_PROMPT = (
     "output structure your instructions require, stating the verdict and every finding."
 )
 
+#: Stop reasons meaning the output budget ran out: "length" from OpenAI-compatible
+#: backends, "max_tokens" from Anthropic via the SDK (slice 924 D2). The only place
+#: these strings live in src/.
+OUTPUT_BUDGET_STOP_REASONS = frozenset({"length", "max_tokens"})
+
+
+def budget_exhausted(stop_reason: str | None) -> bool:
+    """Did the turn stop because it hit its output budget? ``None`` (Codex) is not."""
+    return stop_reason in OUTPUT_BUDGET_STOP_REASONS
+
+
+def describe_budget(max_output_tokens: int | None) -> str:
+    """The one wording for a budget: ``"N tokens"``, or ``"backend default"`` when none was sent."""
+    if max_output_tokens is None:
+        return "backend default"
+    return f"{max_output_tokens} tokens"
+
 
 @dataclass
 class TurnCapture:

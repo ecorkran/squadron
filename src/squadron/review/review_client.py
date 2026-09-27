@@ -36,7 +36,9 @@ from squadron.review.tool_support import should_inject_file_bodies
 from squadron.review.turn_capture import (
     FINISH_REVIEW_PROMPT,
     TurnCapture,
+    budget_exhausted,
     collect_turn,
+    describe_budget,
     ended_mid_task,
 )
 from squadron.tools import resolve_effective_tools
@@ -248,10 +250,15 @@ async def run_review_with_profile(
     agent = await provider.create_agent(config)
     capture = TurnCapture()
     recovery_turn_used = False
+    max_output_tokens: int | None = None
     try:
         await collect_turn(agent, content=prompt, recipient=config.name, capture=capture)
         result = parse(capture.raw_output)
-        if ended_mid_task(result):
+        if ended_mid_task(result) and budget_exhausted(capture.stop_reason):
+            # D2: a turn that ran out of output budget would run out again when asked
+            # for the whole review a second time.
+            _log_budget_skip(template.name, resolved_model, capture.stop_reason, max_output_tokens)
+        elif ended_mid_task(result):
             # #92: the model ended its turn believing it had more to do — a narrated next
             # step, or its own tool-call markup written as text — and no review was
             # emitted. One more turn on the same conversation keeps the completed work.
@@ -271,6 +278,7 @@ async def run_review_with_profile(
         await agent.shutdown()
 
     result.recovery_turn_used = recovery_turn_used
+    result.output_budget_exhausted = budget_exhausted(capture.stop_reason)
     result.tools_given = capture.tools_given
     result.tool_calls_made = capture.tool_calls_made
     # Slice 266: the gate's own result is authoritative — SDK providers do not stamp it.
@@ -326,6 +334,22 @@ async def run_review_with_profile(
         result.default_system_prompt_preset_used = uses_preset
 
     return result
+
+
+def _log_budget_skip(
+    template_name: str,
+    model: str | None,
+    stop_reason: str | None,
+    max_output_tokens: int | None,
+) -> None:
+    _logger.warning(
+        "%s review (model=%s) ended without writing the review and its output budget "
+        "ran out (stop reason: %s; budget: %s); not asking again",
+        template_name,
+        model or "(default)",
+        stop_reason,
+        describe_budget(max_output_tokens),
+    )
 
 
 # "pr" (slice 382, design D4): a pr input value is rendered text from the builder, never a

@@ -188,6 +188,10 @@ class ReviewResult:
     # #92: the first turn ended without a readable review and one more turn was asked for.
     # A recovered verdict is real but came from a second prompt, which the digest shows.
     recovery_turn_used: bool = False
+    # Slice 924 D2: the final turn stopped on an exhausted output budget.
+    output_budget_exhausted: bool = False
+    # Slice 924 D4: the per-request output budget sent. None means no budget was sent.
+    max_output_tokens: int | None = None
     # Parse-scan facts (slice 917 Part 3). None means "not produced by the
     # parser" — a hand-built result — the same convention provenance uses.
     # These feed the artifact's run digest (Part 6); no gate reads them, and they
@@ -301,6 +305,8 @@ class ReviewResult:
             "reasoning_chars": self.reasoning_chars,
             "failed_tool_calls": self.failed_tool_calls,
             "recovery_turn_used": self.recovery_turn_used,
+            "output_budget_exhausted": self.output_budget_exhausted,
+            "max_output_tokens": self.max_output_tokens,
             # A degraded parse must be visible to JSON consumers too, or an
             # empty findings list reads as "the model found nothing" (issue #72).
             "fallback_used": self.fallback_used,

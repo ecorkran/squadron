@@ -17,6 +17,7 @@ from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
+from squadron.review.turn_capture import describe_budget, ended_mid_task
 
 _logger = logging.getLogger(__name__)
 
@@ -268,6 +269,13 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
     # follow-up did not produce a review either.
     if result.recovery_turn_used:
         lines.append("- Recovery turn used: yes (the follow-up reply is included below)")
+    # Slice 924 D2: only when the skip happened.
+    elif result.output_budget_exhausted and ended_mid_task(result):
+        lines.append(
+            f"- Recovery turn: skipped — output budget exhausted (stop reason: "
+            f"{_render_optional(result.stop_reason)}; budget: "
+            f"{describe_budget(result.max_output_tokens)})"
+        )
     # Slice 927 D4: a truncated diff kept a PASS only because the model made a
     # successful tool call. Visible so a gate that wants stricter behavior can key on
     # diffTruncated instead of trusting the exemption.
@@ -345,6 +353,7 @@ def _review_frontmatter_lines(
     tools_suppressed_reason: str | None,
     diff_truncated: bool | None = None,
     requested_model: str | None = None,
+    recovery_turn: bool = False,
     run_id: str | None = None,
     squadron_version: str,
     provider_failure: bool = False,
@@ -388,6 +397,10 @@ def _review_frontmatter_lines(
         lines.append("providerFailure: true")
     if verdict_source is not None:
         lines.append(f"verdictSource: {verdict_source.value}")
+    # Slice 924 D1: the verdict came only after squadron asked a second time. Gate-facing
+    # evidence, beside the provenance it qualifies; absent on every other artifact.
+    if recovery_turn:
+        lines.append("recoveryTurn: true")
     lines.extend(
         [
             f"sourceDocument: {source_doc}",
@@ -537,6 +550,7 @@ def format_review_markdown(
         tools_suppressed_reason=result.tools_suppressed_reason,
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
         requested_model=result.requested_model if result.model_substituted else None,
+        recovery_turn=result.recovery_turn_used,
         run_id=result.run_id,
         squadron_version=squadron_version,
     )

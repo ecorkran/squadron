@@ -22,6 +22,7 @@ from squadron.review.models import (
     ReviewResult,
     Severity,
     Verdict,
+    VerdictSource,
 )
 from squadron.review.persistence import (
     REVIEWS_DIR,
@@ -1514,6 +1515,70 @@ class TestRecoveryTurnRendering:
         md = format_review_markdown(_make_result(), "code", _make_slice_info())
 
         assert "Recovery turn" not in md
+
+    def test_recovered_review_flags_recovery_turn_right_after_verdict_source(self) -> None:
+        """Slice 924 D1."""
+        result = _make_result()
+        result.verdict_source = VerdictSource.STATED
+        result.recovery_turn_used = True
+
+        keys = _frontmatter_keys(format_review_markdown(result, "code", _make_slice_info()))
+
+        assert keys[keys.index("verdictSource") + 1] == "recoveryTurn"
+        assert "recoveryTurn: true" in format_review_markdown(result, "code", _make_slice_info())
+
+    def test_ordinary_review_has_no_recovery_turn_key(self) -> None:
+        result = _make_result()
+        result.verdict_source = VerdictSource.STATED
+
+        keys = _frontmatter_keys(format_review_markdown(result, "code", _make_slice_info()))
+
+        assert "recoveryTurn" not in keys
+
+    @staticmethod
+    def _skipped_result() -> ReviewResult:
+        result = ReviewResult(
+            verdict=Verdict.UNKNOWN,
+            findings=[],
+            raw_output="Let me read the next file.",
+            template_name="code",
+            input_files={},
+        )
+        result.stop_reason = "length"
+        result.output_budget_exhausted = True
+        return result
+
+    def test_budget_skip_is_disclosed_in_the_digest(self) -> None:
+        """Slice 924 D2."""
+        md = format_review_markdown(self._skipped_result(), "code", _make_slice_info())
+
+        assert (
+            "- Recovery turn: skipped — output budget exhausted "
+            "(stop reason: length; budget: backend default)"
+        ) in md
+
+    def test_budget_skip_line_names_the_sent_budget(self) -> None:
+        result = self._skipped_result()
+        result.max_output_tokens = 256
+
+        md = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "budget: 256 tokens)" in md
+
+    def test_parsed_review_on_a_spent_budget_has_no_skip_line(self) -> None:
+        """Exhausted but the review parsed: nothing was skipped."""
+        result = _make_result()
+        result.stop_reason = "length"
+        result.output_budget_exhausted = True
+
+        md = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "skipped" not in md
+
+    def test_normal_run_has_no_skip_line(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+
+        assert "skipped — output budget exhausted" not in md
 
 
 # ---------------------------------------------------------------------------

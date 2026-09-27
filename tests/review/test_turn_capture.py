@@ -8,7 +8,12 @@ from typing import Any
 import pytest
 
 from squadron.core.models import Message, MessageType
-from squadron.review.turn_capture import TurnCapture, collect_turn
+from squadron.review.turn_capture import (
+    TurnCapture,
+    budget_exhausted,
+    collect_turn,
+    describe_budget,
+)
 
 
 class _FakeAgent:
@@ -89,3 +94,21 @@ async def test_turn_with_no_stamp_leaves_the_list_unchanged() -> None:
     await collect_turn(agent, content="go", recipient="bot", capture=capture)
 
     assert capture.answering_models == ["gpt-4o"]
+
+
+@pytest.mark.parametrize("stop_reason", ["length", "max_tokens"])
+def test_budget_exhausted_on_budget_stop_reasons(stop_reason: str) -> None:
+    assert budget_exhausted(stop_reason) is True
+
+
+@pytest.mark.parametrize("stop_reason", ["stop", "end_turn", "tool_calls", None])
+def test_budget_not_exhausted_on_other_stop_reasons(stop_reason: str | None) -> None:
+    assert budget_exhausted(stop_reason) is False
+
+
+def test_describe_budget_names_the_sent_budget() -> None:
+    assert describe_budget(32000) == "32000 tokens"
+
+
+def test_describe_budget_names_the_backend_default_when_none_was_sent() -> None:
+    assert describe_budget(None) == "backend default"

@@ -533,6 +533,21 @@ def test_to_dict_serializes_zero_failed_calls_as_zero_not_null() -> None:
     assert json.loads(json.dumps(payload))["failed_tool_calls"] == 0
 
 
+def test_to_dict_always_emits_budget_keys_with_defaults() -> None:
+    payload = _bare_result().to_dict()
+
+    assert payload["max_output_tokens"] is None
+    assert payload["output_budget_exhausted"] is False
+
+
+def test_to_dict_carries_set_budget_values() -> None:
+    payload = _bare_result(max_output_tokens=4096, output_budget_exhausted=True).to_dict()
+
+    assert payload["max_output_tokens"] == 4096
+    assert payload["output_budget_exhausted"] is True
+    assert json.loads(json.dumps(payload))["max_output_tokens"] == 4096
+
+
 # ---------------------------------------------------------------------------
 # Diff injection and answering-model fields (slice 927)
 # ---------------------------------------------------------------------------
