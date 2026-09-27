@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
@@ -137,3 +139,41 @@ def testsave_review_result_creates_directory(tmp_path: Path) -> None:
 
     assert reviews_dir.exists()
     assert path.exists()
+
+
+# ---------------------------------------------------------------------------
+# Slice 195 D12 (#139): stdout stays pure JSON under --output json
+# ---------------------------------------------------------------------------
+
+
+def test_saved_line_goes_to_stderr_under_json_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from squadron.cli.commands.review import _display_json, _save_and_report
+    from squadron.review.save_target import SliceTarget
+
+    monkeypatch.chdir(tmp_path)
+    result = _make_result()
+
+    _display_json(result)
+    saved = _save_and_report(
+        result, "slice", SliceTarget(SLICE_INFO, cwd=str(tmp_path)), json_stdout=True
+    )
+
+    captured = capsys.readouterr()
+    assert saved is True
+    assert json.loads(captured.out)["verdict"] == "CONCERNS"
+    assert "Saved review to" in captured.err
+
+
+def test_saved_line_stays_on_stdout_otherwise(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from squadron.cli.commands.review import _save_and_report
+    from squadron.review.save_target import SliceTarget
+
+    monkeypatch.chdir(tmp_path)
+
+    _save_and_report(_make_result(), "slice", SliceTarget(SLICE_INFO, cwd=str(tmp_path)))
+
+    assert "Saved review to" in capsys.readouterr().out

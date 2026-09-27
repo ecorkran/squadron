@@ -104,6 +104,14 @@ _SEVERITY_COLORS: dict[Severity, str] = {
 # ---------------------------------------------------------------------------
 
 
+class OutputMode(StrEnum):
+    """The ``--output`` values."""
+
+    TERMINAL = "terminal"
+    JSON = "json"
+    FILE = "file"
+
+
 def display_result(
     result: ReviewResult,
     output_mode: str,
@@ -112,11 +120,11 @@ def display_result(
 ) -> None:
     """Format and deliver review results based on output mode."""
     match output_mode:
-        case "terminal":
+        case OutputMode.TERMINAL:
             _display_terminal(result, verbosity)
-        case "json":
+        case OutputMode.JSON:
             _display_json(result)
-        case "file":
+        case OutputMode.FILE:
             _write_file(result, output_path)
         case _:
             rprint(f"[red]Unknown output mode: {output_mode}[/red]")
@@ -364,6 +372,7 @@ def _save_and_report(
     input_file: str | None = None,
     name_suffix: str | None = None,
     project_name: str | None = None,
+    json_stdout: bool = False,
 ) -> bool:
     """Persist a review, reporting either where it landed or why it did not.
 
@@ -391,10 +400,16 @@ def _save_and_report(
             project_name=project_name,
         )
     except OSError as exc:
-        rprint(f"[red]Review not saved: {exc}[/red]")
+        _report_console(json_stdout).print(f"[red]Review not saved: {exc}[/red]")
         return False
-    rprint(f"[green]Saved review to {path}[/green]")
+    _report_console(json_stdout).print(f"[green]Saved review to {path}[/green]")
     return True
+
+
+def _report_console(json_stdout: bool) -> Console:
+    """Where save reports go: stderr under ``--output json`` (slice 195 D12, #139),
+    so stdout carries only the JSON payload and pipes into ``jq``."""
+    return Console(stderr=True) if json_stdout else Console()
 
 
 def _exit_on(verdict: Verdict, outcome: SaveOutcome) -> None:
@@ -820,7 +835,7 @@ def review_slice(
         raise typer.Exit(code=1)
 
     if use_json:
-        output = "json"
+        output = OutputMode.JSON
 
     verbosity = _resolve_verbosity(verbose)
     review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
@@ -853,6 +868,7 @@ def review_slice(
             "slice",
             SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
             as_json=use_json,
+            json_stdout=output == OutputMode.JSON,
             input_file=input_file,
             project_name=info["project"],
         ),
@@ -915,7 +931,7 @@ def review_arch(
         input_file = _resolve_arch_file(input_file)
 
     if use_json:
-        output = "json"
+        output = OutputMode.JSON
 
     verbosity = _resolve_verbosity(verbose)
     review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
@@ -957,6 +973,7 @@ def review_arch(
             "arch",
             arch_target,
             as_json=use_json,
+            json_stdout=output == OutputMode.JSON,
             input_file=input_file,
             project_name=cf_project_name(),
         )
@@ -1022,7 +1039,7 @@ def review_tasks(
         raise typer.Exit(code=1)
 
     if use_json:
-        output = "json"
+        output = OutputMode.JSON
 
     verbosity = _resolve_verbosity(verbose)
     review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
@@ -1076,6 +1093,7 @@ def review_tasks(
                 "tasks",
                 SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
                 as_json=use_json,
+                json_stdout=output == OutputMode.JSON,
                 input_file=path,
                 name_suffix=suf,
                 project_name=info["project"],
@@ -1173,7 +1191,7 @@ def review_code(
         raise typer.Exit(code=1)
 
     if use_json:
-        output = "json"
+        output = OutputMode.JSON
 
     # Pre-flight: a range with nothing reviewable in it must not reach the
     # model. Deliberately outside the rules-dir branch below — a review with no
@@ -1250,6 +1268,7 @@ def review_code(
             "code",
             SliceTarget(info, cwd=review_cwd, rules_source=rules_source),
             as_json=use_json,
+            json_stdout=output == OutputMode.JSON,
             project_name=info["project"],
         ),
         review_type="code",
