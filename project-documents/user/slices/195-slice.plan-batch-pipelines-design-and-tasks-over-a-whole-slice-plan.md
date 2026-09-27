@@ -129,7 +129,7 @@ sq run design-plan 900
                → set_slice {index} → set_phase 4 → build_context → dispatch → review(slice) → commit
                (FAILED here — no design written, provider failure — → item FLAGGED, next item)
       loop:    skip_if_met → until met by design's review? → 0 rounds, done
-               else up to {max-tries} rounds:
+               else up to {max-revisions} rounds:
                  dispatch feedback=review  (findings + reviewed file path → revise in place)
                  review(slice, slice={index})
                  commit (commit_each_iteration)
@@ -275,7 +275,7 @@ params:
   plan: required
   model: sonnet
   review-model: minimax
-  max-tries: 3
+  max-revisions: 3
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better
 
@@ -294,7 +294,7 @@ steps:
             review: { template: slice, model: "{review-model}" }
             checkpoint: never
         - loop:
-            max: "{max-tries}"
+            max: "{max-revisions}"
             until: "{pass-threshold}"
             accept_if: "{accept-threshold}"
             skip_if_met: true
@@ -304,6 +304,7 @@ steps:
               - review: { template: slice, model: "{review-model}", slice: "{slice.index}" }
 ```
 
+- `max-revisions` counts revise rounds after the first design, so a slice gets at most `max-revisions + 1` reviews. It's named for what it counts, because "max-tries" read as total attempts.
 - The model defaults match P4 and P5 (`sonnet` / `minimax`). This fixes #136 item 2, where `design-batch` declared `model: opus` and never passed it.
 - `tasks-plan.yaml` is the same file with three changes: the source is `cf.untasked_slices("{plan}", "{accept-threshold}")`, the step is `tasks:` with `phase: 5`, and both review templates are `tasks`.
 - `design-batch.yaml` is deleted, and its references are updated: `tests/pipeline/test_loader.py:108`, `tests/pipeline/test_loader_integration.py:16,77`, and `docs/PIPELINES.md:662`. Two near-duplicate pipelines don't ship.
@@ -453,7 +454,7 @@ Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local
 3. **The design batch runs over a non-active plan.** With the active plan set to 180:
    ```bash
    cf get --json | jq -r .fileSlicePlan        # 180-slices.pipeline-intelligence
-   uv run sq run design-plan 900 -p max-tries=2 -v
+   uv run sq run design-plan 900 -p max-revisions=2 -v
    cf get --json | jq -r '.fileSlicePlan, .fileArch'
    # 900-slices.maintenance-and-refactoring / 900-arch.maintenance-and-refactoring
    ```
@@ -497,12 +498,12 @@ Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local
 ### Technical Risks
 
 - **Router extraction touches every step path.** `_execute_step` replaces the dispatch branch that every pipeline goes through.
-- **Unattended cost.** A batch over a large plan with `max-tries: 3` can run many design and review calls with no human watching.
+- **Unattended cost.** A batch over a large plan with `max-revisions: 3` can run many design and review calls with no human watching.
 
 ### Mitigation Strategies
 
 - **Router:** extract it first, as a pure refactor commit with no behavior change, and gate it on the full existing suite before any feature work lands on top.
-- **Cost:** `max-tries` is a param with a small default (3), visible in the pipeline file and overridable with `-p`. The report is written even when every item flags. Selection by artifact presence means a stopped run doesn't redo finished slices.
+- **Cost:** `max-revisions` is a param with a small default (3), visible in the pipeline file and overridable with `-p`. The report is written even when every item flags. Selection by artifact presence means a stopped run doesn't redo finished slices.
 
 ## Implementation Notes
 
