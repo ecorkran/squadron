@@ -10,6 +10,7 @@ Handles:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -1414,7 +1415,10 @@ async def _execute_each_step(
     from squadron.pipeline.state import StateManager
 
     # Written on every exit, including an all-flagged or stopped batch (D9).
-    report_path = report.write(StateManager(runs_dir=runs_dir).runs_dir)
+    # Off-thread: mkdir, YAML dump and file write are blocking I/O.
+    report_path = await asyncio.to_thread(
+        lambda: report.write(StateManager(runs_dir=runs_dir).runs_dir)
+    )
     _logger.info("%s; report: %s", report.summary_line(), report_path)
     return StepResult(
         step_name=step.name,
