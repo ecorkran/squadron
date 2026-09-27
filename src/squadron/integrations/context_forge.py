@@ -15,6 +15,9 @@ from typing import Any
 
 from squadron.core.subprocess_text import TEXT_DECODING
 
+#: Where cf keeps architecture documents and slice plans, relative to the project.
+ARCHITECTURE_DIR = "project-documents/user/architecture"
+
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
@@ -157,6 +160,19 @@ class ContextForgeClient:
             for e in raw_entries
         ]
 
+    def slice_plan_path(self, plan: str) -> str:
+        """The slice plan file for arch index *plan*, from the top-level
+        ``slicePlan`` field of ``cf list slices {plan} --json``.
+
+        Raises:
+            ContextForgeError: if cf reports no ``slicePlan`` for *plan*.
+        """
+        data: dict[str, Any] = self._run_json(self._list_args("slices", plan))
+        stem = data.get("slicePlan")
+        if not stem:
+            raise ContextForgeError(f"cf list slices {plan}: no slicePlan in output")
+        return f"{ARCHITECTURE_DIR}/{stem}.md"
+
     def list_tasks(self, plan: str | None = None) -> list[TaskEntry]:
         """Return all task groups from ``cf list tasks [plan] --json``."""
         raw_entries: list[dict[str, Any]] = self._run_json(self._list_args("tasks", plan))
@@ -188,7 +204,7 @@ class ContextForgeClient:
         arch_raw: str = str(data.get("fileArch", ""))
         # Resolve arch file: bare name → full path with .md suffix
         if arch_raw and not arch_raw.endswith(".md"):
-            arch_file = f"project-documents/user/architecture/{arch_raw}.md"
+            arch_file = f"{ARCHITECTURE_DIR}/{arch_raw}.md"
         else:
             arch_file = arch_raw
 

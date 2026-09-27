@@ -302,3 +302,17 @@ class TestGetConfig:
         ):
             info = ContextForgeClient().get_project()
             assert info.name == "unknown"
+
+
+class TestSlicePlanPath:
+    def test_returns_plan_file_from_slice_plan_field(self) -> None:
+        payload = {"slicePlan": "900-slices.maintenance-and-refactoring", "entries": []}
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(payload))) as run:
+            path = ContextForgeClient().slice_plan_path("900")
+        assert run.call_args.args[0] == ["cf", "list", "slices", "900", "--json"]
+        assert path == "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md"
+
+    def test_missing_slice_plan_raises(self) -> None:
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps({"entries": []}))):
+            with pytest.raises(ContextForgeError, match="no slicePlan"):
+                ContextForgeClient().slice_plan_path("900")

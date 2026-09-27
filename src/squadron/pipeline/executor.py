@@ -76,6 +76,8 @@ def _summarize_action_config(action_type: str, config: dict[str, object]) -> str
                 return f"set_phase({config.get('phase', '?')})"
             if op == "set_slice":
                 return f"set_slice({config.get('slice', '?')})"
+            if op == "set_arch":
+                return f"set_arch({config.get('plan', '?')})"
             return str(op)
         case "dispatch":
             model = config.get("model", "default")
