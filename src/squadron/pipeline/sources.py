@@ -13,12 +13,12 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from squadron.documents.frontmatter import read_frontmatter
+from squadron.pipeline.loop_config import LoopCondition
 from squadron.review.models import Verdict
 from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_review_stem
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
-    from squadron.pipeline.executor import LoopCondition
 
 SourceFn = Callable[
     [list[str], "ContextForgeClient", dict[str, object]],
@@ -89,8 +89,6 @@ async def _cf_undesigned_slices(
 
 def _accept_arg(args: list[str]) -> LoopCondition:
     """The ``accept`` threshold: a verdict-bearing LoopCondition value."""
-    from squadron.pipeline.executor import LoopCondition  # executor imports this module
-
     if len(args) < 2:
         raise ValueError("untasked_slices requires (plan, accept) arguments")
     try:

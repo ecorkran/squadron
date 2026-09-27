@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import cast
 
 from squadron.pipeline.actions.gate import GatePolicy, policy_contract
-from squadron.pipeline.executor import ExhaustBehavior, LoopCondition
+from squadron.pipeline.loop_config import ExhaustBehavior, LoopCondition
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_type
 from squadron.pipeline.steps.utils import unpack_inner_steps
@@ -263,7 +263,7 @@ class LoopStepType:
 
         ``_validate_verdict_count`` excludes a named step from its count on the
         grounds that the gate is the decider. That holds only while
-        ``_last_with_verdict`` lands on the gate, and it walks the body in
+        ``last_with_verdict`` lands on the gate, and it walks the body in
         order: a gate placed *before* the step it names would leave that step's
         raw verdict gating ``until:`` with the gate bypassed entirely.
 
@@ -399,13 +399,13 @@ class LoopStepType:
         """Reject a loop body with more than one *unconsumed* verdict-bearing action.
 
         A verdict-bearing action ("review" or "gate") gates ``until:`` via
-        ``_last_with_verdict``, which only looks at the last such action in
+        ``last_with_verdict``, which only looks at the last such action in
         the body. Two or more makes that gating ambiguous, so this is
         rejected at validation time rather than resolved at runtime.
 
         An inner step named by a gate in the same body is *consumed*: the gate
         is the decider and that step's verdict is an input to the gate's
-        decision, not a competing answer. ``_last_with_verdict`` lands on the
+        decision, not a competing answer. ``last_with_verdict`` lands on the
         gate by construction, since a gate must follow the steps it names.
         """
         walked = self._walk_valid_inner_action_types(steps)

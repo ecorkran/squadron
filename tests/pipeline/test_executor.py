@@ -585,7 +585,7 @@ class TestExecutePipelineErrorHandling:
         action, not the (empty) findings list on the checkpoint result itself.
 
         The checkpoint action copies the prior verdict into its own ActionResult
-        so downstream code can see it. _last_with_verdict() walking action_results
+        so downstream code can see it. last_with_verdict() walking action_results
         in reverse would otherwise hit the checkpoint result first (verdict set,
         findings empty) and report "no structured findings" even when the review
         produced a full list. See issue #12.

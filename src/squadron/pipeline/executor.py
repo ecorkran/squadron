@@ -30,6 +30,14 @@ from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
 )
+from squadron.pipeline.loop_config import (
+    ExhaustBehavior,
+    LoopCondition,
+    LoopConfig,
+    evaluate_condition,
+    last_with_verdict,
+    parse_loop_config,
+)
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.sources import SOURCE_REGISTRY, parse_source
 from squadron.pipeline.steps import StepTypeName
@@ -37,7 +45,6 @@ from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
-from squadron.review.models import Verdict
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -230,97 +237,6 @@ def _resolve_str(value: str, params: dict[str, object]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Loop condition grammar
-# ---------------------------------------------------------------------------
-
-
-class LoopCondition(StrEnum):
-    """Closed set of loop exit conditions."""
-
-    REVIEW_PASS = "review.pass"
-    REVIEW_CONCERNS_OR_BETTER = "review.concerns_or_better"
-    ACTION_SUCCESS = "action.success"
-
-    def met_by_verdict(self, verdict: str) -> bool:
-        """Whether a review *verdict* meets this threshold — the single
-        definition of the verdict sets (slice 195 D7).
-
-        Raises ValueError for ``action.success``, which has no verdict meaning.
-        """
-        match self:
-            case LoopCondition.REVIEW_PASS:
-                return verdict == Verdict.PASS
-            case LoopCondition.REVIEW_CONCERNS_OR_BETTER:
-                return verdict in (Verdict.PASS, Verdict.CONCERNS)
-            case LoopCondition.ACTION_SUCCESS:
-                raise ValueError(f"{self.value} is not a review verdict threshold")
-
-    @property
-    def minimum_verdict(self) -> Verdict:
-        """The lowest verdict that meets this threshold, for messages."""
-        match self:
-            case LoopCondition.REVIEW_PASS:
-                return Verdict.PASS
-            case LoopCondition.REVIEW_CONCERNS_OR_BETTER:
-                return Verdict.CONCERNS
-            case LoopCondition.ACTION_SUCCESS:
-                raise ValueError(f"{self.value} is not a review verdict threshold")
-
-
-def evaluate_condition(
-    condition: LoopCondition,
-    action_results: list[ActionResult],
-) -> bool:
-    """Return True if *condition* is satisfied by *action_results*.
-
-    Returns False if no matching results are found (e.g. no review action).
-    """
-    if condition is LoopCondition.ACTION_SUCCESS:
-        return bool(action_results) and all(r.success for r in action_results)
-    last_review = _last_with_verdict(action_results)
-    return (
-        last_review is not None
-        and last_review.verdict is not None
-        and condition.met_by_verdict(last_review.verdict)
-    )
-
-
-def _last_with_verdict(results: list[ActionResult]) -> ActionResult | None:
-    for result in reversed(results):
-        if result.verdict is not None:
-            return result
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Retry loop configuration
-# ---------------------------------------------------------------------------
-
-
-class ExhaustBehavior(StrEnum):
-    """What to do when a loop reaches max iterations without the condition."""
-
-    FAIL = "fail"
-    CHECKPOINT = "checkpoint"
-    SKIP = "skip"
-
-
-@dataclass
-class LoopConfig:
-    """Parsed loop configuration from a step config dict."""
-
-    max: int
-    until: LoopCondition | None = None
-    on_exhaust: ExhaustBehavior = ExhaustBehavior.FAIL
-    strategy: str | None = None
-    commit_each_iteration: bool = False
-    # Second threshold, applied on exhaust (slice 195 D6).
-    accept_if: LoopCondition | None = None
-    # Skip every round when the verdict already in scope meets `until`.
-    skip_if_met: bool = False
-
-
-# ---------------------------------------------------------------------------
 # Checkpoint resolution types
 # ---------------------------------------------------------------------------
 
@@ -430,51 +346,6 @@ def _prompt_checkpoint_interactive(
         if choice == CHECKPOINT_KEY_EXIT:
             return CheckpointDecision(CheckpointResolution.EXIT, None)
         # Invalid input: loop and re-prompt
-
-
-def _parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
-    """Parse a raw loop dict into a LoopConfig.
-
-    Raises ValueError for invalid ``until`` or ``on_exhaust`` values.
-    """
-    # A param-sourced max arrives as the placeholder's string (D6).
-    max_raw = loop_dict.get("max")
-    max_iter = int(max_raw) if isinstance(max_raw, str) and max_raw.isdecimal() else max_raw
-    if isinstance(max_iter, bool) or not isinstance(max_iter, int) or max_iter < 1:
-        raise ValueError(f"loop.max must be a positive integer, got: {max_raw!r}")
-
-    until = _parse_loop_condition(loop_dict, "until")
-    accept_if = _parse_loop_condition(loop_dict, "accept_if")
-
-    on_exhaust_raw = loop_dict.get("on_exhaust", ExhaustBehavior.FAIL.value)
-    try:
-        on_exhaust = ExhaustBehavior(on_exhaust_raw)
-    except ValueError:
-        valid_ex = [b.value for b in ExhaustBehavior]
-        raise ValueError(f"Invalid on_exhaust value {on_exhaust_raw!r}. Valid: {valid_ex}") from None
-
-    strategy = loop_dict.get("strategy")
-
-    return LoopConfig(
-        max=max_iter,
-        until=until,
-        on_exhaust=on_exhaust,
-        strategy=strategy if isinstance(strategy, str) else None,
-        commit_each_iteration=loop_dict.get("commit_each_iteration") is True,
-        accept_if=accept_if,
-        skip_if_met=loop_dict.get("skip_if_met") is True,
-    )
-
-
-def _parse_loop_condition(loop_dict: dict[str, object], field: str) -> LoopCondition | None:
-    raw = loop_dict.get(field)
-    if raw is None:
-        return None
-    try:
-        return LoopCondition(raw)
-    except ValueError:
-        valid = [c.value for c in LoopCondition]
-        raise ValueError(f"Invalid loop.{field} value {raw!r}. Valid: {valid}") from None
 
 
 # ---------------------------------------------------------------------------
@@ -706,10 +577,10 @@ async def execute_pipeline(
             prior_outputs[key] = action_result
 
         # Accumulate step_outputs: step-name -> this step's most recent
-        # verdict-bearing result, mirroring _last_with_verdict's "most recent
+        # verdict-bearing result, mirroring last_with_verdict's "most recent
         # verdict" intent but scoped to this one step (additive; does not
         # change prior_outputs or checkpoint behavior).
-        step_verdict_result = _last_with_verdict(step_result.action_results)
+        step_verdict_result = last_with_verdict(step_result.action_results)
         if step_verdict_result is not None:
             step_outputs[step_result.step_name] = step_verdict_result
 
@@ -846,7 +717,7 @@ async def _execute_step(
         )
     loop_raw = resolved_config.get("loop")
     if isinstance(loop_raw, dict):
-        loop_config = _parse_loop_config(cast(dict[str, object], loop_raw))
+        loop_config = parse_loop_config(cast(dict[str, object], loop_raw))
         # Remove loop key from config before passing to step type
         action_config = {k: v for k, v in resolved_config.items() if k != "loop"}
         return await _execute_loop_step(
@@ -997,11 +868,11 @@ async def _execute_step_once(
             # Findings come from the review action, not the checkpoint action.
             # The checkpoint action sets outputs["checkpoint"] = "paused" AND
             # copies verdict from the prior review for downstream use — so
-            # _last_with_verdict walking action_results would return the
+            # last_with_verdict walking action_results would return the
             # checkpoint result (which has verdict but empty findings) before
             # the review. Skip the just-appended checkpoint result and search
             # the prior actions only.
-            prior_review = _last_with_verdict(action_results[:-1])
+            prior_review = last_with_verdict(action_results[:-1])
             verdict = prior_review.verdict if prior_review else None
             findings: list[dict[str, object]] = (
                 [f for f in (prior_review.findings or []) if isinstance(f, dict)]  # type: ignore[misc]
@@ -1298,10 +1169,10 @@ async def _execute_loop_body(
     """Execute a ``loop:`` step type with a multi-step body.
 
     Mirrors ``_execute_loop_step`` semantics but iterates over a ``steps:``
-    body rather than a single action.  ``_parse_loop_config`` ignores the
+    body rather than a single action.  ``parse_loop_config`` ignores the
     ``steps`` key, so ``resolved_config`` is passed through unchanged.
     """
-    loop_config = _parse_loop_config(resolved_config)
+    loop_config = parse_loop_config(resolved_config)
 
     if loop_config.strategy is not None:
         _logger.warning(
@@ -1393,7 +1264,7 @@ async def _execute_loop_body(
             # Published into this iteration's view only: the run-wide dict is
             # left untouched, so inner names neither collide with a top-level
             # step nor remain resolvable after the loop exits.
-            inner_verdict_result = _last_with_verdict(inner_result.action_results)
+            inner_verdict_result = last_with_verdict(inner_result.action_results)
             if inner_verdict_result is not None:
                 iteration_step_outputs[inner_result.step_name] = inner_verdict_result
                 visible_step_outputs[inner_result.step_name] = inner_verdict_result
@@ -1613,7 +1484,7 @@ async def _run_each_item(
         results.append(inner_result)
         for action_index, result in enumerate(inner_result.action_results):
             item_prior[f"{inner_step_index}-{result.action_type}-{action_index}"] = result
-        verdict_result = _last_with_verdict(inner_result.action_results)
+        verdict_result = last_with_verdict(inner_result.action_results)
         if verdict_result is not None:
             item_step_outputs[inner_result.step_name] = verdict_result
         if inner_result.status in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):

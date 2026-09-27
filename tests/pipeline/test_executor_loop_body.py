@@ -1845,7 +1845,7 @@ async def test_max_as_digit_string_resolves() -> None:
 
 
 def test_max_non_numeric_string_fails_naming_max() -> None:
-    from squadron.pipeline.executor import _parse_loop_config
+    from squadron.pipeline.loop_config import parse_loop_config
 
     with pytest.raises(ValueError, match="loop.max"):
-        _parse_loop_config({"max": "three"})
+        parse_loop_config({"max": "three"})
