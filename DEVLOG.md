@@ -12,6 +12,45 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 195 implementation — plan batch pipelines (Phase 6 complete)
+
+Closes #136 and #139. 27 commits on
+`195-slice.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan`, 861f8083 (router
+extraction) through f0cc31a5 (loop grammar extraction), one per task, merged to main.
+
+Shipped: `design-plan` and `tasks-plan` (replacing `design-batch`), the `cf.undesigned_slices` /
+`cf.untasked_slices` sources and the `unfinished_slices` plan fix, `set_arch` plus the phase
+step's `plan:` key and arch → slice → phase order, one `_execute_step` router, per-item isolation,
+`on_item_failure`, pre-flagged items, `accept_if` / `skip_if_met`, `feedback: review`, the batch
+report plus the `sq run` summary, and the #139 review keys (`runId`, `squadronVersion`,
+`providerFailure`, pure JSON stdout, and `to_dict` gaps).
+
+Beyond the task list:
+
+- `executor.py` grew 61 lines with the features, so the loop grammar (`LoopCondition`,
+  `LoopConfig`, the parsers) moved to `pipeline/loop_config.py`. The executor is 1636 lines (was
+  1704), and `sources.py` now imports `LoopCondition` without a lazy import.
+- Slice review filenames come from shared `slice_name_for` / `slice_review_stem` helpers, which the
+  save path and `cf.untasked_slices` both use.
+- The `--prompt-only` renderer renders `set_arch` (it would otherwise print `cf set_arch`).
+- An autouse `isolate_default_runs_dir` fixture keeps test batch reports out of
+  `~/.config/squadron/runs`.
+- `squadronVersion` is unconditional, so the six 383 migration fixtures and
+  `clean_pass_artifact.md` each gained that one line, with the version pinned in tests.
+- `review.py` got an `OutputMode` StrEnum in place of the `--output` string literals.
+
+Validation: ruff clean, pyright 0 errors, full suite 4669 passed / 4 skipped. The walkthrough's
+steps 1, 2 and 8 ran here with recorded output: live selection returns 923/924/928/929 undesigned
+and 914 untasked-flagged while plan 180 is active, and `sq review slice 195 --output json` is pure
+JSON. Steps 3–7 and 9 need `sq run` from a terminal (#144) and are PM-run.
+
+`tests/cli/test_review_pr_worktree.py::test_tools_enabled_worktree_cwd_and_checkout_conventions`
+failed once in isolation and then passed on four reruns: intermittent, and not in this slice's code.
+
+Logged: #146 (run batch items concurrently; blocked on cf's global active-slice state).
+
+Next: PM runs walkthrough steps 3–7 from a terminal. Next planned slice: 928.
+
 ### Slice 195 tasks — plan batch pipelines (Phase 5 complete)
 
 Task breakdown: `project-documents/user/tasks/195-tasks.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan.md`

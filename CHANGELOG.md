@@ -16,8 +16,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `sq run design-plan <plan>` designs and reviews every undesigned slice in a slice plan, and `sq run tasks-plan <plan>` breaks down every designed slice whose design review was acceptable. Each revises against its review up to `max-revisions` times, flags any slice it can't get to an acceptable review, and keeps going. They replace `design-batch` (#136)
+- Every `each` step now writes a batch report next to the run state (`{run_id}.{step}.report.md`) listing passed, accepted and flagged items, flagged first with the reason. `sq run` prints the counts and the flagged items at the end (#136)
+- New pipeline options: `on_item_failure: continue` on `each`, `accept_if` and `skip_if_met` on `loop`, `feedback: review` on `dispatch`, `plan:` on phase steps, and the `cf.undesigned_slices` / `cf.untasked_slices` sources. See `docs/PIPELINES.md`
+- Review artifacts record the pipeline run that wrote them (`runId`) and the squadron version (`squadronVersion`), and a provider-failure artifact is marked `providerFailure: true`. `--output json` includes `run_id`, `squadron_version`, `finding_scan`, and `location_verified` per finding (#139)
 - A code review's saved artifact now says whether the diff was truncated before it reached the model (`diffTruncated`, plus a `**Diff:** truncated: X of Y characters` line and matching JSON fields). A truncated diff that got a clean PASS with no tool use is now flagged CONCERNS instead, with a finding explaining what was never read (#135)
 - `aiModel` in a saved review now names the model that actually answered, not just the one that was requested. If a different model answered — a fallback, a remapped route — `requestedModel` appears alongside it with a warning, instead of the artifact silently naming a model that never ran (#134)
+
+### Fixed
+- A `loop:` step inside `each` now runs. It used to complete immediately with no rounds run (#136)
+- `cf.unfinished_slices("{plan}")` now reads the plan it's given; it used to ignore the argument and read the active plan. The argument must be an architecture index such as `"900"` (#136)
+- Phase steps set cf's slice before its phase, as cf requires; it was phase first (#136)
+- `sq review … --output json` stdout is now pure JSON: "Saved review to …" goes to stderr (#139)
+
+### Removed
+- The `design-batch` pipeline. Use `design-plan` (#136)
 
 ## [0.14.0] - 20260926
 

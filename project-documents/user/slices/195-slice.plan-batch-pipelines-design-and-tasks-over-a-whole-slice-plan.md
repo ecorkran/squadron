@@ -7,7 +7,7 @@ dependencies: [194, 181, 909, 927]
 interfaces: []
 dateCreated: 20260926
 dateUpdated: 20260926
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan
@@ -442,20 +442,37 @@ flagged: 1
 
 Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local code runs. Expected values reflect the 900 plan on 20260926. Re-read `cf list slices 900 --json` before running, because the plan changes.
 
-1. **The pipelines load.**
+Status: steps 1, 2 and 8 were run during implementation (20260926) and their actual output is recorded below. Steps 3–7 and 9 dispatch through `sq run`, which refuses inside a Claude Code session (#144): **PM-run from a terminal.**
+
+1. **The pipelines load.** *(run 20260926)*
    ```bash
    uv run sq run design-plan --validate
    uv run sq run tasks-plan --validate
    uv run sq run --list          # design-plan and tasks-plan listed; design-batch absent
    ```
+   Actual output:
+   ```
+   Pipeline 'design-plan' is valid.
+   Pipeline 'tasks-plan' is valid.
+   │ design-plan              │ Design and review every undesigned     │ built-in │
+   │ tasks-plan               │ Break down every designed slice in a   │ built-in │
+   ```
+   (`--list` filtered to those names; no `design-batch` row.)
 
-2. **Selection matches the plan.** Cross-check what the batch should pick:
+2. **Selection matches the plan.** Cross-check what the batch should pick: *(run 20260926)*
    ```bash
    cf list slices 900 --json | jq -r '.entries[] | select(.status!="complete" and .status!="deferred" and .designFile==null) | .index'
    # expect: 923 924 928 929
    ```
+   Actual output: `923`, `924`, `928`, `929`, one per line. The squadron sources themselves, called against live cf while the active plan was 180:
+   ```
+   undesigned_slices [('923', None), ('924', None), ('928', None), ('929', None)]
+   untasked_slices [('914', 'no design review found')]
+   unfinished_slices [('907', None), ('914', None), ('923', None), ('924', None), ('928', None), ('929', None)]
+   active plan: 180-slices.pipeline-intelligence
+   ```
 
-3. **The design batch runs over a non-active plan.** With the active plan set to 180:
+3. **The design batch runs over a non-active plan.** *(PM-run from a terminal, #144.)* With the active plan set to 180:
    ```bash
    cf get --json | jq -r .fileSlicePlan        # 180-slices.pipeline-intelligence
    uv run sq run design-plan 900 -p max-revisions=2 -v
@@ -466,7 +483,7 @@ Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local
    - Expect a slice review under `project-documents/user/reviews/` for each slice.
    - Expect one commit per design step, plus one per revise round (`git log --oneline`).
 
-4. **Read the report.**
+4. **Read the report.** *(PM-run.)*
    ```bash
    ls ~/.config/squadron/runs/*.slices.report.md | tail -1
    ```
@@ -474,11 +491,11 @@ Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local
    - Every flagged item names a reason and a review file.
    - stdout ended with the same counts and the path.
 
-5. **A failure doesn't stop the batch.** Force one: run with `-p review-model=<an alias whose provider has no credit>` (the `openai` profile returned `insufficient_quota` during the 927 walkthrough). Every item is FLAGGED with the provider error as its reason, and the run completes with status COMPLETED. Restore normal models afterwards.
+5. **A failure doesn't stop the batch.** *(PM-run.)* Force one: run with `-p review-model=<an alias whose provider has no credit>` (the `openai` profile returned `insufficient_quota` during the 927 walkthrough). Every item is FLAGGED with the provider error as its reason, and the run completes with status COMPLETED. Restore normal models afterwards.
 
-6. **Rerunning picks only what's left.** Rerun step 3. Slices designed in step 3 are not selected. The report lists only the remainder, or reports zero items.
+6. **Rerunning picks only what's left.** *(PM-run.)* Rerun step 3. Slices designed in step 3 are not selected. The report lists only the remainder, or reports zero items.
 
-7. **The tasks batch chains safely.**
+7. **The tasks batch chains safely.** *(PM-run.)*
    ```bash
    uv run sq run tasks-plan 900 -v
    ```
@@ -495,7 +512,15 @@ Run from a terminal, not inside Claude Code (#144). Use `uv run sq` so the local
    ```
    A provider-failure artifact from step 5 carries `providerFailure: true` in its frontmatter.
 
-9. **Restore cf state** if needed: `cf set arch 180-arch.pipeline-intelligence`, then `cf set slice` and `cf set phase` back to their prior values.
+   The `head` line needs step 3's artifacts (PM-run). The JSON checks were run on 20260926 against slice 195 instead, because 923 has no design until step 3; `--no-save` kept the existing 195 review untouched:
+   ```bash
+   uv run sq review slice 195 --output json --no-save > rev.json
+   python -m json.tool rev.json >/dev/null && echo pure-json
+   jq '.run_id, .squadron_version, .finding_scan' rev.json
+   ```
+   Actual output: `pure-json`, then `null`, `"0.14.0"`, `{"total": 9, "in_fences": 0, "in_section": 9, "surviving": 9}`. The stderr routing of "Saved review to" (skipped by `--no-save`) is covered by `tests/cli/test_review_save.py`.
+
+9. **Restore cf state** if needed *(PM-run)*: `cf set arch 180-arch.pipeline-intelligence`, then `cf set slice` and `cf set phase` back to their prior values.
 
 ## Risk Assessment
 
