@@ -12,6 +12,25 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260926
 
+### Slice 195 tasks — plan batch pipelines (Phase 5 complete)
+
+Task breakdown: `project-documents/user/tasks/195-tasks.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan.md`
+(31 tasks in 10 parts, following the design's commit order, with each test task right after its
+implementation). The design review came back CONCERNS (F001–F005, all dispositioned in the review
+file). The 180 architecture's scope now names the 194/195 engine exception. The `max-tries` param
+was renamed to `max-revisions`.
+
+Found while breaking it down:
+
+- `design-batch` has five references, not the three the design lists. The extra two are
+  `test_executor_integration.py:189,242` and `example.yaml:172`, and Task 22 covers all five.
+- `cf list slices {plan} --json` carries a top-level `slicePlan`, which `list_slices()` discards.
+  `set_arch` needs a client method that returns it (Task 10).
+- The walkthrough needs `sq run`, which refuses inside Claude Code (#144). Steps 3–7 are PM-run
+  from a terminal (Task 30).
+
+Next: Phase 6 on branch `195-slice.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan`.
+
 ### Slice 195 design — plan batch pipelines (Phase 4 complete)
 
 Design written for 195 (issue #136 plus its Phase 5 addendum, with #139 folded in):
