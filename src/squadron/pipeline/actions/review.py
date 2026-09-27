@@ -62,6 +62,7 @@ def _save_failure_artifact(
     cwd: str,
     step_name: str,
     step_index: int,
+    run_id: str,
 ) -> Path | None:
     """Resolve the sha and write the failure artifact — all blocking work.
 
@@ -81,6 +82,7 @@ def _save_failure_artifact(
         cwd=cwd,
         slice_name=step_name,
         slice_index=step_index,
+        run_id=run_id,
     )
 
 
@@ -300,6 +302,7 @@ class ReviewAction:
                 cwd=cwd,
                 step_name=context.step_name,
                 step_index=context.step_index,
+                run_id=context.run_id,
             )
             _logger.warning(
                 "review: provider failed in step %s; failure artifact: %s",
@@ -307,6 +310,9 @@ class ReviewAction:
                 saved if saved is not None else "not written",
             )
             raise
+
+        # Traceability (slice 195 D12, #139): the run that wrote this review.
+        result.run_id = context.run_id
 
         # Judge enforcement runs before persistence: judge templates instruct
         # the model to omit a verdict line (score is the source of truth), so

@@ -1514,3 +1514,40 @@ class TestRecoveryTurnRendering:
         md = format_review_markdown(_make_result(), "code", _make_slice_info())
 
         assert "Recovery turn" not in md
+
+
+# ---------------------------------------------------------------------------
+# Slice 195 D12 — review traceability (#139)
+# ---------------------------------------------------------------------------
+
+
+def _frontmatter_keys(markdown: str) -> list[str]:
+    block = markdown.split("---", 2)[1]
+    return [line.split(":", 1)[0] for line in block.splitlines() if line and not line[0].isspace()]
+
+
+class TestReviewTraceability:
+    def test_pipeline_review_has_run_id_ending_the_common_block(self) -> None:
+        result = _make_result(verdict=Verdict.PASS)
+        result.run_id = "3f9c2a1b7d10"
+
+        markdown = format_review_markdown(result, "slice", _make_slice_info())
+
+        assert "runId: 3f9c2a1b7d10" in markdown
+        keys = _frontmatter_keys(markdown)
+        # Common block ends at runId; result-specific keys (findings) follow it.
+        assert keys.index("dateUpdated") < keys.index("runId") < keys.index("findings")
+
+    def test_cli_review_has_no_run_id(self) -> None:
+        markdown = format_review_markdown(_make_result(), "slice", _make_slice_info())
+
+        assert "runId" not in _frontmatter_keys(markdown)
+
+    def test_provider_failure_carries_run_id(self) -> None:
+        exc = ProviderError(_FAILURE_MESSAGE)
+
+        markdown = format_provider_failure_markdown(
+            exc, "slice", _failure_slice_info(), run_id="3f9c2a1b7d10"
+        )
+
+        assert "runId: 3f9c2a1b7d10" in markdown

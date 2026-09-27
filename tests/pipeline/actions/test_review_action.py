@@ -516,6 +516,8 @@ class TestReviewPersistence:
         result = await ReviewAction().execute(_make_context())
         mock_save.assert_called_once()
         assert result.outputs["review_file"] == "/tmp/reviews/review.md"
+        # Slice 195 D12: the saved review carries the pipeline run that wrote it.
+        assert mock_save.call_args.args[0].run_id == "run-12345678"
 
     @pytest.mark.asyncio
     @patch(f"{_P}.save_review_result", side_effect=OSError("disk full"))
@@ -1553,6 +1555,7 @@ class TestProviderFailureArtifact:
         assert "## Provider Failure" in written
         assert f"verdict: {Verdict.UNKNOWN.value}" in written
         assert "finish_reason='length'" in written
+        assert "runId: run-12345678" in written
         archived = list((reviews / "archive").glob("*.md"))
         assert len(archived) == 1
         assert "A previous, passing run." in archived[0].read_text()

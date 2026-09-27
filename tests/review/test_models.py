@@ -343,6 +343,11 @@ class TestReviewResultScoreFields:
         assert d["criteria"] is None
         assert d["provenance"] is None
 
+    def test_to_dict_run_id_always_present(self) -> None:
+        """Slice 195 D12: null on the CLI, the run id from a pipeline."""
+        assert self._base().to_dict()["run_id"] is None
+        assert self._base(run_id="3f9c2a1b7d10").to_dict()["run_id"] == "3f9c2a1b7d10"
+
     def test_existing_shape_keys_unchanged(self) -> None:
         """An existing-shape result still serializes its prior keys."""
         d = self._base().to_dict()

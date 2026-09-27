@@ -344,6 +344,7 @@ def _review_frontmatter_lines(
     tools_suppressed_reason: str | None,
     diff_truncated: bool | None = None,
     requested_model: str | None = None,
+    run_id: str | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -412,6 +413,10 @@ def _review_frontmatter_lines(
     # Slice 927 D2: present exactly when the review had a diff input, true or false.
     if diff_truncated is not None:
         lines.append(f"diffTruncated: {'true' if diff_truncated else 'false'}")
+    # Slice 195 D12 (#139): the pipeline run that wrote this review. Absent from a
+    # CLI review, which belongs to no run.
+    if run_id is not None:
+        lines.append(f"runId: {run_id}")
     return lines
 
 
@@ -522,6 +527,7 @@ def format_review_markdown(
         tools_suppressed_reason=result.tools_suppressed_reason,
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
         requested_model=result.requested_model if result.model_substituted else None,
+        run_id=result.run_id,
     )
 
     if result.score is not None:
@@ -864,6 +870,7 @@ def format_provider_failure_markdown(
     source_document: str | None = None,
     tools_given: list[str] | None = None,
     reviewed_sha: str | None = None,
+    run_id: str | None = None,
 ) -> str:
     """Render an artifact recording that the provider failed to deliver a review.
 
@@ -902,6 +909,7 @@ def format_provider_failure_markdown(
         tools_given=tools_given,
         tool_calls_made=exc.tool_calls_made,
         tools_suppressed_reason=None,
+        run_id=run_id,
     )
     lines.append("---")
     lines.append("")
@@ -943,6 +951,7 @@ def save_provider_failure(
     slice_name: str | None = None,
     slice_index: int | None = None,
     name_suffix: str | None = None,
+    run_id: str | None = None,
 ) -> Path | None:
     """Write a provider-failure artifact into the review's own slot.
 
@@ -971,6 +980,7 @@ def save_provider_failure(
         source_document=source_document,
         tools_given=tools_given,
         reviewed_sha=reviewed_sha,
+        run_id=run_id,
     )
     resolved_name = slice_info["slice_name"] if slice_info else slice_name
     if resolved_name is not None and name_suffix:

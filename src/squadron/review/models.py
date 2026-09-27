@@ -221,6 +221,9 @@ class ReviewResult:
     # convention). [] means the provider reported nothing at all (Codex, D11) — a real,
     # observed fact, not "not computed".
     answering_models: list[str] | None = None
+    # The pipeline run that produced this review (slice 195 D12, #139). None on the CLI,
+    # where a review belongs to no run.
+    run_id: str | None = None
 
     @property
     def model_substituted(self) -> bool:
@@ -313,6 +316,8 @@ class ReviewResult:
             "requested_model": self.requested_model,
             "answering_models": self.answering_models,
             "model_substituted": self.model_substituted,
+            # Slice 195 D12: always present, null on the CLI.
+            "run_id": self.run_id,
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.
