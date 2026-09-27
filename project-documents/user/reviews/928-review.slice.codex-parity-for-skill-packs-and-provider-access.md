@@ -9,146 +9,123 @@ project: squadron
 verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md
-aiModel: claude-opus-5-5
+aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260927
 dateUpdated: 20260927
-reviewedSha: 44dbc267e62e4827bb7d036233673be8297bfd12
+reviewedSha: 16194f3e130855cdf673d88c4d65af2ef3f1bb44
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 7
+toolCallsMade: 43
 squadronVersion: 0.14.0
 findings:
   - id: F001
-    severity: pass
-    category: scope
-    summary: "Belongs in the maintenance initiative"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#overview"
+    severity: concern
+    category: under-specification
+    summary: "D7's removal extraction states two incompatible properties about destination removal"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:75"
   - id: F002
-    severity: note
-    category: scope
-    summary: "Bigger than 900's \"small and focused\" guideline"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:310"
+    severity: concern
+    category: error-handling
+    summary: "D8's \"pack ships no Codex content\" requires source resolution the pure check layer cannot do, with unenumerated failure modes"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
   - id: F003
-    severity: pass
-    category: architecture
-    summary: "Dependencies point the right way; no string dispatch"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#component-structure"
+    severity: concern
+    category: verification
+    summary: "Walkthrough step 7 expects WARN rows on bare `sq doctor`, repeating the exact error slice 925 already corrected"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:278-279"
   - id: F004
     severity: concern
-    category: hidden-dependency
-    summary: "D8 needs source content that doctor can't read for GitHub packs"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    category: alignment
+    summary: "Slice invalidates 340-arch's stated skill-pack delivery model but plans no amendment line"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:180-190"
   - id: F005
-    severity: concern
-    category: integration
-    summary: "D5 suffixes let two packs share a receipt file, and `write_receipt` isn't in the component table"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+    severity: note
+    category: verification
+    summary: "`sq model list` fix is described as \"one line each\" but occurs three times per file"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
   - id: F006
-    severity: concern
-    category: error-handling
-    summary: "Agents install can overwrite skill directories it doesn't own"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:123-130"
-  - id: F007
-    severity: concern
-    category: security
-    summary: "The allow rule may approve `sq skills install` with no prompt"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:162"
-  - id: F008
     severity: note
     category: under-specification
-    summary: "Rule contents are decided at implementation time"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+    summary: "D12 hint placement and scope interact with the #126 waiting-rule equality test and the pending daemon probe"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:170"
+  - id: F007
+    severity: pass
+    category: alignment
+    summary: "Dependency slice 925's interface claims are all verified present in shipped code"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:58"
+  - id: F008
+    severity: pass
+    category: alignment
+    summary: "D5's receipt-name generalization verifiably preserves every existing name and receipt"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
   - id: F009
     severity: pass
-    category: error-handling
-    summary: "Failure modes for the new install path are explicit"
-    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+    category: alignment
+    summary: "Scope, effort, and exclusions align with plan entry 26, including the recorded divergences"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:35"
   - id: F010
     severity: pass
-    category: nfr
-    summary: "No NFRs to restate"
-    location: "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
+    category: error-handling
+    summary: "D9/D10 security posture and evidence discipline are handled correctly"
+    location: "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142"
 ---
 
 # Review: slice — slice 928
 
 **Verdict:** CONCERNS
-**Model:** claude-opus-5-5
+**Model:** z-ai/glm-5.3-flash
 
 ## Findings
 
-### [PASS] Belongs in the maintenance initiative
+### [CONCERN] D7's removal extraction states two incompatible properties about destination removal
 
-This is parity and bug-fix work that 925 left behind. The typo fix (`sq model list` → `sq models list`) is the kind of cleanup 900's scope explicitly covers. The exclusions are explicit and each has a reason: no auto-conversion (D2), no doctor check for the rule (D11), and #126, copilot and cursor stay out.
+The component table (line 75) specifies `remove_receipt_files(receipt)` as "never removes the destination itself," but the Data Flow (line 102) says "for a Claude prefix pack the now-empty prefix directory is still removed, as today." These cannot both hold: for a skill-pack prefix install, the receipt's `destination` **is** the prefix directory (installer.py records `commands_dir / prefix` as `InstallReceipt.destination`), and today's `sq skills uninstall` removes exactly that destination when empty (skills.py:120-122, gated on `SurfaceType.PREFIX`). The extraction source (`uninstall_commands`, install.py) never removes its destination because its destination is the commands *root*. The design must state which surface performs the prefix-dir removal — the shared routine keyed on `surface`, or the caller — and how the dispatch_file case (where `sq/` is shared and must *not* be removed) is distinguished. As written, the implementer must guess, and the two guesses produce visibly different `~/.claude/commands/` end states.
 
-### [NOTE] Bigger than 900's "small and focused" guideline
+### [CONCERN] D8's "pack ships no Codex content" requires source resolution the pure check layer cannot do, with unenumerated failure modes
 
-The slice raised its own effort to 3/5 and has two parts. Part A (install layout) and Part B (docs, rule, hints) share no code, and each could ship on its own. The slice plan bundled them deliberately, so this doesn't block anything. If implementation stalls, Part B is the obvious split point.
+D8 has `check_skill_packs` report `WARN — pack ships no Codex content` for packs without an `agents/` directory, distinguishing that state from "not installed." Determining "no agents content" requires resolving the pack's *source* — but `installed_path(entry, root)` inspects only the destination. For `github:` sources, resolution means `clone_github` (subprocess + network), and `check_skill_packs`' contract and docstring say "Pure: reads the manifest and the filesystem only. no subprocess, no network" (doctor_checks.py:428, and the module docstring at line 1). For unreachable local sources, `resolve_source` raises `SkillSourceError`, but the design's error convention ("SkillSourceError → exit 1") does not apply inside a doctor check, which must return a WARN row, not exit. The design enumerates none of this: does a github-source pack get probed (new network I/O path with hang/timeout failure modes in a pure layer), silently reported as "not installed," or reported some third way? The distinction D8 promises is exactly the one it does not specify a mechanism for.
 
-### [PASS] Dependencies point the right way; no string dispatch
+### [CONCERN] Walkthrough step 7 expects WARN rows on bare `sq doctor`, repeating the exact error slice 925 already corrected
 
-- `pack_layouts.py` lives in `skills/`. The CLI and doctor read from it, and nothing in `skills/` imports CLI code.
-- `PACK_LAYOUTS` is keyed by `CommandTarget` and checked exhaustively at import, the same way `DELIVERIES` is.
-- D6 removes the install-path logic that `skills.py:156-164` and `doctor_checks.py:453-459` each compute separately today.
-- D7 moves the containment-checked removal loop into one place and drops the flat `unlink` loop at `skills.py:112-116`, which leaves empty directories behind.
+Step 7 runs bare `sq doctor` and expects "analysis, analysis (codex), demo, demo (codex) — all four rows present," then a bare `sq doctor` showing the `demo (codex)` WARN row. All four rows are WARN-level at that point (nothing is installed for the walkthrough's targets), and `doctor.py:64` hides every WARN row unless `-v` is passed. Slice 925's walkthrough hit this precise mistake, corrected it in place, and recorded the lesson ("the design assumed output rather than running the command"); 925's D9-based rows (installed commands) are OK-level and visible, but skill-pack rows here are all WARN. The walkthrough as written will fail at step 7 for the implementer through no defect in the design's actual behavior — it needs `sq doctor -v`, and the success criterion containing this expectation should be corrected before implementation.
 
-### [CONCERN] D8 needs source content that doctor can't read for GitHub packs
+### [CONCERN] Slice invalidates 340-arch's stated skill-pack delivery model but plans no amendment line
 
-D8 has doctor print `WARN — pack ships no Codex content` for packs with no `agents/` directory. The only way to know that is to look at the pack's source. `check_skill_packs` is documented as "Pure: reads the manifest and the filesystem only", and for a `github:` source the content is only reachable through `clone_github`, which does a network `git clone`.
+The Migration Plan records the moved files, receipt compatibility, and behavior preservation — but no architecture amendments. After this slice, `340-arch.skill-pack-infrastructure.md`'s stated model is partially wrong on two points: "File copy is the delivery primitive — `sq skills install` writes markdown files to `~/.claude/commands/<prefix>/`" (the codex target now writes skill directories to `~/.agents/skills/`), and the pack-source layout section (README's documented format gains a required-for-codex `agents/` tree with validation rules that 340-arch does not describe). Slice 925 set the governing precedent: its integration requirements mandated dated amendment lines to 340-arch and 360-arch when this exact sentence was invalidated. This slice changes the same sentence's subject matter and should carry the same obligation; the skill-pack architecture document is the parent lineage of the surface this slice redefines.
 
-The design doesn't say which of these doctor does for a GitHub pack:
-- clone it (network I/O inside doctor, plus hang and timeout handling),
-- skip the check,
-- or report "unknown".
+### [NOTE] `sq model list` fix is described as "one line each" but occurs three times per file
 
-Walkthrough step 7 only uses a local `/tmp` source, so it never hits this case. Fix: resolve only bundled and local sources. For a GitHub pack with no install, report plain "not installed (codex)" with no content claim, and say so in D8.
+The Overview says the typo is "fixed here, one line each"; the string `sq model list` appears at three places in each file (commands/sq/review.md:60,112,158 and commands/agents/sq-review/SKILL.md:82,134,180) — six sites, not two. Trivial as an edit, but the design's own walkthrough and the drift guard both depend on accurate tree descriptions, and the undercount could leave stale occurrences behind if the implementer fixes "one line" per file. The target command `sq models list` was verified to exist (models.py:194, registered at app.py:55).
 
-### [CONCERN] D5 suffixes let two packs share a receipt file, and `write_receipt` isn't in the component table
+### [NOTE] D12 hint placement and scope interact with the #126 waiting-rule equality test and the pending daemon probe
 
-Receipt names are built as `base + "-agents" + "-local"`, so two different pack/target combinations can produce the same name. A Claude install of a pack named `foo-agents` gets `foo-agents.toml`, and so does a Codex install of pack `foo`. Installing one overwrites the other's receipt. Uninstalling then deletes files listed by the wrong pack. The "Excluded" section only rules out collisions with squadron's own names; this pack-vs-pack collision is new in this slice.
+Two small unstated constraints. First, the new sandbox-rejection section goes into `sq-review`, `sq-run`, and `sq-pr` SKILL.md — three of the four skills whose `## Waiting on the command` sections must remain byte-identical to each other (the #126 drift test extracts everything from that heading to the next `\n---\n`). The design doesn't pin where the hint section is inserted relative to the waiting rule; an insertion inside that span breaks the equality test loudly (recoverable, but the placement should be specified). Second, `sq-task` is a daemon-client command sitting in the same long-command set, and D10's daemon rows are unprobed — if the probe finds daemon commands need the rule, `sq-task` can hit the same sandbox rejection the hint exists to explain, yet the hint trio excludes it. Worth one sentence either way.
 
-The component table also leaves out a signature change the design depends on. `receipts.py:write_receipt` and `read_receipt` build the file name from `pack_name` (`receipts_dir/<pack_name>.toml`). D5 needs that name to come from `receipt_name(...)`. Either those two functions take the receipt name as a parameter, or `InstallReceipt.pack_name` quietly starts holding `mypack-agents`. The second contradicts "Schema unchanged" at line 113.
+### [PASS] Dependency slice 925's interface claims are all verified present in shipped code
 
-Fix, pick one:
-- reject pack names ending in `-agents` or `-local` at manifest load, or
-- on read, check the receipt's recorded pack name and target against the request, and fail if they don't match.
+Every prerequisite named in Dependencies exists with the stated semantics: `CommandTarget`/`normalize_target`/`DELIVERIES`/`receipt_name`/`write_skill_dirs`/`bundled_skill_names` in skills/targets.py, and doctor's `_command_targets_to_check` with the Claude-always/agents-only-if-Codex semantics the design assumes (doctor_checks.py:577). The consumption direction is correct — this slice builds on a completed prerequisite and provides `PACK_LAYOUTS`/`remove_receipt_files` forward without inventing upward dependencies.
 
-Then add the `write_receipt`/`read_receipt` change to the component table.
+### [PASS] D5's receipt-name generalization verifiably preserves every existing name and receipt
 
-### [CONCERN] Agents install can overwrite skill directories it doesn't own
+Checked against the current implementation: `receipt_base` values are `"squadron-commands"` and `"squadron-commands-agents"` (targets.py:167,179), so `base + suffix(""/"-agents") + ("-local")` reproduces today's four `squadron-commands*` names exactly; a pack name as base yields `<pack>.toml` for Claude machine scope, matching what `write_receipt` writes today. The old-receipt-read requirement (criterion 6) is satisfiable with no schema change, as claimed. The blast radius is correctly scoped: callers are install.py:128,233 and the receipt-name tests the design's test list already covers.
 
-D3 says `~/.agents/skills` is shared with every other skill source. But D3 only validates the source tree. `write_skill_dirs` copies with `copytree(..., dirs_exist_ok=True)`, which merges into an existing directory and silently overwrites a same-named `SKILL.md` that belongs to another tool or to the user. The receipt then lists that file, and `skills uninstall` deletes it. That is the #65 ownership failure again, which the "Patterns" section says receipts are there to prevent.
+### [PASS] Scope, effort, and exclusions align with plan entry 26, including the recorded divergences
 
-A second case exists inside squadron itself. With D4, `install-commands --ide codex` and `skills install analysis --ide codex` write the same `analysis-*` directories under two different receipts. Uninstalling either one removes files the other still claims.
+The design covers exactly the plan's Part A (target threading through `sq skills`) and Part B (approval rule documentation + command enumeration), answers the plan's designated design question about a doctor check for the rule (D11, with the reasoning the plan asked for), and its D9 divergence from the plan's `default.rules` wording (own `squadron.rules` file) is recorded in the plan entry itself. Effort revision to 3/5 appears in both documents. Exclusions carry forward the plan's (#126, copilot/cursor) and correctly keep `sq setup`'s prints-don't-edit principle for the rule file, consistent with slice 908's constraint.
 
-Fix: before writing, check that no destination skill directory exists unless it is already listed in this pack's own receipt. If one does, exit 1 with its path, the same way D3 does. At minimum, acknowledge the two-receipts case in the Excluded section, because D4 makes it structural rather than accidental.
+### [PASS] D9/D10 security posture and evidence discipline are handled correctly
 
-### [CONCERN] The allow rule may approve `sq skills install` with no prompt
-
-The D10 table marks `sq skills install` (GitHub source) as "yes — confirm by probe", which puts it in the `allow` rule if the probe agrees. That lets the Codex model clone any repo and write skills into `~/.agents/skills`, which Codex loads on its next start, all outside the sandbox and without asking. That is different in kind from "call a model provider": it lets the model install new instructions for itself. D9's justification text ("commands that call a model provider or GitHub") hides this.
-
-Fix: keep `sq skills` out of the `allow` alternatives. Either document a separate `decision = "prompt"` rule for it or leave it to per-call approval, and state that choice in D10.
-
-### [NOTE] Rule contents are decided at implementation time
-
-Several D10 rows are still "probe", so the exact rule text doesn't exist yet. The design does pin down the method (run under `codex sandbox` from a real terminal, with `sq serve` running for the daemon commands), where results get recorded (DEVLOG), and a check to verify the result (criterion 8). That's acceptable for a docs deliverable.
-
-### [PASS] Failure modes for the new install path are explicit
-
-A missing `agents/` directory, bad skill names, and bad frontmatter are all collected and reported together, and nothing is written unless every check passes. Exit codes and messages are specified, and the walkthrough exercises each case. For `uninstall`, a `--commands-dir` that doesn't match the receipt fails with nothing removed (line 194). The GitHub clone path is unchanged from today.
-
-### [PASS] No NFRs to restate
-
-The 900 architecture document states no latency or throughput targets, so there is nothing this slice needed to carry over.
+The rule grants unsandboxed execution (network *and* filesystem), and the design mandates stating that in the same paragraph as the snippet, documents the `decision = "prompt"` alternative, and names the non-matching command shapes (redirection, env-var prefixes, globs). D10's subcommand enumeration is probe-based rather than code-read, with an honest table distinguishing confirmed rows from "confirm by probe" rows and recording where results land (DEVLOG) — the design does not present unverified evidence as verified, and the README consequence for daemon commands is handled conditionally in the same decision.
 
 ### Run Digest
 
-- Response length: 8314 chars
+- Response length: 11041 chars
 - Response is newline-free: no
-- Tool calls made: 7
+- Tool calls made: 43
 - Tool calls failed: 0
-- Stop reason: end_turn
-- Reasoning characters: 0
+- Stop reason: stop
+- Output budget: 128000 tokens
+- Reasoning characters: 40077
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 10
