@@ -127,8 +127,8 @@ class TestPromptOnlyFullCycle:
         ]
 
         # CF ops
-        assert instructions.actions[0].command == "cf set phase 4"
-        assert instructions.actions[1].command == "cf set slice 152"
+        assert instructions.actions[0].command == "cf set slice 152"
+        assert instructions.actions[1].command == "cf set phase 4"
         assert instructions.actions[2].command == "cf build"
 
         # Dispatch should reference opus

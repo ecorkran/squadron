@@ -1308,10 +1308,10 @@ class TestStepDonePostActionParity:
         result = runner.invoke(app, ["run", "--step-done", "run-123"])
 
         assert result.exit_code == 0
-        # design's expand() order: cf-op(set_phase), cf-op(set_slice),
+        # design's expand() order: cf-op(set_slice), cf-op(set_phase),
         # cf-op(build_context), dispatch(slice=...), commit(slice=...).
-        # "slice" first appears in the second call (set_slice).
-        set_slice_context = mock_run_event.call_args_list[1].args[0]
+        # "slice" first appears in the first call (set_slice).
+        set_slice_context = mock_run_event.call_args_list[0].args[0]
         assert set_slice_context.params.get("slice") == "200"
 
 

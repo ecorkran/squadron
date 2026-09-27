@@ -139,6 +139,12 @@ class TestRenderCfOp:
         assert result.command == "cf set phase 4"
         assert "4" in result.instruction
 
+    def test_set_arch_resolves_via_plan_listing(self) -> None:
+        result = _render_cf_op({"operation": "set_arch", "plan": "900"}, {})
+        assert result.command == "cf list slices 900 --json"
+        assert "cf set arch" in result.instruction
+        assert "parent:" in result.instruction
+
     def test_build_context(self) -> None:
         result = _render_cf_op({"operation": "build_context"}, {})
         assert result.command == "cf build"
@@ -472,7 +478,7 @@ class TestRenderStepInstructions:
         ]
 
         # set_slice resolves {slice} param
-        set_slice = result.actions[1]
+        set_slice = result.actions[0]
         assert set_slice.command == "cf set slice 152"
 
         # Dispatch has opus model

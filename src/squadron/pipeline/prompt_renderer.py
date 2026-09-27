@@ -92,6 +92,17 @@ class CompletionResult:
 def _render_cf_op(config: dict[str, object], params: dict[str, object]) -> ActionInstruction:
     """Build instruction for a cf-op action (set_phase or build_context)."""
     operation = str(config.get("operation", ""))
+    if operation == "set_arch":
+        plan = config.get("plan", "")
+        return ActionInstruction(
+            action_type=ActionType.CF_OP,
+            instruction=(
+                f"Switch to the architecture that owns plan {plan}: run the command, open "
+                "the file its `slicePlan` field names, and run `cf set arch` with the stem "
+                "of that file's `parent:` frontmatter. Never run `cf set plan`."
+            ),
+            command=f"cf list slices {plan} --json",
+        )
     if operation == "set_phase":
         phase = config.get("phase", "")
         return ActionInstruction(

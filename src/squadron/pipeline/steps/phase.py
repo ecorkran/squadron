@@ -28,9 +28,10 @@ _EXPECTED_ARTIFACT_KIND: dict[str, ArtifactKind | None] = {
 class PhaseStepType:
     """Step type for design, tasks, and implement phases.
 
-    Expands to: cf-op(set_phase) -> cf-op(build) -> dispatch
-    -> [review -> checkpoint] -> commit.
-    Review and checkpoint are included only when review is configured.
+    Expands to: [cf-op(set_arch)] -> cf-op(set_slice) -> cf-op(set_phase)
+    -> cf-op(build) -> dispatch -> [review -> checkpoint] -> commit.
+    set_arch is included only when ``plan:`` is set; review and checkpoint
+    only when review is configured.
     """
 
     def __init__(self, phase_name: str) -> None:
@@ -117,6 +118,16 @@ class PhaseStepType:
                 )
             )
 
+        plan = cfg.get("plan")
+        if plan is not None and not isinstance(plan, str | int):
+            errors.append(
+                ValidationError(
+                    field="plan",
+                    message="'plan' must be an architecture index",
+                    action_type=self._phase_name,
+                )
+            )
+
         fragment = cfg.get("pre_emption_fragment")
         if fragment is not None and not isinstance(fragment, str):
             errors.append(
@@ -152,12 +163,16 @@ class PhaseStepType:
         if "allowed_tools" in cfg:
             dispatch_config["allowed_tools"] = cfg["allowed_tools"]
 
+        # cf's switching rule (slice 195 D2): arch (switches initiative and
+        # plan) → slice (must be in that plan) → phase → build.
         actions: list[tuple[str, dict[str, object]]] = [
-            ("cf-op", {"operation": "set_phase", "phase": phase}),
             ("cf-op", {"operation": "set_slice", "slice": slice_ref}),
+            ("cf-op", {"operation": "set_phase", "phase": phase}),
             ("cf-op", {"operation": "build_context"}),
             ("dispatch", dispatch_config),
         ]
+        if "plan" in cfg:
+            actions.insert(0, ("cf-op", {"operation": "set_arch", "plan": cfg["plan"]}))
 
         review = cfg.get("review")
         if review is not None:

@@ -136,8 +136,9 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
     )
 
     assert len(actions) == 7
-    assert actions[0] == ("cf-op", {"operation": "set_phase", "phase": 4})
-    assert actions[1] == ("cf-op", {"operation": "set_slice", "slice": "{slice}"})
+    # cf switching rule: slice before phase (slice 195 D2).
+    assert actions[0] == ("cf-op", {"operation": "set_slice", "slice": "{slice}"})
+    assert actions[1] == ("cf-op", {"operation": "set_phase", "phase": 4})
     assert actions[2] == ("cf-op", {"operation": "build_context"})
     assert actions[3] == ("dispatch", {"model": "opus", "slice": "{slice}"})
     assert actions[4] == (
@@ -146,6 +147,31 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
     )
     assert actions[5] == ("checkpoint", {"trigger": "on-concerns"})
     assert actions[6] == ("commit", {"message_prefix": "phase-4", "slice": "{slice}"})
+
+
+def test_expand_with_plan_sets_arch_first(design_step: PhaseStepType) -> None:
+    """``plan:`` prepends set_arch: arch → slice → phase → build (D2)."""
+    actions = design_step.expand(_make_config({"phase": 4, "plan": "{plan}", "slice": "{slice.index}"}))
+
+    assert actions[:4] == [
+        ("cf-op", {"operation": "set_arch", "plan": "{plan}"}),
+        ("cf-op", {"operation": "set_slice", "slice": "{slice.index}"}),
+        ("cf-op", {"operation": "set_phase", "phase": 4}),
+        ("cf-op", {"operation": "build_context"}),
+    ]
+
+
+def test_expand_without_plan_has_no_set_arch(design_step: PhaseStepType) -> None:
+    actions = design_step.expand(_make_config({"phase": 4}))
+
+    operations = [cfg.get("operation") for kind, cfg in actions if kind == "cf-op"]
+    assert operations == ["set_slice", "set_phase", "build_context"]
+
+
+def test_validate_plan_must_be_scalar(design_step: PhaseStepType) -> None:
+    assert design_step.validate(_make_config({"phase": 4, "plan": "{plan}"})) == []
+    errors = design_step.validate(_make_config({"phase": 4, "plan": ["900"]}))
+    assert [e.field for e in errors] == ["plan"]
 
 
 def test_expand_review_as_dict(design_step: PhaseStepType) -> None:
