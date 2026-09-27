@@ -1993,6 +1993,69 @@ class TestEachExecution:
         assert verdicts == ["PASS", "PASS"]
 
     @pytest.mark.asyncio
+    async def test_items_do_not_see_each_others_outputs(self) -> None:
+        """D4: item 2's dispatch sees item 2's review and never item 1's."""
+        from squadron.integrations.context_forge import SliceEntry
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+        from squadron.pipeline.models import ActionContext
+        from squadron.pipeline.steps import register_step_type
+
+        def review(finding: str) -> ActionResult:
+            return ActionResult(
+                success=True,
+                action_type="review",
+                outputs={},
+                verdict="CONCERNS",
+                findings=[{"summary": finding}],
+            )
+
+        review_action = mock_action([review("item-1 finding"), review("item-2 finding")])
+        seen: list[list[object]] = []
+
+        async def dispatch_exec(ctx: object) -> ActionResult:
+            assert isinstance(ctx, ActionContext)
+            visible = [*ctx.prior_outputs.values(), *ctx.step_outputs.values()]
+            seen.append([f["summary"] for r in visible for f in (r.findings or [])])
+            return make_action_result(True, "dispatch")
+
+        dispatch_action = MagicMock()
+        dispatch_action.execute = dispatch_exec
+        register_step_type("_test_iso_review", mock_step_type([("review", {})]))
+        register_step_type("_test_iso_dispatch", mock_step_type([("dispatch", {})]))
+
+        cf_client = MagicMock()
+        cf_client.list_slices.return_value = [
+            SliceEntry(index=1, name="a", design_file=None, status="not_started"),
+            SliceEntry(index=2, name="b", design_file=None, status="not_started"),
+        ]
+        pipeline = make_pipeline(
+            [
+                make_step_config(
+                    "each",
+                    "each-step",
+                    {
+                        "source": "cf.unfinished_slices()",
+                        "as": "slice",
+                        "steps": [{"_test_iso_review": {}}, {"_test_iso_dispatch": {}}],
+                    },
+                )
+            ]
+        )
+
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            _action_registry={"review": review_action, "dispatch": dispatch_action},
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert len(seen) == 2
+        assert set(seen[0]) == {"item-1 finding"}
+        assert set(seen[1]) == {"item-2 finding"}
+
+    @pytest.mark.asyncio
     async def test_unrecognized_source_raises(self) -> None:
         from squadron.pipeline.executor import execute_pipeline
 

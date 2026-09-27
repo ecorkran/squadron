@@ -1218,6 +1218,16 @@ async def _execute_loop_step(
     )
 
 
+def _unpack_body(resolved_config: dict[str, object]) -> list[Any]:
+    """The ``steps:`` body of a ``loop:`` or ``each`` step as StepConfigs."""
+    raw = resolved_config.get("steps", [])
+    if not isinstance(raw, list):
+        return []
+    return unpack_inner_steps(
+        [cast(dict[str, object], s) for s in cast(list[object], raw) if isinstance(s, dict)]
+    )
+
+
 async def _execute_loop_body(
     *,
     step: Any,
@@ -1251,16 +1261,7 @@ async def _execute_loop_body(
             loop_config.strategy,
         )
 
-    inner_steps_raw = resolved_config.get("steps", [])
-    if isinstance(inner_steps_raw, list):
-        raw_list: list[dict[str, object]] = [
-            cast(dict[str, object], s)
-            for s in inner_steps_raw  # type: ignore[union-attr]
-            if isinstance(s, dict)
-        ]
-    else:
-        raw_list = []
-    inner_steps = unpack_inner_steps(raw_list)
+    inner_steps = _unpack_body(resolved_config)
 
     # Bound across the loop so the exhaustion path can return the latest
     # iteration's results.  Reassigned at the start of each iteration.
@@ -1444,7 +1445,6 @@ async def _execute_each_step(
     """Execute an `each` collection step."""
     source_str = str(resolved_config.get("source", ""))
     as_name = str(resolved_config.get("as", ""))
-    inner_steps_raw = resolved_config.get("steps", [])
 
     # Resolve placeholders in source string
     source_resolved = _resolve_str(source_str, merged_params)
@@ -1454,51 +1454,36 @@ async def _execute_each_step(
 
     items = await source_fn(args, cf_client, merged_params)
 
-    from typing import cast
-
-    if isinstance(inner_steps_raw, list):
-        raw_list: list[dict[str, object]] = [
-            cast(dict[str, object], s)
-            for s in inner_steps_raw  # type: ignore[union-attr]
-            if isinstance(s, dict)
-        ]
-    else:
-        raw_list = []
-    inner_steps = unpack_inner_steps(raw_list)
+    inner_steps = _unpack_body(resolved_config)
     all_action_results: list[ActionResult] = []
 
     for item in items:
-        # Bind iteration variable
-        item_params = {**merged_params, as_name: item}
-
-        for inner_step in inner_steps:
-            inner_resolved = resolve_placeholders(inner_step.config, item_params)
-            inner_result = await _execute_step(
-                step=inner_step,
-                resolved_config=inner_resolved,
-                step_index=step_index,
-                merged_params=item_params,
-                prior_outputs=prior_outputs,
-                step_outputs=step_outputs,
-                pipeline_name=pipeline_name,
-                run_id=run_id,
-                cwd=cwd,
-                resolver=resolver,
-                cf_client=cf_client,
-                sdk_session=sdk_session,
-                get_step_type_fn=get_step_type_fn,
-                get_action_fn=get_action_fn,
-                runs_dir=runs_dir,
-            )
+        item_results = await _run_each_item(
+            inner_steps=inner_steps,
+            item_params={**merged_params, as_name: item},
+            step_index=step_index,
+            prior_outputs=prior_outputs,
+            step_outputs=step_outputs,
+            pipeline_name=pipeline_name,
+            run_id=run_id,
+            cwd=cwd,
+            resolver=resolver,
+            cf_client=cf_client,
+            sdk_session=sdk_session,
+            get_step_type_fn=get_step_type_fn,
+            get_action_fn=get_action_fn,
+            runs_dir=runs_dir,
+        )
+        for inner_result in item_results:
             all_action_results.extend(inner_result.action_results)
-
-            if inner_result.status in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):
-                return StepResult(
-                    step_name=step.name,
-                    step_type=step.step_type,
-                    status=inner_result.status,
-                    action_results=all_action_results,
-                )
+        final_status = item_results[-1].status if item_results else ExecutionStatus.COMPLETED
+        if final_status in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):
+            return StepResult(
+                step_name=step.name,
+                step_type=step.step_type,
+                status=final_status,
+                action_results=all_action_results,
+            )
 
     return StepResult(
         step_name=step.name,
@@ -1506,6 +1491,44 @@ async def _execute_each_step(
         status=ExecutionStatus.COMPLETED,
         action_results=all_action_results,
     )
+
+
+async def _run_each_item(
+    *,
+    inner_steps: list[Any],
+    item_params: dict[str, object],
+    prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None,
+    **route: Any,
+) -> list[StepResult]:
+    """Run one ``each`` item's body in its own scope (D4); stop at the first
+    FAILED or PAUSED inner step.
+
+    The item sees the run's outputs so far plus its own inner results, keyed
+    as ``_execute_loop_body`` keys them. Nothing it produces reaches the
+    run-wide dicts, so item N+1 never reads item N's review.
+    """
+    item_prior = dict(prior_outputs)
+    item_step_outputs = dict(step_outputs) if step_outputs is not None else {}
+    results: list[StepResult] = []
+    for inner_step_index, inner_step in enumerate(inner_steps):
+        inner_result = await _execute_step(
+            step=inner_step,
+            resolved_config=resolve_placeholders(inner_step.config, item_params),
+            merged_params=item_params,
+            prior_outputs=item_prior,
+            step_outputs=item_step_outputs,
+            **route,
+        )
+        results.append(inner_result)
+        for action_index, result in enumerate(inner_result.action_results):
+            item_prior[f"{inner_step_index}-{result.action_type}-{action_index}"] = result
+        verdict_result = _last_with_verdict(inner_result.action_results)
+        if verdict_result is not None:
+            item_step_outputs[inner_result.step_name] = verdict_result
+        if inner_result.status in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):
+            break
+    return results
 
 
 # ---------------------------------------------------------------------------
