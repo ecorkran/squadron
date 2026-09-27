@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- `sq run design-plan <plan>` designs and reviews every undesigned slice in a slice plan, and `sq run tasks-plan <plan>` breaks down every designed slice whose design review was acceptable. Each revises against its review up to `max-revisions` times, flags any slice it can't get to an acceptable review, and keeps going. They replace `design-batch` (#136)
+- `sq run slices-plan <plan>` designs and reviews every undesigned slice in a slice plan, and `sq run tasks-plan <plan>` breaks down every designed slice whose design review was acceptable. Each revises against its review up to `max-revisions` times, flags any slice it can't get to an acceptable review, and keeps going. They replace `design-batch` (#136)
 - Every `each` step now writes a batch report next to the run state (`{run_id}.{step}.report.md`) listing passed, accepted and flagged items, flagged first with the reason. `sq run` prints the counts and the flagged items at the end (#136)
 - New pipeline options: `on_item_failure: continue` on `each`, `accept_if` and `skip_if_met` on `loop`, `feedback: review` on `dispatch`, `plan:` on phase steps, and the `cf.undesigned_slices` / `cf.untasked_slices` sources. See `docs/PIPELINES.md`
 - Review artifacts record the pipeline run that wrote them (`runId`) and the squadron version (`squadronVersion`), and a provider-failure artifact is marked `providerFailure: true`. `--output json` includes `run_id`, `squadron_version`, `finding_scan`, and `location_verified` per finding (#139)
@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The test suite no longer passes or fails based on the developer's machine: user config, git config, timezone, terminal width, credentials and `PATH` are pinned per test, and a new CI job runs the suite under a deliberately hostile environment (#47)
 
 ### Removed
-- The `design-batch` pipeline. Use `design-plan` (#136)
+- The `design-batch` pipeline. Use `slices-plan` (#136)
 
 ## [0.14.0] - 20260926
 

@@ -105,7 +105,7 @@ class TestDiscoverPipelines:
         assert "slice" in names
         assert "review" in names
         assert "implement" in names
-        assert "design-plan" in names
+        assert "slices-plan" in names
         assert "tasks-plan" in names
         assert len(pipelines) >= 4
 

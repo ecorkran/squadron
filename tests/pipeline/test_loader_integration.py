@@ -13,7 +13,7 @@ _BUILTIN_NAMES = [
     "slice",
     "review",
     "implement",
-    "design-plan",
+    "slices-plan",
     "tasks-plan",
     "tasks",
     "judge-cycle",
@@ -76,7 +76,7 @@ class TestBuiltInPipelineStructure:
     @pytest.mark.parametrize(
         ("name", "source", "phase_step"),
         [
-            ("design-plan", 'cf.undesigned_slices("{plan}")', "design"),
+            ("slices-plan", 'cf.undesigned_slices("{plan}")', "design"),
             ("tasks-plan", 'cf.untasked_slices("{plan}", "{accept-threshold}")', "tasks"),
         ],
     )

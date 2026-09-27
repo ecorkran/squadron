@@ -169,7 +169,7 @@ steps:
   # each — iterate over a collection, running inner steps per item
   # -------------------------------------------------------------------------
   # Used for batch operations like designing every undesigned slice in a plan.
-  # See design-plan.yaml for a real-world example.
+  # See slices-plan.yaml for a real-world example.
   # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------

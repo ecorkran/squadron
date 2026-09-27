@@ -67,7 +67,7 @@ class TestRecordOutcome:
 
 def _report() -> BatchReport:
     return BatchReport(
-        pipeline="design-plan",
+        pipeline="slices-plan",
         run_id="3f9c2a1b7d10",
         step_name="slices",
         plan="900",
@@ -94,7 +94,7 @@ class TestRender:
         frontmatter = read_frontmatter(path)
         assert frontmatter == {
             "docType": "batch-report",
-            "pipeline": "design-plan",
+            "pipeline": "slices-plan",
             "runId": "3f9c2a1b7d10",
             "plan": "900",
             "passed": 2,
@@ -118,5 +118,5 @@ class TestRender:
 
     def test_summary_line(self) -> None:
         assert _report().summary_line() == (
-            "design-plan slices: 4 items — 2 passed, 1 accepted, 1 flagged"
+            "slices-plan slices: 4 items — 2 passed, 1 accepted, 1 flagged"
         )

@@ -476,7 +476,7 @@ Each loop iteration regenerates the artifact from the phase prompt. `revision_nu
 
 ### `each` fan-out caveat
 
-If you fan a judge-gated cycle out over multiple slices with `each`, the registered sources are `cf.unfinished_slices`, `cf.undesigned_slices` and `cf.untasked_slices` (see [`each`](#each)) — do not assume other collection sources exist. `design-plan` and `tasks-plan` are worked examples of a loop inside `each`.
+If you fan a judge-gated cycle out over multiple slices with `each`, the registered sources are `cf.unfinished_slices`, `cf.undesigned_slices` and `cf.untasked_slices` (see [`each`](#each)) — do not assume other collection sources exist. `slices-plan` and `tasks-plan` are worked examples of a loop inside `each`.
 
 ### Alternative: `on_exhaust: fail`
 
@@ -688,7 +688,7 @@ sq run --list    # shows all available pipelines with descriptions
 | `tasks` | Task breakdown through implementation | `slice`, `model`, `review-model` |
 | `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
-| `design-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
+| `slices-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
@@ -708,15 +708,15 @@ The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the prima
 
 ## Plan Batch Pipelines
 
-`design-plan` and `tasks-plan` walk a whole slice plan unattended, flag what they can't finish, and end with one [batch report](#each) for the PM.
+`slices-plan` and `tasks-plan` walk a whole slice plan unattended, flag what they can't finish, and end with one [batch report](#each) for the PM.
 
 ```bash
-sq run design-plan 900                     # design + review every undesigned slice in plan 900
+sq run slices-plan 900                     # design + review every undesigned slice in plan 900
 sq run tasks-plan 900                      # break down every designed slice whose design review is acceptable
-sq run design-plan 900 -p max-revisions=2 -p review-model=minimax
+sq run slices-plan 900 -p max-revisions=2 -p review-model=minimax
 ```
 
-Per slice, `design-plan`:
+Per slice, `slices-plan`:
 
 1. switches cf to plan 900's arch, then the slice, then phase 4 (see [Phase steps](#phase-steps-design-tasks-implement));
 2. writes the design and reviews it, committing both;
@@ -741,7 +741,7 @@ A design step that writes no design, a provider failure, or any other step failu
 
 - **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan, the last slice, and the batch's phase. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
 - **Commits land on the current branch.** Planning artifacts belong on the integration target; run the batch there.
-- **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `design-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
+- **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `slices-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
 - **Run from a terminal.** `sq run` refuses inside a Claude Code session (#144), and these pipelines dispatch through an SDK session.
 - **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.
 - `--prompt-only` doesn't render `each` or `loop:` steps yet (#145).

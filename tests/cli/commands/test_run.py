@@ -1636,7 +1636,7 @@ def test_display_result_summarizes_batch_report(
     from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
 
     report = BatchReport(
-        pipeline="design-plan",
+        pipeline="slices-plan",
         run_id="3f9c2a1b7d10",
         step_name="slices",
         plan="900",
@@ -1647,7 +1647,7 @@ def test_display_result_summarizes_batch_report(
     )
     report_path = report.write(tmp_path)
     result = PipelineResult(
-        pipeline_name="design-plan",
+        pipeline_name="slices-plan",
         status=ExecutionStatus.COMPLETED,
         step_results=[
             StepResult(
@@ -1663,6 +1663,6 @@ def test_display_result_summarizes_batch_report(
     _display_result(result)
 
     out = capsys.readouterr().out
-    assert "design-plan slices: 2 items — 1 passed, 0 accepted, 1 flagged" in out
+    assert "slices-plan slices: 2 items — 1 passed, 0 accepted, 1 flagged" in out
     assert "FLAGGED 929 Serialize — step design failed" in out
     assert str(report_path) in out.replace("\n", "")

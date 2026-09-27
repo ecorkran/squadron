@@ -1,10 +1,10 @@
-name: design-plan
+name: slices-plan
 description: Design and review every undesigned slice in a plan; flag failures, report at end
 
 params:
   plan: required
   model: sonnet
-  review-model: minimax
+  review-model: glmflash
   max-revisions: "3"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better

@@ -181,7 +181,7 @@ class TestReviewOnlyIntegration:
 
 
 class TestDesignPlanIntegration:
-    """design-plan end to end with fake actions (slice 195).
+    """slices-plan end to end with fake actions (slice 195).
 
     923: design review PASS → loop skipped → PASSED.
     924: design review FAIL, both revise rounds CONCERNS → exhausted, accepted.
@@ -252,9 +252,9 @@ class TestDesignPlanIntegration:
             "commit": ok,
         }
 
-        run_id = StateManager(runs_dir=tmp_path).init_run("design-plan", {"plan": "900"})
+        run_id = StateManager(runs_dir=tmp_path).init_run("slices-plan", {"plan": "900"})
         result = await execute_pipeline(
-            _no_project_pipeline("design-plan"),  # type: ignore[arg-type]
+            _no_project_pipeline("slices-plan"),  # type: ignore[arg-type]
             {"plan": "900", "max-revisions": "2"},
             resolver=MagicMock(),
             cf_client=self._cf_client(),
