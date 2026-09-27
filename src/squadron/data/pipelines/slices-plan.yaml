@@ -3,7 +3,7 @@ description: Design and review every undesigned slice in a plan; flag failures, 
 
 params:
   plan: required
-  model: sonnet
+  model: opus
   review-model: glmflash
   max-revisions: "3"
   pass-threshold: review.pass
