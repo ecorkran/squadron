@@ -46,6 +46,8 @@ class ModelAlias(_ModelAliasRequired, total=False):
     notes: str
     pricing: ModelPricing
     tool_use: bool
+    # Slice 924 D4: absent means no budget is sent (the backend default applies).
+    max_output_tokens: int
 
 
 def models_toml_path() -> Path:
@@ -67,6 +69,19 @@ def _extract_metadata(
     tool_use_val = table.get("tool_use")
     if isinstance(tool_use_val, bool):
         alias["tool_use"] = tool_use_val
+
+    budget_val = table.get("max_output_tokens")
+    if budget_val is not None:
+        # bool is an int subclass, so `true` would otherwise read as a budget of 1.
+        if isinstance(budget_val, int) and not isinstance(budget_val, bool) and budget_val >= 1:
+            alias["max_output_tokens"] = budget_val
+        else:
+            _logger.warning(
+                "Skipping max_output_tokens for alias '%s' in %s — expected an integer >= 1, got %r",
+                name,
+                path,
+                budget_val,
+            )
 
     cost_tier_val = table.get("cost_tier")
     if isinstance(cost_tier_val, str):
@@ -205,6 +220,21 @@ def model_allows_tools(name: str | None) -> bool:
     if alias is None:
         return True
     return alias.get("tool_use", True)
+
+
+def model_max_output_tokens(name: str | None) -> int | None:
+    """Return the per-request output budget for ``name`` (slice 924 D4).
+
+    An unknown name, a ``None`` name, and an alias that does not set
+    ``max_output_tokens`` all return ``None``: no budget is sent. This is the
+    single reader of the field.
+    """
+    if name is None:
+        return None
+    alias = get_all_aliases().get(name)
+    if alias is None:
+        return None
+    return alias.get("max_output_tokens")
 
 
 def estimate_cost(

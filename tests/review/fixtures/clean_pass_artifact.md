@@ -27,6 +27,7 @@ No specific findings.
 - Tool calls made: not offered
 - Tool calls failed: not computed
 - Stop reason: not computed
+- Output budget: backend default
 - Reasoning characters: not computed
 - `## Summary` located: not computed
 - `## Findings` located: not computed

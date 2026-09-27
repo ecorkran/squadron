@@ -84,6 +84,7 @@ async def run_review_with_profile(
     model_allows_tools: bool | None = None,
     convention_root: str | None = None,
     setting_sources_override: list[str] | None = None,
+    max_output_tokens: int | None = None,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
@@ -205,6 +206,7 @@ async def run_review_with_profile(
         convention_root=convention_root,
         allowed_tools=resolved_allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
+        max_output_tokens=max_output_tokens,
         # A document review must not read its own predecessors: they sit inside the tool
         # jail under the reviewed document's name prefix (#94). Passed as a list, empty when
         # the template declares none, so no layer below has to interpret None.
@@ -251,7 +253,6 @@ async def run_review_with_profile(
     # Create agent, send prompt, collect response, shut down
     agent = await provider.create_agent(config)
     capture = TurnCapture()
-    max_output_tokens: int | None = None
     try:
         result, recovery_turn_used = await _collect_review(
             agent,
@@ -268,6 +269,7 @@ async def run_review_with_profile(
 
     result.recovery_turn_used = recovery_turn_used
     result.output_budget_exhausted = budget_exhausted(capture.stop_reason)
+    result.max_output_tokens = max_output_tokens
     result.tools_given = capture.tools_given
     result.tool_calls_made = capture.tool_calls_made
     # Slice 266: the gate's own result is authoritative — SDK providers do not stamp it.

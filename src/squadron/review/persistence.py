@@ -247,6 +247,8 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         f"- Tool calls made: {tool_calls}",
         f"- Tool calls failed: {_render_optional(result.failed_tool_calls)}",
         f"- Stop reason: {_render_optional(result.stop_reason)}",
+        # Slice 924 B3: always present, so a `length` stop has a number to point at.
+        f"- Output budget: {describe_budget(result.max_output_tokens)}",
         f"- Reasoning characters: {_render_optional(result.reasoning_chars)}",
         f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
         f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from unittest.mock import patch
+
 import pytest
 
 from squadron.pipeline.resolver import (
@@ -76,3 +79,20 @@ def test_resolves_unknown_alias_as_literal() -> None:
     model_id, profile = resolver.resolve()
     assert model_id == "my-custom-model"
     assert profile is None
+
+
+def test_resolve_full_carries_the_alias_output_budget(tmp_path: Path) -> None:
+    """Slice 924 D4: read while the alias name is still known."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        '[aliases.budgeted]\nprofile = "openrouter"\nmodel = "x/y"\nmax_output_tokens = 4096\n'
+    )
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        resolved = ModelResolver(cli_override="budgeted").resolve_full()
+    assert resolved.max_output_tokens == 4096
+
+
+def test_resolve_full_has_no_budget_for_an_alias_without_one(tmp_path: Path) -> None:
+    with patch("squadron.models.aliases.models_toml_path", return_value=tmp_path / "none.toml"):
+        resolved = ModelResolver(cli_override="opus").resolve_full()
+    assert resolved.max_output_tokens is None

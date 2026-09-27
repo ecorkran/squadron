@@ -11,6 +11,9 @@
 #   tool_use   (optional) — bool; false = never offer tool schemas to this
 #                model. Absent means allow, so omitting it keeps current
 #                behavior. Set it on models whose tool calling is unreliable.
+#   max_output_tokens (optional) — integer >= 1; sent as max_completion_tokens
+#                on each request of an OpenAI-compatible agent. Absent means no
+#                budget is sent and the backend default applies.
 #   [aliases.<name>.pricing]  (optional sub-table)
 #     input, output, cache_read, cache_write — USD per 1M tokens
 #

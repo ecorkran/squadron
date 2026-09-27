@@ -1149,7 +1149,7 @@ class TestRecoveryTurn:
         provider.create_agent = AsyncMock(return_value=agent)
         return provider, sent
 
-    async def _run(self, provider: MagicMock) -> ReviewResult:
+    async def _run(self, provider: MagicMock, max_output_tokens: int | None = None) -> ReviewResult:
         from squadron.providers.profiles import ProviderProfile
 
         with (
@@ -1161,7 +1161,10 @@ class TestRecoveryTurn:
                 name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
             )
             return await run_review_with_profile(
-                _make_template(), {"input": "file.md"}, profile="openai"
+                _make_template(),
+                {"input": "file.md"},
+                profile="openai",
+                max_output_tokens=max_output_tokens,
             )
 
     @pytest.mark.asyncio
@@ -1361,3 +1364,37 @@ class TestEmptyFinalTurnRecovery:
         assert exc_info.value is second
         assert len(sent) == 2
         provider.create_agent.return_value.shutdown.assert_awaited_once()
+
+
+class TestOutputBudgetThreading:
+    """Slice 924 B.10: the budget reaches AgentConfig and the result."""
+
+    _scripted_provider = TestRecoveryTurn._scripted_provider  # pyright: ignore[reportPrivateUsage]
+    _run = TestRecoveryTurn._run  # pyright: ignore[reportPrivateUsage]
+
+    @pytest.mark.asyncio
+    async def test_budget_reaches_agent_config_and_result(self) -> None:
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+
+        result = await self._run(provider, max_output_tokens=32000)
+
+        config: AgentConfig = provider.create_agent.call_args.args[0]
+        assert config.max_output_tokens == 32000
+        assert result.max_output_tokens == 32000
+
+    @pytest.mark.asyncio
+    async def test_no_budget_leaves_both_none(self) -> None:
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+
+        result = await self._run(provider)
+
+        assert provider.create_agent.call_args.args[0].max_output_tokens is None
+        assert result.max_output_tokens is None
+
+    @pytest.mark.asyncio
+    async def test_skip_warning_names_the_sent_budget(self, caplog: pytest.LogCaptureFixture) -> None:
+        provider, _ = self._scripted_provider([_TEXT_TOOL_CALL_REPLY], [{"stop_reason": "length"}])
+        with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
+            await self._run(provider, max_output_tokens=256)
+
+        assert any("budget: 256 tokens" in r.getMessage() for r in caplog.records)

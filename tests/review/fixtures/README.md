@@ -20,6 +20,11 @@ one sanctioned regeneration is slice 383 Task 8.2, when `rulesSource` and
 `targetKind` are added together — and that regeneration asserts the diff
 contains exactly those two keys and nothing else.
 
+A second sanctioned regeneration is slice 924 B3, which added the always-present
+Run Digest line `- Output budget: backend default` after `- Stop reason:`. It
+touched these three files, the three `383-postkeys-*.md` files, and
+`clean_pass_artifact.md`, and each diff is exactly that one added line.
+
 `reviewedSha` is a pinned literal rather than a resolved value. The live save
 path stamps `resolve_reviewed_sha(".")`, which changes on every commit and
 would make a byte-identity fixture stale immediately; what these pin is the

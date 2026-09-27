@@ -1581,6 +1581,24 @@ class TestRecoveryTurnRendering:
         assert "skipped — output budget exhausted" not in md
 
 
+class TestOutputBudgetDigestLine:
+    """Slice 924 B3: always present, right after the stop reason."""
+
+    def test_sent_budget_is_named(self) -> None:
+        result = _make_result()
+        result.max_output_tokens = 32000
+
+        lines = format_review_markdown(result, "code", _make_slice_info()).splitlines()
+
+        index = lines.index("- Output budget: 32000 tokens")
+        assert lines[index - 1].startswith("- Stop reason:")
+
+    def test_no_budget_reads_backend_default(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+
+        assert "- Output budget: backend default" in md
+
+
 # ---------------------------------------------------------------------------
 # Slice 195 D12 — review traceability (#139)
 # ---------------------------------------------------------------------------

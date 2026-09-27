@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -12,7 +13,7 @@ import pytest
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
-from squadron.pipeline.resolver import ModelResolutionError
+from squadron.pipeline.resolver import ModelResolutionError, ModelResolver, ResolvedModel
 from squadron.providers.base import ProfileName
 from squadron.review.models import (
     ReviewFinding,
@@ -34,7 +35,7 @@ _P = "squadron.pipeline.actions.review"
 def _make_context(**overrides: object) -> ActionContext:
     """Build an ActionContext with review-specific defaults."""
     resolver = MagicMock()
-    resolver.resolve.return_value = ("claude-sonnet-4-20250514", None)
+    resolver.resolve_full.return_value = ResolvedModel("claude-sonnet-4-20250514", None)
     defaults: dict[str, object] = {
         "pipeline_name": "test-pipeline",
         "run_id": "run-12345678",
@@ -276,7 +277,7 @@ class TestReviewModelResolution:
 
         ctx = _make_context(params={"template": "code", "model": "opus"})
         await ReviewAction().execute(ctx)
-        ctx.resolver.resolve.assert_called_once_with("opus", None)
+        ctx.resolver.resolve_full.assert_called_once_with("opus", None)
 
     @pytest.mark.asyncio
     @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
@@ -294,7 +295,7 @@ class TestReviewModelResolution:
         mock_run_review.return_value = _make_review_result()
 
         ctx = _make_context(params={"template": "code"})
-        ctx.resolver.resolve.return_value = ("gpt-4o", "openrouter")
+        ctx.resolver.resolve_full.return_value = ResolvedModel("gpt-4o", "openrouter")
 
         result = await ReviewAction().execute(ctx)
         assert result.metadata["profile"] == "openrouter"
@@ -315,7 +316,7 @@ class TestReviewModelResolution:
         mock_run_review.return_value = _make_review_result()
 
         ctx = _make_context(params={"template": "code", "profile": "openai"})
-        ctx.resolver.resolve.return_value = ("gpt-4o", "openrouter")
+        ctx.resolver.resolve_full.return_value = ResolvedModel("gpt-4o", "openrouter")
 
         result = await ReviewAction().execute(ctx)
         assert result.metadata["profile"] == "openai"
@@ -336,7 +337,7 @@ class TestReviewModelResolution:
         mock_run_review.return_value = _make_review_result()
 
         ctx = _make_context(params={"template": "code"})
-        ctx.resolver.resolve.return_value = ("sonnet", None)
+        ctx.resolver.resolve_full.return_value = ResolvedModel("sonnet", None)
 
         result = await ReviewAction().execute(ctx)
         assert result.metadata["profile"] == ProfileName.SDK
@@ -363,15 +364,64 @@ class TestReviewModelResolution:
         mock_run_review.return_value = _make_review_result()
 
         ctx = _make_context(params={"template": "judge.slice-vs-arch"})
-        ctx.resolver.resolve.side_effect = [
+        ctx.resolver.resolve_full.side_effect = [
             ModelResolutionError("no model"),
-            ("claude-opus-4-8", None),
+            ResolvedModel("claude-opus-4-8", None),
         ]
 
         result = await ReviewAction().execute(ctx)
         assert result.success is True
-        assert ctx.resolver.resolve.call_count == 2
-        ctx.resolver.resolve.assert_called_with("opus", None)
+        assert ctx.resolver.resolve_full.call_count == 2
+        ctx.resolver.resolve_full.assert_called_with("opus", None)
+
+
+class TestReviewAliasParity:
+    """Slice 924 D6: a pipeline review reads the alias's tool gate and budget, like the CLI."""
+
+    @pytest.fixture
+    def gated_alias(self, tmp_path: Path) -> Iterator[None]:
+        toml_file = tmp_path / "models.toml"
+        toml_file.write_text(
+            "[aliases.gated]\n"
+            'profile = "openrouter"\n'
+            'model = "x/y"\n'
+            "tool_use = false\n"
+            "max_output_tokens = 4096\n"
+        )
+        with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+            yield
+
+    @pytest.mark.asyncio
+    @pytest.mark.usefixtures("gated_alias")
+    @pytest.mark.parametrize("via_template_default", [False, True])
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_alias_gate_and_budget_reach_the_review(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+        via_template_default: bool,
+    ) -> None:
+        mock_tpl = _mock_template()
+        mock_tpl.model = "gated" if via_template_default else None
+        mock_get_template.return_value = mock_tpl
+        mock_run_review.return_value = _make_review_result()
+        params: dict[str, object] = {"template": "code"}
+        if not via_template_default:
+            params["model"] = "gated"
+
+        ctx = _make_context(params=params, resolver=ModelResolver())
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is True
+        kwargs = mock_run_review.call_args.kwargs
+        assert kwargs["model"] == "x/y"
+        assert kwargs["model_allows_tools"] is False
+        assert kwargs["max_output_tokens"] == 4096
 
 
 # ---------------------------------------------------------------------------
@@ -726,7 +776,7 @@ class TestReviewErrors:
         mock_get_template.return_value = _mock_template()
 
         ctx = _make_context()
-        ctx.resolver.resolve.side_effect = ModelResolutionError("no model")
+        ctx.resolver.resolve_full.side_effect = ModelResolutionError("no model")
 
         result = await ReviewAction().execute(ctx)
         assert result.success is False
@@ -746,12 +796,12 @@ class TestReviewErrors:
         mock_get_template.return_value = mock_tpl
 
         ctx = _make_context()
-        ctx.resolver.resolve.side_effect = ModelResolutionError("no model")
+        ctx.resolver.resolve_full.side_effect = ModelResolutionError("no model")
 
         result = await ReviewAction().execute(ctx)
         assert result.success is False
         assert "no model" in (result.error or "")
-        ctx.resolver.resolve.assert_called_once()
+        ctx.resolver.resolve_full.assert_called_once()
 
     @pytest.mark.asyncio
     @patch(f"{_P}.run_review_with_profile", side_effect=RuntimeError("API down"))

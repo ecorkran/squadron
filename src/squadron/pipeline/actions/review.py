@@ -172,12 +172,15 @@ class ReviewAction:
         # pipeline `review:` step.
         action_model = str(context.params["model"]) if "model" in context.params else None
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
+        # resolve_full, not resolve: the alias's tool_use gate and output budget can
+        # only be read while its name is known (slice 924 D6).
         try:
-            model_id, alias_profile = context.resolver.resolve(action_model, step_model)
+            resolved = context.resolver.resolve_full(action_model, step_model)
         except ModelResolutionError:
             if template.model is None:
                 raise
-            model_id, alias_profile = context.resolver.resolve(template.model, step_model)
+            resolved = context.resolver.resolve_full(template.model, step_model)
+        model_id, alias_profile = resolved.model_id, resolved.profile
 
         # Profile resolution — explicit param → alias-derived → SDK default
         profile_name = (
@@ -280,6 +283,8 @@ class ReviewAction:
                 model=model_id,
                 rules_content=rules_content,
                 allowed_tools=allowed_tools,
+                model_allows_tools=resolved.allows_tools,
+                max_output_tokens=resolved.max_output_tokens,
             )
         except ProviderError as exc:
             # For a pipeline run the artifact is the whole durable record, so a

@@ -825,3 +825,28 @@ class TestProviderFailureArtifact:
 
         assert result.exit_code == 1
         assert list(reviews.glob("*.md")) == []
+
+
+class TestOutputBudgetThreading:
+    """Slice 924 B.11: the alias's budget is read while its name is known."""
+
+    def test_alias_budget_reaches_run_review_with_profile(
+        self,
+        cli_runner: CliRunner,
+        patch_run_review: AsyncMock,
+        doc_files: tuple[str, str],
+        tmp_path: Path,
+    ) -> None:
+        toml_file = tmp_path / "models.toml"
+        toml_file.write_text(
+            '[aliases.budgeted]\nprofile = "openrouter"\nmodel = "x/y"\nmax_output_tokens = 4096\n'
+        )
+        input_doc, against_doc = doc_files
+        with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+            result = cli_runner.invoke(
+                app,
+                ["review", "slice", input_doc, "--against", against_doc, "--model", "budgeted"],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert patch_run_review.call_args.kwargs["max_output_tokens"] == 4096

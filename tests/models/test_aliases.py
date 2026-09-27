@@ -11,6 +11,7 @@ from squadron.models.aliases import (
     get_all_aliases,
     load_builtin_aliases,
     load_user_aliases,
+    model_max_output_tokens,
     resolve_model_alias,
 )
 
@@ -191,3 +192,46 @@ def testload_builtin_aliases_contains_claude() -> None:
     assert "opus" in aliases
     assert "sonnet" in aliases
     assert "haiku" in aliases
+
+
+# ---------------------------------------------------------------------------
+# max_output_tokens (slice 924 D4)
+# ---------------------------------------------------------------------------
+
+
+def _user_aliases(tmp_path: Path, body: str) -> Path:
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(f'[aliases.budgeted]\nprofile = "openrouter"\nmodel = "x/y"\n{body}\n')
+    return toml_file
+
+
+def test_max_output_tokens_is_read_back(tmp_path: Path) -> None:
+    toml_file = _user_aliases(tmp_path, "max_output_tokens = 4096")
+
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        assert model_max_output_tokens("budgeted") == 4096
+
+
+@pytest.mark.parametrize("raw", ["0", "-1", '"4096"', "4096.0", "true"])
+def test_invalid_max_output_tokens_is_rejected(
+    tmp_path: Path, raw: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    toml_file = _user_aliases(tmp_path, f"max_output_tokens = {raw}")
+
+    with (
+        patch("squadron.models.aliases.models_toml_path", return_value=toml_file),
+        caplog.at_level("WARNING", logger="squadron.models.aliases"),
+    ):
+        assert model_max_output_tokens("budgeted") is None
+    assert any(
+        "Skipping max_output_tokens for alias 'budgeted'" in r.getMessage() for r in caplog.records
+    )
+
+
+def test_max_output_tokens_is_none_when_unset(tmp_path: Path) -> None:
+    toml_file = _user_aliases(tmp_path, "")
+
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        assert model_max_output_tokens("budgeted") is None
+        assert model_max_output_tokens("no-such-alias") is None
+        assert model_max_output_tokens(None) is None
