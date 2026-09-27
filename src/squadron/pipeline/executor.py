@@ -32,6 +32,7 @@ from squadron.pipeline.classification import (
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
 from squadron.pipeline.sources import SOURCE_REGISTRY, parse_source
 from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
@@ -1455,9 +1456,15 @@ async def _execute_each_step(
     items = await source_fn(args, cf_client, merged_params)
 
     inner_steps = _unpack_body(resolved_config)
+    policy = ItemFailurePolicy(resolved_config.get("on_item_failure", ItemFailurePolicy.STOP))
     all_action_results: list[ActionResult] = []
 
     for item in items:
+        # A failed precondition, not an execution failure: flagged under both
+        # policies, body never run (D5).
+        if flag_reason := item.get("flag_reason"):
+            _warn_item_flagged(step.name, item, str(flag_reason))
+            continue
         item_results = await _run_each_item(
             inner_steps=inner_steps,
             item_params={**merged_params, as_name: item},
@@ -1477,6 +1484,10 @@ async def _execute_each_step(
         for inner_result in item_results:
             all_action_results.extend(inner_result.action_results)
         final_status = item_results[-1].status if item_results else ExecutionStatus.COMPLETED
+        if final_status == ExecutionStatus.FAILED and policy is ItemFailurePolicy.CONTINUE:
+            _warn_item_flagged(step.name, item, _item_failure_reason(item_results[-1]))
+            continue
+        # PAUSED stops the run under both policies: resume depends on it.
         if final_status in (ExecutionStatus.FAILED, ExecutionStatus.PAUSED):
             return StepResult(
                 step_name=step.name,
@@ -1491,6 +1502,20 @@ async def _execute_each_step(
         status=ExecutionStatus.COMPLETED,
         action_results=all_action_results,
     )
+
+
+def _item_failure_reason(failed: StepResult) -> str:
+    """Why an item's body failed: the step's error, else the first failed
+    action's, else a generic line naming the step (D5)."""
+    if failed.error:
+        return failed.error
+    action_error = next((r.error for r in failed.action_results if not r.success and r.error), None)
+    return action_error or f"step {failed.step_name} failed"
+
+
+def _warn_item_flagged(step_name: str, item: dict[str, object], reason: str) -> None:
+    label = item.get("index", item.get("name", "?"))
+    _logger.warning("each step %s: item %s FLAGGED: %s", step_name, label, reason)
 
 
 async def _run_each_item(
