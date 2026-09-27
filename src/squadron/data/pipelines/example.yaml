@@ -168,8 +168,8 @@ steps:
   # -------------------------------------------------------------------------
   # each — iterate over a collection, running inner steps per item
   # -------------------------------------------------------------------------
-  # Used for batch operations like designing all unfinished slices.
-  # See design-batch.yaml for a real-world example.
+  # Used for batch operations like designing every undesigned slice in a plan.
+  # See design-plan.yaml for a real-world example.
   # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------

@@ -13,7 +13,6 @@ _BUILTIN_NAMES = [
     "slice",
     "review",
     "implement",
-    "design-batch",
     "design-plan",
     "tasks-plan",
     "tasks",
@@ -73,15 +72,6 @@ class TestBuiltInPipelineStructure:
         )
         assert len(defn.steps) == 1
         assert defn.steps[0].step_type == "review"
-
-    def test_design_batch_steps(self) -> None:
-        defn = load_pipeline(
-            "design-batch",
-            project_dir=_NONEXISTENT,
-            user_dir=_NONEXISTENT,
-        )
-        assert len(defn.steps) == 1
-        assert defn.steps[0].step_type == "each"
 
     @pytest.mark.parametrize(
         ("name", "source", "phase_step"),

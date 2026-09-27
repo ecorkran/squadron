@@ -659,7 +659,8 @@ sq run --list    # shows all available pipelines with descriptions
 | `tasks` | Task breakdown through implementation | `slice`, `model`, `review-model` |
 | `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
-| `design-batch` | Phase 4 for every unfinished slice in a plan | `plan`, `model` |
+| `design-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
+| `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
 | `findings-addressed-cycle` | Fix-review cycle that exits only when fresh eyes pass *and* the prior round's findings were accounted for — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed) | `slice`, `model`, `review-model`, `judge-model` |

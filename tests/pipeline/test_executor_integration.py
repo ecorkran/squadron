@@ -180,72 +180,84 @@ class TestReviewOnlyIntegration:
         assert result.status == ExecutionStatus.COMPLETED
 
 
-class TestDesignBatchIntegration:
-    @pytest.mark.asyncio
-    async def test_two_slices_inner_steps_run_twice(self, tmp_path: Path) -> None:
-        from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
-        from squadron.pipeline.state import StateManager
+class TestDesignPlanIntegration:
+    """design-plan end to end with fake actions (slice 195).
 
-        definition = _no_project_pipeline("design-batch")
+    923: design review PASS → loop skipped → PASSED.
+    924: design review FAIL, both revise rounds CONCERNS → exhausted, accepted.
+    928: dispatch writes no design → design step fails → FLAGGED, batch goes on.
+    """
+
+    _REVIEWS = {"923": ["PASS"], "924": ["FAIL", "CONCERNS", "CONCERNS"], "928": []}
+
+    def _cf_client(self) -> MagicMock:
+        from squadron.integrations.context_forge import ProjectInfo, SliceEntry
+
+        def list_slices(plan: str | None = None) -> list[SliceEntry]:
+            # The source reads plan 900 before any design exists; the
+            # post-condition's resolve_slice_info reads the designed plan.
+            return [
+                SliceEntry(
+                    index=int(i),
+                    name=f"slice {i}",
+                    design_file=None if plan == "900" else f"{i}-slice.stub.md",
+                    status="not_started",
+                )
+                for i in self._REVIEWS
+            ]
 
         cf_client = MagicMock()
-        cf_client.list_slices.return_value = [
-            SliceEntry(index=10, name="sl-a", design_file="10-slice.sl-a.md", status="not_started"),
-            SliceEntry(index=11, name="sl-b", design_file="11-slice.sl-b.md", status="in_progress"),
-        ]
-        cf_client.list_tasks.return_value = [
-            TaskEntry(index=10, files=[]),
-            TaskEntry(index=11, files=[]),
-        ]
+        cf_client.list_slices.side_effect = list_slices
+        cf_client.list_tasks.return_value = []
         cf_client.get_project.return_value = ProjectInfo(
-            arch_file="project-documents/user/architecture/100-arch.md",
-            slice_plan="100-slices.md",
+            arch_file="project-documents/user/architecture/900-arch.md",
+            slice_plan="900-slices.md",
             phase="4",
-            slice="10",
+            slice="923",
             name="squadron",
         )
+        return cf_client
 
-        call_count = 0
+    @pytest.mark.asyncio
+    async def test_passed_accepted_and_flagged_slices(self, tmp_path: Path) -> None:
+        from squadron.pipeline.batch_report import ItemOutcome
+        from squadron.pipeline.models import ActionContext
+        from squadron.pipeline.state import StateManager
 
-        async def counting_execute(ctx: object) -> ActionResult:
-            nonlocal call_count
-            call_count += 1
-            return ActionResult(
-                success=True,
-                action_type="mock",
-                outputs={},
-                verdict="PASS",
-            )
+        reviews = {k: list(v) for k, v in self._REVIEWS.items()}
+        revise_calls: list[str] = []
 
-        async def dispatch_execute(ctx: object) -> ActionResult:
-            nonlocal call_count
-            call_count += 1
-            slice_index = ctx.params["slice"]  # type: ignore[attr-defined]
-            suffix = "a" if str(slice_index) == "10" else "b"
-            design_path = tmp_path / f"{slice_index}-slice.sl-{suffix}.md"
-            design_path.write_text("# stub design")
+        async def review_execute(ctx: ActionContext) -> ActionResult:
+            verdict = reviews[str(ctx.params["slice"])].pop(0)
+            return ActionResult(success=True, action_type="review", outputs={}, verdict=verdict)
+
+        async def dispatch_execute(ctx: ActionContext) -> ActionResult:
+            slice_index = str(ctx.params["slice"]) if "slice" in ctx.params else ""
+            if ctx.params.get("feedback") == "review":
+                revise_calls.append(str(ctx.params["slice"].get("index")))  # type: ignore[union-attr]
+            elif slice_index != "928":
+                (tmp_path / f"{slice_index}-slice.stub.md").write_text("# stub design")
             return ActionResult(success=True, action_type="dispatch", outputs={})
 
-        action = MagicMock()
-        action.execute = counting_execute
-        dispatch_mock = MagicMock()
-        dispatch_mock.execute = dispatch_execute
+        review = MagicMock()
+        review.execute = review_execute
+        dispatch = MagicMock()
+        dispatch.execute = dispatch_execute
+        ok = _mock_action_fn(success=True)
         registry: dict[str, object] = {
-            "cf-op": action,
-            "dispatch": dispatch_mock,
-            "review": action,
-            "checkpoint": action,
-            "commit": action,
+            "cf-op": ok,
+            "dispatch": dispatch,
+            "review": review,
+            "checkpoint": ok,
+            "commit": ok,
         }
 
-        state_mgr = StateManager(runs_dir=tmp_path)
-        run_id = state_mgr.init_run("design-batch", {"plan": "900"})
-
+        run_id = StateManager(runs_dir=tmp_path).init_run("design-plan", {"plan": "900"})
         result = await execute_pipeline(
-            definition,
-            {"plan": "900"},
+            _no_project_pipeline("design-plan"),  # type: ignore[arg-type]
+            {"plan": "900", "max-revisions": "2"},
             resolver=MagicMock(),
-            cf_client=cf_client,
+            cf_client=self._cf_client(),
             cwd=str(tmp_path),
             run_id=run_id,
             runs_dir=tmp_path,
@@ -253,6 +265,13 @@ class TestDesignBatchIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        # design step expands to: cf-op(set_phase), cf-op(set_slice), cf-op(build),
-        # dispatch, review, checkpoint, commit = 7 actions × 2 slices = 14 total calls
-        assert call_count == 14
+        report = result.step_results[0].batch_report
+        assert report is not None
+        assert [(r.index, r.outcome) for r in report.records] == [
+            ("923", ItemOutcome.PASSED),
+            ("924", ItemOutcome.ACCEPTED),
+            ("928", ItemOutcome.FLAGGED),
+        ]
+        assert revise_calls == ["924", "924"]
+        assert all(not remaining for remaining in reviews.values())
+        assert (tmp_path / f"{run_id}.slices.report.md").is_file()
