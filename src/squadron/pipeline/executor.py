@@ -677,119 +677,26 @@ async def execute_pipeline(
                     )
                     raise LazySessionConnectError(step.name, exc) from exc
 
-        # Detect each step type
-        if step.step_type == "each":
-            step_result = await _execute_each_step(
-                step=step,
-                resolved_config=resolved_config,
-                step_index=step_index,
-                merged_params=merged_params,
-                prior_outputs=prior_outputs,
-                step_outputs=step_outputs,
-                pipeline_name=definition.name,
-                run_id=effective_run_id,
-                cwd=effective_cwd,
-                resolver=resolver,
-                cf_client=cf_client,
-                sdk_session=sdk_session,
-                get_step_type_fn=get_step_type,
-                get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
-                runs_dir=runs_dir,
-            )
-        elif step.step_type == StepTypeName.FAN_OUT:
-            step_result = await _execute_fan_out_step(
-                step=step,
-                resolved_config=resolved_config,
-                step_index=step_index,
-                merged_params=merged_params,
-                prior_outputs=prior_outputs,
-                step_outputs=step_outputs,
-                pipeline_name=definition.name,
-                run_id=effective_run_id,
-                cwd=effective_cwd,
-                resolver=resolver,
-                cf_client=cf_client,
-                sdk_session=sdk_session,
-                get_step_type_fn=get_step_type,
-                get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
-                runs_dir=runs_dir,
-            )
-        elif step.step_type == StepTypeName.LOOP:
-            step_result = await _execute_loop_body(
-                step=step,
-                resolved_config=resolved_config,
-                step_index=step_index,
-                merged_params=merged_params,
-                prior_outputs=prior_outputs,
-                step_outputs=step_outputs,
-                pipeline_name=definition.name,
-                run_id=effective_run_id,
-                cwd=effective_cwd,
-                resolver=resolver,
-                cf_client=cf_client,
-                sdk_session=sdk_session,
-                get_step_type_fn=get_step_type,
-                get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
-                runs_dir=runs_dir,
-                start_iteration=_resume_start_iteration(
-                    step=step, start_from=start_from, start_from_iteration=start_from_iteration
-                ),
-            )
-        else:
-            # Check for loop config
-            loop_raw = resolved_config.get("loop")
-            if loop_raw is not None and isinstance(loop_raw, dict):
-                typed_loop: dict[str, object] = loop_raw  # type: ignore[assignment]
-                loop_config = _parse_loop_config(typed_loop)
-                # Remove loop key from config before passing to step type
-                action_config = {k: v for k, v in resolved_config.items() if k != "loop"}
-                step_result = await _execute_loop_step(
-                    step=step,
-                    action_config=action_config,
-                    loop_config=loop_config,
-                    step_index=step_index,
-                    merged_params=merged_params,
-                    prior_outputs=prior_outputs,
-                    step_outputs=step_outputs,
-                    pipeline_name=definition.name,
-                    run_id=effective_run_id,
-                    cwd=effective_cwd,
-                    resolver=resolver,
-                    cf_client=cf_client,
-                    sdk_session=sdk_session,
-                    get_step_type_fn=get_step_type,
-                    get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
-                    runs_dir=runs_dir,
-                    start_iteration=_resume_start_iteration(
-                        step=step,
-                        start_from=start_from,
-                        start_from_iteration=start_from_iteration,
-                    ),
-                )
-            else:
-                if step.name == start_from and start_from_iteration != 0:
-                    _logger.debug(
-                        "executor: start_from_iteration=%d ignored for non-loop step '%s'",
-                        start_from_iteration,
-                        step.name,
-                    )
-                step_result = await _execute_step_once(
-                    step=step,
-                    resolved_config=resolved_config,
-                    step_index=step_index,
-                    merged_params=merged_params,
-                    prior_outputs=prior_outputs,
-                    step_outputs=step_outputs,
-                    pipeline_name=definition.name,
-                    run_id=effective_run_id,
-                    cwd=effective_cwd,
-                    resolver=resolver,
-                    cf_client=cf_client,
-                    sdk_session=sdk_session,
-                    get_step_type_fn=get_step_type,
-                    get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
-                    runs_dir=runs_dir,
-                )
+        step_result = await _execute_step(
+            step=step,
+            resolved_config=resolved_config,
+            step_index=step_index,
+            merged_params=merged_params,
+            prior_outputs=prior_outputs,
+            step_outputs=step_outputs,
+            pipeline_name=definition.name,
+            run_id=effective_run_id,
+            cwd=effective_cwd,
+            resolver=resolver,
+            cf_client=cf_client,
+            sdk_session=sdk_session,
+            get_step_type_fn=get_step_type,
+            get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+            runs_dir=runs_dir,
+            start_iteration=_resume_start_iteration(
+                step=step, start_from=start_from, start_from_iteration=start_from_iteration
+            ),
+        )
 
         step_results.append(step_result)
 
@@ -900,6 +807,84 @@ async def _connect_lazy_session(*, run_id: str) -> SDKExecutionSession:
         )
         raise
     return session
+
+
+async def _execute_step(
+    *,
+    step: Any,
+    resolved_config: dict[str, object],
+    step_index: int,
+    merged_params: dict[str, object],
+    prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None,
+    pipeline_name: str,
+    run_id: str,
+    cwd: str,
+    resolver: Any,
+    cf_client: Any,
+    sdk_session: SDKExecutionSession | None,
+    get_step_type_fn: Any,
+    get_action_fn: Any,
+    runs_dir: Path | None,
+    start_iteration: int = 1,
+    iteration: int = 0,
+    prior_iteration_step_outputs: dict[str, ActionResult] | None = None,
+) -> StepResult:
+    """Route *step* to the executor for its shape (D3, slice 195).
+
+    The single entry point for every step: the top-level walk, ``each``
+    bodies and ``loop:`` bodies all call it, so a step behaves the same
+    wherever it is nested. Nesting limits are enforced by validation, not here.
+    ``iteration`` / ``prior_iteration_step_outputs`` reach only the once path —
+    the only shape a ``loop:`` body may contain that consumes them.
+    """
+    common: dict[str, Any] = {
+        "step": step,
+        "step_index": step_index,
+        "merged_params": merged_params,
+        "prior_outputs": prior_outputs,
+        "step_outputs": step_outputs,
+        "pipeline_name": pipeline_name,
+        "run_id": run_id,
+        "cwd": cwd,
+        "resolver": resolver,
+        "cf_client": cf_client,
+        "sdk_session": sdk_session,
+        "get_step_type_fn": get_step_type_fn,
+        "get_action_fn": get_action_fn,
+        "runs_dir": runs_dir,
+    }
+    if step.step_type == StepTypeName.EACH:
+        return await _execute_each_step(resolved_config=resolved_config, **common)
+    if step.step_type == StepTypeName.FAN_OUT:
+        return await _execute_fan_out_step(resolved_config=resolved_config, **common)
+    if step.step_type == StepTypeName.LOOP:
+        return await _execute_loop_body(
+            resolved_config=resolved_config, start_iteration=start_iteration, **common
+        )
+    loop_raw = resolved_config.get("loop")
+    if isinstance(loop_raw, dict):
+        loop_config = _parse_loop_config(cast(dict[str, object], loop_raw))
+        # Remove loop key from config before passing to step type
+        action_config = {k: v for k, v in resolved_config.items() if k != "loop"}
+        return await _execute_loop_step(
+            action_config=action_config,
+            loop_config=loop_config,
+            start_iteration=start_iteration,
+            **common,
+        )
+    if start_iteration > 1:
+        _logger.debug(
+            "executor: start_from_iteration=%d ignored for non-loop step '%s'",
+            start_iteration,
+            step.name,
+        )
+    return await _execute_step_once(
+        resolved_config=resolved_config,
+        iteration=iteration,
+        prior_iteration_step_outputs=prior_iteration_step_outputs,
+        **common,
+    )
 
 
 async def _execute_step_once(
@@ -1356,7 +1341,7 @@ async def _execute_loop_body(
 
         for inner_step_index, inner_step in enumerate(inner_steps):
             inner_resolved = resolve_placeholders(inner_step.config, merged_params)
-            inner_result = await _execute_step_once(
+            inner_result = await _execute_step(
                 step=inner_step,
                 resolved_config=inner_resolved,
                 step_index=step_index,
@@ -1525,7 +1510,7 @@ async def _execute_each_step(
 
         for inner_step in inner_steps:
             inner_resolved = resolve_placeholders(inner_step.config, item_params)
-            inner_result = await _execute_step_once(
+            inner_result = await _execute_step(
                 step=inner_step,
                 resolved_config=inner_resolved,
                 step_index=step_index,

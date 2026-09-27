@@ -1907,6 +1907,68 @@ class TestEachExecution:
         assert result.status == ExecutionStatus.FAILED
 
     @pytest.mark.asyncio
+    async def test_loop_inside_each_runs_its_rounds(self) -> None:
+        """Pins slice 195 D3: before the single step router, a ``loop:`` step
+        inside ``each`` went to _execute_step_once, whose LoopStepType.expand()
+        returns [] — zero actions, status COMPLETED. It must run its rounds."""
+        from squadron.integrations.context_forge import SliceEntry
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        # Per item: round 1 FAIL, round 2 PASS → until met on round 2.
+        review_action = mock_action(
+            [
+                make_action_result(True, "review", verdict="FAIL"),
+                make_action_result(True, "review", verdict="PASS"),
+                make_action_result(True, "review", verdict="FAIL"),
+                make_action_result(True, "review", verdict="PASS"),
+            ]
+        )
+        register_step_type("_test_each_loop_review", mock_step_type([("review", {})]))
+
+        cf_client = MagicMock()
+        cf_client.list_slices.return_value = [
+            SliceEntry(index=1, name="a", design_file=None, status="not_started"),
+            SliceEntry(index=2, name="b", design_file=None, status="not_started"),
+        ]
+
+        pipeline = make_pipeline(
+            [
+                make_step_config(
+                    "each",
+                    "each-step",
+                    {
+                        "source": "cf.unfinished_slices()",
+                        "as": "slice",
+                        "steps": [
+                            {
+                                "loop": {
+                                    "max": 2,
+                                    "until": "review.pass",
+                                    "steps": [{"_test_each_loop_review": {}}],
+                                }
+                            }
+                        ],
+                    },
+                )
+            ]
+        )
+
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            _action_registry={"review": review_action},
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert review_action.execute.await_count == 4
+        # A loop reports its final round's results: one PASS review per item.
+        verdicts = [r.verdict for r in result.step_results[0].action_results]
+        assert verdicts == ["PASS", "PASS"]
+
+    @pytest.mark.asyncio
     async def test_unrecognized_source_raises(self) -> None:
         from squadron.pipeline.executor import execute_pipeline
 
