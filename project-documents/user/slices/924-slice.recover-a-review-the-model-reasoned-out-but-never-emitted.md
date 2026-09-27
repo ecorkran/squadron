@@ -355,7 +355,9 @@ Run on 20260927 from the slice branch. Use `uv run sq` from the checkout: a glob
    uv run sq run review 924 --model kimi3-notools -v
    uv run sq review code 924 --model kimi3-notools -v
    ```
-   Expected: both code-review artifacts show `toolsSuppressedReason` and no `toolsGiven`/`toolCallsMade`, and both digests show `Output budget: backend default`. Before this slice the pipeline artifact showed tools offered. Unit coverage: `TestReviewAliasParity` in `tests/pipeline/actions/test_review_action.py`.
+   Expected: both code-review artifacts show `toolsSuppressedReason` and no `toolsGiven`/`toolCallsMade`, and both digests show `Output budget: backend default`. The `review` pipeline's `checkpoint: on-concerns` pauses for input when the verdict is CONCERNS.
+
+   Actual (PM, 20260927): both artifacts show `toolsSuppressedReason: model-capability`, no `toolsGiven`/`toolCallsMade`, `Tool calls made: not offered`, and `Output budget: backend default`. The only frontmatter difference is the pipeline's `runId`. Both reviews raised the same CONCERN: a budget was recorded even for providers that cannot send one. Fixed in `1d767962` with `ProviderCapabilities.applies_output_budget`. Before this slice the pipeline artifact showed tools offered. Unit coverage: `TestReviewAliasParity` in `tests/pipeline/actions/test_review_action.py`.
 6. **Empty final turn is recovered (Part C).** Rerun the review that failed live:
    ```bash
    uv run sq review slice 928 --model glmflash -v
