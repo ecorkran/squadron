@@ -13,7 +13,7 @@ projectState: >
   passed review at CONCERNS with all findings dispositioned.
 dateCreated: 20260926
 dateUpdated: 20260926
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -371,5 +371,5 @@ status: in_progress
 - [x] DEVLOG entry: Phase 6 complete, test counts, commits
 - [x] Set `status: complete` in the slice design and this task file; check off entry 15 (195) in `project-documents/user/architecture/180-slices.pipeline-intelligence.md`
 - [x] Commit: `docs: complete slice 195`
-- [ ] Merge: re-read the target (`cf config get git.integration_branch`), `git checkout {target}`, `git merge` the slice branch; if either fails, stop and ask the PM
-  - [ ] **Success:** the target contains the slice commits; the slice branch is left in place
+- [x] Merge: re-read the target (`cf config get git.integration_branch`), `git checkout {target}`, `git merge` the slice branch; if either fails, stop and ask the PM
+  - [x] **Success:** the target contains the slice commits; the slice branch is left in place

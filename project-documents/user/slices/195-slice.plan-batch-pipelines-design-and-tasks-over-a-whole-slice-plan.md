@@ -7,7 +7,7 @@ dependencies: [194, 181, 909, 927]
 interfaces: []
 dateCreated: 20260926
 dateUpdated: 20260926
-status: in_progress
+status: complete
 ---
 
 # Slice Design: plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan
