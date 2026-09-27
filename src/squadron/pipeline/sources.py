@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable, Callable
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from squadron.integrations.context_forge import ContextForgeClient
+    from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
 
 SourceFn = Callable[
     [list[str], "ContextForgeClient", dict[str, object]],
@@ -24,23 +25,47 @@ SOURCE_REGISTRY: dict[tuple[str, str], SourceFn] = {}
 _SOURCE_RE = re.compile(r"(\w+)\.(\w+)\(([^)]*)\)")
 
 
+class CfSliceStatus(StrEnum):
+    """cf slice statuses a source selects on (slice 195 D1)."""
+
+    COMPLETE = "complete"
+    DEFERRED = "deferred"
+
+
+_EXCLUDED_STATUSES = frozenset({CfSliceStatus.COMPLETE, CfSliceStatus.DEFERRED})
+
+
+def _plan_arg(args: list[str]) -> str | None:
+    """The source's ``plan`` argument as a cf arch index, or None when absent.
+
+    Raises ValueError when the value is not all digits — a slice-plan name or
+    an unresolved ``{plan}`` placeholder would otherwise reach cf as garbage.
+    """
+    if not args:
+        return None
+    plan = args[0]
+    if not plan.isdigit():
+        raise ValueError(f"plan must be an architecture index, got {plan!r}")
+    return plan
+
+
+def _slice_item(entry: SliceEntry) -> dict[str, object]:
+    return {
+        "index": str(entry.index),
+        "name": entry.name,
+        "status": entry.status,
+        "design_file": entry.design_file or "",
+    }
+
+
 async def _cf_unfinished_slices(
     args: list[str],
     cf_client: ContextForgeClient,
     params: dict[str, object],
 ) -> list[dict[str, object]]:
-    """Return slices whose status is not 'complete'."""
-    slices = cf_client.list_slices()
-    return [
-        {
-            "index": str(entry.index),
-            "name": entry.name,
-            "status": entry.status,
-            "design_file": entry.design_file or "",
-        }
-        for entry in slices
-        if entry.status != "complete"
-    ]
+    """Return slices of the plan whose status is not 'complete'."""
+    slices = cf_client.list_slices(_plan_arg(args))
+    return [_slice_item(entry) for entry in slices if entry.status != CfSliceStatus.COMPLETE]
 
 
 SOURCE_REGISTRY[("cf", "unfinished_slices")] = _cf_unfinished_slices
