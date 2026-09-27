@@ -12,6 +12,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260927
 
+### Slice 924: Recover a Review the Model Reasoned Out but Never Emitted — Part C Added, Tasks Complete
+
+- **Design amended (`f3856b7e`):** Part C / D7 covers an empty final turn. `_require_final_content` raises `ProviderError` before the shipped recovery check runs, and that is what flagged 928 in the `slices-plan 900` run (glmflash, `finish_reason='stop', reasoning_chars=1022`, twice). The fix is a typed `EmptyFinalTurnError` whose telemetry rides the error. The agent drops the empty assistant history entry, and the same single recovery turn runs unless the budget was spent.
+- **Tasks:** `user/tasks/924-tasks.recover-a-review-the-model-reasoned-out-but-never-emitted.md`, 224 lines, ordered A → C → B. Part C reuses A's `budget_exhausted` and `recoveryTurn`.
+- **Found:** the always-on `Output budget` digest line changes seven snapshot fixtures (`clean_pass_artifact.md` plus six `383-*`). Task B.14 makes this a single sanctioned regeneration, and each file's diff must be exactly that one line.
+- **Next:** Phase 6 on 924, then rerun 928's design review.
+
 ### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Design Complete
 
 The design is at `user/slices/929-slice.serialize-concurrent-git-worktree-add-on-one-checkout.md`, and the validator passes. The slice plan entry now points to it.
