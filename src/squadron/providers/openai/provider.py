@@ -76,6 +76,7 @@ class OpenAICompatibleProvider:
             system_prompt=config.instructions,
             allowed_tools=config.allowed_tools,
             tools_suppressed_reason=config.tools_suppressed_reason,
+            max_output_tokens=config.max_output_tokens,
             cwd=config.cwd,
             tool_exclude_patterns=config.tool_exclude_patterns,
             max_tool_iterations=max_tool_iterations,

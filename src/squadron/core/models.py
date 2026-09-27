@@ -75,6 +75,8 @@ class AgentConfig(BaseModel):
     # not. Carried so the agent can stamp it into telemetry: an empty allowed_tools is
     # otherwise indistinguishable from a run that simply declared no tools.
     tools_suppressed_reason: str | None = None
+    # Per-request output budget; None sends no budget (slice 924 D4).
+    max_output_tokens: int | None = None
     # API agents: path patterns withheld from the tool jail, relative to cwd. Opaque to
     # every layer below the caller that sets it — the agent threads them to tool binding
     # without knowing why any pattern is present (slice 918, design D5). Empty means plain

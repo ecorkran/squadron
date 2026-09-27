@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import openai
+from openai import omit
 import pytest
 
 from squadron.core.models import AgentState, Message, MessageType
@@ -351,3 +352,47 @@ class TestToolUseGuidanceComposition:
         assert content.startswith("Review the diff.")
         assert TOOL_USE_HEADING in content
         assert "read_file" in content
+
+
+class TestOutputBudget:
+    """Slice 924 D4, D5: a configured budget rides every request; none sends omit."""
+
+    @staticmethod
+    def _client(*streams: AsyncMock) -> MagicMock:
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock(side_effect=list(streams))
+        client.close = AsyncMock()
+        return client
+
+    @pytest.mark.asyncio
+    async def test_budget_is_sent_on_every_turn_of_the_agentic_loop(self, tmp_path: Any) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        client = self._client(
+            _async_stream(tool_chunk(0, "c1", "read_file", '{"path": "a.txt"}')),
+            _async_stream(text_chunk("done")),
+        )
+        agent = OpenAICompatibleAgent(
+            name="bot",
+            client=client,
+            model=_MODEL,
+            system_prompt=None,
+            allowed_tools=["read_file"],
+            cwd=str(tmp_path),
+            max_output_tokens=4096,
+        )
+
+        await _collect(agent, _USER_MSG)
+
+        calls = client.chat.completions.create.call_args_list
+        assert len(calls) == 2
+        assert all(call.kwargs["max_completion_tokens"] == 4096 for call in calls)
+        assert all("max_tokens" not in call.kwargs for call in calls)
+
+    @pytest.mark.asyncio
+    async def test_no_budget_sends_omit(self) -> None:
+        client = self._client(_async_stream(text_chunk("hi")))
+        agent = _make_agent(client=client)
+
+        await _collect(agent, _USER_MSG)
+
+        assert client.chat.completions.create.call_args.kwargs["max_completion_tokens"] is omit

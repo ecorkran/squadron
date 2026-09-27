@@ -104,6 +104,17 @@ class TestCreateAgent:
         assert agent._cwd == config.cwd  # pyright: ignore[reportPrivateUsage]
 
     @pytest.mark.asyncio
+    async def test_threads_output_budget_into_agent(
+        self, provider: OpenAICompatibleProvider, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        config = AgentConfig(**{**_BASE_CONFIG, "max_output_tokens": 4096})
+        with patch("squadron.providers.openai.provider.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            agent = await provider.create_agent(config)
+        assert agent._max_output_tokens == 4096  # pyright: ignore[reportPrivateUsage]
+
+    @pytest.mark.asyncio
     async def test_resolves_loop_bounds_from_config_into_agent(
         self,
         provider: OpenAICompatibleProvider,

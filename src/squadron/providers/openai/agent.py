@@ -134,6 +134,7 @@ class OpenAICompatibleAgent:
         *,
         allowed_tools: list[str] | None = None,
         tools_suppressed_reason: str | None = None,
+        max_output_tokens: int | None = None,
         cwd: str | None = None,
         tool_exclude_patterns: Sequence[str] | None = None,
         max_tool_iterations: int | None = None,
@@ -147,6 +148,7 @@ class OpenAICompatibleAgent:
         self._history_chars = 0
         self._state = AgentState.idle
         self._cwd = cwd
+        self._max_output_tokens = max_output_tokens
         # Opaque to this agent: a sequence of path patterns to withhold from the tool jail,
         # threaded to ``materialize`` exactly as ``cwd`` is. The agent is a generic provider
         # and deliberately does not know why any pattern is here or what a review type is
@@ -302,6 +304,10 @@ class OpenAICompatibleAgent:
             stream=True,
             extra_body=extra_body,
             tools=cast(list[ChatCompletionToolUnionParam], tool_schemas) if tool_schemas else omit,
+            # D5: max_completion_tokens, never the deprecated max_tokens.
+            max_completion_tokens=(
+                self._max_output_tokens if self._max_output_tokens is not None else omit
+            ),
         )
         async for chunk in stream:
             # Read from every chunk, including choice-less ones — the usage chunk

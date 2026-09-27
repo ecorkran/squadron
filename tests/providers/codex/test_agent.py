@@ -226,3 +226,23 @@ class TestShutdown:
         mock_codex.__aexit__.assert_awaited_once()
         assert agent._codex is None
         assert agent._thread is None
+
+
+class TestOutputBudgetWarning:
+    """Slice 924 B2: Codex cannot apply a budget, and says so."""
+
+    def test_budget_logs_one_warning(
+        self, agent_config: AgentConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config = agent_config.model_copy(update={"max_output_tokens": 4096})
+        with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
+            CodexAgent(name="test-codex", config=config)
+        hits = [r for r in caplog.records if "cannot apply max_output_tokens=4096" in r.getMessage()]
+        assert len(hits) == 1
+
+    def test_no_budget_logs_nothing(
+        self, agent_config: AgentConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
+            CodexAgent(name="test-codex", config=agent_config)
+        assert not [r for r in caplog.records if "max_output_tokens" in r.getMessage()]

@@ -41,6 +41,12 @@ class CodexAgent:
         self._name = name
         self._config = config
         self._state = AgentState.idle
+        # Slice 924 B2: Codex sends no per-request budget; say so rather than drop it.
+        if config.max_output_tokens is not None:
+            _log.warning(
+                "Codex agent cannot apply max_output_tokens=%d; the backend default applies",
+                config.max_output_tokens,
+            )
         self._codex: object | None = None
         self._thread: object | None = None
 

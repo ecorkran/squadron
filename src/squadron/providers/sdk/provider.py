@@ -38,6 +38,13 @@ class ClaudeSDKProvider:
     async def create_agent(self, config: AgentConfig) -> ClaudeSDKAgent:
         """Build ``ClaudeAgentOptions`` from *config* and return agent."""
         kwargs: dict[str, object] = {}
+        # Slice 924 B2: the SDK agent sends no per-request budget, so say so rather
+        # than drop it silently. Warned here because the agent never sees the config.
+        if config.max_output_tokens is not None:
+            _log.warning(
+                "SDK agent cannot apply max_output_tokens=%d; the backend default applies",
+                config.max_output_tokens,
+            )
 
         # The preset form is the only way to get the CLI's default system
         # prompt: the SDK emits no --system-prompt flag for it, so the CLI

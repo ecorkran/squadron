@@ -336,3 +336,31 @@ class TestToolNameTranslation:
         opts = await self._build_options(provider, None)
 
         assert opts.allowed_tools == []
+
+
+class TestOutputBudgetWarning:
+    """Slice 924 B2: the SDK agent cannot apply a budget, and says so."""
+
+    async def _create(self, provider: ClaudeSDKProvider, config: AgentConfig) -> None:
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+    @pytest.mark.asyncio
+    async def test_budget_logs_one_warning(
+        self, provider: ClaudeSDKProvider, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config = AgentConfig(name="b", agent_type="sdk", provider="sdk", max_output_tokens=4096)
+        with caplog.at_level("WARNING", logger="squadron.providers.sdk.provider"):
+            await self._create(provider, config)
+        hits = [r for r in caplog.records if "cannot apply max_output_tokens=4096" in r.getMessage()]
+        assert len(hits) == 1
+
+    @pytest.mark.asyncio
+    async def test_no_budget_logs_nothing(
+        self, provider: ClaudeSDKProvider, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config = AgentConfig(name="b", agent_type="sdk", provider="sdk")
+        with caplog.at_level("WARNING", logger="squadron.providers.sdk.provider"):
+            await self._create(provider, config)
+        assert not [r for r in caplog.records if "max_output_tokens" in r.getMessage()]
