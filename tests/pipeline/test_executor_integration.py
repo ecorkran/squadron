@@ -239,11 +239,11 @@ class TestDesignBatchIntegration:
         }
 
         state_mgr = StateManager(runs_dir=tmp_path)
-        run_id = state_mgr.init_run("design-batch", {"plan": "my-plan"})
+        run_id = state_mgr.init_run("design-batch", {"plan": "900"})
 
         result = await execute_pipeline(
             definition,
-            {"plan": "my-plan"},
+            {"plan": "900"},
             resolver=MagicMock(),
             cf_client=cf_client,
             cwd=str(tmp_path),

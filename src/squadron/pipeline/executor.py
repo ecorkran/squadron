@@ -247,6 +247,17 @@ class LoopCondition(StrEnum):
             case LoopCondition.ACTION_SUCCESS:
                 raise ValueError(f"{self.value} is not a review verdict threshold")
 
+    @property
+    def minimum_verdict(self) -> Verdict:
+        """The lowest verdict that meets this threshold, for messages."""
+        match self:
+            case LoopCondition.REVIEW_PASS:
+                return Verdict.PASS
+            case LoopCondition.REVIEW_CONCERNS_OR_BETTER:
+                return Verdict.CONCERNS
+            case LoopCondition.ACTION_SUCCESS:
+                raise ValueError(f"{self.value} is not a review verdict threshold")
+
 
 def evaluate_condition(
     condition: LoopCondition,

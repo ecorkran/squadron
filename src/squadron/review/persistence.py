@@ -81,6 +81,21 @@ class SaveTargetProtocol(Protocol):
     def heading_label(self) -> str | None: ...
 
 
+def slice_name_for(design_file: str | None, name: str) -> str:
+    """A slice's name segment in artifact filenames: the design file's stem
+    after its ``{index}-slice.`` prefix, else the slugged display name."""
+    if design_file:
+        stem = Path(design_file).stem
+        return stem.split(".", 1)[1] if "." in stem else stem
+    return name.lower().replace(" ", "-")
+
+
+def slice_review_stem(index: int, review_type: str, slice_name: str) -> str:
+    """A slice review artifact's filename without extension — the one
+    definition both the save path and readers of saved reviews use."""
+    return f"{index}-review.{review_type}.{slice_name}"
+
+
 def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:
     """Resolve a slice number to file paths via Context-Forge.
 
@@ -98,11 +113,7 @@ def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:
         raise ValueError(f"No slice with index {index} in the current slice plan")
 
     design_file = match.design_file
-    if design_file:
-        stem = Path(design_file).stem
-        slice_name = stem.split(".", 1)[1] if "." in stem else stem
-    else:
-        slice_name = match.name.lower().replace(" ", "-")
+    slice_name = slice_name_for(design_file, match.name)
 
     tasks = cf_client.list_tasks()  # type: ignore[union-attr]
     task_match = next((t for t in tasks if t.index == index), None)
@@ -795,7 +806,7 @@ def save_review_result(
     if target is not None:
         base = target.filename_stem(review_type)
     elif slice_info is not None:
-        base = f"{slice_info['index']}-review.{review_type}.{slice_info['slice_name']}"
+        base = slice_review_stem(slice_info["index"], review_type, slice_info["slice_name"])
     else:
         # Nothing to name the artifact under. Raising beats writing a file
         # called "None-review.code.None": the caller decides whether that is

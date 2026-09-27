@@ -12,8 +12,13 @@ from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
+from squadron.documents.frontmatter import read_frontmatter
+from squadron.review.models import Verdict
+from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_review_stem
+
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
+    from squadron.pipeline.executor import LoopCondition
 
 SourceFn = Callable[
     [list[str], "ContextForgeClient", dict[str, object]],
@@ -82,8 +87,72 @@ async def _cf_undesigned_slices(
     ]
 
 
+def _accept_arg(args: list[str]) -> LoopCondition:
+    """The ``accept`` threshold: a verdict-bearing LoopCondition value."""
+    from squadron.pipeline.executor import LoopCondition  # executor imports this module
+
+    if len(args) < 2:
+        raise ValueError("untasked_slices requires (plan, accept) arguments")
+    try:
+        accept = LoopCondition(args[1])
+    except ValueError:
+        valid = [c.value for c in LoopCondition if c is not LoopCondition.ACTION_SUCCESS]
+        raise ValueError(f"Invalid accept threshold {args[1]!r}. Valid: {valid}") from None
+    if accept is LoopCondition.ACTION_SUCCESS:
+        raise ValueError(f"{accept.value} is not a review verdict threshold")
+    return accept
+
+
+def _design_review_flag(entry: SliceEntry, accept: LoopCondition) -> str | None:
+    """Why *entry*'s design review blocks task breakdown, or None if it doesn't.
+
+    The path is computed exactly as the save path names it — never searched —
+    so an archived predecessor is never read (D1).
+    """
+    slice_name = slice_name_for(entry.design_file, entry.name)
+    path = REVIEWS_DIR / f"{slice_review_stem(entry.index, 'slice', slice_name)}.md"
+    if not path.is_file():
+        return "no design review found"
+    frontmatter = read_frontmatter(path)
+    raw_verdict = frontmatter.get("verdict") if frontmatter is not None else None
+    if raw_verdict not in {v.value for v in Verdict}:
+        return "design review verdict unreadable"
+    verdict = Verdict(raw_verdict)
+    if not accept.met_by_verdict(verdict):
+        return f"design review below threshold ({verdict} < {accept.minimum_verdict})"
+    return None
+
+
+async def _cf_untasked_slices(
+    args: list[str],
+    cf_client: ContextForgeClient,
+    params: dict[str, object],
+) -> list[dict[str, object]]:
+    """Return open, designed slices of the plan with no task file.
+
+    A slice whose design review is missing, unreadable, or below *accept*
+    carries ``flag_reason``; ``each`` records it FLAGGED without running it.
+    """
+    plan = _plan_arg(args)
+    accept = _accept_arg(args)
+    tasked = {task.index for task in cf_client.list_tasks(plan)}
+    items: list[dict[str, object]] = []
+    for entry in cf_client.list_slices(plan):
+        if entry.status in _EXCLUDED_STATUSES or not entry.design_file:
+            continue
+        if entry.index in tasked:
+            continue
+        item = _slice_item(entry)
+        flag_reason = _design_review_flag(entry, accept)
+        if flag_reason is not None:
+            item["flag_reason"] = flag_reason
+        items.append(item)
+    return items
+
+
 SOURCE_REGISTRY[("cf", "unfinished_slices")] = _cf_unfinished_slices
 SOURCE_REGISTRY[("cf", "undesigned_slices")] = _cf_undesigned_slices
+SOURCE_REGISTRY[("cf", "untasked_slices")] = _cf_untasked_slices
 
 
 def parse_source(

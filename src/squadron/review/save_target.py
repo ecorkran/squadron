@@ -31,7 +31,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from squadron.review.persistence import SliceInfo, resolve_reviewed_sha
+from squadron.review.persistence import SliceInfo, resolve_reviewed_sha, slice_review_stem
 from squadron.review.rules import RulesSource
 
 
@@ -134,7 +134,7 @@ class SliceTarget:
         return self._info
 
     def filename_stem(self, review_type: str) -> str:
-        return f"{self._info['index']}-review.{review_type}.{self._info['slice_name']}"
+        return slice_review_stem(self._info["index"], review_type, self._info["slice_name"])
 
     def frontmatter_fields(self) -> dict[str, object]:
         return {
