@@ -91,13 +91,16 @@ steps:
 **Purpose:** Run a Context Forge phase — build context, dispatch to the LLM, optionally review the output, and commit the result.
 
 **Expansion sequence:**
-`cf-op(set_phase)` → `cf-op(set_slice)` → `cf-op(build_context)` → `dispatch` → [`review` → `checkpoint`] → `commit`
+[`cf-op(set_arch)`] → `cf-op(set_slice)` → `cf-op(set_phase)` → `cf-op(build_context)` → `dispatch` → [`review` → `checkpoint`] → `commit`
+
+The cf calls follow Context Forge's switching rule: arch (which switches the initiative and sets its slice plan), then slice (which must be in that plan), then phase, then build. `set_arch` runs only when the step has a `plan:` key.
 
 **Fields:**
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `phase` | int | yes | Context Forge phase number |
+| `plan` | string | no | Architecture index of the slice plan to work in (e.g. `"900"`). Switches cf to the arch that owns that plan (read from the plan file's `parent:`) before setting the slice. Never runs `cf set plan` |
 | `model` | string | no | Model alias for the dispatch action |
 | `review` | string or dict | no | Review template name, or `{template, model}` dict |
 | `checkpoint` | string | no | When to pause: `always`, `on-concerns`, `on-fail`, `never` (default: `never`) |
@@ -207,6 +210,7 @@ steps:
 |---|---|---|---|
 | `prompt` | string | no | Prompt text. When absent, falls back to the most recent `build_context` output (same behavior as the dispatch action inside phase steps) |
 | `model` | string | no | Model alias for the dispatch |
+| `feedback` | string | no | `review` — revise against the most recent review in scope. The prompt becomes the step's `prompt` (if any), then that review's findings, then `Revise `<file>` in place; do not create a new file.` naming the file the review read. Takes precedence over a prior `build_context` output, which inside a batch item is the original "create a design" prompt. With no review in scope the step fails: `feedback: review but no prior review in scope` |
 
 **Example:**
 
@@ -214,6 +218,12 @@ steps:
 - dispatch:
     prompt: "Address any findings from the prior review."
     model: sonnet
+```
+
+A revise round inside a loop:
+
+```yaml
+- dispatch: { name: revise, model: "{model}", feedback: review }
 ```
 
 ---
@@ -284,13 +294,17 @@ Named steps must appear **earlier** than the `gate` step. At the top level the l
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `max` | int | yes | The bound — maximum number of iterations. Always explicit; there is no unbounded form |
+| `max` | int | yes | The bound — maximum number of iterations. Always explicit; there is no unbounded form. May be a `{param}` placeholder; the resolved value must be a positive integer |
 | `until` | string | no | Exit condition, evaluated after each iteration completes: `review.pass`, `review.concerns_or_better`, `action.success` |
-| `on_exhaust` | string | no | What happens if `max` is reached without `until` passing: `fail` (mark the step FAILED, default), `checkpoint` (pause for a human), `skip` |
+| `accept_if` | string | no | A second, lower threshold (same values as `until`, except `action.success`), applied only when `max` is reached without `until` passing. If the final round's results meet it, the step completes and is marked *accepted*; otherwise `on_exhaust` applies. Requires `until` |
+| `skip_if_met` | bool | no | Before round 1, check `until` against the most recent verdict already in scope (e.g. the review a preceding phase step ran). If it passes, the loop runs zero rounds. Requires `until`. Default `false` |
+| `on_exhaust` | string | no | What happens if `max` is reached without `until` (or `accept_if`) passing: `fail` (mark the step FAILED, default), `checkpoint` (pause for a human), `skip` |
 | `commit_each_iteration` | bool | no | Commit after each iteration's body completes, before `until:` is evaluated. Default `false`. Rejected at validation time if the body already commits — see [`commit_each_iteration` and per-round history](#commit_each_iteration-and-per-round-history) |
-| `steps` | list | yes | Body — an ordered list of step definitions, using any registered step type except `loop` itself |
+| `steps` | list | yes | Body — an ordered list of step definitions, using any registered step type except `loop` and `each` |
 
-**Post-test semantics:** `until` is evaluated only *after* an iteration's body finishes, against that iteration's own results — never before the first iteration runs. A `loop` cannot use a pre-loop check to skip iteration 1.
+`max`, `until` and `accept_if` may all come from pipeline params (`"{max-revisions}"`, `"{pass-threshold}"`); load-time validation skips placeholder values and checks them once they resolve.
+
+**Post-test semantics:** `until` is evaluated only *after* an iteration's body finishes, against that iteration's own results. The one exception is `skip_if_met`, which checks the verdict already in scope before round 1 — so a phase step's own review can settle an artifact without a wasted revise round.
 
 **Example:**
 
@@ -354,27 +368,42 @@ Prefer scalar shorthand:
 |---|---|---|---|
 | `source` | string | yes | Collection source expression |
 | `as` | string | yes | Loop variable name |
-| `steps` | list | yes | Inner step definitions using `{variable.field}` placeholders |
+| `steps` | list | yes | Inner step definitions using `{variable.field}` placeholders. Any step type except `each`; a `loop:` step runs its rounds per item |
+| `on_item_failure` | string | no | `stop` (default) — a failed item fails the `each` step, as before. `continue` — a failed item is recorded as FLAGGED with its error and the next item runs; the `each` step completes |
 
-**Source options:**
+**Source options:** each `plan` argument is an architecture index (`"900"`), passed to cf as `archIndex` so the source reads that plan without changing cf state. Anything other than digits fails the step: `plan must be an architecture index, got …`.
 
 | Expression | Returns |
 |---|---|
-| `cf.unfinished_slices("{plan}")` | All unfinished slices in a Context Forge plan — the only registered source |
+| `cf.unfinished_slices("{plan}")` | Slices in the plan whose status is not `complete` |
+| `cf.undesigned_slices("{plan}")` | Slices that are not `complete` or `deferred` and have no design file |
+| `cf.untasked_slices("{plan}", "<threshold>")` | Slices that are not `complete` or `deferred`, have a design file, and have no task file. `<threshold>` is `review.pass` or `review.concerns_or_better`. A slice whose design review (`{index}-review.slice.{name}.md`) is missing, has no readable verdict, or falls below the threshold is returned *pre-flagged* |
 
-Item fields are accessed as dotted references: `{slice.index}`, `{slice.title}`, etc.
+Item fields are accessed as dotted references: `{slice.index}`, `{slice.name}`, `{slice.status}`, `{slice.design_file}`.
+
+**Per-item behavior:**
+
+- **Isolation.** Each item runs in its own scope: it sees the outputs of steps before the `each` plus its own inner steps, and nothing from other items. Item 2's revise dispatch never reads item 1's review.
+- **Pre-flagged items.** An item carrying `flag_reason` (e.g. `no design review found`) is recorded as FLAGGED with that reason and its body never runs, under either policy.
+- **Pauses.** A checkpoint pause inside an item stops the run under either policy, so `sq run --resume` can pick it up. Batch pipelines use `checkpoint: never`.
+- Every flagged item is logged at WARNING with its reason.
+
+**Batch report.** Every `each` step writes `{run_id}.{step_name}.report.md` next to the run state file (`~/.config/squadron/runs/` by default) — on success, on a stop, and when every item flagged. Its frontmatter carries `docType: batch-report`, `pipeline`, `runId`, `plan` (when the source had one) and the `passed` / `accepted` / `flagged` counts; the body lists flagged items first, each with its reason, last verdict and review file. An item is **FLAGGED** if it was pre-flagged, failed, or paused; **ACCEPTED** if a loop in it exhausted but met `accept_if`; otherwise **PASSED**. `sq run` prints the counts, the flagged items and the report path at the end of the run.
 
 **Example:**
 
 ```yaml
 - each:
-    source: cf.unfinished_slices("{plan}")
+    name: slices
+    source: cf.undesigned_slices("{plan}")
     as: slice
+    on_item_failure: continue
     steps:
       - design:
           phase: 4
+          plan: "{plan}"
           slice: "{slice.index}"
-          model: opus
+          model: "{model}"
 ```
 
 ---
@@ -447,7 +476,7 @@ Each loop iteration regenerates the artifact from the phase prompt. `revision_nu
 
 ### `each` fan-out caveat
 
-If you fan a judge-gated cycle out over multiple slices with `each`, the only registered source is `cf.unfinished_slices("{plan}")` — do not assume other collection sources exist.
+If you fan a judge-gated cycle out over multiple slices with `each`, the registered sources are `cf.unfinished_slices`, `cf.undesigned_slices` and `cf.untasked_slices` (see [`each`](#each)) — do not assume other collection sources exist. `design-plan` and `tasks-plan` are worked examples of a loop inside `each`.
 
 ### Alternative: `on_exhaust: fail`
 
@@ -676,6 +705,46 @@ The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the prima
 > **Note on naming:** The architecture document used placeholder names (`slice-lifecycle`, `review-only`, `implementation-only`). The shipped names (`slice`, `review`, `implement`) are the canonical user-facing names.
 
 ---
+
+## Plan Batch Pipelines
+
+`design-plan` and `tasks-plan` walk a whole slice plan unattended, flag what they can't finish, and end with one [batch report](#each) for the PM.
+
+```bash
+sq run design-plan 900                     # design + review every undesigned slice in plan 900
+sq run tasks-plan 900                      # break down every designed slice whose design review is acceptable
+sq run design-plan 900 -p max-revisions=2 -p review-model=minimax
+```
+
+Per slice, `design-plan`:
+
+1. switches cf to plan 900's arch, then the slice, then phase 4 (see [Phase steps](#phase-steps-design-tasks-implement));
+2. writes the design and reviews it, committing both;
+3. stops there if that review already meets `pass-threshold` (`skip_if_met`) — **PASSED**;
+4. otherwise runs up to `max-revisions` revise rounds: a `feedback: review` dispatch that revises the design in place against the findings, then a fresh review, committing each round;
+5. on a passing round — **PASSED**; if the rounds run out but the last review meets `accept-threshold` — **ACCEPTED**; otherwise — **FLAGGED**, and the next slice starts.
+
+A design step that writes no design, a provider failure, or any other step failure also flags the slice and moves on.
+
+`tasks-plan` is the same shape over `cf.untasked_slices`, with the `tasks` phase (5) and `tasks` review template. A slice whose design review is missing or below `accept-threshold` is flagged without running.
+
+| Param | Default | Meaning |
+|---|---|---|
+| `plan` | required | Architecture index of the slice plan |
+| `model` | `sonnet` | Design / tasks and revise model |
+| `review-model` | `minimax` | Review model |
+| `max-revisions` | `3` | Revise rounds **after** the first design, so a slice gets at most `max-revisions + 1` reviews |
+| `pass-threshold` | `review.pass` | Stops revising |
+| `accept-threshold` | `review.concerns_or_better` | Accepts a slice whose rounds ran out (and gates `tasks-plan` selection) |
+
+**Things to know before running one:**
+
+- **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan, the last slice, and the batch's phase. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
+- **Commits land on the current branch.** Planning artifacts belong on the integration target; run the batch there.
+- **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `design-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
+- **Run from a terminal.** `sq run` refuses inside a Claude Code session (#144), and these pipelines dispatch through an SDK session.
+- **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.
+- `--prompt-only` doesn't render `each` or `loop:` steps yet (#145).
 
 ## Writing a Custom Pipeline
 
