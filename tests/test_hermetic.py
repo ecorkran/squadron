@@ -10,9 +10,17 @@ import pytest
 
 from tests import _hermetic
 
+_homes_seen: list[Path] = []
 
-def test_home_is_per_test(tmp_path: Path) -> None:
-    assert Path.home().is_relative_to(tmp_path)
+
+@pytest.mark.parametrize("run", [1, 2])
+def test_home_is_fresh_per_test(run: int, tmp_path_factory: pytest.TempPathFactory) -> None:
+    home = Path.home()
+    assert home != _hermetic.REAL_HOME
+    assert home.is_relative_to(tmp_path_factory.getbasetemp())
+    assert list(home.iterdir()) == []
+    assert home not in _homes_seen
+    _homes_seen.append(home)
 
 
 def test_git_sees_pinned_config() -> None:

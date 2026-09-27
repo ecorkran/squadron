@@ -30,10 +30,15 @@ from tests.codehost.fake_runner import FakeProcessRunner
 
 CHECKOUT_CWD = "/repo"
 _LSTART = "Mon Sep 14 06:27:18 2026"
-#: The epoch seconds ``_process_start_time`` derives from ``_LSTART``. Parsed rather
-#: than hardcoded: that parse is local-time, so a literal is only correct in the zone
-#: it was written in and a lock written with it reads as a dead owner anywhere else.
-_LSTART_EPOCH = datetime.strptime(_LSTART, "%a %b %d %H:%M:%S %Y").timestamp()
+
+
+def _lstart_epoch() -> float:
+    """The epoch seconds ``_process_start_time`` derives from ``_LSTART``.
+
+    Parsed rather than hardcoded, and at call time rather than import: the parse is
+    local-time, so it must run under the same ``TZ`` the code under test sees.
+    """
+    return datetime.strptime(_LSTART, "%a %b %d %H:%M:%S %Y").timestamp()
 
 
 def _record(number: int = 83) -> PullRequestRecord:
@@ -133,7 +138,7 @@ def test_sweep_orphans_leaves_live_owner_alone(tmp_path: Path) -> None:
     root = tmp_path / "worktrees"
     entry = root / "github.com-acme-widgets-83-run1"
     my_pid = os.getpid()
-    my_start = _LSTART_EPOCH
+    my_start = _lstart_epoch()
     _write_lock(entry, pid=my_pid, started_at=my_start)
 
     runner = FakeProcessRunner(
@@ -156,7 +161,7 @@ def test_sweep_orphans_removes_dead_owner_with_one_warning(
     root = tmp_path / "worktrees"
     entry = root / "github.com-acme-widgets-83-run1"
     dead_pid = 999999  # ps returns nothing for a pid that isn't running
-    _write_lock(entry, pid=dead_pid, started_at=_LSTART_EPOCH)
+    _write_lock(entry, pid=dead_pid, started_at=_lstart_epoch())
 
     runner = FakeProcessRunner(
         [
@@ -184,7 +189,7 @@ def test_sweep_leaves_unlocked_worktree_with_a_live_claim_alone(tmp_path: Path) 
     entry.mkdir(parents=True)  # created by 'git worktree add', lock not yet written
     my_pid = os.getpid()
     (root / "github.com-acme-widgets-83-run1.claim").write_text(
-        json.dumps({"pid": my_pid, "started_at": _LSTART_EPOCH})
+        json.dumps({"pid": my_pid, "started_at": _lstart_epoch()})
     )
 
     runner = FakeProcessRunner(
@@ -206,7 +211,7 @@ def test_sweep_removes_unlocked_worktree_whose_claim_owner_is_gone(tmp_path: Pat
     entry.mkdir(parents=True)
     dead_pid = 999999
     (root / "github.com-acme-widgets-83-run1.claim").write_text(
-        json.dumps({"pid": dead_pid, "started_at": _LSTART_EPOCH})
+        json.dumps({"pid": dead_pid, "started_at": _lstart_epoch()})
     )
 
     runner = FakeProcessRunner(

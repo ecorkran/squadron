@@ -25,7 +25,7 @@ def hermetic_git_config(tmp_path_factory: pytest.TempPathFactory) -> Path:
 @pytest.fixture(autouse=True)
 def hermetic_environment(
     request: pytest.FixtureRequest,
-    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
     monkeypatch: pytest.MonkeyPatch,
     hermetic_git_config: Path,
 ) -> None:
@@ -38,8 +38,9 @@ def hermetic_environment(
     if request.node.get_closest_marker("host_cf"):
         home = _hermetic.REAL_HOME
     else:
-        home = tmp_path / "home"
-        home.mkdir()
+        # A fresh directory beside tmp_path, not inside it: tests that list
+        # tmp_path must not find a home directory there.
+        home = tmp_path_factory.mktemp("home")
     monkeypatch.setenv("HOME", str(home))
 
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(hermetic_git_config))
