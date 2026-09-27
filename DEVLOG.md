@@ -12,6 +12,22 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260927
 
+### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Tasks Complete
+
+- **Task file:** `user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md`, 7 parts (A–G), 570 lines.
+- **Fixes:** [#133](https://github.com/ecorkran/squadron/issues/133) — two concurrent `sq review pr`
+  runs on one checkout can hit `fatal: failed to read .git/worktrees/<sibling>/commondir`. Task
+  order follows the design's own Development Approach: measure the pre-fix failure rate (A) → write
+  the deterministic no-overlap test and confirm it fails on today's code (B) → build
+  `metadata_lock.py` and its unit + holder-death tests (C) → wrap the four call sites, fix
+  `review_pr.py`'s `WorktreeError` traceback leak, per-site timeout tests (D) → turn the load test
+  into `ROUNDS` repeats sized off the measured baseline (E) → docstring (F) → full verification (G).
+- **One design-doc inconsistency resolved explicitly, not silently:** the poll-interval constant is
+  named `_POLL_SECONDS` in the design's component table but `_METADATA_LOCK_POLL_SECONDS` in D3's
+  prose. Task file picks the latter (D3 is the more specific source) and says so, rather than
+  leaving it for whoever implements to guess.
+- **Next:** Phase 6 implementation, starting with Task A.1 (baseline measurement).
+
 ### Slice 928: Codex Parity for Skill Packs and Provider Access — Tasks Complete
 
 - **Task file:** `user/tasks/928-tasks.codex-parity-for-skill-packs-and-provider-access.md`, 13 tasks, 415 lines.
