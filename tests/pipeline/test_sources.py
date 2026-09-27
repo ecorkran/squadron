@@ -130,3 +130,34 @@ class TestUnfinishedSlices:
 
         with pytest.raises(ValueError, match="plan must be an architecture index, got"):
             await _cf_unfinished_slices([plan], StubCfClient(), {})
+
+
+class TestUndesignedSlices:
+    @pytest.mark.asyncio
+    async def test_selects_open_slices_without_a_design(self) -> None:
+        from squadron.pipeline.sources import _cf_undesigned_slices
+
+        client = StubCfClient()
+        items = await _cf_undesigned_slices(["900"], client, {})
+
+        # 907 is deferred, 914 is designed, 901 is complete.
+        assert _indices(items) == ["923", "924", "928", "929"]
+        assert client.calls == [["list", "slices", "900", "--json"]]
+
+    @pytest.mark.asyncio
+    async def test_item_shape(self) -> None:
+        from squadron.pipeline.sources import _cf_undesigned_slices
+
+        items = await _cf_undesigned_slices(["900"], StubCfClient(), {})
+
+        assert items[0] == {
+            "index": "923",
+            "name": "Test Suite Machine-State Isolation",
+            "status": "not_started",
+            "design_file": "",
+        }
+
+    def test_registered(self) -> None:
+        from squadron.pipeline.sources import parse_source
+
+        assert parse_source('cf.undesigned_slices("900")') == ("cf", "undesigned_slices", ["900"])

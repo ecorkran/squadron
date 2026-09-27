@@ -68,7 +68,22 @@ async def _cf_unfinished_slices(
     return [_slice_item(entry) for entry in slices if entry.status != CfSliceStatus.COMPLETE]
 
 
+async def _cf_undesigned_slices(
+    args: list[str],
+    cf_client: ContextForgeClient,
+    params: dict[str, object],
+) -> list[dict[str, object]]:
+    """Return open slices of the plan that have no design file yet."""
+    slices = cf_client.list_slices(_plan_arg(args))
+    return [
+        _slice_item(entry)
+        for entry in slices
+        if entry.status not in _EXCLUDED_STATUSES and not entry.design_file
+    ]
+
+
 SOURCE_REGISTRY[("cf", "unfinished_slices")] = _cf_unfinished_slices
+SOURCE_REGISTRY[("cf", "undesigned_slices")] = _cf_undesigned_slices
 
 
 def parse_source(
