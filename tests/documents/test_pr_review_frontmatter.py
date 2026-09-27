@@ -140,6 +140,7 @@ def _skip_unless_this_checkout_is_the_registered_root() -> int:
     return files_checked
 
 
+@pytest.mark.host_cf  # real `cf validate` resolves this checkout via cf's project registry
 class TestPrShapedFrontmatterValidates:
     def test_a_pr_artifact_adds_one_validated_file_with_no_findings(self) -> None:
         """D7's probe, encoded: the count must *rise*, not merely not-fall.
