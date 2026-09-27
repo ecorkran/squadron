@@ -95,7 +95,7 @@ Verdict stands at **CONCERNS**. Four findings addressed in the design, one accep
 
 ### F001 — fixed
 
-Accurate. The 180 slice plan authorizes engine changes for 194/195, and the design didn't say so. Added a paragraph under Architecture citing that authorization and the 194 precedent. The 180 architecture doc is not edited here.
+Accurate. The 180 slice plan authorizes engine changes for 194/195, and the design didn't say so. Added a paragraph under Architecture citing that authorization and the 194 precedent. The 180 architecture doc's scope statement and Out of Scope list now name the 194/195 exception.
 
 ### F002 — fixed (evidence recorded; the global scope stays)
 

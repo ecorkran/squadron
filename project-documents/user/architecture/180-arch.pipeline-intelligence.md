@@ -5,7 +5,7 @@ project: squadron
 archIndex: 180
 component: pipeline-intelligence
 dateCreated: 20260327
-dateUpdated: 20260406
+dateUpdated: 20260926
 status: in_progress
 ---
 
@@ -37,7 +37,7 @@ Every capability in this initiative plugs into extension points defined in 140:
 | Conversation persistence | `persistence` field on steps |
 | Finding matching | Structured findings JSON from review action |
 
-No 140 code is modified. 180 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes.
+180 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes. The exception is the batch-pipeline slices (194, 195). They extend 140's engine and grammar directly with the `loop:` step, per-item `each` isolation, loop thresholds, and review feedback on dispatch, so that each batch phase is a YAML file rather than an engine change.
 
 ---
 
@@ -699,7 +699,7 @@ Everything. Specifically:
 
 ### Out of Scope
 
-- Changes to 140's pipeline grammar (only registration of new strategies/behaviors)
+- Changes to 140's pipeline grammar beyond the general batch-pipeline pieces added by 194 and 195 (otherwise only registration of new strategies/behaviors)
 - Changes to the review system's core models (builds on existing `ReviewFinding`)
 - Multi-agent communication topology (that's initiative 200)
 - GUI for convergence visualization (useful but separate)

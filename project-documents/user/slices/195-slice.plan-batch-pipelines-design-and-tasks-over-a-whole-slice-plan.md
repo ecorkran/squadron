@@ -88,7 +88,7 @@ Sources: issue #136 and its Phase 5 addendum comment, and issue #139.
 
 ## Architecture
 
-The 180 architecture says 140 code is not modified and grammar changes are out of scope. The 180 slice plan overrides that for 194 and 195, whose entries call for general engine pieces so each batch phase is a YAML file. 194 already added `loop:` to the grammar. This slice changes the executor, the step types and the actions directly, and adds grammar keys, under that same authorization.
+The 180 architecture otherwise keeps 140's code and grammar unchanged, but it makes an exception for 194 and 195: general batch-pipeline engine pieces, so that each batch phase is a YAML file. 194 added `loop:` under that exception. This slice changes the executor, the step types and the actions directly, and adds grammar keys, under the same exception.
 
 ### Component Structure
 
