@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Importing squadron as a library no longer loads `.env` from the current directory or resolves home-directory paths at import time. Running `sq` still loads `.env` from the current directory (#47)
+
+### Fixed
+- The test suite no longer passes or fails based on the developer's machine: user config, git config, timezone, terminal width, credentials and `PATH` are pinned per test, and a new CI job runs the suite under a deliberately hostile environment (#47)
+
 ## [0.14.0] - 20260926
 
 ### Changed

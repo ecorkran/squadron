@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/923-slice.test-suite-machine-state-i
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 projectState: Design complete and reviewed (verdict CONCERNS, resolved). No code changes yet.
-status: not_started
+status: in_progress
 dateCreated: 20260926
 dateUpdated: 20260926
 ---
@@ -70,18 +70,18 @@ merges.
 
 ### Task A.1 — Record the pre-change baseline
 
-- [ ] Effort: 1/5
-- [ ] Run `uv run pytest -q 2>&1 | tail -1` on the current tree (before any
+- [x] Effort: 1/5
+- [x] Run `uv run pytest -q 2>&1 | tail -1` on the current tree (before any
       change in this slice) and record the passed/skipped/failed counts.
-- [ ] Write the counts into a scratch note (not committed) — later tasks in
+- [x] Write the counts into a scratch note (not committed) — later tasks in
       this file compare against this baseline per the design's Behavior
       Preserved requirement: passed/skipped counts must not fall, only rise
       via accidental-pass fixes.
 
 ### Task A.2 — Write `scripts/test-hostile-env`
 
-- [ ] Effort: 4/5
-- [ ] Create `scripts/test-hostile-env`, a bash script per design D9,
+- [x] Effort: 4/5
+- [x] Create `scripts/test-hostile-env`, a bash script per design D9,
       taking an optional `ref` argument (default `HEAD`):
       1. `set -euo pipefail`.
       2. `git clone --no-local` the repo into a fresh temp dir, then
@@ -109,26 +109,26 @@ merges.
          exit non-zero.
       9. Run `pytest -m "not host_cf"`. Print passed/skipped/failed counts
          and the deselected `host_cf` count. Exit non-zero on any failure.
-- [ ] Every setup step (clone, checkout, `uv sync --frozen`, both
+- [x] Every setup step (clone, checkout, `uv sync --frozen`, both
       preconditions) prints a labeled `hostile-env: <step> failed` line on
       stderr before exiting non-zero on failure — per the design's F004
       review fix, no step may fail silently into a half-built tree.
-- [ ] Script is executable (`chmod +x`) and has no dependency on the
+- [x] Script is executable (`chmod +x`) and has no dependency on the
       invoking shell's existing `HOME` or `PATH` beyond what it explicitly
       captures in step 5.
 
 ### Task A.3 — Negative control run
 
-- [ ] Effort: 1/5
-- [ ] Identify the pre-slice parent commit (the commit immediately before
+- [x] Effort: 1/5
+- [x] Identify the pre-slice parent commit (the commit immediately before
       Task A.2's commit lands).
-- [ ] Run `scripts/test-hostile-env <pre-slice-sha>`.
-- [ ] Confirm both preconditions pass (cf hidden, hostile config read back)
+- [x] Run `scripts/test-hostile-env <pre-slice-sha>`.
+- [x] Confirm both preconditions pass (cf hidden, hostile config read back)
       and the run then reports a non-zero failure count — this is the #47
       evidence that was never completed before.
-- [ ] Record the exact failure count and a one-line summary of what failed
+- [x] Record the exact failure count and a one-line summary of what failed
       in `DEVLOG.md` under a new entry for this slice.
-- [ ] Commit `scripts/test-hostile-env` and the DEVLOG entry together.
+- [x] Commit `scripts/test-hostile-env` and the DEVLOG entry together.
 
 ---
 
@@ -136,8 +136,8 @@ merges.
 
 ### Task B.1 — Convert import-time home paths to call-time functions
 
-- [ ] Effort: 4/5
-- [ ] For each of the 19 sites listed in the design's D1 section
+- [x] Effort: 4/5
+- [x] For each of the 19 sites listed in the design's D1 section
       (`cli/commands/doctor_checks.py:32`, `cli/commands/skills.py:23`,
       `cli/commands/summary_instructions.py:25`, `client/http.py:12`,
       `codehost/github_config.py:24`, `events/manifest.py:29`,
@@ -150,35 +150,35 @@ merges.
       `skills/resolver.py:11`), convert the module-level constant into a
       private zero-argument function that resolves `Path.home()` when
       called (e.g. `_DEFAULT_RUNS_DIR` → `_default_runs_dir()`).
-- [ ] Where the constant was used as a default parameter value, change the
+- [x] Where the constant was used as a default parameter value, change the
       parameter to `Path | None = None` and resolve the function call in
       the body instead.
-- [ ] Update every in-module and cross-module caller of each renamed
+- [x] Update every in-module and cross-module caller of each renamed
       constant to call the function instead.
-- [ ] The resolved path in production is unchanged for all 19 — this is a
+- [x] The resolved path in production is unchanged for all 19 — this is a
       mechanical rename, not a behavior change. Confirm by inspection for
       each site (no test yet — Task B.3 covers verification).
-- [ ] Do not touch `_config_dir()`, `models_toml_path()`,
+- [x] Do not touch `_config_dir()`, `models_toml_path()`,
       `worktree.py:102`, or `reviews_dir.py:73` — these already resolve at
       call time per the design.
 
 ### Task B.2 — Move `.env` loading into the CLI callback
 
-- [ ] Effort: 2/5
-- [ ] In [src/squadron/cli/app.py](src/squadron/cli/app.py), remove the
+- [x] Effort: 2/5
+- [x] In [src/squadron/cli/app.py](src/squadron/cli/app.py), remove the
       module-level `load_dotenv(dotenv_path=Path.cwd() / ".env")` call
       (line 41).
-- [ ] Add a `_load_env_file()` function that performs the same
+- [x] Add a `_load_env_file()` function that performs the same
       `load_dotenv` call, and invoke it from the root Typer
       `@app.callback` function body (not at import time).
-- [ ] Confirm `sq` still loads `.env` from the current working directory
+- [x] Confirm `sq` still loads `.env` from the current working directory
       when run normally — this is the one behavior this task must not
       change.
 
 ### Task B.3 — Retarget the ~44 existing test patch references
 
-- [ ] Effort: 3/5
-- [ ] Search all 13 test files that patch the 19 renamed constants by name
+- [x] Effort: 3/5
+- [x] Search all 13 test files that patch the 19 renamed constants by name
       (per the design's D1 count: ~44 references). For every reference,
       switch the patch target to the new function name (e.g. patch
       `squadron.skills.manifest._user_manifest` instead of
@@ -186,25 +186,25 @@ merges.
       in this task, even one that looks redundant — the per-test home does
       not exist until Task C.3, so a dropped patch here would leak the
       developer's real `HOME` with no isolation net yet to catch it.
-- [ ] Run `uv run pytest -q 2>&1 | tail -1` and confirm the suite is still
+- [x] Run `uv run pytest -q 2>&1 | tail -1` and confirm the suite is still
       green (same or better than Task A.1's baseline) before moving on.
-- [ ] Commit Tasks B.1–B.3 together (`src/` changes and their direct test
+- [x] Commit Tasks B.1–B.3 together (`src/` changes and their direct test
       patch retargets land as one buildable checkpoint).
 
 ### Task B.4 — Add the import-purity guard
 
-- [ ] Effort: 3/5
-- [ ] Create `tests/test_import_purity.py`. Walk the AST of every module
+- [x] Effort: 3/5
+- [x] Create `tests/test_import_purity.py`. Walk the AST of every module
       under `src/squadron/` and fail if any module-level statement (top-level
       statements, class bodies, or default argument values — not function
       bodies) calls `Path.home()` or `load_dotenv`.
-- [ ] Run it against the current tree post-B.1/B.2; it must pass with zero
+- [x] Run it against the current tree post-B.1/B.2; it must pass with zero
       violations.
-- [ ] Add one deliberately-broken fixture module (or an inline AST sample
+- [x] Add one deliberately-broken fixture module (or an inline AST sample
       built in the test itself) asserting the scanner actually flags a
       module-level `Path.home()` call — the guard must be shown to fail
       before it's trusted to pass.
-- [ ] Run the design's walkthrough step 3 import-cleanliness check
+- [x] Run the design's walkthrough step 3 import-cleanliness check
       directly, not just via the AST guard: `uv run python -c "import
       squadron.cli.app, os; print('OPENROUTER_API_KEY' in os.environ)"`
       with the shell not exporting that var, and confirm it prints
@@ -212,7 +212,7 @@ merges.
       `Path.home()`/`load_dotenv` call; this confirms Task B.2's
       `_load_env_file()` isn't itself invoked at import time, which the
       guard cannot detect on its own.
-- [ ] Commit as its own checkpoint.
+- [x] Commit as its own checkpoint.
 
 ---
 
@@ -220,8 +220,8 @@ merges.
 
 ### Task C.1 — Create `tests/_hermetic.py`
 
-- [ ] Effort: 3/5
-- [ ] Create `tests/_hermetic.py` defining, each exactly once:
+- [x] Effort: 3/5
+- [x] Create `tests/_hermetic.py` defining, each exactly once:
       - `PINNED_TZ = "Asia/Kolkata"`
       - `PINNED_COLUMNS = "80"`
       - `PINNED_DEFAULT_BRANCH = "hermetic-default"`
@@ -234,20 +234,20 @@ merges.
         list
       - the real home path, captured once at this module's import (for
         `host_cf` use only)
-- [ ] No test yet — this module is pure data/helpers, exercised by
+- [x] No test yet — this module is pure data/helpers, exercised by
       Task C.3's self-test.
 
 ### Task C.2 — Register the `host_cf` marker
 
-- [ ] Effort: 1/5
-- [ ] In `pyproject.toml`, register `host_cf` as a pytest marker next to
+- [x] Effort: 1/5
+- [x] In `pyproject.toml`, register `host_cf` as a pytest marker next to
       the existing `network` marker, with a one-line description matching
       D2 ("test needs cf's real project registry under the host's home").
 
 ### Task C.3 — Add the per-test autouse fixture and session git-config fixture
 
-- [ ] Effort: 4/5
-- [ ] In `tests/conftest.py`, add:
+- [x] Effort: 4/5
+- [x] In `tests/conftest.py`, add:
       - a session-scoped autouse fixture (via `tmp_path_factory`) that
         writes the hermetic git-config file once per session using
         `tests/_hermetic.py`'s writer function;
@@ -265,39 +265,39 @@ merges.
           prefixed `ORCH_` or `SQUADRON_`, plus `CLAUDECODE` and
           `GH_CONFIG_DIR`;
         - patches `squadron.cli.app._load_env_file` to a no-op.
-- [ ] Every pinned value is read from `tests/_hermetic.py` — no value is
+- [x] Every pinned value is read from `tests/_hermetic.py` — no value is
       duplicated inline in `conftest.py`.
 
 ### Task C.4 — Hermetic self-test
 
-- [ ] Effort: 2/5
-- [ ] Create `tests/test_hermetic.py` asserting, for a normal (non-
+- [x] Effort: 2/5
+- [x] Create `tests/test_hermetic.py` asserting, for a normal (non-
       `host_cf`) test:
       - `Path.home()` is under the test's `tmp_path`
       - `git config init.defaultBranch` (run via subprocess with the
         test's env) returns `hermetic-default`
       - `TZ` is `Asia/Kolkata` and `COLUMNS` is `80`
       - none of the scrubbed vars are set
-- [ ] Add a second test marked `host_cf` asserting `Path.home()` equals the
+- [x] Add a second test marked `host_cf` asserting `Path.home()` equals the
       real captured home from `tests/_hermetic.py`.
-- [ ] Run this file directly with sentinels set in the outer shell env
+- [x] Run this file directly with sentinels set in the outer shell env
       (`OPENAI_API_KEY=sentinel CLAUDECODE=1 FORCE_COLOR=1 uv run pytest
       tests/test_hermetic.py -v`) and confirm it still passes — proves the
       fixture overrides the outer environment rather than merely matching
       an already-clean one.
-- [ ] Commit Tasks C.1–C.4 together as one checkpoint.
+- [x] Commit Tasks C.1–C.4 together as one checkpoint.
 
 ### Task C.5 — One unit test for the real `_load_env_file`
 
-- [ ] Effort: 1/5
-- [ ] Add a test (in `tests/cli/` alongside existing app/CLI tests) that
+- [x] Effort: 1/5
+- [x] Add a test (in `tests/cli/` alongside existing app/CLI tests) that
       calls the real `squadron.cli.app._load_env_file()` (not the patched
       no-op) against a temp directory containing a `.env` file, and
       asserts the variable it defines is present in `os.environ`
       afterward. Clean up the env var at the end of the test.
-- [ ] This is the only test in the suite that exercises the unpached
+- [x] This is the only test in the suite that exercises the unpached
       loader — everywhere else the autouse fixture's no-op patch applies.
-- [ ] Commit: rides with Task C.1–C.4's checkpoint (same commit, added
+- [x] Commit: rides with Task C.1–C.4's checkpoint (same commit, added
       before that commit lands).
 
 ---
@@ -306,28 +306,28 @@ merges.
 
 ### Task D.1 — Run the full suite under isolation and record failures
 
-- [ ] Effort: 2/5
-- [ ] Run `uv run pytest -q 2>&1 | tail -1` with Parts A–C's changes in
+- [x] Effort: 2/5
+- [x] Run `uv run pytest -q 2>&1 | tail -1` with Parts A–C's changes in
       place (host `HOME`/config/etc. now unreachable from any non-
       `host_cf` test).
-- [ ] Record the full list of newly-failing tests in a scratch note (not
+- [x] Record the full list of newly-failing tests in a scratch note (not
       committed as a permanent doc, but do capture it in the commit
       message or a DEVLOG addendum) — this is the "count is unknown until
       Part A lands" risk called out in the design, now measured.
 
 ### Task D.2 — Fix failures caused by the non-`main` default branch
 
-- [ ] Effort: 3/5
-- [ ] For every failure from Task D.1 caused by a fixture running bare
+- [x] Effort: 3/5
+- [x] For every failure from Task D.1 caused by a fixture running bare
       `git init` and then assuming a `main` branch exists, change the
       fixture to the explicit form: `git init -b main`.
-- [ ] Do not change `PINNED_DEFAULT_BRANCH` itself to `main` — the pin is
+- [x] Do not change `PINNED_DEFAULT_BRANCH` itself to `main` — the pin is
       deliberately hostile per D3; the fix is always on the fixture side.
 
 ### Task D.3 — Fix failures caused by `TZ`/timezone assumptions
 
-- [ ] Effort: 2/5
-- [ ] For every failure from Task D.1 caused by a hardcoded epoch or
+- [x] Effort: 2/5
+- [x] For every failure from Task D.1 caused by a hardcoded epoch or
       timestamp that assumed a specific timezone, derive the expected
       value from its source string/data instead of a literal, or have the
       test explicitly `monkeypatch.setenv("TZ", ...)` and call `tzset()`
@@ -335,57 +335,57 @@ merges.
 
 ### Task D.4 — Fix remaining failures from Task D.1
 
-- [ ] Effort: 3/5
-- [ ] Address any remaining failures not covered by Tasks D.2/D.3 (e.g.
+- [x] Effort: 3/5
+- [x] Address any remaining failures not covered by Tasks D.2/D.3 (e.g.
       `COLUMNS`-dependent output assertions, leftover credential-var
       assumptions) at their cause, following the same pattern: adjust the
       test to not depend on machine state, or set the state explicitly via
       `monkeypatch` if the test intentionally needs a non-default value.
-- [ ] Confirm `uv run pytest -q 2>&1 | tail -1` now shows passed/skipped
+- [x] Confirm `uv run pytest -q 2>&1 | tail -1` now shows passed/skipped
       counts at or above Task A.1's baseline, zero unexplained failures.
-- [ ] Commit Tasks D.1–D.4 together as one checkpoint.
+- [x] Commit Tasks D.1–D.4 together as one checkpoint.
 
 ### Task D.5 — Classify real-`cf` dependents under `host_cf` (D2)
 
-- [ ] Effort: 2/5
-- [ ] Starting from the four named files (`test_schema_drift.py`,
+- [x] Effort: 2/5
+- [x] Starting from the four named files (`test_schema_drift.py`,
       `test_pr_review_frontmatter.py`, `test_cf_contract_live.py`,
       `test_cli_review.py`), run each under isolation. For every test that
       fails specifically because it needs cf's real project registry at
       `~/.config/context-forge/projects.json`, add `@pytest.mark.host_cf`
       with a one-line comment naming what it needs from the host.
-- [ ] Do not mark any test `host_cf` that fails for a different reason —
+- [x] Do not mark any test `host_cf` that fails for a different reason —
       fix that failure per Task D.4's pattern instead.
-- [ ] Confirm no test outside these four files needed the marker; if one
+- [x] Confirm no test outside these four files needed the marker; if one
       does, add it here with the same justification comment.
-- [ ] Commit: its own checkpoint, separate from D.1–D.4 (marker additions
+- [x] Commit: its own checkpoint, separate from D.1–D.4 (marker additions
       are easy to revert independently if a marking judgment turns out
       wrong).
 
 ### Task D.6 — Confirm the `shutil.which`/git host-probe sweep (D8)
 
-- [ ] Effort: 1/5
-- [ ] Run the five files that call `shutil.which`
+- [x] Effort: 1/5
+- [x] Run the five files that call `shutil.which`
       (`tests/cli/test_setup.py`, `tests/cli/test_setup_install.py`,
       `tests/cli/test_doctor.py`, `tests/cli/test_doctor_checks.py`,
       `tests/skills/test_resolver.py`) under isolation and confirm all
       pass — the design measured that each already stubs `shutil.which`.
-- [ ] Confirm `tests/events/builtin/test_frontmatter_gate.py:415`'s bare
+- [x] Confirm `tests/events/builtin/test_frontmatter_gate.py:415`'s bare
       call is the one covered by Task D.5's `host_cf` marker on
       `test_frontmatter_gate.py` (or add it there if not already covered).
-- [ ] No code change expected in this task — it is a verification step.
+- [x] No code change expected in this task — it is a verification step.
       If a failure surfaces, route it to Task D.4 or D.5 as appropriate.
-- [ ] Commit: none expected (verification-only); if a fix is needed, it
+- [x] Commit: none expected (verification-only); if a fix is needed, it
       commits under whichever of D.4/D.5's checkpoints it was routed to.
 
 ### Task D.7 — Consolidate redundant per-directory fixtures, drop redundant patches
 
-- [ ] Effort: 3/5
-- [ ] Delete `_isolated_user_config`, `_isolated_model_registry`, and
+- [x] Effort: 3/5
+- [x] Delete `_isolated_user_config`, `_isolated_model_registry`, and
       `_isolated_user_templates` from `tests/review/conftest.py` — the
       per-test home from Task C.3 now covers all three since Task B.1 made
       their underlying paths call-time.
-- [ ] Delete the same duplicated fixtures from `tests/cli/conftest.py`:
+- [x] Delete the same duplicated fixtures from `tests/cli/conftest.py`:
       `_isolated_model_registry` (patches
       `squadron.models.aliases.models_toml_path`, ~line 24) and
       `_isolated_user_templates` (patches
@@ -395,19 +395,19 @@ merges.
       equivalently-named fixture) in that file untouched if it patches the
       repo-relative `REVIEWS_DIR` — that path is not home-derived and the
       per-test home does not cover it.
-- [ ] Delete `isolate_review_debug_log` from `tests/conftest.py` for the
+- [x] Delete `isolate_review_debug_log` from `tests/conftest.py` for the
       same reason.
-- [ ] Keep `_pinned_diff_base` (pins `cf`'s *project* config, read from the
+- [x] Keep `_pinned_diff_base` (pins `cf`'s *project* config, read from the
       checkout, not `HOME`) and the root `patch_config_paths` fixture
       unchanged.
-- [ ] Reimplement metrology's `isolated_user_config` (stays opt-in) to
+- [x] Reimplement metrology's `isolated_user_config` (stays opt-in) to
       create and return `Path.home() / ".config/squadron/config.toml"`
       under the per-test home, instead of patching `user_config_path`
       directly. Its consumers (`repo_with_remote`, `repo_no_remote`,
       `non_repo_dir`, `second_audited_repo`, and direct users) keep the
       same fixture name and `Path` return type — no consumer call sites
       change.
-- [ ] Sweep the ~44 patch references retargeted (not dropped) in Task B.3:
+- [x] Sweep the ~44 patch references retargeted (not dropped) in Task B.3:
       for each one, if the per-test home now makes the patch redundant
       (i.e. the patch exists only to redirect a path under `HOME` that the
       autouse fixture from Task C.3 already redirects), delete the patch

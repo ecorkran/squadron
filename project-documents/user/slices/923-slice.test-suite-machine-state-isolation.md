@@ -7,7 +7,7 @@ dependencies: []
 interfaces: [914]
 dateCreated: 20260926
 dateUpdated: 20260926
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: Test Suite Machine-State Isolation
@@ -272,7 +272,7 @@ Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Pyt
 1. With a hostile `~/.config/squadron/config.toml`, `models.toml` and user templates in the developer's *real* home, the full suite's results are unchanged.
 2. No module-level code in `src/` calls `Path.home()` or `load_dotenv`. `tests/test_import_purity.py` enforces this and fails when either is reintroduced.
 3. In every test that is not marked `host_cf`, all of the following hold unless the test set them itself:
-   - `Path.home()` is under `tmp_path`.
+   - `Path.home()` is a fresh, empty, pytest-owned directory (created beside `tmp_path`, not inside it, so tests that list `tmp_path` never see it).
    - `git config init.defaultBranch` returns `hermetic-default`.
    - `TZ` is `Asia/Kolkata` and `COLUMNS` is `80`.
    - No credential, `ORCH_*`, `SQUADRON_*`, `CLAUDECODE` or `GH_CONFIG_DIR` variable is set.
@@ -297,46 +297,53 @@ Add a `hermetic` job to `ci.yml` that runs `scripts/test-hostile-env` on one Pyt
 
 ### Verification Walkthrough
 
-Draft; to be refined after Phase 6. `scripts/test-hostile-env`, `tests/test_hermetic.py` and `tests/test_import_purity.py` do not exist yet.
+Verified in Phase 6 (20260926), macOS, git 2.50.1, Python 3.13. Each full run takes about 8 minutes (no xdist).
 
-1. **Baseline, before any change:**
+1. **Baseline, before any change** (at `2f2c5d60`):
    ```bash
-   uv run pytest -q 2>&1 | tail -1          # record passed/skipped
+   uv run pytest -q 2>&1 | tail -1
+   # actual: 4461 passed, 4 skipped
    ```
 2. **Negative control.** Hostile script against the pre-slice tree:
    ```bash
-   scripts/test-hostile-env <pre-slice-sha>
-   # expect: preconditions pass (cf hidden, hostile config readable),
-   #         then a non-zero failure count — the leaks, measured
+   scripts/test-hostile-env 2f2c5d60
+   # actual: preconditions pass, then 139 failed, 4124 passed, 8 skipped, 184 errors
    ```
+   Caveat found while building the script: the hostile `COLUMNS=20` wraps `sq config get` output and `FORCE_COLOR=1` adds ANSI codes. So the config probe runs with `COLUMNS=1000` and strips escape codes before it reads the value.
 3. **Import purity:**
    ```bash
-   uv run pytest tests/test_import_purity.py -v     # passes
-   uv run python -c "import squadron.cli.app, os; print('OPENROUTER_API_KEY' in os.environ)"
-   # False when the shell doesn't export it — import no longer loads .env
+   uv run pytest tests/test_import_purity.py -v     # 12 passed
+   env -u OPENROUTER_API_KEY uv run python -c "import squadron.cli.app, os; print('OPENROUTER_API_KEY' in os.environ)"
+   # actual: False
    ```
-4. **Runtime `.env` still works:**
+   Run against the pre-slice source, the scanner flags exactly the 19 D1 sites plus `cli/app.py:41` `load_dotenv`.
+4. **Runtime `.env` still works.** Compare against a directory without the file:
    ```bash
-   cd "$(mktemp -d)" && printf 'OPENROUTER_API_KEY=probe\n' > .env && sq auth status
-   # openrouter shows as configured from the probe key
+   cd "$(mktemp -d)" && printf 'OPENROUTER_API_KEY=probe\n' > .env && env -u OPENROUTER_API_KEY sq auth status
+   # actual: openrouter │ api_key │ ✓ authenticated
+   # same command in an empty temp dir: ✗ not authenticated │ Set OPENROUTER_API_KEY
    ```
-5. **Environment inside a test.** Sentinels are set in the outer env; the self-test asserts Functional criterion 3 plus `host_cf` restoring the real home:
+5. **Environment inside a test.** Sentinels are set in the outer env:
    ```bash
-   OPENAI_API_KEY=sentinel CLAUDECODE=1 FORCE_COLOR=1 uv run pytest tests/test_hermetic.py -v
+   OPENAI_API_KEY=sentinel CLAUDECODE=1 FORCE_COLOR=1 TZ=Pacific/Chatham COLUMNS=20 \
+     uv run pytest tests/test_hermetic.py -v
+   # actual: 7 passed
    ```
+   The 7 are: fresh home ×2, git config, TZ/COLUMNS, scrub, credential list, and `host_cf` real home.
 6. **Hostile script on the slice tip:**
    ```bash
    scripts/test-hostile-env
-   # expect: N passed, M skipped, 0 failed; K deselected (host_cf)
+   # actual: 4461 passed, 8 skipped, 6 deselected (host_cf), 0 failed
    ```
-7. **Real-home hostility:**
+   It has 4 more skips than a local run because tests that need `cf` on `PATH` skip under the hostile `PATH`.
+7. **Real-home hostility.** Change the value with `sq config set`. Appending with `>>` creates a duplicate TOML key when the config already sets it. That makes the file invalid rather than hostile, and pytest then aborts at collection in `test_cf_contract_live.py`, whose module-level live probe reads the host config.
    ```bash
    cp ~/.config/squadron/config.toml /tmp/cfg.bak
-   printf '"review.max_file_size_bytes" = 1\n' >> ~/.config/squadron/config.toml
-   uv run pytest -q 2>&1 | tail -1          # same counts as a normal run
+   sq config set review.max_file_size_bytes 1
+   uv run pytest -q 2>&1 | tail -1          # actual: 4481 passed, 4 skipped (same as clean)
    cp /tmp/cfg.bak ~/.config/squadron/config.toml
    ```
-8. **CI:** push the slice branch; the `hermetic` job and the main test job are both green.
+8. **CI:** open a PR from the slice branch against `main` (see Functional criterion 7). The `hermetic` job and the main `test` job must both be green. The job runs `git checkout -B hermetic-under-test` first, because the PR merge commit is on no branch and the script's clone copies only branches and tags.
 
 ## Risk Assessment
 
