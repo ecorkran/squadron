@@ -22,6 +22,9 @@
 #
 # Deprecated: `kimi25` (moonshotai/kimi-k2) is no longer shipped. Use `kimi27`
 # (moonshotai/kimi-k2.7-code) in tests and examples.
+#
+# Deprecated: `qwen36-free` (qwen/qwen3.6-plus:free) is no longer shipped; it is
+# gone from OpenRouter's model listing (20260927).
 
 # ---------------------------------------------------------------------------
 # Claude family — Max subscription, no per-token pricing
@@ -348,19 +351,6 @@ input = 1.60
 output = 4.80
 cache_read = 0.40
 cache_write = 4.80
-
-[aliases.qwen36-free]
-profile = "openrouter"
-model = "qwen/qwen3.6-plus:free"
-private = false
-cost_tier = "free"
-notes = "Preview - Not Private"
-
-[aliases.qwen36-free.pricing]
-input = 0.00
-output = 0.00
-cache_read = 0.00
-cache_write = 0.00
 
 [aliases.qwen38-flash]
 profile = "openrouter"
