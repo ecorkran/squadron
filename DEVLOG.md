@@ -2,13 +2,30 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260926
+dateUpdated: 20260927
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260927
+
+### Slice 924: Recover a Review the Model Reasoned Out but Never Emitted — Design Complete
+
+The design is at `user/slices/924-slice.recover-a-review-the-model-reasoned-out-but-never-emitted.md`, and the validator passes. The slice plan entry now points to it.
+
+- **Surprise:** Part A's core, the one bounded recovery turn, already shipped in `7dbd1e18` and closed #92. The design covers only what remains:
+  - D1: a `recoveryTurn: true` frontmatter key; `verdictSource` stays orthogonal per 919 D7;
+  - D2: skip recovery when the stop reason is `length` or `max_tokens`, defined once in `OUTPUT_BUDGET_STOP_REASONS`;
+  - D3: tools stay on for the recovery turn, because the captures show the model had not finished reading.
+- **Part B:** per-alias `max_output_tokens` in `models.toml`, sent as `max_completion_tokens` only when set (D4, D5). The digest always shows the budget, and the snapshot fixtures change.
+- **Found:** the pipeline review action uses `resolve()`, not `resolve_full()`, so `tool_use = false` aliases are never gated in pipeline reviews. D6 fixes it along with the budget.
+- **Pending at implementation:**
+  - B5 budget values come from OpenRouter's `/api/v1/models` listing;
+  - file a context-forge issue for `recoveryTurn`;
+  - file an issue for dispatch/summary budget threading.
 
 ## 20260926
 
