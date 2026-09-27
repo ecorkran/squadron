@@ -74,6 +74,7 @@ status: not_started
   - [ ] When unset, the command is unchanged
 - [ ] Tests in `tests/integrations/test_context_forge.py`: the argument list passed to the cf runner with and without `plan`
   - [ ] **Success:** tests pass; existing callers unchanged
+- [ ] Commit: `feat: add plan argument to cf slice and task listing`
 
 ### Task 6 — `LoopCondition.met_by_verdict` (Effort: 2)
 
@@ -83,6 +84,7 @@ status: not_started
 - [ ] Rewrite `evaluate_condition` to call `met_by_verdict` for the two review conditions
 - [ ] Tests: each condition against PASS, CONCERNS, FAIL; `ACTION_SUCCESS` raises
   - [ ] **Success:** new tests and existing `evaluate_condition` / loop tests pass
+- [ ] Commit: `refactor: define review verdict thresholds once in met_by_verdict`
 
 ### Task 7 — `CfSliceStatus`, plan argument check, and the `unfinished_slices` fix (Effort: 2)
 
@@ -94,6 +96,7 @@ status: not_started
   - [ ] A non-digit plan raises the stated error
   - [ ] Existing `each` tests using `cf.unfinished_slices(...)` still pass
   - [ ] **Success:** all pass
+- [ ] Commit: `fix: make unfinished_slices honor its plan argument`
 
 ### Task 8 — `cf.undesigned_slices(plan)` (Effort: 1)
 
@@ -101,6 +104,7 @@ status: not_started
   - [ ] Item shape matches the API Contracts section of the design
 - [ ] Tests with a fixture mirroring today's 900 plan: selects 923, 924, 928, 929; excludes 907 (deferred) and 914 (designed)
   - [ ] **Success:** tests pass
+- [ ] Commit: `feat: add undesigned_slices source`
 
 ### Task 9 — `cf.untasked_slices(plan, accept)` (Effort: 3)
 
@@ -117,7 +121,7 @@ status: not_started
   - [ ] A PASS review → no flag; a FAIL review under `concerns_or_better` → below-threshold flag; malformed frontmatter → unreadable flag
   - [ ] A slice with a task file is not selected
   - [ ] **Success:** tests pass
-- [ ] Commit: `feat: add plan-aware undesigned and untasked slice sources`
+- [ ] Commit: `feat: add untasked_slices source gated on design review`
 
 ---
 
@@ -132,6 +136,7 @@ status: not_started
   - [ ] Do not call `cf set plan`
 - [ ] Tests in `tests/pipeline/actions/test_cf_op.py`: the `cf set arch` call and argument; the no-parent failure message; missing `plan` param rejected
   - [ ] **Success:** tests pass
+- [ ] Commit: `feat: add set_arch cf-op`
 
 ### Task 11 — Phase step `plan:` key and the arch → slice → phase order (Effort: 2)
 
@@ -141,7 +146,7 @@ status: not_started
   - [ ] This flips today's `set_phase` → `set_slice` order for every phase step
 - [ ] Update the exact-equality `expand()` tests in `tests/pipeline/steps/test_phase.py` to the new order; add cases with and without `plan:`
   - [ ] **Success:** tests pass; P4, P5, `app.yaml`, `judge-cycle`, `findings-addressed-cycle`, and `test-loop` still load and validate
-- [ ] Commit: `feat: add set_arch cf-op and fix phase step switching order`
+- [ ] Commit: `fix: switch phase step cf order to arch, slice, phase`
 
 ---
 
@@ -155,6 +160,7 @@ status: not_started
 - [ ] In `steps/loop.py` `_validate_inner_steps`, reject an inner `each`
 - [ ] Tests (new `tests/pipeline/steps/test_collection.py`, plus `tests/pipeline/steps/test_loop.py`): nested `each` rejected; `each` in `loop:` rejected; invalid inner step config surfaces its own error; bad `on_item_failure` rejected
   - [ ] **Success:** tests pass; existing pipelines validate
+- [ ] Commit: `feat: validate each inner steps and ban nested each`
 
 ### Task 13 — Per-item isolation (Effort: 2)
 
@@ -162,6 +168,7 @@ status: not_started
   - [ ] Run-wide `prior_outputs` / `step_outputs` never receive item results
 - [ ] Test: two items whose fake reviews carry distinct findings; the second item's fake dispatch sees only its own item's review
   - [ ] **Success:** test passes
+- [ ] Commit: `fix: isolate each item outputs from other items`
 
 ### Task 14 — `on_item_failure` and pre-flagged items (Effort: 3)
 
@@ -173,7 +180,7 @@ status: not_started
   - [ ] Each flagged item logs at WARNING with its reason
 - [ ] Tests: each bullet above, including that `STOP` behavior is unchanged
   - [ ] **Success:** tests pass
-- [ ] Commit: `feat: add per-item isolation and failure policy to each`
+- [ ] Commit: `feat: add on_item_failure policy and pre-flagged items to each`
 
 ---
 
@@ -204,6 +211,7 @@ status: not_started
 - [ ] In `src/squadron/pipeline/actions/review.py`, add `outputs["input_file"]`: the path of the file that was reviewed
 - [ ] Test in `tests/pipeline/actions/test_review_action.py`: a slice review's `input_file` is the slice design path
   - [ ] **Success:** test passes
+- [ ] Commit: `feat: add input_file to review action outputs`
 
 ### Task 17 — `dispatch: { feedback: review }` (Effort: 2)
 
@@ -228,6 +236,7 @@ status: not_started
   - [ ] Write to `{runs_dir}/{run_id}.{step_name}.report.md`
 - [ ] Tests (new `tests/pipeline/test_batch_report.py`): outcome rules for each case; item without `index`/`name` labeled by position; rendered frontmatter parses and counts match; flagged section first
   - [ ] **Success:** tests pass; module stays near ~300 lines
+- [ ] Commit: `feat: add batch report model and renderer`
 
 ### Task 19 — Wire the report into `each` (Effort: 2)
 
@@ -236,13 +245,14 @@ status: not_started
   - [ ] Report is written even when every item is FLAGGED
 - [ ] Tests: report file exists next to `{run_id}.json` with correct counts after a mixed run
   - [ ] **Success:** tests pass
+- [ ] Commit: `feat: write batch report for each steps`
 
 ### Task 20 — `sq run` summary (Effort: 1)
 
 - [ ] In `src/squadron/cli/commands/run.py`, after the run, for each step result with a `batch_report`: print one line of counts, the flagged items, and the report path
 - [ ] Test in `tests/cli/commands/test_run.py`
   - [ ] **Success:** test passes
-- [ ] Commit: `feat: write batch report for each steps and summarize in sq run`
+- [ ] Commit: `feat: summarize batch reports in sq run`
 
 ---
 
@@ -302,13 +312,14 @@ status: not_started
 - [ ] In `_save_and_report` (`src/squadron/cli/commands/review.py`), print "Saved review to {path}" to stderr when `--output json`, and to stdout otherwise
 - [ ] Test in `tests/cli/test_review_save.py`: stdout under `--output json` parses as JSON
   - [ ] **Success:** test passes
+- [ ] Commit: `fix: send saved-review line to stderr under json output`
 
 ### Task 27 — `to_dict()` gaps (Effort: 1)
 
 - [ ] `structured_findings[].location_verified` added; `finding_scan` added as an object of `FindingScanCounts` fields, `null` when absent
 - [ ] Tests in `tests/review/test_models.py`
   - [ ] **Success:** tests pass; CLI and pipeline paths write identical frontmatter apart from `runId`
-- [ ] Commit: `fix: keep review json stdout pure and close to_dict gaps`
+- [ ] Commit: `fix: add location_verified and finding_scan to review to_dict`
 
 ---
 
