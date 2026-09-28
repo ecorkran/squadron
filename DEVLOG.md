@@ -18,7 +18,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 - **Seeding (#162):** rotation, resume, and `summary restore` connect a fresh client with the framed seed as preset `append`. No turn, so there is nothing to act on. A single `open_pipeline_session` builder replaces the duplicated literals in run.py/executor.py.
 - **Background wait (#163):** `dispatch()` tracks `local_agent`/`local_workflow` tasks through the lifecycle messages and returns only on its own result (`origin`) with none still running. Shells are not waited on. No new ceiling. The post-condition flag gets the last 400 chars of the agent's final text.
 - **Prompt (#155):** SDK dispatch always uses the preset, with the step prompt appended. The session path rejects a step `system_prompt`.
-- **Settings (#156):** probed on CLI 2.1.284. With no flag, it loads the user and project CLAUDE.md. Auto-memory loads even under `project`. Policy: `[project]` for reviews, judges, pipeline sessions, and dispatch. Auto-memory is off whenever `user` is not loaded. Run Digest, JSON, and step metadata record the prompt mode and settings.
+- **Settings (#156):** probed on CLI 2.1.284. With no flag, it loads the user and project CLAUDE.md. Auto-memory loads even under `project`. Policy: `[project]` for reviews, judges, pipeline sessions, and dispatch. Auto-memory for pipeline sessions and dispatch is controlled by the new config key `pipeline.auto_memory` (default on). It is always off for reviews, judges, PR, summary, and audit. Run Digest, JSON, and step metadata record the prompt mode and settings.
 - Found:
   - Resume seeding skips the lazy session.
   - `summary restore` frames the summary twice.

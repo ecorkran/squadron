@@ -26,7 +26,7 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 - A pipeline cannot act on seed text. Rotation and resume put the seed into the new session's system prompt, and the model gets no turn until the next real step.
 - A dispatch that starts background agents returns only after those agents report back and the model finishes its follow-up turn. When a dispatch still leaves no artifact, the flag includes the agent's last words, so the reason is on record.
 - A step's `system_prompt` adds to the Claude Code prompt instead of replacing it, the same as reviews.
-- Every automated SDK path loads a declared set of settings. Personal state (user CLAUDE.md, user settings, output style, auto-memory) no longer leaks into reviews and pipeline runs based on which template or path is running. Each review artifact and dispatch step records the prompt mode and settings it ran with.
+- Every automated SDK path loads a declared set of settings. Personal settings (user CLAUDE.md, user settings, output style) no longer reach reviews or pipeline runs, and which template or path is running no longer changes that. Auto-memory becomes a deliberate choice: a config switch for pipeline work, and always off for reviews. Each review artifact and dispatch step records the prompt mode and settings it ran with.
 
 ## Technical Scope
 
@@ -35,7 +35,7 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 - **A — Seeding without a turn (#162).** A single session builder. Rotation, resume, and `summary restore` connect a fresh client whose system prompt is the preset with the framed seed appended. No seeding `query()` is sent. The lazy-connect path also receives the resume seed, which it misses today. The restore path's double framing is fixed.
 - **B — Dispatch waits for background agents (#163).** `SDKExecutionSession.dispatch()` tracks background agent tasks from the task lifecycle messages. It keeps reading past a turn's result until none are still running and the final result answers its own prompt. The dispatch-artifact post-condition appends the tail of the agent's final text to its failure message, and the batch report shows it too.
 - **C — Explicit system prompt (#155).** SDK one-shot dispatch always uses the preset, and a step `system_prompt` is appended to it. On the session path, a step `system_prompt` fails with an explicit error, as `allowed_tools` already does.
-- **D — Explicit settings, recorded (#156).** The CLI's default is verified and written down (D9). One declared `setting_sources` value per automated path. Auto-memory is disabled whenever user settings are not loaded. Each review's Run Digest and JSON output records the system-prompt mode and settings sources, as does each dispatch and summary step's metadata.
+- **D — Explicit settings, recorded (#156).** The CLI's default is verified and written down (D9). One declared `setting_sources` value per automated path. Auto-memory is set explicitly per path: the config key `pipeline.auto_memory` (default on) controls pipeline sessions and dispatch, and every review, judge, PR, summary, and audit path has it off. Each review's Run Digest and JSON output records the system-prompt mode and settings sources, as does each dispatch and summary step's metadata.
 
 **Out of scope**
 
@@ -67,8 +67,9 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 | `pipeline/actions/summary.py` | Restore passes the raw summary. `seed_context` does the framing, which removes the double frame. |
 | `pipeline/actions/dispatch.py` | SDK one-shot always uses the preset, with the step prompt appended. The session path rejects a step `system_prompt`. Step metadata gets `system_prompt_mode`, `setting_sources`, and (session path) `background_tasks_waited`. |
 | `events/builtin/dispatch_artifact.py` | The failure message gets the tail of `result.outputs["response"]`. |
-| `providers/sdk/settings.py` (new, small) | `PIPELINE_SETTING_SOURCES` and `REVIEW_SETTING_SOURCES` policy constants, plus `sdk_settings_options(setting_sources) -> dict`, which returns `setting_sources` and the auto-memory env. Used by both the provider and the session builder. |
-| `providers/sdk/provider.py` | Uses `sdk_settings_options`. The auto-memory rule changes from "only for `[]`" to "whenever `user` is not loaded" (D11). |
+| `providers/sdk/settings.py` (new, small) | `PIPELINE_SETTING_SOURCES` and `REVIEW_SETTING_SOURCES` policy constants, plus `sdk_settings_options(setting_sources, *, auto_memory) -> dict`, which returns `setting_sources` and the auto-memory env. Used by both the provider and the session builder. |
+| `providers/sdk/provider.py` | Uses `sdk_settings_options` and reads `AgentConfig.auto_memory` instead of inferring it from `setting_sources == []` (D11). |
+| `config/keys.py` | New key `pipeline.auto_memory` (bool, default `true`). |
 | `core/models.py` | `SystemPromptMode` StrEnum and `describe_system_prompt(config)`, next to the existing prompt table. |
 | `review/templates/__init__.py`, `data/templates/*.yaml` | Built-in templates set `setting_sources: [project]`. The loader resolves an absent or `null` key to `REVIEW_SETTING_SOURCES`. |
 | `review/models.py`, `review/review_client.py`, `review/persistence.py` | `ReviewResult` carries `system_prompt_mode` (replacing the `default_system_prompt_preset_used` bool) and `setting_sources`. The Run Digest and JSON output render both, always. |
@@ -178,8 +179,8 @@ Each automated path uses a declared value. None of them inherits `None`.
 |---|---|---|---|
 | Reviews and judges (all built-in templates) | `REVIEW_SETTING_SOURCES = ["project"]` | off | `slice`, `tasks`, `judge-*`: `null` → `[project]` |
 | PR review | `[]` | off | none |
-| Pipeline SDK session | `PIPELINE_SETTING_SOURCES = ["project"]` | off | unset → `[project]` |
-| One-shot SDK dispatch | `PIPELINE_SETTING_SOURCES` | off | unset → `[project]` |
+| Pipeline SDK session | `PIPELINE_SETTING_SOURCES = ["project"]` | `pipeline.auto_memory` (default on) | unset → `[project]` |
+| One-shot SDK dispatch | `PIPELINE_SETTING_SOURCES` | `pipeline.auto_memory` (default on) | unset → `[project]` |
 | Summary one-shot | `[]` | off | none |
 | Tech-debt audit | `["project"]` | off | auto-memory now off |
 | PR composer | `[]` | off | none |
@@ -188,16 +189,21 @@ Pipelines and reviews run on the project's conventions, not on the operator's pe
 
 Custom review templates that omit `setting_sources` or set it to `null` resolve to `REVIEW_SETTING_SOURCES` in the loader. The artifact records the value used, so the default is visible rather than silent.
 
-### D11 — Auto-memory follows user settings
+### D11 — Auto-memory: a config key for pipeline work, off for judging paths
 
-`sdk_settings_options` sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` whenever `"user"` is not in `setting_sources`. This widens today's rule, which applies only to `[]` ([provider.py:88](../../../src/squadron/providers/sdk/provider.py#L88)). Auto-memory is the operator's personal state, so it loads only when personal settings load. It uses the same env-merge pattern as today. `open_pipeline_session` passes the same `env` into `ClaudeAgentOptions`.
+`sdk_settings_options(setting_sources, *, auto_memory: bool)` sets `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` whenever `auto_memory` is false. It uses the same env-merge pattern as today ([provider.py:88](../../../src/squadron/providers/sdk/provider.py#L88)), and `open_pipeline_session` passes the same `env` into `ClaudeAgentOptions`.
+
+- **Pipeline sessions and one-shot dispatch** read a new config key, `pipeline.auto_memory` (bool, default `true`, declared in `config/keys.py`). The per-project memory holds project lessons that help an agent doing project work. Because the key follows the existing user/project config levels, one project can turn it off without touching the others. With it on, the agent can also *write* to the memory directory. That is the reason the switch exists.
+- **Reviews, judges, PR review, PR composer, summary one-shot, and audit** always pass `auto_memory=False`, with no switch. A reviewer judges against the project's conventions, not the operator's accumulated preferences. The PR paths work on untrusted input (slice 382 D8).
+
+`AgentConfig` gets an `auto_memory: bool = False` field, and the provider reads it instead of inferring the setting from `setting_sources == []`. The default is `False`, so every path that doesn't opt in gets memory off. Only the two pipeline paths set it, from the config key.
 
 ### D12 — Recording
 
 `SystemPromptMode` (StrEnum): `preset`, `preset+append`, `custom`, `empty`. `describe_system_prompt(config: AgentConfig)` derives the mode from the same two fields the provider table uses, so the recorded mode and the prompt actually sent come from one rule. Settings render as the joined list (`project`), `none` for `[]`, or `n/a (non-SDK)`.
 
 - **Review Run Digest**, always on: `- System prompt: preset+append` and `- Settings sources: project`. The same two keys go in `--output json`. The `-vv` "sent with the preset" note reads the mode instead of the old bool.
-- **Dispatch step metadata**: `system_prompt_mode` and `setting_sources` on both paths. The session path uses `preset`, or `preset+append` when seeded. The session path also records `background_tasks_waited` (count).
+- **Dispatch step metadata**: `system_prompt_mode`, `setting_sources`, and `auto_memory` on both paths. The session path uses `preset`, or `preset+append` when seeded. The session path also records `background_tasks_waited` (count).
 - **Summary one-shot metadata**: `system_prompt_mode: empty`, `setting_sources: none`.
 - **Seeding**: INFO log `seeded fresh session via system prompt (N chars, source: compact|resume|restore)`.
 
@@ -232,7 +238,10 @@ class SDKExecutionSession:
 # providers/sdk/settings.py
 PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
-def sdk_settings_options(setting_sources: Sequence[str]) -> dict[str, object]: ...
+def sdk_settings_options(setting_sources: Sequence[str], *, auto_memory: bool) -> dict[str, object]: ...
+
+# core/models.py — AgentConfig
+auto_memory: bool = False   # SDK agents: True only on pipeline paths, from pipeline.auto_memory
 
 # core/models.py
 class SystemPromptMode(StrEnum):
@@ -265,7 +274,8 @@ The two policy constants have the same value today, but they are separate on pur
 - A dispatch never returns on an injected turn's result. Consuming one before its own result logs a WARNING.
 - A dispatch-artifact post-condition failure message ends with the agent's final-text tail, and the batch report's flag reason shows it.
 - An SDK one-shot dispatch with `system_prompt` builds `AgentConfig(use_default_system_prompt=True, instructions=<prompt>)`. The session path fails a step that sets `system_prompt`.
-- Every path in the D10 table passes its declared `setting_sources` (never `None`). Auto-memory is disabled on each.
+- Every path in the D10 table passes its declared `setting_sources` (never `None`).
+- Auto-memory is on for pipeline sessions and dispatch when `pipeline.auto_memory` is true (the default) and off when it is false. It is off on every other path whatever the key says.
 - Review artifacts always show the two new Run Digest lines, and JSON output has both keys. Dispatch and summary step metadata carry the mode and settings.
 
 ### Technical Requirements
