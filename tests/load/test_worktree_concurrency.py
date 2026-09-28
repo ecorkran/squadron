@@ -38,6 +38,10 @@ from squadron.core.process_runner import SubprocessRunner
 # holding (an unbounded wait would blow well past this).
 BUDGET_TOLERANCE = 5.0
 
+# Case 1's sizing; the reasoning is in its test's docstring.
+_ROUNDS = 4
+_CONCURRENCY = 32
+
 
 def _run_git(args: list[str], cwd: Path) -> None:
     subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
@@ -78,19 +82,35 @@ def _record(number: int) -> PullRequestRecord:
 def test_concurrent_worktree_creation_succeeds_with_non_colliding_paths(
     real_checkout: Path, tmp_path: Path
 ) -> None:
-    """Several real, concurrent ScratchWorktree creations against one throwaway repo.
+    """Rounds of real, concurrent ScratchWorktree creations against one throwaway repo.
 
     Unlike tests/codehost/test_worktree.py (scripted fake, sequential), this spawns real
     'git worktree add' processes from multiple threads at once against the same checkout —
     the actual race the lock and orphan sweep exist to survive.
+
+    Sizing (slice 929, measured on macOS): the #133 'commondir' race never reproduced
+    locally (0 failures in 130 runs at concurrency 8, 32 and 64), so no rate exists to
+    calibrate against. The only race measured here was the sweep deleting a live worktree
+    (929 D8), at 3 in 50 single rounds of 32. One round of 32 costs about 3s, and 95%
+    detection of that rate would take ~49 rounds (~2.5 min on every run), so this
+    settles for _ROUNDS=4 (~12s, ~22% per run, adding up across CI runs). The proof that
+    the races are gone is the deterministic tests in tests/codehost/; this is the
+    real-git backstop.
     """
-    worktrees_root = tmp_path / "worktrees"
     runner = SubprocessRunner()
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=real_checkout, check=True, capture_output=True, text=True
     ).stdout.strip()
 
-    concurrency = 8
+    for round_index in range(_ROUNDS):
+        # A fresh root per round, so rounds never collide with each other's paths.
+        _run_one_creation_round(runner, real_checkout, head, tmp_path / f"round{round_index}")
+
+
+def _run_one_creation_round(
+    runner: SubprocessRunner, real_checkout: Path, head: str, worktrees_root: Path
+) -> None:
+    concurrency = _CONCURRENCY
     results: list[Path | BaseException] = [None] * concurrency  # type: ignore[list-item]
 
     def _create(index: int) -> None:
