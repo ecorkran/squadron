@@ -275,6 +275,10 @@ hard pass/fail rather than a probability.
       to repeat its existing 8-concurrent-creation body `ROUNDS` times within the
       one test function, each round using a fresh `worktrees_root` subdirectory
       (or otherwise ensuring rounds don't collide with each other's paths).
+- [ ] Keep the existing `started`/`elapsed` budget assertion **per round**: reset
+      `started` at the top of each round and assert `elapsed < GIT_QUERY_TIMEOUT_SECONDS
+      * BUDGET_TOLERANCE` at the end of each round. Do not wrap the timer around the
+      whole `ROUNDS` loop — the budget was calibrated for one round of 8 creations.
 - [ ] Pick `ROUNDS` from Task A.1's measured pre-fix failure rate so the test would
       have caught the original bug with high probability (design's own worked
       example: a rate of 1-in-20 per round needs ~60 rounds for ~95% pre-fix
@@ -332,7 +336,7 @@ hard pass/fail rather than a probability.
 
 ### Task G.1 — Confirm CI actually gates the load test tier
 
-Per `.claude/rules/testing.md` / `.claude/rules/python.md`: "CI must gate load
+Per `.claude/rules/python.md`: "CI must gate load
 tests for slices touching these paths" — this slice's concurrency fix is exactly
 that path, so confirm it explicitly rather than assuming `pytest` in CI already
 covers it.

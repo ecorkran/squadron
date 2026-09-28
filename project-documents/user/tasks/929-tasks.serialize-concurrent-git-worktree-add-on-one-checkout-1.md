@@ -99,6 +99,10 @@ read D1–D7 before implementing. In particular:
       (that one mutates a list without a lock and is not safe to call from multiple
       threads at once).
 - [ ] Behavior of `.run(argv, cwd=, timeout=, env=None, stdin=None)`:
+      - First line of `.run`: `argv = tuple(argv)`. Callers pass lists, and a list
+        slice never equals a tuple literal, so without this every branch below
+        misses and falls through to the raise. Same idiom as
+        `tests/codehost/fake_runner.py`'s `argv_tuple = tuple(argv)`.
       - If `argv[:2] == ("git", "worktree")`: under a `threading.Lock`, increment an
         in-flight counter and update a running max; release the lock; `time.sleep`
         a short fixed duration (e.g. 0.02s — long enough to make an unserialized
@@ -219,7 +223,7 @@ read D1–D7 before implementing. In particular:
            seconds waited) (D7 row 3).
          - Any other `OSError` (e.g. `ENOLCK`, `EBADF`): raise `MetadataLockError`
            immediately — it must **not** enter the retry loop (D7 row 4). This is
-           the behavior Task C.4's test pins.
+           the behavior Task C.3b's test pins.
       5. `yield` once the lock is held.
       6. On exit (`finally`): `fcntl.flock(f, fcntl.LOCK_UN)` then `f.close()`. On
          `OSError` here, log at WARNING and do **not** raise — closing the
@@ -232,11 +236,12 @@ read D1–D7 before implementing. In particular:
 - [ ] Never cache or share the open file descriptor across acquisitions (D1) — each
       call to `git_metadata_lock` opens, locks, and closes its own file.
 
-### Task C.3 — Unit tests: acquire/release, mutual exclusion, timeout
+### Task C.3a — Unit tests: acquire/release and timeout
 
-- [ ] Effort: 3/5
-- [ ] Create `tests/codehost/test_metadata_lock.py`. Every test name starts with
-      `test_lock_` so `-k lock` (per the walkthrough) matches all of them:
+- [ ] Effort: 2/5
+- [ ] Create `tests/codehost/test_metadata_lock.py`. Every test name in Tasks
+      C.3a–C.3c starts with `test_lock_` so `-k lock` (per the walkthrough) matches
+      all of them:
       - **`test_lock_is_acquired_and_released_for_reuse`**: `with
         git_metadata_lock(root): pass` succeeds; a second
         `with git_metadata_lock(root): pass` immediately afterward also succeeds
@@ -249,6 +254,12 @@ read D1–D7 before implementing. In particular:
         assert it raises `MetadataLockError` after roughly that patched timeout
         (assert elapsed is close to the patched value, not the real 60s default —
         a hung test here means the patch didn't take).
+- [ ] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
+
+### Task C.3b — Unit tests: D7 immediate-failure mapping
+
+- [ ] Effort: 2/5
+- [ ] In the same file, add:
       - **`test_lock_fails_immediately_on_a_read_only_root`**: `os.chmod` a real
         `tmp_path` subdirectory to remove write permission (e.g. `0o500`), then
         call `git_metadata_lock` targeting a lock file inside it; assert
@@ -270,6 +281,12 @@ read D1–D7 before implementing. In particular:
         `sys.modules` trick, not real platform unavailability). Assert
         `MetadataLockError` is raised and its `detail` names the platform/import
         failure.
+- [ ] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
+
+### Task C.3c — Unit tests: release failure (D7 row 5)
+
+- [ ] Effort: 2/5
+- [ ] In the same file, add:
       - **`test_lock_release_failure_logs_warning_and_does_not_raise`** (D7 row
         5): `monkeypatch.setattr(fcntl, "flock", ...)` with a stateful fake that
         succeeds on the acquire call (`LOCK_EX | LOCK_NB`) but raises `OSError` on
