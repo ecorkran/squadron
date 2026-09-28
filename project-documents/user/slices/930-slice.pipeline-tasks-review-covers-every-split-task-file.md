@@ -33,6 +33,8 @@ Fixes [issue #153](https://github.com/ecorkran/squadron/issues/153). When a slic
 - `ReviewAction`: review each part, save each with its `part-N` suffix, and return one `ActionResult` carrying the worst verdict and every part's findings.
 - `DispatchAction._resolve_feedback_prompt` / `_findings_block`: name every file to revise, and tag each finding with its file when the review had more than one part.
 - `review_tasks` (CLI): switch to the shared helpers. Behavior stays the same except the UNKNOWN fix.
+- New `src/squadron/pipeline/actions/review_outputs.py`: the review action's output and finding key names plus typed readers. The review action writes through it; dispatch and the batch report read through it.
+- `pipeline/batch_report.py`: show `unsaved: <paths>` for an item whose review had parts that failed to save.
 
 **Out of scope**
 - Splitting or merging task files.
@@ -60,7 +62,8 @@ review/template_inputs.py    (edit) per-part resolution for fan-out keys
 pipeline/actions/review.py   (edit) resolve parts → run+save each → fold
 pipeline/actions/dispatch.py (edit) multi-file feedback prompt
 cli/commands/review.py       (edit) review_tasks uses parts.py; _aggregate_verdicts removed
-pipeline/batch_report.py     (edit) render outputs["unsaved_parts"] for an item
+pipeline/actions/review_outputs.py (new) ReviewOutputKey, FINDING_INPUT_FILE, typed readers
+pipeline/batch_report.py     (edit) render unsaved parts for an item
 ```
 
 **`review/parts.py`**
@@ -94,7 +97,7 @@ ReviewAction._review(context)
   ├─ resolve template / model / profile          (unchanged)
   ├─ base inputs from params                      (unchanged)
   ├─ slice given and no explicit input?
-  │     part_inputs = resolve_template_inputs(...)  → [inputs_1 .. inputs_N]
+  │     part_inputs = resolve_template_input_parts(...)  → [inputs_1 .. inputs_N]
   │   else part_inputs = [inputs]
   ├─ validate every part (required inputs, files exist) BEFORE any model call
   ├─ rules content resolved once                  (same for every part)
@@ -127,9 +130,31 @@ Edge cases for the fold:
 
 The loop condition (`until`, `accept_if`, `skip_if_met`) reads `verdict` through `last_with_verdict`, so it now sees the worst part without any change to loop code.
 
+**The output contract (`pipeline/actions/review_outputs.py`).** `ActionResult.outputs` is a `dict[str, object]` and findings are `dict[str, object]`. Today, dispatch and the batch report each spell out `"input_file"` / `"review_file"` as literals and cast whatever comes back. This slice adds three keys and a per-finding key, so those names move into one module:
+
+```python
+class ReviewOutputKey(StrEnum):
+    RESPONSE = "response"
+    INPUT_FILE = "input_file"
+    INPUT_FILES = "input_files"
+    REVIEW_FILE = "review_file"
+    REVIEW_FILES = "review_files"
+    UNSAVED_PARTS = "unsaved_parts"
+
+FINDING_INPUT_FILE = "input_file"   # per-finding key naming the part it came from
+
+def review_input_files(result: ActionResult) -> list[str]: ...  # INPUT_FILES, else [INPUT_FILE], else []
+def unsaved_parts(result: ActionResult) -> list[str]: ...       # [] when absent
+def finding_input_file(finding: dict[str, object]) -> str | None: ...
+```
+
+- The key values match today's literals exactly, so a single-part `ActionResult` is unchanged.
+- The readers check types at the boundary. A present key whose value is the wrong type (for example `input_files` not being a `list[str]`) raises `TypeError`. It's never treated as absent, because a wrong shape here is a bug in the writer.
+- `ReviewAction` builds outputs with `ReviewOutputKey` members. `DispatchAction` and `batch_report` read only through the readers, and after the change neither contains a string literal for these keys. Findings still come from `StructuredFinding.__dict__`; the review action adds `FINDING_INPUT_FILE` to multi-part findings. `StructuredFinding` itself doesn't gain a field, since it's serialized into review artifacts and single-part artifacts must stay byte-identical.
+
 **Feedback dispatch** (`feedback: review`):
-- If the review has `outputs["input_files"]` with more than one entry, the instruction becomes "Revise each of these files in place; do not create new files:" followed by the list. Otherwise it keeps today's `input_file` sentence.
-- `_findings_block` renders `- [SEV] summary (location) — <input_file>` when a finding has `input_file`. Single-part findings have no `input_file` key, so their prompt text is unchanged.
+- If `review_input_files(review)` has more than one entry, the instruction becomes "Revise each of these files in place; do not create new files:" followed by the list. With one entry it keeps today's sentence.
+- `_findings_block` renders `- [SEV] summary (location) — <file>` when `finding_input_file(finding)` returns a path. Single-part findings have no such key, so their prompt text is unchanged.
 
 ### State Management
 
@@ -256,7 +281,7 @@ Use the real split slice from the issue (914, three task files):
 2. Switch the CLI `review_tasks` to `parts.py`, delete `_aggregate_verdicts`. The CLI tests stay green and the new UNKNOWN test passes.
 3. Registry changes in `template_inputs.py` and its tests.
 4. `ReviewAction`: pull the per-part run/judge/save out of `_review` into `_run_part`, add the fold, and validate every part up front. `_review` currently runs about 290 lines, and this extraction shrinks it.
-5. Dispatch feedback changes and their tests.
+5. `review_outputs.py` and its tests (reader shapes, `TypeError` on a wrong-typed value). Then move `ReviewAction`, dispatch feedback, and `batch_report` onto it. Tests for all three follow.
 6. Parity test, then the verification walkthrough against 914.
 
 Effort: 2/5.
