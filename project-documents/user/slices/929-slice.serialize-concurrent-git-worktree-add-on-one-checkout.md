@@ -41,6 +41,7 @@ This slice puts an exclusive cross-process lock around each of those calls, and 
 - The lock wraps exactly four git calls: `worktree add`, the sweep's `worktree remove`, the sweep's `worktree prune`, and `_remove`'s `worktree remove`.
 - The lock timeout is observable. In `__enter__` it raises `WorktreeCreationError`. In the never-raise paths (sweep, exit removal) it logs a WARNING and skips that git call.
 - `review_pr.py`: render a `WorktreeError` from worktree setup as an error panel, not a traceback (D4).
+- `sweep_orphans` reads the claim before the lock, which closes a sweep-deletes-live-worktree race found during the baseline (D8).
 - Tests: deterministic no-overlap test, timeout tests for all three call sites, holder-death release test, and the load test repeated in one run.
 
 **Excluded**
@@ -138,6 +139,8 @@ The real-git load test stays as the acceptance test. It runs repeated rounds of 
 | release: `flock(LOCK_UN)` then `close()` | `OSError` | WARNING, not raised. Closing the descriptor releases the lock anyway, and a raise here would mask the exception already propagating out of the `with` body. |
 
 Every error the helper can raise is a `MetadataLockError`, so each call site's single `except MetadataLockError` (D4) covers all of them. `sweep_orphans` and `_remove` keep their never-raise contracts without a broad `except OSError`. A failure to acquire is always logged by the call site, at ERROR in `__enter__` and at WARNING in the sweep and exit paths, so none is silent.
+
+**D8: The sweep reads the claim before the lock (found in Task A.1).** The baseline showed a second race, separate from #133. `sweep_orphans` read `lock.json` first and the `.claim` file second, while `__enter__` writes `lock.json` and then unlinks the claim. When that handoff fell between the sweep's two reads, the sweep saw neither file and removed a live worktree. At concurrency 32 this caused 3 of 50 runs to fail (`ProcessCwdNotFoundError`, `Invalid path .git/worktrees/...`, submodule `Unable to read current working directory`). Every failing run logged "Sweeping orphaned worktree ... (no readable/parseable lock)" against a live, same-process worktree, and no passing run swept anything. The metadata lock does not cover this: the sweep decides before any git call, and the handoff happens after `add` returns. The fix reverses the reads to claim first, then lock. The claim exists before the directory does, and `lock.json` exists before the claim is unlinked, so a live worktree always shows at least one of the two. No new locking is needed. A deterministic test injects the handoff between the two reads.
 
 ### Patterns and Conventions
 - Named constants for the lock filename, timeout, and poll interval, each defined once in `metadata_lock.py`. Tests patch `metadata_lock.METADATA_LOCK_TIMEOUT_SECONDS` down the same way the load test already patches `GIT_FETCH_TIMEOUT_SECONDS`.

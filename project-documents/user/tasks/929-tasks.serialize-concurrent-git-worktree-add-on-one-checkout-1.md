@@ -84,6 +84,30 @@ read D1–D7 before implementing. In particular:
       **scratch copy** (do not commit this change) until failures appear, and record
       the concurrency value that reproduces the race alongside the failure rate.
 - [ ] No commit for this task — nothing in the working tree changes.
+- **Result (20260928, macOS, Darwin 25.5.0):** concurrency 8: `50 1 passed`.
+  Concurrency 32 (scratch copy): `3 1 failed` / `47 1 passed`. None of the three
+  failures was the #133 `commondir` error. All three were the sweep race in Task A.2.
+
+### Task A.2 — Sweep reads the claim before the lock (design D8)
+
+- [ ] Effort: 2/5
+- [ ] Added after Task A.1's baseline: the elevated-concurrency failures were
+      `sweep_orphans` removing live worktrees, not the #133 metadata race. See D8.
+- [ ] Add `test_sweep_spares_a_worktree_whose_claim_hands_off_to_its_lock_mid_sweep`
+      to `tests/codehost/test_worktree.py`: seed an entry directory plus a live
+      claim, and wrap `worktree._read_lock` so that right after its first call it
+      performs `__enter__`'s handoff (write `lock.json`, unlink the claim). Assert
+      the entry still exists and no `git worktree remove` was issued. Confirm it
+      fails on the current code.
+- [ ] In `sweep_orphans`, read and check the claim first, then the lock. An entry
+      is swept only when neither names a live owner.
+- [ ] Run: `pytest tests/codehost/test_worktree.py -x` (existing sweep tests stay green).
+- [ ] Re-run Task A.1's concurrency-32 scratch measurement (50 runs) and record
+      the result under this task. It is the baseline Part E's `ROUNDS` uses.
+- **Result (20260928, macOS):** after the fix, concurrency 32: `50 1 passed`;
+  concurrency 64: `30 1 passed`. The #133 `commondir` race did not reproduce locally
+  at any concurrency tried. Its only observed occurrence is the v0.13.3 tag CI run.
+- [ ] **Commit**: `fix: read worktree claim before lock in orphan sweep`
 
 ---
 

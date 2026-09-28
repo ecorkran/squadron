@@ -230,21 +230,18 @@ def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = 
     for entry in sorted(worktree_root.iterdir()):
         if not entry.is_dir():
             continue  # also skips the sibling .claim files (see _claim_path)
-        lock_path = entry / _LOCK_FILENAME
-        lock = _read_lock(lock_path)
+        # Claim first, lock second (929 D8). No lock yet does not mean abandoned: `git
+        # worktree add` refuses a pre-existing target directory, so the claim lives
+        # beside the worktree and covers it until the lock lands. The creator writes
+        # the lock *before* unlinking the claim, so reading in the same order means a
+        # live worktree always shows at least one of the two. Lock-first let the
+        # handoff fall between the reads, and a live worktree read as an orphan.
+        claim = _read_lock(_claim_path(entry))
+        if claim is not None and not _is_orphan(runner, claim):
+            continue  # live creator, still setting up
+        lock = _read_lock(entry / _LOCK_FILENAME)
         if lock is not None and not _is_orphan(runner, lock):
             continue  # live owner, matching pid and start time — leave it alone
-
-        if lock is None:
-            # No lock yet does not mean abandoned: `git worktree add` refuses a
-            # pre-existing target directory, so the claim cannot live inside the
-            # worktree and a live creator is briefly indistinguishable from a crashed
-            # one. The sibling claim closes that window — a live claimant is still
-            # setting up, and sweeping it would delete a worktree out from under a
-            # concurrent run.
-            claim = _read_lock(_claim_path(entry))
-            if claim is not None and not _is_orphan(runner, claim):
-                continue
 
         reason = "no readable/parseable lock" if lock is None else "owner process is gone"
         _logger.warning("Sweeping orphaned worktree %s (%s)", entry, reason)

@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from squadron.codehost import worktree
 from squadron.codehost.models import PullRequestRecord
 from squadron.codehost.refs import GIT_FETCH_TIMEOUT_SECONDS
 from squadron.codehost.worktree import (
@@ -21,6 +22,7 @@ from squadron.codehost.worktree import (
     SubmoduleTimeoutError,
     SubmoduleUnfetchableError,
     WorktreeCreationError,
+    WorktreeLock,
     _current_process_start_time,
     _worktree_root,
     sweep_orphans,
@@ -224,6 +226,48 @@ def test_sweep_removes_unlocked_worktree_whose_claim_owner_is_gone(tmp_path: Pat
     sweep_orphans(runner, CHECKOUT_CWD, root=root)
 
     assert not entry.exists()
+
+
+def test_sweep_spares_a_worktree_whose_claim_hands_off_to_its_lock_mid_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """929 D8: the creator's claim-to-lock handoff can land between the sweep's two reads.
+
+    ``__enter__`` writes ``lock.json`` and then unlinks the claim. A sweep that read the
+    lock first and the claim second saw neither across that handoff and removed a live
+    worktree. The handoff is injected right after the sweep's first read.
+    """
+    root = tmp_path / "worktrees"
+    entry = root / "github.com-acme-widgets-83-run1"
+    entry.mkdir(parents=True)  # 'git worktree add' done, lock not yet written
+    claim = root / "github.com-acme-widgets-83-run1.claim"
+    my_pid = os.getpid()
+    owner = json.dumps({"pid": my_pid, "started_at": _lstart_epoch()})
+    claim.write_text(owner)
+
+    real_read_lock = worktree._read_lock  # pyright: ignore[reportPrivateUsage]
+    reads: list[Path] = []
+
+    def _read_then_hand_off(path: Path) -> WorktreeLock | None:
+        result = real_read_lock(path)
+        reads.append(path)
+        if len(reads) == 1:
+            (entry / "lock.json").write_text(owner)
+            claim.unlink()
+        return result
+
+    monkeypatch.setattr(worktree, "_read_lock", _read_then_hand_off)
+    runner = FakeProcessRunner(
+        [
+            (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok(_LSTART)),
+            (["git", "worktree", "remove"], _worktree_add_ok()),
+            (["git", "worktree", "prune"], _worktree_add_ok()),
+        ]
+    )
+    sweep_orphans(runner, CHECKOUT_CWD, root=root)
+
+    assert entry.exists()
+    assert not any("remove" in call.argv for call in runner.calls)
 
 
 def test_claim_is_removed_once_the_real_lock_lands(tmp_path: Path) -> None:
