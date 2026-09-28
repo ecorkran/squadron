@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -28,7 +31,7 @@ from squadron.codehost.worktree import (
     sweep_orphans,
 )
 from squadron.core.process_runner import ProcessResult, ProcessTimedOutError
-from tests.codehost.fake_runner import FakeProcessRunner
+from tests.codehost.fake_runner import FakeProcessRunner, UnscriptedCallError
 
 CHECKOUT_CWD = "/repo"
 _LSTART = "Mon Sep 14 06:27:18 2026"
@@ -667,3 +670,97 @@ def test_two_concurrent_instances_same_pr_different_run_id_do_not_collide(
         assert entered_a.path != entered_b.path
         assert entered_a.path == path_a
         assert entered_b.path == path_b
+
+
+# ---------------------------------------------------------------------------
+# Metadata serialization (slice 929, D6): no two 'git worktree' calls ever overlap
+# ---------------------------------------------------------------------------
+
+# Long enough that an unserialized overlap between threads is essentially certain, short
+# enough to keep the test fast.
+_GIT_WORKTREE_HOLD_SECONDS = 0.02
+
+
+class _OverlapTrackingRunner:
+    """A thread-safe fake runner that records peak concurrent 'git worktree' calls.
+
+    ``FakeProcessRunner`` mutates its script without a lock and cannot be shared across
+    threads. This one answers a fixed set of calls and holds each 'git worktree' call
+    open briefly, so any two that are not serialized are caught in flight together.
+    """
+
+    def __init__(self) -> None:
+        self._guard = threading.Lock()
+        self._in_flight = 0
+        self.max_in_flight = 0
+
+    def run(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: str | None,
+        timeout: float,
+        env: Mapping[str, str] | None = None,
+        stdin: str | None = None,
+    ) -> ProcessResult:
+        argv = tuple(argv)
+        if argv[:1] == ("ps",):
+            return _ps_ok()
+        if argv[:2] == ("git", "submodule"):
+            return _worktree_add_ok()
+        if argv[:2] != ("git", "worktree"):
+            raise UnscriptedCallError(f"unscripted call: {' '.join(argv)}")
+
+        with self._guard:
+            self._in_flight += 1
+            self.max_in_flight = max(self.max_in_flight, self._in_flight)
+        time.sleep(_GIT_WORKTREE_HOLD_SECONDS)
+        with self._guard:
+            self._in_flight -= 1
+        if argv[2] == "add":
+            # Production writes lock.json into the new directory straight after 'add'.
+            Path(argv[4]).mkdir(parents=True)
+        return _worktree_add_ok()
+
+
+def test_concurrent_call_sites_never_overlap_a_metadata_git_call(tmp_path: Path) -> None:
+    """Every 'git worktree' add/remove/prune runs alone, across sweeps and full cycles."""
+    root = tmp_path / "worktrees"
+    # An orphan (no lock, no claim), so the sweep issues its remove and prune.
+    (root / "stale-entry").mkdir(parents=True)
+    runner = _OverlapTrackingRunner()
+    head_ref = "refs/squadron/pr/origin/83/head"
+    cycles = 5
+    start = threading.Barrier(cycles + 1)
+    errors: list[BaseException] = []
+
+    def _capture(work: Callable[[], None]) -> Callable[[], None]:
+        def _run() -> None:
+            start.wait()
+            try:
+                work()
+            except BaseException as exc:  # noqa: BLE001 - asserted empty below, not swallowed
+                errors.append(exc)
+
+        return _run
+
+    def _sweep() -> None:
+        sweep_orphans(runner, CHECKOUT_CWD, root)
+
+    def _cycle(index: int) -> Callable[[], None]:
+        def _work() -> None:
+            with ScratchWorktree(runner, _record(), head_ref, f"run{index}", CHECKOUT_CWD, root=root):
+                pass
+
+        return _work
+
+    threads = [threading.Thread(target=_capture(_sweep))]
+    threads += [threading.Thread(target=_capture(_cycle(i))) for i in range(cycles)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=10.0)
+    assert not any(thread.is_alive() for thread in threads), "a worker thread hung"
+
+    assert errors == []
+    assert runner.max_in_flight == 1
