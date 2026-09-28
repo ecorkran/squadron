@@ -425,7 +425,11 @@ read D1–D7 before implementing. In particular:
 ### Task D.7 — CLI test: worktree creation failure renders as a panel, not a traceback
 
 - [ ] Effort: 2/5
-- [ ] In `tests/cli/test_review_pr.py`, add a test following the existing pattern
+- [ ] In `tests/cli/test_review_pr.py`, add
+      `from squadron.codehost.worktree import ScratchWorktree, WorktreeCreationError`
+      to the file's imports (`Path` is already imported at line 12; neither
+      `ScratchWorktree` nor `WorktreeCreationError` is imported yet).
+- [ ] Add a test following the existing pattern
       `test_discussion_fetch_failure_renders_as_an_adapter_error_not_a_traceback`
       (same file): `monkeypatch.setattr(ScratchWorktree, "__enter__", ...)` to
       raise `WorktreeCreationError(Path("/tmp/fake"), "boom")`, invoke
@@ -513,7 +517,29 @@ read D1–D7 before implementing. In particular:
 
 ## Part G — Full verification
 
-### Task G.1 — Full suite, lint, typecheck
+### Task G.1 — Confirm CI actually gates the load test tier
+
+Per `.claude/rules/testing.md` / `.claude/rules/python.md`: "CI must gate load
+tests for slices touching these paths" — this slice's concurrency fix is exactly
+that path, so confirm it explicitly rather than assuming `pytest` in CI already
+covers it.
+
+- [ ] Effort: 1/5
+- [ ] Read [.github/workflows/ci.yml](.github/workflows/ci.yml)'s `test` job. Confirm
+      its `uv run pytest` step (currently the last step of that job) has no `-m`
+      marker deselect and no path argument that would exclude `tests/load/` —
+      `[tool.pytest.ini_options]` in `pyproject.toml` sets `testpaths = ["tests"]`
+      with no load-excluding marker defined, so a bare `pytest` invocation already
+      collects `tests/load/test_worktree_concurrency.py`.
+- [ ] State the outcome explicitly in this checklist item (do not just check the
+      box): either "confirmed — CI's `test` job runs `tests/load/` unfiltered on
+      every push/PR to `main`, no change needed" or, if you find a marker/path
+      exclusion that skips it, fix `.github/workflows/ci.yml` so the load tier is
+      gated and note that fix here.
+- [ ] This is a one-time confirmation for this slice's new/changed load-test
+      content (Task E.1's `ROUNDS` change) — it does not require a new CI job.
+
+### Task G.2 — Full suite, lint, typecheck
 
 - [ ] Effort: 1/5
 - [ ] From the squadron repo root: `ruff format && ruff check && pyright`. Zero
@@ -523,7 +549,7 @@ read D1–D7 before implementing. In particular:
       function body (Technical Requirements).
 - [ ] Run the full test suite: `pytest`. All green.
 
-### Task G.2 — Manual verification walkthrough
+### Task G.3 — Manual verification walkthrough
 
 - [ ] Effort: 2/5
 - [ ] Follow the design's Verification Walkthrough steps 3 and 5 exactly (design
@@ -541,7 +567,7 @@ read D1–D7 before implementing. In particular:
       silent adjustment — if something doesn't match, stop and report before
       proceeding.
 
-### Task G.3 — Confirm everything landed
+### Task G.4 — Confirm everything landed
 
 - [ ] Effort: 1/5
 - [ ] Confirm current working directory is the squadron project root.
