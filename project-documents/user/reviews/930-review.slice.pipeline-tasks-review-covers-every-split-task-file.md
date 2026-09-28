@@ -4,95 +4,95 @@ layer: project
 reviewType: slice
 slice: pipeline-tasks-review-covers-every-split-task-file
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md
 aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20260928
 dateUpdated: 20260928
-reviewedSha: f135f30721f9bb8868f40b99c5f045b0266dc996
-revision_number: 1
+reviewedSha: 4d13e9fc85c187bb70bce3ed01757379d968b9ec
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 runId: run-20260928-slices-plan-783dab3a
 squadronVersion: 0.15.1
 findings:
   - id: F001
-    severity: concern
+    severity: pass
     category: scope
-    summary: "In-scope list omits the batch report change"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md:30-35"
-  - id: F002
-    severity: concern
-    category: consistency
-    summary: "Data flow uses a function name the Migration Plan removes"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md:97"
-  - id: F003
-    severity: concern
-    category: integration
-    summary: "Findings-to-dispatch contract rides on untyped dict keys"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md:111-121, 130-132"
-  - id: F004
-    severity: note
-    category: scope
-    summary: "Scope stays within the maintenance initiative's bounds"
+    summary: "Fits the initiative's scope"
     location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Overview"
-  - id: F005
+  - id: F002
     severity: pass
     category: architecture
-    summary: "Dependency direction and layering"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Architecture"
-  - id: F006
+    summary: "Dependency directions and layering are correct"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Component-Structure"
+  - id: F003
     severity: pass
     category: error-handling
-    summary: "Failure modes enumerated with observable signals"
+    summary: "Failure modes are enumerated with observable signals"
     location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Failure-Modes"
-  - id: F007
+  - id: F004
     severity: pass
+    category: nfr
+    summary: "Parent architecture states no NFRs"
+    location: "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
+  - id: F005
+    severity: note
+    category: scope
+    summary: "Size is at the top of \"small and focused\""
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Technical-Scope"
+  - id: F006
+    severity: note
     category: integration
-    summary: "Cross-repo boundary handled correctly"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Integration-Points"
+    summary: "The context-forge gate gap is recorded and tracked outside this slice"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Consumes-from-Other-Slices"
+  - id: F007
+    severity: note
+    category: error-handling
+    summary: "UNKNOWN-ranking fix is folded in deliberately"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Value"
 ---
 
 # Review: slice — slice 930
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [CONCERN] In-scope list omits the batch report change
+### [PASS] Fits the initiative's scope
 
-Component Structure (line 63) lists `pipeline/batch_report.py` as an edit to render `outputs["unsaved_parts"]`. The "In scope" list has no matching bullet. Failure Modes (line 158) and Success Criteria (line 202) both depend on it. The unsaved-part signal is the slice's answer to the silent-save-failure case, so it belongs in the scope list. Otherwise a reader of the scope list would think the batch report is untouched. Add the bullet.
+This is a non-trivial bug fix (#153) plus a consolidation of duplicated part-naming and verdict-folding logic between the CLI and the pipeline. Both are in scope for `900-arch.maintenance-and-refactoring.md` ("Bug fixes", "Refactoring: consolidating duplicated logic"). It adds no new user-facing capability. The slice is independently deliverable, and its dependency on slice 195 is already complete.
 
-### [CONCERN] Data flow uses a function name the Migration Plan removes
+### [PASS] Dependency directions and layering are correct
 
-The Data Flow diagram calls `resolve_template_inputs(...)`. Line 85 and the Migration Plan (line 169) say that name is deleted and replaced by `resolve_template_input_parts`. Line 169 also requires `grep -rn resolve_template_inputs src tests` to return nothing. The diagram should use the new name. As written, it contradicts the slice's own guard against the silent-ignore bug.
+`review/parts.py` sits in the review layer and both the CLI and the pipeline consume it. `pipeline/actions/review_outputs.py` sits in the pipeline layer and is read only by dispatch and the batch report. Nothing points back up. The fan-out lives in the `TEMPLATE_INPUTS` registry, not in a `ReviewAction` check on the template name. That avoids string dispatch, which matches the project's stated rules.
 
-### [CONCERN] Findings-to-dispatch contract rides on untyped dict keys
+### [PASS] Failure modes are enumerated with observable signals
 
-`ReviewAction` and `DispatchAction` now share a contract made of `outputs["input_files"]`, `outputs["input_file"]`, `outputs["unsaved_parts"]` and a per-finding `input_file` key. The doc describes it only in prose. The feedback prompt's behavior depends on whether `input_files` has more than one entry, so a rename or typo on either side would silently fall back to the single-file prompt. That is the kind of hidden dependency the "no silent fallback" rule targets. Define these keys once as constants, or a small typed structure, in one shared module. Also add a test asserting the dispatch prompt reads exactly what the review action writes. The parity tests cover file names but not this seam.
+Provider error and timeout, model hang, git-subprocess hang and save failure each have an explicit behavior. Each also has a named signal: a WARNING or ERROR log, a failure artifact, or `unsaved_parts` in the batch report. The hang case deliberately adds no per-part timeout and says so, with the reason. The Technical Requirements list tests that assert these signals with `caplog`. Validating every part before the first model call avoids paying for early parts when a later file is missing.
 
-### [NOTE] Scope stays within the maintenance initiative's bounds
+### [PASS] Parent architecture states no NFRs
 
-This is a bug fix (#153) plus a consolidation of duplicated logic. Both fit the architecture's "Bug fixes" and "Refactoring" categories. It adds no new capability. It touches about five files, which is at the upper edge of "small and focused". The doc justifies not extracting the full loop body, which avoids over-engineering.
+The architecture defines no latency or throughput targets, so the slice doesn't need to restate any. Running parts sequentially is a documented decision and matches the CLI.
 
-### [PASS] Dependency direction and layering
+### [NOTE] Size is at the top of "small and focused"
 
-`review/parts.py` sits in the review layer, and both the CLI and the pipeline depend on it, not on each other. Fan-out is declared in the input registry instead of by template-name checks in the action. That avoids string dispatch. Deleting the old function name so that stale callers break at import time is a good guard.
+The architecture prefers small slices. This one touches seven components, including two new modules, a registry signature change for every `TEMPLATE_INPUTS` entry, and a batch-report change. `review_outputs.py` and the `unsaved:` rendering are the parts that go beyond the minimum fix. The doc justifies both. The typed keys stop dispatch and the report from each hard-coding the same literals, and an unsaved part would otherwise fail silently. I don't think either is over-engineering. If the slice grows during implementation, the output-contract work is the natural piece to split out. The "Effort: 2/5" rating looks light for this footprint.
 
-### [PASS] Failure modes enumerated with observable signals
+### [NOTE] The context-forge gate gap is recorded and tracked outside this slice
 
-The table covers provider error and timeout, hang, save-subprocess hang, and save failure. Each row gives a handling strategy and a WARNING or ERROR log or a named output, and tests are specified with `caplog`. The hang case explicitly declines a per-part timeout and explains why. Validating every part before the first model call is a good way to avoid wasted spend. Sequential runs multiply latency by N, which is acceptable because the architecture states no NFR for this path.
+Context-forge's gate reads the lexicographically last tasks review, so it sees only `part-N`. Numeric ordering also breaks at 10 or more parts. The doc marks this out of scope, links context-forge#106, and states the interim behavior: the pipeline's own loop gate is correct, but a later `cf next` can still be cleared by a passing last part. This follows the project's rule to log deferred work as an issue. The residual risk is stated honestly.
 
-### [PASS] Cross-repo boundary handled correctly
+### [NOTE] UNKNOWN-ranking fix is folded in deliberately
 
-The context-forge gate's last-match selection is recorded as out of scope and tracked in context-forge#106. The slice records what the consequences are, including the `part-10` ordering issue. It also states that a leftover unsuffixed review never wins. This respects the repository boundary and logs the deferred work as an issue, not as Future Work.
+Replacing `_aggregate_verdicts` with `worst_verdict` fixes the `KeyError` on UNKNOWN. It also makes empty input raise, where the CLI helper returned PASS. That is in line with the "no silent fallback" principle and is covered by tests. It's a small extra behavior change to the CLI, and the doc discloses it.
 
 ### Run Digest
 
-- Response length: 4411 chars
+- Response length: 4253 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0

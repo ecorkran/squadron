@@ -11,52 +11,48 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20260928
 dateUpdated: 20260928
-reviewedSha: 10cf828b00bb6c9a81035ee9b9ac64b95d8b4c49
+reviewedSha: f135f30721f9bb8868f40b99c5f045b0266dc996
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 runId: run-20260928-slices-plan-783dab3a
 squadronVersion: 0.15.1
 findings:
   - id: F001
-    severity: pass
+    severity: concern
     category: scope
-    summary: "Fits the maintenance initiative scope"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Overview"
+    summary: "In-scope list omits the batch report change"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md:30-35"
   - id: F002
+    severity: concern
+    category: consistency
+    summary: "Data flow uses a function name the Migration Plan removes"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md:97"
+  - id: F003
+    severity: concern
+    category: integration
+    summary: "Findings-to-dispatch contract rides on untyped dict keys"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md:111-121, 130-132"
+  - id: F004
+    severity: note
+    category: scope
+    summary: "Scope stays within the maintenance initiative's bounds"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Overview"
+  - id: F005
     severity: pass
     category: architecture
     summary: "Dependency direction and layering"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Component-Structure"
-  - id: F003
-    severity: concern
-    category: error-handling
-    summary: "Failure modes for hang and timeout are not enumerated for the new per-part I/O path"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Patterns-and-Conventions"
-  - id: F004
-    severity: concern
-    category: error-handling
-    summary: "Silent gap in verdict semantics when a part's save fails"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Patterns-and-Conventions"
-  - id: F005
-    severity: concern
-    category: integration
-    summary: "Known downstream gate defect is recorded but not tracked"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Integration-Points"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Architecture"
   - id: F006
-    severity: note
-    category: specification
-    summary: "Verdict fold and score/criteria tie-breaking are under-specified at the edges"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Data-Flow"
+    severity: pass
+    category: error-handling
+    summary: "Failure modes enumerated with observable signals"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Failure-Modes"
   - id: F007
-    severity: note
-    category: specification
-    summary: "Behavior change to `resolve_template_inputs` signature"
-    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Migration-Plan"
-  - id: F008
-    severity: note
-    category: nfr
-    summary: "NFR restatement not applicable"
-    location: "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
+    severity: pass
+    category: integration
+    summary: "Cross-repo boundary handled correctly"
+    location: "project-documents/user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md#Integration-Points"
 ---
 
 # Review: slice — slice 930
@@ -66,41 +62,37 @@ findings:
 
 ## Findings
 
-### [PASS] Fits the maintenance initiative scope
+### [CONCERN] In-scope list omits the batch report change
 
-This is a non-trivial bug fix (issue #153) that also removes a latent `KeyError` and moves the part naming and verdict folding into one module. Arch 900 lists "Bug fixes" and "Refactoring: consolidating duplicated logic" as in scope. Effort is 2/5 and the slice can be delivered on its own. Out-of-scope items are explicit: no task splitting, no cleanup of old artifacts, and no context-forge change.
+Component Structure (line 63) lists `pipeline/batch_report.py` as an edit to render `outputs["unsaved_parts"]`. The "In scope" list has no matching bullet. Failure Modes (line 158) and Success Criteria (line 202) both depend on it. The unsaved-part signal is the slice's answer to the silent-save-failure case, so it belongs in the scope list. Otherwise a reader of the scope list would think the batch report is untouched. Add the bullet.
+
+### [CONCERN] Data flow uses a function name the Migration Plan removes
+
+The Data Flow diagram calls `resolve_template_inputs(...)`. Line 85 and the Migration Plan (line 169) say that name is deleted and replaced by `resolve_template_input_parts`. Line 169 also requires `grep -rn resolve_template_inputs src tests` to return nothing. The diagram should use the new name. As written, it contradicts the slice's own guard against the silent-ignore bug.
+
+### [CONCERN] Findings-to-dispatch contract rides on untyped dict keys
+
+`ReviewAction` and `DispatchAction` now share a contract made of `outputs["input_files"]`, `outputs["input_file"]`, `outputs["unsaved_parts"]` and a per-finding `input_file` key. The doc describes it only in prose. The feedback prompt's behavior depends on whether `input_files` has more than one entry, so a rename or typo on either side would silently fall back to the single-file prompt. That is the kind of hidden dependency the "no silent fallback" rule targets. Define these keys once as constants, or a small typed structure, in one shared module. Also add a test asserting the dispatch prompt reads exactly what the review action writes. The parity tests cover file names but not this seam.
+
+### [NOTE] Scope stays within the maintenance initiative's bounds
+
+This is a bug fix (#153) plus a consolidation of duplicated logic. Both fit the architecture's "Bug fixes" and "Refactoring" categories. It adds no new capability. It touches about five files, which is at the upper edge of "small and focused". The doc justifies not extracting the full loop body, which avoids over-engineering.
 
 ### [PASS] Dependency direction and layering
 
-`review/parts.py` is a leaf module. Both `cli/commands/review.py` and `pipeline/actions/review.py` depend on it, and it depends on neither. The `fans_out` fan-out is declared in the input registry, so `ReviewAction` needs no template-name string dispatch. That fits the project rule against string dispatch. Sharing naming and verdict folding instead of the loop body is justified in the doc, and it avoids a sync/async adapter layer.
+`review/parts.py` sits in the review layer, and both the CLI and the pipeline depend on it, not on each other. Fan-out is declared in the input registry instead of by template-name checks in the action. That avoids string dispatch. Deleting the old function name so that stale callers break at import time is a good guard.
 
-### [CONCERN] Failure modes for hang and timeout are not enumerated for the new per-part I/O path
+### [PASS] Failure modes enumerated with observable signals
 
-The failure-behavior paragraph covers a provider failure on part k and a failed save. It says nothing about a part that hangs or times out, or about a peer that disconnects mid-call. A run of N sequential calls multiplies exposure to those cases. The doc should say whether the existing per-call timeout applies to each part, or whether one timeout covers the whole step. It should also say what observable signal (WARNING+ log or metric) marks a timed-out part and which failure artifact slot it lands in. The test list has one failure test, for a provider failure on part 2. It has none that asserts the observable signal for a timeout or a non-fatal save failure. The review-code rule requires an observable signal and a test for each failure mode.
+The table covers provider error and timeout, hang, save-subprocess hang, and save failure. Each row gives a handling strategy and a WARNING or ERROR log or a named output, and tests are specified with `caplog`. The hang case explicitly declines a per-part timeout and explains why. Validating every part before the first model call is a good way to avoid wasted spend. Sequential runs multiply latency by N, which is acceptable because the architecture states no NFR for this path.
 
-### [CONCERN] Silent gap in verdict semantics when a part's save fails
+### [PASS] Cross-repo boundary handled correctly
 
-A save failure is logged and the step continues. In the multi-part case that leaves a verdict for a part with no artifact on disk. The context-forge gate and the parity claim ("identical filenames") both rely on those artifacts, so the step can report success while artifacts are missing. The doc should say whether that case is surfaced in `ActionResult` (for example in `metadata` or `outputs`), or state why a log line alone is enough.
-
-### [CONCERN] Known downstream gate defect is recorded but not tracked
-
-The doc finds that context-forge's gate reads only the lexicographically last tasks review. That means the gate can PASS a slice whose worst part failed. The slice's stated Value is that "a PASS on part 1 no longer clears a slice whose part 3 is broken", but this defect leaves the gate open to the same failure. The doc defers the fix and leaves the issue link as a to-do (implementation step 7). Project convention is to log deferred work as a GitHub issue and link its number from the deferring decision. File the issue before implementation starts, or state that the Value claim covers pipeline gating only.
-
-### [NOTE] Verdict fold and score/criteria tie-breaking are under-specified at the edges
-
-The fold takes `score` and `criteria` from the lowest-scoring part, and `review_file` from the worst verdict part, first on ties. Those two can point at different parts. That is acceptable, but the doc should state it. It should also say how a part with no score is treated when other parts have one. This is minor and can be settled in the task breakdown.
-
-### [NOTE] Behavior change to `resolve_template_inputs` signature
-
-`resolve_template_inputs` now returns a list and stops mutating its argument. The doc names the single production caller and the affected tests. That covers the integration surface adequately. No action is needed beyond the planned updates.
-
-### [NOTE] NFR restatement not applicable
-
-Arch 900 states no NFRs (latency, throughput), so the slice has none to restate. Sequential per-part calls do raise wall-clock time roughly N-fold for split slices. The doc accepts that as a deliberate choice ("Sequential parts").
+The context-forge gate's last-match selection is recorded as out of scope and tracked in context-forge#106. The slice records what the consequences are, including the `part-10` ordering issue. It also states that a leftover unsuffixed review never wins. This respects the repository boundary and logs the deferred work as an issue, not as Future Work.
 
 ### Run Digest
 
-- Response length: 5149 chars
+- Response length: 4411 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -109,7 +101,7 @@ Arch 900 states no NFRs (latency, throughput), so the slice has none to restate.
 - Reasoning characters: 0
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
