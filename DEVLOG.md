@@ -12,6 +12,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Implementation Complete
+
+- Closes #133. New `codehost/metadata_lock.py` (`git_metadata_lock`, `MetadataLockError`): an exclusive `fcntl.flock` on `.git-metadata.flock` under the worktree root, polled against `2 × GIT_QUERY_TIMEOUT_SECONDS`. It wraps `worktree add`, both `remove` sites, and `prune`. `sq review pr` now shows a `WorktreeError` from setup as an error panel instead of a traceback.
+- **Second bug found by the baseline (D8, Task A.2):** `sweep_orphans` read `lock.json` before the `.claim`, so the creator's handoff could land between the two reads and a live worktree got swept. That was 3/50 failures at concurrency 32. Reading the claim first fixed it.
+- **Baseline:** #133's `commondir` race never reproduced on macOS (0 failures in 130 runs at concurrency 8/32/64); it has only been seen in Linux CI. The load test runs 4 rounds × 32 (~12s), sized on the D8 rate; 50/50 pass after the fix. The deterministic no-overlap test (max in-flight 6 → 1) is the proof.
+- **Accepted finding:** against a wedged holder, `sq review pr` fails after ~120s, not ~60s, because the internal sweep's `prune` waits its own timeout. Recorded in D4.
+- Live walkthrough run against throwaway PRs #160/#161 (closed, branches deleted).
+- **Unrelated, not touched:** an uncommitted `src/squadron/data/models.toml` edit (`sonnet` → `claude-sonnet-5-5`) fails 3 alias tests.
+- **Next:** merge `929-slice...` into `main`.
+
 ### Slice 929: Task File Split
 
 - Task breakdown (709 lines, review round 3 PASS) split to meet the 450-line limit: `-1.md` covers Parts A–C (baseline, failing no-overlap test, `metadata_lock.py`), `-2.md` covers Parts D–G plus Completion. No task content changed; the split needs a fresh per-part tasks review.

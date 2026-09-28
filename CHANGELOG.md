@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Running several `sq review pr` at once against one repository no longer fails at random while setting up worktrees (#133). One run's cleanup could also delete another run's live worktree; that is fixed too.
+- `sq review pr` shows a worktree setup failure as an error message instead of a Python traceback.
+
 ## [0.15.0] - 20260928
 
 ### Added

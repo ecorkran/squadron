@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import ExitStack
 from pathlib import Path
 
 import typer
@@ -29,7 +30,7 @@ from squadron.codehost.errors import CodeHostError
 from squadron.codehost.models import PullRequestRecord, RepositoryLocator, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
 from squadron.codehost.targets import PullRequestTarget, TargetForm
-from squadron.codehost.worktree import ScratchWorktree
+from squadron.codehost.worktree import ScratchWorktree, WorktreeError
 from squadron.config.manager import get_config
 from squadron.integrations.context_forge import cf_project_name
 from squadron.review.git_utils import EmptyScopeError, assert_reviewable_scope
@@ -423,9 +424,15 @@ def review_pr(
         # ScratchWorktree.__enter__ sweeps orphans itself before creating this one
         # (design D3) — no separate sweep_orphans() call needed here.
         run_id = uuid.uuid4().hex[:8]
-        with ScratchWorktree(
-            host.runner, resolved.record, fetched.head_ref, run_id, checkout_cwd
-        ) as worktree:
+        scratch = ScratchWorktree(host.runner, resolved.record, fetched.head_ref, run_id, checkout_cwd)
+        # Only setup failures become an error panel (929 D4), not failures in the review
+        # run: ExitStack lets the try wrap entry alone while the stack owns cleanup.
+        with ExitStack() as stack:
+            try:
+                worktree = stack.enter_context(scratch)
+            except WorktreeError as exc:
+                render_code_host_error(exc)
+                raise typer.Exit(code=1) from exc
             worktree_path = worktree.path
             result = _run(str(worktree.path), checkout_cwd)
 
