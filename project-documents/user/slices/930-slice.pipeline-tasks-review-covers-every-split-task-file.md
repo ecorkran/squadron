@@ -190,7 +190,7 @@ An unsaved part is where silence would hurt. The step's verdict includes that pa
 
 - `_aggregate_verdicts` (`cli/commands/review.py`) → replaced by `parts.worst_verdict`. `review_tasks` is its only caller.
 - `review_tasks`'s inline `multi_part` / `f"part-{part_idx}"` logic → `review_parts(task_file_paths)`. Its `SaveOutcome` folding stays in the CLI, because it's CLI-specific (exit codes).
-- `_tasks_input` → `_task_files` (list return). The `TEMPLATE_INPUTS` source signature changes for every entry. The only callers are `resolve_template_inputs` and `tests/review/test_template_inputs.py`.
+- `_tasks_input` → `_task_files` (list return). The `TEMPLATE_INPUTS` source signature changes for every entry. The only callers are the resolver (renamed below) and `tests/review/test_template_inputs.py`.
 - `resolve_template_inputs` (mutates `inputs` in place, returns `None`) is replaced by `resolve_template_input_parts` (doesn't mutate, returns `list[dict[str, str]]`). The rename is on purpose. A caller that kept the old name and ignored the return value would silently lose the resolved inputs. With the old name gone, that becomes an import error and a pyright error instead. Its single production caller is `ReviewAction._resolve_slice_inputs`, which is updated here. `grep -rn resolve_template_inputs src tests` must come back empty after the change.
 - **Behavior check:** the existing `tests/pipeline/actions/test_review_action*.py` and CLI review tests pass unchanged for single-file slices. The byte-for-byte check is the Success Criteria test below.
 
