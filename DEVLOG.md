@@ -12,6 +12,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Slice 932: Pipeline SDK Session Control — Design Complete
+
+- Design: `user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md` (#162, #163, #155, #156).
+- **Seeding (#162):** rotation, resume, and `summary restore` connect a fresh client with the framed seed as preset `append`. No turn, so there is nothing to act on. A single `open_pipeline_session` builder replaces the duplicated literals in run.py/executor.py.
+- **Background wait (#163):** `dispatch()` tracks `local_agent`/`local_workflow` tasks through the lifecycle messages and returns only on its own result (`origin`) with none still running. Shells are not waited on. No new ceiling. The post-condition flag gets the last 400 chars of the agent's final text.
+- **Prompt (#155):** SDK dispatch always uses the preset, with the step prompt appended. The session path rejects a step `system_prompt`.
+- **Settings (#156):** probed on CLI 2.1.284. With no flag, it loads the user and project CLAUDE.md. Auto-memory loads even under `project`. Policy: `[project]` for reviews, judges, pipeline sessions, and dispatch. Auto-memory is off whenever `user` is not loaded. Run Digest, JSON, and step metadata record the prompt mode and settings.
+- Found:
+  - Resume seeding skips the lazy session.
+  - `summary restore` frames the summary twice.
+  - A step `system_prompt` on the session path was silently ignored.
+
 ### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Design Complete
 
 - Design: `user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md` (#154, #157, #158).
