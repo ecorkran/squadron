@@ -97,13 +97,28 @@ read D1–D7 before implementing. In particular:
         in-flight counter and update a running max; release the lock; `time.sleep`
         a short fixed duration (e.g. 0.02s — long enough to make an unserialized
         overlap essentially certain, short enough to keep the test fast); reacquire
-        the lock to decrement the counter; return a canned success `ProcessResult`
-        (reuse `_worktree_add_ok()`'s shape — `returncode=0`, empty `stdout`/`stderr`).
+        the lock to decrement the counter.
+        - **If `argv[2] == "add"`** (shape `["git", "worktree", "add", "--detach",
+          str(path), head_ref]` — the path is `argv[4]`): **create the target
+          directory** (`Path(argv[4]).mkdir(parents=True)`) before returning
+          success. This is not optional: production code writes the lock file
+          straight to `path / "lock.json"` immediately after a successful `add`
+          returns (`worktree.py`, right after the `add` call), with no git call in
+          between — a fake that returns success without creating the directory
+          makes that write raise `FileNotFoundError`, and the test fails on that
+          error instead of on the overlap assertion it exists to check.
+        - If `argv[2] == "remove"` or `argv[2] == "prune"`: no directory side
+          effect needed — `sweep_orphans` and `_remove` both already fall back to
+          `shutil.rmtree` themselves once the (faked) git call returns, so the
+          fake doesn't need to delete anything to keep the test's end state clean.
+        - Return a canned success `ProcessResult` in every case (reuse
+          `_worktree_add_ok()`'s shape — `returncode=0`, empty `stdout`/`stderr`).
       - If `argv[:1] == ("ps",)`: return `_ps_ok()` immediately (already defined in
         this file) — no counting, no sleep.
       - If `argv[:2] == ("git", "submodule")`: return a canned success immediately —
-        no counting, no sleep. (`_init_submodules` runs during `__enter__`; this
-        keeps it a no-op for this test.)
+        no counting, no sleep. (`_init_submodules` runs during `__enter__`, with
+        `cwd=str(path)` — since `path` was created by the `add` branch above,
+        this call needs no directory side effect of its own.)
       - Anything else: raise (reuse `UnscriptedCallError` from
         `tests/codehost/fake_runner.py`, or a local equivalent) — an unscripted call
         here means the test's assumptions about what `ScratchWorktree`/`sweep_orphans`
@@ -149,7 +164,9 @@ read D1–D7 before implementing. In particular:
 - [ ] Confirm current working directory is the squadron project root.
 - [ ] `git add` and commit Part B's changes. The suite is expected to have one new
       failing test at this point — note that in the commit body so it isn't mistaken
-      for an accident later.
+      for an accident later. Branch CI will show red on this commit and on Part C's
+      commit (Task C.5) too, since nothing wires the new lock in until Part D's
+      commit (Task D.9) — expected, not a regression to chase down mid-slice.
       Suggested message: `test: add failing deterministic no-overlap test for worktree metadata races`.
 
 ---
@@ -212,46 +229,65 @@ read D1–D7 before implementing. In particular:
 ### Task C.3 — Unit tests: acquire/release, mutual exclusion, timeout
 
 - [ ] Effort: 3/5
-- [ ] Create `tests/codehost/test_metadata_lock.py`. Tests (name each so `-k lock`
-      matches the file, per the walkthrough):
-      - **Acquire and release**: `with git_metadata_lock(root): pass` succeeds; a
-        second `with git_metadata_lock(root): pass` immediately afterward also
-        succeeds (lock was released, not leaked).
-      - **Mutual exclusion**: from the test's own process, `open()` +
-        `fcntl.flock(f, fcntl.LOCK_EX)` the same lock file path
+- [ ] Create `tests/codehost/test_metadata_lock.py`. Every test name starts with
+      `test_lock_` so `-k lock` (per the walkthrough) matches all of them:
+      - **`test_lock_is_acquired_and_released_for_reuse`**: `with
+        git_metadata_lock(root): pass` succeeds; a second
+        `with git_metadata_lock(root): pass` immediately afterward also succeeds
+        (lock was released, not leaked).
+      - **`test_lock_blocks_a_second_acquirer_until_timeout`**: from the test's own
+        process, `open()` + `fcntl.flock(f, fcntl.LOCK_EX)` the same lock file path
         (`root / ".git-metadata.flock"`) directly, so the test itself holds it.
         Then call `git_metadata_lock(root)` with
         `METADATA_LOCK_TIMEOUT_SECONDS` monkeypatched down (e.g. to `0.2`) and
         assert it raises `MetadataLockError` after roughly that patched timeout
         (assert elapsed is close to the patched value, not the real 60s default —
         a hung test here means the patch didn't take).
-      - **Read-only root**: `os.chmod` a real `tmp_path` subdirectory to remove
-        write permission (e.g. `0o500`), then call `git_metadata_lock` targeting a
-        lock file inside it; assert `MetadataLockError` is raised **immediately**
-        (assert elapsed is small, well under the timeout — proving D7's "fails at
-        once, not after the deadline"). Skip this test if
-        `hasattr(os, "getuid") and os.getuid() == 0` — root bypasses permission
-        checks, which would make the test silently pass for the wrong reason.
-      - **Non-`BlockingIOError` flock failure**: `monkeypatch.setattr(fcntl,
-        "flock", ...)` (import `fcntl` in the test module) so the first call raises
-        e.g. `OSError(errno.ENOLCK, "no locks available")`. Assert
-        `MetadataLockError` is raised immediately (elapsed small, no retry loop
-        entered) — this is the test that pins D7 row 4's "must not enter the retry
-        loop" behavior; a bug here would otherwise silently retry for the full 60s
-        before failing.
-      - **Fcntl unavailable**: `monkeypatch.setitem(sys.modules, "fcntl", None)` —
-        this makes any subsequent `import fcntl` raise `ImportError` (a documented
+      - **`test_lock_fails_immediately_on_a_read_only_root`**: `os.chmod` a real
+        `tmp_path` subdirectory to remove write permission (e.g. `0o500`), then
+        call `git_metadata_lock` targeting a lock file inside it; assert
+        `MetadataLockError` is raised **immediately** (assert elapsed is small,
+        well under the timeout — proving D7's "fails at once, not after the
+        deadline"). Skip this test if `hasattr(os, "getuid") and os.getuid() == 0`
+        — root bypasses permission checks, which would make the test silently
+        pass for the wrong reason.
+      - **`test_lock_fails_immediately_on_non_blocking_io_flock_error`**:
+        `monkeypatch.setattr(fcntl, "flock", ...)` (import `fcntl` in the test
+        module) so the first call raises e.g. `OSError(errno.ENOLCK, "no locks
+        available")`. Assert `MetadataLockError` is raised immediately (elapsed
+        small, no retry loop entered) — this is the test that pins D7 row 4's
+        "must not enter the retry loop" behavior; a bug here would otherwise
+        silently retry for the full 60s before failing.
+      - **`test_lock_fails_with_detail_when_fcntl_is_unavailable`**:
+        `monkeypatch.setitem(sys.modules, "fcntl", None)` — this makes any
+        subsequent `import fcntl` raise `ImportError` (a documented
         `sys.modules` trick, not real platform unavailability). Assert
         `MetadataLockError` is raised and its `detail` names the platform/import
         failure.
+      - **`test_lock_release_failure_logs_warning_and_does_not_raise`** (D7 row
+        5): `monkeypatch.setattr(fcntl, "flock", ...)` with a stateful fake that
+        succeeds on the acquire call (`LOCK_EX | LOCK_NB`) but raises `OSError` on
+        the release call (`LOCK_UN`) — distinguish the two by the `operation`
+        argument the fake receives. Run a normal, exception-free
+        `with git_metadata_lock(root): pass` body. Assert: no exception
+        propagates out of the `with` block, and a WARNING was logged (`caplog`).
+      - **`test_lock_release_failure_does_not_mask_a_body_exception`** (D7 row 5,
+        the other half): same release-failure setup as above, but this time the
+        `with` block's own body raises a distinct exception (e.g. a local
+        `class _BodyError(Exception)`). Assert that **`_BodyError`** propagates
+        out of the `with` statement — not an `OSError` and not a
+        `MetadataLockError` — proving the release-path failure is logged and
+        swallowed rather than replacing whatever the body was already raising.
 - [ ] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
 
 ### Task C.4 — Holder-death test
 
 - [ ] Effort: 2/5
-- [ ] In the same file, add a test proving a killed holder does not block later
-      callers (Success Criteria: "A holder process killed while holding the lock
-      does not block later callers"):
+- [ ] In the same file, add
+      **`test_a_killed_holder_does_not_block_a_later_acquirer`** (name contains
+      "holder" — the `-k holder` filter below selects on it), proving a killed
+      holder does not block later callers (Success Criteria: "A holder process
+      killed while holding the lock does not block later callers"):
       - Launch a real subprocess (`subprocess.Popen`) running a short inline
         Python script (`python -c ...`) that opens the same lock file path this
         test will use, calls `fcntl.flock(f, fcntl.LOCK_EX)` (blocking — no
@@ -375,7 +411,10 @@ read D1–D7 before implementing. In particular:
         `ScratchWorktree._remove(path)` with a real directory present at `path`
         (`path.mkdir()`) does not raise, logs a WARNING, and the directory is gone
         afterward (the `rmtree` fallback ran).
-- [ ] Run: `pytest tests/codehost/test_worktree.py -k timeout -x`.
+- [ ] Run: `pytest tests/codehost/test_worktree.py -k lock_timeout -x` — **not** bare
+      `-k timeout`, which would also pick up the pre-existing
+      `test_submodule_timeout_raises_and_removes_worktree` (a different timeout
+      this slice doesn't touch); all four new names above end in `lock_timeout`.
 
 ### Task D.5 — Confirm the deterministic no-overlap test now passes
 
@@ -388,7 +427,37 @@ read D1–D7 before implementing. In particular:
       in-flight above 1 (per the design's Verification Walkthrough step 2). Revert
       immediately after checking; do not leave this reverted.
 
-### Task D.6 — `review_pr.py`: render `WorktreeError` as an error panel
+### Task D.6 — Confirm submodule fetches are excluded from the lock
+
+Success Criteria states: "`git submodule update` runs outside the lock. Two
+runs' submodule fetches still overlap." Tasks D.1–D.3 only ever wrapped `git
+worktree add|remove|prune` — never `_init_submodules`'s `git submodule update`
+call — but that scope decision needs its own proof, not just an absence of a
+`with git_metadata_lock(...)` line around it that a future edit could add by
+accident without any test catching it.
+
+- [ ] Effort: 2/5
+- [ ] In `tests/codehost/test_worktree.py`, extend Task B.1's
+      `_OverlapTrackingRunner` (or add a second, similarly-shaped fake) so its
+      `("git", "submodule")` branch also participates in in-flight counting —
+      under its own separate counter/lock (distinct from the `git worktree`
+      counter — these two must never be conflated into one number), sleeping a
+      short fixed duration (e.g. 0.02s) before returning success.
+- [ ] Add **`test_submodule_fetch_calls_still_overlap_unlike_worktree_metadata_calls`**:
+      run at least two concurrent `ScratchWorktree(...).__enter__()` /
+      `.__exit__()` cycles (same pattern as Task B.2, distinct `run_id`s, one
+      shared `root`/runner) and assert the submodule-call max-in-flight is
+      **greater than 1** — the mirror image of Task B.2's assertion, proving
+      `_init_submodules` genuinely runs outside `git_metadata_lock` rather than
+      merely appearing to because no test checks it.
+- [ ] Run against the fully-wired code from Tasks D.1–D.3 (not before) — the
+      point is confirming the lock's scope stayed correctly narrow after wiring,
+      not proving something that was never at risk.
+- [ ] Run: `pytest tests/codehost/test_worktree.py -k "submodule and overlap" -x`
+      (both words appear in the test's own name — `-k` accepts this boolean form
+      directly).
+
+### Task D.7 — `review_pr.py`: render `WorktreeError` as an error panel
 
 - [ ] Effort: 3/5
 - [ ] In [src/squadron/cli/commands/review_pr.py](src/squadron/cli/commands/review_pr.py),
@@ -422,14 +491,16 @@ read D1–D7 before implementing. In particular:
 - [ ] Verify `no_tools` behavior (the `if no_tools:` branch just above, currently
       line 419) is untouched — this restructuring only affects the `else` branch.
 
-### Task D.7 — CLI test: worktree creation failure renders as a panel, not a traceback
+### Task D.8 — CLI test: worktree creation failure renders as a panel, not a traceback
 
 - [ ] Effort: 2/5
 - [ ] In `tests/cli/test_review_pr.py`, add
       `from squadron.codehost.worktree import ScratchWorktree, WorktreeCreationError`
       to the file's imports (`Path` is already imported at line 12; neither
       `ScratchWorktree` nor `WorktreeCreationError` is imported yet).
-- [ ] Add a test following the existing pattern
+- [ ] Add
+      **`test_worktree_creation_failure_renders_as_an_error_panel_not_a_traceback`**,
+      following the existing pattern
       `test_discussion_fetch_failure_renders_as_an_adapter_error_not_a_traceback`
       (same file): `monkeypatch.setattr(ScratchWorktree, "__enter__", ...)` to
       raise `WorktreeCreationError(Path("/tmp/fake"), "boom")`, invoke
@@ -438,9 +509,9 @@ read D1–D7 before implementing. In particular:
       `result.exception is None or isinstance(result.exception, SystemExit)` — the
       same "not an unhandled traceback" assertion the existing test uses. Also
       assert the printed stderr/output contains the error message text (`"boom"`).
-- [ ] Run: `pytest tests/cli/test_review_pr.py -k worktree -x`.
+- [ ] Run: `pytest tests/cli/test_review_pr.py -k worktree_creation_failure -x`.
 
-### Task D.8 — Commit Part D
+### Task D.9 — Commit Part D
 
 - [ ] Effort: 1/5
 - [ ] Confirm current working directory is the squadron project root.
