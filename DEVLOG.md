@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260927
+dateUpdated: 20260928
 
 ---
 
@@ -11,6 +11,12 @@ dateUpdated: 20260927
 A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
+
+### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Design Complete
+
+- Design: `user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md` (#153). The shared module is `review/parts.py` (`review_parts`, `worst_verdict`). The loop body is not shared: the CLI runs sync and drives display, the pipeline runs async. The registry's `fans_out` flag makes `tasks`/`judge.tasks-vs-slice` resolve one inputs dict per file. `ReviewAction` reviews each part, saves it as `part-N`, and folds the parts to the worst verdict, with UNKNOWN ranked worst. Feedback dispatch lists every file and tags each finding with its file.
+- Found: the CLI's `_aggregate_verdicts` raises `KeyError` on UNKNOWN; this slice fixes it. Context-forge's tasks gate takes the lexicographically last `{index}-review.tasks.*.md`, so it reads only `part-N`, not the worst part. That needs a context-forge issue. `cf.untasked_slices` reads only the design review and is unaffected.
+- **Next:** Phase 5 task breakdown for 930.
 
 ### Release 0.15.1
 
