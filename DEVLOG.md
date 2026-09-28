@@ -12,6 +12,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Slice 929: Task File Split
+
+- Task breakdown (709 lines, review round 3 PASS) split to meet the 450-line limit: `-1.md` covers Parts A–C (baseline, failing no-overlap test, `metadata_lock.py`), `-2.md` covers Parts D–G plus Completion. No task content changed; the split needs a fresh per-part tasks review.
+- **Next:** Phase 6, starting with Task A.1.
+
 ### Release 0.15.0
 
 - **Contents:** plan batch pipelines `slices-plan` / `tasks-plan` (slice 195) and review recovery with per-alias output budgets (slice 924). Also alias renames (`glm-flash`, `gemini-flash`), new `mimo-flash` / `muse`, and `qwen36-free` removed.
