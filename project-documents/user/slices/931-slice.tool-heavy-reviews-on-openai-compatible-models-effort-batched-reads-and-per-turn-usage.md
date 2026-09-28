@@ -32,7 +32,21 @@ amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed
 
 - **A — Effort.** An optional `effort` field on a models.toml alias, from a closed vocabulary. It is carried `ResolvedModel` → `AgentConfig` and applied by the OpenAI-compatible and SDK providers. Codex warns that it cannot apply it. The level is recorded in frontmatter, the Run Digest, and `--output json`.
 - **B — Batched reads.** `read_file` accepts `paths: list[str]` alongside `path`. Per-file caps stay as they are, and a new batch byte budget sits alongside them. Tool guidance says to batch reads and independent calls.
-- **C — Per-turn usage.** Each streamed turn requests and reads usage. The agentic loop sums it, along with reasoning characters and the turn count. Review wall-clock is measured in `review_client`. All of it goes to frontmatter, digest, and JSON.
+- **C — Per-turn usage.** Each streamed turn requests and reads usage. The agentic loop sums it, along with reasoning characters and the turn count. Review wall-clock is measured in `review_client`. All of it goes to frontmatter, digest, and JSON. That includes a provider-failure artifact, which gets whatever the run had gathered when it failed (D12).
+
+**Why one slice, and why this initiative.** The three parts could each ship alone: B and A do not depend on each other, and neither depends on C for correctness. They stay together for three reasons.
+
+- **They share a measurement.** C is the instrument that shows whether B and A worked. Shipped separately, B and A would land unmeasured, or would wait on C anyway. The build order C → B → A exists for this reason.
+- **They share files.** All three edit `_stream_turn` and `_run_agentic_loop` in `providers/openai/agent.py`, and all three add to the same `ReviewResult` → frontmatter/digest/JSON rendering. Three slices would mean three rounds of fixture regeneration over the same snapshot, in the same files.
+- **The PM bundled them.** #154's comment says to bundle #157 and #158 in one slice, and the slice plan entry does so.
+
+This is maintenance, not a feature initiative. Each part fixes a defect in behavior that already ships:
+
+- An effort nobody chose (the backend default applies unrecorded).
+- A read tool that forces the slowest access pattern on a loop that already runs several tool calls per turn.
+- A digest line that under-reports what it claims to report.
+
+The new surface is two optional inputs: an alias field and a tool parameter. Absent, each keeps today's behavior.
 
 **Out of scope**
 
@@ -41,9 +55,10 @@ amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed
 - #155 and #156 (SDK system prompt and setting sources).
 - A `--effort` CLI flag and a per-step `effort:` key (D2).
 - Codex effort. The Codex SDK is not installed in this environment, so its parameter cannot be verified. Filed as a follow-up issue during implementation (D4).
-- Token usage for SDK and Codex runs. Those rows render `not reported`; SDK usage from `ResultMessage` is a follow-up issue.
+- Token usage for SDK and Codex runs. Those rows render `not reported`. SDK usage from `ResultMessage` is a follow-up issue. The neutral types in D8 are what that issue plugs into.
 - Recording OpenRouter's `usage.cost`.
 - Effort on AgentConfig sites that do not resolve an alias: `pr/composer.py`, `metrology/audit.py`, `server/routes/agents.py`, `providers/auth.py`.
+- A timeout on `read_file` reads (D12, hung reads).
 
 ## Dependencies
 
@@ -51,13 +66,22 @@ amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed
 
 - **924 (complete).** It set the pattern this slice follows: `max_output_tokens` is an alias field with one reader, carried on `ResolvedModel`/`AgentConfig`, gated by `ProviderCapabilities.applies_output_budget`, and recorded as the value actually sent.
 - **927 (complete).** It added `answering_models` and the per-turn `chunk.model` read in `_stream_turn`. Usage is read the same way.
+- **195 (complete).** Its provider-failure artifact (`format_provider_failure_markdown`) reads telemetry off the `ProviderError` (`tool_calls_made` today). D12 extends that.
 - `openai` 2.24.0: `chat.completions.create` has typed `reasoning_effort` (`none|minimal|low|medium|high|xhigh`) and `stream_options`.
 - `claude-agent-sdk` 0.2.160: `ClaudeAgentOptions.effort` (`low|medium|high|xhigh|max`) and `thinking` (`{"type": "disabled"}` among others).
 
 ### Interfaces Required
 
-- OpenRouter accepts top-level `reasoning_effort` as the OpenAI-style alias of `reasoning.effort` (API reference, parameters). It maps an unsupported non-`none` level to the nearest supported one. Its streams always end with a usage chunk, and that chunk carries one choice with an empty delta, not zero choices (API reference, streaming). `stream_options` is accepted and ignored there.
-- OpenAI native streams report usage only when `stream_options={"include_usage": True}` is sent. Its usage chunk has an empty `choices` list.
+Backend behavior for the two new request parameters, per built-in OpenAI-compatible profile. The Source column says whether this was checked against docs, live, or both (20260928).
+
+| Profile | `stream_options.include_usage` | `reasoning_effort` | Usage chunk shape | Source |
+|---|---|---|---|---|
+| openai | Required for usage | Typed in SDK | Empty `choices` | OpenAI SDK types |
+| openrouter | Accepted, ignored; usage always sent | Documented OpenAI-style alias of `reasoning.effort`. Unsupported non-`none` levels map to the nearest level. | One choice, empty delta, repeats `finish_reason` | OpenRouter API reference: parameters, streaming |
+| local (Ollama 0.34.2) | Accepted, usage sent | Documented. `xhigh` maps to `max`; `none` disables thinking. | Empty `choices`; `prompt_tokens_details.cached_tokens` present, no `completion_tokens_details` | Ollama docs, plus a live probe against `llama3.2` |
+| gemini | **Undocumented; live probe returned 503 (demand) twice** | Documented (`minimal\|low\|medium\|high\|none`) | Unknown | Gemini OpenAI-compat docs |
+
+Gemini's `stream_options` behavior is the one open fact. Resolving it is a merge precondition (see Risk Assessment), not a task.
 
 ## Architecture
 
@@ -66,22 +90,25 @@ amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed
 | Component | Change |
 |---|---|
 | `core/models.py` | New `Effort` StrEnum. `AgentConfig.effort: Effort \| None`. |
+| `core/usage.py` (new) | Provider-neutral `TokenUsage`, `RunTelemetry` (turns, reasoning chars, usage), and `add_optional` (the `None`-preserving sum, moved from `turn_capture._add`). |
 | `models/aliases.py` | `ModelAlias.effort`. `_extract_metadata` validates it. New single reader `model_effort(name)`. |
 | `pipeline/resolver.py` | `ResolvedModel.effort`, filled by `model_effort(alias)`. |
 | `pipeline/actions/review.py`, `dispatch.py`, `summary.py` | Pass `resolved.effort` into the config they build. |
 | `cli/commands/review.py` | Reads `model_effort(alias_name)` next to `model_max_output_tokens` and passes it through. |
 | `providers/base.py` | `ProviderCapabilities.applies_effort: bool = False`. |
-| `providers/openai/provider.py`, `agent.py` | `applies_effort=True`. Sends `reasoning_effort` and `stream_options`. Reads `chunk.usage`. Accumulates `LoopTelemetry`. |
+| `providers/errors.py` | `ProviderError` gains `telemetry: RunTelemetry \| None` and `duration_seconds: float \| None`, beside `tool_calls_made`. `EmptyFinalTurnError` uses the inherited `telemetry`. |
+| `providers/openai/usage.py` (new) | OpenAI-shaped only: `read_chunk_usage(chunk) -> TokenUsage \| None`, which also reports malformed detail fields. |
+| `providers/openai/provider.py`, `agent.py` | `applies_effort=True`. Sends `reasoning_effort` and `stream_options`. Accumulates `RunTelemetry`. Attaches it to every `ProviderError` leaving `handle_message`. |
 | `providers/sdk/provider.py` | `applies_effort=True`. Maps `Effort` to `effort` / `thinking`. |
 | `providers/codex/agent.py` | WARNING when `config.effort` is set, the same as `max_output_tokens`. |
-| `providers/errors.py` | `EmptyFinalTurnError` also carries the loop's `LoopTelemetry`. |
-| `providers/openai/usage.py` (new) | `TokenUsage` and `LoopTelemetry` dataclasses, plus the chunk-usage reader. |
-| `review/turn_capture.py` | `TurnCapture` gains `turns` and `usage`, summed across calls and the recovery turn. |
-| `review/review_client.py` | Records the sent effort, times the review, and copies turns and usage onto `ReviewResult`. |
-| `review/models.py`, `review/persistence.py` | New `ReviewResult` fields, frontmatter keys, digest lines, and `to_dict()` keys. |
+| `review/turn_capture.py` | `TurnCapture` gains `turns` and `usage`, summed with `core.usage.add_optional`. |
+| `review/review_client.py` | Records the sent effort. Times the review. Copies turns and usage onto `ReviewResult`. Stamps `duration_seconds` on a `ProviderError` before it propagates. |
+| `review/models.py`, `review/persistence.py` | New `ReviewResult` fields, frontmatter keys, digest lines, and `to_dict()` keys. The provider-failure artifact renders the same keys from the error. |
 | `tools/builtin/file_tools.py`, `tools/limits.py` | `read_file` `paths`. `MAX_READ_BATCH_BYTES`. |
 | `tools/guidance.py` | One added paragraph on batching. |
 | `data/models.toml` | Header comment documents `effort`. No built-in alias sets it. |
+
+Dependency direction: `review/` imports only `core.usage` and `providers.errors`, which it already imports. It does not import `providers/openai`. The OpenAI package imports `core.usage`, never the reverse.
 
 ### Data Flow
 
@@ -93,11 +120,21 @@ amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed
 
 `review_client` records `sent_effort = effort if provider.capabilities.applies_effort else None` onto `ReviewResult.effort`.
 
-**Usage.** Each OpenAI turn is created with `stream_options={"include_usage": True}`. Every chunk's `chunk.usage` is read before the `choices` check; the last non-null value per turn wins. `TurnResult.usage` feeds the agent's `LoopTelemetry`, which accumulates turns, usage, and reasoning characters and is reset at the top of `handle_message`. `_stamp_tool_telemetry` stamps `turns`, `usage`, and the loop's `reasoning_chars` onto the final Message metadata. An empty final turn does not return normally, so it rides `EmptyFinalTurnError.telemetry` instead. `collect_turn` or `fold_empty_turn` then sums the values into `TurnCapture` across the recovery turn. `review_client` copies them onto `ReviewResult` along with `duration_seconds`, and they render in frontmatter, the digest, and JSON.
+**Usage on success.**
+
+1. Each OpenAI turn is created with `stream_options={"include_usage": True}`.
+2. `read_chunk_usage` reads every chunk before the `choices` check. The last non-None value in a turn wins, and becomes `TurnResult.usage`.
+3. The agent folds each turn into its `RunTelemetry`, which is reset at the top of `handle_message`.
+4. `_stamp_tool_telemetry` stamps `turns`, `usage`, and the run's `reasoning_chars` onto the final Message metadata.
+5. `collect_turn` sums them into `TurnCapture` across calls, including the recovery turn.
+6. `review_client` copies them onto `ReviewResult` with `duration_seconds`.
+7. They render in frontmatter, the digest, and JSON.
+
+**Usage on failure.** Any `ProviderError` leaving `handle_message` carries a snapshot of the `RunTelemetry` gathered so far in its `telemetry` attribute (D12). `EmptyFinalTurnError` is a subclass, and `fold_empty_turn` reads the same attribute. `review_client` stamps `duration_seconds` on the error as it propagates. `format_provider_failure_markdown` reads both off the error, the same way it already reads `exc.tool_calls_made`, so the CLI and pipeline call sites are unchanged.
 
 ### State Management
 
-`LoopTelemetry` is per-`handle_message` agent state, reset at the top of every call the same way as `_answering_models`. `TurnCapture` sums across calls. Nothing persists beyond the review artifact.
+`RunTelemetry` is per-`handle_message` agent state, reset at the top of every call the same way as `_answering_models`. `TurnCapture` sums across calls. Nothing persists beyond the review artifact.
 
 ## Technical Decisions
 
@@ -118,7 +155,7 @@ Validation follows the `max_output_tokens` precedent. A value outside the vocabu
 
 ### D3 — OpenAI-compatible wire format: top-level `reasoning_effort`
 
-One typed parameter works for OpenAI native and OpenRouter, since OpenRouter documents `reasoning_effort` as the OpenAI-style alias. Gemini's OpenAI-compatible endpoint accepts it too. Profile-specific dispatch (OpenRouter's `reasoning: {effort}` object in `extra_body`) is not needed and would branch on profile identity. It is passed explicitly, not through `**kwargs`, which keeps the typed overload (see the existing comment at `_stream_turn`).
+One typed parameter works for every built-in OpenAI-compatible profile (see the Interfaces Required table). Profile-specific dispatch, such as OpenRouter's `reasoning: {effort}` object in `extra_body`, is not needed and would branch on profile identity. It is passed explicitly, not through `**kwargs`, which keeps the typed overload (see the existing comment at `_stream_turn`).
 
 A backend that rejects the level returns a 400. That surfaces as `ProviderAPIError`, which is loud, and that is correct: the user asked for a level the model cannot run at.
 
@@ -153,17 +190,32 @@ The floor formula needs no change, because the batch output is bounded by the sa
 
 The first sentence covers #157. The second covers what the loop already supports (several tool calls per turn) and what nothing currently asks for. The existing sentence "Do not read files a claim does not depend on" stays, so batching is not an invitation to read everything.
 
-### D8 — Usage: read every chunk, last value per turn, sum per loop
+### D8 — Usage: neutral types, one OpenAI reader, summed per run
 
-- `stream_options={"include_usage": True}` is sent on every turn, unconditionally. OpenAI needs it. OpenRouter ignores it and always reports usage.
-- `chunk.usage` is read before the `if not chunk.choices: continue` guard. OpenAI's usage chunk has no choices. OpenRouter's has one choice with an empty delta that repeats `finish_reason`, which the existing aggregation already handles without change.
-- `TokenUsage` fields are `prompt`, `cached`, `completion`, and `reasoning`, each `int | None`. `cached` comes from `prompt_tokens_details.cached_tokens` and `reasoning` from `completion_tokens_details.reasoning_tokens`. Each is `None` when the backend did not report it. The summing rule is `turn_capture._add`, where `None` survives only when no turn reported the field. That helper moves to the new `usage.py` module and both callers import it, keeping one definition.
-- **Reasoning characters becomes the loop total.** `_stamp_tool_telemetry` stamps `LoopTelemetry.reasoning_chars`, not `turn.reasoning_chars`. The digest line keeps its label, which now means what a reader already assumed it meant. `EmptyFinalTurnError`'s message keeps the final turn's value, since that diagnoses the empty turn, and its `telemetry` carries the total.
-- `turns` counts `_stream_turn` calls, the requests actually sent. It is not the same as tool calls.
+**Placement.** The types are provider-neutral and live in `core/usage.py`:
+
+- `TokenUsage` has `prompt`, `cached`, `completion`, and `reasoning`, each `int | None`.
+- `RunTelemetry` has `turns: int`, `reasoning_chars: int`, and `usage: TokenUsage`.
+- `add_optional` is moved from `turn_capture._add` unchanged. `turn_capture` and the agent both import it from `core/usage.py`.
+
+`ReviewResult` and `TurnCapture` refer only to these. The OpenAI wire format stays in `providers/openai/usage.py`. When the SDK-usage issue lands, it maps `ResultMessage.usage` onto the same `TokenUsage` without touching `review/`.
+
+**Reading.**
+
+- `stream_options={"include_usage": True}` is sent on every turn, unconditionally.
+- `chunk.usage` is read before the `if not chunk.choices: continue` guard. That covers both shapes in the Interfaces table: OpenAI and Ollama send no choices, OpenRouter sends one empty choice. The existing aggregation already handles OpenRouter's repeated `finish_reason`.
+- `cached` comes from `prompt_tokens_details.cached_tokens`, and `reasoning` from `completion_tokens_details.reasoning_tokens`. Each is `None` when the backend did not report it. Ollama omits `completion_tokens_details` entirely.
+- Sums use `add_optional`, where `None` survives only when no turn reported the field.
+
+**Reasoning characters becomes the run total.** `_stamp_tool_telemetry` stamps `RunTelemetry.reasoning_chars`, not `turn.reasoning_chars`. The digest line keeps its label, which now means what a reader already assumed it meant. `EmptyFinalTurnError`'s message and its `reasoning_chars` attribute keep the final turn's value, because that diagnoses the empty turn. Its `telemetry` carries the total, and `fold_empty_turn` reads the total from there.
+
+**Turns.** `turns` counts `_stream_turn` calls, which are the requests actually sent. That is not the same as tool calls.
 
 ### D9 — Wall-clock is measured once, in `review_client`, for every provider
 
-`time.monotonic()` is read before `provider.create_agent` and after `_collect_review`, so it includes the recovery turn. It is provider-agnostic, so SDK and Codex reviews get it too. It is stored as `ReviewResult.duration_seconds: float | None` and rendered with one decimal place. `None` only on a hand-built result.
+`time.monotonic()` is read before `provider.create_agent`. On success it is read again after `_collect_review`, so the recovery turn is included. On a `ProviderError`, an `except` clause sets `exc.duration_seconds` and re-raises. That clause is narrow and does not swallow anything. It is provider-agnostic, so SDK and Codex reviews get it too.
+
+The value is stored as `ReviewResult.duration_seconds: float | None` and rendered with one decimal place. It is `None` only on a hand-built result.
 
 ### D10 — Frontmatter carries effort and run cost; keys appear only when reported
 
@@ -172,9 +224,9 @@ The slice plan puts these in frontmatter. That differs from slice 918 D10, which
 | Key | Present when |
 |---|---|
 | `effort` | An effort was sent. |
-| `turns` | The provider stamped it (openai). |
+| `turns` | The provider stamped it (openai), on success or failure. |
 | `promptTokens`, `cachedTokens`, `completionTokens`, `reasoningTokens` | Individually, when summed to a non-None value. |
-| `durationSeconds` | Always on a `review_client` result. |
+| `durationSeconds` | On every `review_client` result, and on a failure artifact whose error carries it. |
 
 `durationSeconds` changes every artifact, including the `clean_pass_artifact.md` snapshot, so the fixture is regenerated once, deliberately. cf does not reject unknown keys, which is how `runId` and `diffTruncated` were added without cf changes.
 
@@ -192,6 +244,22 @@ New Run Digest lines always render, with the `not reported` sentinel via `_rende
 ### D11 — Where effort flows, and where it does not
 
 Effort reaches every site that resolves an alias: the `sq review` CLI, and the pipeline review, dispatch, and summary actions via `resolve_full`. Sites that build `AgentConfig` without an alias (listed in Out of scope) have no alias to read. Dispatch and summary get effort but have no artifact, so the provider's own behavior is the record, plus a DEBUG log of the sent level in `create_agent`.
+
+### D12 — Failure modes and their signals
+
+Each new I/O path has its failure modes listed below, with the signal each one produces and a test that asserts it. The rule is that a failure logs at WARNING or above, and that no count degrades to 0 without saying so.
+
+| Failure | Behavior | Signal | Test |
+|---|---|---|---|
+| **Stream fails mid-loop.** The stream times out or the peer disconnects, and the openai SDK raises `APITimeoutError` or `APIConnectionError` on a later turn. | `handle_message`'s existing conversions still produce `ProviderTimeoutError` / `ProviderError`. An outer `except ProviderError` attaches a snapshot of `RunTelemetry` (turns and usage from the turns that completed) and re-raises. The same covers the iteration-guard `ProviderError` and `ProviderAPIError` 4xx/5xx. | WARNING `"OpenAI agent failed after %d turn(s) (prompt=%s, completion=%s tokens)"`. The failure artifact carries `turns`, the token keys, and `durationSeconds`. | A stubbed stream raises on turn 3. Assert the error's `telemetry.turns == 2` with summed usage, the WARNING, and the rendered failure frontmatter. |
+| **Exception outside the conversion list** (for example a raw `httpx` error that the openai SDK does not wrap). | Unchanged from today: it propagates unconverted and no artifact is written. This slice does not widen the conversion list. | Existing traceback. | None (unchanged behavior). |
+| **Backend sends no usage at all** (no usage chunk on any turn). | Fields stay `None` and render `not reported` / absent. | One WARNING per `handle_message`: `"backend reported no token usage across %d turn(s); usage will not be recorded"`. It fires once per call, not per turn, so a backend that never reports is not noisy. | A stubbed stream with no usage chunk: assert the single WARNING and the `None` fields. |
+| **Malformed usage detail** (a non-int token count, or a details object of the wrong type). | `read_chunk_usage` treats that field as `None`. The other fields are still read. Nothing raises, because a bad accounting frame must not fail a review that produced its answer. | WARNING naming the field and the raw value (truncated `%.200r`), once per `handle_message`. | Parametrized malformed shapes: assert the field is `None`, the siblings are intact, and the WARNING. |
+| **Backend rejects `reasoning_effort` or `stream_options`** (400). | `ProviderAPIError`, and the failure artifact records it, which is today's path. | ERROR panel / failure artifact. | Covered by existing 4xx tests. For `stream_options`, see Risk Assessment. |
+| **Batch hits the byte budget.** | Remaining paths get the `[not read: …]` line (D6). | WARNING in `read_file`: `"read_file: batch budget of %d bytes reached; %d path(s) not read"`. This follows the `list_files` cap precedent. | Assert the marker lines and the WARNING. |
+| **Every file in a batch fails.** | `is_error=True`, counted in `failed_tool_calls`. | The existing INFO for an error result, plus `Tool calls failed` in the digest. | Assert `is_error` and the per-file errors inline. |
+| **A read hangs** (a regular file on a stalled network mount). | Not bounded, which is today's single-read behavior. `reject_special_file` already rejects FIFOs and devices before any read, so the hang case is a regular file on stalled storage. A batch runs its reads sequentially inside the one `asyncio.to_thread` call, so a hang blocks that worker thread and that tool call, not the event loop. Batching does not add a new unbounded case; it runs at most the reads the model would otherwise spread over several turns. | None new. | None (unchanged behavior). |
+| **Effort not appliable** (Codex), or **invalid alias value.** | Not sent, not recorded (D4, D1). | WARNING. | Assert the WARNING and the absent `effort` key. |
 
 ## Implementation Details
 
@@ -235,19 +303,25 @@ effort = "low"                 # none | low | medium | high | xhigh
 
 **Message metadata (final Message, OpenAI agent)**
 
-The existing keys are unchanged, except that `reasoning_chars` becomes the loop total. New keys: `turns: int` and `usage: {"prompt": int|None, "cached": ..., "completion": ..., "reasoning": ...}`.
+The existing keys are unchanged, except that `reasoning_chars` becomes the run total. New keys: `turns: int` and `usage: TokenUsage`.
+
+**`ProviderError` additions**
+
+`telemetry: RunTelemetry | None = None` and `duration_seconds: float | None = None`. Both are keyword-only and default to `None`, so existing raisers are unchanged.
 
 ## Integration Points
 
 ### Provides to Other Slices
 
 - `Effort` and `model_effort()` give any future site that resolves an alias one reader.
+- `core.usage` (`TokenUsage`, `RunTelemetry`) is the provider-neutral contract the SDK-usage follow-up plugs into.
 - Usage fields in frontmatter and JSON give amoeba and metrology cost data per review. #159 (preloading) can measure its own effect against these fields.
 
 ### Consumes from Other Slices
 
 - 924's alias-field and capability-flag pattern, and 927's per-chunk read in `_stream_turn`.
 - `collect_turn` and `fold_empty_turn` (918/924). Their per-call summing extends to the new fields with no change to the recovery-turn logic.
+- 195's provider-failure artifact, which gains the telemetry keys.
 
 ## Success Criteria
 
@@ -260,24 +334,28 @@ The existing keys are unchanged, except that `reasoning_chars` becomes the loop 
 5. No `effort` set gives request parameters identical to today, apart from `stream_options`.
 6. `read_file` with `path` returns byte-identical output to today. With `paths` it returns headed sections in request order, per-file errors inline, and the batch-budget marker for files past `MAX_READ_BATCH_BYTES`. `is_error` is set only when every file failed. Both or neither of `path`/`paths` returns an error.
 7. The tool-use guidance block contains the batching paragraph.
-8. A review whose stream reports usage records summed prompt, cached, completion, and reasoning tokens and a turn count in frontmatter, digest, and JSON. `Reasoning characters` is the loop total.
+8. A review whose stream reports usage records summed prompt, cached, completion, and reasoning tokens and a turn count in frontmatter, digest, and JSON. `Reasoning characters` is the run total.
 9. A backend that omits a usage field records it as `not reported` / null / absent key, never as 0.
-10. An empty final turn still contributes its turns and usage to the capture (via `EmptyFinalTurnError`).
+10. An empty final turn still contributes its turns and usage to the capture (via `ProviderError.telemetry`).
 11. Every `review_client` review records `durationSeconds`, including SDK and Codex runs.
+12. A review that fails mid-loop writes a provider-failure artifact carrying the turns, usage, and duration gathered before the failure, and logs the D12 WARNING.
+13. Each D12 failure mode with a listed signal emits it.
 
 ### Technical Requirements
 
 - `ruff format`, `ruff check`, and `pyright` (strict) clean. The full test suite passes, with fixtures regenerated only where D10 says the output changes.
+- `review/` has no import from `providers/openai`, checked by a grep in the task's verification step.
 - Unit tests:
   - alias parsing of `effort` (valid, invalid, bool, absent), parametrized
   - `ResolvedModel.effort` round-trip
   - the provider mappings (openai kwargs, SDK options, Codex warning)
   - `read_file` single, batch, mixed failure, all-fail, budget cutoff, oversize first file, and both/neither
   - the `MAX_READ_BATCH_BYTES` vs floor invariant
-  - usage-chunk parsing for both the OpenAI (no choices) and OpenRouter (one empty choice) shapes
+  - usage-chunk parsing for the OpenAI/Ollama (no choices) and OpenRouter (one empty choice) shapes
   - summing across a three-turn loop plus the recovery turn
   - `None`-preserving sums
-  - frontmatter, digest, and JSON rendering agreeing from one `ReviewResult`
+  - every row of the D12 table that names a test, each asserting its signal with `caplog`
+  - frontmatter, digest, and JSON rendering agreeing from one `ReviewResult`, and from one failed `ProviderError`
 
 ### Integration Requirements
 
@@ -324,19 +402,29 @@ Draft; refined after Phase 6.
    ```
    The dry run shows `glm-flash-low` on the review step. The saved code review has `effort: low` and the usage keys.
 
-7. **Codex refuses loudly.** Define an alias on the `openai-oauth` profile with `effort = "low"` and run a review. A WARNING says effort cannot be applied, and the artifact has no `effort` key.
+7. **Every built-in OpenAI-compatible profile accepts the new request.** Run one short review per profile: `openrouter` (steps 2–3), `local` (with Ollama running, using an alias on the `local` profile), `openai`, and `gemini` (`--model gemini-flash`). Each completes. `local` shows prompt and completion tokens and `Reasoning tokens` `not reported`, matching the Interfaces table.
 
-8. **Invalid value.** Set `effort = "extreme"` on the test alias. Any `sq` command that loads aliases logs the skip WARNING naming the alias and file.
+8. **Mid-loop failure is recorded.** Run a review against the `local` profile and stop Ollama (`ollama stop` / quit the app) once the first tool call appears at `-v`. The failure artifact has `providerFailure: true`, `turns` ≥ 1, `durationSeconds`, and the `## Provider Failure` section, and the D12 WARNING is logged.
+
+9. **Codex refuses loudly.** Define an alias on the `openai-oauth` profile with `effort = "low"` and run a review. A WARNING says effort cannot be applied, and the artifact has no `effort` key.
+
+10. **Invalid value.** Set `effort = "extreme"` on the test alias. Any `sq` command that loads aliases logs the skip WARNING naming the alias and file.
 
 ## Risk Assessment
 
 ### Technical Risks
 
-- `stream_options` now goes on every OpenAI-compatible request, including backends without effort set. A backend that rejects the parameter would fail every request, where today it succeeds. The built-in profiles are openai, openrouter, gemini, and local (Ollama). OpenAI and OpenRouter document it. Gemini's and Ollama's OpenAI-compatible endpoints need confirming.
+- **`stream_options` on Gemini is unverified.** `stream_options` now goes on every OpenAI-compatible request, including backends without effort set. A backend that rejects it would fail every request, where today it succeeds.
+  - Three of the four built-in profiles are settled (Interfaces table): openai and openrouter by docs, local/Ollama by docs and a live probe.
+  - Gemini does not document the parameter. Both live probes on 20260928 returned 503 for high demand, which says nothing about the parameter.
 
 ### Mitigation Strategies
 
-- Phase 6 runs one live review per reachable built-in profile before merge. If a backend rejects `stream_options`, the fix is a profile-level opt-out field, not string dispatch on the profile name. That field is added only if a backend actually fails.
+- **Merge precondition, not a task.** The slice branch does not merge into `main` until the Gemini probe returns a completed stream. The probe is one `curl` with `stream_options` and `reasoning_effort="low"` against `gemini-3.8-flash`, repeatable at any time. The outcome is recorded in the Interfaces table, and walkthrough step 7 exercises it end to end.
+  - **If Gemini accepts it:** nothing changes.
+  - **If Gemini rejects it:** the fix lands in this slice before merge. It is a profile-level field in `ProviderProfile`, `sends_stream_usage: bool = True`, set False on the gemini built-in and read by the agent. That is declared per profile, not string dispatch on the profile name. Gemini usage then renders `not reported` and the D12 WARNING applies.
+  - **If Gemini is still unreachable when everything else is done:** stop and ask the PM. Do not merge on the assumption that it works.
+- User-defined profiles on other OpenAI-compatible backends are not covered by the precondition. If one rejects the parameter, the failure is a loud 400 (D12) naming it, and the same profile field is the fix. No speculative field ships for backends nobody has reported.
 
 ## Implementation Notes
 
@@ -345,9 +433,11 @@ Draft; refined after Phase 6.
 Order: **C → B → A**. Usage first, so B and A are measured, not guessed.
 
 1. **C:**
-   - `usage.py` (`TokenUsage`, `LoopTelemetry`, the moved `_add`)
+   - `core/usage.py` (move `add_optional` first, with `turn_capture`'s existing tests as the guard), then `providers/openai/usage.py`
    - `_stream_turn` reads usage and sends `stream_options`
-   - loop accumulation and stamping, and `EmptyFinalTurnError.telemetry`
+   - loop accumulation and stamping
+   - `ProviderError.telemetry`/`duration_seconds` and the failure-artifact rendering
+   - the D12 WARNINGs
    - `TurnCapture` and `review_client` timing
    - `ReviewResult` fields and rendering, then regenerate fixtures
    - live baseline run: walkthrough step 2
@@ -361,13 +451,15 @@ Order: **C → B → A**. Usage first, so B and A are measured, not guessed.
    - `ResolvedModel` and the call sites
    - the capability flag and the three providers
    - rendering
-   - live runs: walkthrough steps 3–8
+   - live runs: walkthrough steps 3–10
 4. File the two follow-up issues (Codex effort, SDK usage), and comment the D2 decision on #154.
 
 Tests use stubbed `AsyncStream`s for the chunk shapes, the way slice 927's `chunk.model` tests do. No live calls run in the suite.
 
 ### Special Considerations
 
-- `_stream_turn` runs inside the event loop. Reading usage is attribute access, well under the 1 ms rule. `read_file` batches keep every blocking read inside the one existing `asyncio.to_thread` call, so a batch is one worker hop, not N.
-- The `_add` move must not change `turn_capture`'s behavior. Its existing tests are the guard.
+- `_stream_turn` runs inside the event loop. Reading usage is attribute access and a few dict lookups per chunk, well under the 1 ms rule. `read_file` batches keep every blocking read inside the one existing `asyncio.to_thread` call, so a batch is one worker hop, not N, and a hung read never blocks the event loop (D12).
+- The `add_optional` move must not change `turn_capture`'s behavior. Its existing tests are the guard.
 - `answering_models` and usage are both read from choice-less chunks. Read them in the same spot so the next field added there has one obvious home.
+- `providers/openai/agent.py` is 630 lines, over the 300-line guideline. The usage reader goes in its own module rather than growing the agent, and the attach-telemetry wrapper stays a few lines. Splitting the agent itself is out of scope.
+- There are no initiative-level NFRs to restate. The event-loop constraint above is the one NFR this slice has.
