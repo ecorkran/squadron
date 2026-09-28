@@ -34,19 +34,23 @@ amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed
 - **B — Batched reads.** `read_file` accepts `paths: list[str]` alongside `path`. Per-file caps stay as they are, and a new batch byte budget sits alongside them. Tool guidance says to batch reads and independent calls.
 - **C — Per-turn usage.** Each streamed turn requests and reads usage. The agentic loop sums it, along with reasoning characters and the turn count. Review wall-clock is measured in `review_client`. All of it goes to frontmatter, digest, and JSON. That includes a provider-failure artifact, which gets whatever the run had gathered when it failed (D12).
 
-**Why one slice, and why this initiative.** The three parts could each ship alone: B and A do not depend on each other, and neither depends on C for correctness. They stay together for three reasons.
+**Why one slice.** The initiative's guidelines prefer small, independently deliverable slices. Bundling these three is a Project Manager decision: #154's comment says to bundle #157 and #158 into one slice, and the slice plan entry does so. This design keeps that decision and does not reopen it. It does keep the parts independently deliverable inside the slice:
 
-- **They share a measurement.** C is the instrument that shows whether B and A worked. Shipped separately, B and A would land unmeasured, or would wait on C anyway. The build order C → B → A exists for this reason.
-- **They share files.** All three edit `_stream_turn` and `_run_agentic_loop` in `providers/openai/agent.py`, and all three add to the same `ReviewResult` → frontmatter/digest/JSON rendering. Three slices would mean three rounds of fixture regeneration over the same snapshot, in the same files.
-- **The PM bundled them.** #154's comment says to bundle #157 and #158 in one slice, and the slice plan entry does so.
+- Each part lands as its own commit or commits, in the order C → B → A. Each commit passes the full suite on its own, and each can be reverted without touching the others. B and A share no code, and neither depends on C for correctness.
+- No gate on one part holds back another. The only unverified external fact (Gemini's handling of `stream_options`) is settled by shipping Gemini with the parameter off (see Risk Assessment), so there is no merge precondition at all.
+- The bundle is justified by shared work, not shared behavior:
+  - C is the instrument that shows whether B and A worked.
+  - All three edit `_stream_turn`/`_run_agentic_loop` and the same `ReviewResult` rendering. Three slices would mean three rounds of fixture regeneration over one snapshot.
 
-This is maintenance, not a feature initiative. Each part fixes a defect in behavior that already ships:
+**Initiative fit.** Each part maps to a line of the 900 architecture's "Work that belongs here" list (`900-arch.maintenance-and-refactoring.md`, Scope):
 
-- An effort nobody chose (the backend default applies unrecorded).
-- A read tool that forces the slowest access pattern on a loop that already runs several tool calls per turn.
-- A digest line that under-reports what it claims to report.
+| Part | Scope line | Why |
+|---|---|---|
+| A — Effort | **Operational:** "configuration improvements that span subsystems" | An alias setting applied across three providers, the pipeline, and the CLI. It has the same shape as 924's `max_output_tokens`, which this initiative already shipped. The defect it removes is concrete: #154 records glm-flash spending 68,841 reasoning characters on slice 929's tasks review at an effort nobody chose. The artifact could not state the condition it ran under. Recording the level is a fix to the artifact; the alias field is the smallest control that makes the level choosable. |
+| B — Batched reads | **Tech debt:** "restructured for … performance" | The loop already executes several tool calls per turn. The read tool's one-path shape and the silent guidance force the slowest pattern. |
+| C — Per-turn usage | **Operational:** logging; **Bug fixes** | `Reasoning characters` under-reports what its label claims (final turn only), and usage is never read. |
 
-The new surface is two optional inputs: an alias field and a tool parameter. Absent, each keeps today's behavior.
+It is not "a new feature or capability" in the excluded sense: no new command, workflow, or user task becomes possible. Two optional inputs (an alias field and a tool parameter) change how existing reviews run, and each keeps today's behavior when absent.
 
 **Out of scope**
 
@@ -79,9 +83,9 @@ Backend behavior for the two new request parameters, per built-in OpenAI-compati
 | openai | Required for usage | Typed in SDK | Empty `choices` | OpenAI SDK types |
 | openrouter | Accepted, ignored; usage always sent | Documented OpenAI-style alias of `reasoning.effort`. Unsupported non-`none` levels map to the nearest level. | One choice, empty delta, repeats `finish_reason` | OpenRouter API reference: parameters, streaming |
 | local (Ollama 0.34.2) | Accepted, usage sent | Documented. `xhigh` maps to `max`; `none` disables thinking. | Empty `choices`; `prompt_tokens_details.cached_tokens` present, no `completion_tokens_details` | Ollama docs, plus a live probe against `llama3.2` |
-| gemini | **Undocumented; live probe returned 503 (demand) twice** | Documented (`minimal\|low\|medium\|high\|none`) | Unknown | Gemini OpenAI-compat docs |
+| gemini | **Undocumented. Live probes on 20260928 across `gemini-3.8-flash`, `gemini-3.5-flash-lite`, and `gemini-3.1-pro-preview-customtools` returned only 503 (demand) or 429 (free-tier quota).** | Documented (`minimal\|low\|medium\|high\|none`) | Unknown | Gemini OpenAI-compat docs |
 
-Gemini's `stream_options` behavior is the one open fact. Resolving it is a merge precondition (see Risk Assessment), not a task.
+Gemini's `stream_options` behavior is the one open fact. The gemini built-in profile therefore ships with `sends_stream_usage = False` and keeps today's exact request (see Risk Assessment). Nothing waits on the answer.
 
 ## Architecture
 
@@ -96,9 +100,11 @@ Gemini's `stream_options` behavior is the one open fact. Resolving it is a merge
 | `pipeline/actions/review.py`, `dispatch.py`, `summary.py` | Pass `resolved.effort` into the config they build. |
 | `cli/commands/review.py` | Reads `model_effort(alias_name)` next to `model_max_output_tokens` and passes it through. |
 | `providers/base.py` | `ProviderCapabilities.applies_effort: bool = False`. |
+| `providers/profiles.py` | `ProviderProfile.sends_stream_usage: bool = True`, readable from a user profile table. The gemini built-in sets it False. New `profile_credentials(profile)` returns the profile-derived `credentials` entries (`api_key_env`, `default_headers`, `sends_stream_usage`). |
+| `review/review_client.py`, `pipeline/actions/dispatch.py`, `pipeline/summary_oneshot.py`, `metrology/audit.py`, `pr/composer.py`, `cli/commands/spawn.py` | Each builds `credentials` by copying profile fields by hand today. Each switches to `**profile_credentials(profile)`, so the new flag reaches every OpenAI-compatible agent from one definition. |
 | `providers/errors.py` | `ProviderError` gains `telemetry: RunTelemetry \| None` and `duration_seconds: float \| None`, beside `tool_calls_made`. `EmptyFinalTurnError` uses the inherited `telemetry`. |
 | `providers/openai/usage.py` (new) | OpenAI-shaped only: `read_chunk_usage(chunk) -> TokenUsage \| None`, which also reports malformed detail fields. |
-| `providers/openai/provider.py`, `agent.py` | `applies_effort=True`. Sends `reasoning_effort` and `stream_options`. Accumulates `RunTelemetry`. Attaches it to every `ProviderError` leaving `handle_message`. |
+| `providers/openai/provider.py`, `agent.py` | `applies_effort=True`. Sends `reasoning_effort`, and sends `stream_options` unless `credentials["sends_stream_usage"]` is False. Only a profile can opt out. An absent key means no profile was involved, which is today only the daemon's `server/routes/agents.py`, whose agents are built from request bodies. Those agents send it, which is the OpenAI spec's behavior. A test pins both cases. Accumulates `RunTelemetry`. Attaches it to every `ProviderError` leaving `handle_message`. |
 | `providers/sdk/provider.py` | `applies_effort=True`. Maps `Effort` to `effort` / `thinking`. |
 | `providers/codex/agent.py` | WARNING when `config.effort` is set, the same as `max_output_tokens`. |
 | `review/turn_capture.py` | `TurnCapture` gains `turns` and `usage`, summed with `core.usage.add_optional`. |
@@ -108,7 +114,12 @@ Gemini's `stream_options` behavior is the one open fact. Resolving it is a merge
 | `tools/guidance.py` | One added paragraph on batching. |
 | `data/models.toml` | Header comment documents `effort`. No built-in alias sets it. |
 
-Dependency direction: `review/` imports only `core.usage` and `providers.errors`, which it already imports. It does not import `providers/openai`. The OpenAI package imports `core.usage`, never the reverse.
+**Dependency direction.** `frontmatter.parent` is the slice plan, per the template. The 900 architecture document above it defines scope and guidelines, not layers, so the layering rule here has two sources: the project's rules, and the import graph as it stands.
+
+- **Project rules:** CLAUDE.md, "Program to interfaces (contracts). Maintain clear separation between components". `review-code.md`, Dependency Inversion: "Business logic imports concrete infrastructure … directly rather than through an interface" is a violation.
+- **Current imports:** `review/` imports the provider layer's shared modules only: `providers.base`, `providers.errors`, `providers.loader`, `providers.profiles`, and `providers.registry` (verified by grep, 20260928). It imports no concrete provider package (`providers/openai`, `providers/sdk`, `providers/codex`).
+
+This slice keeps that rule. The only new imports into `review/` are `core.usage` and `providers.errors`, and nothing there imports `providers/openai`. `providers/openai` imports `core.usage`, never the reverse. The Technical Requirements grep enforces it.
 
 ### Data Flow
 
@@ -345,6 +356,11 @@ The existing keys are unchanged, except that `reasoning_chars` becomes the run t
 
 - `ruff format`, `ruff check`, and `pyright` (strict) clean. The full test suite passes, with fixtures regenerated only where D10 says the output changes.
 - `review/` has no import from `providers/openai`, checked by a grep in the task's verification step.
+- `sends_stream_usage` tests:
+  - A gemini-profile agent omits `stream_options`.
+  - An openrouter-profile agent sends it.
+  - An agent built without a profile (the server-route shape) sends it.
+  - All six call sites produce the same credentials as `profile_credentials`.
 - Unit tests:
   - alias parsing of `effort` (valid, invalid, bool, absent), parametrized
   - `ResolvedModel.effort` round-trip
@@ -402,7 +418,7 @@ Draft; refined after Phase 6.
    ```
    The dry run shows `glm-flash-low` on the review step. The saved code review has `effort: low` and the usage keys.
 
-7. **Every built-in OpenAI-compatible profile accepts the new request.** Run one short review per profile: `openrouter` (steps 2–3), `local` (with Ollama running, using an alias on the `local` profile), `openai`, and `gemini` (`--model gemini-flash`). Each completes. `local` shows prompt and completion tokens and `Reasoning tokens` `not reported`, matching the Interfaces table.
+7. **Every built-in OpenAI-compatible profile accepts the new request.** Run one short review per profile: `openrouter` (steps 2–3), `local` (with Ollama running, using an alias on the `local` profile), `openai`, and `gemini` (`--model gemini-flash`). Each completes. `local` shows prompt and completion tokens and `Reasoning tokens` `not reported`, matching the Interfaces table. `gemini`'s profile does not send `stream_options`, so it records only the usage the backend sends unasked. If it sends none, every token field shows `not reported` and the D12 no-usage WARNING is logged. Its request is byte-for-byte today's apart from `reasoning_effort` when an effort is set.
 
 8. **Mid-loop failure is recorded.** Run a review against the `local` profile and stop Ollama (`ollama stop` / quit the app) once the first tool call appears at `-v`. The failure artifact has `providerFailure: true`, `turns` ≥ 1, `durationSeconds`, and the `## Provider Failure` section, and the D12 WARNING is logged.
 
@@ -414,27 +430,28 @@ Draft; refined after Phase 6.
 
 ### Technical Risks
 
-- **`stream_options` on Gemini is unverified.** `stream_options` now goes on every OpenAI-compatible request, including backends without effort set. A backend that rejects it would fail every request, where today it succeeds.
+- **A backend that rejects `stream_options`.** `stream_options` now goes on OpenAI-compatible requests, including those with no effort set. A backend that rejects it would fail every request, where today it succeeds.
   - Three of the four built-in profiles are settled (Interfaces table): openai and openrouter by docs, local/Ollama by docs and a live probe.
-  - Gemini does not document the parameter. Both live probes on 20260928 returned 503 for high demand, which says nothing about the parameter.
+  - Gemini does not document the parameter. Every live probe on 20260928 returned 503 or 429, which says nothing about the parameter.
 
 ### Mitigation Strategies
 
-- **Merge precondition, not a task.** The slice branch does not merge into `main` until the Gemini probe returns a completed stream. The probe is one `curl` with `stream_options` and `reasoning_effort="low"` against `gemini-3.8-flash`, repeatable at any time. The outcome is recorded in the Interfaces table, and walkthrough step 7 exercises it end to end.
-  - **If Gemini accepts it:** nothing changes.
-  - **If Gemini rejects it:** the fix lands in this slice before merge. It is a profile-level field in `ProviderProfile`, `sends_stream_usage: bool = True`, set False on the gemini built-in and read by the agent. That is declared per profile, not string dispatch on the profile name. Gemini usage then renders `not reported` and the D12 WARNING applies.
-  - **If Gemini is still unreachable when everything else is done:** stop and ask the PM. Do not merge on the assumption that it works.
-- User-defined profiles on other OpenAI-compatible backends are not covered by the precondition. If one rejects the parameter, the failure is a loud 400 (D12) naming it, and the same profile field is the fix. No speculative field ships for backends nobody has reported.
+- **Gemini ships unchanged instead of gating the merge.** The gemini built-in profile sets `sends_stream_usage = False`, so its requests stay exactly as today. Nothing in the slice depends on the Gemini answer, and no part waits on it.
+  - The cost is that Gemini reviews record usage only if the backend sends it unasked. The D12 WARNING makes that visible.
+  - Turning it on is a one-line change in `BUILT_IN_PROFILES` once a probe succeeds. A follow-up issue tracks it and records the probe command: one `curl` with `stream_options` and `reasoning_effort="low"` against `gemini-3.8-flash`.
+  - This is a declared per-profile field, not string dispatch on the profile name.
+- **User-defined profiles** on other OpenAI-compatible backends default to sending the parameter, because that is the OpenAI spec's behavior. If a backend rejects it, the failure is a loud 400 (D12) naming it, and the fix is `sends_stream_usage = false` in the user's profile table. That needs no code change.
 
 ## Implementation Notes
 
 ### Development Approach
 
-Order: **C → B → A**. Usage first, so B and A are measured, not guessed.
+Order: **C → B → A**. Usage first, so B and A are measured, not guessed. Each part ends at a green, separately revertible commit. B and A touch none of each other's code.
 
 1. **C:**
    - `core/usage.py` (move `add_optional` first, with `turn_capture`'s existing tests as the guard), then `providers/openai/usage.py`
-   - `_stream_turn` reads usage and sends `stream_options`
+   - `profile_credentials` and `sends_stream_usage` (gemini False), switching the six call sites
+   - `_stream_turn` reads usage and sends `stream_options` per the flag
    - loop accumulation and stamping
    - `ProviderError.telemetry`/`duration_seconds` and the failure-artifact rendering
    - the D12 WARNINGs
@@ -452,7 +469,7 @@ Order: **C → B → A**. Usage first, so B and A are measured, not guessed.
    - the capability flag and the three providers
    - rendering
    - live runs: walkthrough steps 3–10
-4. File the two follow-up issues (Codex effort, SDK usage), and comment the D2 decision on #154.
+4. File the three follow-up issues (Codex effort, SDK usage, enabling `sends_stream_usage` on gemini once a probe succeeds), and comment the D2 decision on #154.
 
 Tests use stubbed `AsyncStream`s for the chunk shapes, the way slice 927's `chunk.model` tests do. No live calls run in the suite.
 
