@@ -6,7 +6,6 @@ is real (written to a real tmp_path), since sweep_orphans reads it straight off 
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import threading
@@ -821,6 +820,10 @@ _PATCHED_LOCK_TIMEOUT_SECONDS = 0.2
 @contextmanager
 def _metadata_lock_held_elsewhere(root: Path) -> Iterator[Path]:
     """Hold the real metadata lock under *root* from this process, as a rival would."""
+    # Imported here, not at module level, so the rest of this file still collects where
+    # fcntl does not exist (929 D5).
+    import fcntl
+
     root.mkdir(parents=True, exist_ok=True)
     lock_path = root / ".git-metadata.flock"
     with lock_path.open("a") as holder:
@@ -857,22 +860,27 @@ def test_enter_raises_worktree_creation_error_on_lock_timeout(tmp_path: Path) ->
 
 
 @pytest.mark.usefixtures("short_lock_timeout")
-def test_sweep_orphans_logs_warning_and_skips_entry_on_remove_lock_timeout(
+def test_sweep_orphans_abandons_the_sweep_on_first_remove_lock_timeout(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
+    """One lock timeout ends the sweep: no further waits, no prune, orphans left intact."""
     root = tmp_path / "worktrees"
-    orphan = root / "stale-entry"  # no lock, no claim
-    orphan.mkdir(parents=True)
+    orphans = [root / "stale-a", root / "stale-b"]  # no lock, no claim
+    for orphan in orphans:
+        orphan.mkdir(parents=True)
 
+    started = time.monotonic()
     with _metadata_lock_held_elsewhere(root), caplog.at_level("WARNING"):
         sweep_orphans(FakeProcessRunner([]), CHECKOUT_CWD, root=root)
+    elapsed = time.monotonic() - started
 
-    assert orphan.exists()  # git still registers it; deleting it would corrupt metadata
-    assert any(
-        "remove orphaned worktree" in r.message and str(orphan) in r.message
-        for r in caplog.records
-        if r.levelname == "WARNING"
-    )
+    # One wait, not one per orphan plus the prune.
+    assert elapsed < 2 * _PATCHED_LOCK_TIMEOUT_SECONDS
+    assert all(orphan.exists() for orphan in orphans)
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    lock_warnings = [r for r in warnings if "metadata lock" in r.message]
+    assert len(lock_warnings) == 1
+    assert "abandoning this sweep" in lock_warnings[0].message
 
 
 @pytest.mark.usefixtures("short_lock_timeout")
@@ -903,3 +911,28 @@ def test_remove_logs_warning_and_falls_through_to_rmtree_on_lock_timeout(
 
     assert not path.exists()
     assert any("remove worktree" in r.message and r.levelname == "WARNING" for r in caplog.records)
+
+
+def test_enter_gives_a_no_wait_fix_hint_when_the_lock_fails_without_timing_out(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Missing fcntl, an unwritable root, or ENOLCK: waiting never helps, so don't say it."""
+    root = tmp_path / "worktrees"
+
+    @contextmanager
+    def _unusable_lock(lock_root: Path) -> Iterator[None]:
+        raise metadata_lock.MetadataLockError(lock_root / ".git-metadata.flock", "no fcntl")
+        yield  # unreachable; makes this a generator for @contextmanager
+
+    monkeypatch.setattr(worktree, "git_metadata_lock", _unusable_lock)
+    runner = FakeProcessRunner([(["ps", "-o", "lstart=", "-p", str(os.getpid())], _ps_ok())])
+
+    sw = ScratchWorktree(runner, _record(), "refs/x", "run1", CHECKOUT_CWD, root=root)
+    with pytest.raises(WorktreeCreationError) as excinfo:
+        sw.__enter__()
+
+    hint = excinfo.value.fix_hint
+    assert hint is not None
+    assert "waiting will not help" in hint
+    assert "another squadron process" not in hint.lower()
+    assert "--no-tools" in hint

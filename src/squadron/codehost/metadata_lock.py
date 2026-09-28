@@ -41,12 +41,17 @@ METADATA_LOCK_TIMEOUT_SECONDS = 2 * GIT_QUERY_TIMEOUT_SECONDS
 
 
 class MetadataLockError(CodeHostError):
-    """The git metadata lock could not be taken: timeout, filesystem error, or no ``fcntl``."""
+    """The git metadata lock could not be taken: timeout, filesystem error, or no ``fcntl``.
 
-    def __init__(self, lock_path: Path, detail: str) -> None:
+    ``timed_out`` separates "held elsewhere, waiting may help" from the failures where
+    waiting never helps (missing ``fcntl``, unwritable root, persistent flock error).
+    """
+
+    def __init__(self, lock_path: Path, detail: str, *, timed_out: bool = False) -> None:
         super().__init__(f"git metadata lock {lock_path}: {detail}")
         self.lock_path = lock_path
         self.detail = detail
+        self.timed_out = timed_out
 
 
 @contextmanager
@@ -100,7 +105,9 @@ def _acquire(lock_file: TextIO, lock_path: Path) -> None:
             # pass a persistent error off as a timeout (D7).
             raise MetadataLockError(lock_path, f"flock failed: {exc.strerror}") from exc
         if time.monotonic() >= deadline:
-            raise MetadataLockError(lock_path, f"timed out after {timeout}s waiting for the lock")
+            raise MetadataLockError(
+                lock_path, f"timed out after {timeout}s waiting for the lock", timed_out=True
+            )
         time.sleep(_METADATA_LOCK_POLL_SECONDS)
 
 

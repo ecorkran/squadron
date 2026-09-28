@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import errno
-import fcntl
 import os
 import subprocess
 import sys
@@ -14,6 +13,9 @@ import pytest
 
 from squadron.codehost import metadata_lock
 from squadron.codehost.metadata_lock import MetadataLockError, git_metadata_lock
+
+# Every test here exercises the real flock; the lock is POSIX-only by design (D5).
+fcntl = pytest.importorskip("fcntl")
 
 _LOCK_FILENAME = ".git-metadata.flock"
 

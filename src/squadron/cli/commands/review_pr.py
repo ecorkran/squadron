@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import ExitStack
 from pathlib import Path
 
 import typer
@@ -424,18 +425,16 @@ def review_pr(
         # (design D3) — no separate sweep_orphans() call needed here.
         run_id = uuid.uuid4().hex[:8]
         scratch = ScratchWorktree(host.runner, resolved.record, fetched.head_ref, run_id, checkout_cwd)
-        # Entered by hand so only setup failures become an error panel (929 D4); a
-        # `with` statement cannot separate its own __enter__ from the review run.
-        try:
-            worktree = scratch.__enter__()
-        except WorktreeError as exc:
-            render_code_host_error(exc)
-            raise typer.Exit(code=1) from exc
-        try:
+        # Only setup failures become an error panel (929 D4), not failures in the review
+        # run: ExitStack lets the try wrap entry alone while the stack owns cleanup.
+        with ExitStack() as stack:
+            try:
+                worktree = stack.enter_context(scratch)
+            except WorktreeError as exc:
+                render_code_host_error(exc)
+                raise typer.Exit(code=1) from exc
             worktree_path = worktree.path
             result = _run(str(worktree.path), checkout_cwd)
-        finally:
-            scratch.__exit__(None, None, None)
 
     # Both roots are reported alongside the result (design criterion) — a
     # display-layer addition, not a new ReviewResult field: 383 has not yet

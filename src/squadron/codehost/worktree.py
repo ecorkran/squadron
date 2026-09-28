@@ -265,16 +265,18 @@ def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = 
                 "Timed out removing orphaned worktree %s via git; will unlink directly", entry
             )
         except MetadataLockError as exc:
-            # sweep_orphans never raises. Skip this entry entirely: git still registers
-            # it, and deleting the directory under git would corrupt its metadata (929 D4).
-            # The next sweep retries it.
+            # sweep_orphans never raises. Abandon the whole sweep, prune included: the next
+            # acquisition would almost certainly fail the same way, and each wait costs a
+            # full timeout. Unlike _remove (which must clean up the worktree its own run
+            # made), an orphan has no deadline, so it is left intact, directory and git
+            # registration both, for the next sweep rather than half-removed now.
             _logger.warning(
                 "Could not take the git metadata lock to remove orphaned worktree %s; "
-                "leaving it for a later sweep: %s",
+                "abandoning this sweep, a later one will retry: %s",
                 entry,
                 exc.detail,
             )
-            continue
+            return
         if entry.exists():
             _rmtree(entry)
 
@@ -288,6 +290,20 @@ def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = 
     except MetadataLockError as exc:
         # sweep_orphans never raises; a skipped prune is retried by the next sweep.
         _logger.warning("Could not take the git metadata lock for 'git worktree prune': %s", exc.detail)
+
+
+def _metadata_lock_fix_hint(exc: MetadataLockError) -> str:
+    """Remediation for a lock failure: waiting only helps when the lock was held elsewhere."""
+    if exc.timed_out:
+        return (
+            f"Another squadron process may be holding the worktree metadata lock "
+            f"({exc.lock_path}). Wait for it to finish, or stop it, then retry."
+        )
+    return (
+        f"The worktree metadata lock ({exc.lock_path}) could not be used; waiting will not "
+        f"help. PR reviews with tools need a POSIX system (fcntl) and a writable "
+        f"{exc.lock_path.parent}. Use --no-tools to review without a worktree."
+    )
 
 
 def _rmtree(path: Path) -> None:
@@ -375,10 +391,7 @@ class ScratchWorktree:
             raise WorktreeCreationError(
                 path,
                 exc.detail,
-                fix_hint=(
-                    f"Another squadron process may be holding the worktree metadata lock "
-                    f"({exc.lock_path}). Wait for it to finish, or stop it, then retry."
-                ),
+                fix_hint=_metadata_lock_fix_hint(exc),
             ) from exc
         except BaseException:
             # The claim outlives this process only as sweepable litter; drop it eagerly so
