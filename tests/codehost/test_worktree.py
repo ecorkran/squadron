@@ -6,17 +6,19 @@ is real (written to a real tmp_path), since sweep_orphans reads it straight off 
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 
 import pytest
 
-from squadron.codehost import worktree
+from squadron.codehost import metadata_lock, worktree
 from squadron.codehost.models import PullRequestRecord
 from squadron.codehost.refs import GIT_FETCH_TIMEOUT_SECONDS
 from squadron.codehost.worktree import (
@@ -689,10 +691,13 @@ class _OverlapTrackingRunner:
     open briefly, so any two that are not serialized are caught in flight together.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, submodule_barrier: threading.Barrier | None = None) -> None:
         self._guard = threading.Lock()
         self._in_flight = 0
         self.max_in_flight = 0
+        # When set, every 'git submodule' call waits here for all its siblings (D.6).
+        self._submodule_barrier = submodule_barrier
+        self.broken_barriers: list[threading.BrokenBarrierError] = []
 
     def run(
         self,
@@ -707,6 +712,13 @@ class _OverlapTrackingRunner:
         if argv[:1] == ("ps",):
             return _ps_ok()
         if argv[:2] == ("git", "submodule"):
+            if self._submodule_barrier is not None:
+                try:
+                    self._submodule_barrier.wait(timeout=5.0)
+                except threading.BrokenBarrierError as exc:
+                    # Recorded for the test's assertion, not swallowed.
+                    with self._guard:
+                        self.broken_barriers.append(exc)
             return _worktree_add_ok()
         if argv[:2] != ("git", "worktree"):
             raise UnscriptedCallError(f"unscripted call: {' '.join(argv)}")
@@ -764,3 +776,130 @@ def test_concurrent_call_sites_never_overlap_a_metadata_git_call(tmp_path: Path)
 
     assert errors == []
     assert runner.max_in_flight == 1
+
+
+def test_submodule_fetch_calls_still_overlap_unlike_worktree_metadata_calls(
+    tmp_path: Path,
+) -> None:
+    """The lock covers 'git worktree' only; submodule fetches must still run side by side.
+
+    Deterministic: every submodule call waits on one barrier sized to the thread count.
+    If the lock ever grew to cover the fetch, the threads would reach it one at a time
+    and the barrier would break.
+    """
+    root = tmp_path / "worktrees"
+    cycles = 3
+    runner = _OverlapTrackingRunner(submodule_barrier=threading.Barrier(cycles))
+    head_ref = "refs/squadron/pr/origin/83/head"
+    errors: list[BaseException] = []
+
+    def _cycle(index: int) -> None:
+        try:
+            with ScratchWorktree(runner, _record(), head_ref, f"run{index}", CHECKOUT_CWD, root=root):
+                pass
+        except BaseException as exc:  # noqa: BLE001 - asserted empty below, not swallowed
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_cycle, args=(i,)) for i in range(cycles)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=15.0)
+    assert not any(thread.is_alive() for thread in threads), "a worker thread hung"
+
+    assert errors == []
+    assert runner.broken_barriers == []
+
+
+# ---------------------------------------------------------------------------
+# Metadata lock timeouts at each call site (slice 929, D4)
+# ---------------------------------------------------------------------------
+
+_PATCHED_LOCK_TIMEOUT_SECONDS = 0.2
+
+
+@contextmanager
+def _metadata_lock_held_elsewhere(root: Path) -> Iterator[Path]:
+    """Hold the real metadata lock under *root* from this process, as a rival would."""
+    root.mkdir(parents=True, exist_ok=True)
+    lock_path = root / ".git-metadata.flock"
+    with lock_path.open("a") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX)
+        try:
+            yield lock_path
+        finally:
+            fcntl.flock(holder, fcntl.LOCK_UN)
+
+
+@pytest.fixture
+def short_lock_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(metadata_lock, "METADATA_LOCK_TIMEOUT_SECONDS", _PATCHED_LOCK_TIMEOUT_SECONDS)
+
+
+@pytest.mark.usefixtures("short_lock_timeout")
+def test_enter_raises_worktree_creation_error_on_lock_timeout(tmp_path: Path) -> None:
+    root = tmp_path / "worktrees"
+    expected_path = root / "github.com-acme-widgets-83-run1"
+    # 'ps' only: the lock times out before 'git worktree add' can run. The internal
+    # sweep's prune times out too, and is logged rather than raised.
+    runner = FakeProcessRunner([(["ps", "-o", "lstart=", "-p", str(os.getpid())], _ps_ok())])
+
+    sw = ScratchWorktree(runner, _record(), "refs/x", "run1", CHECKOUT_CWD, root=root)
+    with _metadata_lock_held_elsewhere(root) as lock_path:
+        with pytest.raises(WorktreeCreationError) as excinfo:
+            sw.__enter__()
+
+    assert excinfo.value.fix_hint is not None
+    assert str(lock_path) in excinfo.value.fix_hint
+    assert "another squadron process" in excinfo.value.fix_hint.lower()
+    assert not (root / f"{expected_path.name}.claim").exists()
+    assert not any(call.argv[:3] == ("git", "worktree", "add") for call in runner.calls)
+
+
+@pytest.mark.usefixtures("short_lock_timeout")
+def test_sweep_orphans_logs_warning_and_skips_entry_on_remove_lock_timeout(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = tmp_path / "worktrees"
+    orphan = root / "stale-entry"  # no lock, no claim
+    orphan.mkdir(parents=True)
+
+    with _metadata_lock_held_elsewhere(root), caplog.at_level("WARNING"):
+        sweep_orphans(FakeProcessRunner([]), CHECKOUT_CWD, root=root)
+
+    assert orphan.exists()  # git still registers it; deleting it would corrupt metadata
+    assert any(
+        "remove orphaned worktree" in r.message and str(orphan) in r.message
+        for r in caplog.records
+        if r.levelname == "WARNING"
+    )
+
+
+@pytest.mark.usefixtures("short_lock_timeout")
+def test_sweep_orphans_logs_warning_on_prune_lock_timeout(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = tmp_path / "worktrees"  # exists, holds only the lock file: no entries to sweep
+
+    with _metadata_lock_held_elsewhere(root), caplog.at_level("WARNING"):
+        sweep_orphans(FakeProcessRunner([]), CHECKOUT_CWD, root=root)
+
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warnings) == 1
+    assert "git worktree prune" in warnings[0].message
+
+
+@pytest.mark.usefixtures("short_lock_timeout")
+def test_remove_logs_warning_and_falls_through_to_rmtree_on_lock_timeout(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    root = tmp_path / "worktrees"
+    path = root / "github.com-acme-widgets-83-run1"
+    path.mkdir(parents=True)
+    sw = ScratchWorktree(FakeProcessRunner([]), _record(), "refs/x", "run1", CHECKOUT_CWD, root=root)
+
+    with _metadata_lock_held_elsewhere(root), caplog.at_level("WARNING"):
+        sw._remove(path)  # pyright: ignore[reportPrivateUsage]
+
+    assert not path.exists()
+    assert any("remove worktree" in r.message and r.levelname == "WARNING" for r in caplog.records)

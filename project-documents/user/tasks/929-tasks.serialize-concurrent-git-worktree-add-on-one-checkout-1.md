@@ -7,8 +7,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 projectState: Design complete, not yet reviewed. No code changes yet.
 dateCreated: 20260927
-dateUpdated: 20260927
-status: not_started
+dateUpdated: 20260928
+status: in_progress
 ---
 
 # Tasks: Serialize Concurrent `git worktree add` on One Checkout (1 of 2)
@@ -69,45 +69,45 @@ read D1–D7 before implementing. In particular:
 
 ### Task A.1 — Reproduce the race and record the pre-fix failure rate
 
-- [ ] Effort: 1/5
-- [ ] From the squadron repo root, run the design's Verification Walkthrough step 1:
+- [x] Effort: 1/5
+- [x] From the squadron repo root, run the design's Verification Walkthrough step 1:
       ```bash
       for i in $(seq 1 50); do
         uv run pytest -q tests/load/test_worktree_concurrency.py \
           -k concurrent_worktree_creation 2>&1 | tail -1
       done | sort | uniq -c
       ```
-- [ ] Record the exact `uniq -c` output (pass count, fail count) as a note under this
+- [x] Record the exact `uniq -c` output (pass count, fail count) as a note under this
       task item. This is the baseline Part E's `ROUNDS` calculation depends on — do
       not skip or guess it.
-- [ ] If zero failures show up in 50 runs, raise the load test's `concurrency` in a
+- [x] If zero failures show up in 50 runs, raise the load test's `concurrency` in a
       **scratch copy** (do not commit this change) until failures appear, and record
       the concurrency value that reproduces the race alongside the failure rate.
-- [ ] No commit for this task — nothing in the working tree changes.
+- [x] No commit for this task — nothing in the working tree changes.
 - **Result (20260928, macOS, Darwin 25.5.0):** concurrency 8: `50 1 passed`.
   Concurrency 32 (scratch copy): `3 1 failed` / `47 1 passed`. None of the three
   failures was the #133 `commondir` error. All three were the sweep race in Task A.2.
 
 ### Task A.2 — Sweep reads the claim before the lock (design D8)
 
-- [ ] Effort: 2/5
-- [ ] Added after Task A.1's baseline: the elevated-concurrency failures were
+- [x] Effort: 2/5
+- [x] Added after Task A.1's baseline: the elevated-concurrency failures were
       `sweep_orphans` removing live worktrees, not the #133 metadata race. See D8.
-- [ ] Add `test_sweep_spares_a_worktree_whose_claim_hands_off_to_its_lock_mid_sweep`
+- [x] Add `test_sweep_spares_a_worktree_whose_claim_hands_off_to_its_lock_mid_sweep`
       to `tests/codehost/test_worktree.py`: seed an entry directory plus a live
       claim, and wrap `worktree._read_lock` so that right after its first call it
       performs `__enter__`'s handoff (write `lock.json`, unlink the claim). Assert
       the entry still exists and no `git worktree remove` was issued. Confirm it
       fails on the current code.
-- [ ] In `sweep_orphans`, read and check the claim first, then the lock. An entry
+- [x] In `sweep_orphans`, read and check the claim first, then the lock. An entry
       is swept only when neither names a live owner.
-- [ ] Run: `pytest tests/codehost/test_worktree.py -x` (existing sweep tests stay green).
-- [ ] Re-run Task A.1's concurrency-32 scratch measurement (50 runs) and record
+- [x] Run: `pytest tests/codehost/test_worktree.py -x` (existing sweep tests stay green).
+- [x] Re-run Task A.1's concurrency-32 scratch measurement (50 runs) and record
       the result under this task. It is the baseline Part E's `ROUNDS` uses.
 - **Result (20260928, macOS):** after the fix, concurrency 32: `50 1 passed`;
   concurrency 64: `30 1 passed`. The #133 `commondir` race did not reproduce locally
   at any concurrency tried. Its only observed occurrence is the v0.13.3 tag CI run.
-- [ ] **Commit**: `fix: read worktree claim before lock in orphan sweep`
+- [x] **Commit**: `fix: read worktree claim before lock in orphan sweep`
 
 ---
 
@@ -115,8 +115,8 @@ read D1–D7 before implementing. In particular:
 
 ### Task B.1 — Add a thread-safe, overlap-tracking fake `ProcessRunner`
 
-- [ ] Effort: 2/5
-- [ ] In `tests/codehost/test_worktree.py`, add a small class (e.g.
+- [x] Effort: 2/5
+- [x] In `tests/codehost/test_worktree.py`, add a small class (e.g.
       `_OverlapTrackingRunner`) implementing the `ProcessRunner` protocol
       ([src/squadron/core/process_runner.py](src/squadron/core/process_runner.py),
       `class ProcessRunner(Protocol)`), distinct from the existing `FakeProcessRunner`
@@ -158,14 +158,14 @@ read D1–D7 before implementing. In particular:
         here means the test's assumptions about what `ScratchWorktree`/`sweep_orphans`
         invoke are wrong, and that must fail loudly, not silently pass.
       - Expose the recorded max in-flight count as a public attribute or method.
-- [ ] Do not add real git process spawning here — this stays a pure fake, is what
+- [x] Do not add real git process spawning here — this stays a pure fake, is what
       makes the test deterministic and fast rather than timing-dependent, unlike
       `tests/load/test_worktree_concurrency.py`.
 
 ### Task B.2 — Write the no-overlap test; confirm it fails on today's code
 
-- [ ] Effort: 3/5
-- [ ] In the same file, add
+- [x] Effort: 3/5
+- [x] In the same file, add
       `test_concurrent_call_sites_never_overlap_a_metadata_git_call` (name must
       contain "overlap" — the walkthrough's `-k "overlap or lock"` filter selects on
       it):
@@ -185,18 +185,18 @@ read D1–D7 before implementing. In particular:
         thread doesn't finish).
       - Assert the runner's recorded max in-flight `git worktree` count is exactly
         `1`.
-- [ ] Run: `pytest tests/codehost/test_worktree.py -k overlap -x`. **Confirm it
+- [x] Run: `pytest tests/codehost/test_worktree.py -k overlap -x`. **Confirm it
       fails** against today's code (no lock exists yet) — this is the point: it
       proves the race exists before recording it as fixed. Do not proceed to Part C
       until you've seen this fail.
-- [ ] Do not commit `metadata_lock.py` or any wiring yet — this task only adds the
+- [x] Do not commit `metadata_lock.py` or any wiring yet — this task only adds the
       test and its fake runner, and confirms the failure.
 
 ### Task B.3 — Commit Part B
 
-- [ ] Effort: 1/5
-- [ ] Confirm current working directory is the squadron project root.
-- [ ] `git add` and commit Part B's changes. The suite is expected to have one new
+- [x] Effort: 1/5
+- [x] Confirm current working directory is the squadron project root.
+- [x] `git add` and commit Part B's changes. The suite is expected to have one new
       failing test at this point — note that in the commit body so it isn't mistaken
       for an accident later. Branch CI will show red on this commit and on Part C's
       commit (Task C.5) too, since nothing wires the new lock in until Part D's
@@ -209,18 +209,18 @@ read D1–D7 before implementing. In particular:
 
 ### Task C.1 — Create `metadata_lock.py`: constants and `MetadataLockError`
 
-- [ ] Effort: 1/5
-- [ ] Create `src/squadron/codehost/metadata_lock.py` with a module docstring
+- [x] Effort: 1/5
+- [x] Create `src/squadron/codehost/metadata_lock.py` with a module docstring
       describing: the race this serializes (per the Overview), that it is POSIX-only
       (D5), and where the lock file lives (D2).
-- [ ] Define, each with a short comment stating its purpose:
+- [x] Define, each with a short comment stating its purpose:
       - `_LOCK_FILENAME = ".git-metadata.flock"`
       - `_METADATA_LOCK_POLL_SECONDS = 0.05`
       - `METADATA_LOCK_TIMEOUT_SECONDS = 2 * GIT_QUERY_TIMEOUT_SECONDS` — import
         `GIT_QUERY_TIMEOUT_SECONDS` from
         [src/squadron/codehost/refs.py](src/squadron/codehost/refs.py). Comment
         states this is derived, not independently chosen (D3).
-- [ ] Define `MetadataLockError(CodeHostError)` (import `CodeHostError` from
+- [x] Define `MetadataLockError(CodeHostError)` (import `CodeHostError` from
       [src/squadron/codehost/errors.py](src/squadron/codehost/errors.py) — **not**
       from `worktree.py`, which would create a circular import per the design's
       Patterns section). Constructor takes `lock_path: Path` and `detail: str`,
@@ -228,8 +228,8 @@ read D1–D7 before implementing. In particular:
 
 ### Task C.2 — Implement `git_metadata_lock(root)`
 
-- [ ] Effort: 3/5
-- [ ] Implement `git_metadata_lock(root: Path) -> ContextManager[None]` (a
+- [x] Effort: 3/5
+- [x] Implement `git_metadata_lock(root: Path) -> ContextManager[None]` (a
       `@contextlib.contextmanager` generator function is the natural shape here).
       Behavior per D3/D7, in order:
       1. `import fcntl` **inside this function** (D5) — catch the case where it's
@@ -254,16 +254,16 @@ read D1–D7 before implementing. In particular:
          descriptor releases the lock regardless, and raising here would mask
          whatever exception is already propagating out of the `with` body (D7 row
          5).
-- [ ] Every raised exception from this function must be a `MetadataLockError` — no
+- [x] Every raised exception from this function must be a `MetadataLockError` — no
       bare `OSError`/`ImportError`/`BlockingIOError` escapes it (Technical
       Requirements).
-- [ ] Never cache or share the open file descriptor across acquisitions (D1) — each
+- [x] Never cache or share the open file descriptor across acquisitions (D1) — each
       call to `git_metadata_lock` opens, locks, and closes its own file.
 
 ### Task C.3a — Unit tests: acquire/release and timeout
 
-- [ ] Effort: 2/5
-- [ ] Create `tests/codehost/test_metadata_lock.py`. Every test name in Tasks
+- [x] Effort: 2/5
+- [x] Create `tests/codehost/test_metadata_lock.py`. Every test name in Tasks
       C.3a–C.3c starts with `test_lock_` so `-k lock` (per the walkthrough) matches
       all of them:
       - **`test_lock_is_acquired_and_released_for_reuse`**: `with
@@ -278,12 +278,12 @@ read D1–D7 before implementing. In particular:
         assert it raises `MetadataLockError` after roughly that patched timeout
         (assert elapsed is close to the patched value, not the real 60s default —
         a hung test here means the patch didn't take).
-- [ ] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
+- [x] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
 
 ### Task C.3b — Unit tests: D7 immediate-failure mapping
 
-- [ ] Effort: 2/5
-- [ ] In the same file, add:
+- [x] Effort: 2/5
+- [x] In the same file, add:
       - **`test_lock_fails_immediately_on_a_read_only_root`**: `os.chmod` a real
         `tmp_path` subdirectory to remove write permission (e.g. `0o500`), then
         call `git_metadata_lock` targeting a lock file inside it; assert
@@ -305,12 +305,12 @@ read D1–D7 before implementing. In particular:
         `sys.modules` trick, not real platform unavailability). Assert
         `MetadataLockError` is raised and its `detail` names the platform/import
         failure.
-- [ ] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
+- [x] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
 
 ### Task C.3c — Unit tests: release failure (D7 row 5)
 
-- [ ] Effort: 2/5
-- [ ] In the same file, add:
+- [x] Effort: 2/5
+- [x] In the same file, add:
       - **`test_lock_release_failure_logs_warning_and_does_not_raise`** (D7 row
         5): `monkeypatch.setattr(fcntl, "flock", ...)` with a stateful fake that
         succeeds on the acquire call (`LOCK_EX | LOCK_NB`) but raises `OSError` on
@@ -325,12 +325,12 @@ read D1–D7 before implementing. In particular:
         out of the `with` statement — not an `OSError` and not a
         `MetadataLockError` — proving the release-path failure is logged and
         swallowed rather than replacing whatever the body was already raising.
-- [ ] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
+- [x] Run: `pytest tests/codehost/test_metadata_lock.py -x`.
 
 ### Task C.4 — Holder-death test
 
-- [ ] Effort: 2/5
-- [ ] In the same file, add
+- [x] Effort: 2/5
+- [x] In the same file, add
       **`test_a_killed_holder_does_not_block_a_later_acquirer`** (name contains
       "holder" — the `-k holder` filter below selects on it), proving a killed
       holder does not block later callers (Success Criteria: "A holder process
@@ -352,13 +352,13 @@ read D1–D7 before implementing. In particular:
         `_METADATA_LOCK_POLL_SECONDS` plus a generous margin (e.g. under 1 second)
         — proving the kernel released the lock automatically, not that the test
         happened to wait out a full timeout.
-- [ ] Run: `pytest tests/codehost/test_metadata_lock.py -k holder -x`.
+- [x] Run: `pytest tests/codehost/test_metadata_lock.py -k holder -x`.
 
 ### Task C.5 — Commit Part C
 
-- [ ] Effort: 1/5
-- [ ] Confirm current working directory is the squadron project root.
-- [ ] `git add` and commit Part C's changes. Part B's failing test is still failing
+- [x] Effort: 1/5
+- [x] Confirm current working directory is the squadron project root.
+- [x] `git add` and commit Part C's changes. Part B's failing test is still failing
       at this point — `metadata_lock.py` exists but nothing calls it yet.
       Suggested message: `feat: add cross-process metadata_lock for git worktree metadata calls`.
 

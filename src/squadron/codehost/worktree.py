@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import cast
 
 from squadron.codehost.errors import CodeHostError
+from squadron.codehost.metadata_lock import MetadataLockError, git_metadata_lock
 from squadron.codehost.models import PullRequestRecord
 from squadron.codehost.refs import GIT_FETCH_TIMEOUT_SECONDS, GIT_QUERY_TIMEOUT_SECONDS
 from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
@@ -246,22 +247,40 @@ def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = 
         reason = "no readable/parseable lock" if lock is None else "owner process is gone"
         _logger.warning("Sweeping orphaned worktree %s (%s)", entry, reason)
         try:
-            runner.run(
-                ["git", "worktree", "remove", "--force", str(entry)],
-                cwd=checkout_cwd,
-                timeout=GIT_QUERY_TIMEOUT_SECONDS,
-            )
+            with git_metadata_lock(worktree_root):
+                runner.run(
+                    ["git", "worktree", "remove", "--force", str(entry)],
+                    cwd=checkout_cwd,
+                    timeout=GIT_QUERY_TIMEOUT_SECONDS,
+                )
         except ProcessTimedOutError:
             _logger.warning(
                 "Timed out removing orphaned worktree %s via git; will unlink directly", entry
             )
+        except MetadataLockError as exc:
+            # sweep_orphans never raises. Skip this entry entirely: git still registers
+            # it, and deleting the directory under git would corrupt its metadata (929 D4).
+            # The next sweep retries it.
+            _logger.warning(
+                "Could not take the git metadata lock to remove orphaned worktree %s; "
+                "leaving it for a later sweep: %s",
+                entry,
+                exc.detail,
+            )
+            continue
         if entry.exists():
             _rmtree(entry)
 
     try:
-        runner.run(["git", "worktree", "prune"], cwd=checkout_cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
+        with git_metadata_lock(worktree_root):
+            runner.run(
+                ["git", "worktree", "prune"], cwd=checkout_cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS
+            )
     except ProcessTimedOutError:
         _logger.warning("'git worktree prune' timed out after sweeping orphans")
+    except MetadataLockError as exc:
+        # sweep_orphans never raises; a skipped prune is retried by the next sweep.
+        _logger.warning("Could not take the git metadata lock for 'git worktree prune': %s", exc.detail)
 
 
 def _rmtree(path: Path) -> None:
@@ -326,11 +345,12 @@ class ScratchWorktree:
         _write_claim(claim_path, lock)
 
         try:
-            result = self._runner.run(
-                ["git", "worktree", "add", "--detach", str(path), self._head_ref],
-                cwd=self._checkout_cwd,
-                timeout=GIT_QUERY_TIMEOUT_SECONDS,
-            )
+            with git_metadata_lock(self._root):
+                result = self._runner.run(
+                    ["git", "worktree", "add", "--detach", str(path), self._head_ref],
+                    cwd=self._checkout_cwd,
+                    timeout=GIT_QUERY_TIMEOUT_SECONDS,
+                )
             if result.returncode != 0:
                 _logger.error("git worktree add failed for %s: %s", path, result.stderr)
                 raise WorktreeCreationError(path, result.stderr)
@@ -340,6 +360,19 @@ class ScratchWorktree:
             (path / _LOCK_FILENAME).write_text(
                 json.dumps({"pid": lock.pid, "started_at": lock.started_at})
             )
+        # Unlike the sweep and exit paths, __enter__ may raise: a lock failure is a failed
+        # creation, reported as one (929 D4). Must precede the BaseException clause below.
+        except MetadataLockError as exc:
+            _logger.error("Could not take the git metadata lock to create %s: %s", path, exc.detail)
+            _unlink_claim(claim_path)
+            raise WorktreeCreationError(
+                path,
+                exc.detail,
+                fix_hint=(
+                    f"Another squadron process may be holding the worktree metadata lock "
+                    f"({exc.lock_path}). Wait for it to finish, or stop it, then retry."
+                ),
+            ) from exc
         except BaseException:
             # The claim outlives this process only as sweepable litter; drop it eagerly so
             # a failed creation leaves nothing behind. Re-raised immediately.
@@ -393,13 +426,23 @@ class ScratchWorktree:
         # below logs at WARNING and falls through to a direct filesystem removal attempt
         # rather than raising.
         try:
-            result = self._runner.run(
-                ["git", "worktree", "remove", "--force", str(path)],
-                cwd=self._checkout_cwd,
-                timeout=GIT_QUERY_TIMEOUT_SECONDS,
-            )
+            with git_metadata_lock(self._root):
+                result = self._runner.run(
+                    ["git", "worktree", "remove", "--force", str(path)],
+                    cwd=self._checkout_cwd,
+                    timeout=GIT_QUERY_TIMEOUT_SECONDS,
+                )
         except ProcessTimedOutError:
             _logger.warning("Timed out removing worktree %s; may require manual cleanup", path)
+        except MetadataLockError as exc:
+            # _remove never raises: fall through to the direct removal below, the same as a
+            # git-side timeout (929 D4).
+            _logger.warning(
+                "Could not take the git metadata lock to remove worktree %s; "
+                "may require manual cleanup: %s",
+                path,
+                exc.detail,
+            )
         else:
             if result.returncode != 0:
                 _logger.warning("Failed to remove worktree %s: %s", path, result.stderr)

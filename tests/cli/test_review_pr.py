@@ -19,6 +19,7 @@ from squadron.cli.app import app
 from squadron.cli.commands.review_pr import assemble_pr_metadata
 from squadron.codehost.github_cli import GitHubCli
 from squadron.codehost.models import PullRequestState, ResolvedPullRequest
+from squadron.codehost.worktree import ScratchWorktree, WorktreeCreationError
 from squadron.core.process_runner import ProcessResult
 from squadron.review.persistence import REVIEWS_DIR
 from squadron.review.reviews_dir import ReviewsDirRule
@@ -195,6 +196,25 @@ def test_discussion_fetch_failure_renders_as_an_adapter_error_not_a_traceback(
 
     assert result.exit_code == 1
     assert result.exception is None or isinstance(result.exception, SystemExit)
+
+
+def test_worktree_creation_failure_renders_as_an_error_panel_not_a_traceback(
+    patched_host: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """929 D4: a WorktreeError from worktree setup (e.g. a metadata lock timeout) exits 1
+    with an error panel, not an unhandled traceback."""
+    _arm(patched_host)
+
+    def _raise(_self: object) -> ScratchWorktree:
+        raise WorktreeCreationError(Path("/tmp/fake"), "boom")
+
+    monkeypatch.setattr(ScratchWorktree, "__enter__", _raise)
+
+    result = CliRunner().invoke(app, ["review", "pr", "83"])
+
+    assert result.exit_code == 1
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert "boom" in result.stderr
 
 
 def test_assemble_pr_metadata_no_discussions_has_no_discussions_section() -> None:
