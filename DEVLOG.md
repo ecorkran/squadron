@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Release 0.15.1
+
+- **Contents:** slice 929 (the metadata lock serializing `git worktree` add/remove/prune, closes #133; the claim-before-lock sweep fix; a `WorktreeError` renders as a panel) plus its code review fixes, and the `sonnet` alias moved to `claude-sonnet-5-5`.
+
 ### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Implementation Complete
 
 - Closes #133. New `codehost/metadata_lock.py` (`git_metadata_lock`, `MetadataLockError`): an exclusive `fcntl.flock` on `.git-metadata.flock` under the worktree root, polled against `2 × GIT_QUERY_TIMEOUT_SECONDS`. It wraps `worktree add`, both `remove` sites, and `prune`. `sq review pr` now shows a `WorktreeError` from setup as an error panel instead of a traceback.
