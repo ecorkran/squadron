@@ -11,8 +11,8 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20260928
 dateUpdated: 20260928
-reviewedSha: 8fc47d463362c1e6655c3ca0dd2d746d09cfb44f
-revision_number: 2
+reviewedSha: 9f0fa457b2c6e8a89f7316f426729864e3e3ba33
+revision_number: 3
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 runId: run-20260928-slices-plan-783dab3a
@@ -21,47 +21,42 @@ findings:
   - id: F001
     severity: concern
     category: scope
-    summary: "Slice is large for an initiative that prefers small, focused slices"
+    summary: "Slice weight runs against the initiative's \"small and focused, lighter-weight\" guidance"
     location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#Technical Scope"
   - id: F002
     severity: concern
     category: scope
-    summary: "Part A leans on \"configuration improvements\" and edges toward a new capability"
+    summary: "Part A's alias field sits at the edge of the \"no new features\" exclusion"
     location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#Initiative fit"
   - id: F003
     severity: concern
-    category: error-handling
-    summary: "Hang and timeout handling for the stream is inherited, not specified"
-    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#D12 — Failure modes and their signals"
+    category: dependencies
+    summary: "Slice frontmatter lists only 924 as a dependency, though 927 and 195 are consumed"
+    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md:6"
   - id: F004
-    severity: concern
-    category: error-handling
-    summary: "Failure-artifact telemetry depends on every `ProviderError` exit being wrapped"
-    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#D12 — Failure modes and their signals"
-  - id: F005
-    severity: concern
+    severity: pass
     category: architecture
-    summary: "Dependency direction: `core/usage.py` gains a consumer from `review/` and a producer in `providers/`"
+    summary: "Layering and dependency direction are explicit and checkable"
     location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#Dependency direction"
+  - id: F005
+    severity: pass
+    category: error-handling
+    summary: "Failure modes are enumerated with handling, signal and test for each I/O path"
+    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#D12 — Failure modes and their signals"
   - id: F006
-    severity: note
-    category: metadata
-    summary: "Frontmatter parent points at a slices document"
-    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md:5"
-  - id: F007
     severity: pass
     category: risk
-    summary: "Gemini `stream_options` risk is isolated by a declared profile field"
+    summary: "The unverified Gemini fact does not gate the slice"
     location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#Mitigation Strategies"
-  - id: F008
-    severity: pass
-    category: error-handling
-    summary: "Failure modes are enumerated for each new I/O path with signals and tests"
-    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#D12 — Failure modes and their signals"
-  - id: F009
-    severity: pass
+  - id: F007
+    severity: note
     category: nfr
-    summary: "NFR handling and integration points are explicit"
+    summary: "No NFRs in the parent architecture; the slice states its own event-loop constraint"
+    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#Special Considerations"
+  - id: F008
+    severity: note
+    category: maintainability
+    summary: "`agent.py` already exceeds the 300-line guideline"
     location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md#Special Considerations"
 ---
 
@@ -72,45 +67,45 @@ findings:
 
 ## Findings
 
-### [CONCERN] Slice is large for an initiative that prefers small, focused slices
+### [CONCERN] Slice weight runs against the initiative's "small and focused, lighter-weight" guidance
 
-The 900 architecture says "prefer many small slices over few large ones" and "Lighter-weight given the maintenance nature". This slice bundles three parts (effort, batched reads, usage). It touches about 25 components across core, models, pipeline, CLI, providers (openai/sdk/codex), review, tools, and data. It also carries a 12-row failure table and a new `core/usage.py` module. The doc records the bundling as a PM decision and adds mitigations: separate commits, C→B→A ordering, and separate revertability. That is a reasonable answer, but "independently deliverable" is met only at the commit level, not the slice level. B shares no code with A or C, so its bundling rests only on the PM decision and the shared fixture regeneration. Consider allowing B to be cut into its own slice if the implementation runs long.
+The 900 architecture says to prefer many small slices over few large ones, and to keep the process lighter-weight given the maintenance nature. This slice bundles three parts (A, B, C). It adds a new `core/usage.py` module, a new `providers/openai/usage.py`, and a new profile flag. It rewires six credential call sites, extends `ProviderError`, adds new frontmatter, digest and JSON keys, and lists 12 D12 failure-mode rows.
 
-### [CONCERN] Part A leans on "configuration improvements" and edges toward a new capability
+The doc handles this well. It records the bundle as a PM decision and orders the parts C → B → A, each a separately revertible commit. It also names B as the part to cut into its own slice if the work runs long, and says A and C must stay together. That mitigates the concern but does not remove it. Treat the B cut-out as a real trigger, not an aspiration, and consider deciding it at task breakdown instead of mid-implementation.
 
-The architecture excludes "new features or capabilities". The doc argues that A is not one because it adds no new command or workflow. But the alias field lets users choose reasoning effort across three providers, a control that did not exist before. The 924 `max_output_tokens` precedent supports the "operational configuration" reading. The argument is defensible, but it is the weakest of the three mappings. The recorded-level fix is the part that clearly belongs in this initiative, and the doc should say so explicitly. It could also say the alias field is included because it is the smallest control that makes the recorded level meaningful.
+### [CONCERN] Part A's alias field sits at the edge of the "no new features" exclusion
 
-### [CONCERN] Hang and timeout handling for the stream is inherited, not specified
+The architecture excludes "new features or capabilities". The doc admits the effort mapping is "the weakest of the three mappings" and argues the recorded level is a fix and the alias field is the smallest enabling control. The argument is reasonable. It follows the 924 `max_output_tokens` precedent and adds no CLI flag, pipeline key or new workflow (D2). But a user-settable reasoning level that changes model behavior is a user-visible capability, whatever the framing.
 
-The D12 table covers a mid-loop stream failure by relying on the existing conversions to `ProviderTimeoutError`. It does not say what happens when the stream hangs with no error raised, or when the peer stops sending the final usage chunk. The `stream_options` request adds a trailing chunk. A backend that accepts the parameter but never sends the trailing usage chunk would stall the stream until the client timeout fires. The doc should either state that the existing client timeout bounds this, or state that the loop does not wait on the usage chunk. The "read hangs" row is handled explicitly. The equivalent stream-side row should be too.
+The doc's splitting of the "fix" half from the "control" half is the right defense. Keep that split visible in the task file. Then, if the PM disagrees on the "control" half, it can be dropped without losing the recording fix.
 
-### [CONCERN] Failure-artifact telemetry depends on every `ProviderError` exit being wrapped
+### [CONCERN] Slice frontmatter lists only 924 as a dependency, though 927 and 195 are consumed
 
-The design says an outer `except ProviderError` attaches a `RunTelemetry` snapshot and re-raises. Raw exceptions outside the conversion list are explicitly left unconverted and produce no artifact. That is honest, but it means a common failure class (an unwrapped `httpx` error) still loses all the gathered telemetry, which is what #158 wanted preserved. The doc should say whether the WARNING with turns and tokens also fires on that path, since the log is the only record there. The current design has no signal on it beyond the traceback.
+`dependencies: [924]`, but the Dependencies section lists 927 (the per-chunk `chunk.model` read that usage extends) and 195 (the provider-failure artifact that D12 extends) as prerequisites. All three are complete, so nothing blocks. Still, the machine-readable dependency list understates what the slice touches. List them, or state why they are excluded.
 
-### [CONCERN] Dependency direction: `core/usage.py` gains a consumer from `review/` and a producer in `providers/`
+### [PASS] Layering and dependency direction are explicit and checkable
 
-The layering argument is sound: `review/` imports only shared provider modules and `core`, and `providers/openai` imports `core.usage`. However, `ProviderError` in `providers/errors.py` now holds a `RunTelemetry` from `core.usage`, so `providers/errors.py` gains a `core` import. This is a correct direction, but the doc should confirm that `core` does not already import from `providers`. The doc also relies on a grep for the `review/` to `providers/openai` rule. It could add the reverse check, so `core/usage.py` stays free of any provider import.
+The 900 architecture defines no layers, and the doc says so. It derives the rule from CLAUDE.md, `review-code.md` (Dependency Inversion) and the current import graph. `review/` imports only shared provider modules, and the new neutral `core/usage.py` is a leaf. The doc addresses the existing `core` ↔ `providers` coupling and shows that the new edges cannot form a cycle. Two grep checks are proposed as enforcement.
 
-### [NOTE] Frontmatter parent points at a slices document
+### [PASS] Failure modes are enumerated with handling, signal and test for each I/O path
 
-The `parent` field names `900-slices.maintenance-and-refactoring.md`, the slice plan. That is the expected form, so it is not flagged as an error.
+D12 covers connect and request failure, mid-stream disconnect, stream stall, a usage chunk that never arrives, malformed usage, backend rejection, batch budget exhaustion, all-files-fail, and a hung read. The two unbounded cases (a trickling stream, a hung read) are declared as unchanged behavior and explained, not left as "TBD". Every signal is WARNING or above. The mid-stream `httpx` conversion closes a real gap, since the raw exception would otherwise produce a traceback and no artifact.
 
-### [PASS] Gemini `stream_options` risk is isolated by a declared profile field
+### [PASS] The unverified Gemini fact does not gate the slice
 
-The one unverified external fact is handled by `sends_stream_usage = False` on the gemini profile. It is a declared per-profile field, not string dispatch on the profile name, so nothing in the slice waits on the answer. User-defined profiles default to sending it and can opt out through config, with no code change. This matches the "independently deliverable" guideline and the project's no-string-dispatch rule.
+Gemini ships with `sends_stream_usage = False` as a declared per-profile field, not string dispatch on the profile name. Its requests stay as they are today. The follow-up is tracked, and the D12 no-usage WARNING makes the gap observable.
 
-### [PASS] Failure modes are enumerated for each new I/O path with signals and tests
+### [NOTE] No NFRs in the parent architecture; the slice states its own event-loop constraint
 
-The table covers stream failure mid-loop, no usage reported, malformed usage, backend rejection of new parameters, batch budget exhaustion, an all-failed batch, and a hung read. Each row has a stated behavior, an observable signal (WARNING or above), and a named test. This meets the failure-mode enumeration criterion apart from the stream-hang gap noted above.
+The 900 architecture defines no NFRs, and the doc says so. It restates the one constraint that applies: per-chunk usage reading stays well under 1 ms, and blocking reads stay inside `asyncio.to_thread`.
 
-### [PASS] NFR handling and integration points are explicit
+### [NOTE] `agent.py` already exceeds the 300-line guideline
 
-The 900 architecture defines no NFRs, and the doc says so. It restates the one constraint it does have (usage reading stays cheap inside the event loop, and blocking reads stay off the loop). Integration points with 924, 927, 195, `collect_turn`, and the failure artifact are named, and the interface parity requirement between `sq review` and `sq run` is stated.
+The slice keeps the growth small by putting the usage reader in its own module and declares the split of `agent.py` out of scope. That is acceptable for a maintenance initiative. The split does fit this initiative's Refactoring scope, so file it as an issue in line with the project's practice.
 
 ### Run Digest
 
-- Response length: 7124 chars
+- Response length: 5710 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -119,7 +114,7 @@ The 900 architecture defines no NFRs, and the doc says so. It restates the one c
 - Reasoning characters: 0
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
