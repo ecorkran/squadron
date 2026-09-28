@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260927
+dateUpdated: 20260928
 status: in_progress
 ---
 
@@ -466,6 +466,10 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 **Fix:** extract the CLI's per-part loop (iterate files, review, save with `part-N`, fold to worst verdict) into one helper that the CLI and the pipeline review action both call. The step's verdict is the worst part's, so `until`/`accept_if`/`skip_if_met` read it, and `dispatch: { feedback: review }` gets every part's findings, not only the last saved review. A single-file slice's artifacts stay byte-for-byte unchanged. Design checks what context-forge's review gate and `cf.untasked_slices` read when both an unsuffixed review and `part-N` reviews exist for one slice.
 **Tests:** 2+ task files yield N review calls, N `part-N` artifacts, and the worst verdict (PASS + CONCERNS → CONCERNS, so the loop does not skip); a single file is unchanged; the CLI and the pipeline produce the same artifact names for the same slice.
 **Not in scope:** splitting or merging task files. Dependencies: 195 (complete). Risk: Low-Medium (changes the verdict every task-review loop gates on). Effort: 2/5
+
+29. [ ] **(931) Tool-Heavy Reviews on OpenAI-Compatible Models — Effort, Batched Reads, and Per-Turn Usage** — Fixes [issue #154](https://github.com/ecorkran/squadron/issues/154), [issue #157](https://github.com/ecorkran/squadron/issues/157), and [issue #158](https://github.com/ecorkran/squadron/issues/158). amoeba's `sq run slices-plan` (run `run-20260928-slices-plan-a04bdb07`) reviewed slice 105 with glm-flash three times: ≤4 min with 7 tool calls, then ~55 and ~26 min with 22 calls each. Output speed does not explain it. Each review reads one file per turn and every turn resends the whole history; squadron sends no reasoning effort, so the model thinks at full depth on every turn; and the digest's `Reasoning characters` covers only the final turn ([agent.py:604](src/squadron/providers/openai/agent.py#L604)), so most of that thinking is unrecorded. `_stream_turn` never requests usage, so prompt, cached and reasoning tokens are unknown, including whether OpenRouter caches the resent history.
+**Fix:** (1) per-alias effort/thinking level in models.toml, sent on every provider that supports it and recorded in the artifact (#154). (2) `read_file` accepts a list of paths, with the per-file caps in `tools/limits.py` unchanged, and tool guidance says to batch reads (#157). (3) request `include_usage` on every streamed turn, sum prompt/cached/completion/reasoning tokens across the loop, and record them with turn count and wall-clock in frontmatter and digest (#158).
+**Not in scope:** lowering `agent.max_tool_iterations`; preloading predictable reads into the prompt ([issue #159](https://github.com/ecorkran/squadron/issues/159), touches cf); #155/#156 (SDK system prompt and setting sources). Dependencies: 924 (complete). Risk: Low-Medium (changes every OpenAI-compatible request and the review digest; fixtures regenerate). Effort: 3/5
 
 ---
 
