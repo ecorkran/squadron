@@ -11,53 +11,48 @@ aiModel: z-ai/glm-5.3-flash
 status: complete
 dateCreated: 20260927
 dateUpdated: 20260927
-reviewedSha: 88195ab9a7f994e6c32381cbcef4265ba09e3bf2
-revision_number: 1
+reviewedSha: 81be4a9ef8bb48efecb6158e9bb6b2f38169316e
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 31
+toolCallsMade: 33
 runId: run-20260927-tasks-plan-1e76e648
 squadronVersion: 0.14.0
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "All success criteria trace to tasks, and sequencing/dependencies are correct"
+    summary: "Every success criterion traces to at least one task; no scope creep; sequencing and test-with pattern hold"
     location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md"
   - id: F002
-    severity: pass
-    category: coverage
-    summary: "Load-test NFR is covered by a `tests/load/` task and explicit CI gating, with a verified premise"
-    location: ".github/workflows/ci.yml:38"
+    severity: concern
+    category: testing
+    summary: "Task D.6's \"must overlap\" assertion is timing-dependent, undermining the slice's determinism goal"
+    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md:430-459"
   - id: F003
     severity: concern
-    category: test-coverage
-    summary: "Task B.1's fake runner spec omits the directory-creation side effect, so B.2 fails for the wrong reason and D.5 cannot pass"
-    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md#Task-B.1"
-  - id: F004
-    severity: concern
-    category: test-coverage
-    summary: "The \"submodule update runs outside the lock / still overlaps\" success criterion has no verifying task"
-    location: "project-documents/user/slices/929-slice.serialize-concurrent-git-worktree-add-on-one-checkout.md:159"
-  - id: F005
-    severity: concern
-    category: test-coverage
-    summary: "The D7 release-path outcome (LOCK_UN/close `OSError` → WARNING, never raised) is untested"
-    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md#Task-C.3"
-  - id: F006
-    severity: note
-    category: test-coverage
-    summary: "Several `-k` filter commands depend on test names that the tasks never pin"
+    category: process
+    summary: "End-of-slice document edits and G.1's conditional CI fix have no commit step before the branch merge"
     location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md"
-  - id: F007
+  - id: F004
     severity: note
-    category: documentation
-    summary: "Minor line-number drift in Task D.6's anchors (all `worktree.py` citations are accurate)"
-    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md#Task-D.6"
-  - id: F008
+    category: sequencing
+    summary: "Part D's commit lands before the CLI suite first runs; a D.7 regression would survive two subsequent commits"
+    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md:514-524"
+  - id: F005
     severity: note
     category: process
-    summary: "Commits B.3 and C.5 land a known-failing test; branch CI will be red until D.8"
-    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md#Task-B.3"
+    summary: "The mid-slice red-CI commits are intentional and adequately documented"
+    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md:161-173"
+  - id: F006
+    severity: note
+    category: testing
+    summary: "Task C.4 should specify `sys.executable`, not bare `python`, for the holder subprocess"
+    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md:292"
+  - id: F007
+    severity: note
+    category: testing
+    summary: "Task D.8's output-content assertion is click-version sensitive"
+    location: "project-documents/user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md:494-513"
 ---
 
 # Review: tasks — slice 929
@@ -67,50 +62,46 @@ findings:
 
 ## Findings
 
-### [PASS] All success criteria trace to tasks, and sequencing/dependencies are correct
+### [PASS] Every success criterion traces to at least one task; no scope creep; sequencing and test-with pattern hold
 
-Cross-reference result: no-overlap (SC 1) → B.1/B.2 + D.1–D.3 + D.5; error panel with fix hint and exit 1 (SC 2, integration) → D.6/D.7; per-site timeout behavior (SC 4's three sub-cases, plus prune) → D.1–D.3 wiring + D.4's four tests; holder death → C.4; read-only root fails fast → C.3; lazy `fcntl` import → C.2 + G.2's grep check; lint/typecheck → G.2; repeated-rounds load test → E.1/E.2; existing suite unchanged → D.8. Walkthrough steps 1–5 map to A.1, D.5, G.3, E.2, G.3 respectively, and E.1 explicitly depends on A.1's recorded measurement. The B.2 red step is correctly sequenced before C, with D.5 confirming the green step and a re-break check. Commit checkpoints exist per part (B.3, C.5, D.8, E.3, F.2) with G.4 as final sweep. No scope creep found: A.1 (measurement-only), G.1 (CI confirmation), G.3 (manual walkthrough), and F.1 (docstring) all trace to the design's walkthrough/Development Approach; excluded items (claim/lock.json folding, Windows locking, #88) are not tasked. Task sizes are reasonable — D.4's four tests share one helper and one file, C.2 is one ~50-line function.
+Functional criteria map cleanly: no-overlap → B.1/B.2 + D.1–D.3 + D.5 + E; error panel with fix hint and exit 1 → D.7/D.8; submodule stays outside the lock → D.6; the three (plus prune) timeout behaviors → D.1–D.4, including the claim-file assertion matching "leaves no claim file behind"; holder-death → C.4; read-only-root immediate failure → C.2 steps 2–3 + C.3. Technical requirements map to C.2 (lazy `fcntl`, D7 table), F.1, G.2. Integration requirements map to D.9 and G.2. All five Verification Walkthrough steps are covered (A.1, D.5, E.2, G.3). I verified the task file's line anchors against the real code: the `add` call spans worktree.py:332-336, `except BaseException` at :346, sweep remove/prune at :253/:265, `_remove` at :400, and the `with ScratchWorktree` block at review_pr.py:426 — all accurate. Two authoring strengths worth keeping: D.1 explicitly orders `except MetadataLockError` before `except BaseException` (without which the conversion to `WorktreeCreationError` would be silently swallowed), and B.1 correctly requires the fake `add` branch to create the target directory because worktree.py writes `lock.json` immediately after the add with no intervening call. G.1 is not scope creep: `.claude/rules/python.md:64` requires CI to gate load tests, and I independently confirmed G.1's factual claim — ci.yml's `test` job runs bare `uv run pytest`, `pyproject.toml` sets `testpaths = ["tests"]` (including `tests/load/`) with only `network`/`host_cf` markers, and the `hermetic` job's `-m "not host_cf"` also leaves the load tier in.
 
-### [PASS] Load-test NFR is covered by a `tests/load/` task and explicit CI gating, with a verified premise
+### [CONCERN] Task D.6's "must overlap" assertion is timing-dependent, undermining the slice's determinism goal
 
-Task E.1 keeps the acceptance test in `tests/load/test_worktree_concurrency.py` per `.claude/rules/python.md:64` ("CI must gate load tests for slices touching these paths"), and Task G.1 makes the gating explicit instead of implicit. G.1's factual premise checks out: `ci.yml:38` is a bare `run: uv run pytest` (no `-m` deselect, no path argument), `pyproject.toml:83` sets `testpaths = ["tests"]`, and the only markers defined (`network`, `host_cf`, at `pyproject.toml:84-87`) are opt-out markers not applied by default — so `tests/load/` is collected and run. G.1 also correctly requires the outcome to be stated rather than silently checked.
+`test_submodule_fetch_calls_still_overlap_unlike_worktree_metadata_calls` asserts the submodule max-in-flight is **greater than 1** based on threads happening to interleave (0.02s sleep inside the fake). The never-overlap direction (B.2) is genuinely deterministic — an overlap either happened or a serialized run hangs and the bounded join fails — but the must-overlap direction fails spuriously when a loaded CI scheduler keeps the two threads from entering the 20ms window simultaneously, i.e., the test can go red with correct code. That reintroduces exactly the flakiness this slice exists to eliminate. A `threading.Barrier` (with a bounded timeout so an accidental lock-coverage regression fails loudly rather than hangs) inside the fake's submodule branch would force two concurrent calls to rendezvous, making the assertion deterministic and its failure mode meaningful. The barrier is cheap to specify in the task text and worth adding before implementation.
 
-### [CONCERN] Task B.1's fake runner spec omits the directory-creation side effect, so B.2 fails for the wrong reason and D.5 cannot pass
+### [CONCERN] End-of-slice document edits and G.1's conditional CI fix have no commit step before the branch merge
 
-`ScratchWorktree.__enter__` writes the lock file into the just-"created" worktree directory after a successful `add` (`src/squadron/codehost/worktree.py:343`). Real `git worktree add` creates that directory; a canned `ProcessResult` does not. The existing suite hit exactly this and solved it with `_FakeRunnerCreatingWorktreeDir` (`tests/codehost/test_worktree.py:309-323`), whose docstring says the fake "must make that side effect real" — but Task B.1's `_OverlapTrackingRunner` spec returns `_worktree_add_ok()`'s shape with no such side effect, and B.2 never pre-creates the per-thread target paths. As specified, every thread's `__enter__` raises `FileNotFoundError` from the `lock.json` write inside `__enter__`'s try block, which is re-raised and swallowed by the thread. Consequences: B.2's mandatory "confirm it fails" step fails for the wrong reason (proving nothing about the race), and even after wiring D.1–D.3, `__enter__` never completes so `__exit__`/`_remove` never run in the overlap test — D.5's "it must now pass" only passes vacuously while the remove path goes unexercised. Fix: amend B.1 to have the fake create the target directory on an `add` call (mirroring `_FakeRunnerCreatingWorktreeDir`), or amend B.2 to pre-create each thread's distinct target directory before starting threads.
+The Completion section edits the task file's frontmatter, the slice design's frontmatter, the parent plan entry (900-slices.maintenance-and-refactoring.md:459), and writes a DEVLOG entry — with no instruction to commit these changes. G.4 asserts a clean tree *before* those edits ("nothing outstanding except this task file's own completion-marking edits below"), so the slice ends with uncommitted document changes, and the next workflow step per the git rules is `git checkout {target}` + merge, which will carry or choke on them. Same gap in G.1's conditional branch ("fix `.github/workflows/ci.yml` ... and note that fix here" — no commit instruction), and G.2's `ruff format` could modify files with no stated commit home. I verified the G.1 fix branch is very unlikely to fire (no exclusion exists today), but the checklist should end with an explicit final commit (e.g., extend G.4 or add a completion commit step) so the merge starts from a clean tree.
 
-### [CONCERN] The "submodule update runs outside the lock / still overlaps" success criterion has no verifying task
+### [NOTE] Part D's commit lands before the CLI suite first runs; a D.7 regression would survive two subsequent commits
 
-No task verifies this functional requirement, and the planned tests cannot catch a violation. B.1 explicitly makes `git submodule` calls in the fake "no counting, no sleep" — so if an implementer wrongly wraps the submodule call in `git_metadata_lock` (the design's Excluded list and the Data Flow diagram both forbid it), the no-overlap test still passes (max in-flight `git worktree` stays 1), and D.4's enter-timeout test also passes (the held lock makes a wrapped submodule call time out into the same `WorktreeCreationError` at the same assertion). A cheap pin exists: have the fake's submodule handler attempt a non-blocking `flock` of the same lock file and record whether it succeeded, then assert in B.2 that it was free during at least one in-flight submodule call — or simply assert the fake observed two submodule calls while no lock was held. Add this as an item to B.1/B.2 or D.4.
+Task D.9 runs only the full `tests/codehost/test_worktree.py` suite before committing Part D, and D.8 runs only its own new test. The existing tests that exercise D.7's restructured happy path with real worktrees (`tests/cli/test_review_pr_worktree.py`) don't run until G.2's full `pytest`, after the Part E and Part F commits. The blast radius is contained (G.2 is still pre-merge) and D.7's restructure preserves `__exit__` semantics for this class (which ignores `exc_info`), so this is a NOTE, not a CONCERN — but adding the CLI worktree file to D.9's pre-commit run would close the window.
 
-### [CONCERN] The D7 release-path outcome (LOCK_UN/close `OSError` → WARNING, never raised) is untested
+### [NOTE] The mid-slice red-CI commits are intentional and adequately documented
 
-The technical requirement "Every `OSError` from the helper's mkdir, open, flock, or close is either converted to `MetadataLockError` or logged (D7). None escapes the helper" includes the release path, and D7 row 5 assigns it a specific outcome chosen precisely so a raise there cannot mask the `with` body's exception — exactly the failure mode the project's exception-handling rule warns about. C.3's five tests cover mkdir/open (read-only root), flock (non-`BlockingIOError`), the deadline, and `fcntl` unavailability, but nothing exercises the `finally` release path failing. One additional test (patched `fcntl.flock` raising `OSError` on `LOCK_UN` only, plus a sentinel exception through the `with` body to assert it isn't masked) would pin it; add it to C.3's list.
+Committing a known-failing test (B.3) and keeping it red through C.5 is deliberate — the design's D6 requires the test to fail before the fix lands — and the task file tells the implementer to note it in the commit body and not to chase it. This is a sound, traceable deviation from "every commit green"; noting it here so a future reviewer doesn't "fix" it.
 
-### [NOTE] Several `-k` filter commands depend on test names that the tasks never pin
+### [NOTE] Task C.4 should specify `sys.executable`, not bare `python`, for the holder subprocess
 
-B.2 does this correctly ("name must contain 'overlap'"), but C.4's `-k holder` and D.7's `-k worktree` filters require the new tests' names to contain those substrings, and neither task specifies a name or the constraint. If the junior names them otherwise, `-k` selects nothing and the run exits vacuously. One sentence each ("name must contain 'holder'"/"'worktree'") closes it. Relatedly, D.4's sweep-remove timeout test will see two WARNINGs (the lock is held for the whole call, so both the per-entry `remove` and the final `prune` time out), while the design says "logs one WARNING" — the task should say to assert on the message naming the orphan entry (as the existing `test_sweep_orphans_removes_dead_owner_with_one_warning` does via `str(entry) in ...`) rather than on the count, or a junior mirroring that count assertion will chase a phantom failure against correct code.
+The holder-death test spawns `python -c ...`. In a uv-managed project there may be no `python` on PATH outside the venv, making the test environment-dependent. `sys.executable` is the standard robust form; one word in the task text prevents a spurious skip-or-fail.
 
-### [NOTE] Minor line-number drift in Task D.6's anchors (all `worktree.py` citations are accurate)
+### [NOTE] Task D.8's output-content assertion is click-version sensitive
 
-D.6 cites the `with ScratchWorktree(...)` block as "currently lines 425–429" and `_run(...)` as "line 429", and the `no_tools` branch as "line 419"; the verified positions are 426–430, `_run` at 430, and `if no_tools:` at 418. Every citation into `worktree.py` (add at 333, `except BaseException` at 346, sweep remove at 251–256, prune at 264–267, `_remove` at 398–403, docstring 1–11) and into `test_review_pr.py` (Path at line 12, `patched_host` at 77, `_arm` at 232) verified accurate, so this is drift only on one file; the code quotes are unambiguous. Worth correcting so a junior following line numbers literally doesn't hesitate at the boundary.
-
-### [NOTE] Commits B.3 and C.5 land a known-failing test; branch CI will be red until D.8
-
-This is deliberate TDD sequencing and the task file already requires the failure to be noted in the commit body, so it is not a defect — but note that CI runs on every push (`on: pull_request` / `push: [main]`, `.github/workflows/ci.yml:3-7`), so the Part B and Part C commits will show red runs on the slice branch. If branch CI is watched by anything automated, consider an explicit note in the task that this is expected until D.8.
+`render_code_host_error` prints to a stderr `Console` (pr.py:95-103). Whether `CliRunner`'s `result.output` merges stderr depends on the click version (8.2 split the streams); the existing sibling test the task copies deliberately asserts only `exit_code` and exception type, and D.8 adds a content assertion. The task's hedged "stderr/output" wording is workable, but naming `result.stderr` explicitly (or checking the project's pinned click) would keep a junior implementer from asserting on the wrong stream.
 
 ### Run Digest
 
-- Response length: 9679 chars
+- Response length: 7405 chars
 - Response is newline-free: no
-- Tool calls made: 31
+- Tool calls made: 33
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 128000 tokens
-- Reasoning characters: 72942
+- Reasoning characters: 69937
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
