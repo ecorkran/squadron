@@ -238,3 +238,4 @@ def _changed_paths(runner: ProcessRunner, *, cwd: str, diff_range: str) -> tuple
         timeout=GIT_QUERY_TIMEOUT_SECONDS,
     )
     return tuple(line for line in result.stdout.splitlines() if line.strip())
+# throwaway change for slice 929 live verification (b)
