@@ -10,6 +10,14 @@ dateUpdated: 20260927
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20260928
+
+### Release 0.15.0
+
+- **Contents:** plan batch pipelines `slices-plan` / `tasks-plan` (slice 195) and review recovery with per-alias output budgets (slice 924). Also alias renames (`glm-flash`, `gemini-flash`), new `mimo-flash` / `muse`, and `qwen36-free` removed.
+- **Live check:** `sq run tasks-plan 900` passed 914, 928 and 929 with none flagged. 929's first review survived an upstream `finish_reason='error'` empty turn through the new recovery turn (`recoveryTurn: true`).
+- **Known gaps, filed:** #153 (pipeline tasks review covers only the first file of a split breakdown; 914's per-part CLI reviews are CONCERNS and need a revision pass), #152 (a budget-truncated review can save as a clean PASS), #154 (effort/thinking level), #155 and #156 (system prompt and settings sources).
+
 ## 20260927
 
 ### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Tasks Complete

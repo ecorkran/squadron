@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 20260928
+
 ### Added
 - `sq run slices-plan <plan>` designs and reviews every undesigned slice in a slice plan, and `sq run tasks-plan <plan>` breaks down every designed slice whose design review was acceptable. Each revises against its review up to `max-revisions` times, flags any slice it can't get to an acceptable review, and keeps going. They replace `design-batch` (#136)
 - Every `each` step now writes a batch report next to the run state (`{run_id}.{step}.report.md`) listing passed, accepted and flagged items, flagged first with the reason. `sq run` prints the counts and the flagged items at the end (#136)
