@@ -56,7 +56,7 @@ notes = "Max sub"
 
 [aliases.sonnet]
 profile = "sdk"
-model = "claude-sonnet-5"
+model = "claude-sonnet-5-5"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"

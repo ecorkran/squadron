@@ -42,9 +42,9 @@ def test_resolve_unknown_passthrough() -> None:
 
 
 def test_resolve_sonnet() -> None:
-    """sonnet resolves to claude-sonnet-5 on sdk profile."""
+    """sonnet resolves to claude-sonnet-5-5 on sdk profile."""
     model, profile = resolve_model_alias("sonnet")
-    assert model == "claude-sonnet-5"
+    assert model == "claude-sonnet-5-5"
     assert profile == "sdk"
 
 
