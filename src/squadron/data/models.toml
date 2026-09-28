@@ -25,6 +25,9 @@
 #
 # Deprecated: `qwen36-free` (qwen/qwen3.6-plus:free) is no longer shipped; it is
 # gone from OpenRouter's model listing (20260927).
+#
+# Renamed (20260928): `glmflash` → `glm-flash`, matching the other `-flash`
+# aliases. `flash3` and `flash3-lite` are replaced by `gemini-flash`.
 
 # ---------------------------------------------------------------------------
 # Claude family — Max subscription, no per-token pricing
@@ -161,31 +164,18 @@ output = 12.00
 cache_read = 0.20
 cache_write = 2.00
 
-[aliases.flash3]
+[aliases.gemini-flash]
 profile = "gemini"
-model = "gemini-3-flash-preview"
+model = "gemini-3.8-flash"
 private = true
 cost_tier = "cheap"
 notes = "Fast, cheap"
 
-[aliases.flash3.pricing]
-input = 0.50
-output = 3.00
-cache_read = 0.05
-cache_write = 0.50
-
-[aliases.flash3-lite]
-profile = "gemini"
-model = "gemini-3.1-flash-lite-preview"
-private = true
-cost_tier = "cheap"
-notes = "very cheap"
-
-[aliases.flash3-lite.pricing]
-input = 0.25
-output = 1.50
-cache_read = 0.025
-cache_write = 0.25
+[aliases.gemini-flash.pricing]
+input = 0.75
+output = 3.75
+cache_read = 0.75
+cache_write = 3.75
 
 [aliases.gemma4]
 profile = "openrouter"
@@ -195,10 +185,10 @@ private = true
 cost_tier = "cheap"
 
 [aliases.gemma4.pricing]
-input = 0.14
-output = 0.40
-cache_read = 0.14
-cache_write = 0.40
+input = 0.08
+output = 0.30
+cache_read = 0.05
+cache_write = 0.30
 
 # ---------------------------------------------------------------------------
 # OpenRouter — cost-effective, no retention/training (provider-dependent)
@@ -271,14 +261,14 @@ output = 4.40
 cache_read = 0.26
 cache_write = 4.40
 
-[aliases.glmflash]
+[aliases.glm-flash]
 profile = "openrouter"
 model = "z-ai/glm-5.3-flash"
 max_output_tokens = 128000
 private = true
 cost_tier = "cheap"
 
-[aliases.glmflash.pricing]
+[aliases.glm-flash.pricing]
 input = 0.15
 output = 0.50
 cache_read = 0.03
@@ -323,6 +313,19 @@ input = 0.435
 output = 0.870
 cache_read = 0.004
 cache_write = 0.87
+
+[aliases.mimo-flash]
+profile = "openrouter"
+model = "xiaomi/mimo-v2.6-flash"
+max_output_tokens = 131072
+private = true
+cost_tier = "cheap"
+
+[aliases.mimo-flash.pricing]
+input = 0.07
+output = 0.14
+cache_read = 0.007
+cache_write = 0.14
 
 [aliases.grok-code]
 profile = "openrouter"
@@ -406,3 +409,16 @@ input = 0.22
 output = 0.85
 cache_read = 0.06
 cache_write = 0.00
+
+[aliases.muse]
+profile = "openrouter"
+model = "meta/muse-spark-1.3"
+max_output_tokens = 943718
+private = true
+cost_tier = "moderate"
+
+[aliases.muse.pricing]
+input = 1.25
+output = 4.25
+cache_read = 0.15
+cache_write = 4.25

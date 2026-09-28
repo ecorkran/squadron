@@ -224,7 +224,7 @@ sq review slice 120 -v
 sq review code --diff main --model gpt54-nano -v
 
 # Google Gemini
-sq review slice 120 --model flash3 -v
+sq review slice 120 --model gemini-flash -v
 
 # OpenRouter
 sq review tasks 118 --model kimi27 -v
@@ -247,7 +247,7 @@ $ sq models
 │ gpt54           │ openai       │ gpt-5.4                            │        │
 │ gpt54-nano      │ openai       │ gpt-5.4-nano                       │        │
 │ codex-agent     │ openai-oauth │ gpt-5.3-codex                      │        │
-│ flash3          │ gemini       │ gemini-3-flash-preview             │        │
+│ gemini-flash    │ gemini       │ gemini-3.8-flash                   │        │
 │ gemini          │ gemini       │ gemini-3.1-pro-preview-customtools │        │
 │ deepseek4-flash │ openrouter   │ deepseek/deepseek-v4-flash-0731    │        │
 │ glm53           │ openrouter   │ z-ai/glm-5.3                       │        │

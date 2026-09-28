@@ -4,7 +4,7 @@ description: Break down every designed slice in a plan whose design review is ac
 params:
   plan: required
   model: sonnet
-  review-model: glmflash
+  review-model: glm-flash
   max-revisions: "3"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better

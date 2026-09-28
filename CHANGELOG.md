@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Importing squadron as a library no longer loads `.env` from the current directory or resolves home-directory paths at import time. Running `sq` still loads `.env` from the current directory (#47)
+- Alias `glmflash` is now `glm-flash`, and `flash3` / `flash3-lite` are replaced by `gemini-flash` (Gemini 3.8 Flash). Update any pipelines or configs that name the old aliases
+- New aliases: `mimo-flash` (Xiaomi MiMo v2.6 Flash) and `muse` (Meta Muse Spark 1.3)
 
 ### Removed
 - The `qwen36-free` alias. Its model is gone from OpenRouter, and the `cheap` pool no longer includes it
