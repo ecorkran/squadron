@@ -37,7 +37,7 @@ Fixes [issue #153](https://github.com/ecorkran/squadron/issues/153). When a slic
 **Out of scope**
 - Splitting or merging task files.
 - Cleaning up unsuffixed reviews that earlier pipeline runs already wrote (for example `914-review.tasks.strict-type-checking-over-the-test-suite.md`). Delete those by hand; see Special Considerations.
-- Context-forge's review gate. It reads only one tasks review per slice (see Integration Points). That fix belongs in context-forge and gets its own issue there.
+- Context-forge's review gate. It reads only one tasks review per slice (see Integration Points). That fix belongs in context-forge: [context-forge#106](https://github.com/ecorkran/context-forge/issues/106).
 - Running parts concurrently. Parts run one after another, the same as the CLI.
 
 ## Dependencies
@@ -60,6 +60,7 @@ review/template_inputs.py    (edit) per-part resolution for fan-out keys
 pipeline/actions/review.py   (edit) resolve parts → run+save each → fold
 pipeline/actions/dispatch.py (edit) multi-file feedback prompt
 cli/commands/review.py       (edit) review_tasks uses parts.py; _aggregate_verdicts removed
+pipeline/batch_report.py     (edit) render outputs["unsaved_parts"] for an item
 ```
 
 **`review/parts.py`**
@@ -81,7 +82,7 @@ def worst_verdict(verdicts: Iterable[str]) -> str: ...
 
 `TemplateInputSpec` gains `fans_out: bool = False`. The `tasks` and `judge.tasks-vs-slice` entries set it on `input`. Their source is renamed `_task_files` and returns every path. The spec's source type becomes `Callable[[SliceInfo, str], list[str]]`: every source returns a list, empty when it has nothing. Scalar sources return one element. That gives a single signature instead of a union.
 
-`resolve_template_inputs(template, info, cwd, inputs) -> list[dict[str, str]]` returns one fully populated inputs dict per part. Scalar keys are copied into every dict. The one fan-out key gets one value per dict. Rules:
+`resolve_template_input_parts(template, info, cwd, inputs) -> list[dict[str, str]]` (replaces `resolve_template_inputs`; see Migration Plan) returns one fully populated inputs dict per part. Scalar keys are copied into every dict. The one fan-out key gets one value per dict. Rules:
 - If a caller already supplied a key, the caller's value still wins. An explicit `input:` means one part, as today.
 - If more than one spec in an entry sets `fans_out`, the call raises `ValueError`. Only one axis can fan out, and nothing needs two.
 - If the fan-out source returns nothing, the result is one dict without that key, and the existing missing-required-input `KeyError` in `ReviewAction` reports it, as today.
@@ -113,11 +114,16 @@ Every part is validated before the first model call. A missing part-3 file then 
 | `verdict` | `worst_verdict` over the parts' verdicts (judge-enforced where applicable) |
 | `provenance` | same for every part (template-level), taken from the first part |
 | `findings` | every part's findings, in part order. Each finding dict gets an `input_file` key naming its part. |
-| `score` / `criteria` | from the lowest-scoring part. `None` if no part has a score. |
+| `score` / `criteria` | from the lowest-scoring part among the parts that have a score, first part on ties. Parts with no score are skipped. `None` only when no part has a score. |
+| `outputs["unsaved_parts"]` | input paths of the parts whose save failed. Omitted when every part saved. |
 | `outputs["response"]` | the parts' raw outputs joined, each under a `## <input path>` header |
 | `outputs["input_files"]` / `outputs["review_files"]` | all parts, in order |
 | `outputs["input_file"]` / `outputs["review_file"]` | the part with the worst verdict (first one on ties). The batch report shows the file that sank the item. |
 | `metadata` | first part's model and profile values (all parts use the same ones). `tool_calls_made` is summed. |
+
+Edge cases for the fold:
+- **Verdict:** ties go to the first part in order. All UNKNOWN gives UNKNOWN. A judge part whose threshold enforcement degraded to UNKNOWN (malformed override) ranks as UNKNOWN like any other part. A value outside `Verdict` raises `ValueError` in `worst_verdict`; it doesn't default to a rank. Every producer already emits a `Verdict` value, so this only fires on a real bug.
+- **Score vs. verdict:** these are chosen independently. For a judge template the verdict comes from the score, so the lowest-scoring part is also the worst-verdict part, unless a per-part threshold degraded to UNKNOWN. In that case the verdict is UNKNOWN and the score still reports the lowest real score. Both facts are true, and neither one hides the other.
 
 The loop condition (`until`, `accept_if`, `skip_if_met`) reads `verdict` through `last_with_verdict`, so it now sees the worst part without any change to loop code.
 
@@ -140,7 +146,18 @@ No new state. Each part writes its own review artifact. A revise-loop iteration 
 ### Patterns and Conventions
 
 - Suffix format `part-N` is unchanged (existing artifacts for 265, 305, 306, 381, 382 use it). `review_parts` becomes its only producer. `persistence.py` still only appends whatever suffix it's given.
-- **Failure behavior:** a provider failure on part k writes a failure artifact into part k's slot and fails the step. Parts 1..k-1 stay saved, just as they do in the CLI. If saving a successful part fails, that's logged with `logger.exception` and the step continues, the same non-fatal rule as today. Every part is attempted.
+### Failure Modes
+
+The per-part path adds no new kind of I/O. Each part makes the same model call and the same save that a single-file review makes today, just N times in a row. Here is each failure, what it produces, and how it shows up:
+
+| Failure on part k | Behavior | Observable signal |
+|---|---|---|
+| Provider error (including `ProviderTimeoutError`, which the OpenAI path raises on a client timeout) | Write a failure artifact into part k's slot, re-raise, and the step fails. Parts 1..k-1 stay saved and parts k+1..N are not run, same as the CLI. | WARNING `review: provider failed in step %s part %d/%d; failure artifact: %s`, plus the failure artifact and `success=False` |
+| Model call hangs (SDK path, which has no client timeout) | Same as a single-file review today: the step waits. No new per-part timeout here. A hang is a provider-level gap, and fixing it one review action at a time would be the wrong layer. | INFO `review: step %s part %d/%d: %s` logged before each call, so a stalled run shows exactly which part it's stuck on |
+| Save's git subprocess hangs | Already capped at 30s inside `resolve_reviewed_sha`, and it runs off-thread. | The existing save-failure path below |
+| Save fails (write error, or an archive refusal as `OSError`) | The step does not fail, same rule as today, because the review succeeded and its verdict still counts in the fold. The part's path goes into `outputs["unsaved_parts"]`. | ERROR via `logger.exception` naming the part. The batch report lists `unsaved: <paths>` next to the item. |
+
+An unsaved part is where silence would hurt. The step's verdict includes that part, but context-forge's gate can't see it on disk, and a stale `part-k` from an earlier run could be sitting there instead. That's why an unsaved part is a named output shown in the batch report, not just a log line. It is still not fatal: failing the step would throw away N paid reviews to report one file write, and the operator can rerun `sq review tasks <slice>` to fill the slot.
 
 ## Implementation Details
 
@@ -149,7 +166,7 @@ No new state. Each part writes its own review artifact. A revise-loop iteration 
 - `_aggregate_verdicts` (`cli/commands/review.py`) → replaced by `parts.worst_verdict`. `review_tasks` is its only caller.
 - `review_tasks`'s inline `multi_part` / `f"part-{part_idx}"` logic → `review_parts(task_file_paths)`. Its `SaveOutcome` folding stays in the CLI, because it's CLI-specific (exit codes).
 - `_tasks_input` → `_task_files` (list return). The `TEMPLATE_INPUTS` source signature changes for every entry. The only callers are `resolve_template_inputs` and `tests/review/test_template_inputs.py`.
-- `resolve_template_inputs` stops mutating its `inputs` argument and returns a list. Its single production caller is `ReviewAction._resolve_slice_inputs`, which is updated here.
+- `resolve_template_inputs` (mutates `inputs` in place, returns `None`) is replaced by `resolve_template_input_parts` (doesn't mutate, returns `list[dict[str, str]]`). The rename is on purpose. A caller that kept the old name and ignored the return value would silently lose the resolved inputs. With the old name gone, that becomes an import error and a pyright error instead. Its single production caller is `ReviewAction._resolve_slice_inputs`, which is updated here. `grep -rn resolve_template_inputs src tests` must come back empty after the change.
 - **Behavior check:** the existing `tests/pipeline/actions/test_review_action*.py` and CLI review tests pass unchanged for single-file slices. The byte-for-byte check is the Success Criteria test below.
 
 ## Integration Points
@@ -163,7 +180,7 @@ No new state. Each part writes its own review artifact. A revise-loop iteration 
   - `part-10` sorts before `part-2`. That only shows up at 10+ parts, which is rare but possible.
   - A stale unsuffixed review (`….md`) sorts before `….part-1.md` (`m` < `p`), so a leftover never wins.
 
-  File a context-forge issue: the tasks gate should fold every `part-N` review for the slice into the worst verdict, with numeric part ordering. Link that issue number from this section when it's filed.
+  Tracked as [context-forge#106](https://github.com/ecorkran/context-forge/issues/106): the tasks gate should fold every `part-N` review for the slice into the worst verdict, with numeric part ordering. Until that lands, the pipeline's own loop gate is correct. Only a later `cf next` or a Phase 6 gate check can clear a slice whose last part passes but an earlier part fails.
 - **`cf.untasked_slices`** (`pipeline/sources.py`) reads only the **slice design** review (`slice_review_stem(index, 'slice', …)`), never a tasks review. Split task reviews don't affect it.
 
 ## Success Criteria
@@ -182,7 +199,7 @@ No new state. Each part writes its own review artifact. A revise-loop iteration 
 - Tests:
   - `tests/review/test_parts.py`: suffixes for 1 and 3 paths, `worst_verdict` ordering including UNKNOWN, empty input raises.
   - `tests/review/test_template_inputs.py`: multi-file `tasks` yields K dicts with shared `against`. A caller-supplied `input` yields 1. Two `fans_out` specs raise.
-  - `tests/pipeline/actions/test_review_action.py`: 2 task files → 2 review calls, 2 `part-N` saves, verdict PASS + CONCERNS → CONCERNS, findings tagged with `input_file`, `review_file` points at the CONCERNS part. A missing part-2 file fails before any model call. A provider failure on part 2 keeps part 1's artifact and writes the failure artifact under `part-2`.
+  - `tests/pipeline/actions/test_review_action.py`: 2 task files → 2 review calls, 2 `part-N` saves, verdict PASS + CONCERNS → CONCERNS, findings tagged with `input_file`, `review_file` points at the CONCERNS part. A missing part-2 file fails before any model call. A provider failure on part 2 keeps part 1's artifact, writes the failure artifact under `part-2`, and logs the part-numbered WARNING (checked with `caplog`). A save failure on part 2 still returns the folded verdict, puts part 2's path in `outputs["unsaved_parts"]`, and logs at ERROR. The batch report renders `unsaved:` for that item. `worst_verdict` breaks ties in favor of the first part, and score is taken from the lowest part that has one while unscored parts are skipped.
   - Single-file regression: the saved artifact matches a snapshot of today's output.
   - Parity: the CLI (`review_tasks`) and the pipeline over the same fixture slice write the same set of filenames.
   - `tests/pipeline/actions/test_dispatch*.py`: the multi-file feedback prompt lists every file. The single-file prompt is unchanged.
@@ -241,7 +258,6 @@ Use the real split slice from the issue (914, three task files):
 4. `ReviewAction`: pull the per-part run/judge/save out of `_review` into `_run_part`, add the fold, and validate every part up front. `_review` currently runs about 290 lines, and this extraction shrinks it.
 5. Dispatch feedback changes and their tests.
 6. Parity test, then the verification walkthrough against 914.
-7. File the context-forge gate issue and link it from Integration Points.
 
 Effort: 2/5.
 
