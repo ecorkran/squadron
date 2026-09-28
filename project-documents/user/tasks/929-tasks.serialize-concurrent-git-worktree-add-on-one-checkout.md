@@ -288,11 +288,14 @@ read D1–D7 before implementing. In particular:
       "holder" — the `-k holder` filter below selects on it), proving a killed
       holder does not block later callers (Success Criteria: "A holder process
       killed while holding the lock does not block later callers"):
-      - Launch a real subprocess (`subprocess.Popen`) running a short inline
-        Python script (`python -c ...`) that opens the same lock file path this
-        test will use, calls `fcntl.flock(f, fcntl.LOCK_EX)` (blocking — no
-        `LOCK_NB`), then sleeps for a long duration (e.g. 60s) so it would still be
-        holding the lock if not killed.
+      - Launch a real subprocess (`subprocess.Popen([sys.executable, "-c", ...])`
+        — use `sys.executable`, not a bare `"python"` string; many systems only
+        have `python3` on `PATH`, and the subprocess must run under the same
+        interpreter this test itself runs under) running a short inline Python
+        script that opens the same lock file path this test will use, calls
+        `fcntl.flock(f, fcntl.LOCK_EX)` (blocking — no `LOCK_NB`), then sleeps for
+        a long duration (e.g. 60s) so it would still be holding the lock if not
+        killed.
       - Poll (with a short bounded loop, not a fixed sleep) until you can confirm
         the subprocess actually holds the lock — e.g. attempt a non-blocking
         `flock` from the test process and expect `BlockingIOError` — before
@@ -436,20 +439,37 @@ call — but that scope decision needs its own proof, not just an absence of a
 `with git_metadata_lock(...)` line around it that a future edit could add by
 accident without any test catching it.
 
+A sleep-and-measure-the-max approach (like Task B.1's fake) would make this
+**timing-dependent** in the wrong direction: two threads merely being scheduled
+to overlap under a short sleep is a matter of luck, not proof, and the slice's
+whole point (D6 in the design) is to stop relying on luck. Use a
+`threading.Barrier` instead — it makes "these calls can run concurrently" a
+hard pass/fail rather than a probability.
+
 - [ ] Effort: 2/5
-- [ ] In `tests/codehost/test_worktree.py`, extend Task B.1's
-      `_OverlapTrackingRunner` (or add a second, similarly-shaped fake) so its
-      `("git", "submodule")` branch also participates in in-flight counting —
-      under its own separate counter/lock (distinct from the `git worktree`
-      counter — these two must never be conflated into one number), sleeping a
-      short fixed duration (e.g. 0.02s) before returning success.
+- [ ] In `tests/codehost/test_worktree.py`, add a fake `ProcessRunner` (or extend
+      Task B.1's, gated so only this test constructs it with the barrier
+      installed) whose `("git", "submodule")` branch does the following on every
+      call: `barrier.wait(timeout=5.0)` against a `threading.Barrier(N)` shared
+      by the test, where `N` is exactly the number of concurrent
+      `ScratchWorktree` threads the test spawns. Catch
+      `threading.BrokenBarrierError` from `barrier.wait(...)` inside each thread
+      and record it (e.g. append to a shared, lock-guarded list) rather than
+      letting it propagate — a broken barrier must fail the *test's assertion*,
+      not crash a worker thread silently. Return a canned success
+      `ProcessResult` after the barrier releases (or after catching the broken-
+      barrier error).
 - [ ] Add **`test_submodule_fetch_calls_still_overlap_unlike_worktree_metadata_calls`**:
-      run at least two concurrent `ScratchWorktree(...).__enter__()` /
-      `.__exit__()` cycles (same pattern as Task B.2, distinct `run_id`s, one
-      shared `root`/runner) and assert the submodule-call max-in-flight is
-      **greater than 1** — the mirror image of Task B.2's assertion, proving
-      `_init_submodules` genuinely runs outside `git_metadata_lock` rather than
-      merely appearing to because no test checks it.
+      spawn exactly `N` (e.g. 3) concurrent `ScratchWorktree(...).__enter__()` /
+      `.__exit__()` cycles (distinct `run_id`s, one shared `root`/runner), join
+      with a bounded timeout, then assert **no thread recorded a
+      `BrokenBarrierError`** — i.e., all `N` threads really did reach the
+      submodule call at the same time and the barrier released them together.
+      This is the deterministic version of "still overlap": if the metadata lock
+      ever accidentally grew to cover the submodule call too, the threads could
+      only reach the barrier one at a time, `barrier.wait`'s 5s timeout would
+      expire before all `N` arrived, and every waiting thread would raise
+      `BrokenBarrierError` — a hard failure, not a flaky one.
 - [ ] Run against the fully-wired code from Tasks D.1–D.3 (not before) — the
       point is confirming the lock's scope stayed correctly narrow after wiring,
       not proving something that was never at risk.
@@ -508,7 +528,13 @@ accident without any test catching it.
       fixture (armed via `_arm`), and assert `result.exit_code == 1` and
       `result.exception is None or isinstance(result.exception, SystemExit)` — the
       same "not an unhandled traceback" assertion the existing test uses. Also
-      assert the printed stderr/output contains the error message text (`"boom"`).
+      assert `"boom"` appears in **`result.stderr`**, not `result.output` —
+      `render_code_host_error` writes to `Console(stderr=True)`, and whether
+      `result.output` includes stderr content at all is a `CliRunner`
+      implementation detail that has changed across Click versions (Click 8.2
+      dropped the constructor's `mix_stderr` parameter); `result.stderr` is
+      Click's own dedicated accessor for exactly this stream and stays correct
+      regardless.
 - [ ] Run: `pytest tests/cli/test_review_pr.py -k worktree_creation_failure -x`.
 
 ### Task D.9 — Commit Part D
@@ -517,6 +543,10 @@ accident without any test catching it.
 - [ ] Confirm current working directory is the squadron project root.
 - [ ] Run the full existing `tests/codehost/test_worktree.py` suite (not just the
       new tests) and confirm it still passes unchanged (Integration Requirements).
+- [ ] Also run `pytest tests/cli/test_review_pr.py -x` — Task D.8's CLI test lands
+      in this same commit and has not been run as part of any prior commit's
+      verification step; do not commit Part D on the strength of the codehost
+      suite alone.
 - [ ] `git add` and commit Part D's changes.
       Suggested message: `fix: serialize git worktree metadata calls and render WorktreeError as a panel`.
 
@@ -609,6 +639,11 @@ covers it.
       gated and note that fix here.
 - [ ] This is a one-time confirmation for this slice's new/changed load-test
       content (Task E.1's `ROUNDS` change) — it does not require a new CI job.
+- [ ] **If and only if** you changed `.github/workflows/ci.yml`: `git add
+      .github/workflows/ci.yml` and commit it now, before moving to Task G.2 —
+      do not carry a CI-file change forward uncommitted into the rest of Part G.
+      Suggested message: `chore: gate the worktree-concurrency load test in CI`.
+      If nothing needed changing, there is nothing to commit for this task.
 
 ### Task G.2 — Full suite, lint, typecheck
 
@@ -665,3 +700,10 @@ covers it.
       guidance, dated the actual completion date, noting the slice closed issue
       #133, the measured pre-fix failure rate (Task A.1), and the chosen `ROUNDS`
       value (Task E.1) with its reasoning.
+- [ ] Commit the four edits above together, from the squadron project root, as
+      one final commit **before** this branch merges into the target — none of
+      Parts A–G's commits touch this task file's own frontmatter, the slice
+      design's frontmatter, the slice plan checkbox, or DEVLOG.md, so without
+      this step they would merge as uncommitted or get silently folded into
+      whatever commit happens next.
+      Suggested message: `docs: close slice 929 — serialize concurrent git worktree add`.
