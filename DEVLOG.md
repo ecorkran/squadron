@@ -12,6 +12,24 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Design Complete
+
+- Design: `user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md` (#154, #157, #158).
+- **Effort:**
+  - An alias field from the closed vocabulary `Effort` (`none|low|medium|high|xhigh`), carried `ResolvedModel` → `AgentConfig`.
+  - Sent as `reasoning_effort` on OpenAI-compatible providers, and as SDK `effort`, or `thinking` disabled for `none`.
+  - Gated by `ProviderCapabilities.applies_effort`. Codex warns.
+  - No `--effort` flag or step key: a second alias is the override (D2).
+- **Batched reads:** `read_file` takes `path` or `paths`, capped by `MAX_READ_BATCH_BYTES`. The cap keeps the agent's per-result floor from cutting files mid-body. The guidance paragraph stays tool-agnostic.
+- **Usage:**
+  - `stream_options.include_usage` is sent on every turn. `chunk.usage` is read before the choices guard, because OpenRouter's usage chunk carries one empty choice.
+  - Turns, tokens, and reasoning characters are summed across the loop and across `EmptyFinalTurnError`.
+  - `durationSeconds` is measured in `review_client` for all providers.
+  - New frontmatter keys are emitted only when reported.
+- Found: the digest's `Reasoning characters` counted only the final turn. It becomes the loop total.
+- **Deferred to issues at implementation:** Codex effort (the SDK parameter cannot be verified locally), SDK token usage.
+- **Next:** Phase 5 task breakdown for 931.
+
 ### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Design Complete
 
 - Design: `user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md` (#153). The shared module is `review/parts.py` (`review_parts`, `worst_verdict`). The loop body is not shared: the CLI runs sync and drives display, the pipeline runs async. The registry's `fans_out` flag makes `tasks`/`judge.tasks-vs-slice` resolve one inputs dict per file. `ReviewAction` reviews each part, saves it as `part-N`, and folds the parts to the worst verdict, with UNKNOWN ranked worst. Feedback dispatch lists every file and tags each finding with its file.

@@ -473,6 +473,8 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 **Fix:** (1) per-alias effort/thinking level in models.toml, sent on every provider that supports it and recorded in the artifact (#154). (2) `read_file` accepts a list of paths, with the per-file caps in `tools/limits.py` unchanged, and tool guidance says to batch reads (#157). (3) request `include_usage` on every streamed turn, sum prompt/cached/completion/reasoning tokens across the loop, and record them with turn count and wall-clock in frontmatter and digest (#158).
 **Not in scope:** lowering `agent.max_tool_iterations`; preloading predictable reads into the prompt ([issue #159](https://github.com/ecorkran/squadron/issues/159), touches cf); #155/#156 (SDK system prompt and setting sources). Dependencies: 924 (complete). Risk: Low-Medium (changes every OpenAI-compatible request and the review digest; fixtures regenerate). Effort: 3/5
 
+**Slice design:** `user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md` (20260928). Effort values are `none|low|medium|high|xhigh`. They are sent as top-level `reasoning_effort` (OpenRouter accepts the OpenAI form) and as SDK `effort`/`thinking`. Codex warns that it cannot apply effort. Overrides come from defining another alias, not from a `--effort` flag. `read_file` takes `path` or `paths` under a batch byte budget equal to `MAX_READ_BYTES`, so the per-result floor holds. Reasoning characters becomes the total across the loop. Usage, turns, effort, and `durationSeconds` go to frontmatter, digest, and JSON, and each key is absent when not reported. Build order is C → B → A.
+
 ---
 
 ## Future Slices
