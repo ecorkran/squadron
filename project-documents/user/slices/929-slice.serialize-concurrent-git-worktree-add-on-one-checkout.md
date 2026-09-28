@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 interfaces: []
 dateCreated: 20260927
-dateUpdated: 20260927
-status: not_started
+dateUpdated: 20260928
+status: complete
 ---
 
 # Slice Design: Serialize Concurrent `git worktree add` on One Checkout
@@ -122,6 +122,8 @@ This refines parent plan entry 27's "observable as a `WorktreeCreationError`" on
 
 Each `except MetadataLockError` gets a comment naming the never-raise contract it serves, per the exception-handling rule.
 
+**Worst-case wait (found in verification, accepted).** The timeout applies per acquisition, not per `__enter__`. Against a wedged holder, `__enter__` waits 60s for each orphan the internal sweep removes, 60s for the sweep's `prune`, and then 60s for `add`. With no orphans, that is about 120s before the error panel. A live holder can't cause this, because each wrapped git call is capped at `GIT_QUERY_TIMEOUT_SECONDS` (30s). Sharing one deadline across the sweep and `add` would restore ~60s at the cost of threading a deadline through `sweep_orphans`. That was not done.
+
 **D5: POSIX only, imported lazily.** `docs/QUICKSTART.md` supports installing `sq` on Windows, and `review_pr.py` imports `worktree` at module level. A top-level `import fcntl` would therefore break the whole CLI on Windows. `fcntl` is imported inside `git_metadata_lock`. The limit adds nothing new: `ScratchWorktree.__enter__` already shells out to `ps -o lstart=` before any git call (`_current_process_start_time`), so the tools path of `sq review pr` already fails on Windows. The limit is documented in the module docstring. If `fcntl` is missing, the helper raises `MetadataLockError` with a detail naming the platform, and every call site handles it exactly like a timeout (D4). Anything that reaches it on Windows fails loudly, not silently unlocked.
 
 **D6: The test proves "gone", not "rare".** A deterministic test proves the property the fix provides: no two wrapped git calls ever overlap. It uses real threads and a `FakeProcessRunner`-style runner that records how many `git worktree` calls are in flight and sleeps briefly inside each one. It asserts the maximum is 1. This fails on the current code every time, independent of git's timing.
@@ -192,23 +194,29 @@ Every error the helper can raise is a `MetadataLockError`, so each call site's s
    ```
    Expect some `1 failed` lines with the `commondir` fatal. If none show up locally, raise the test's `concurrency` in a scratch copy until they do, and record the setting that reproduces. That number sets the round count in step 4.
 
+   **Actual (20260928, macOS):** the `commondir` fatal never reproduced: `50 1 passed` at concurrency 8, 0 of 50 at 32 once D8 was fixed, 0 of 30 at 64. Before D8 was fixed, concurrency 32 gave `3 1 failed` / `47 1 passed`, and all three were the sweep race D8 describes. The load test is sized on that rate (see its docstring). On Linux CI, #133's own rate is still unmeasured. Scratch copy used:
+   ```bash
+   sed "s/_CONCURRENCY = 32/_CONCURRENCY = 64/" tests/load/test_worktree_concurrency.py > /tmp/test_wt_c64.py
+   uv run pytest -q -p no:cacheprovider /tmp/test_wt_c64.py -k concurrent_worktree_creation
+   ```
+
 2. **Deterministic proof.** After the fix:
    ```bash
    uv run pytest -q tests/codehost/test_metadata_lock.py tests/codehost/test_worktree.py -k "overlap or lock"
    ```
    Expected: all pass. Temporarily removing the `with git_metadata_lock(...)` around `add` makes the no-overlap test fail with a max-in-flight above 1. Revert after checking.
 
-3. **Loud timeout.** Hold the lock from a second shell, then start a PR review with the timeout left at its default. It fails after about 60s with `WorktreeCreationError` naming `~/.config/squadron/worktrees/.git-metadata.flock`:
+3. **Loud timeout.** Hold the lock from a second shell, then start a PR review with the timeout left at its default. It fails with `WorktreeCreationError` naming `~/.config/squadron/worktrees/.git-metadata.flock`. The PR needs an open head branch and at least one non-excluded (code) file changed, or the review is refused before the worktree stage. Use `uv run sq` so the branch's code runs rather than the installed release:
    ```bash
-   python - <<'EOF' &
+   python3 - <<'EOF' &
    import fcntl, time, pathlib
    p = pathlib.Path.home() / ".config/squadron/worktrees/.git-metadata.flock"
    p.parent.mkdir(parents=True, exist_ok=True)
-   f = open(p, "a"); fcntl.flock(f, fcntl.LOCK_EX); time.sleep(120)
+   f = open(p, "a"); fcntl.flock(f, fcntl.LOCK_EX); time.sleep(300)
    EOF
-   sq review pr <number> --model opus
+   uv run sq review pr <number> --model haiku --no-save
    ```
-   Expected: an error panel for the worktree creation failure, with a fix hint pointing at the lock file. The command doesn't hang past the deadline. Kill the holder (`kill %1`), rerun, and the review proceeds.
+   Expected (actual, 20260928): a WARNING `Could not take the git metadata lock for 'git worktree prune': timed out after 60s`, then an error panel `failed to create worktree at ...: timed out after 60s waiting for the lock` with the fix hint `Another squadron process may be holding the worktree metadata lock (~/.config/squadron/worktrees/.git-metadata.flock)...`. Exit 1, no traceback, **about 120s total, not 60s**: `__enter__`'s internal sweep waits out its own 60s on `prune` before `add` waits 60s, and each swept orphan's `remove` would add another 60s. With the original 120s holder, the second wait outlasted it and the review went through at 153s. Kill the holder (`kill %1`), rerun, and the review proceeds.
 
 4. **Acceptance.** Repeat step 1's loop against the fixed code, plus one full run of the load file:
    ```bash
@@ -216,7 +224,15 @@ Every error the helper can raise is a `MetadataLockError`, so each call site's s
    ```
    Expected: zero failures across the loop, and the in-file repeated-rounds test passes.
 
+   **Actual (20260928):** `50 1 passed` (each run is 4 rounds of 32, about 12s); the full load file gives `2 passed`.
+
 5. **Real parallel use.** In one repo, start two `sq review pr` runs against different PRs at the same moment (two terminals). Both reach the review phase, and neither reports a `commondir` error.
+
+   **Actual (20260928):** run against two throwaway PRs (#160, #161, since closed), each changing one `.py` line:
+   ```bash
+   uv run sq review pr 160 --model haiku --no-save & uv run sq review pr 161 --model haiku --no-save & wait
+   ```
+   Both printed a review verdict panel (exit 0 on CONCERNS, exit 2 on FAIL; the exit code follows the verdict, not an error), with no `commondir` or lock message. Afterwards `~/.config/squadron/worktrees/` held only `.git-metadata.flock`.
 
 ## Implementation Notes
 

@@ -5,10 +5,10 @@ project: squadron
 lld: user/slices/929-slice.serialize-concurrent-git-worktree-add-on-one-checkout.md
 parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
-projectState: Design complete, not yet reviewed. No code changes yet.
+projectState: Implementation complete. Slice 929 closed.
 dateCreated: 20260927
 dateUpdated: 20260928
-status: in_progress
+status: complete
 ---
 
 # Tasks: Serialize Concurrent `git worktree add` on One Checkout (1 of 2)
@@ -122,17 +122,17 @@ read D1–D7 before implementing. In particular:
       `class ProcessRunner(Protocol)`), distinct from the existing `FakeProcessRunner`
       (that one mutates a list without a lock and is not safe to call from multiple
       threads at once).
-- [ ] Behavior of `.run(argv, cwd=, timeout=, env=None, stdin=None)`:
-      - First line of `.run`: `argv = tuple(argv)`. Callers pass lists, and a list
+- [x] Behavior of `.run(argv, cwd=, timeout=, env=None, stdin=None)`:
+      - [x] First line of `.run`: `argv = tuple(argv)`. Callers pass lists, and a list
         slice never equals a tuple literal, so without this every branch below
         misses and falls through to the raise. Same idiom as
         `tests/codehost/fake_runner.py`'s `argv_tuple = tuple(argv)`.
-      - If `argv[:2] == ("git", "worktree")`: under a `threading.Lock`, increment an
+      - [x] If `argv[:2] == ("git", "worktree")`: under a `threading.Lock`, increment an
         in-flight counter and update a running max; release the lock; `time.sleep`
         a short fixed duration (e.g. 0.02s — long enough to make an unserialized
         overlap essentially certain, short enough to keep the test fast); reacquire
         the lock to decrement the counter.
-        - **If `argv[2] == "add"`** (shape `["git", "worktree", "add", "--detach",
+        - [x] **If `argv[2] == "add"`** (shape `["git", "worktree", "add", "--detach",
           str(path), head_ref]` — the path is `argv[4]`): **create the target
           directory** (`Path(argv[4]).mkdir(parents=True)`) before returning
           success. This is not optional: production code writes the lock file
@@ -141,23 +141,23 @@ read D1–D7 before implementing. In particular:
           between — a fake that returns success without creating the directory
           makes that write raise `FileNotFoundError`, and the test fails on that
           error instead of on the overlap assertion it exists to check.
-        - If `argv[2] == "remove"` or `argv[2] == "prune"`: no directory side
+        - [x] If `argv[2] == "remove"` or `argv[2] == "prune"`: no directory side
           effect needed — `sweep_orphans` and `_remove` both already fall back to
           `shutil.rmtree` themselves once the (faked) git call returns, so the
           fake doesn't need to delete anything to keep the test's end state clean.
-        - Return a canned success `ProcessResult` in every case (reuse
+        - [x] Return a canned success `ProcessResult` in every case (reuse
           `_worktree_add_ok()`'s shape — `returncode=0`, empty `stdout`/`stderr`).
-      - If `argv[:1] == ("ps",)`: return `_ps_ok()` immediately (already defined in
+      - [x] If `argv[:1] == ("ps",)`: return `_ps_ok()` immediately (already defined in
         this file) — no counting, no sleep.
-      - If `argv[:2] == ("git", "submodule")`: return a canned success immediately —
+      - [x] If `argv[:2] == ("git", "submodule")`: return a canned success immediately —
         no counting, no sleep. (`_init_submodules` runs during `__enter__`, with
         `cwd=str(path)` — since `path` was created by the `add` branch above,
         this call needs no directory side effect of its own.)
-      - Anything else: raise (reuse `UnscriptedCallError` from
+      - [x] Anything else: raise (reuse `UnscriptedCallError` from
         `tests/codehost/fake_runner.py`, or a local equivalent) — an unscripted call
         here means the test's assumptions about what `ScratchWorktree`/`sweep_orphans`
         invoke are wrong, and that must fail loudly, not silently pass.
-      - Expose the recorded max in-flight count as a public attribute or method.
+      - [x] Expose the recorded max in-flight count as a public attribute or method.
 - [x] Do not add real git process spawning here — this stays a pure fake, is what
       makes the test deterministic and fast rather than timing-dependent, unlike
       `tests/load/test_worktree_concurrency.py`.
@@ -266,11 +266,11 @@ read D1–D7 before implementing. In particular:
 - [x] Create `tests/codehost/test_metadata_lock.py`. Every test name in Tasks
       C.3a–C.3c starts with `test_lock_` so `-k lock` (per the walkthrough) matches
       all of them:
-      - **`test_lock_is_acquired_and_released_for_reuse`**: `with
+      - [x] **`test_lock_is_acquired_and_released_for_reuse`**: `with
         git_metadata_lock(root): pass` succeeds; a second
         `with git_metadata_lock(root): pass` immediately afterward also succeeds
         (lock was released, not leaked).
-      - **`test_lock_blocks_a_second_acquirer_until_timeout`**: from the test's own
+      - [x] **`test_lock_blocks_a_second_acquirer_until_timeout`**: from the test's own
         process, `open()` + `fcntl.flock(f, fcntl.LOCK_EX)` the same lock file path
         (`root / ".git-metadata.flock"`) directly, so the test itself holds it.
         Then call `git_metadata_lock(root)` with
@@ -284,7 +284,7 @@ read D1–D7 before implementing. In particular:
 
 - [x] Effort: 2/5
 - [x] In the same file, add:
-      - **`test_lock_fails_immediately_on_a_read_only_root`**: `os.chmod` a real
+      - [x] **`test_lock_fails_immediately_on_a_read_only_root`**: `os.chmod` a real
         `tmp_path` subdirectory to remove write permission (e.g. `0o500`), then
         call `git_metadata_lock` targeting a lock file inside it; assert
         `MetadataLockError` is raised **immediately** (assert elapsed is small,
@@ -292,14 +292,14 @@ read D1–D7 before implementing. In particular:
         deadline"). Skip this test if `hasattr(os, "getuid") and os.getuid() == 0`
         — root bypasses permission checks, which would make the test silently
         pass for the wrong reason.
-      - **`test_lock_fails_immediately_on_non_blocking_io_flock_error`**:
+      - [x] **`test_lock_fails_immediately_on_non_blocking_io_flock_error`**:
         `monkeypatch.setattr(fcntl, "flock", ...)` (import `fcntl` in the test
         module) so the first call raises e.g. `OSError(errno.ENOLCK, "no locks
         available")`. Assert `MetadataLockError` is raised immediately (elapsed
         small, no retry loop entered) — this is the test that pins D7 row 4's
         "must not enter the retry loop" behavior; a bug here would otherwise
         silently retry for the full 60s before failing.
-      - **`test_lock_fails_with_detail_when_fcntl_is_unavailable`**:
+      - [x] **`test_lock_fails_with_detail_when_fcntl_is_unavailable`**:
         `monkeypatch.setitem(sys.modules, "fcntl", None)` — this makes any
         subsequent `import fcntl` raise `ImportError` (a documented
         `sys.modules` trick, not real platform unavailability). Assert
@@ -311,14 +311,14 @@ read D1–D7 before implementing. In particular:
 
 - [x] Effort: 2/5
 - [x] In the same file, add:
-      - **`test_lock_release_failure_logs_warning_and_does_not_raise`** (D7 row
+      - [x] **`test_lock_release_failure_logs_warning_and_does_not_raise`** (D7 row
         5): `monkeypatch.setattr(fcntl, "flock", ...)` with a stateful fake that
         succeeds on the acquire call (`LOCK_EX | LOCK_NB`) but raises `OSError` on
         the release call (`LOCK_UN`) — distinguish the two by the `operation`
         argument the fake receives. Run a normal, exception-free
         `with git_metadata_lock(root): pass` body. Assert: no exception
         propagates out of the `with` block, and a WARNING was logged (`caplog`).
-      - **`test_lock_release_failure_does_not_mask_a_body_exception`** (D7 row 5,
+      - [x] **`test_lock_release_failure_does_not_mask_a_body_exception`** (D7 row 5,
         the other half): same release-failure setup as above, but this time the
         `with` block's own body raises a distinct exception (e.g. a local
         `class _BodyError(Exception)`). Assert that **`_BodyError`** propagates
