@@ -31,7 +31,7 @@ def _step(*actions: ActionResult, accepted: bool = False) -> StepResult:
     )
 
 
-_ITEM = {"index": "923", "name": "Test Suite Machine-State Isolation"}
+_ITEM: dict[str, object] = {"index": "923", "name": "Test Suite Machine-State Isolation"}
 
 
 class TestRecordOutcome:
@@ -119,4 +119,36 @@ class TestRender:
     def test_summary_line(self) -> None:
         assert _report().summary_line() == (
             "slices-plan slices: 4 items — 2 passed, 1 accepted, 1 flagged"
+        )
+
+
+class TestUnsavedParts:
+    """A split review whose part never reached disk says so next to the item (slice 930)."""
+
+    _PARTS = [
+        "project-documents/user/tasks/923-tasks.isolation-1.md",
+        "project-documents/user/tasks/923-tasks.isolation-2.md",
+    ]
+
+    def test_unsaved_part_renders(self) -> None:
+        review = ActionResult(
+            success=True,
+            action_type="review",
+            outputs={"review_file": _REVIEW_FILE, "unsaved_parts": self._PARTS},
+            verdict="CONCERNS",
+        )
+        record = BatchItemRecord.from_item(_ITEM, 0, [_step(review)])
+
+        assert record.unsaved_parts == self._PARTS
+        assert record.render_line() == (
+            "- 923 Test Suite Machine-State Isolation — verdict CONCERNS; "
+            f"review: {_REVIEW_FILE}; unsaved: {self._PARTS[0]}, {self._PARTS[1]}"
+        )
+
+    def test_line_without_unsaved_parts_is_unchanged(self) -> None:
+        record = BatchItemRecord.from_item(_ITEM, 0, [_step(_review("PASS"))])
+
+        assert record.unsaved_parts == []
+        assert record.render_line() == (
+            f"- 923 Test Suite Machine-State Isolation — verdict PASS; review: {_REVIEW_FILE}"
         )

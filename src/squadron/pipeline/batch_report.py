@@ -15,6 +15,8 @@ from typing import TYPE_CHECKING
 import yaml
 
 from squadron.documents.frontmatter import FRONTMATTER_LINE_WIDTH
+from squadron.pipeline.actions import ActionType
+from squadron.pipeline.actions.review_outputs import review_file, unsaved_parts
 from squadron.pipeline.models import ActionResult
 
 if TYPE_CHECKING:
@@ -46,6 +48,7 @@ class BatchItemRecord:
     reason: str | None = None
     final_verdict: str | None = None
     review_file: str | None = None
+    unsaved_parts: list[str] = field(default_factory=lambda: [])
 
     @classmethod
     def from_item(
@@ -76,6 +79,7 @@ class BatchItemRecord:
             reason=failure_reason,
             final_verdict=_last_verdict(actions),
             review_file=_last_review_file(actions),
+            unsaved_parts=_last_review_unsaved_parts(actions),
         )
 
     def render_line(self) -> str:
@@ -87,6 +91,8 @@ class BatchItemRecord:
             details.append(f"verdict {self.final_verdict}")
         if self.review_file:
             details.append(f"review: {self.review_file}")
+        if self.unsaved_parts:
+            details.append(f"unsaved: {', '.join(self.unsaved_parts)}")
         return f"- {label} — {'; '.join(details)}" if details else f"- {label}"
 
 
@@ -96,10 +102,16 @@ def _last_verdict(actions: list[ActionResult]) -> str | None:
 
 def _last_review_file(actions: list[ActionResult]) -> str | None:
     for result in reversed(actions):
-        review_file = result.outputs.get("review_file")
-        if review_file:
-            return str(review_file)
+        path = review_file(result)
+        if path:
+            return path
     return None
+
+
+def _last_review_unsaved_parts(actions: list[ActionResult]) -> list[str]:
+    """Parts of the item's last review that never reached disk (slice 930)."""
+    last_review = next((r for r in reversed(actions) if r.action_type == ActionType.REVIEW), None)
+    return unsaved_parts(last_review) if last_review is not None else []
 
 
 @dataclass
