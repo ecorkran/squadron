@@ -37,6 +37,8 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 - **C — Explicit system prompt (#155).** SDK one-shot dispatch always uses the preset, and a step `system_prompt` is appended to it. On the session path, a step `system_prompt` fails with an explicit error, as `allowed_tools` already does.
 - **D — Explicit settings, recorded (#156).** The CLI's default is verified and written down (D9). One declared `setting_sources` value per automated path. Auto-memory is set explicitly per path: the config key `pipeline.auto_memory` (default on) controls pipeline sessions and dispatch, and every review, judge, PR, summary, and audit path has it off. Each review's Run Digest and JSON output records the system-prompt mode and settings sources, as does each dispatch and summary step's metadata.
 
+**Why one slice.** The slice plan entry bundles all four issues, and that was a Project Manager decision. They share one theme: squadron decides what an SDK session receives and when it is done. They also share two surfaces, the session builder and the prompt/settings recording. The parts are still delivered separately, in the order A → B → D → C (see Development Approach). Each part is its own commit or commits, passes the suite on its own, and can be reverted without touching the others. Part A, the safety fix, goes first and does not wait on the others.
+
 **Out of scope**
 
 - The summary-capture turn in the old session (`capture_summary`). It answers an explicit "summarize" instruction, so it is a real task, not a free turn. It stays as is.
@@ -49,7 +51,8 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 
 ### Prerequisites
 
-- None. Slice 931 (designed, not implemented) also adds Run Digest lines and `AgentConfig` fields. The two slices touch neighboring lines but share no logic. Whichever slice merges second rebases.
+- No hard prerequisite.
+- **Soft ordering with slice 931** (designed, not implemented). Both slices add Run Digest lines, `ReviewResult` fields, `AgentConfig` fields, and review JSON keys. The overlap is in `review/models.py`, `review/persistence.py`, and `core/models.py`. The two share no logic. If 931 merges first, Part C of this slice rebases onto it, along with Part D's one `AgentConfig.auto_memory` line in `core/models.py`. Parts A and B don't touch those files.
 
 ### Interfaces Required
 
@@ -69,7 +72,7 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 | `events/builtin/dispatch_artifact.py` | The failure message gets the tail of `result.outputs["response"]`. |
 | `providers/sdk/settings.py` (new, small) | `PIPELINE_SETTING_SOURCES` and `REVIEW_SETTING_SOURCES` policy constants, plus `sdk_settings_options(setting_sources, *, auto_memory) -> dict`, which returns `setting_sources` and the auto-memory env. Used by both the provider and the session builder. |
 | `providers/sdk/provider.py` | Uses `sdk_settings_options` and reads `AgentConfig.auto_memory` instead of inferring it from `setting_sources == []` (D11). |
-| `config/keys.py` | New key `pipeline.auto_memory` (bool, default `true`). |
+| `config/keys.py` | New keys `pipeline.auto_memory` (bool, default `true`) and `pipeline.background_idle_timeout_s` (int, default `1800`). |
 | `core/models.py` | `SystemPromptMode` StrEnum and `describe_system_prompt(config)`, next to the existing prompt table. |
 | `review/templates/__init__.py`, `data/templates/*.yaml` | Built-in templates set `setting_sources: [project]`. The loader resolves an absent or `null` key to `REVIEW_SETTING_SOURCES`. |
 | `review/models.py`, `review/review_client.py`, `review/persistence.py` | `ReviewResult` carries `system_prompt_mode` (replacing the `default_system_prompt_preset_used` bool) and `setting_sources`. The Run Digest and JSON output render both, always. |
@@ -101,9 +104,12 @@ loop receive_response():
     TaskStartedMessage(task_type ∈ WAITED_TASK_TYPES)       → ledger.add(task_id)
     TaskNotificationMessage | TaskUpdatedMessage(terminal)   → ledger.discard(task_id)
     ResultMessage:
+        injected and not own_result_seen  → drop text read so far (leftover, WARNING)
         origin is None or kind == "human" → own_result_seen = True
         own_result_seen and ledger empty  → return joined text
         else                              → log once, read the next turn
+    (waiting, no message for idle timeout) → stop_task each, clear ledger, WARNING, return
+    (stream ends, no own result)           → ProviderError
 ```
 
 Text from the follow-up turn (the one the CLI injects when a background agent reports back) is joined into the response. The response therefore contains the agent's real final words.
@@ -140,13 +146,28 @@ Today `executor.py:488` seeds only `if sdk_session is not None`. Under the lazy 
 
 The ledger tracks `task_started` only for `task_type ∈ WAITED_TASK_TYPES = {"local_agent", "local_workflow"}`. This mirrors the SDK's `DEFERRING_TASK_TYPES`, redeclared locally because the SDK's constant is `_internal`. The comment cites the source. A task is cleared by a `TaskNotificationMessage` or by a `TaskUpdatedMessage` with a status in `TERMINAL_TASK_STATUSES`, since the SDK documents that either can be the only terminal signal. Shells and monitors are ignored, because they may never finish.
 
-No new wait ceiling is added. A background agent that hangs holds dispatch just as a hanging foreground turn does today. The wait is visible, though: the first time a result arrives with the ledger non-empty, dispatch logs at INFO: `dispatch: turn ended with N background agent(s) running; waiting: <descriptions>`.
+The wait is visible. The first time a result arrives with the ledger non-empty, dispatch logs at INFO: `dispatch: turn ended with N background agent(s) running; waiting: <descriptions>`.
+
+**The wait is bounded by idle time.** Background-wait mode is the state where the dispatch's own result has been seen and the ledger is still non-empty. In that mode, each read of the stream is bounded by `pipeline.background_idle_timeout_s`, a new config key (int, default `1800`). If no message of any kind arrives within that time, dispatch does the following:
+
+1. It calls `client.stop_task(task_id)` for each tracked id.
+2. It clears the ledger locally, because a lost terminal signal is exactly the case being handled here.
+3. It logs a WARNING: `dispatch: no activity for <N>s with background agent(s) still running; stopped: <descriptions>`.
+4. It records `background_tasks_stopped` in the step metadata and returns the text it has.
+
+The timer is idle-based, not total, so a long agent that keeps emitting progress messages is never cut off. If the CLI turns out to send no progress messages between turns, the timer becomes a total cap on the wait. That is still a bound. Walkthrough step 3 shows which of the two applies. Foreground turns keep today's behavior, with no timer. This slice bounds only the new wait it adds.
+
+A stopped agent can still trigger a follow-up turn from the CLI. That turn's messages arrive at the start of the next dispatch and are handled by D6.
 
 The rejected alternative is to disallow background agents. The CLI has no per-parameter switch for `run_in_background`, and blocking the `Agent` tool would also remove foreground subagents.
 
 ### D6 — Only the dispatch's own result can end it
 
-`ResultMessage.origin` tells a result for our prompt (`None` or `{"kind": "human"}`) apart from the result of an injected turn (`{"kind": "task-notification"}`). There is a race the SDK documents (#1190): a background agent can finish just before our result, leaving the ledger empty while a follow-up turn is still owed. That follow-up then arrives at the start of the *next* dispatch's stream. Because injected results never end a dispatch, the next dispatch reads past it to its own result. Dispatch logs a WARNING when it consumes an injected turn before its own result, since that text belongs to the previous step.
+`ResultMessage.origin` tells a result for our prompt (`None` or `{"kind": "human"}`) apart from the result of an injected turn (`{"kind": "task-notification"}`). There is a race the SDK documents (#1190): a background agent can finish just before our result, leaving the ledger empty while a follow-up turn is still owed. That follow-up then arrives at the start of the *next* dispatch's stream. Because injected results never end a dispatch, the next dispatch reads past it to its own result.
+
+**Leftover text is dropped from the response.** An injected result can arrive before the dispatch's own result. When it does, every message read up to and including that injected result belongs to the previous step. Dispatch drops that text from its response and logs it at WARNING: `dispatch: discarded a background follow-up turn left over from the previous dispatch; its final text: "…<tail>"`. The current step's response, D7 tail, and post-condition therefore see only the current step's words, and the previous step's late words are still on record in the log.
+
+**The previous step's flag can be misleading, and this is accepted.** If that leftover turn wrote the previous step's artifact, it did so after that step's post-condition ran. The step is flagged even though its artifact now exists on disk, and the WARNING above is the evidence. A resume or re-run finds the artifact. This is the rare race the SDK documents, and closing it would need the CLI's session-state frames, which the SDK hides from callers (`sdk_host_only`).
 
 ### D7 — The flag carries the agent's last words
 
@@ -185,7 +206,9 @@ Each automated path uses a declared value. None of them inherits `None`.
 | Tech-debt audit | `["project"]` | off | auto-memory now off |
 | PR composer | `[]` | off | none |
 
-Pipelines and reviews run on the project's conventions, not on the operator's personal setup. A run should produce the same artifacts whoever starts it, and personal settings such as the output style should not shape pipeline output. The rejected alternative is `user,project` for pipeline sessions. It would keep the operator's global CLAUDE.md in every dispatch, and it is a single constant change if the PM prefers it.
+Pipelines and reviews run on the project's conventions, not on the operator's personal setup. A run should produce the same artifacts whoever starts it, and personal settings such as the output style should not shape pipeline output. The rejected alternative was `user,project` for pipeline sessions, which would keep the operator's global CLAUDE.md in every dispatch.
+
+**PM-ratified 20260928.** The policy was presented to the Project Manager, who kept `[project]` and changed only the auto-memory part (D11). This changes behavior operators can see: user CLAUDE.md and user settings stop loading on these paths. The CHANGELOG entry for the release says so in one line (see Implementation Notes).
 
 Custom review templates that omit `setting_sources` or set it to `null` resolve to `REVIEW_SETTING_SOURCES` in the loader. The artifact records the value used, so the default is visible rather than silent.
 
@@ -211,10 +234,11 @@ Custom review templates that omit `setting_sources` or set it to `null` resolve 
 
 | Failure | Signal |
 |---|---|
-| Reconnect with seed fails (CLI spawn, E2BIG on a huge seed) | Exception propagates as today. Compact/emit/restore report a failed step with the error and log via `logger.exception`. |
-| Background agent never finishes | Dispatch waits. The INFO line names the agent(s) being waited on. |
+| Reconnect with seed fails (CLI spawn, E2BIG on a huge seed) | The old client is already gone, so `_reconnect` records `self.unusable_reason` and re-raises. Compact, emit, and restore report a failed step with the error and log via `logger.exception`. Any later `dispatch()`, `compact()`, or `seed_context()` on that session raises `ProviderError("SDK session unusable: reconnect failed: …")` at once. Inside an `each` batch with a continue policy, the remaining items are therefore flagged with that reason, not sent into a dead client. There is no automatic retry. |
+| Stream ends before the dispatch's own result (CLI died, or the iterator ended) | A CLI crash surfaces as `ProcessError`/`CLIConnectionError` and maps to `ProviderError`, as today. If `receive_response()` ends without the dispatch's own result, dispatch raises `ProviderError("stream ended before the dispatch's result; N background agent(s) still running: …")`. It never returns partial text as success. |
+| Background agent never finishes, or its terminal signal is lost | After `pipeline.background_idle_timeout_s` of silence: stop the tracked tasks, clear the ledger, log a WARNING naming them, and record `background_tasks_stopped` (D5). |
 | Background agent fails or is killed | A terminal status clears it. The follow-up turn's text is in the response, and the D7 tail shows it if no artifact was written. |
-| Injected turn consumed at the start of a dispatch | WARNING naming the step. |
+| Injected turn consumed at the start of a dispatch | Its text is dropped from the response and logged at WARNING with its tail (D6). |
 | Step `system_prompt` on the session path | Step fails with an explicit error. |
 | Custom template with no `setting_sources` | Resolves to `REVIEW_SETTING_SOURCES`, and the Run Digest shows it. |
 
@@ -234,6 +258,8 @@ class SDKExecutionSession:
     async def seed_context(self, text: str) -> None:   # rotate; caller passes raw text
     async def dispatch(self, prompt: str) -> str:       # waits per D5/D6
     background_tasks_waited: int                        # set by the last dispatch()
+    background_tasks_stopped: int                       # set by the last dispatch() (idle timeout)
+    unusable_reason: str | None                         # set when _reconnect fails; later calls raise
 
 # providers/sdk/settings.py
 PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
@@ -271,7 +297,10 @@ The two policy constants have the same value today, but they are separate on pur
 - Rotation (`compact`, `emit: [rotate]`), resume seeding (connected and lazy), and `summary restore` send no `query()` to the fresh session. The fresh client's options carry the framed seed as preset `append`.
 - Restore frames the summary once.
 - A session dispatch whose turn ends with a `local_agent` task still running returns only after that task reaches a terminal status and the next result arrives. Its text includes the follow-up turn. A running `local_bash` task does not hold dispatch.
-- A dispatch never returns on an injected turn's result. Consuming one before its own result logs a WARNING.
+- A dispatch never returns on an injected turn's result. An injected turn consumed before its own result is dropped from the response and logged at WARNING with its tail.
+- When no message arrives for `pipeline.background_idle_timeout_s` while background agents are tracked, dispatch stops them, logs a WARNING naming them, records `background_tasks_stopped`, and returns.
+- A stream that ends before the dispatch's own result raises `ProviderError`. It never returns partial text as success.
+- After a failed reconnect, every later call on the session raises `ProviderError` naming the reconnect failure.
 - A dispatch-artifact post-condition failure message ends with the agent's final-text tail, and the batch report's flag reason shows it.
 - An SDK one-shot dispatch with `system_prompt` builds `AgentConfig(use_default_system_prompt=True, instructions=<prompt>)`. The session path fails a step that sets `system_prompt`.
 - Every path in the D10 table passes its declared `setting_sources` (never `None`).
@@ -280,7 +309,11 @@ The two policy constants have the same value today, but they are separate on pur
 
 ### Technical Requirements
 
-- Unit tests with a fake `ClaudeSDKClient`. For rotation and seeding, assert on the options the new client was built with, and that the new client received no `query`. For dispatch waiting, feed scripted message sequences across two `receive_response()` calls: agent started, then result, then notification, then the follow-up result. Cover `TaskUpdatedMessage(killed)` as the only terminal signal, a `local_bash` start, and an injected result arriving first.
+- Unit tests with a fake `ClaudeSDKClient`. For rotation and seeding, assert on the options the new client was built with, and that the new client received no `query`. For dispatch waiting, feed scripted message sequences across two `receive_response()` calls: agent started, then result, then notification, then the follow-up result. Cover `TaskUpdatedMessage(killed)` as the only terminal signal, a `local_bash` start, and an injected result arriving first (its text absent from the response, WARNING asserted).
+- Failure-mode tests, each asserting its observable signal:
+  - the idle timeout, using a small timeout value and a fake client that goes silent. Assert `stop_task` was called per id, the WARNING, and `background_tasks_stopped`.
+  - a stream that ends early, with a tracked agent and no own result. Assert `ProviderError` and the message naming the agent.
+  - a reconnect failure. Assert `logger.exception` on the failing call, then `ProviderError("SDK session unusable…")` from the next `dispatch()`.
 - The rate-limit retry behavior in `dispatch()` is unchanged. Existing tests pass as they are.
 - Parametrized tests for `describe_system_prompt` over all four rows, and for D10 (one case per path, asserting `setting_sources` and the env).
 - Digest rendering tests for each mode, plus `n/a (non-SDK)`.
@@ -353,6 +386,8 @@ Order by damage prevented. Each part is one or more commits that pass the full s
 4. **C + recording** (#155, #156 recording): dispatch preset+append, session guard, `SystemPromptMode`, digest and JSON, metadata. Effort 2.
 
 Existing tests that assert seeding goes through `dispatch()` (compact, emit rotate, restore, resume) are rewritten to assert on client options instead. That change is the point of this slice, so it does not count as a regression.
+
+At release, the CHANGELOG gets one user-facing line for Part D: pipeline runs and all reviews load project settings only, so user CLAUDE.md and user settings no longer apply, and `pipeline.auto_memory` controls memory for pipeline work.
 
 ### Special Considerations
 
