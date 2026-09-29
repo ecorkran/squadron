@@ -12,6 +12,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Slice 932: Pipeline SDK Session Control — Task Breakdown Complete
+
+- Tasks: `user/tasks/932-tasks.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md` (427 lines, single file).
+- Order: setup → A (seeding) → B (background wait and flag tail) → D (settings) → C (prompt and recording) → close-out. Tests follow each task, and each part has its own commit.
+- Found: config has no bool type (`_coerce_value` supports only int and str). Task D1 adds lenient bool parsing before `pipeline.auto_memory`.
+- Found: the template loader turns an explicit `setting_sources: []` into `None` (`if setting_src else None`). Fixed in D6.
+- Added names:
+  - `SeedSource` enum, for the seeding log.
+  - `pipeline/text_tail.py::tail_text`, one tail definition shared by the leftover-turn warning and the flag.
+  - `session.seeded`, for the prompt-mode metadata.
+
 ### Slice 932: Pipeline SDK Session Control — Design Complete
 
 - Design: `user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md` (#162, #163, #155, #156).
