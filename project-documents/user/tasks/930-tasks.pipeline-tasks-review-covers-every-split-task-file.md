@@ -31,12 +31,25 @@ status: not_started
 
 ---
 
-## Task 1 — Create the slice branch
+## Task 1 — Create the slice branch and pin single-file behavior
 
 - [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
       `git status` is clean
 - [ ] `git checkout -b 930-slice.pipeline-tasks-review-covers-every-split-task-file main`
   - [ ] Success: `git branch --show-current` prints the new branch name
+
+- [ ] Add a characterization test for a one-task-file slice, **before any source change**,
+      so it runs against unmodified code and guards every later task
+  - [ ] Create `tests/pipeline/actions/test_review_action_single_file.py` (follow
+        `test_review_action.py` fixtures): run `ReviewAction` for a `tasks` review on a slice
+        with one task file and a mocked review client
+  - [ ] Assert the saved artifact is unsuffixed and its content equals a checked-in snapshot
+        (`tests/pipeline/actions/snapshots/`), and assert the `ActionResult` `outputs`
+        keys/values, `verdict`, `findings`, and `metadata` against literals in the test
+  - [ ] Generate the snapshot by running this test on the current, unmodified branch and
+        reading the output once
+  - [ ] Success: passes now; must keep passing, unedited, through Tasks 4, 6, 7 and 8
+- [ ] Format, lint, typecheck, commit: `test: pin single-file review action output before fan-out`
 
 ---
 
@@ -112,7 +125,7 @@ status: not_started
   - [ ] Unknown template name → `[dict(inputs)]` (one unchanged dict)
 - [ ] Interim shim so the build stays green: in `ReviewAction._resolve_slice_inputs`
       (`pipeline/actions/review.py`) call the new function and update `inputs` from the
-      first dict only. Comment it as temporary; Task 7 replaces it
+      first dict only. Comment it as temporary; Task 7a replaces it
 - [ ] Update the stale reference to `_tasks_input` in the docstring at
       `src/squadron/pr/tasks.py` (grep confirmed it is the only non-test mention)
 
@@ -163,7 +176,7 @@ status: not_started
 
 ## Task 6 — Extract `_run_part` from `ReviewAction._review` (pure refactor)
 
-Behavior must not change; this task exists so Task 7 adds the loop to small functions.
+Behavior must not change; this task exists so Task 7a adds the loop to small functions.
 
 - [ ] In `src/squadron/pipeline/actions/review.py`, move the model call, provider-failure
       artifact, judge enforcement, save, and per-part `ActionResult` construction out of
@@ -173,7 +186,7 @@ Behavior must not change; this task exists so Task 7 adds the loop to small func
         `rules_source`); use a small frozen dataclass for the shared per-review settings
         rather than a 12-argument signature
   - [ ] `_run_part` returns the same `ActionResult` `_review` returns today, and takes an
-        optional `name_suffix` (unused until Task 7; passes through to both save calls and
+        optional `name_suffix` (unused until Task 7a; passes through to both save calls and
         `_save_failure_artifact`)
   - [ ] `_review` keeps template/model/profile resolution, input building, validation,
         and rules resolution, then calls `_run_part` once
@@ -183,12 +196,17 @@ Behavior must not change; this task exists so Task 7 adds the loop to small func
       are unchanged)
   - [ ] Success: `pytest tests/pipeline/actions/test_review_action.py tests/pipeline/actions/test_review_action_integration.py`
         passes with **no test edits**
+  - [ ] Success: `tests/pipeline/actions/test_review_action_single_file.py` (Task 1) also
+        passes unedited, so the saved artifact is byte-identical to the pre-change snapshot
 
 - [ ] Format, lint, typecheck, commit: `refactor: extract per-part run from ReviewAction`
 
 ---
 
-## Task 7 — Multi-part review in `ReviewAction` (design: Data Flow, Folding, Failure Modes)
+## Task 7a — Part loop, validation, and failure handling in `ReviewAction` (design: Data Flow, Failure Modes)
+
+Until Task 7b lands, multiple parts return the **last** part's `ActionResult` (temporary,
+commented as such); single-part behavior is already final.
 
 - [ ] Replace the interim shim: `_resolve_slice_inputs` returns
       `tuple[SliceInfo | None, list[dict[str, str]]]`; it returns `(None, [inputs])` when
@@ -209,6 +227,24 @@ Behavior must not change; this task exists so Task 7 adds the loop to small func
 - [ ] Save failure on part k stays non-fatal (existing `except`), logs via
       `logger.exception` naming the part; that part is recorded as unsaved
 
+- [ ] Tests in `tests/pipeline/actions/test_review_action.py` (follow its fixtures; add a
+      sibling `test_review_action_parts.py` if the file would pass ~450 lines)
+  - [ ] 2 task files → 2 review calls in order, saves `…part-1.md` and `…part-2.md`, each
+        `sourceDocument` names its own file
+  - [ ] Missing part-2 file raises `KeyError` **before any model call** (assert zero calls)
+  - [ ] Provider failure on part 2: part 1 artifact kept, failure artifact written under
+        `part-2`, part-numbered WARNING present (`caplog`), step result `success=False`
+  - [ ] Save failure on part 2: later work continues, ERROR logged (`caplog`), part 2 recorded
+        as unsaved
+  - [ ] Explicit `input:` with `slice:` → one part, unsuffixed
+  - [ ] Success: all pass, and `test_review_action_single_file.py` still passes unedited
+
+- [ ] Format, lint, typecheck, commit: `feat: run every split task file through the review action`
+
+---
+
+## Task 7b — `_fold` (design: Folding)
+
 - [ ] Implement `_fold(part_results)` per the design's fold table
   - [ ] One part → return that `ActionResult` unchanged (identical to today, including
         the no-`review_file` result when a single save failed)
@@ -223,33 +259,34 @@ Behavior must not change; this task exists so Task 7 adds the loop to small func
         `INPUT_FILE` / `REVIEW_FILE` = the worst-verdict part (first on ties; if that
         part is unsaved, `REVIEW_FILE` is omitted); `UNSAVED_PARTS` only when non-empty
   - [ ] metadata: first part's values; `tool_calls_made` summed when present
+- [ ] Remove the Task 7a "last part's result" stopgap; `_review` returns `_fold(results)`
 
-- [ ] Tests in `tests/pipeline/actions/test_review_action.py` (follow its fixtures; add a
-      sibling `test_review_action_parts.py` if the file would pass ~450 lines)
-  - [ ] 2 task files → 2 review calls in order, saves `…part-1.md` and `…part-2.md`, each
-        `sourceDocument` names its own file
+- [ ] Tests (same files as Task 7a)
   - [ ] PASS + CONCERNS → verdict CONCERNS; `REVIEW_FILE` and `INPUT_FILE` point at the
         CONCERNS part; findings carry `input_file`
   - [ ] PASS + UNKNOWN → UNKNOWN; tie → first part is `REVIEW_FILE`
   - [ ] Judge template (`judge.tasks-vs-slice`): per-part enforcement, lowest score wins,
         a part with no score is skipped, all-unscored gives `None`
-  - [ ] Missing part-2 file raises `KeyError` **before any model call** (assert zero calls)
-  - [ ] Provider failure on part 2: part 1 artifact kept, failure artifact written under
-        `part-2`, part-numbered WARNING present (`caplog`), step result `success=False`
-  - [ ] Save failure on part 2: folded verdict still returned, `UNSAVED_PARTS` lists part
-        2's path, ERROR logged (`caplog`)
-  - [ ] Explicit `input:` with `slice:` → one part, unsuffixed
+  - [ ] Judge part whose verdict degrades to UNKNOWN still reports the lowest real score
+  - [ ] `RESPONSE` joins each part's raw output under a `## <input path>` header, in order
+  - [ ] `tool_calls_made` metadata is the sum across parts; `provenance` is the first part's
+  - [ ] Worst-verdict part unsaved → `REVIEW_FILE` omitted, `UNSAVED_PARTS` lists that
+        part's input path, `REVIEW_FILES` holds only saved parts
+  - [ ] Save failure on part 2: folded verdict still returned (completes the Task 7a case)
   - [ ] Success: all pass
 
-- [ ] Single-file regression: a slice with one task file saves an unsuffixed artifact
-      whose content matches a checked-in snapshot of today's output, and the
-      `ActionResult` equals the pre-change result (compare `outputs` keys/values,
-      `verdict`, `findings`, `metadata`)
-  - [ ] Generate the snapshot from the **pre-change** code (`git stash` is not allowed
-        mid-edit; use `git show main:<path>` or a worktree of main) before relying on it
-  - [ ] Success: passes
+- [ ] Format, lint, typecheck, commit: `feat: fold per-part review results into one worst-verdict result`
 
-- [ ] Format, lint, typecheck, commit: `feat: review every split task file in the pipeline review action`
+---
+
+## Task 7c — Single-file regression check
+
+- [ ] Run `tests/pipeline/actions/test_review_action_single_file.py` (Task 1), unedited,
+      against the final `ReviewAction`
+  - [ ] Success: passes — the unsuffixed artifact is byte-identical to the snapshot taken
+        on pre-change code, and the `ActionResult` matches
+  - [ ] If it fails, fix the code; never regenerate the snapshot to make it pass
+- [ ] No commit unless a fix was needed: `fix: restore single-file review action output`
 
 ---
 
@@ -356,6 +393,7 @@ Costs real model calls with `glm-flash`; run exactly the design's steps.
       `900-slices.maintenance-and-refactoring.md`
 - [ ] Add a DEVLOG entry (Session State Summary format)
 - [ ] Run `sq review code` for slice 930 with an explicit `--model`; fix or record findings
+- [ ] Commit the close-out changes on the slice branch: `docs: close out slice 930`
 - [ ] Merge into the target: re-read `cf config get git.integration_branch`, then
       `git checkout main && git merge 930-slice.pipeline-tasks-review-covers-every-split-task-file`;
       if either command fails, stop and ask the Project Manager
