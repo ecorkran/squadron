@@ -13,6 +13,7 @@ from unittest.mock import patch
 import pytest
 import yaml
 
+from squadron.core.models import SystemPromptMode
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
@@ -1597,6 +1598,51 @@ class TestOutputBudgetDigestLine:
         md = format_review_markdown(_make_result(), "code", _make_slice_info())
 
         assert "- Output budget: backend default" in md
+
+
+class TestPromptAndSettingsDigestLines:
+    """Slice 932 D12: always present, right after the output budget."""
+
+    @pytest.mark.parametrize("mode", list(SystemPromptMode))
+    def test_each_mode_renders(self, mode: SystemPromptMode) -> None:
+        result = _make_result()
+        result.system_prompt_mode = mode
+        result.setting_sources = "project"
+
+        lines = format_review_markdown(result, "code", _make_slice_info()).splitlines()
+
+        index = lines.index(f"- System prompt: {mode.value}")
+        assert lines[index - 1].startswith("- Output budget:")
+        assert lines[index + 1] == "- Settings sources: project"
+
+    def test_unreported_values_render_the_shared_sentinel(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+
+        assert "- System prompt: not computed" in md
+        assert "- Settings sources: not computed" in md
+
+    def test_degraded_artifact_shows_both_lines(self) -> None:
+        result = _make_result()
+        result.verdict = Verdict.UNKNOWN
+        result.fallback_used = True
+        result.system_prompt_mode = SystemPromptMode.PRESET_APPEND
+        result.setting_sources = "none"
+
+        md = format_review_markdown(result, "code", _make_slice_info())
+
+        assert "- System prompt: preset+append" in md
+        assert "- Settings sources: none" in md
+
+    def test_json_carries_both_keys(self) -> None:
+        result = _make_result()
+        assert result.to_dict()["system_prompt_mode"] is None
+        assert result.to_dict()["setting_sources"] is None
+
+        result.system_prompt_mode = SystemPromptMode.PRESET
+        result.setting_sources = "project"
+        data = result.to_dict()
+        assert data["system_prompt_mode"] == "preset"
+        assert data["setting_sources"] == "project"
 
 
 # ---------------------------------------------------------------------------

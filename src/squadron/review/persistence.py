@@ -251,6 +251,9 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         f"- Stop reason: {_render_optional(result.stop_reason)}",
         # Slice 924 B3: always present, so a `length` stop has a number to point at.
         f"- Output budget: {describe_budget(result.max_output_tokens)}",
+        # Slice 932 D12: always present, so every artifact says what it ran with.
+        f"- System prompt: {_render_optional(result.system_prompt_mode)}",
+        f"- Settings sources: {_render_optional(result.setting_sources)}",
         f"- Reasoning characters: {_render_optional(result.reasoning_chars)}",
         f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
         f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",

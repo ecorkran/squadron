@@ -25,6 +25,11 @@ Run Digest line `- Output budget: backend default` after `- Stop reason:`. It
 touched these three files, the three `383-postkeys-*.md` files, and
 `clean_pass_artifact.md`, and each diff is exactly that one added line.
 
+A third sanctioned regeneration is slice 932 C5, which added the always-present
+Run Digest lines `- System prompt: not computed` and `- Settings sources: not
+computed` after `- Output budget:`. It touched the same seven files, and each
+diff is exactly those two added lines.
+
 `reviewedSha` is a pinned literal rather than a resolved value. The live save
 path stamps `resolve_reviewed_sha(".")`, which changes on every commit and
 would make a byte-identity fixture stale immediately; what these pin is the

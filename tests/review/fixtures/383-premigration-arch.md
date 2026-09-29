@@ -41,6 +41,8 @@ The runner does not handle SDK timeout errors.
 - Tool calls failed: not computed
 - Stop reason: not computed
 - Output budget: backend default
+- System prompt: not computed
+- Settings sources: not computed
 - Reasoning characters: not computed
 - `## Summary` located: not computed
 - `## Findings` located: not computed

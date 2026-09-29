@@ -310,6 +310,9 @@ class ReviewResult:
             "recovery_turn_used": self.recovery_turn_used,
             "output_budget_exhausted": self.output_budget_exhausted,
             "max_output_tokens": self.max_output_tokens,
+            # Slice 932 D12: always present, null when not reported (stop_reason's convention).
+            "system_prompt_mode": (self.system_prompt_mode.value if self.system_prompt_mode else None),
+            "setting_sources": self.setting_sources,
             # A degraded parse must be visible to JSON consumers too, or an
             # empty findings list reads as "the model found nothing" (issue #72).
             "fallback_used": self.fallback_used,
