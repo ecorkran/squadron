@@ -641,26 +641,16 @@ async def _connect_lazy_session(*, run_id: str) -> SDKExecutionSession:
     On connection failure, logs at ERROR and re-raises — the caller handles
     state persistence and user-facing error messaging.
     """
-    import claude_agent_sdk
+    from squadron.pipeline.sdk_session import open_pipeline_session
 
-    from squadron.pipeline.sdk_session import SDKExecutionSession
-
-    options = claude_agent_sdk.ClaudeAgentOptions(
-        cwd=str(__import__("pathlib").Path.cwd()),
-        permission_mode="bypassPermissions",
-        system_prompt={"type": "preset", "preset": "claude_code"},
-    )
-    client = claude_agent_sdk.ClaudeSDKClient(options=options)
-    session = SDKExecutionSession(client=client, options=options)
     try:
-        await session.connect()
+        return await open_pipeline_session()
     except Exception:
         _logger.exception(
             "executor: lazy session connect failed for run %s",
             run_id,
         )
         raise
-    return session
 
 
 async def _execute_step(

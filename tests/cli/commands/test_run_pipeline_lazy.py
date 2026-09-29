@@ -100,7 +100,7 @@ def _sdk_base_patches(
         ),
         patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
         patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-        patch("squadron.cli.commands.run.SDKExecutionSession"),
+        patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
     )
 
 
@@ -285,7 +285,7 @@ class TestMidRunSessionHook:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
             _PATCH_RESOLVE_EXEC_MODE,
         ):
             await _run_pipeline_sdk("test-pipeline", {})
@@ -402,7 +402,7 @@ class TestLazyConnectFailureUX:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
         ):
             with pytest.raises(typer.Exit) as exc_info:
                 await _run_pipeline_sdk("test-pipeline", {})
@@ -431,7 +431,7 @@ class TestLazyConnectFailureUX:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
             patch("squadron.cli.commands.run.rprint") as mock_rprint,
         ):
             with pytest.raises(typer.Exit):
@@ -476,7 +476,7 @@ class TestStrictFlagAndPolicyResolution:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
         ):
             self._run_sdk(strict=True)
 
@@ -506,7 +506,7 @@ class TestStrictFlagAndPolicyResolution:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
         ):
             self._run_sdk(strict=False)
 
@@ -536,7 +536,7 @@ class TestStrictFlagAndPolicyResolution:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
         ):
             self._run_sdk(strict=False)
 
@@ -566,7 +566,7 @@ class TestStrictFlagAndPolicyResolution:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession"),
         ):
             self._run_sdk(strict=True)
 

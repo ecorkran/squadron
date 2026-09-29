@@ -13,6 +13,7 @@ import asyncio
 import dataclasses
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 
 from claude_agent_sdk import (
     ClaudeAgentOptions,
@@ -49,7 +50,7 @@ from squadron.providers.sdk.translation import translate_sdk_message
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ["SDKExecutionSession", "frame_summary_for_seed"]
+__all__ = ["SDKExecutionSession", "frame_summary_for_seed", "open_pipeline_session"]
 
 
 _SEED_FRAMING_PREFIX = (
@@ -102,12 +103,13 @@ class SDKExecutionSession:
 
     The client is connected once and reused across all steps, enabling
     ``set_model()`` to switch models mid-session without spawning new processes.
-    ``options`` is retained so compaction can build a fresh client with the
-    same configuration when rotating sessions.
+    ``base_options`` is the unseeded option set, retained so rotation can
+    build a fresh client with the same configuration. A seed is applied per
+    connect and never stored back.
     """
 
     client: ClaudeSDKClient
-    options: ClaudeAgentOptions
+    base_options: ClaudeAgentOptions
     current_model: str | None = None
     session_id: str | None = None
 
@@ -308,7 +310,7 @@ class SDKExecutionSession:
         await self.disconnect()
 
         _logger.debug("SDKExecutionSession.compact: creating new client")
-        self.client = ClaudeSDKClient(options=self.options)
+        self.client = ClaudeSDKClient(options=self.base_options)
         self.current_model = None
         self.session_id = None
         await self.connect()
@@ -330,3 +332,24 @@ class SDKExecutionSession:
         """
         _logger.debug("SDKExecutionSession: seed_context (%d chars)", len(text))
         await self.dispatch(frame_summary_for_seed(text))
+
+
+async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSession:
+    """Build and connect the pipeline's persistent SDK session.
+
+    The only way to build a pipeline session. Permission mode must be set at
+    session start; the SDK rejects runtime ``set_permission_mode(
+    "bypassPermissions")`` calls. The Claude Code preset gives dispatches the
+    full Claude Code persona rather than the Agent SDK's minimal prompt. A
+    ``seed`` is appended to that preset (see ``_seeded_options``), never sent
+    as a turn.
+    """
+    base = ClaudeAgentOptions(
+        cwd=str(Path.cwd()),
+        permission_mode="bypassPermissions",
+        system_prompt={"type": "preset", "preset": "claude_code"},
+    )
+    client = ClaudeSDKClient(options=_seeded_options(base, seed))
+    session = SDKExecutionSession(client=client, base_options=base)
+    await session.connect()
+    return session

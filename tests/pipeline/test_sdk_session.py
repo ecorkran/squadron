@@ -28,7 +28,7 @@ def _make_options() -> ClaudeAgentOptions:
 
 
 def _make_session(client: AsyncMock | None = None) -> SDKExecutionSession:
-    return SDKExecutionSession(client=client or _make_client(), options=_make_options())
+    return SDKExecutionSession(client=client or _make_client(), base_options=_make_options())
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ async def test_set_model_skips_call_when_model_matches() -> None:
     client = _make_client()
     session = SDKExecutionSession(
         client=client,
-        options=_make_options(),
+        base_options=_make_options(),
         current_model="claude-haiku-4-5-20251001",
     )
     await session.set_model("claude-haiku-4-5-20251001")
@@ -92,7 +92,7 @@ async def test_set_model_updates_current_model() -> None:
     client = _make_client()
     session = SDKExecutionSession(
         client=client,
-        options=_make_options(),
+        base_options=_make_options(),
         current_model="claude-haiku-4-5-20251001",
     )
     await session.set_model("claude-sonnet-4-6")
@@ -519,7 +519,7 @@ class TestCompactSessionRotate:
 
         assert result == "SUMMARY"
         old.set_model.assert_not_called()
-        client_ctor.assert_called_once_with(options=session.options)
+        client_ctor.assert_called_once_with(options=session.base_options)
         old.disconnect.assert_called_once()
         new.connect.assert_called_once()
         assert session.client is new
@@ -666,7 +666,7 @@ class TestCaptureSummary:
         client.receive_response.return_value = _result_message_gen("SUMMARY")
         session = SDKExecutionSession(
             client=client,
-            options=_make_options(),
+            base_options=_make_options(),
             current_model="sonnet-id",
         )
 
@@ -750,3 +750,25 @@ class TestSeededOptions:
             "preset": "claude_code",
             "append": "EXISTING",
         }
+
+
+# ---------------------------------------------------------------------------
+# open_pipeline_session
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_open_pipeline_session_seeds_client_options_and_connects() -> None:
+    from squadron.pipeline.sdk_session import open_pipeline_session
+
+    client = _make_client()
+    with patch(f"{_MOD}.ClaudeSDKClient", return_value=client) as client_ctor:
+        session = await open_pipeline_session(seed="S")
+
+    options = client_ctor.call_args.kwargs["options"]
+    assert isinstance(options.system_prompt, dict)
+    assert "S" in options.system_prompt["append"]
+    # The seed is applied per connect, never stored on base_options.
+    assert "append" not in session.base_options.system_prompt
+    client.connect.assert_called_once()
+    client.query.assert_not_called()

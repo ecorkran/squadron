@@ -59,7 +59,7 @@ from squadron.pipeline.prompt_renderer import (
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ModelResolver
-from squadron.pipeline.sdk_session import SDKExecutionSession
+from squadron.pipeline.sdk_session import SDKExecutionSession, open_pipeline_session
 from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError, StateManager
 from squadron.pipeline.steps.phase import PhaseStepType
 
@@ -345,23 +345,7 @@ async def _run_pipeline_sdk(
 
     session: SDKExecutionSession | None
     if classification.needs_persistent_session:
-        import claude_agent_sdk
-
-        # Permission mode must be set at session start; the SDK rejects runtime
-        # set_permission_mode("bypassPermissions") calls (since claude-agent-sdk
-        # ~Apr 2026). bypassPermissions matches the prior runtime behavior.
-        # Default to the Claude Code system prompt preset so SDK dispatches get the
-        # full Claude Code persona (coding conventions, response style, project
-        # context), not the Agent SDK's minimal tool-only prompt. See
-        # platform.claude.com/docs/en/agent-sdk/modifying-system-prompts.
-        options = claude_agent_sdk.ClaudeAgentOptions(
-            cwd=str(Path.cwd()),
-            permission_mode="bypassPermissions",
-            system_prompt={"type": "preset", "preset": "claude_code"},
-        )
-        client = claude_agent_sdk.ClaudeSDKClient(options=options)
-        session = SDKExecutionSession(client=client, options=options)
-        await session.connect()
+        session = await open_pipeline_session()
     else:
         session = None
 

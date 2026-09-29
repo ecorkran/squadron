@@ -195,9 +195,9 @@ class TestRunPipelineSdkRunId:
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ) as mock_inner,
-            patch("claude_agent_sdk.ClaudeAgentOptions"),
-            patch("claude_agent_sdk.ClaudeSDKClient"),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions"),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             mock_session = AsyncMock()
             mock_session_cls.return_value = mock_session
@@ -232,9 +232,9 @@ class TestRunPipelineSdkRunId:
                 new_callable=AsyncMock,
                 return_value=mock_result,
             ) as mock_inner,
-            patch("claude_agent_sdk.ClaudeAgentOptions"),
-            patch("claude_agent_sdk.ClaudeSDKClient"),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions"),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient"),
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             mock_session = AsyncMock()
             mock_session_cls.return_value = mock_session
@@ -268,7 +268,7 @@ class TestRunPipelineSdkValidation:
                 return_value=_make_definition(),
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=errors),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             mock_session = AsyncMock()
             mock_session_cls.return_value = mock_session

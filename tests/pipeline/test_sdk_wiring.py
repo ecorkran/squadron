@@ -154,10 +154,10 @@ async def test_run_pipeline_sdk_connects_and_disconnects_on_success() -> None:
             new_callable=AsyncMock,
             return_value=success_result,
         ),
-        patch("claude_agent_sdk.ClaudeSDKClient"),
-        patch("claude_agent_sdk.ClaudeAgentOptions"),
+        patch("squadron.pipeline.sdk_session.ClaudeSDKClient"),
+        patch("squadron.pipeline.sdk_session.ClaudeAgentOptions"),
         patch(
-            "squadron.cli.commands.run.SDKExecutionSession",
+            "squadron.pipeline.sdk_session.SDKExecutionSession",
             return_value=mock_session,
         ),
     ):
@@ -192,10 +192,10 @@ async def test_run_pipeline_sdk_disconnects_on_failure() -> None:
             new_callable=AsyncMock,
             side_effect=RuntimeError("pipeline crashed"),
         ),
-        patch("claude_agent_sdk.ClaudeSDKClient"),
-        patch("claude_agent_sdk.ClaudeAgentOptions"),
+        patch("squadron.pipeline.sdk_session.ClaudeSDKClient"),
+        patch("squadron.pipeline.sdk_session.ClaudeAgentOptions"),
         patch(
-            "squadron.cli.commands.run.SDKExecutionSession",
+            "squadron.pipeline.sdk_session.SDKExecutionSession",
             return_value=mock_session,
         ),
     ):

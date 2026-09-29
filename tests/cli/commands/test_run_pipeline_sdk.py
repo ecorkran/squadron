@@ -169,14 +169,16 @@ def _sdk_patches(
     if session_mock is not None:
         patches.append(
             patch(
-                "squadron.cli.commands.run.SDKExecutionSession",
+                "squadron.pipeline.sdk_session.SDKExecutionSession",
                 return_value=session_mock,
             )
         )
-        patches.append(patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock()))
-        patches.append(patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock()))
+        patches.append(
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions", return_value=MagicMock())
+        )
+        patches.append(patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=MagicMock()))
     else:
-        patches.append(patch("squadron.cli.commands.run.SDKExecutionSession"))
+        patches.append(patch("squadron.pipeline.sdk_session.SDKExecutionSession"))
     return tuple(patches)
 
 
@@ -216,7 +218,7 @@ class TestClassificationGate:
             ) as mock_run,
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             self._run_sdk()
 
@@ -249,7 +251,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             result = self._run_sdk()
 
@@ -286,11 +288,11 @@ class TestClassificationGate:
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
-                "squadron.cli.commands.run.SDKExecutionSession",
+                "squadron.pipeline.sdk_session.SDKExecutionSession",
                 return_value=mock_session,
             ),
-            patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock()),
-            patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=MagicMock()),
         ):
             self._run_sdk()
 
@@ -333,7 +335,7 @@ class TestClassificationGate:
             ) as mock_run,
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             self._run_sdk()
 
@@ -371,11 +373,11 @@ class TestClassificationGate:
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
-                "squadron.cli.commands.run.SDKExecutionSession",
+                "squadron.pipeline.sdk_session.SDKExecutionSession",
                 return_value=mock_session,
             ),
-            patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock()),
-            patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=MagicMock()),
         ):
             self._run_sdk()
 
@@ -398,7 +400,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             with pytest.raises(typer.Exit) as exc_info:
                 self._run_sdk()
@@ -434,11 +436,11 @@ class TestClassificationGate:
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
-                "squadron.cli.commands.run.SDKExecutionSession",
+                "squadron.pipeline.sdk_session.SDKExecutionSession",
                 return_value=mock_session,
             ),
-            patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock()),
-            patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=MagicMock()),
         ):
             with pytest.raises(CLINotFoundError):
                 self._run_sdk()
@@ -482,7 +484,7 @@ class TestResumePath:
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
-            patch("squadron.cli.commands.run.SDKExecutionSession") as mock_session_cls,
+            patch("squadron.pipeline.sdk_session.SDKExecutionSession") as mock_session_cls,
         ):
             asyncio.run(
                 _run_pipeline_sdk(
@@ -527,11 +529,11 @@ class TestResumePath:
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
             patch("squadron.cli.commands.run.ModelResolver", return_value=MagicMock()),
             patch(
-                "squadron.cli.commands.run.SDKExecutionSession",
+                "squadron.pipeline.sdk_session.SDKExecutionSession",
                 return_value=mock_session,
             ),
-            patch("claude_agent_sdk.ClaudeAgentOptions", return_value=MagicMock()),
-            patch("claude_agent_sdk.ClaudeSDKClient", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeAgentOptions", return_value=MagicMock()),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=MagicMock()),
         ):
             asyncio.run(
                 _run_pipeline_sdk(
