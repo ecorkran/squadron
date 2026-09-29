@@ -1154,3 +1154,31 @@ async def test_subagent_prose_is_not_part_of_the_response() -> None:
     session = scripted_session(client)
 
     assert await session.dispatch("p") == "Waiting.\nDONE"  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_unrelated_timeout_while_waiting_is_not_treated_as_idle() -> None:
+    """Review F002: only the idle timer's own expiry stops the agents."""
+
+    class _TimingOutClient(ScriptedClient):
+        def receive_response(self):  # type: ignore[no-untyped-def]
+            if self.receive_calls == 1:
+                self.receive_calls += 1
+
+                async def _raise():  # type: ignore[no-untyped-def]
+                    raise TimeoutError("transport timeout")
+                    yield  # pragma: no cover
+
+                return _raise()
+            return super().receive_response()
+
+    client = _TimingOutClient([sdk_task_started("t1", "local_agent"), sdk_result()])
+    session = scripted_session(client)
+
+    with (
+        patch(f"{_MOD}.get_typed_config", return_value=60),
+        pytest.raises(TimeoutError, match="transport timeout"),
+    ):
+        await session.dispatch("p")  # type: ignore[attr-defined]
+    client.stop_task.assert_not_called()
+    assert session.background_tasks_stopped == 0  # type: ignore[attr-defined]

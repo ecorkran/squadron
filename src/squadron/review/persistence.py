@@ -197,8 +197,8 @@ def _findings_not_parsed_section(reason: str) -> list[str]:
 
 
 _NOT_COMPUTED = "not computed"
-_PRESET_MODES = frozenset({SystemPromptMode.PRESET, SystemPromptMode.PRESET_APPEND})
 _NOT_OFFERED = "not offered"
+_PRESET_MODES = frozenset({SystemPromptMode.PRESET, SystemPromptMode.PRESET_APPEND})
 
 
 def _run_digest_lines(result: ReviewResult) -> list[str]:

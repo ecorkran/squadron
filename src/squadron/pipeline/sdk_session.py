@@ -98,6 +98,10 @@ def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOp
     return dataclasses.replace(base, system_prompt=preset)
 
 
+class _BackgroundIdleTimeout(Exception):
+    """The idle bound on a background-agent wait expired (D5)."""
+
+
 @dataclass
 class SDKExecutionSession:
     """Manages a persistent ClaudeSDKClient across pipeline steps.
@@ -224,7 +228,7 @@ class SDKExecutionSession:
                     idle_s = self._background_idle_timeout_s()
                 try:
                     result = await self._read_turn_with_retry(turns, idle_s=idle_s)
-                except TimeoutError:
+                except _BackgroundIdleTimeout:
                     await self._stop_background(turns, idle_s)
                     return turns.text()
             if result is None:
@@ -292,15 +296,22 @@ class SDKExecutionSession:
         """Read one turn; return its result, or None if the stream ended first.
 
         With ``idle_s`` set, each wait for the next message is bounded by it
-        (the timer resets on every message) and expiry raises ``TimeoutError``.
+        (the timer resets on every message) and expiry raises
+        ``_BackgroundIdleTimeout``.
         """
         stream = aiter(self.client.receive_response())
         while True:
+            idle_timer = asyncio.timeout(idle_s)  # fresh per message: the timer resets
             try:
-                async with asyncio.timeout(idle_s):
+                async with idle_timer:
                     sdk_msg = await anext(stream)
             except StopAsyncIteration:
                 return None
+            except TimeoutError as exc:
+                # Only our own timer means "idle"; any other TimeoutError propagates.
+                if idle_timer.expired():
+                    raise _BackgroundIdleTimeout from exc
+                raise
             # Inspect a RateLimitEvent before anything else touches it, and
             # before collect() marks progress: a rejected event is not
             # progress and must consume retry budget.
