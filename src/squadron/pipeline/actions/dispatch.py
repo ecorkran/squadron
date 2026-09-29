@@ -7,6 +7,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from squadron.config.manager import get_typed_config
 from squadron.core.agent_registry import get_registry
 from squadron.core.models import (
     RATE_LIMIT_EVENT_TYPE,
@@ -23,6 +24,7 @@ from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionE
 from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile
+from squadron.providers.sdk.settings import PIPELINE_SETTING_SOURCES
 from squadron.tools import resolve_effective_tools
 
 if TYPE_CHECKING:
@@ -133,6 +135,10 @@ async def one_shot_dispatch_with_telemetry(
     use_default_system_prompt = is_sdk and not has_explicit_prompt
     instructions = system_prompt if has_explicit_prompt else None
 
+    # Pipeline settings policy (slice 932 D10/D11); not applicable off the SDK.
+    setting_sources = list(PIPELINE_SETTING_SOURCES) if is_sdk else None
+    auto_memory = is_sdk and get_typed_config("pipeline.auto_memory", bool, cwd=cwd or ".")
+
     branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
     config = AgentConfig(
         name=f"dispatch-{step_name}{branch_suffix}-{run_id[:8]}",
@@ -143,6 +149,8 @@ async def one_shot_dispatch_with_telemetry(
         use_default_system_prompt=use_default_system_prompt,
         base_url=profile.base_url,
         cwd=None if is_sdk else cwd,
+        setting_sources=setting_sources,
+        auto_memory=auto_memory,
         allowed_tools=allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
         credentials={

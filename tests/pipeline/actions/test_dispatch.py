@@ -743,3 +743,37 @@ class TestDispatchStepFeedback:
         assert step.validate(good) == []
         assert [e.field for e in step.validate(bad)] == ["feedback"]
         assert step.expand(good) == [("dispatch", {"feedback": "review"})]
+
+
+# ---------------------------------------------------------------------------
+# Settings policy on one-shot dispatch (slice 932 D10/D11)
+# ---------------------------------------------------------------------------
+
+
+async def _config_with_profile(
+    action: DispatchAction, profile: ProviderProfile, auto_memory: bool = True
+) -> AgentConfig:
+    mock_registry = _make_registry(_make_agent_mock("ok"))
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=profile),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(f"{_P}.get_typed_config", return_value=auto_memory),
+    ):
+        await action.execute(_make_context())
+    return mock_registry.spawn.call_args[0][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auto_memory", [True, False])
+async def test_sdk_dispatch_uses_pipeline_settings(action: DispatchAction, auto_memory: bool) -> None:
+    config = await _config_with_profile(action, _sdk_profile(), auto_memory=auto_memory)
+    assert config.setting_sources == ["project"]
+    assert config.auto_memory is auto_memory
+
+
+@pytest.mark.asyncio
+async def test_non_sdk_dispatch_leaves_settings_unset(action: DispatchAction) -> None:
+    config = await _config_with_profile(action, _openrouter_profile())
+    assert config.setting_sources is None
+    assert config.auto_memory is False
