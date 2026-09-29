@@ -122,3 +122,9 @@ class DispatchTurns:
 
     def text(self) -> str:
         return "\n".join(self.parts)
+
+    def discard(self) -> str:
+        """Drop the text collected so far and return it (D6 leftover turn)."""
+        dropped = self.text()
+        self.parts.clear()
+        return dropped

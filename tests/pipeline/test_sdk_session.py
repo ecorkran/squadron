@@ -996,3 +996,23 @@ class TestDispatchWaitsForBackgroundAgents:
             ProviderError, match="stream ended before the dispatch's result.*Explore src"
         ):
             await session.dispatch("p")  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_leftover_injected_turn_is_dropped_and_logged(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client = ScriptedClient(
+            [sdk_text("Late words from the previous step."), sdk_result(injected=True)],
+            [sdk_text("This step's answer."), sdk_result()],
+        )
+        session = scripted_session(client)
+
+        with caplog.at_level(logging.WARNING, logger=_MOD):
+            response = await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert response == "This step's answer."
+        warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert any(
+            "discarded a background follow-up turn" in m and "Late words from the previous step." in m
+            for m in warnings
+        )

@@ -30,6 +30,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import SystemPromptPreset
 
 from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
+from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -206,6 +207,15 @@ class SDKExecutionSession:
                 return turns.text()
             if is_own_result(result):
                 turns.own_result_seen = True
+            elif not turns.own_result_seen:
+                # An injected result before our own: everything read so far
+                # is a follow-up turn owed by the previous dispatch (D6).
+                _logger.warning(
+                    "dispatch: discarded a background follow-up turn left over from "
+                    'the previous dispatch; its final text: "%s"',
+                    tail_text(turns.discard()),
+                )
+                continue
             if turns.own_result_seen and not turns.ledger.active:
                 return turns.text()
             if turns.waiting and not turns.waiting_logged:
