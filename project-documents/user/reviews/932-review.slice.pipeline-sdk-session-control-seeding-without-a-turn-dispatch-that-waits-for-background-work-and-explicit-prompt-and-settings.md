@@ -13,7 +13,7 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20260928
 dateUpdated: 20260928
-reviewedSha: 0a93b6a785d1502252dbdcf9424398891abc68e1
+reviewedSha: 5807aea95fa66a49e512b0e65b91464837f43849
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 squadronVersion: 0.15.1
@@ -21,43 +21,43 @@ findings:
   - id: F001
     severity: concern
     category: scope
-    summary: "Slice bundles four issues and exceeds the \"small and focused\" guideline"
+    summary: "Slice size and independence conflict with the architecture's \"small and focused\" guideline"
     location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#Technical Scope"
   - id: F002
     severity: concern
     category: scope
-    summary: "Part D changes operator-visible defaults, which sits close to the \"not a feature\" boundary"
+    summary: "Part D is a visible behavior and policy change, not maintenance"
     location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#D10 — Settings policy per path"
   - id: F003
     severity: concern
     category: error-handling
-    summary: "Failure modes for the new reconnect and background-wait paths are incomplete"
-    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#D13 — Failure modes"
+    summary: "Failure handling for `stop_task` itself is not enumerated"
+    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#D5 — Wait for background agents, not shells"
   - id: F004
     severity: concern
-    category: correctness
-    summary: "The D6 race can misattribute work between steps"
-    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#D6 — Only the dispatch's own result can end it"
+    category: error-handling
+    summary: "Foreground dispatch remains unbounded and is only implicitly justified"
+    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md:158"
   - id: F005
     severity: note
-    category: dependencies
-    summary: "The dependency declaration understates the overlap with slice 931"
-    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md:6"
+    category: nfr
+    summary: "No NFRs in the parent architecture apply"
+    location: "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
   - id: F006
+    severity: note
+    category: dependencies
+    summary: "Soft dependency on slice 931 is documented but not in frontmatter"
+    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md:6"
+  - id: F007
     severity: pass
     category: architecture
     summary: "Layering and dependency direction"
-    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings#Component Structure"
-  - id: F007
-    severity: pass
-    category: scope
-    summary: "Scope boundaries are explicit and justified"
-    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings#Technical Scope"
+    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#Component Structure"
   - id: F008
     severity: pass
-    category: testing
-    summary: "Verification and test plan match the change"
-    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings#Technical Requirements"
+    category: error-handling
+    summary: "Failure modes for the new I/O paths are largely explicit"
+    location: "project-documents/user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md#D13 — Failure modes"
 ---
 
 # Review: slice — slice 932
@@ -67,56 +67,41 @@ findings:
 
 ## Findings
 
-### [CONCERN] Slice bundles four issues and exceeds the "small and focused" guideline
+### [CONCERN] Slice size and independence conflict with the architecture's "small and focused" guideline
 
-The architecture asks for "many small slices over few large ones" that are each independently deliverable. This slice combines four parts (A–D) across the following areas:
-- the session builder
-- dispatch-loop semantics
-- a new `providers/sdk/settings.py` module
-- a new `SystemPromptMode` enum
-- template loader changes
-- review model, digest, and JSON output changes
-- step metadata
+Architecture 900 says to prefer many small slices, and that each slice should be independently deliverable. This slice bundles four issues (#162, #163, #155, #156). It touches about 14 components across `pipeline/`, `providers/`, `review/`, `config/`, `core/`, `events/` and `data/templates`. It also adds a new module and two new config keys. The "Why one slice" paragraph records that bundling was a PM decision, and I'm not challenging it. The A → B → D → C ordering with separately revertable commits reduces the risk. But Part D is coupled to Part C. The recording half of #156 lands in the C + recording step, and `AgentConfig.auto_memory` overlaps with slice 931's files. Part A also depends on Part D's constants only loosely. If effort or review pressure grows, splitting at the A/B vs D/C boundary would match the architecture better, and A alone is the urgent safety fix. Treat that split as a pre-agreed fallback.
 
-The Development Approach already splits the work into four commits, and A, B, and D are largely independent of one another. Part A is the safety fix and is the urgent one. Splitting off B, and the D-plus-recording work, would fit the guideline better. If the PM wants to keep it together, the slice should say why.
+### [CONCERN] Part D is a visible behavior and policy change, not maintenance
 
-### [CONCERN] Part D changes operator-visible defaults, which sits close to the "not a feature" boundary
+The architecture excludes "new features or capabilities" from this initiative. Part D introduces the `pipeline.auto_memory` switch, a policy layer (`PIPELINE_SETTING_SOURCES`, `REVIEW_SETTING_SOURCES`), and a change to which user settings reach automated runs. D10 records PM ratification and a CHANGELOG line, which covers the decision. Even so, the new config key and operator-visible behavior change sit at the edge of "operational: configuration improvements". The slice should say explicitly why this counts as maintenance (closing an unintended default, #156) rather than a feature. It should also keep the config surface minimal. Consider whether the `auto_memory` switch is needed now or is a candidate for a deferred issue.
 
-D10 and D11 do more than fix bugs. Pipeline sessions, dispatch, and the `slice`/`tasks`/`judge-*` reviews stop loading the operator's user CLAUDE.md, and auto-memory is turned off on several paths. That is a behavior-policy change. The slice concedes it is "a single constant change if the PM prefers" the other option, so the decision is still open. Because the maintenance architecture excludes new capabilities, the slice should mark D10 as a PM-ratified decision before implementation. The change could also break workflows that quietly rely on user-level CLAUDE.md, and the slice has no migration or release-note item for it.
+### [CONCERN] Failure handling for `stop_task` itself is not enumerated
 
-### [CONCERN] Failure modes for the new reconnect and background-wait paths are incomplete
+D13 covers the idle timeout, an early stream end, and reconnect failure well. It does not say what happens if `client.stop_task(task_id)` raises or hangs during the timeout path. The steps say the ledger is cleared locally and the WARNING is logged, but not whether a `stop_task` error is logged at ERROR and swallowed or re-raised. Project rules require an explicit strategy for every try/except. The failure-mode table and the failure-mode tests should add this row. Also state that the reconnect-failed `unusable_reason` path is inspected before the idle-timeout path, so the two don't interact.
 
-D13 covers the main cases, but three gaps remain on paths the slice adds:
+### [CONCERN] Foreground dispatch remains unbounded and is only implicitly justified
 
-- **Reconnect leaves no live client.** Rotation disconnects the old client before connecting the new one. If the new connect fails, the session has no live client. D13 says only that "the exception propagates". It does not say what state the session is left in, or whether a later step can retry safely or must abort the run.
-- **CLI process dies while the ledger is non-empty.** The stream may end with no terminal task message and no own result. D13 does not say whether that is an error, an empty return, or a hang. Today's dispatch handles stream end. The new loop needs an explicit rule.
-- **A lost terminal signal hangs dispatch.** If a terminal task message is never delivered, the ledger never empties. D5 accepts "no wait ceiling" and offers only an INFO log. The architecture states no NFR, so this is acceptable in principle. Still, an unbounded wait on an unattended batch run is an explicit failure mode that the slice should either accept knowingly, with the log line as the signal, or bound.
+The slice states that foreground turns keep today's behavior with no timer, and that it bounds only the new wait it adds. That is acceptable scope discipline. But the new stream-read loop now runs across multiple `receive_response()` turns, and a peer that stalls before the own result is seen (the ledger is empty, or the own result hasn't arrived) is not covered by any signal. Add one line to D13 saying this is an accepted, unchanged failure mode, and link a tracking issue per the "issues over Future Work" convention. Otherwise a reader can't tell whether the gap is deliberate.
 
-Tests are specified for the scripted message sequences. There is no test for the stream-ended-early case, and none asserting the observable signal on reconnect failure.
+### [NOTE] No NFRs in the parent architecture apply
 
-### [CONCERN] The D6 race can misattribute work between steps
+Architecture 900 defines no latency, throughput, or other NFR targets, so nothing needs restating in the slice. The only quantitative bound the slice introduces is `pipeline.background_idle_timeout_s` (default 1800), which is stated where it is used.
 
-D6 admits a known SDK race. An injected follow-up turn can land at the start of the next dispatch's stream, so its text belongs to the previous step. The mitigation is a WARNING. In the meantime, the previous step's post-condition (the artifact check) has already run and may have flagged it. The consumed text is also joined into the next step's response, so the D7 tail and the next step's post-condition see the wrong step's words. The slice should say whether that text is discarded from the response or kept, and it should acknowledge that the previous step's flag reason can be misleading.
+### [NOTE] Soft dependency on slice 931 is documented but not in frontmatter
 
-### [NOTE] The dependency declaration understates the overlap with slice 931
-
-Frontmatter says `dependencies: []`, and Prerequisites says "None". The slice also says 931 adds Run Digest lines and `AgentConfig` fields in neighboring code, and that "whichever merges second rebases". This is manageable. Still, `ReviewResult` and the digest renderer are shared surfaces. Record it as a soft ordering constraint, since the rebase risk sits mainly in `review/models.py` and `review/persistence.py`.
+`dependencies: []` is consistent with the "no hard prerequisite" statement. The rebase overlap with 931 (`review/models.py`, `persistence.py`, `core/models.py`) is described in the Dependencies section. No action is needed unless the project tracks soft ordering elsewhere.
 
 ### [PASS] Layering and dependency direction
 
-The new `providers/sdk/settings.py` is a leaf module used by both the provider and the session builder. Prompt-mode derivation lives in `core/models.py` next to the existing prompt table, and there is one shared session builder. This removes duplicated option literals (DRY) and keeps pipeline, provider, and review dependencies pointing at core and provider primitives. No cross-layer violations found.
+The settings policy lives in a small `providers/sdk/settings.py` that both the provider and the pipeline session builder consume. `describe_system_prompt` sits next to the existing prompt table in `core/models.py`, so the recorded mode and the mode sent come from one rule. `open_pipeline_session` replaces duplicated option literals, which is a DRY consolidation. `AgentConfig.auto_memory` replaces an inferred `setting_sources == []` check. Dependency directions look correct: pipeline and review depend on the provider and core layers, not the reverse.
 
-### [PASS] Scope boundaries are explicit and justified
+### [PASS] Failure modes for the new I/O paths are largely explicit
 
-The out-of-scope list is specific and each item has a reason: `capture_summary`, query-mode dispatch, background shells, `sq serve`, and the auth probe. The rejected `system_prompt_mode: replace` escape hatch is backed by a check of shipped and user pipelines. All four parts fit the architecture's categories of bug fixes and operational improvements that span subsystems. The slice carries no feature scope beyond the settings-policy question raised above.
-
-### [PASS] Verification and test plan match the change
-
-Tests assert on the client options and on the absence of a `query`, which is the right check for part A. Scripted message sequences cover the dispatch-wait cases, including terminal-only-by-update, shells, and injected-first. Parametrized tests cover the modes and the per-path settings. The CLI default behavior in D9 was probed rather than assumed.
+The D13 table covers reconnect failure, an early stream end, an idle timeout with lost terminal signals, a killed or failed agent, a leftover injected turn, an invalid step prompt on the session path, and a missing template setting. Each row has an observable signal (a WARNING, `logger.exception`, a `ProviderError`, or step metadata). The Technical Requirements list tests asserting those signals. This meets the failure-mode enumeration criterion apart from the two gaps noted above.
 
 ### Run Digest
 
-- Response length: 7184 chars
+- Response length: 6669 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -132,12 +117,12 @@ Tests assert on the client options and on the absence of a `query`, which is the
 
 ## Response (20260928)
 
-- **F001, no change to scope.** The slice plan entry bundles the four issues, and that was a PM decision. Technical Scope now has a "Why one slice" paragraph: one shared theme and two shared surfaces. The parts still land separately in the order A → B → D → C. Each passes the suite on its own and can be reverted alone. The safety fix (A) goes first.
-- **F002, fixed.** D10 is marked PM-ratified 20260928. The PM kept `[project]` and changed only auto-memory, which is now the `pipeline.auto_memory` config key (D11). Implementation Notes add a one-line CHANGELOG item telling operators that user CLAUDE.md and user settings no longer load.
+- **F001, no change to scope.** Bundling is the PM's decision. Technical Scope now records the fallback the review suggests: if the slice needs splitting, split between A/B and D/C.
+- **F002, clarified.** D10 now says why Part D is maintenance. The SDK's handling of `setting_sources=None` changed underneath squadron: slice 101 records "no project context", while 0.2.160 lets the CLI load user settings (D9). Part D closes that unintended default. Its only new config key is `pipeline.auto_memory`, which the PM asked for explicitly, so it stays. Settings sources remain code constants, not config.
 - **F003, fixed.**
-  - A failed reconnect sets `unusable_reason`, and every later call raises `ProviderError` naming it.
-  - A stream that ends before the dispatch's own result raises `ProviderError`.
-  - The background wait is now bounded by `pipeline.background_idle_timeout_s` (default 1800). On timeout, dispatch stops the tracked tasks, clears the ledger, logs a WARNING, and records `background_tasks_stopped`.
-  - D13, Data Flow, Success Criteria, and Technical Requirements are updated, and a test asserts the signal for each mode.
-- **F004, fixed.** Leftover text from an injected turn that arrives before the dispatch's own result is dropped from the response and logged at WARNING with its tail. The current step's response, D7 tail, and post-condition therefore see only that step's words. D6 now says plainly that the previous step's flag can be misleading if the leftover turn wrote its artifact late. This is accepted: the WARNING is the evidence, and a resume finds the artifact.
-- **F005, fixed.** Prerequisites records a soft ordering with 931. The overlap is in `review/models.py`, `review/persistence.py`, and `core/models.py`, and Part C (plus Part D's one `AgentConfig` line) rebases if 931 lands first. Frontmatter `dependencies` stays `[]`, because the two slices share no logic.
+  - `stop_task` is already bounded by the SDK (a 60s control-request timeout). It raises a bare `Exception` on both timeout and error response. The design names a single-call `except Exception` (`noqa: BLE001`, with a comment citing the SDK) that logs through `logger.exception` and continues with the next id. This is best-effort cleanup, and any follow-up turn falls to D6.
+  - A D13 row and a test were added.
+  - The `unusable_reason` check is the first statement of each session method, so it cannot meet the wait logic.
+- **F004, fixed.** D13 now has a row stating that a stalled foreground turn is an accepted, unchanged failure mode, tracked in [#165](https://github.com/ecorkran/squadron/issues/165). D5 links it too.
+- **F005, no action.**
+- **F006, no action.** The soft ordering is recorded in Dependencies, and the frontmatter stays `[]` because 932 has no hard prerequisite.

@@ -37,7 +37,7 @@ Squadron does not fully control what a pipeline SDK session receives, or decide 
 - **C — Explicit system prompt (#155).** SDK one-shot dispatch always uses the preset, and a step `system_prompt` is appended to it. On the session path, a step `system_prompt` fails with an explicit error, as `allowed_tools` already does.
 - **D — Explicit settings, recorded (#156).** The CLI's default is verified and written down (D9). One declared `setting_sources` value per automated path. Auto-memory is set explicitly per path: the config key `pipeline.auto_memory` (default on) controls pipeline sessions and dispatch, and every review, judge, PR, summary, and audit path has it off. Each review's Run Digest and JSON output records the system-prompt mode and settings sources, as does each dispatch and summary step's metadata.
 
-**Why one slice.** The slice plan entry bundles all four issues, and that was a Project Manager decision. They share one theme: squadron decides what an SDK session receives and when it is done. They also share two surfaces, the session builder and the prompt/settings recording. The parts are still delivered separately, in the order A → B → D → C (see Development Approach). Each part is its own commit or commits, passes the suite on its own, and can be reverted without touching the others. Part A, the safety fix, goes first and does not wait on the others.
+**Why one slice.** The slice plan entry bundles all four issues, and that was a Project Manager decision. They share one theme: squadron decides what an SDK session receives and when it is done. They also share two surfaces, the session builder and the prompt/settings recording. The parts are still delivered separately, in the order A → B → D → C (see Development Approach). Each part is its own commit or commits, passes the suite on its own, and can be reverted without touching the others. Part A, the safety fix, goes first and does not wait on the others. If the slice needs splitting, the agreed fallback is to split between A/B and D/C.
 
 **Out of scope**
 
@@ -150,12 +150,12 @@ The wait is visible. The first time a result arrives with the ledger non-empty, 
 
 **The wait is bounded by idle time.** Background-wait mode is the state where the dispatch's own result has been seen and the ledger is still non-empty. In that mode, each read of the stream is bounded by `pipeline.background_idle_timeout_s`, a new config key (int, default `1800`). If no message of any kind arrives within that time, dispatch does the following:
 
-1. It calls `client.stop_task(task_id)` for each tracked id.
+1. It calls `client.stop_task(task_id)` for each tracked id. The SDK already bounds each call: it waits 60s for the control response and then raises a bare `Exception`. It raises the same type when the CLI returns an error, so no narrower type can be caught. The catch is therefore `except Exception` around the single call, marked `noqa: BLE001` with a comment naming this SDK behavior, and it logs through `logger.exception`. Stopping is best-effort cleanup: the dispatch goes on to the next id and then returns. An agent that failed to stop may still trigger a follow-up turn later, and D6 handles that.
 2. It clears the ledger locally, because a lost terminal signal is exactly the case being handled here.
 3. It logs a WARNING: `dispatch: no activity for <N>s with background agent(s) still running; stopped: <descriptions>`.
 4. It records `background_tasks_stopped` in the step metadata and returns the text it has.
 
-The timer is idle-based, not total, so a long agent that keeps emitting progress messages is never cut off. If the CLI turns out to send no progress messages between turns, the timer becomes a total cap on the wait. That is still a bound. Walkthrough step 3 shows which of the two applies. Foreground turns keep today's behavior, with no timer. This slice bounds only the new wait it adds.
+The timer is idle-based, not total, so a long agent that keeps emitting progress messages is never cut off. If the CLI turns out to send no progress messages between turns, the timer becomes a total cap on the wait. That is still a bound. Walkthrough step 3 shows which of the two applies. Foreground turns keep today's behavior, with no timer. This slice bounds only the new wait it adds, and the foreground case is tracked in [#165](https://github.com/ecorkran/squadron/issues/165).
 
 A stopped agent can still trigger a follow-up turn from the CLI. That turn's messages arrive at the start of the next dispatch and are handled by D6.
 
@@ -208,6 +208,8 @@ Each automated path uses a declared value. None of them inherits `None`.
 
 Pipelines and reviews run on the project's conventions, not on the operator's personal setup. A run should produce the same artifacts whoever starts it, and personal settings such as the output style should not shape pipeline output. The rejected alternative was `user,project` for pipeline sessions, which would keep the operator's global CLAUDE.md in every dispatch.
 
+**Why this is maintenance, not a feature.** Nobody chose today's behavior. Squadron leaves `setting_sources` unset, and the SDK's handling of `None` changed underneath it: slice 101 records "None → no project context loaded", but 0.2.160 passes no flag, and the CLI then loads user settings too (D9). Part D closes that unintended default and makes it explicit. Part D's only new config key is `pipeline.auto_memory`, which the PM asked for (D11). Settings sources get no config key; they are code constants.
+
 **PM-ratified 20260928.** The policy was presented to the Project Manager, who kept `[project]` and changed only the auto-memory part (D11). This changes behavior operators can see: user CLAUDE.md and user settings stop loading on these paths. The CHANGELOG entry for the release says so in one line (see Implementation Notes).
 
 Custom review templates that omit `setting_sources` or set it to `null` resolve to `REVIEW_SETTING_SOURCES` in the loader. The artifact records the value used, so the default is visible rather than silent.
@@ -234,9 +236,11 @@ Custom review templates that omit `setting_sources` or set it to `null` resolve 
 
 | Failure | Signal |
 |---|---|
-| Reconnect with seed fails (CLI spawn, E2BIG on a huge seed) | The old client is already gone, so `_reconnect` records `self.unusable_reason` and re-raises. Compact, emit, and restore report a failed step with the error and log via `logger.exception`. Any later `dispatch()`, `compact()`, or `seed_context()` on that session raises `ProviderError("SDK session unusable: reconnect failed: …")` at once. Inside an `each` batch with a continue policy, the remaining items are therefore flagged with that reason, not sent into a dead client. There is no automatic retry. |
+| Reconnect with seed fails (CLI spawn, E2BIG on a huge seed) | The old client is already gone, so `_reconnect` records `self.unusable_reason` and re-raises. Compact, emit, and restore report a failed step with the error and log via `logger.exception`. Any later `dispatch()`, `compact()`, or `seed_context()` on that session raises `ProviderError("SDK session unusable: reconnect failed: …")` at once. The check is the first statement of each method, before any query or stream read, so it can never meet the background-wait or idle-timeout logic. Inside an `each` batch with a continue policy, the remaining items are therefore flagged with that reason, not sent into a dead client. There is no automatic retry. |
 | Stream ends before the dispatch's own result (CLI died, or the iterator ended) | A CLI crash surfaces as `ProcessError`/`CLIConnectionError` and maps to `ProviderError`, as today. If `receive_response()` ends without the dispatch's own result, dispatch raises `ProviderError("stream ended before the dispatch's result; N background agent(s) still running: …")`. It never returns partial text as success. |
 | Background agent never finishes, or its terminal signal is lost | After `pipeline.background_idle_timeout_s` of silence: stop the tracked tasks, clear the ledger, log a WARNING naming them, and record `background_tasks_stopped` (D5). |
+| `stop_task` raises or times out during the idle-timeout path (the SDK bounds it at 60s) | `logger.exception` naming the task id, then continue with the next id, and return as in D5. The agent may later trigger a follow-up turn, which D6 handles. |
+| Stalled foreground turn: no own result yet and no tracked agents | **Accepted and unchanged**: no timer, same as today. This slice bounds only the new wait it adds. Tracked in [#165](https://github.com/ecorkran/squadron/issues/165). |
 | Background agent fails or is killed | A terminal status clears it. The follow-up turn's text is in the response, and the D7 tail shows it if no artifact was written. |
 | Injected turn consumed at the start of a dispatch | Its text is dropped from the response and logged at WARNING with its tail (D6). |
 | Step `system_prompt` on the session path | Step fails with an explicit error. |
@@ -312,6 +316,7 @@ The two policy constants have the same value today, but they are separate on pur
 - Unit tests with a fake `ClaudeSDKClient`. For rotation and seeding, assert on the options the new client was built with, and that the new client received no `query`. For dispatch waiting, feed scripted message sequences across two `receive_response()` calls: agent started, then result, then notification, then the follow-up result. Cover `TaskUpdatedMessage(killed)` as the only terminal signal, a `local_bash` start, and an injected result arriving first (its text absent from the response, WARNING asserted).
 - Failure-mode tests, each asserting its observable signal:
   - the idle timeout, using a small timeout value and a fake client that goes silent. Assert `stop_task` was called per id, the WARNING, and `background_tasks_stopped`.
+  - `stop_task` raising on the first of two tracked ids. Assert `logger.exception` for that id, `stop_task` still called for the second, and dispatch returning normally.
   - a stream that ends early, with a tracked agent and no own result. Assert `ProviderError` and the message naming the agent.
   - a reconnect failure. Assert `logger.exception` on the failing call, then `ProviderError("SDK session unusable…")` from the next `dispatch()`.
 - The rate-limit retry behavior in `dispatch()` is unchanged. Existing tests pass as they are.
