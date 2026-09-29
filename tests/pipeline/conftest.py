@@ -93,11 +93,13 @@ def completed_pipeline_result() -> PipelineResult:
 # ---------------------------------------------------------------------------
 
 
-def sdk_text(text: str) -> object:
-    """A real AssistantMessage carrying one text block."""
+def sdk_text(text: str, *, parent_tool_use_id: str | None = None) -> object:
+    """A real AssistantMessage carrying one text block; a parent id marks a subagent's."""
     from claude_agent_sdk import AssistantMessage, TextBlock
 
-    return AssistantMessage(content=[TextBlock(text=text)], model="test-model")
+    return AssistantMessage(
+        content=[TextBlock(text=text)], model="test-model", parent_tool_use_id=parent_tool_use_id
+    )
 
 
 def sdk_result(text: str = "", *, injected: bool = False) -> object:

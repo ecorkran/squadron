@@ -123,6 +123,7 @@ def _sdk_text_messages(*texts: str) -> AsyncMock:
     async def _gen():  # type: ignore[return]
         for text in texts:
             msg = MagicMock(spec=AssistantMessage)
+            msg.parent_tool_use_id = None
             block = MagicMock(spec=TextBlock)
             block.text = text
             msg.content = [block]
@@ -142,6 +143,7 @@ async def test_dispatch_sends_query_and_collects_response() -> None:
 
     async def _gen():  # type: ignore[return]
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         block = MagicMock(spec=TextBlock)
         block.text = "Hello world"
         msg.content = [block]
@@ -174,6 +176,7 @@ async def test_dispatch_excludes_tool_call_noise() -> None:
 
     async def _gen():  # type: ignore[return]
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         text_block = MagicMock(spec=TextBlock)
         text_block.text = "Let me check the diff first."
         tool_use_block = MagicMock(spec=ToolUseBlock)
@@ -187,6 +190,8 @@ async def test_dispatch_excludes_tool_call_noise() -> None:
         yield tool_result
 
         msg2 = MagicMock(spec=AssistantMessage)
+
+        msg2.parent_tool_use_id = None
         text_block2 = MagicMock(spec=TextBlock)
         text_block2.text = "Looks good."
         msg2.content = [text_block2]
@@ -224,6 +229,7 @@ async def test_dispatch_excludes_informational_rate_limit_event() -> None:
             session_id="sess-1",
         )
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         block = MagicMock(spec=TextBlock)
         block.text = "Looks good."
         msg.content = [block]
@@ -260,6 +266,7 @@ async def test_dispatch_retries_on_rate_limit() -> None:
             return
         # Third call succeeds
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         block = MagicMock(spec=TextBlock)
         block.text = "done"
         msg.content = [block]
@@ -355,6 +362,7 @@ def _assistant_gen(text: str) -> MagicMock:
 
     async def _gen():  # type: ignore[return]
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         block = MagicMock(spec=TextBlock)
         block.text = text
         msg.content = [block]
@@ -379,6 +387,7 @@ def _result_message_gen(text: str, session_id: str | None = "sess-1") -> MagicMo
 
     async def _gen():  # type: ignore[return]
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         block = MagicMock(spec=TextBlock)
         block.text = text
         msg.content = [block]
@@ -482,6 +491,7 @@ async def test_dispatch_no_content_appended_before_is_error_raise() -> None:
         # AssistantMessage arrives first — but the is_error ResultMessage
         # should abort before the assistant text reaches callers.
         msg = MagicMock(spec=AssistantMessage)
+        msg.parent_tool_use_id = None
         block = MagicMock(spec=TextBlock)
         block.text = "partial text"
         msg.content = [block]
@@ -1123,3 +1133,20 @@ class TestPipelineSessionSettings:
         assert rotated.setting_sources == ["project"]
         assert rotated.env == {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
         assert rotated.system_prompt["append"].endswith("S")
+
+
+@pytest.mark.asyncio
+async def test_subagent_prose_is_not_part_of_the_response() -> None:
+    """E1 finding: a background subagent's own messages stream between turns."""
+    client = ScriptedClient(
+        [sdk_task_started("t1", "local_agent"), sdk_text("Waiting."), sdk_result()],
+        [
+            sdk_text("There are 3 files under src/.", parent_tool_use_id="toolu_1"),
+            sdk_task_notification("t1"),
+            sdk_text("DONE"),
+            sdk_result(injected=True),
+        ],
+    )
+    session = scripted_session(client)
+
+    assert await session.dispatch("p") == "Waiting.\nDONE"  # type: ignore[attr-defined]

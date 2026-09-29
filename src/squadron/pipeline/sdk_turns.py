@@ -12,6 +12,7 @@ from typing import Final
 
 from claude_agent_sdk import (
     TERMINAL_TASK_STATUSES,
+    AssistantMessage,
     ResultMessage,
     TaskNotificationMessage,
     TaskStartedMessage,
@@ -106,9 +107,12 @@ class DispatchTurns:
         """Record one message; return the session id it carries, if any."""
         self.progressed = True
         self.ledger.observe(msg)
+        # A subagent's own messages stream through too (parent_tool_use_id set); its
+        # report reaches the main agent as a tool result, so its prose is not ours.
+        is_subagent = isinstance(msg, AssistantMessage) and msg.parent_tool_use_id is not None
         session_id: str | None = None
         for translated in translate_sdk_message(msg, sender="pipeline"):
-            if translated.metadata.get("sdk_type") not in _NON_PROSE_TYPES:
+            if not is_subagent and translated.metadata.get("sdk_type") not in _NON_PROSE_TYPES:
                 self.parts.append(translated.content)
             sid = translated.metadata.get("session_id")
             if isinstance(sid, str) and sid:
