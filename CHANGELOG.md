@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A pipeline `review:` step over a split task breakdown now reviews every task file, not just the first. Each part saves as `part-N`, same as `sq review tasks`. The step reports the worst part's verdict, so a revise loop no longer skips when a later part falls short (#153).
+- `sq review tasks` no longer crashes when one part of a split breakdown gets an UNKNOWN verdict (#153).
+
 ## [0.16.0] - 20260928
 
 ### Added
