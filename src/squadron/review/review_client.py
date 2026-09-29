@@ -212,10 +212,9 @@ async def run_review_with_profile(
         # the template declares none, so no layer below has to interpret None.
         tool_exclude_patterns=list(template.tool_exclude_patterns or []),
         permission_mode=template.permission_mode,
-        # None (the default) preserves today's template-only behavior exactly, including
-        # for sq review code, whose code.yaml sets [project]. A caller may override per
-        # invocation (slice 382, design D8) — the safe value depends on what is being
-        # reviewed, not on the template, so code.yaml itself is never edited for this.
+        # A caller may override per invocation (slice 382, design D8) — the safe value
+        # depends on what is being reviewed, not on the template, so code.yaml itself is
+        # never edited for this. Otherwise the template's value (never None) applies.
         setting_sources=(
             setting_sources_override
             if setting_sources_override is not None

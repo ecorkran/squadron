@@ -10,6 +10,7 @@ from typing import cast
 
 import yaml
 
+from squadron.providers.sdk.settings import REVIEW_SETTING_SOURCES
 from squadron.review.models import TemplateValidationError
 
 
@@ -31,7 +32,8 @@ class ReviewTemplate:
     system_prompt: str
     allowed_tools: list[str]
     permission_mode: str
-    setting_sources: list[str] | None
+    # Never None: an absent or null key resolves to REVIEW_SETTING_SOURCES.
+    setting_sources: list[str]
     required_inputs: list[InputDef]
     optional_inputs: list[InputDef]
     hooks: dict[str, object] | None = None
@@ -92,6 +94,19 @@ def _resolve_builder(dotted_path: str) -> Callable[[dict[str, str]], str]:
     return func  # type: ignore[return-value]
 
 
+def _resolve_setting_sources(raw: object) -> list[str]:
+    """Absent or null → the review policy; an explicit list (``[]`` included) is kept.
+
+    With no ``--setting-sources`` flag the CLI loads user settings too (slice 932
+    D9), so a review never inherits ``None``.
+    """
+    if raw is None:
+        return list(REVIEW_SETTING_SOURCES)
+    if not isinstance(raw, list):
+        raise TemplateValidationError(f"setting_sources must be a list, got {raw!r}")
+    return [str(source) for source in cast(list[object], raw)]
+
+
 def load_template(path: Path) -> ReviewTemplate:
     """Load a ReviewTemplate from a YAML file."""
     with open(path, encoding="utf-8") as f:
@@ -137,7 +152,7 @@ def load_template(path: Path) -> ReviewTemplate:
         system_prompt=str(data["system_prompt"]),
         allowed_tools=list(data["allowed_tools"]),  # type: ignore[arg-type]
         permission_mode=str(data["permission_mode"]),
-        setting_sources=list(setting_src) if setting_src else None,  # type: ignore[arg-type]
+        setting_sources=_resolve_setting_sources(setting_src),
         required_inputs=required,
         optional_inputs=optional,
         hooks=dict(hooks_raw) if isinstance(hooks_raw, dict) else None,  # type: ignore[arg-type]

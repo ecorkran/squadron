@@ -111,7 +111,7 @@ class TestLoadTemplate:
         assert t.system_prompt.strip() == "You are a reviewer."
         assert t.allowed_tools == ["Read", "Glob"]
         assert t.permission_mode == "bypassPermissions"
-        assert t.setting_sources is None
+        assert t.setting_sources == ["project"]
         assert len(t.required_inputs) == 1
         assert t.required_inputs[0].name == "input"
         assert len(t.optional_inputs) == 1
@@ -541,3 +541,34 @@ def test_specimen_is_inside_a_fence(template_file: str) -> None:
     assert result.finding_scan is not None
     assert result.finding_scan.total > 0
     assert result.finding_scan.in_fences == result.finding_scan.total
+
+
+class TestSettingSourcesResolution:
+    """Slice 932 D10: a review never inherits None."""
+
+    @pytest.mark.parametrize(
+        "yaml_path",
+        sorted((Path(__file__).parents[2] / "src/squadron/data/templates").glob("*.yaml")),
+        ids=lambda p: p.stem,
+    )
+    def test_every_builtin_template_uses_project(self, yaml_path: Path) -> None:
+        assert load_template(yaml_path).setting_sources == ["project"]
+
+    @pytest.mark.parametrize(
+        ("line", "expected"),
+        [
+            ("", ["project"]),
+            ("setting_sources: null\n", ["project"]),
+            ("setting_sources: []\n", []),
+            ("setting_sources: [user, project]\n", ["user", "project"]),
+        ],
+        ids=["missing", "null", "empty-stays-empty", "explicit"],
+    )
+    def test_custom_template_resolution(self, tmp_path: Path, line: str, expected: list[str]) -> None:
+        text = VALID_YAML.replace("setting_sources: null\n", line)
+        assert load_template(_write_yaml(tmp_path, text)).setting_sources == expected
+
+    def test_non_list_value_is_rejected(self, tmp_path: Path) -> None:
+        text = VALID_YAML.replace("setting_sources: null", "setting_sources: project")
+        with pytest.raises(TemplateValidationError, match="setting_sources must be a list"):
+            load_template(_write_yaml(tmp_path, text))
