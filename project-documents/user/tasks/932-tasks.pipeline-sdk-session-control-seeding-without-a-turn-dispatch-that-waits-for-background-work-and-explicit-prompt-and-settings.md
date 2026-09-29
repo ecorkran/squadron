@@ -40,6 +40,12 @@ The design is [932-slice…md](../slices/932-slice.pipeline-sdk-session-control-
 - `SeedSource` StrEnum, used in the seeding log line.
 - `pipeline/text_tail.py::tail_text`, the one definition of the 400-character tail, shared by the leftover-turn warning and the flag.
 - `session.seeded`, used for the prompt-mode metadata.
+- The `source: SeedSource` parameter on `seed_context`.
+- The `base_env` parameter on `sdk_settings_options`.
+
+E2 folds all of these back into the design's API Contracts.
+
+**Commit cadence:** one commit after each implementation+test pair (the `Commit:` line in each `-T` task). Each part ends with a checkpoint task that runs format, lint, pyright, and the full suite.
 
 SDK facts, checked against claude-agent-sdk 0.2.160:
 
@@ -82,6 +88,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] An existing `append` is kept first, with the seed after a blank line.
   - [ ] `base.system_prompt` is unchanged after the call (not mutated).
   - [ ] SC: `uv run pytest tests/pipeline/test_sdk_session.py -q` passes.
+  - [ ] Commit: `feat: add system-prompt seed framing and seeded-options helper`
 
 - [ ] **A2 — `open_pipeline_session` builder** — Effort 2
   - [ ] In `sdk_session.py`, rename the dataclass field `options` → `base_options` and update every reference (`grep -rn "\.options\b" src/squadron/pipeline`).
@@ -91,25 +98,44 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 
 - [ ] **A2-T — Tests for A2**
   - [ ] Update `tests/pipeline/test_sdk_wiring.py`, `tests/cli/commands/test_run_pipeline_sdk.py`, and `tests/cli/commands/test_run_pipeline_lazy.py` wherever they patch `ClaudeAgentOptions`/`ClaudeSDKClient` construction in run.py/executor.py, so they patch the builder's module instead.
+  - [ ] Update every test that reads `session.options` to use `session.base_options` (`grep -rn "\.options\b" tests/pipeline tests/cli`).
   - [ ] New test: `open_pipeline_session(seed="S")` constructs the client with options whose `system_prompt["append"]` contains `S`, and it calls `connect` once.
   - [ ] SC: the wiring and run-pipeline test files pass.
+  - [ ] Commit: `refactor: build pipeline sessions through open_pipeline_session`
 
-- [ ] **A3 — Rotation via `_reconnect`; `unusable_reason`** (`sdk_session.py`) — Effort 3
-  - [ ] Add a field `unusable_reason: str | None = None`.
-  - [ ] Add `async def _reconnect(self, seed: str | None) -> None`. It disconnects the current client, builds `ClaudeSDKClient(options=_seeded_options(self.base_options, seed))`, resets `current_model`/`session_id`, and connects.
-    - On connect failure: set `unusable_reason = f"reconnect failed: {exc}"`, call `logger.exception`, and re-raise.
-    - On success: log at INFO `seeded fresh session via system prompt (%d chars, source: %s)`. `source` is a `SeedSource` StrEnum argument: `compact` / `resume` / `restore`. Do not pass free strings.
-  - [ ] `compact()`: capture the summary as today, then call `await self._reconnect(summary)` in place of disconnect + new client + `dispatch(frame…)`. Keep the `restore_model` handling.
-  - [ ] `seed_context(text, source)`: `await self._reconnect(text)`. The docstring states D3: it replaces the session.
-  - [ ] Add a private guard `_require_usable()` that raises `ProviderError(f"SDK session unusable: {self.unusable_reason}")`. It is the **first statement** of `dispatch()`, `compact()`, and `seed_context()`.
+- [ ] **A3 — Rotation via `_reconnect`** (`sdk_session.py`) — Effort 2
+  - [ ] Add `SeedSource(StrEnum)`: `COMPACT="compact"`, `RESUME="resume"`, `RESTORE="restore"`.
+  - [ ] Add `async def _reconnect(self, seed: str | None, source: SeedSource) -> None`. It disconnects the current client, builds `ClaudeSDKClient(options=_seeded_options(self.base_options, seed))`, resets `current_model`/`session_id`, and connects. On success it logs at INFO: `seeded fresh session via system prompt (%d chars, source: %s)`. Connect failure handling comes in A3b; let the exception propagate here.
+  - [ ] `compact()`: capture the summary as today, then call `await self._reconnect(summary, SeedSource.COMPACT)` in place of disconnect + new client + `dispatch(frame…)`. Keep the `restore_model` handling.
+  - [ ] `seed_context(text, source: SeedSource)`: `await self._reconnect(text, source)`. The docstring states D3: it replaces the session.
   - [ ] SC: `compact()` and `seed_context()` contain no call to `dispatch`/`query` on the new client.
 
-- [ ] **A3-T — Tests for A3** (`tests/pipeline/test_sdk_session.py`, with a fake client factory)
-  - [ ] `compact(summary="X")`: the old client is disconnected. The new client is built with `append` containing `X`. **The new client's `query` is never called.** The return value is `"X"`.
-  - [ ] `compact(instructions="I")` with no summary: the capture goes through the *old* client, and the new client gets the captured text as its seed.
-  - [ ] `seed_context("Y", …)`: rotates, the new client's options carry `Y`, and there is no `query`.
-  - [ ] Reconnect failure: `connect` raises on the new client. The first call re-raises, and `caplog` shows an ERROR record with the exception. `unusable_reason` is set. The next `dispatch("p")` raises `ProviderError` whose message contains `SDK session unusable` **without** calling `query`.
-  - [ ] SC: the file passes. The 20-line function guideline is respected (split helpers if needed).
+- [ ] **A3-T — Tests for A3, plus the rewrites A3 breaks**
+  - [ ] `tests/pipeline/test_sdk_session.py` (fake client factory):
+    - [ ] `compact(summary="X")`: the old client is disconnected, and the new client is built with `append` containing `X`. **The new client's `query` is never called.** The return value is `"X"`.
+    - [ ] `compact(instructions="I")` with no summary: the capture goes through the *old* client, and the new client gets the captured text as its seed.
+    - [ ] `seed_context("Y", SeedSource.RESTORE)`: rotates, the new client's options carry `Y`, there is no `query`, and an INFO record names `restore`.
+  - [ ] Rewrite the existing tests that asserted seeding went through `dispatch()`/`query`, so they assert on the new client's options and on the absence of `query`. This is the intended behavior change, not a regression. Files:
+    - `tests/pipeline/test_compact_integration.py`
+    - `tests/pipeline/test_compact_compose_integration.py`
+    - `tests/pipeline/test_sdk_session.py`
+    - `tests/pipeline/actions/test_dispatch_session.py`
+    - any emit-rotate test found with `grep -rln "rotate" tests/pipeline`
+  - [ ] SC: `uv run pytest tests/pipeline -q` passes, which confirms nothing in the pipeline tests is left red.
+  - [ ] Commit: `fix: seed rotated sessions via system prompt, never a turn`
+
+- [ ] **A3b — `unusable_reason` and the usable-session guard** (`sdk_session.py`) — Effort 1
+  - [ ] Add a field `unusable_reason: str | None = None`.
+  - [ ] In `_reconnect`, wrap the new client's `connect()`. On failure, set `unusable_reason = f"reconnect failed: {exc}"`, call `logger.exception`, and re-raise.
+  - [ ] Add `_require_usable()`, which raises `ProviderError(f"SDK session unusable: {self.unusable_reason}")`. It is the **first statement** of `dispatch()`, `compact()`, and `seed_context()`.
+  - [ ] SC: no stream read or query happens before the guard in any of the three methods.
+
+- [ ] **A3b-T — Tests for A3b, including the action-level and batch signals (D13)**
+  - [ ] `tests/pipeline/test_sdk_session.py`: `connect` raises on the new client. The first call re-raises, `caplog` has an ERROR record with the exception, and `unusable_reason` is set. The next `dispatch("p")` raises `ProviderError` containing `SDK session unusable`, **without** calling `query`.
+  - [ ] Action level (`tests/pipeline/actions/test_compact.py`, `tests/pipeline/actions/test_summary.py`): each of `compact`, `emit: [rotate]`, and `summary restore`, with a session whose reconnect fails, returns `ActionResult(success=False)` whose `error` holds the exception text or `EmitResult(ok=False)`.
+  - [ ] Batch level (`tests/pipeline/test_executor_each.py`): an `each` batch with a continue policy and three items. Item 1's rotate fails the reconnect. Items 2 and 3 are FLAGGED with a reason containing `SDK session unusable`, and their dispatch never reaches `query`.
+  - [ ] SC: these tests pass.
+  - [ ] Commit: `fix: mark a session unusable after a failed reconnect`
 
 - [ ] **A4 — Resume seeding, including the lazy session** (`pipeline/executor.py`) — Effort 2
   - [ ] Around `executor.py:488`, compute `resume_seed: str | None` from `active_compact_summary_for_resume` **regardless of** whether `sdk_session` exists. Keep the `FileNotFoundError` debug path.
@@ -121,7 +147,9 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] Resume with a connected session: `seed_context` is called once with the summary text.
   - [ ] Resume under a lazy session: `open_pipeline_session` (or `_connect_lazy_session`) receives `seed=<summary>`. **This case fails against today's code.** Confirm that by running it before A4 if convenient.
   - [ ] Resume with no applicable summary: no seed is passed on either path.
-  - [ ] SC: the relevant tests in `tests/cli/commands/test_run_pipeline_lazy.py` / `tests/pipeline/test_sdk_integration.py` pass.
+  - [ ] Rewrite the existing resume-seeding assertions in `tests/cli/commands/test_run_pipeline.py` and `tests/pipeline/test_sdk_integration.py` that expected `seed_context(text)` with one argument or a seeding `dispatch`.
+  - [ ] SC: `uv run pytest tests/cli/commands tests/pipeline -q` passes.
+  - [ ] Commit: `fix: seed resumed runs, including lazily connected sessions`
 
 - [ ] **A5 — `summary restore` framing and docs** — Effort 1
   - [ ] `pipeline/actions/summary.py:151-154`: remove the `frame_summary_for_seed` import and call. Pass the raw `summary` and `SeedSource.RESTORE` to `seed_context`.
@@ -132,12 +160,12 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 - [ ] **A5-T — Tests for A5** (`tests/pipeline/actions/test_summary.py`, `tests/pipeline/test_summary_integration.py`)
   - [ ] Restore passes the raw summary. The framing prefix appears **exactly once** in the resulting seeded options.
   - [ ] SC: the files pass.
+  - [ ] Commit: `fix: frame restored summaries once; restore replaces the session`
 
-- [ ] **A6 — Update the remaining seeding tests and commit Part A**
-  - [ ] Rewrite the tests that assert seeding went through `dispatch()`/`query` so they assert on the new client's options and on the *absence* of `query`. Candidate files: `test_compact_integration.py`, `test_compact_compose_integration.py`, `tests/pipeline/actions/test_dispatch_session.py`, and `tests/cli/commands/test_run_pipeline.py`. This change is the intended behavior change, not a regression.
+- [ ] **A6 — Part A checkpoint**
   - [ ] Run `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`.
-  - [ ] SC: all green apart from any baseline failures recorded in T0.2.
-  - [ ] Commit: `fix: seed pipeline sessions via system prompt, never a turn`
+  - [ ] SC: all green apart from any baseline failures recorded in T0.2. If anything outside the tasks above is red, fix it here and name it in the commit body.
+  - [ ] Commit any formatting fixes: `style: format Part A`. Skip this if there are no changes.
 
 ---
 
@@ -150,23 +178,38 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 - [ ] **B1-T — Test** (`tests/config/test_keys.py`)
   - [ ] The key exists with type `int` and default `1800`. `set_config` with `"60"` coerces to `60`.
   - [ ] SC: the file passes.
+  - [ ] Commit: `feat: add pipeline.background_idle_timeout_s config key`
 
-- [ ] **B2 — Ledger and origin-aware completion in `dispatch()`** (`sdk_session.py`) — Effort 3
+- [ ] **B2a — Background ledger and own-result helper** (`sdk_session.py`) — Effort 1
   - [ ] Module constant `WAITED_TASK_TYPES: Final = frozenset({"local_agent", "local_workflow"})`, with a one-line comment citing the SDK's `_internal/query.py` `DEFERRING_TASK_TYPES`, which is private and redeclared on purpose.
-  - [ ] Put the ledger logic in a small helper, e.g. `_BackgroundLedger`, with:
+  - [ ] Add a `_BackgroundLedger` class with:
     - `observe(msg)`: add on `TaskStartedMessage` whose `task_type ∈ WAITED_TASK_TYPES`. Discard on `TaskNotificationMessage`, or on a `TaskUpdatedMessage` whose status is in `TERMINAL_TASK_STATUSES`.
-    - `descriptions()`, used for logs.
-  - [ ] Add a helper `_is_own_result(msg: ResultMessage) -> bool`: `origin is None or origin.get("kind") == "human"`.
+    - `active` (bool), `seen_count` (distinct ids ever tracked), `active_ids()`, and `descriptions()`.
+  - [ ] Add `_is_own_result(msg: ResultMessage) -> bool`: `origin is None or origin.get("kind") == "human"`.
+  - [ ] SC: both are pure and have no client dependency.
+
+- [ ] **B2a-T — Tests for B2a** (`tests/pipeline/test_sdk_session.py`)
+  - [ ] Ledger parametrized cases:
+    - `local_agent` start → active.
+    - `local_bash` start → not active.
+    - Notification clears.
+    - `TaskUpdated(killed)` clears.
+    - `TaskUpdated(running)` does not clear.
+    - A duplicate terminal is idempotent.
+  - [ ] `_is_own_result`: `None` → True, `{"kind": "human"}` → True, `{"kind": "task-notification"}` → False.
+  - [ ] Commit: `feat: add background-agent ledger for session dispatch`
+
+- [ ] **B2b — Origin-aware completion in `dispatch()`** (`sdk_session.py`) — Effort 3
   - [ ] Restructure the read loop in `dispatch()`. Keep the existing rate-limit retry semantics exactly as they are.
     - After each `ResultMessage`: if it is our own result, set `own_result_seen`.
     - Return when `own_result_seen` and the ledger is empty.
     - Otherwise call `receive_response()` again to read the next turn.
     - On the first result seen with the ledger non-empty, log at INFO once: `dispatch: turn ended with %d background agent(s) running; waiting: %s`.
-  - [ ] Set `self.background_tasks_waited` to the number of distinct tracked task ids seen in this dispatch.
+  - [ ] Set `self.background_tasks_waited = ledger.seen_count`, using a fresh ledger per dispatch.
   - [ ] If `receive_response()` finishes a pass with no `ResultMessage` at all (the iterator ended), raise `ProviderError(f"stream ended before the dispatch's result; {n} background agent(s) still running: {descriptions}")`.
   - [ ] SC: text from the follow-up turn is joined into the returned response. `dispatch()` itself stays readable: extract helpers to keep each function ≈ 50 lines.
 
-- [ ] **B2-T — Tests for B2** (`tests/pipeline/test_sdk_session.py`, scripted fake client whose `receive_response()` yields one scripted list per call)
+- [ ] **B2b-T — Tests for B2b** (`tests/pipeline/test_sdk_session.py`, scripted fake client whose `receive_response()` yields one scripted list per call)
   - [ ] `local_agent` started → own result → (next call) notification + assistant text + injected result → returns with **both** turns' text. `background_tasks_waited == 1`, and there is an INFO record `waiting`.
   - [ ] The terminal signal is only `TaskUpdatedMessage(status="killed")`: the dispatch still completes.
   - [ ] A `local_bash` task started, then own result: returns immediately with `background_tasks_waited == 0`.
@@ -174,10 +217,11 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] The stream ends with no result while an agent is tracked: raises `ProviderError` naming the agent's description.
   - [ ] The existing rate-limit retry tests still pass unchanged.
   - [ ] SC: the file passes.
+  - [ ] Commit: `fix: wait for background agents before a session dispatch returns`
 
 - [ ] **B3 — Drop leftover injected turns** (`sdk_session.py`) — Effort 2
   - [ ] While `own_result_seen` is false, an injected (non-own) `ResultMessage` means everything read so far in this dispatch belongs to the previous step (D6).
-  - [ ] Clear the collected response parts. Log at WARNING: `dispatch: discarded a background follow-up turn left over from the previous dispatch; its final text: "…%s"`, using the last `FINAL_TEXT_TAIL_CHARS` characters of the discarded text with whitespace collapsed.
+  - [ ] Clear the collected response parts. Log at WARNING: `dispatch: discarded a background follow-up turn left over from the previous dispatch; its final text: "%s"`, filled with `tail_text(discarded)`. `tail_text` adds the leading `…` itself, so do not add another.
   - [ ] `FINAL_TEXT_TAIL_CHARS = 400` and the tail formatter are defined **once**. Put both in a shared module so B6 and this task use the same definition, e.g. `squadron/pipeline/text_tail.py` with `tail_text(text: str) -> str`. `tail_text` collapses whitespace, keeps the last 400 characters, prefixes `…` when it truncated, and returns `(empty response)` for empty input.
   - [ ] SC: the leftover text is absent from the return value.
 
@@ -185,6 +229,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] Injected assistant text + injected result, then our own assistant text + own result: the return value holds only our text, and a WARNING carries the leftover tail.
   - [ ] Unit tests for `tail_text`: empty input, short input (no `…`), long input (truncated with `…`), and whitespace collapse.
   - [ ] SC: passes.
+  - [ ] Commit: `fix: drop leftover background follow-up turns from the next dispatch`
 
 - [ ] **B4 — Idle timeout while waiting** (`sdk_session.py`) — Effort 3
   - [ ] Read `pipeline.background_idle_timeout_s` through `get_typed_config(…, int)` **once per dispatch, only when entering the waiting state**. Take `cwd` from `self.base_options.cwd`.
@@ -202,6 +247,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] `stop_task` raises for the first of two ids: an ERROR record for id 1, `stop_task` is still called for id 2, and the dispatch returns normally.
   - [ ] A slow foreground turn (a delay before our own result) longer than `idle_s` still completes. No timer applies.
   - [ ] SC: passes. No real sleeps longer than 0.2s.
+  - [ ] Commit: `fix: bound the background-agent wait by idle time`
 
 - [ ] **B5 — Session-path metadata** (`pipeline/actions/dispatch.py::_dispatch_via_session`) — Effort 1
   - [ ] Add `background_tasks_waited` and `background_tasks_stopped` from the session to the returned `ActionResult.metadata`.
@@ -209,6 +255,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 
 - [ ] **B5-T — Test** (`tests/pipeline/actions/test_dispatch_session.py`)
   - [ ] A fake session with `background_tasks_waited=2`, `background_tasks_stopped=0` produces metadata with both values.
+  - [ ] Commit: `feat: record background task counts in session dispatch metadata`
 
 - [ ] **B6 — Flag tail on the post-condition** (`events/builtin/dispatch_artifact.py`) — Effort 1
   - [ ] In `DispatchArtifactAction.execute`, when `error` is not None, append `f'; agent\'s final text: "{tail_text(response)}"'`, where `response = str(context.result.outputs.get("response", ""))`.
@@ -219,10 +266,11 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] `tests/pipeline/test_executor.py`: a phase dispatch with no artifact and response `"…the research agent is still running."`. The failed result's error ends with that tail.
   - [ ] `tests/pipeline/test_executor_each.py`: the same inside an `each` batch. The batch report record's failure reason and the FLAGGED warning both contain `agent's final text:`.
   - [ ] SC: `uv run pytest tests/pipeline/test_executor.py tests/pipeline/test_executor_each.py -k final_text -q` passes.
+  - [ ] Commit: `fix: include the agent's final text in dispatch post-condition flags`
 
-- [ ] **B7 — Commit Part B**
+- [ ] **B7 — Part B checkpoint**
   - [ ] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
-  - [ ] Commit: `fix: wait for background agents before a session dispatch returns`
+  - [ ] Commit any formatting fixes: `style: format Part B`. Skip this if there are no changes.
 
 
 ## Part D — Explicit settings (#156)
@@ -239,6 +287,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] `get_typed_config(key, bool)` returns a bool, and a non-bool raises.
   - [ ] The CLI set/get round-trip for `pipeline.auto_memory`.
   - [ ] SC: `uv run pytest tests/config -q` passes.
+  - [ ] Commit: `feat: support bool config values and add pipeline.auto_memory`
 
 - [ ] **D2 — `providers/sdk/settings.py`** (new) — Effort 1
   - [ ] Add `PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)` and `REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)`, each with a one-line comment saying which paths it governs. They are separate on purpose.
@@ -250,6 +299,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] `auto_memory=False` → env contains the disable var. `True` → env lacks it.
   - [ ] Existing `base_env` keys survive the merge, and the input mapping is unchanged.
   - [ ] `setting_sources` is returned as a new list.
+  - [ ] Commit: `feat: add SDK settings policy module`
 
 - [ ] **D3 — `AgentConfig.auto_memory` and the provider** — Effort 2
   - [ ] `core/models.py`: add `auto_memory: bool = False` to `AgentConfig`, with a one-line comment: "SDK agents: True only on pipeline paths (pipeline.auto_memory)".
@@ -264,6 +314,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] `AgentConfig(auto_memory=False, setting_sources=["project"])` → options env has the disable var. `auto_memory=True` → it does not.
   - [ ] The PR isolation tests still pass unchanged: `[]` plus the disable var.
   - [ ] SC: both files pass.
+  - [ ] Commit: `refactor: drive SDK auto-memory from AgentConfig.auto_memory`
 
 - [ ] **D4 — Pipeline session settings** (`pipeline/sdk_session.py::open_pipeline_session`) — Effort 1
   - [ ] Merge `sdk_settings_options(PIPELINE_SETTING_SOURCES, auto_memory=<pipeline.auto_memory read via get_typed_config(..., bool, cwd)>)` into the base options.
@@ -273,6 +324,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 - [ ] **D4-T — Tests** (`tests/pipeline/test_sdk_session.py`)
   - [ ] With the config patched to `True`: `setting_sources == ["project"]` and the env lacks the disable var. With `False`: the env has it.
   - [ ] After `compact()`, the new client's options still carry the same `setting_sources` and env.
+  - [ ] Commit: `fix: set explicit settings sources on pipeline sessions`
 
 - [ ] **D5 — One-shot dispatch settings** (`pipeline/actions/dispatch.py::one_shot_dispatch_with_telemetry`) — Effort 1
   - [ ] SDK path: `setting_sources=list(PIPELINE_SETTING_SOURCES)`, and `auto_memory` from `pipeline.auto_memory` (use the `cwd` argument when given, else `"."`).
@@ -282,6 +334,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 - [ ] **D5-T — Tests** (`tests/pipeline/actions/test_dispatch.py`)
   - [ ] SDK dispatch → `AgentConfig.setting_sources == ["project"]`, and `auto_memory` follows the patched config (both values).
   - [ ] Non-SDK dispatch → `setting_sources is None`, `auto_memory is False`.
+  - [ ] Commit: `fix: set explicit settings sources on one-shot SDK dispatch`
 
 - [ ] **D6 — Review templates and loader** — Effort 2
   - [ ] Change `setting_sources: null` → `setting_sources: [project]` in each of:
@@ -302,6 +355,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] A custom template with the key missing → `["project"]`. With `null` → `["project"]`. With `[]` → `[]`.
   - [ ] Update any existing assertion that expected `None` for slice/tasks/judge templates.
   - [ ] SC: `uv run pytest tests/review -q` passes.
+  - [ ] Commit: `fix: load review templates with project settings sources`
 
 - [ ] **D7 — Per-path policy test** (`tests/providers/sdk/test_settings_policy.py`, new) — Effort 2
   - [ ] One parametrized test over the D10 table. Each case builds that path's `AgentConfig` or options through its real builder (with collaborators faked) and asserts `setting_sources` and `auto_memory`:
@@ -313,10 +367,11 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
     - [ ] audit (`metrology/audit.py`) → `["project"]`, `False`
     - [ ] PR composer (`pr/composer.py`) → `[]`, `False`
   - [ ] SC: the test passes, and no case asserts `None`.
+  - [ ] Commit: `test: assert settings policy per SDK path`
 
-- [ ] **D8 — Commit Part D**
+- [ ] **D8 — Part D checkpoint**
   - [ ] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
-  - [ ] Commit: `fix: set SDK settings sources explicitly on every automated path`
+  - [ ] Commit any formatting fixes: `style: format Part D`. Skip this if there are no changes.
 
 ---
 
@@ -331,6 +386,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] SDK without → `(True, None)`.
   - [ ] Non-SDK with `"X"` → `(False, "X")`, unchanged.
   - [ ] `sq dispatch --system-prompt X` on an SDK model → `(True, "X")`.
+  - [ ] Commit: `fix: append dispatch system_prompt to the Claude Code preset`
 
 - [ ] **C2 — Session path rejects a step `system_prompt`** (`dispatch.py::_dispatch_via_session`) — Effort 1
   - [ ] Next to the existing `allowed_tools` guard, add: if `context.params.get("system_prompt")` is truthy, return `ActionResult(success=False, …)` with an error stating that a persistent session's system prompt is fixed at connect and suggesting a non-SDK model or removing `system_prompt`. Match the `allowed_tools` wording pattern.
@@ -338,6 +394,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 
 - [ ] **C2-T — Test** (`tests/pipeline/actions/test_dispatch_session.py`)
   - [ ] A step with `system_prompt` on the session path fails with that message, and the session's `dispatch` is never called.
+  - [ ] Commit: `fix: reject a step system_prompt on the SDK session path`
 
 - [ ] **C3 — `SystemPromptMode` and describers** (`core/models.py`) — Effort 2
   - [ ] Add the `SystemPromptMode(StrEnum)`: `PRESET="preset"`, `PRESET_APPEND="preset+append"`, `CUSTOM="custom"`, `EMPTY="empty"`.
@@ -356,6 +413,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
 - [ ] **C3-T — Tests** (`tests/test_models.py`)
   - [ ] Parametrize `describe_system_prompt` over the four rows plus `instructions=""`.
   - [ ] Parametrize `describe_setting_sources` over non-SDK, `[]`, `["project"]`, `["user", "project"]`, and SDK `None`.
+  - [ ] Commit: `feat: add SystemPromptMode and settings describers`
 
 - [ ] **C4 — `ReviewResult` carries the mode and settings** — Effort 2
   - [ ] `review/models.py`: replace `default_system_prompt_preset_used: bool` with `system_prompt_mode: SystemPromptMode | None = None`. Add `setting_sources: str | None = None`, holding the rendered string from `describe_setting_sources`.
@@ -368,6 +426,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] An SDK review → `system_prompt_mode == PRESET_APPEND` and `setting_sources == "project"`.
   - [ ] A non-SDK review → `CUSTOM` and `"n/a (non-SDK)"`.
   - [ ] A PR review (override `[]`) → `setting_sources == "none"`.
+  - [ ] Commit: `feat: record prompt mode and settings on review results`
 
 - [ ] **C5 — Run Digest and JSON output** (`review/persistence.py::_run_digest_lines`, `review/models.py::to_dict`) — Effort 2
   - [ ] Add two always-on digest lines after `Output budget`:
@@ -382,6 +441,7 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] The JSON output contains both keys.
   - [ ] Regenerate or update the golden fixtures that contain a full `### Run Digest` block (`tests/review/fixtures/clean_pass_artifact.md` and any others the suite flags). Diff them, and confirm that the only change is the two new lines.
   - [ ] SC: `uv run pytest tests/review tests/cli -q` passes.
+  - [ ] Commit: `feat: show prompt mode and settings in the Run Digest and JSON`
 
 - [ ] **C6 — Dispatch and summary step metadata** — Effort 1
   - [ ] One-shot dispatch (`dispatch.py::_dispatch_via_agent` / `one_shot_dispatch_with_telemetry`): add `system_prompt_mode`, `setting_sources` (the rendered string), and `auto_memory` to `ActionResult.metadata`, derived from the built `AgentConfig`. Return them alongside the telemetry. Do not recompute them.
@@ -393,16 +453,17 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [ ] `test_dispatch.py`: SDK one-shot with `system_prompt` → `preset+append`, `project`, and `auto_memory` equal to the config value.
   - [ ] `test_dispatch_session.py`: an unseeded session → `preset`. A seeded session → `preset+append`.
   - [ ] A summary one-shot test asserts `empty` and `none`.
+  - [ ] Commit: `feat: record prompt mode and settings in dispatch and summary metadata`
 
-- [ ] **C7 — Commit Part C**
+- [ ] **C7 — Part C checkpoint**
   - [ ] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
-  - [ ] Commit: `fix: append step system prompts to the preset and record prompt/settings`
+  - [ ] Commit any formatting fixes: `style: format Part C`. Skip this if there are no changes.
 
 ---
 
 ## Close-out
 
-- [ ] **E1 — Live verification** (design § Verification Walkthrough) — Effort 2
+- [ ] **E1 — Live verification** (design § Verification Walkthrough) — Effort 2 — **PM-assisted**: it needs live model calls and a scratch repo. The agent runs the steps and the PM confirms the observations. It is not an autonomous checklist item.
   - [ ] Step 2 (seeding): run `/tmp/seed-check.yaml` from a scratch git repo. The second session's transcript has the third step's prompt as its first `user` entry, the reply quotes the `item-reset` line, and there are no new commits.
   - [ ] Step 3 (background wait): the INFO `waiting` line appears, `bg-check.txt` exists after the step, and `background_tasks_waited: 1` appears in `sq run --status latest`. Also record **whether `task_progress` messages arrived between turns** (D5: this decides whether the idle timer acts per idle period or as a total cap).
   - [ ] Step 5 (recording): `sq review slice 932 --model sonnet -v`. The digest shows `System prompt: preset+append` and `Settings sources: project`, and `--output json` has both keys.
@@ -415,12 +476,17 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
     - [ ] Dispatch waits for background agents, and flagged items show the agent's last words (#163).
     - [ ] Dispatch `system_prompt` is appended to the Claude Code prompt (#155).
     - [ ] Pipeline runs and all reviews load project settings only: user CLAUDE.md and user settings no longer apply. New settings `pipeline.auto_memory` and `pipeline.background_idle_timeout_s` (#156).
+  - [ ] Design § API Contracts: bring it in line with what was built. At minimum:
+    - `seed_context(text, source: SeedSource)`
+    - `sdk_settings_options(..., base_env=...)`
+    - `SeedSource`, `seeded`, `unusable_reason`, `background_tasks_stopped`
+    - `pipeline/text_tail.py::tail_text` (which replaces the design's `FINAL_TEXT_TAIL_CHARS` in `dispatch_artifact.py`)
   - [ ] DEVLOG: an implementation entry, with details and any deviations from the design.
-  - [ ] Design `status: complete`, both task files `status: complete`, and `projectState` updated.
+  - [ ] Design `status: complete`, task file `status: complete`, and `projectState` updated.
   - [ ] Check off slice plan entry 30 in `900-slices.maintenance-and-refactoring.md`.
   - [ ] Commit: `docs: close out slice 932`
 
-- [ ] **E3 — Code review gate and merge**
+- [ ] **E3 — Code review gate and merge** — **PM-gated**: the PM runs the review. The agent then addresses the findings and merges.
   - [ ] The Project Manager runs the code review (`sq review code 932 --model <model>`). Do not run it without an explicit `--model`.
   - [ ] Address the findings in the review file's `## Response` section, fix them, and commit.
   - [ ] Re-read `cf config get git.integration_branch` (empty → `main`). Then `git checkout main && git merge 932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`.
