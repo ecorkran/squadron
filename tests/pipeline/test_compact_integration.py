@@ -202,7 +202,9 @@ async def test_resume_seeds_from_compact_summary(tmp_path: Path) -> None:
     finally:
         state_mod.StateManager = original  # type: ignore[misc]
 
-    session.seed_context.assert_awaited_once_with("prior summary text")
+    from squadron.pipeline.sdk_session import SeedSource
+
+    session.seed_context.assert_awaited_once_with("prior summary text", SeedSource.RESUME)
 
 
 @pytest.mark.asyncio

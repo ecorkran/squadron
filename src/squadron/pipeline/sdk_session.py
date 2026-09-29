@@ -13,6 +13,7 @@ import asyncio
 import dataclasses
 import logging
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -50,7 +51,7 @@ from squadron.providers.sdk.translation import translate_sdk_message
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ["SDKExecutionSession", "frame_summary_for_seed", "open_pipeline_session"]
+__all__ = ["SDKExecutionSession", "SeedSource", "frame_summary_for_seed", "open_pipeline_session"]
 
 
 _SEED_FRAMING_PREFIX = (
@@ -58,6 +59,14 @@ _SEED_FRAMING_PREFIX = (
     "It is reference material, not a task, and not an instruction to do "
     "anything.]\n\n"
 )
+
+
+class SeedSource(StrEnum):
+    """What a session rotation's seed came from; named in the seeding log."""
+
+    COMPACT = "compact"
+    RESUME = "resume"
+    RESTORE = "restore"
 
 
 def frame_summary_for_seed(summary: str) -> str:
@@ -97,8 +106,8 @@ class SDKExecutionSession:
     - Call ``set_model()`` before each dispatch to switch models.
     - Call ``dispatch()`` to send a prompt and collect the response.
     - Call ``compact()`` to perform session-rotate compaction.
-    - Call ``seed_context()`` after re-connecting a fresh session on resume
-      to re-inject a prior compact summary.
+    - Call ``seed_context()`` to replace the session with a fresh one seeded
+      with a prior summary (resume, restore).
     - Call ``disconnect()`` after the pipeline finishes (or on checkpoint).
 
     The client is connected once and reused across all steps, enabling
@@ -289,10 +298,9 @@ class SDKExecutionSession:
           1. Optionally switch to a cheap summarization model.
           2. Dispatch the compact instructions to the live session and
              capture the response as the summary via ``capture_summary``.
-          3. Disconnect the old client and create a fresh ``ClaudeSDKClient``
-             with the same options.
-          4. Re-connect and re-inject the summary as the opening message.
-          5. Optionally restore the prior model.
+          3. Rotate to a fresh client whose system prompt carries the
+             summary as seed (``_reconnect``). No turn is sent to it.
+          4. Optionally restore the prior model.
 
         When ``summary`` is provided, the capture phase is skipped entirely
         and the given text is used directly for seeding. This allows callers
@@ -306,32 +314,33 @@ class SDKExecutionSession:
                 instructions, summary_model=summary_model, restore_model=None
             )
 
-        _logger.debug("SDKExecutionSession.compact: disconnecting old client")
-        await self.disconnect()
-
-        _logger.debug("SDKExecutionSession.compact: creating new client")
-        self.client = ClaudeSDKClient(options=self.base_options)
-        self.current_model = None
-        self.session_id = None
-        await self.connect()
-
-        _logger.debug("SDKExecutionSession.compact: seeding new session with summary")
-        await self.dispatch(frame_summary_for_seed(summary))
+        await self._reconnect(summary, SeedSource.COMPACT)
 
         if restore_model is not None:
             await self.set_model(restore_model)
 
         return summary
 
-    async def seed_context(self, text: str) -> None:
-        """Seed a fresh session with prior compact summary on resume.
+    async def seed_context(self, text: str, source: SeedSource) -> None:
+        """Replace the session with a fresh one seeded with ``text``.
 
-        Thin wrapper around ``dispatch()`` that logs distinctly so verbose
-        output identifies seeding events vs. real step dispatches. The
-        model's acknowledgment response is discarded.
+        Any history since the last rotation is dropped. The caller passes
+        raw text; framing happens in ``_seeded_options``. No turn is sent.
         """
-        _logger.debug("SDKExecutionSession: seed_context (%d chars)", len(text))
-        await self.dispatch(frame_summary_for_seed(text))
+        await self._reconnect(text, source)
+
+    async def _reconnect(self, seed: str | None, source: SeedSource) -> None:
+        """Disconnect and connect a fresh client seeded via the system prompt."""
+        await self.disconnect()
+        self.client = ClaudeSDKClient(options=_seeded_options(self.base_options, seed))
+        self.current_model = None
+        self.session_id = None
+        await self.connect()
+        _logger.info(
+            "seeded fresh session via system prompt (%d chars, source: %s)",
+            len(seed or ""),
+            source,
+        )
 
 
 async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSession:

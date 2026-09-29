@@ -487,6 +487,7 @@ async def execute_pipeline(
     # Resume: seed SDK session with most recent applicable compact summary
     if start_from is not None and sdk_session is not None:
         try:
+            from squadron.pipeline.sdk_session import SeedSource
             from squadron.pipeline.state import StateManager
 
             _state_mgr = StateManager(runs_dir=runs_dir)
@@ -503,7 +504,7 @@ async def execute_pipeline(
                         _start_idx,
                         _active.key,
                     )
-                    await sdk_session.seed_context(_active.text)
+                    await sdk_session.seed_context(_active.text, SeedSource.RESUME)
         except FileNotFoundError:
             _logger.debug("executor: no state file for resume seeding; skipping")
 

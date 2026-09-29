@@ -148,10 +148,12 @@ class SummaryAction:
             )
 
         if context.sdk_session is not None:
-            from squadron.pipeline.sdk_session import frame_summary_for_seed
+            from squadron.pipeline.sdk_session import SeedSource, frame_summary_for_seed
 
             try:
-                await context.sdk_session.seed_context(frame_summary_for_seed(summary))
+                await context.sdk_session.seed_context(
+                    frame_summary_for_seed(summary), SeedSource.RESTORE
+                )
             except Exception as exc:
                 _logger.exception(
                     "SummaryAction restore: seed_context failed in step %s",

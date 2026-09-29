@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -519,9 +520,11 @@ class TestCompactSessionRotate:
 
         assert result == "SUMMARY"
         old.set_model.assert_not_called()
-        client_ctor.assert_called_once_with(options=session.base_options)
+        seeded = client_ctor.call_args.kwargs["options"]
+        assert seeded.system_prompt["append"].endswith("SUMMARY")
         old.disconnect.assert_called_once()
         new.connect.assert_called_once()
+        new.query.assert_not_called()
         assert session.client is new
 
     @pytest.mark.asyncio
@@ -556,37 +559,37 @@ class TestCompactSessionRotate:
         assert session.current_model == "sonnet-id"
 
     @pytest.mark.asyncio
-    async def test_compact_dispatches_instructions_then_summary(self) -> None:
+    async def test_compact_captures_on_old_client_and_seeds_new_one(self) -> None:
         old = _make_client()
         old.receive_response.return_value = _result_message_gen("SUMMARY TEXT")
         new = _make_client()
-        new.receive_response.return_value = _result_message_gen("ack")
         session = _make_session(old)
 
-        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new) as client_ctor:
             result = await session.compact(instructions="Keep X")
 
         from squadron.pipeline.sdk_session import frame_summary_for_seed
 
         assert result == "SUMMARY TEXT"
         old.query.assert_called_once_with("Keep X")
-        new.query.assert_called_once_with(frame_summary_for_seed("SUMMARY TEXT"))
+        seeded = client_ctor.call_args.kwargs["options"]
+        assert seeded.system_prompt["append"] == frame_summary_for_seed("SUMMARY TEXT")
+        new.query.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_compact_with_pre_made_summary_skips_capture(self) -> None:
         """When summary= provided, old client is NOT queried for instructions."""
         old = _make_client()
         new = _make_client()
-        new.receive_response.return_value = _result_message_gen("ack")
         session = _make_session(old)
 
-        from squadron.pipeline.sdk_session import frame_summary_for_seed
-
-        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=new) as client_ctor:
             result = await session.compact(instructions="x", summary="pre-made")
 
         old.query.assert_not_called()
-        new.query.assert_called_once_with(frame_summary_for_seed("pre-made"))
+        new.query.assert_not_called()
+        old.disconnect.assert_called_once()
+        assert client_ctor.call_args.kwargs["options"].system_prompt["append"].endswith("pre-made")
         assert result == "pre-made"
 
     @pytest.mark.asyncio
@@ -621,15 +624,29 @@ class TestCompactSessionRotate:
 
 
 @pytest.mark.asyncio
-async def test_seed_context_calls_dispatch_once() -> None:
-    client = _make_client()
-    client.receive_response.return_value = _result_message_gen("ack")
-    session = _make_session(client)
-    from squadron.pipeline.sdk_session import frame_summary_for_seed
+async def test_seed_context_rotates_without_a_turn(caplog: pytest.LogCaptureFixture) -> None:
+    from squadron.pipeline.sdk_session import SeedSource
 
-    result = await session.seed_context("prior summary")
+    old = _make_client()
+    new = _make_client()
+    session = _make_session(old)
+
+    with (
+        caplog.at_level(logging.INFO, logger=_MOD),
+        patch(f"{_MOD}.ClaudeSDKClient", return_value=new) as client_ctor,
+    ):
+        result = await session.seed_context("Y", SeedSource.RESTORE)
+
     assert result is None
-    client.query.assert_called_once_with(frame_summary_for_seed("prior summary"))
+    old.disconnect.assert_called_once()
+    assert client_ctor.call_args.kwargs["options"].system_prompt["append"].endswith("Y")
+    old.query.assert_not_called()
+    new.query.assert_not_called()
+    assert session.client is new
+    assert any(
+        "seeded fresh session via system prompt" in r.getMessage() and "restore" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 # ---------------------------------------------------------------------------
