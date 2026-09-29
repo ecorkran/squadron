@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -302,3 +303,78 @@ class TestUnusableSessionInBatch:
         assert "SDK session unusable" in reasons["3"]
         assert "item 2 FLAGGED: SDK session unusable" in caplog.text
         fresh_ctor.return_value.query.assert_not_called()
+
+
+class TestFinalTextInBatchFlags:
+    @pytest.mark.asyncio
+    async def test_flag_reason_carries_agents_final_text(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        tmp_path: Path,
+    ) -> None:
+        """Slice 932 D7: a phase dispatch with no artifact inside an ``each``
+        is flagged with the agent's last words in the report and the warning."""
+        from unittest.mock import AsyncMock
+
+        from squadron.pipeline.state import StateManager
+        from tests.pipeline.conftest import phase_artifact_cf_client
+
+        caplog.set_level(logging.WARNING, logger="squadron.pipeline.executor")
+
+        async def source(*_: object) -> list[dict[str, object]]:
+            return _items("204")
+
+        monkeypatch.setitem(SOURCE_REGISTRY, ("test", "items"), source)
+        response = "Launched a research agent; it is still running."
+        dispatch = MagicMock()
+        dispatch.execute = AsyncMock(
+            return_value=ActionResult(
+                success=True, action_type="dispatch", outputs={"response": response}
+            )
+        )
+        cf_op = MagicMock()
+        cf_op.execute = AsyncMock(
+            return_value=ActionResult(success=True, action_type="cf-op", outputs={})
+        )
+        commit = MagicMock()
+        commit.execute = AsyncMock(
+            return_value=ActionResult(success=True, action_type="commit", outputs={})
+        )
+        definition = PipelineDefinition(
+            name="each-final-text",
+            description="test",
+            params={},
+            steps=[
+                StepConfig(
+                    step_type="each",
+                    name="slices",
+                    config={
+                        "source": "test.items()",
+                        "as": "item",
+                        "on_item_failure": "continue",
+                        "steps": [{"design": {"phase": 4, "slice": "{item.index}", "model": "opus"}}],
+                    },
+                )
+            ],
+        )
+        run_id = StateManager(runs_dir=tmp_path).init_run("each-final-text", {})
+
+        result = await execute_pipeline(
+            definition,
+            {"_project": "test"},
+            resolver=MagicMock(),
+            cf_client=phase_artifact_cf_client(204, "204-slice.stub.md", "204-tasks.stub.md"),
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry={"cf-op": cf_op, "dispatch": dispatch, "commit": commit},
+        )
+
+        report = result.step_results[0].batch_report
+        assert report is not None
+        reason = report.records[0].reason or ""
+        assert report.records[0].outcome is ItemOutcome.FLAGGED
+        assert f'agent\'s final text: "{response}"' in reason
+        assert "item 204 FLAGGED:" in caplog.text
+        assert "agent's final text:" in caplog.text

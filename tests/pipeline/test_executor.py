@@ -751,6 +751,33 @@ class TestDispatchArtifactPostCondition:
         assert "201" in (result.step_results[0].action_results[-1].error or "")
 
     @pytest.mark.asyncio
+    async def test_absent_artifact_error_ends_with_final_text(self, tmp_path: Path) -> None:
+        """Slice 932 D7: the flag carries the agent's last words."""
+        from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
+
+        run_id = self._init_run(tmp_path, 203)
+        cf_client = self._cf_client(203, "203-slice.stub.md", "203-tasks.stub.md")
+        response = "I started an Explore agent. The research agent is still running."
+        dispatch_mock = mock_action(
+            [ActionResult(success=True, action_type="dispatch", outputs={"response": response})]
+        )
+
+        result = await execute_pipeline(
+            self._pipeline("design"),
+            {"slice": "203"},
+            resolver=MagicMock(),
+            cf_client=cf_client,
+            cwd=str(tmp_path),
+            run_id=run_id,
+            runs_dir=tmp_path,
+            _action_registry=self._registry(dispatch_mock),
+        )
+
+        assert result.status == ExecutionStatus.FAILED
+        error = result.step_results[0].action_results[-1].error or ""
+        assert error.endswith(f'; agent\'s final text: "{response}"')
+
+    @pytest.mark.asyncio
     async def test_stale_artifact_fails(self, tmp_path: Path) -> None:
         """(c) Artifact exists but predates run start -> treated as no-artifact."""
         import time

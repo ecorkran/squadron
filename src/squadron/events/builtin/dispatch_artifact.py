@@ -17,6 +17,7 @@ from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
+from squadron.pipeline.text_tail import tail_text
 from squadron.review.persistence import CfClientProtocol
 
 _logger = logging.getLogger(__name__)
@@ -142,6 +143,10 @@ class DispatchArtifactAction:
             run_state_error=context.run_state_error,
         )
         if error is not None:
+            # The agent's last words say why no artifact exists (D7). Appended
+            # here, once, so every failure branch carries it.
+            response = str(context.result.outputs.get("response", ""))
+            error = f'{error}; agent\'s final text: "{tail_text(response)}"'
             return ActionResult(success=False, action_type=self.name, outputs={}, error=error)
         return ActionResult(success=True, action_type=self.name, outputs={})
 
