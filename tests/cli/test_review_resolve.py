@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import click.exceptions
 import pytest
@@ -279,22 +279,20 @@ def test_review_tasks_split_files_aggregates_verdict(
 @patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_tasks_split_files_unknown_part_does_not_crash(
-    mock_review: object,
-    mock_save: object,
+    mock_review: MagicMock,
+    mock_save: MagicMock,
 ) -> None:
     """A part that parses UNKNOWN folds to UNKNOWN instead of raising KeyError.
 
     The old rank table had no UNKNOWN entry. UNKNOWN exits like a single-file
     UNKNOWN review does: on the verdict, which is not FAIL, so exit 0.
     """
-    from unittest.mock import MagicMock
-
     from typer.testing import CliRunner
 
     from squadron.cli.app import app
     from squadron.review.models import Verdict
 
-    mock_review.side_effect = [  # type: ignore[attr-defined]
+    mock_review.side_effect = [
         MagicMock(verdict=Verdict.PASS),
         MagicMock(verdict=Verdict.UNKNOWN),
     ]
@@ -331,8 +329,8 @@ def test_review_tasks_split_files_unknown_part_does_not_crash(
 
     assert result.exception is None
     assert result.exit_code == 0
-    assert mock_review.call_count == 2  # type: ignore[union-attr]
-    assert mock_save.call_count == 2  # type: ignore[union-attr]
+    assert mock_review.call_count == 2
+    assert mock_save.call_count == 2
 
 
 @patch("squadron.cli.commands.review.save_review_result")

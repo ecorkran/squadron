@@ -6,12 +6,13 @@ import logging
 from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from squadron.pipeline.actions.review import ReviewAction
+from squadron.pipeline.actions.review_outputs import ReviewOutputKey, finding_input_file
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.resolver import ResolvedModel
 from squadron.providers.errors import ProviderError
@@ -106,6 +107,10 @@ async def run(
     return action_result, run_review
 
 
+def review_path(suffix: str) -> str:
+    return str(REVIEWS_DIR / f"{_STEM}.{suffix}.md")
+
+
 def saved_names(project: Path) -> list[str]:
     return sorted(p.name for p in (project / REVIEWS_DIR).glob("*.md"))
 
@@ -161,6 +166,13 @@ class TestPartLoop:
         assert (
             f"failed to persist review file for step review-tasks part 2/2: {_PATHS[1]}" in caplog.text
         )
+        # The unsaved part still counts: it is the worst, so it names the item,
+        # but there is no review file to point at.
+        assert result.verdict == "CONCERNS"
+        assert result.outputs[ReviewOutputKey.INPUT_FILE] == _PATHS[1]
+        assert ReviewOutputKey.REVIEW_FILE not in result.outputs
+        assert result.outputs[ReviewOutputKey.UNSAVED_PARTS] == [_PATHS[1]]
+        assert result.outputs[ReviewOutputKey.REVIEW_FILES] == [review_path("part-1")]
 
     @pytest.mark.asyncio
     async def test_explicit_input_with_slice_is_one_unsuffixed_part(self, project: Path) -> None:
@@ -183,3 +195,92 @@ def save_first_call_only() -> Callable[..., Path]:
         return save_review_result(*args, **kwargs)
 
     return _save
+
+
+class TestFold:
+    @pytest.mark.asyncio
+    async def test_worst_part_names_the_result(self, project: Path) -> None:
+        result, _ = await run(project, review_result(), review_result(Verdict.CONCERNS))
+
+        assert result.verdict == "CONCERNS"
+        assert result.outputs[ReviewOutputKey.INPUT_FILE] == _PATHS[1]
+        assert result.outputs[ReviewOutputKey.REVIEW_FILE] == review_path("part-2")
+        assert result.outputs[ReviewOutputKey.INPUT_FILES] == _PATHS
+        assert result.outputs[ReviewOutputKey.REVIEW_FILES] == [
+            review_path("part-1"),
+            review_path("part-2"),
+        ]
+        assert ReviewOutputKey.UNSAVED_PARTS not in result.outputs
+        assert result.findings
+        findings = [cast(dict[str, object], f) for f in result.findings]
+        assert {finding_input_file(f) for f in findings} == {_PATHS[1]}
+
+    @pytest.mark.asyncio
+    async def test_unknown_outranks_pass(self, project: Path) -> None:
+        result, _ = await run(project, review_result(), review_result(Verdict.UNKNOWN))
+        assert result.verdict == "UNKNOWN"
+
+    @pytest.mark.asyncio
+    async def test_tie_goes_to_first_part(self, project: Path) -> None:
+        result, _ = await run(project, review_result(Verdict.CONCERNS), review_result(Verdict.CONCERNS))
+        assert result.outputs[ReviewOutputKey.INPUT_FILE] == _PATHS[0]
+        assert result.outputs[ReviewOutputKey.REVIEW_FILE] == review_path("part-1")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("scores", "verdict", "score"),
+        [
+            ((90.0, 60.0), "CONCERNS", 60.0),
+            ((60.0, 60.0), "CONCERNS", 60.0),
+            ((None, 70.0), "UNKNOWN", 70.0),
+            ((None, None), "UNKNOWN", None),
+        ],
+    )
+    async def test_judge_parts_enforce_each_and_report_lowest_score(
+        self,
+        project: Path,
+        scores: tuple[float | None, float | None],
+        verdict: str,
+        score: float | None,
+    ) -> None:
+        result, _ = await run(
+            project,
+            *(review_result(Verdict.UNKNOWN, score=s) for s in scores),
+            template="judge.tasks-vs-slice",
+            judge={"pass_floor": 80, "concerns_floor": 50},
+        )
+
+        assert result.verdict == verdict
+        assert result.score == score
+        assert result.provenance == "judge"
+
+    @pytest.mark.asyncio
+    async def test_degraded_judge_verdict_keeps_lowest_real_score(self, project: Path) -> None:
+        result, _ = await run(
+            project,
+            review_result(Verdict.UNKNOWN, score=90.0),
+            review_result(Verdict.UNKNOWN, score=60.0),
+            template="judge.tasks-vs-slice",
+            judge={"pass_floor": "not-a-number"},
+        )
+
+        assert result.verdict == "UNKNOWN"
+        assert result.score == 60.0
+
+    @pytest.mark.asyncio
+    async def test_response_joins_parts_under_their_paths(self, project: Path) -> None:
+        result, _ = await run(project, review_result(raw="one"), review_result(raw="two"))
+
+        assert result.outputs[ReviewOutputKey.RESPONSE] == (
+            f"## {_PATHS[0]}\n\none\n\n## {_PATHS[1]}\n\ntwo"
+        )
+
+    @pytest.mark.asyncio
+    async def test_tool_calls_summed_and_provenance_from_first_part(self, project: Path) -> None:
+        result, _ = await run(
+            project, review_result(tool_calls_made=2), review_result(tool_calls_made=3)
+        )
+
+        assert result.metadata["tool_calls_made"] == 5
+        assert result.metadata["template"] == "tasks"
+        assert result.provenance == "review"

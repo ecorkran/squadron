@@ -55,6 +55,19 @@ def _optional_str(mapping: dict[str, object], key: str) -> str | None:
     return value
 
 
+def review_response(result: ActionResult) -> str:
+    """The review's raw model output.
+
+    Raises:
+        TypeError: If ``RESPONSE`` is absent or not a str — every review
+            result carries one.
+    """
+    response = _optional_str(result.outputs, ReviewOutputKey.RESPONSE)
+    if response is None:
+        raise TypeError(f"review output '{ReviewOutputKey.RESPONSE}' is missing")
+    return response
+
+
 def review_input_files(result: ActionResult) -> list[str]:
     """Every reviewed file: ``INPUT_FILES``, else ``[INPUT_FILE]``, else ``[]``."""
     if ReviewOutputKey.INPUT_FILES in result.outputs:

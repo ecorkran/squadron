@@ -10,6 +10,7 @@ from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_thresholds
+from squadron.pipeline.actions.review_fold import fold_review_parts
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -249,9 +250,7 @@ class ReviewAction:
                     part["input"],
                 )
             results.append(await self._run_part(settings, context, part, suffix, (number, count)))
-        # TEMPORARY (slice 930 Task 7a): a multi-part review returns the last
-        # part's result until Task 7b folds every part into one.
-        return results[-1]
+        return fold_review_parts(results)
 
     def _load_template(self, template_name: str) -> ReviewTemplate:
         load_all_templates()
