@@ -165,3 +165,43 @@ def test_dispatch_run_hidden_from_help() -> None:
     """sq --help output does not list _dispatch-run."""
     result = _runner.invoke(app, ["--help"])
     assert "_dispatch-run" not in (result.output or "")
+
+
+def test_dispatch_run_sdk_system_prompt_appends_to_preset(tmp_path: Path) -> None:
+    """#155: `--system-prompt` on an SDK profile rides on the preset, not replacing it."""
+    from squadron.core.models import Message, MessageType
+
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("Write a haiku.", encoding="utf-8")
+
+    async def _handle(_msg: object):  # type: ignore[no-untyped-def]
+        yield Message(sender="a", recipients=["b"], content="ok", message_type=MessageType.chat)
+
+    agent = MagicMock()
+    agent.handle_message = _handle
+    agent.shutdown = AsyncMock()
+    registry = MagicMock()
+    registry.spawn = AsyncMock(return_value=agent)
+    registry.shutdown_agent = AsyncMock()
+    dispatch_mod = "squadron.pipeline.actions.dispatch"
+
+    with (
+        patch(f"{dispatch_mod}.get_registry", return_value=registry),
+        patch(f"{dispatch_mod}.ensure_provider_loaded"),
+        patch(f"{dispatch_mod}.get_typed_config", return_value=True),
+    ):
+        result = _invoke(
+            "--prompt-file",
+            str(prompt_file),
+            "--model",
+            "m",
+            "--profile",
+            "sdk",
+            "--system-prompt",
+            "X",
+        )
+
+    assert result.exit_code == 0, result.output  # type: ignore[attr-defined]
+    config = registry.spawn.call_args[0][0]
+    assert config.use_default_system_prompt is True
+    assert config.instructions == "X"

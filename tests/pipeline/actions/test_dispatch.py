@@ -596,14 +596,32 @@ async def test_sdk_one_shot_without_prompt_uses_default_system_prompt(
 
 
 @pytest.mark.asyncio
-async def test_sdk_one_shot_explicit_system_prompt_wins(action: DispatchAction) -> None:
-    """SC7: an explicit system_prompt still beats the default."""
+async def test_sdk_one_shot_system_prompt_appends_to_preset(action: DispatchAction) -> None:
+    """#155: an SDK step's system_prompt is appended to the preset, never replaces it."""
     ctx = _make_context(params={"prompt": "test", "system_prompt": "Be terse."})
     mock_registry = _make_registry(_make_agent_mock("ok"))
 
     with (
         patch(f"{_P}.get_registry", return_value=mock_registry),
         patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        await action.execute(ctx)
+
+    config = mock_registry.spawn.call_args[0][0]
+    assert config.use_default_system_prompt is True
+    assert config.instructions == "Be terse."
+
+
+@pytest.mark.asyncio
+async def test_non_sdk_one_shot_system_prompt_is_the_whole_prompt(action: DispatchAction) -> None:
+    """Non-SDK is unchanged: a step system_prompt is sent as the system message."""
+    ctx = _make_context(params={"prompt": "test", "system_prompt": "Be terse."})
+    mock_registry = _make_registry(_make_agent_mock("ok"))
+
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_openrouter_profile()),
         patch(f"{_P}.ensure_provider_loaded"),
     ):
         await action.execute(ctx)

@@ -126,14 +126,13 @@ async def one_shot_dispatch_with_telemetry(
     ensure_provider_loaded(profile.provider)
 
     is_sdk = profile.provider == ProviderType.SDK
-    # #40: what baseline should an agent get when the step supplies no system prompt?
-    # On the SDK side the answer is the CLI's own prompt, matching metrology/audit.py —
-    # an empty system prompt there strips the tool-use discipline the CLI ships with. On
-    # the non-SDK side an empty prompt becomes no system message at all, so with tools the
+    # #40/#155: an SDK agent always gets the CLI's own prompt, matching metrology/audit.py —
+    # an empty or replaced system prompt strips the tool-use discipline the CLI ships
+    # with. A step system_prompt is appended to that preset, as reviews do (#85). On the
+    # non-SDK side an empty prompt becomes no system message at all, so with tools the
     # guidance block (composed in the agent, slice 267 D1) is the whole system prompt.
-    has_explicit_prompt = bool(system_prompt)
-    use_default_system_prompt = is_sdk and not has_explicit_prompt
-    instructions = system_prompt if has_explicit_prompt else None
+    use_default_system_prompt = is_sdk
+    instructions = system_prompt or None
 
     # Pipeline settings policy (slice 932 D10/D11); not applicable off the SDK.
     setting_sources = list(PIPELINE_SETTING_SOURCES) if is_sdk else None
