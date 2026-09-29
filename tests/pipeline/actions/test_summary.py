@@ -698,10 +698,36 @@ async def test_restore_injects_prior_summary_via_sdk_session() -> None:
     assert result.success is True
     assert result.outputs.get("restored") is True
     assert result.outputs.get("summary") == "the prior session summary text"
-    session.seed_context.assert_awaited_once()
-    # Confirm framed text was passed to seed_context
-    seeded = session.seed_context.call_args.args[0]
-    assert "the prior session summary text" in seeded
+    from squadron.pipeline.sdk_session import SeedSource
+
+    # Raw text: seed_context does the framing (slice 932 D3).
+    session.seed_context.assert_awaited_once_with("the prior session summary text", SeedSource.RESTORE)
+
+
+@pytest.mark.asyncio
+async def test_restore_frames_summary_exactly_once() -> None:
+    from unittest.mock import patch
+
+    from squadron.pipeline.sdk_session import (
+        _SEED_FRAMING_PREFIX,  # pyright: ignore[reportPrivateUsage]
+    )
+    from tests.pipeline.conftest import ScriptedClient, scripted_session
+
+    session = scripted_session(ScriptedClient())
+    ctx = _make_context(
+        params={"restore": True},
+        sdk_session=session,
+        prior_outputs={"summary-0": _make_prior_summary_result()},
+    )
+    fresh = ScriptedClient()
+    with patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=fresh) as ctor:
+        result = await _make_action().execute(ctx)
+
+    assert result.success is True
+    append = ctor.call_args.kwargs["options"].system_prompt["append"]
+    assert append.count(_SEED_FRAMING_PREFIX) == 1
+    assert append.endswith("the prior session summary text")
+    fresh.query.assert_not_called()
 
 
 @pytest.mark.asyncio

@@ -116,8 +116,9 @@ steps:
   #     file         — write to ~/.config/squadron/runs/summaries/<project>-<pipeline>.md
   #     {file: path} — write to a specific file path
   #
-  # (b) Restore mode (restore: true): re-inject the most recent prior
-  #     summary step's output into the current session via seed_context().
+  # (b) Restore mode (restore: true): replace the session with a fresh one
+  #     seeded with the most recent prior summary step's output. The seed
+  #     goes into the new session's system prompt; no turn is sent.
   #     Other fields (template, model, emit) are ignored in this mode.
   #     Fails if no prior summary exists in the run.
   #

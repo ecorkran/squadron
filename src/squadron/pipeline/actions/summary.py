@@ -121,12 +121,12 @@ class SummaryAction:
         )
 
     async def _execute_restore(self, context: ActionContext) -> ActionResult:
-        """Re-inject a previously captured summary into the current session.
+        """Replace the session with a fresh one seeded with a prior summary.
 
         Searches prior_outputs (reverse order) for the most recent summary
-        action result containing a ``summary`` key. Injects via
-        sdk_session.seed_context() when available, or dispatches the framed
-        text via sdk_session.dispatch() as a fallback for prompt seeding.
+        action result containing a ``summary`` key and hands it to
+        sdk_session.seed_context(), which rotates the session (slice 932 D3).
+        Without a session (prompt-only), the summary is only returned.
         """
         summary: str | None = None
         for result in reversed(list(context.prior_outputs.values())):
@@ -148,12 +148,11 @@ class SummaryAction:
             )
 
         if context.sdk_session is not None:
-            from squadron.pipeline.sdk_session import SeedSource, frame_summary_for_seed
+            from squadron.pipeline.sdk_session import SeedSource
 
             try:
-                await context.sdk_session.seed_context(
-                    frame_summary_for_seed(summary), SeedSource.RESTORE
-                )
+                # Raw text: seed_context frames it (framing here doubled it).
+                await context.sdk_session.seed_context(summary, SeedSource.RESTORE)
             except Exception as exc:
                 _logger.exception(
                     "SummaryAction restore: seed_context failed in step %s",
