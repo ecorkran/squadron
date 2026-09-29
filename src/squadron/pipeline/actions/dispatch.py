@@ -317,6 +317,20 @@ class DispatchAction:
                     "this step, or remove 'allowed_tools'."
                 ),
             )
+        # Same for the system prompt (#155): it is fixed when the session connects, so a
+        # per-step value would otherwise be silently ignored.
+        if context.params.get("system_prompt"):
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=(
+                    f"Step '{context.step_name}' declares 'system_prompt' but resolved to the "
+                    "SDK session path, where a persistent session's system prompt is fixed at "
+                    "connect time and cannot be changed per step. Use a non-SDK model for "
+                    "this step, or remove 'system_prompt'."
+                ),
+            )
 
         action_model = str(context.params["model"]) if "model" in context.params else None
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None

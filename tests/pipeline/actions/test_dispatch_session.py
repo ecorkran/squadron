@@ -252,3 +252,17 @@ async def test_session_dispatch_records_background_task_counts(action: DispatchA
     assert result.success is True
     assert result.metadata["background_tasks_waited"] == 2
     assert result.metadata["background_tasks_stopped"] == 0
+
+
+@pytest.mark.asyncio
+async def test_session_path_rejects_step_system_prompt(action: DispatchAction) -> None:
+    session = _make_session()
+    ctx = _make_context(session=session, params={"prompt": "p", "system_prompt": "Be terse."})
+
+    result = await action.execute(ctx)
+
+    assert result.success is False
+    assert "declares 'system_prompt'" in (result.error or "")
+    assert "fixed at connect time" in (result.error or "")
+    session.set_model.assert_not_called()
+    session.dispatch.assert_not_called()
