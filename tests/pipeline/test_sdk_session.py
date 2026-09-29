@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from claude_agent_sdk import ClaudeAgentOptions
 
 from squadron.pipeline.sdk_session import SDKExecutionSession
+from tests.pipeline.conftest import (
+    sdk_task_notification,
+    sdk_task_started,
+    sdk_task_updated,
+)
 
 _MOD = "squadron.pipeline.sdk_session"
 
@@ -820,3 +826,85 @@ async def test_failed_reconnect_marks_session_unusable(caplog: pytest.LogCapture
         await session.compact(instructions="x", summary="s")
     with pytest.raises(ProviderError, match="SDK session unusable"):
         await session.seed_context("again", SeedSource.RESUME)
+
+
+# ---------------------------------------------------------------------------
+# Background ledger and own-result detection (slice 932 D5/D6)
+# ---------------------------------------------------------------------------
+
+
+def _ledger_after(*msgs: object) -> object:
+    from squadron.pipeline.sdk_session import _BackgroundLedger  # pyright: ignore[reportPrivateUsage]
+
+    ledger = _BackgroundLedger()
+    for msg in msgs:
+        ledger.observe(msg)
+    return ledger
+
+
+class TestBackgroundLedger:
+    @pytest.mark.parametrize(
+        ("msgs", "active"),
+        [
+            pytest.param(lambda: [sdk_task_started("a", "local_agent")], True, id="agent-start"),
+            pytest.param(lambda: [sdk_task_started("a", "local_bash")], False, id="bash-ignored"),
+            pytest.param(
+                lambda: [sdk_task_started("a", "local_agent"), sdk_task_notification("a")],
+                False,
+                id="notification-clears",
+            ),
+            pytest.param(
+                lambda: [sdk_task_started("a", "local_agent"), sdk_task_updated("a", "killed")],
+                False,
+                id="killed-clears",
+            ),
+            pytest.param(
+                lambda: [sdk_task_started("a", "local_agent"), sdk_task_updated("a", "running")],
+                True,
+                id="running-keeps",
+            ),
+            pytest.param(
+                lambda: [
+                    sdk_task_started("a", "local_agent"),
+                    sdk_task_notification("a"),
+                    sdk_task_updated("a", "completed"),
+                ],
+                False,
+                id="duplicate-terminal-idempotent",
+            ),
+        ],
+    )
+    def test_active_state(self, msgs: Callable[[], list[object]], active: bool) -> None:
+        ledger = _ledger_after(*msgs())
+        assert ledger.active is active  # type: ignore[attr-defined]
+
+    def test_seen_count_counts_distinct_agents_ever_tracked(self) -> None:
+        ledger = _ledger_after(
+            sdk_task_started("a", "local_agent"),
+            sdk_task_notification("a"),
+            sdk_task_started("b", "local_workflow"),
+            sdk_task_started("c", "local_bash"),
+        )
+        assert ledger.seen_count == 2  # type: ignore[attr-defined]
+        assert ledger.active_ids() == ["b"]  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize(
+    ("origin", "own"),
+    [(None, True), ({"kind": "human"}, True), ({"kind": "task-notification"}, False)],
+)
+def test_is_own_result(origin: dict[str, str] | None, own: bool) -> None:
+    from claude_agent_sdk import ResultMessage
+
+    from squadron.pipeline.sdk_session import _is_own_result  # pyright: ignore[reportPrivateUsage]
+
+    msg = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=1,
+        session_id="s",
+        origin=origin,  # type: ignore[arg-type]
+    )
+    assert _is_own_result(msg) is own

@@ -15,8 +15,10 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Final
 
 from claude_agent_sdk import (
+    TERMINAL_TASK_STATUSES,
     ClaudeAgentOptions,
     ClaudeSDKClient,
     ClaudeSDKError,
@@ -26,6 +28,9 @@ from claude_agent_sdk import (
     ProcessError,
     RateLimitEvent,
     ResultMessage,
+    TaskNotificationMessage,
+    TaskStartedMessage,
+    TaskUpdatedMessage,
 )
 from claude_agent_sdk.types import SystemPromptPreset
 
@@ -95,6 +100,58 @@ def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOp
             framed = f"{prior}\n\n{framed}"
     preset: SystemPromptPreset = {"type": "preset", "preset": "claude_code", "append": framed}
     return dataclasses.replace(base, system_prompt=preset)
+
+
+# Background task types a dispatch waits for. Mirrors the SDK's private
+# DEFERRING_TASK_TYPES (claude_agent_sdk/_internal/query.py), redeclared on
+# purpose because the SDK constant is internal. Shells and monitors may run
+# forever, so they never hold a dispatch.
+WAITED_TASK_TYPES: Final = frozenset({"local_agent", "local_workflow"})
+
+
+class _BackgroundLedger:
+    """Background agents a single dispatch has seen start and not yet finish."""
+
+    def __init__(self) -> None:
+        self._active: dict[str, str] = {}
+        self._seen: set[str] = set()
+
+    def observe(self, msg: object) -> None:
+        """Track or clear a task from one lifecycle message; ignore others."""
+        if isinstance(msg, TaskStartedMessage):
+            if msg.task_type in WAITED_TASK_TYPES:
+                self._active[msg.task_id] = msg.description
+                self._seen.add(msg.task_id)
+        elif isinstance(msg, TaskNotificationMessage) or (
+            isinstance(msg, TaskUpdatedMessage) and msg.status in TERMINAL_TASK_STATUSES
+        ):
+            # Either can be the only terminal signal (SDK docs).
+            self._active.pop(msg.task_id, None)
+
+    @property
+    def active(self) -> bool:
+        return bool(self._active)
+
+    @property
+    def seen_count(self) -> int:
+        return len(self._seen)
+
+    def active_ids(self) -> list[str]:
+        return list(self._active)
+
+    def descriptions(self) -> str:
+        return ", ".join(self._active.values())
+
+    def clear(self) -> None:
+        self._active.clear()
+
+
+def _is_own_result(msg: ResultMessage) -> bool:
+    """True for the result of our own prompt, False for an injected turn.
+
+    The SDK says to treat any unrecognized origin kind as "not human".
+    """
+    return msg.origin is None or msg.origin.get("kind") == "human"
 
 
 @dataclass
