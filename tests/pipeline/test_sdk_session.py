@@ -11,9 +11,13 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 from squadron.pipeline.sdk_session import SDKExecutionSession
 from tests.pipeline.conftest import (
+    ScriptedClient,
+    scripted_session,
+    sdk_result,
     sdk_task_notification,
     sdk_task_started,
     sdk_task_updated,
+    sdk_text,
 )
 
 _MOD = "squadron.pipeline.sdk_session"
@@ -834,9 +838,9 @@ async def test_failed_reconnect_marks_session_unusable(caplog: pytest.LogCapture
 
 
 def _ledger_after(*msgs: object) -> object:
-    from squadron.pipeline.sdk_session import _BackgroundLedger  # pyright: ignore[reportPrivateUsage]
+    from squadron.pipeline.sdk_turns import BackgroundLedger
 
-    ledger = _BackgroundLedger()
+    ledger = BackgroundLedger()
     for msg in msgs:
         ledger.observe(msg)
     return ledger
@@ -896,7 +900,7 @@ class TestBackgroundLedger:
 def test_is_own_result(origin: dict[str, str] | None, own: bool) -> None:
     from claude_agent_sdk import ResultMessage
 
-    from squadron.pipeline.sdk_session import _is_own_result  # pyright: ignore[reportPrivateUsage]
+    from squadron.pipeline.sdk_turns import is_own_result
 
     msg = ResultMessage(
         subtype="success",
@@ -907,4 +911,88 @@ def test_is_own_result(origin: dict[str, str] | None, own: bool) -> None:
         session_id="s",
         origin=origin,  # type: ignore[arg-type]
     )
-    assert _is_own_result(msg) is own
+    assert is_own_result(msg) is own
+
+
+# ---------------------------------------------------------------------------
+# dispatch waits for background agents (slice 932 D5/D6)
+# ---------------------------------------------------------------------------
+
+
+class TestDispatchWaitsForBackgroundAgents:
+    @pytest.mark.asyncio
+    async def test_waits_for_agent_and_joins_follow_up_turn(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client = ScriptedClient(
+            [
+                sdk_task_started("t1", "local_agent", "Explore src"),
+                sdk_text("Waiting for the agent."),
+                sdk_result(),
+            ],
+            [sdk_task_notification("t1"), sdk_text("Wrote the design."), sdk_result(injected=True)],
+        )
+        session = scripted_session(client)
+
+        with caplog.at_level(logging.INFO, logger=_MOD):
+            response = await session.dispatch("design it")  # type: ignore[attr-defined]
+
+        assert response == "Waiting for the agent.\nWrote the design."
+        assert session.background_tasks_waited == 1  # type: ignore[attr-defined]
+        assert client.receive_calls == 2
+        assert any(
+            "waiting" in r.getMessage() and "Explore src" in r.getMessage() for r in caplog.records
+        )
+
+    @pytest.mark.asyncio
+    async def test_killed_update_is_enough_to_finish(self) -> None:
+        client = ScriptedClient(
+            [sdk_task_started("t1", "local_agent"), sdk_result()],
+            [
+                sdk_task_updated("t1", "killed"),
+                sdk_text("Agent was killed."),
+                sdk_result(injected=True),
+            ],
+        )
+        session = scripted_session(client)
+
+        response = await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert response == "Agent was killed."
+        assert client.receive_calls == 2
+
+    @pytest.mark.asyncio
+    async def test_background_shell_does_not_hold_dispatch(self) -> None:
+        client = ScriptedClient(
+            [sdk_task_started("b1", "local_bash"), sdk_text("done"), sdk_result()],
+        )
+        session = scripted_session(client)
+
+        response = await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert response == "done"
+        assert session.background_tasks_waited == 0  # type: ignore[attr-defined]
+        assert client.receive_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_no_tasks_reads_one_turn(self) -> None:
+        client = ScriptedClient([sdk_text("hello"), sdk_result()])
+        session = scripted_session(client)
+
+        assert await session.dispatch("p") == "hello"  # type: ignore[attr-defined]
+        assert client.receive_calls == 1
+
+    @pytest.mark.asyncio
+    async def test_stream_end_with_agent_tracked_raises(self) -> None:
+        from squadron.providers.errors import ProviderError
+
+        client = ScriptedClient(
+            [sdk_task_started("t1", "local_agent", "Explore src"), sdk_result()],
+            [],  # stream ends: no notification, no result
+        )
+        session = scripted_session(client)
+
+        with pytest.raises(
+            ProviderError, match="stream ended before the dispatch's result.*Explore src"
+        ):
+            await session.dispatch("p")  # type: ignore[attr-defined]

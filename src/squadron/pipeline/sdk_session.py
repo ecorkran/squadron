@@ -15,10 +15,8 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
 
 from claude_agent_sdk import (
-    TERMINAL_TASK_STATUSES,
     ClaudeAgentOptions,
     ClaudeSDKClient,
     ClaudeSDKError,
@@ -28,18 +26,10 @@ from claude_agent_sdk import (
     ProcessError,
     RateLimitEvent,
     ResultMessage,
-    TaskNotificationMessage,
-    TaskStartedMessage,
-    TaskUpdatedMessage,
 )
 from claude_agent_sdk.types import SystemPromptPreset
 
-from squadron.core.models import (
-    RATE_LIMIT_EVENT_TYPE,
-    SDK_RESULT_TYPE,
-    TOOL_RESULT_TYPE,
-    TOOL_USE_TYPE,
-)
+from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -52,7 +42,6 @@ from squadron.providers.sdk.rate_limit import (
     is_throttle,
     rate_limit_backoff_s,
 )
-from squadron.providers.sdk.translation import translate_sdk_message
 
 _logger = logging.getLogger(__name__)
 
@@ -102,58 +91,6 @@ def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOp
     return dataclasses.replace(base, system_prompt=preset)
 
 
-# Background task types a dispatch waits for. Mirrors the SDK's private
-# DEFERRING_TASK_TYPES (claude_agent_sdk/_internal/query.py), redeclared on
-# purpose because the SDK constant is internal. Shells and monitors may run
-# forever, so they never hold a dispatch.
-WAITED_TASK_TYPES: Final = frozenset({"local_agent", "local_workflow"})
-
-
-class _BackgroundLedger:
-    """Background agents a single dispatch has seen start and not yet finish."""
-
-    def __init__(self) -> None:
-        self._active: dict[str, str] = {}
-        self._seen: set[str] = set()
-
-    def observe(self, msg: object) -> None:
-        """Track or clear a task from one lifecycle message; ignore others."""
-        if isinstance(msg, TaskStartedMessage):
-            if msg.task_type in WAITED_TASK_TYPES:
-                self._active[msg.task_id] = msg.description
-                self._seen.add(msg.task_id)
-        elif isinstance(msg, TaskNotificationMessage) or (
-            isinstance(msg, TaskUpdatedMessage) and msg.status in TERMINAL_TASK_STATUSES
-        ):
-            # Either can be the only terminal signal (SDK docs).
-            self._active.pop(msg.task_id, None)
-
-    @property
-    def active(self) -> bool:
-        return bool(self._active)
-
-    @property
-    def seen_count(self) -> int:
-        return len(self._seen)
-
-    def active_ids(self) -> list[str]:
-        return list(self._active)
-
-    def descriptions(self) -> str:
-        return ", ".join(self._active.values())
-
-    def clear(self) -> None:
-        self._active.clear()
-
-
-def _is_own_result(msg: ResultMessage) -> bool:
-    """True for the result of our own prompt, False for an injected turn.
-
-    The SDK says to treat any unrecognized origin kind as "not human".
-    """
-    return msg.origin is None or msg.origin.get("kind") == "human"
-
-
 @dataclass
 class SDKExecutionSession:
     """Manages a persistent ClaudeSDKClient across pipeline steps.
@@ -180,6 +117,8 @@ class SDKExecutionSession:
     session_id: str | None = None
     # Set when a rotation's reconnect fails; every later call then raises.
     unusable_reason: str | None = None
+    # Set by the last dispatch(): background agents it waited for.
+    background_tasks_waited: int = 0
 
     async def connect(self) -> None:
         """Connect the underlying SDK client.
@@ -220,109 +159,112 @@ class SDKExecutionSession:
     async def dispatch(self, prompt: str) -> str:
         """Send a prompt and collect the full response text.
 
-        Includes rate-limit retry logic: a ``rejected`` ``RateLimitEvent``
-        raises ``RateLimitRejected`` inline in the loop below (this path has
-        no ``_skip_unparseable`` wrapper, unlike ``agent.py``). We retry
-        ``receive_response()`` on the same session (the underlying channel
-        remains intact) up to ``MAX_RATE_LIMIT_RETRIES`` times.
+        Reads past the turn's result while background agents the turn started
+        are still running, and returns only on this dispatch's own result
+        (slice 932 D5/D6). Text from the follow-up turn the CLI injects when
+        an agent reports back is part of the response.
 
-        Returns:
-            The concatenated text content of all response messages.
+        Rate-limit retry: a ``rejected`` ``RateLimitEvent`` raises
+        ``RateLimitRejected`` inline (this path has no ``_skip_unparseable``
+        wrapper, unlike ``agent.py``). ``receive_response()`` is retried on the
+        same session (the channel stays intact) up to ``MAX_RATE_LIMIT_RETRIES``.
 
         Raises:
             ProviderAuthError: If the CLI is not found.
             ProviderAPIError: If the CLI exits with an error code.
-            ProviderError: For other SDK errors, or if the session is unusable.
+            ProviderError: For other SDK errors, if the session is unusable, or
+                if the stream ends while a background agent is still running.
         """
         self._require_usable()
+        turns = DispatchTurns()
         try:
             await self.client.query(prompt)
-            retries = 0
-            response_parts: list[str] = []
-            while True:
-                progressed = False
-                try:
-                    async for sdk_msg in self.client.receive_response():
-                        # No _skip_unparseable wrapper on this path (unlike
-                        # agent.py), so a RateLimitEvent must be inspected
-                        # here, inline, before anything else touches it —
-                        # and before `progressed` is set, so a rejected
-                        # event as the very first message correctly
-                        # consumes retry budget instead of resetting it
-                        # (a rejected event is not progress).
-                        if isinstance(sdk_msg, RateLimitEvent) and event_blocks(sdk_msg):
-                            raise RateLimitRejected(
-                                f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}"
-                            )
-                        progressed = True
-                        # Raise before appending any content so no partial
-                        # error text reaches the caller or _check_cli_error.
-                        if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
-                            raise ProviderAPIError(
-                                f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
-                            )
-                        for translated in translate_sdk_message(sdk_msg, sender="pipeline"):
-                            sdk_type = translated.metadata.get("sdk_type")
-                            # ResultMessage duplicates the assistant text as
-                            # its `result` field — it's for metadata only,
-                            # not content. Assistant text already arrived via
-                            # AssistantMessage/TextBlock. Appending both
-                            # doubles the response string. tool_use/tool_result
-                            # messages narrate the agent's tool calls (e.g.
-                            # "Using tool: Bash", command stdout) and are not
-                            # part of the response's actual prose — mixing
-                            # them in with no separator produced an
-                            # unreadable, unparseable run-on line (issue #23,
-                            # same class of bug as #22/#20). An informational
-                            # RateLimitEvent is now observable (translation.py)
-                            # rather than silently dropped, but it is a
-                            # usage-meter notice, not response prose, so it
-                            # is excluded here the same way.
-                            if sdk_type not in (
-                                SDK_RESULT_TYPE,
-                                TOOL_USE_TYPE,
-                                TOOL_RESULT_TYPE,
-                                RATE_LIMIT_EVENT_TYPE,
-                            ):
-                                response_parts.append(translated.content)
-                            sid = translated.metadata.get("session_id")
-                            if isinstance(sid, str) and sid:
-                                self.session_id = sid
-                                _logger.debug("SDKExecutionSession: session_id=%s", sid)
-                    break  # normal completion
-                except ClaudeSDKError as exc:
-                    # A RateLimitEvent with status='rejected' raises
-                    # RateLimitRejected above; a genuine 429 can also
-                    # surface as a plain ClaudeSDKError. is_throttle
-                    # classifies both. Informational events are not
-                    # exceptions at all — they are yielded through the
-                    # `async for` like any other message and never reach
-                    # this handler.
-                    #
-                    # A throttle after work came
-                    # through is a fresh event, so the budget bounds
-                    # consecutive failures rather than throttles-per-run.
-                    if progressed:
-                        retries = 0
-                    if is_throttle(exc) and retries < MAX_RATE_LIMIT_RETRIES:
-                        retries += 1
-                        delay = rate_limit_backoff_s(retries)
-                        _logger.warning(
-                            "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
-                            retries,
-                            MAX_RATE_LIMIT_RETRIES,
-                            delay,
-                        )
-                        await asyncio.sleep(delay)
-                        continue
-                    raise
-            return "\n".join(response_parts)
+            return await self._collect_turns(turns)
         except CLINotFoundError as exc:
             raise ProviderAuthError(str(exc)) from exc
         except ProcessError as exc:
             raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
         except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
             raise ProviderError(str(exc)) from exc
+        finally:
+            self.background_tasks_waited = turns.ledger.seen_count
+
+    async def _collect_turns(self, turns: DispatchTurns) -> str:
+        """Read turns until our own result arrives with no agent running."""
+        while True:
+            result = await self._read_turn_with_retry(turns)
+            if result is None:
+                # The iterator ended without a result. With nothing tracked,
+                # this is today's behavior; with an agent tracked, the work
+                # it owes can never arrive.
+                if turns.ledger.active:
+                    raise ProviderError(
+                        "stream ended before the dispatch's result; "
+                        f"{len(turns.ledger.active_ids())} background agent(s) still "
+                        f"running: {turns.ledger.descriptions()}"
+                    )
+                return turns.text()
+            if is_own_result(result):
+                turns.own_result_seen = True
+            if turns.own_result_seen and not turns.ledger.active:
+                return turns.text()
+            if turns.waiting and not turns.waiting_logged:
+                turns.waiting_logged = True
+                _logger.info(
+                    "dispatch: turn ended with %d background agent(s) running; waiting: %s",
+                    len(turns.ledger.active_ids()),
+                    turns.ledger.descriptions(),
+                )
+
+    async def _read_turn_with_retry(self, turns: DispatchTurns) -> ResultMessage | None:
+        """One ``receive_response()`` pass, retried on a rate-limit throttle."""
+        retries = 0
+        while True:
+            turns.progressed = False
+            try:
+                return await self._read_turn(turns)
+            except ClaudeSDKError as exc:
+                # A rejected RateLimitEvent raises RateLimitRejected in
+                # _read_turn; a genuine 429 can also surface as a plain
+                # ClaudeSDKError. is_throttle classifies both. A throttle
+                # after work came through is a fresh event, so the budget
+                # bounds consecutive failures rather than throttles-per-run.
+                if turns.progressed:
+                    retries = 0
+                if not is_throttle(exc) or retries >= MAX_RATE_LIMIT_RETRIES:
+                    raise
+                retries += 1
+                delay = rate_limit_backoff_s(retries)
+                _logger.warning(
+                    "Rate limited (attempt %d/%d); waiting %.0fs before retry.",
+                    retries,
+                    MAX_RATE_LIMIT_RETRIES,
+                    delay,
+                )
+                await asyncio.sleep(delay)
+
+    async def _read_turn(self, turns: DispatchTurns) -> ResultMessage | None:
+        """Read one turn; return its result, or None if the stream ended first."""
+        async for sdk_msg in self.client.receive_response():
+            # Inspect a RateLimitEvent before anything else touches it, and
+            # before collect() marks progress: a rejected event is not
+            # progress and must consume retry budget.
+            if isinstance(sdk_msg, RateLimitEvent) and event_blocks(sdk_msg):
+                raise RateLimitRejected(f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}")
+            # Raise before collecting any content so no partial error text
+            # reaches the caller or _check_cli_error.
+            if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
+                turns.progressed = True
+                raise ProviderAPIError(
+                    f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
+                )
+            sid = turns.collect(sdk_msg)
+            if sid is not None:
+                self.session_id = sid
+                _logger.debug("SDKExecutionSession: session_id=%s", sid)
+            if isinstance(sdk_msg, ResultMessage):
+                return sdk_msg
+        return None
 
     async def capture_summary(
         self,
