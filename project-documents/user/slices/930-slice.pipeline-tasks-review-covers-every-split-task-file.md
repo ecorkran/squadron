@@ -217,7 +217,7 @@ An unsaved part is where silence would hurt. The step's verdict includes that pa
 - `judge.tasks-vs-slice` fans out the same way. Its verdict is the worst judge-enforced part verdict. Its score is the lowest part score.
 - A single-task-file slice produces a review artifact byte-for-byte identical to today's (unsuffixed name, same content) and an identical `ActionResult`.
 - `sq review tasks N` and the pipeline write identical artifact filenames for the same slice.
-- `sq review tasks N` with a part that parses UNKNOWN exits non-zero instead of raising `KeyError`.
+- `sq review tasks N` with a part that parses UNKNOWN folds to UNKNOWN instead of raising `KeyError`, and exits on that verdict as a single-file UNKNOWN review does (exit 0 unless a save failed).
 
 ### Technical Requirements
 - ruff format, ruff check, and pyright strict all clean. The full test suite passes.

@@ -43,6 +43,7 @@ from squadron.review.git_utils import (
     resolve_slice_diff_range,
 )
 from squadron.review.models import ReviewResult, Severity, Verdict
+from squadron.review.parts import review_parts, worst_verdict
 from squadron.review.persistence import (
     TASKS_DIR,
     SaveTargetProtocol,
@@ -473,22 +474,6 @@ def _resolve_verbosity(verbose: int) -> int:
         resolved = config_val if isinstance(config_val, int) else 0
     _configure_agent_logging(resolved)
     return resolved
-
-
-def _aggregate_verdicts(results: list[object]) -> Verdict:
-    """Return the worst verdict across a list of ReviewResults.
-
-    Ordering: FAIL > CONCERNS > PASS. An empty list returns PASS.
-    Used when a single review command produces multiple results
-    (e.g. split task files reviewed part-by-part).
-    """
-    worst = Verdict.PASS
-    rank = {Verdict.PASS: 0, Verdict.CONCERNS: 1, Verdict.FAIL: 2}
-    for result in results:
-        verdict = getattr(result, "verdict", Verdict.PASS)
-        if rank[verdict] > rank[worst]:
-            worst = verdict
-    return worst
 
 
 def _resolve_rules_content(rules_path: str | None) -> str | None:
@@ -1054,24 +1039,22 @@ def review_tasks(
     verbosity = _resolve_verbosity(verbose)
     review_cwd, resolved_rules_dir, rules_source = _resolve_review_cwd(cwd, rules_dir_flag)
 
-    results: list[tuple[str, object]] = []  # (task_path, ReviewResult)
+    results: list[tuple[str, ReviewResult]] = []
     # Seeded with the least-serious outcome; each part's own outcome is folded
     # in, so the run reports the worst thing that happened to any part.
     outcome = SaveOutcome.SUPPRESSED
-    multi_part = len(task_file_paths) > 1
-    for part_idx, task_path in enumerate(task_file_paths, start=1):
-        if multi_part:
-            rprint(
-                f"[bold]Reviewing tasks part {part_idx} of {len(task_file_paths)}: {task_path}[/bold]"
-            )
+    parts = review_parts(task_file_paths)
+    for part_idx, part in enumerate(parts, start=1):
+        task_path, suffix = part.input_path, part.name_suffix
+        if len(parts) > 1:
+            rprint(f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: {task_path}[/bold]")
         inputs = {
             "input": task_path,
             "against": against,
             "cwd": review_cwd,
         }
-        # Bound before the run so a provider failure lands in this part's own
-        # slot, the same one its success path would write.
-        suffix = f"part-{part_idx}" if multi_part else None
+        # The suffix is bound before the run so a provider failure lands in this
+        # part's own slot, the same one its success path would write.
         result = _run_review_command(
             "tasks",
             inputs,
@@ -1117,7 +1100,7 @@ def review_tasks(
         )
         outcome = _worst_outcome(outcome, part_outcome)
 
-    _exit_on(_aggregate_verdicts([r for _, r in results]), outcome)
+    _exit_on(Verdict(worst_verdict(str(r.verdict) for _, r in results)), outcome)
 
 
 @review_app.command("code")

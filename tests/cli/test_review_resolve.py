@@ -276,29 +276,63 @@ def test_review_tasks_split_files_aggregates_verdict(
     assert mock_save.call_count == 2  # type: ignore[union-attr]
 
 
-def test_aggregate_verdicts_ordering() -> None:
-    """_aggregate_verdicts returns the worst verdict (FAIL > CONCERNS > PASS)."""
+@patch("squadron.cli.commands.review.save_review_result")
+@patch("squadron.cli.commands.review._run_review_command")
+def test_review_tasks_split_files_unknown_part_does_not_crash(
+    mock_review: object,
+    mock_save: object,
+) -> None:
+    """A part that parses UNKNOWN folds to UNKNOWN instead of raising KeyError.
+
+    The old rank table had no UNKNOWN entry. UNKNOWN exits like a single-file
+    UNKNOWN review does: on the verdict, which is not FAIL, so exit 0.
+    """
     from unittest.mock import MagicMock
 
-    from squadron.cli.commands.review import _aggregate_verdicts
+    from typer.testing import CliRunner
+
+    from squadron.cli.app import app
     from squadron.review.models import Verdict
 
-    assert _aggregate_verdicts([]) == Verdict.PASS
-    assert _aggregate_verdicts([MagicMock(verdict=Verdict.PASS)]) == Verdict.PASS
-    assert (
-        _aggregate_verdicts([MagicMock(verdict=Verdict.PASS), MagicMock(verdict=Verdict.CONCERNS)])
-        == Verdict.CONCERNS
-    )
-    assert (
-        _aggregate_verdicts(
-            [
-                MagicMock(verdict=Verdict.CONCERNS),
-                MagicMock(verdict=Verdict.FAIL),
-                MagicMock(verdict=Verdict.PASS),
-            ]
-        )
-        == Verdict.FAIL
-    )
+    mock_review.side_effect = [  # type: ignore[attr-defined]
+        MagicMock(verdict=Verdict.PASS),
+        MagicMock(verdict=Verdict.UNKNOWN),
+    ]
+    split_entries = [
+        TaskEntry(
+            index=161,
+            files=[
+                "161-tasks.summary-step-with-emit-destinations-1.md",
+                "161-tasks.summary-step-with-emit-destinations-2.md",
+            ],
+        ),
+    ]
+    split_slices = [
+        SliceEntry(
+            index=161,
+            name="Summary Step with Emit Destinations",
+            design_file=(
+                "project-documents/user/slices/161-slice.summary-step-with-emit-destinations.md"
+            ),
+            status="not_started",
+        ),
+    ]
+
+    runner = CliRunner()
+    with patch(
+        "squadron.cli.commands.review.ContextForgeClient",
+        **{
+            "return_value.list_slices.return_value": split_slices,
+            "return_value.list_tasks.return_value": split_entries,
+            "return_value.get_project.return_value": PROJECT_INFO,
+        },
+    ):
+        result = runner.invoke(app, ["review", "tasks", "161"])
+
+    assert result.exception is None
+    assert result.exit_code == 0
+    assert mock_review.call_count == 2  # type: ignore[union-attr]
+    assert mock_save.call_count == 2  # type: ignore[union-attr]
 
 
 @patch("squadron.cli.commands.review.save_review_result")
