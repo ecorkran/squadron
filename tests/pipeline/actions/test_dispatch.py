@@ -15,6 +15,7 @@ from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
 from squadron.providers.base import ProfileName
 from squadron.providers.errors import ProviderError
 from squadron.providers.profiles import ProviderProfile
+from tests.pipeline.conftest import typed_config
 
 _P = "squadron.pipeline.actions.dispatch"
 
@@ -776,7 +777,10 @@ async def _config_with_profile(
         patch(f"{_P}.get_registry", return_value=mock_registry),
         patch(f"{_P}.get_profile", return_value=profile),
         patch(f"{_P}.ensure_provider_loaded"),
-        patch(f"{_P}.get_typed_config", return_value=auto_memory),
+        patch(
+            f"{_P}.get_typed_config",
+            typed_config({"pipeline.auto_memory": auto_memory, "pipeline.user_settings": False}),
+        ),
     ):
         await action.execute(_make_context())
     return mock_registry.spawn.call_args[0][0]
@@ -810,7 +814,10 @@ async def test_sdk_one_shot_records_prompt_and_settings(
         patch(f"{_P}.get_registry", return_value=mock_registry),
         patch(f"{_P}.get_profile", return_value=_sdk_profile()),
         patch(f"{_P}.ensure_provider_loaded"),
-        patch(f"{_P}.get_typed_config", return_value=auto_memory),
+        patch(
+            f"{_P}.get_typed_config",
+            typed_config({"pipeline.auto_memory": auto_memory, "pipeline.user_settings": False}),
+        ),
     ):
         result = await action.execute(ctx)
 

@@ -27,3 +27,10 @@ def test_setting_sources_returned_as_a_new_list() -> None:
     opts = sdk_settings_options(sources, auto_memory=True)
     assert opts["setting_sources"] == ["project"]
     assert isinstance(opts["setting_sources"], list)
+
+
+def test_pipeline_setting_sources_optionally_adds_user() -> None:
+    from squadron.providers.sdk.settings import pipeline_setting_sources
+
+    assert pipeline_setting_sources(include_user=False) == ("project",)
+    assert pipeline_setting_sources(include_user=True) == ("user", "project")

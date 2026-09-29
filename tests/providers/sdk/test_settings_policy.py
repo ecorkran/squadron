@@ -158,3 +158,24 @@ async def test_path_settings_policy(
 
     assert setting_sources == sources
     assert auto_memory is (config_value if follows_config else False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("builder", "sources", "follows_config"),
+    _POLICY,
+    ids=[builder.__name__.lstrip("_") for builder, _, _ in _POLICY],
+)
+async def test_user_settings_widens_pipeline_paths_only(
+    patch_config_paths: dict[str, Path],
+    tmp_path: Path,
+    builder: Callable[[Path], Awaitable[Observed]],
+    sources: list[str],
+    follows_config: bool,
+) -> None:
+    """pipeline.user_settings adds "user" to pipeline sessions and dispatch, nowhere else."""
+    set_config("pipeline.user_settings", "true")
+
+    setting_sources, _ = await builder(tmp_path)
+
+    assert setting_sources == (["user", *sources] if follows_config else sources)

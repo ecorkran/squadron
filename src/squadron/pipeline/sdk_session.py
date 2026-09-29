@@ -46,7 +46,7 @@ from squadron.providers.sdk.rate_limit import (
 )
 from squadron.providers.sdk.settings import (
     AUTO_MEMORY_DISABLE_ENV,
-    PIPELINE_SETTING_SOURCES,
+    pipeline_setting_sources,
     sdk_settings_options,
 )
 
@@ -454,7 +454,9 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
     """
     cwd = str(Path.cwd())
     settings = sdk_settings_options(
-        PIPELINE_SETTING_SOURCES,
+        pipeline_setting_sources(
+            include_user=get_typed_config("pipeline.user_settings", bool, cwd=cwd)
+        ),
         auto_memory=get_typed_config("pipeline.auto_memory", bool, cwd=cwd),
     )
     base = ClaudeAgentOptions(

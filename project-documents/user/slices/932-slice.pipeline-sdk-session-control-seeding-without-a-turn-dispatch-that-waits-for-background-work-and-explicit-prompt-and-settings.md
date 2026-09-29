@@ -212,6 +212,8 @@ Pipelines and reviews run on the project's conventions, not on the operator's pe
 
 **PM-ratified 20260928.** The policy was presented to the Project Manager, who kept `[project]` and changed only the auto-memory part (D11). This changes behavior operators can see: user CLAUDE.md and user settings stop loading on these paths. The CHANGELOG entry for the release says so in one line (see Implementation Notes).
 
+**Added after implementation (PM request):** `pipeline.user_settings` (bool, default `false`). When on, pipeline sessions and one-shot SDK dispatch use `pipeline_setting_sources(include_user=True)` = `["user", "project"]`. Reviews, judges, PR, summary, and audit stay on their declared values whatever it says, so a review's verdict never depends on who runs it (PM-confirmed).
+
 Custom review templates that omit `setting_sources` or set it to `null` resolve to `REVIEW_SETTING_SOURCES` in the loader. The artifact records the value used, so the default is visible rather than silent.
 
 ### D11 — Auto-memory: a config key for pipeline work, off for judging paths
@@ -287,6 +289,8 @@ def tail_text(text: str) -> str: ...                    # "…" when truncated; 
 PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 AUTO_MEMORY_DISABLE_ENV: Final = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
+USER_SETTING_SOURCE: Final = "user"
+def pipeline_setting_sources(*, include_user: bool) -> tuple[str, ...]: ...  # pipeline.user_settings
 class SdkSettings(TypedDict): setting_sources: list[str]; env: dict[str, str]
 def sdk_settings_options(setting_sources: Sequence[str], *, auto_memory: bool,
                          base_env: Mapping[str, str] | None = None) -> SdkSettings: ...

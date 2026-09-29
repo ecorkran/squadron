@@ -143,3 +143,8 @@ class TestPipelineConfigKeys:
         key = CONFIG_KEYS["pipeline.auto_memory"]
         assert key.type_ is bool
         assert key.default is True
+
+    def test_user_settings_registered_as_bool_defaulting_off(self) -> None:
+        key = CONFIG_KEYS["pipeline.user_settings"]
+        assert key.type_ is bool
+        assert key.default is False

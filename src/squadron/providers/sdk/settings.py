@@ -15,6 +15,8 @@ __all__ = [
     "AUTO_MEMORY_DISABLE_ENV",
     "PIPELINE_SETTING_SOURCES",
     "REVIEW_SETTING_SOURCES",
+    "USER_SETTING_SOURCE",
+    "pipeline_setting_sources",
     "SdkSettings",
     "sdk_settings_options",
 ]
@@ -27,6 +29,16 @@ PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 
 AUTO_MEMORY_DISABLE_ENV: Final = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
+
+# The operator's user CLAUDE.md and user settings (output style included).
+USER_SETTING_SOURCE: Final = "user"
+
+
+def pipeline_setting_sources(*, include_user: bool) -> tuple[str, ...]:
+    """Pipeline policy, optionally widened with user settings (pipeline.user_settings)."""
+    if include_user:
+        return (USER_SETTING_SOURCE, *PIPELINE_SETTING_SOURCES)
+    return PIPELINE_SETTING_SOURCES
 
 
 class SdkSettings(TypedDict):

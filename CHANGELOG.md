@@ -16,10 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- New settings `pipeline.auto_memory` (default `true`) and `pipeline.background_idle_timeout_s` (default `1800`). `sq config` now accepts `true`/`false`-style values (#156, #163).
+- New settings `pipeline.auto_memory` (default `true`), `pipeline.user_settings` (default `false`; turn on to load your user CLAUDE.md and user settings in pipeline runs), and `pipeline.background_idle_timeout_s` (default `1800`). `sq config` now accepts `true`/`false`-style values (#156, #163).
 
 ### Changed
-- Pipeline runs and all reviews now load project settings only: your user CLAUDE.md and user settings (including output style) no longer apply to them. Claude Code auto-memory is on for pipeline work unless `pipeline.auto_memory` is off, and always off for reviews (#156).
+- Pipeline runs and all reviews now load project settings only by default: your user CLAUDE.md and user settings (including output style) no longer apply to them. Reviews always stay project-only, so a verdict doesn't depend on who runs it. Claude Code auto-memory is on for pipeline work unless `pipeline.auto_memory` is off, and always off for reviews (#156).
 - A dispatch step's `system_prompt` is now added to the Claude Code system prompt instead of replacing it. On a persistent SDK session a step `system_prompt` fails with a clear error, since the session's prompt is fixed at connect (#155).
 - Review artifacts and `--output json` record the system prompt mode and settings sources each review ran with (#156).
 

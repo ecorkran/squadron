@@ -213,3 +213,14 @@ def failing_reconnect_patch(error_text: str = "spawn failed: E2BIG") -> object:
 
     fresh = ScriptedClient(connect_error=CLIConnectionError(error_text))
     return patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=fresh)
+
+
+def typed_config(values: dict[str, object]) -> object:
+    """A ``get_typed_config`` stand-in answering per key; unlisted keys raise."""
+
+    def _get(key: str, type_: type, cwd: str = ".") -> object:
+        if key not in values:
+            raise AssertionError(f"unexpected config read: {key}")
+        return values[key]
+
+    return _get

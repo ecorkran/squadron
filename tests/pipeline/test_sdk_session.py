@@ -18,6 +18,7 @@ from tests.pipeline.conftest import (
     sdk_task_started,
     sdk_task_updated,
     sdk_text,
+    typed_config,
 )
 
 _MOD = "squadron.pipeline.sdk_session"
@@ -1105,7 +1106,10 @@ class TestPipelineSessionSettings:
         from squadron.pipeline.sdk_session import open_pipeline_session
 
         with (
-            patch(f"{_MOD}.get_typed_config", return_value=auto_memory),
+            patch(
+                f"{_MOD}.get_typed_config",
+                typed_config({"pipeline.auto_memory": auto_memory, "pipeline.user_settings": False}),
+            ),
             patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as ctor,
         ):
             session = await open_pipeline_session()

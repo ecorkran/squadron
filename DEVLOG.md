@@ -49,6 +49,7 @@ A lightweight, append-only record of development activity. Newest entries first.
   - A saved review's digest shows `preset+append` / `project`.
   - Progress messages and subagent messages do arrive between turns, so the idle timer bounds idle periods.
 - **Found live and fixed:** a background subagent's own `AssistantMessage`s (`parent_tool_use_id` set) stream between turns, and their text was joined into the dispatch response. They are now excluded. This also affects foreground subagents, which had the same leak before.
+- **Added after implementation (PM request):** `pipeline.user_settings` (default off). It adds `user` to the settings sources for pipeline sessions and SDK dispatch only. Reviews stay project-only.
 - **Found, not fixed:** the `sonnet` alias (`claude-sonnet-5-5`) fails `set_model` on the bundled CLI ("isn't described by this version's model catalog"). Walkthrough step 3 used `opus`.
 - Checkpoints: baseline 4799 passed. A: 4812. D: 4912. C: 4925. All with 0 failures.
 

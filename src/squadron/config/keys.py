@@ -105,6 +105,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "PR, summary, and audit paths always run with memory off."
         ),
     ),
+    "pipeline.user_settings": ConfigKey(
+        name="pipeline.user_settings",
+        type_=bool,
+        default=False,
+        description=(
+            "Also load your user CLAUDE.md and user settings (output style included) in "
+            "pipeline sessions and pipeline dispatch. Off by default so a run behaves the "
+            "same whoever starts it. Reviews always load project settings only."
+        ),
+    ),
     "pipeline.background_idle_timeout_s": ConfigKey(
         name="pipeline.background_idle_timeout_s",
         type_=int,
