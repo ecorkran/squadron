@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- New settings `pipeline.auto_memory` (default `true`) and `pipeline.background_idle_timeout_s` (default `1800`). `sq config` now accepts `true`/`false`-style values (#156, #163).
+
+### Changed
+- Pipeline runs and all reviews now load project settings only: your user CLAUDE.md and user settings (including output style) no longer apply to them. Claude Code auto-memory is on for pipeline work unless `pipeline.auto_memory` is off, and always off for reviews (#156).
+- A dispatch step's `system_prompt` is now added to the Claude Code system prompt instead of replacing it. On a persistent SDK session a step `system_prompt` fails with a clear error, since the session's prompt is fixed at connect (#155).
+- Review artifacts and `--output json` record the system prompt mode and settings sources each review ran with (#156).
+
+### Fixed
+- Pipeline session rotation (`compact`, `emit: [rotate]`), resume, and `summary restore` no longer give the model a turn, so summary text can't trigger actions like an unrequested `git push` (#162). Resumed runs now also carry their summary into a lazily connected session.
+- A dispatch that starts background agents now waits for them to report back before the step finishes. When a dispatch still leaves no artifact, the flag shows the agent's last words (#163).
+
 ## [0.15.1] - 20260928
 
 ### Changed

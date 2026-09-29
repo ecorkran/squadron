@@ -5,7 +5,7 @@ project: squadron
 lld: user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md
 parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
-projectState: Design complete and reviewed twice (CONCERNS addressed). No code changes yet.
+projectState: Implementation complete and verified live; awaiting the PM code review gate (E3) before merge.
 dateCreated: 20260928
 dateUpdated: 20260928
 status: in_progress
@@ -270,9 +270,10 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [x] SC: `uv run pytest tests/pipeline/test_executor.py tests/pipeline/test_executor_each.py -k final_text -q` passes.
   - [x] Commit: `fix: include the agent's final text in dispatch post-condition flags`
 
-- [ ] **B7 — Part B checkpoint**
-  - [ ] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
-  - [ ] Commit any formatting fixes: `style: format Part B`. Skip this if there are no changes.
+- [x] **B7 — Part B checkpoint**
+  - [x] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
+  - [x] Commit any formatting fixes: `style: format Part B`. Skip this if there are no changes.
+  Checkpoint: first full run showed 2 failures, but it ran while D3/D6 were changing templates and the provider, and templates are read at runtime. The failing ids were not captured. The next full run (Part D checkpoint) was green, 4912 passed, so no failure reproduces. No formatting commit needed.
 
 
 ## Part D — Explicit settings (#156)
@@ -371,9 +372,10 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [x] SC: the test passes, and no case asserts `None`.
   - [x] Commit: `test: assert settings policy per SDK path`
 
-- [ ] **D8 — Part D checkpoint**
-  - [ ] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
-  - [ ] Commit any formatting fixes: `style: format Part D`. Skip this if there are no changes.
+- [x] **D8 — Part D checkpoint**
+  - [x] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
+  - [x] Commit any formatting fixes: `style: format Part D`. Skip this if there are no changes.
+  Checkpoint: 4912 passed, 4 skipped, 0 failed; format/lint/pyright clean. No formatting commit needed.
 
 ---
 
@@ -430,20 +432,20 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [x] A PR review (override `[]`) → `setting_sources == "none"`.
   - [x] Commit: `feat: record prompt mode and settings on review results`
 
-- [ ] **C5 — Run Digest and JSON output** (`review/persistence.py::_run_digest_lines`, `review/models.py::to_dict`) — Effort 2
-  - [ ] Add two always-on digest lines after `Output budget`:
-    - [ ] `- System prompt: <mode or "not reported">`
-    - [ ] `- Settings sources: <value or "not reported">`
-    - [ ] Use the existing `_render_optional` for `None`.
-  - [ ] `to_dict`: add the `system_prompt_mode` and `setting_sources` keys, following the existing `stop_reason` convention for `None`.
-  - [ ] SC: a PASS artifact and a degraded artifact both show the two lines.
+- [x] **C5 — Run Digest and JSON output** (`review/persistence.py::_run_digest_lines`, `review/models.py::to_dict`) — Effort 2
+  - [x] Add two always-on digest lines after `Output budget`:
+    - [x] `- System prompt: <mode or "not reported">`
+    - [x] `- Settings sources: <value or "not reported">`
+    - [x] Use the existing `_render_optional` for `None`.
+  - [x] `to_dict`: add the `system_prompt_mode` and `setting_sources` keys, following the existing `stop_reason` convention for `None`.
+  - [x] SC: a PASS artifact and a degraded artifact both show the two lines.
 
-- [ ] **C5-T — Tests** (`tests/review/test_persistence.py`, `tests/cli/test_review_format.py`, fixtures)
-  - [ ] The digest renders each mode and the `not reported` case.
-  - [ ] The JSON output contains both keys.
-  - [ ] Regenerate or update the golden fixtures that contain a full `### Run Digest` block (`tests/review/fixtures/clean_pass_artifact.md` and any others the suite flags). Diff them, and confirm that the only change is the two new lines.
-  - [ ] SC: `uv run pytest tests/review tests/cli -q` passes.
-  - [ ] Commit: `feat: show prompt mode and settings in the Run Digest and JSON`
+- [x] **C5-T — Tests** (`tests/review/test_persistence.py`, `tests/cli/test_review_format.py`, fixtures)
+  - [x] The digest renders each mode and the `not reported` case.
+  - [x] The JSON output contains both keys.
+  - [x] Regenerate or update the golden fixtures that contain a full `### Run Digest` block (`tests/review/fixtures/clean_pass_artifact.md` and any others the suite flags). Diff them, and confirm that the only change is the two new lines.
+  - [x] SC: `uv run pytest tests/review tests/cli -q` passes.
+  - [x] Commit: `feat: show prompt mode and settings in the Run Digest and JSON`
 
 - [x] **C6 — Dispatch and summary step metadata** — Effort 1
   - [x] One-shot dispatch (`dispatch.py::_dispatch_via_agent` / `one_shot_dispatch_with_telemetry`): add `system_prompt_mode`, `setting_sources` (the rendered string), and `auto_memory` to `ActionResult.metadata`, derived from the built `AgentConfig`. Return them alongside the telemetry. Do not recompute them.
@@ -457,36 +459,38 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [x] A summary one-shot test asserts `empty` and `none`.
   - [x] Commit: `feat: record prompt mode and settings in dispatch and summary metadata`
 
-- [ ] **C7 — Part C checkpoint**
-  - [ ] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
-  - [ ] Commit any formatting fixes: `style: format Part C`. Skip this if there are no changes.
+- [x] **C7 — Part C checkpoint**
+  - [x] `uv run ruff format && uv run ruff check && uv run pyright && uv run pytest -q`: all green (apart from baseline).
+  - [x] Commit any formatting fixes: `style: format Part C`. Skip this if there are no changes.
+  Checkpoint: 4925 passed, 4 skipped, 0 failed; format/lint/pyright clean. No formatting commit needed.
 
 ---
 
 ## Close-out
 
-- [ ] **E1 — Live verification** (design § Verification Walkthrough) — Effort 2 — **PM-assisted**: it needs live model calls and a scratch repo. The agent runs the steps and the PM confirms the observations. It is not an autonomous checklist item.
-  - [ ] Step 2 (seeding): run `/tmp/seed-check.yaml` from a scratch git repo. The second session's transcript has the third step's prompt as its first `user` entry, the reply quotes the `item-reset` line, and there are no new commits.
-  - [ ] Step 3 (background wait): the INFO `waiting` line appears, `bg-check.txt` exists after the step, and `background_tasks_waited: 1` appears in `sq run --status latest`. Also record **whether `task_progress` messages arrived between turns** (D5: this decides whether the idle timer acts per idle period or as a total cap).
-  - [ ] Step 5 (recording): `sq review slice 932 --model sonnet -v`. The digest shows `System prompt: preset+append` and `Settings sources: project`, and `--output json` has both keys.
-  - [ ] Update the design's Verification Walkthrough with what was actually observed. Fix any command that turned out wrong.
-  - [ ] SC: every step either passes or has an open issue linked in the walkthrough.
+- [x] **E1 — Live verification** (design § Verification Walkthrough) — Effort 2 — **PM-assisted**: it needs live model calls and a scratch repo. The agent runs the steps and the PM confirms the observations. It is not an autonomous checklist item.
+  - [x] Step 2 (seeding): run `/tmp/seed-check.yaml` from a scratch git repo. The second session's transcript has the third step's prompt as its first `user` entry, the reply quotes the `item-reset` line, and there are no new commits.
+  - [x] Step 3 (background wait): the INFO `waiting` line appears, `bg-check.txt` exists after the step, and `background_tasks_waited: 1` appears in `sq run --status latest`. Also record **whether `task_progress` messages arrived between turns** (D5: this decides whether the idle timer acts per idle period or as a total cap).
+  - [x] Step 5 (recording): `sq review slice 932 --model sonnet -v`. The digest shows `System prompt: preset+append` and `Settings sources: project`, and `--output json` has both keys.
+  - [x] Update the design's Verification Walkthrough with what was actually observed. Fix any command that turned out wrong.
+  - [x] SC: every step either passes or has an open issue linked in the walkthrough.
+  Done 20260928; all steps pass. See the design's Verification Walkthrough. Live finding fixed: a background subagent's own prose (parent_tool_use_id set) was being joined into the dispatch response (commit df3dd6cb). Progress messages do arrive between turns, so the idle timer bounds idle periods.
 
-- [ ] **E2 — Docs and status**
-  - [ ] CHANGELOG `[Unreleased]`, short user-facing bullets (no internals):
-    - [ ] Pipeline session rotation no longer gives the model a turn (#162).
-    - [ ] Dispatch waits for background agents, and flagged items show the agent's last words (#163).
-    - [ ] Dispatch `system_prompt` is appended to the Claude Code prompt (#155).
-    - [ ] Pipeline runs and all reviews load project settings only: user CLAUDE.md and user settings no longer apply. New settings `pipeline.auto_memory` and `pipeline.background_idle_timeout_s` (#156).
-  - [ ] Design § API Contracts: bring it in line with what was built. At minimum:
-    - `seed_context(text, source: SeedSource)`
-    - `sdk_settings_options(..., base_env=...)`
-    - `SeedSource`, `seeded`, `unusable_reason`, `background_tasks_stopped`
-    - `pipeline/text_tail.py::tail_text` (which replaces the design's `FINAL_TEXT_TAIL_CHARS` in `dispatch_artifact.py`)
-  - [ ] DEVLOG: an implementation entry, with details and any deviations from the design.
-  - [ ] Design `status: complete`, task file `status: complete`, and `projectState` updated.
-  - [ ] Check off slice plan entry 30 in `900-slices.maintenance-and-refactoring.md`.
-  - [ ] Commit: `docs: close out slice 932`
+- [x] **E2 — Docs and status**
+  - [x] CHANGELOG `[Unreleased]`, short user-facing bullets (no internals):
+    - [x] Pipeline session rotation no longer gives the model a turn (#162).
+    - [x] Dispatch waits for background agents, and flagged items show the agent's last words (#163).
+    - [x] Dispatch `system_prompt` is appended to the Claude Code prompt (#155).
+    - [x] Pipeline runs and all reviews load project settings only: user CLAUDE.md and user settings no longer apply. New settings `pipeline.auto_memory` and `pipeline.background_idle_timeout_s` (#156).
+  - [x] Design § API Contracts: bring it in line with what was built. At minimum:
+    - [x] `seed_context(text, source: SeedSource)`
+    - [x] `sdk_settings_options(..., base_env=...)`
+    - [x] `SeedSource`, `seeded`, `unusable_reason`, `background_tasks_stopped`
+    - [x] `pipeline/text_tail.py::tail_text` (which replaces the design's `FINAL_TEXT_TAIL_CHARS` in `dispatch_artifact.py`)
+  - [x] DEVLOG: an implementation entry, with details and any deviations from the design.
+  - [x] Design `status: complete`, task file `status: complete`, and `projectState` updated.
+  - [x] Check off slice plan entry 30 in `900-slices.maintenance-and-refactoring.md`.
+  - [x] Commit: `docs: close out slice 932`
 
 - [ ] **E3 — Code review gate and merge** — **PM-gated**: the PM runs the review. The agent then addresses the findings and merges.
   - [ ] The Project Manager runs the code review (`sq review code 932 --model <model>`). Do not run it without an explicit `--model`.

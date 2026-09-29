@@ -12,6 +12,46 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Slice 932: Pipeline SDK Session Control — Implementation Complete
+
+- Branch `932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`. Not merged: it waits on the PM code review gate (E3).
+- **A (#162):**
+  - `open_pipeline_session(seed=)` is the only session builder. `SDKExecutionSession.base_options` stays unseeded.
+  - `_reconnect(seed, SeedSource)` serves `compact()` and `seed_context()`. The seed rides as preset `append`, and no `query()` is sent.
+  - Resume seeds the lazy session through `_connect_lazy_session(seed=)`.
+  - Restore frames once.
+  - A failed reconnect sets `unusable_reason`, and `_require_usable()` then fails every later call.
+- **B (#163):**
+  - `dispatch()` reads turns until its own result (`origin`) arrives with no `local_agent`/`local_workflow` task tracked.
+  - A leftover injected turn is dropped with a WARNING.
+  - The wait is bounded by `pipeline.background_idle_timeout_s`: `stop_task` each agent, then a WARNING.
+  - A stream that ends with an agent tracked raises `ProviderError`.
+  - The post-condition flag gets `tail_text(response)`.
+- **D (#156):**
+  - Config gains bool values, with lenient spellings.
+  - `providers/sdk/settings.py` holds the policy constants and `sdk_settings_options`.
+  - `AgentConfig.auto_memory` drives the provider, so code reviews now also run with memory off.
+  - Templates are `[project]`. The loader keeps an explicit `[]` and resolves absent/`null` to the review policy.
+  - The per-path policy test covers 7 paths × both config values.
+- **C (#155):**
+  - SDK dispatch always uses the preset, with the step prompt appended. The session path rejects a step `system_prompt`.
+  - `SystemPromptMode` and the describers are in `core/models.py`.
+  - The Run Digest, JSON, dispatch metadata (both paths), and summary one-shot metadata record the mode and settings.
+- **Deviations from the design** (API Contracts updated to match):
+  - The ledger, own-result check, and response accumulator moved to `pipeline/sdk_turns.py` (pure). `sdk_session.py` is 470 lines instead of ~600.
+  - "Stream ended" raises only when an agent is still tracked. A pass with no result and nothing tracked returns text as before, which keeps the "no tasks: identical to today" requirement and the existing retry tests.
+  - An unreported digest value renders `not computed` (the shared `_render_optional` sentinel), not `not reported`.
+  - `session.setting_sources`/`auto_memory` are properties derived from `base_options`, not stored fields.
+  - Fixture regeneration: the seven byte-identity fixtures gained the two digest lines, recorded in `tests/review/fixtures/README.md`.
+- **Live verification** (design walkthrough, all steps pass):
+  - Rotation leaves no turn in the second session's transcript.
+  - A background Explore agent is waited for (`background_tasks_waited: 1`, and `bg-check.txt` was written).
+  - A saved review's digest shows `preset+append` / `project`.
+  - Progress messages and subagent messages do arrive between turns, so the idle timer bounds idle periods.
+- **Found live and fixed:** a background subagent's own `AssistantMessage`s (`parent_tool_use_id` set) stream between turns, and their text was joined into the dispatch response. They are now excluded. This also affects foreground subagents, which had the same leak before.
+- **Found, not fixed:** the `sonnet` alias (`claude-sonnet-5-5`) fails `set_model` on the bundled CLI ("isn't described by this version's model catalog"). Walkthrough step 3 used `opus`.
+- Checkpoints: baseline 4799 passed. A: 4812. D: 4912. C: 4925. All with 0 failures.
+
 ### Slice 932: Pipeline SDK Session Control — Task Breakdown Complete
 
 - Tasks: `user/tasks/932-tasks.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md` (427 lines, single file).

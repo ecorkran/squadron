@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260928
 dateUpdated: 20260928
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: Pipeline SDK Session Control — Seeding Without a Turn, Dispatch That Waits for Background Work, and Explicit Prompt and Settings
@@ -250,25 +250,46 @@ Custom review templates that omit `setting_sources` or set it to `null` resolve 
 
 ### API Contracts
 
+As built:
+
 ```python
 # pipeline/sdk_session.py
+class SeedSource(StrEnum):
+    COMPACT = "compact"; RESUME = "resume"; RESTORE = "restore"   # named in the seeding log
+
 async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSession: ...
 
 class SDKExecutionSession:
     client: ClaudeSDKClient
-    base_options: ClaudeAgentOptions        # renamed from `options`
+    base_options: ClaudeAgentOptions        # renamed from `options`; unseeded, settings included
     async def compact(self, instructions: str, summary_model: str | None = None,
                       restore_model: str | None = None, summary: str | None = None) -> str: ...
-    async def seed_context(self, text: str) -> None:   # rotate; caller passes raw text
+    async def seed_context(self, text: str, source: SeedSource) -> None:  # rotate; raw text
     async def dispatch(self, prompt: str) -> str:       # waits per D5/D6
     background_tasks_waited: int                        # set by the last dispatch()
     background_tasks_stopped: int                       # set by the last dispatch() (idle timeout)
     unusable_reason: str | None                         # set when _reconnect fails; later calls raise
+    seeded: bool                                        # live client carries a seed (prompt-mode metadata)
+    setting_sources: list[str] | None                   # property, derived from base_options
+    auto_memory: bool                                   # property, derived from base_options.env
+
+# pipeline/sdk_turns.py (pure turn bookkeeping, split out of sdk_session.py for size)
+WAITED_TASK_TYPES: Final = frozenset({"local_agent", "local_workflow"})
+class BackgroundLedger: ...                             # observe(msg), active, seen_count, ...
+def is_own_result(msg: ResultMessage) -> bool: ...
+class DispatchTurns: ...                                # response parts + ledger for one dispatch
+
+# pipeline/text_tail.py — the one definition of the tail, shared by D6 and D7
+FINAL_TEXT_TAIL_CHARS: Final = 400
+def tail_text(text: str) -> str: ...                    # "…" when truncated; "(empty response)"
 
 # providers/sdk/settings.py
 PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
-def sdk_settings_options(setting_sources: Sequence[str], *, auto_memory: bool) -> dict[str, object]: ...
+AUTO_MEMORY_DISABLE_ENV: Final = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
+class SdkSettings(TypedDict): setting_sources: list[str]; env: dict[str, str]
+def sdk_settings_options(setting_sources: Sequence[str], *, auto_memory: bool,
+                         base_env: Mapping[str, str] | None = None) -> SdkSettings: ...
 
 # core/models.py — AgentConfig
 auto_memory: bool = False   # SDK agents: True only on pipeline paths, from pipeline.auto_memory
@@ -277,9 +298,16 @@ auto_memory: bool = False   # SDK agents: True only on pipeline paths, from pipe
 class SystemPromptMode(StrEnum):
     PRESET = "preset"; PRESET_APPEND = "preset+append"; CUSTOM = "custom"; EMPTY = "empty"
 def describe_system_prompt(config: AgentConfig) -> SystemPromptMode: ...
+def describe_setting_sources(setting_sources: Sequence[str] | None, *, is_sdk: bool) -> str: ...
+def describe_run_settings(config: AgentConfig, *, is_sdk: bool) -> dict[str, object]: ...
+
+# config/manager.py — bool config values (lenient: true/yes/on/1, false/no/off/0)
+def get_typed_config(key: str, type_: type[bool], cwd: str = ".") -> bool: ...   # overload
 ```
 
 The two policy constants have the same value today, but they are separate on purpose. They answer different questions and can diverge.
+
+Differences from the draft contracts: `seed_context` takes a `SeedSource`; `sdk_settings_options` takes `base_env` and returns a TypedDict; the ledger and own-result helper live in `pipeline/sdk_turns.py` rather than `sdk_session.py`; the D7 tail lives in `pipeline/text_tail.py` rather than `dispatch_artifact.py`. An unreported digest value renders through the existing `_render_optional` sentinel, `not computed`, not `not reported` as drafted in C5.
 
 ## Integration Points
 
@@ -331,9 +359,25 @@ The two policy constants have the same value today, but they are separate on pur
 
 ### Verification Walkthrough
 
-Draft, to be refined after implementation.
+Verified 20260928 against the implementation (Claude Code CLI bundled with claude-agent-sdk 0.2.160).
 
-**1. Settings default (D9, already done at design time).** Reproduce in a scratch directory that contains a `CLAUDE.md` with `The project codeword is PELICAN-SEVEN.`:
+**Running a pipeline live from inside a Claude Code session.** `sq run` picks prompt-only mode when `CLAUDECODE` is set (`run.py:149`), so the SDK session path under test never runs. From an ordinary terminal no prefix is needed. From inside Claude Code, strip the session variables:
+
+```bash
+SQ_ENV="env -u CLAUDECODE -u CLAUDE_CODE_ENTRYPOINT -u CLAUDE_CODE_SESSION_ID -u CLAUDE_CODE_CHILD_SESSION \
+  -u CLAUDE_CODE_SESSION_ATTENDED -u CLAUDE_CODE_MESSAGING_SOCKET -u CLAUDE_CODE_MESSAGING_TOKEN \
+  -u CLAUDE_PID -u CLAUDE_CODE_EXECPATH"
+```
+
+**Scratch repo.** The pipeline pre-flight needs a Context Forge project, so register a throwaway repo (a lite project):
+
+```bash
+mkdir -p /tmp/sq932-scratch && cd /tmp/sq932-scratch && git init -q
+echo "# scratch" > README.md && git add . && git commit -qm init
+cf init --lite --name sq932-scratch && git add -A && git commit -qm "cf init"
+```
+
+**1. Settings default (D9, done at design time).** In a scratch directory whose `CLAUDE.md` says `The project codeword is PELICAN-SEVEN.`:
 
 ```bash
 Q='From your system context only, no tools: 1) project codeword? 2) is there a section titled "Tool Use Discipline"? Reply: codeword=<x> tud=<YES|NO>'
@@ -341,7 +385,7 @@ claude -p "$Q" --model haiku                          # codeword=PELICAN-SEVEN t
 claude -p "$Q" --model haiku --setting-sources project # codeword=PELICAN-SEVEN tud=NO
 ```
 
-**2. Seeding without a turn (#162).** Save this as `/tmp/seed-check.yaml`:
+**2. Seeding without a turn (#162).** `/tmp/seed-check.yaml`:
 
 ```yaml
 name: seed-check
@@ -354,30 +398,70 @@ steps:
       model: haiku
 ```
 
-Run `sq run /tmp/seed-check.yaml -v` from a scratch git repo. Then open the newest session transcript under `~/.claude/projects/<cwd-slug>/` (the second session of the run). Its first `user` entry is the third step's prompt, with no assistant turn before it. The step's reply quotes the `item-reset` line, which proves the seed was visible. `git log` in the scratch repo shows no new commits.
+```bash
+cd /tmp/sq932-scratch && $SQ_ENV sq run /tmp/seed-check.yaml -v
+```
 
-**3. Dispatch waits for a background agent (#163).** Add one step:
+Observed:
+- The log shows `seeded fresh session via system prompt (101 chars, source: compact)`, and all three steps complete.
+- The newest transcript under `~/.claude/projects/-private-tmp-sq932-scratch/` has these entries in order:
+  - `user`: the third step's prompt, with no assistant turn before it.
+  - `assistant`: `"The previous batch item is complete. Nothing from it carries forward; work only from the next prompt."` That is the `item-reset` line, so the seed was visible.
+- `git log --oneline` shows only the two setup commits.
+
+**3. Dispatch waits for a background agent (#163).** Add `src/a.py`, `src/b.py`, `src/c.py` to the scratch repo and commit them. Then `/tmp/bg-check.yaml`:
 
 ```yaml
+name: bg-check
+description: slice 932 — dispatch waits for a background agent
+steps:
   - dispatch:
-      model: sonnet
+      model: opus
       prompt: >
         Launch an Explore agent with run_in_background set to true to count the
         .py files under src/. End your turn immediately, saying you are waiting.
         When it reports back, write the count to bg-check.txt.
 ```
 
-Expected: the log shows `dispatch: turn ended with 1 background agent(s) running; waiting: …`, and `bg-check.txt` exists when the step completes. The step metadata in `sq run --status latest` shows `background_tasks_waited: 1`.
-
-**4. Flag tail.** No cheap command makes a phase dispatch skip its artifact on purpose. The proof is `uv run pytest tests/pipeline/test_executor.py tests/pipeline/test_executor_each.py -k final_text` (post-condition message and batch-report reason). On the next real batch run, any FLAGGED line and its batch-report reason end with `agent's final text: "…"`.
-
-**5. Prompt and settings recording (#155, #156).**
-
 ```bash
-sq review slice 932 --model sonnet -v
+cd /tmp/sq932-scratch && $SQ_ENV sq run /tmp/bg-check.yaml -v
 ```
 
-The artifact's Run Digest shows `System prompt: preset+append` and `Settings sources: project`. `sq review slice 932 --model sonnet --output json | jq '.system_prompt_mode, .setting_sources'` prints the same values.
+Observed:
+- The log shows `dispatch: turn ended with 1 background agent(s) running; waiting: Count .py files in src`.
+- The step completes, and `bg-check.txt` contains `3`.
+- The step metadata is in the run state file, not in `sq run --status latest`, which doesn't render metadata: `~/.config/squadron/runs/<run-id>.json` → `completed_steps[0].action_results[0].metadata` = `{'background_tasks_waited': 1, 'background_tasks_stopped': 0, 'system_prompt_mode': 'preset', 'setting_sources': 'project', 'auto_memory': True, ...}`.
+
+Caveat: the step uses `opus` because the `sonnet` alias (`claude-sonnet-5-5`) failed `set_model` with "isn't described by this version's model catalog" on the bundled CLI. That is unrelated to this slice.
+
+**Messages between turns (D5 timer question).** A direct `ClaudeSDKClient` probe prints every message across the two `receive_response()` calls. After the dispatch's own result, the stream carries the following, roughly every 2s:
+- `TaskProgressMessage`
+- the subagent's own `AssistantMessage`s (`parent_tool_use_id` set)
+- `UserMessage`s (tool results)
+
+Then come `TaskUpdatedMessage`, `TaskNotificationMessage`, the follow-up assistant text, and the injected `ResultMessage` (`origin={'kind': 'task-notification'}`). The idle timer therefore resets on subagent activity and bounds idle periods; it is not a total cap.
+
+The probe also found that the subagent's final report text streams as an `AssistantMessage` with `parent_tool_use_id` set, and dispatch was joining it into the response. It is now excluded (`sdk_turns.DispatchTurns.collect`): only the main agent's prose is the response.
+
+**4. Flag tail.** No cheap live command makes a phase dispatch skip its artifact on purpose. Proof by tests:
+
+```bash
+uv run pytest tests/pipeline/test_executor.py tests/pipeline/test_executor_each.py -k final_text -q   # 2 passed
+```
+
+**5. Prompt and settings recording (#155, #156).** A saved run overwrites the committed review artifact, so either restore it afterwards (`git checkout -- project-documents/user/reviews/` and delete the new archive copy) or use `--no-save` for the JSON check. The recording does not depend on the model.
+
+```bash
+sq review slice 932 --model haiku -v            # saved artifact's Run Digest:
+                                                #   - Output budget: backend default
+                                                #   - System prompt: preset+append
+                                                #   - Settings sources: project
+sq review slice 932 --model haiku --no-save --output json | python3 -c \
+  'import json,sys; t=sys.stdin.read(); d=json.loads(t[t.index("{"):]); print(d["system_prompt_mode"], d["setting_sources"])'
+                                                # preset+append project
+```
+
+`--output file` writes JSON, not the markdown artifact, so the digest check needs a saved run.
 
 ## Implementation Notes
 
