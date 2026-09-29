@@ -698,6 +698,10 @@ def _build_context_result(stdout: str) -> ActionResult:
 
 
 _DESIGN = "project-documents/user/slices/923-slice.isolation.md"
+_PARTS = [
+    "project-documents/user/tasks/923-tasks.isolation-1.md",
+    "project-documents/user/tasks/923-tasks.isolation-2.md",
+]
 
 
 class TestFeedbackReview:
@@ -736,6 +740,55 @@ class TestFeedbackReview:
 
         assert "Create a slice design" not in prompt
         assert "Plan argument is ignored" in prompt
+
+    def test_single_file_prompt_is_unchanged(self, action: DispatchAction) -> None:
+        ctx = _make_context(
+            params={"feedback": "review"},
+            prior_outputs={"0-review-0": _review_result(_DESIGN)},
+        )
+
+        assert action._resolve_prompt(ctx) == (
+            "Address the following findings from the prior review (verdict: CONCERNS):\n"
+            "\n"
+            "- [concern] Plan argument is ignored (sources.py:12)\n"
+            "\n"
+            f"Revise `{_DESIGN}` in place; do not create a new file."
+        )
+
+    def test_multi_file_prompt_lists_every_file_and_tags_findings(self, action: DispatchAction) -> None:
+        review = ActionResult(
+            success=True,
+            action_type="review",
+            outputs={"input_file": _PARTS[1], "input_files": _PARTS},
+            verdict="CONCERNS",
+            findings=[
+                {"severity": "concern", "summary": "Missing test", "input_file": _PARTS[0]},
+                {"severity": "fail", "summary": "Wrong order", "input_file": _PARTS[1]},
+            ],
+        )
+        ctx = _make_context(params={"feedback": "review"}, prior_outputs={"0-review-0": review})
+
+        prompt = action._resolve_prompt(ctx)
+
+        assert "- [concern] Missing test — " + _PARTS[0] in prompt
+        assert "- [fail] Wrong order — " + _PARTS[1] in prompt
+        assert prompt.endswith(
+            "Revise each of these files in place; do not create new files:\n"
+            f"- `{_PARTS[0]}`\n- `{_PARTS[1]}`"
+        )
+        assert "do not create a new file." not in prompt
+
+    def test_wrong_typed_input_files_raises(self, action: DispatchAction) -> None:
+        review = ActionResult(
+            success=True,
+            action_type="review",
+            outputs={"input_files": _PARTS[0]},
+            verdict="CONCERNS",
+        )
+        ctx = _make_context(params={"feedback": "review"}, prior_outputs={"0-review-0": review})
+
+        with pytest.raises(TypeError, match="input_files"):
+            action._resolve_prompt(ctx)
 
     @pytest.mark.asyncio
     async def test_no_review_in_scope_fails(self, action: DispatchAction) -> None:

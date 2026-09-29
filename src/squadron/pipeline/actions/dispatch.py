@@ -21,6 +21,7 @@ from squadron.core.models import (
 )
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
@@ -461,7 +462,10 @@ class DispatchAction:
             summary = finding.get("summary", "")
             location = finding.get("location")
             loc_suffix = f" ({location})" if location else ""
-            lines.append(f"- [{severity}] {summary}{loc_suffix}")
+            # A split review tags each finding with the part file it came from.
+            part_file = finding_input_file(finding)
+            file_suffix = f" — {part_file}" if part_file else ""
+            lines.append(f"- [{severity}] {summary}{loc_suffix}{file_suffix}")
         return "\n".join(lines)
 
     @classmethod
@@ -489,9 +493,12 @@ class DispatchAction:
             raise DispatchFeedbackError("feedback: review but no prior review in scope")
         parts = [str(explicit)] if explicit is not None else []
         parts.append(cls._findings_block(review))
-        input_file = review.outputs.get("input_file")
-        if input_file:
-            parts.append(f"Revise `{input_file}` in place; do not create a new file.")
+        input_files = review_input_files(review)
+        if len(input_files) == 1:
+            parts.append(f"Revise `{input_files[0]}` in place; do not create a new file.")
+        elif input_files:
+            listed = "\n".join(f"- `{path}`" for path in input_files)
+            parts.append(f"Revise each of these files in place; do not create new files:\n{listed}")
         return "\n\n".join(parts)
 
     @staticmethod
