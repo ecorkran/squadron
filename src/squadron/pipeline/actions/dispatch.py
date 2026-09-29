@@ -327,7 +327,12 @@ class DispatchAction:
             success=True,
             action_type=self.action_type,
             outputs={"response": response_text},
-            metadata={"model": model_id, "profile": "sdk-session"},
+            metadata={
+                "model": model_id,
+                "profile": "sdk-session",
+                "background_tasks_waited": session.background_tasks_waited,
+                "background_tasks_stopped": session.background_tasks_stopped,
+            },
         )
 
     def _resolve_prompt(self, context: ActionContext) -> str:
