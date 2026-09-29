@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_thresholds
+from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
+from squadron.pipeline.resolver import (
+    ModelPoolNotImplemented,
+    ModelResolutionError,
+    ResolvedModel,
+)
 from squadron.providers.base import ProfileName
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import (
@@ -21,6 +27,7 @@ from squadron.review.git_utils import (
     assert_reviewable_scope,
     normalize_diff_spec,
 )
+from squadron.review.models import ReviewResult
 from squadron.review.persistence import (
     REVIEWS_DIR,
     CfClientProtocol,
@@ -32,6 +39,7 @@ from squadron.review.persistence import (
 )
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
+    RulesSource,
     extract_diff_paths,
     load_review_rules,
     resolve_rules_dir,
@@ -66,6 +74,7 @@ def _save_failure_artifact(
     step_name: str,
     step_index: int,
     run_id: str,
+    name_suffix: str | None = None,
 ) -> Path | None:
     """Resolve the sha and write the failure artifact — all blocking work.
 
@@ -86,7 +95,22 @@ def _save_failure_artifact(
         slice_name=step_name,
         slice_index=step_index,
         run_id=run_id,
+        name_suffix=name_suffix,
     )
+
+
+@dataclass(frozen=True)
+class _PartSettings:
+    """What every part of one review shares: template, model, rules, target."""
+
+    template: ReviewTemplate
+    template_name: str
+    resolved: ResolvedModel
+    profile_name: str
+    rules_content: str | None
+    rules_source: RulesSource
+    allowed_tools: list[str] | None
+    slice_info: SliceInfo | None
 
 
 class ReviewAction:
@@ -159,13 +183,55 @@ class ReviewAction:
         )
 
     async def _review(self, context: ActionContext) -> ActionResult:
-        # Template resolution
-        load_all_templates()
         template_name = str(context.params["template"])
+        template = self._load_template(template_name)
+        resolved = self._resolve_model(context, template)
+
+        # Profile resolution — explicit param → alias-derived → SDK default
+        profile_name = (
+            str(context.params["profile"])
+            if "profile" in context.params
+            else resolved.profile or ProfileName.SDK
+        )
+
+        inputs = self._base_inputs(context)
+
+        # Auto-resolve template inputs from slice number when not explicit.
+        # Mirrors CLI behavior: `sq review slice 154` resolves input/against
+        # automatically — pipelines should do the same.
+        slice_param = context.params.get("slice")
+        slice_info: SliceInfo | None = None
+        if slice_param is not None and "input" not in inputs:
+            slice_info = self._resolve_slice_inputs(
+                template_name, int(str(slice_param)), context.cf_client, inputs
+            )
+
+        self._validate_inputs(template, template_name, inputs)
+        rules_content, rules_source = self._resolve_rules(context, template_name, inputs)
+
+        # A step-level allowed_tools overrides the template's default; None leaves the
+        # template authoritative (slice 265).
+        allowed_tools = resolve_allowed_tools(context, self.action_type)
+        settings = _PartSettings(
+            template=template,
+            template_name=template_name,
+            resolved=resolved,
+            profile_name=profile_name,
+            rules_content=rules_content,
+            rules_source=rules_source,
+            allowed_tools=allowed_tools,
+            slice_info=slice_info,
+        )
+        return await self._run_part(settings, context, inputs)
+
+    def _load_template(self, template_name: str) -> ReviewTemplate:
+        load_all_templates()
         template = get_template(template_name)
         if template is None:
             raise KeyError(f"Review template '{template_name}' not found")
+        return template
 
+    def _resolve_model(self, context: ActionContext, template: ReviewTemplate) -> ResolvedModel:
         # Model resolution — same pattern as dispatch, with one addition: when
         # the standard cascade (CLI/action/step/pipeline/config) is entirely
         # empty, fall back to the template's own `model:` default — the same
@@ -178,21 +244,13 @@ class ReviewAction:
         # resolve_full, not resolve: the alias's tool_use gate and output budget can
         # only be read while its name is known (slice 924 D6).
         try:
-            resolved = context.resolver.resolve_full(action_model, step_model)
+            return context.resolver.resolve_full(action_model, step_model)
         except ModelResolutionError:
             if template.model is None:
                 raise
-            resolved = context.resolver.resolve_full(template.model, step_model)
-        model_id, alias_profile = resolved.model_id, resolved.profile
+            return context.resolver.resolve_full(template.model, step_model)
 
-        # Profile resolution — explicit param → alias-derived → SDK default
-        profile_name = (
-            str(context.params["profile"])
-            if "profile" in context.params
-            else alias_profile or ProfileName.SDK
-        )
-
-        # Build review inputs
+    def _base_inputs(self, context: ActionContext) -> dict[str, str]:
         cwd = context.cwd
         inputs: dict[str, str] = {"cwd": cwd}
         for key in _INPUT_PASSTHROUGH_KEYS:
@@ -206,17 +264,11 @@ class ReviewAction:
         # so only the step-supplied value passes through here.
         if inputs.get("diff"):
             inputs["diff"] = normalize_diff_spec(inputs["diff"], cwd)
+        return inputs
 
-        # Auto-resolve template inputs from slice number when not explicit.
-        # Mirrors CLI behavior: `sq review slice 154` resolves input/against
-        # automatically — pipelines should do the same.
-        slice_param = context.params.get("slice")
-        slice_info: SliceInfo | None = None
-        if slice_param is not None and "input" not in inputs:
-            slice_info = self._resolve_slice_inputs(
-                template_name, int(str(slice_param)), context.cf_client, inputs
-            )
-
+    def _validate_inputs(
+        self, template: ReviewTemplate, template_name: str, inputs: dict[str, str]
+    ) -> None:
         # Check required inputs are satisfied after auto-resolution
         missing = [inp.name for inp in template.required_inputs if inp.name not in inputs]
         if missing:
@@ -239,8 +291,12 @@ class ReviewAction:
                 f"the expected file."
             )
 
+    def _resolve_rules(
+        self, context: ActionContext, template_name: str, inputs: dict[str, str]
+    ) -> tuple[str | None, RulesSource]:
         # Rules content — mirror CLI: template rules + language auto-detection,
         # layered on any explicit rules_content passed in via params.
+        cwd = context.cwd
         manual_rules = (
             str(context.params["rules_content"]) if "rules_content" in context.params else None
         )
@@ -273,21 +329,26 @@ class ReviewAction:
             file_paths=file_paths,
             manual_rules_content=manual_rules,
         )
+        return rules_content, rules_source
 
-        # Execute review
-        # A step-level allowed_tools overrides the template's default; None leaves the
-        # template authoritative (slice 265).
-        allowed_tools = resolve_allowed_tools(context, self.action_type)
+    async def _run_part(
+        self,
+        settings: _PartSettings,
+        context: ActionContext,
+        inputs: dict[str, str],
+        name_suffix: str | None = None,
+    ) -> ActionResult:
+        """Review one part: model call, judge enforcement, save, result."""
         try:
             result = await run_review_with_profile(
-                template,
+                settings.template,
                 inputs,
-                profile=profile_name,
-                model=model_id,
-                rules_content=rules_content,
-                allowed_tools=allowed_tools,
-                model_allows_tools=resolved.allows_tools,
-                max_output_tokens=resolved.max_output_tokens,
+                profile=settings.profile_name,
+                model=settings.resolved.model_id,
+                rules_content=settings.rules_content,
+                allowed_tools=settings.allowed_tools,
+                model_allows_tools=settings.resolved.allows_tools,
+                max_output_tokens=settings.resolved.max_output_tokens,
             )
         except ProviderError as exc:
             # For a pipeline run the artifact is the whole durable record, so a
@@ -302,15 +363,16 @@ class ReviewAction:
             saved = await asyncio.to_thread(
                 _save_failure_artifact,
                 exc,
-                template_name,
-                slice_info,
-                model=model_id,
+                settings.template_name,
+                settings.slice_info,
+                model=settings.resolved.model_id,
                 source_document=inputs.get("input"),
-                tools_given=list(allowed_tools) if allowed_tools else None,
-                cwd=cwd,
+                tools_given=list(settings.allowed_tools) if settings.allowed_tools else None,
+                cwd=context.cwd,
                 step_name=context.step_name,
                 step_index=context.step_index,
                 run_id=context.run_id,
+                name_suffix=name_suffix,
             )
             _logger.warning(
                 "review: provider failed in step %s; failure artifact: %s",
@@ -321,108 +383,140 @@ class ReviewAction:
 
         # Traceability (slice 195 D12, #139): the run that wrote this review.
         result.run_id = context.run_id
+        verdict, provenance, verdict_override = self._enforce_verdict(settings, context, result)
+        review_file_path = await self._save_part(
+            settings, context, result, inputs, verdict_override, name_suffix
+        )
+        return self._part_result(settings, result, inputs, review_file_path, verdict, provenance)
 
-        # Judge enforcement runs before persistence: judge templates instruct
-        # the model to omit a verdict line (score is the source of truth), so
-        # result.verdict is always UNKNOWN for them. The persisted file must
-        # show the threshold-derived verdict instead, not the always-empty
-        # raw parse.
-        #
-        # Threshold resolution/enforcement must not discard an already-
-        # successful model call: a malformed threshold override (e.g. a
-        # non-numeric pass_floor) degrades to UNKNOWN with a WARNING rather
-        # than raising here, so persistence below still runs and the review
-        # artifact is saved (slice 303 F003).
-        if template.is_judge:
-            judge_override = context.params.get("judge")
-            step_override = (
-                cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
+    def _enforce_verdict(
+        self, settings: _PartSettings, context: ActionContext, result: ReviewResult
+    ) -> tuple[str, str, str | None]:
+        """Return (verdict, provenance, verdict_override for persistence).
+
+        Judge enforcement runs before persistence: judge templates instruct
+        the model to omit a verdict line (score is the source of truth), so
+        result.verdict is always UNKNOWN for them. The persisted file must
+        show the threshold-derived verdict instead, not the always-empty
+        raw parse.
+
+        Threshold resolution/enforcement must not discard an already-
+        successful model call: a malformed threshold override (e.g. a
+        non-numeric pass_floor) degrades to UNKNOWN with a WARNING rather
+        than raising here, so persistence still runs and the review
+        artifact is saved (slice 303 F003).
+        """
+        template_name = settings.template_name
+        if not settings.template.is_judge:
+            return result.verdict.value, Provenance.REVIEW, None
+        judge_override = context.params.get("judge")
+        step_override = (
+            cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
+        )
+        try:
+            thresholds = resolve_thresholds(settings.template.judge, step_override)
+            verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
+        except (TypeError, ValueError):
+            _logger.warning(
+                "review: malformed judge threshold override for template '%s'; verdict=UNKNOWN",
+                template_name,
             )
-            try:
-                thresholds = resolve_thresholds(template.judge, step_override)
-                verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
-            except (TypeError, ValueError):
-                _logger.warning(
-                    "review: malformed judge threshold override for template '%s'; verdict=UNKNOWN",
-                    template_name,
-                )
-                verdict, provenance = "UNKNOWN", Provenance.JUDGE
-            verdict_override = verdict
-        else:
-            verdict, provenance = result.verdict.value, Provenance.REVIEW
-            verdict_override = None
+            verdict, provenance = "UNKNOWN", Provenance.JUDGE
+        return verdict, provenance, verdict
 
-        # File persistence (non-fatal).
-        # When slice_info is available, use save_review_result for correct
-        # naming (e.g. 154-review.slice.prompt-only-loops.md). Otherwise
-        # fall back to save_review_file with step name/index.
+    async def _save_part(
+        self,
+        settings: _PartSettings,
+        context: ActionContext,
+        result: ReviewResult,
+        inputs: dict[str, str],
+        verdict_override: str | None,
+        name_suffix: str | None,
+    ) -> str | None:
+        """Persist one part's review artifact; ``None`` when the save failed.
+
+        When slice_info is available, use save_review_result for correct
+        naming (e.g. 154-review.slice.prompt-only-loops.md). Otherwise
+        fall back to the step name/index target.
+        """
+        cwd = context.cwd
         # revision_number (slice 911 Part B): the loop iteration this review
         # ran in, supplied only when it actually ran inside a loop.
         revision_number = context.iteration if context.iteration >= 1 else None
-        review_file_path: str | None = None
         try:
-            # Off-thread for the same reason the provider-failure branch above
-            # is: the save runs a git subprocess bounded at 30s through the
+            # Off-thread for the same reason the provider-failure branch is:
+            # the save runs a git subprocess bounded at 30s through the
             # target's reviewed_sha(), plus archive_existing_review's read and
             # write, and no blocking call belongs on the event loop inside an
             # async def (project async rule).
-            if slice_info is not None:
-                review_file_path = str(
+            if settings.slice_info is not None:
+                return str(
                     await asyncio.to_thread(
                         save_review_result,
                         result,
-                        template_name,
-                        slice_info,
+                        settings.template_name,
+                        settings.slice_info,
                         input_file=inputs.get("input"),
+                        name_suffix=name_suffix,
                         verdict_override=verdict_override,
                         revision_number=revision_number,
                     )
                 )
-            else:
-                # Through the contract rather than format + save_review_file
-                # directly (slice 383, D2). This is the one save path that
-                # never ran archive_existing_review's guard, so it could
-                # overwrite a review whose prior content could not be
-                # preserved; routing it here closes that gap. The refusal
-                # arrives as OSError where the old call returned None, and the
-                # boundary below keeps it non-fatal to the action exactly as
-                # a write failure was.
-                review_file_path = str(
-                    await asyncio.to_thread(
-                        save_review_result,
-                        result,
-                        template_name,
-                        reviews_dir=Path(cwd) / REVIEWS_DIR,
-                        input_file=inputs.get("input"),
-                        verdict_override=verdict_override,
-                        revision_number=revision_number,
-                        target=StepTarget(
-                            context.step_name,
-                            context.step_index,
-                            cwd=cwd,
-                            rules_source=rules_source,
-                        ),
-                    )
+            # Through the contract rather than format + save_review_file
+            # directly (slice 383, D2). This is the one save path that
+            # never ran archive_existing_review's guard, so it could
+            # overwrite a review whose prior content could not be
+            # preserved; routing it here closes that gap. The refusal
+            # arrives as OSError where the old call returned None, and the
+            # boundary below keeps it non-fatal to the action exactly as
+            # a write failure was.
+            return str(
+                await asyncio.to_thread(
+                    save_review_result,
+                    result,
+                    settings.template_name,
+                    reviews_dir=Path(cwd) / REVIEWS_DIR,
+                    input_file=inputs.get("input"),
+                    name_suffix=name_suffix,
+                    verdict_override=verdict_override,
+                    revision_number=revision_number,
+                    target=StepTarget(
+                        context.step_name,
+                        context.step_index,
+                        cwd=cwd,
+                        rules_source=settings.rules_source,
+                    ),
                 )
+            )
         except Exception:  # noqa: BLE001
             # Boundary by design: this block only persists the review markdown
             # artifact (file write + templating + a git-sha subprocess call);
             # the review itself already succeeded and its result is returned
-            # below regardless. A failure to save the secondary artifact must
+            # regardless. A failure to save the secondary artifact must
             # not fail the action's primary output, the review response.
             _logger.exception(
                 "review: failed to persist review file for step %s",
                 context.step_name,
             )
+            return None
 
-        # Map ReviewResult → ActionResult
-        outputs: dict[str, object] = {"response": result.raw_output}
+    def _part_result(
+        self,
+        settings: _PartSettings,
+        result: ReviewResult,
+        inputs: dict[str, str],
+        review_file_path: str | None,
+        verdict: str,
+        provenance: str,
+    ) -> ActionResult:
+        """Map one part's ReviewResult → ActionResult."""
+        outputs: dict[str, object] = {ReviewOutputKey.RESPONSE: result.raw_output}
         if review_file_path is not None:
-            outputs["review_file"] = review_file_path
+            outputs[ReviewOutputKey.REVIEW_FILE] = review_file_path
         # What was reviewed, so a `feedback: review` dispatch can name the file
         # to revise in place (slice 195 D8).
         if "input" in inputs:
-            outputs["input_file"] = inputs["input"]
+            outputs[ReviewOutputKey.INPUT_FILE] = inputs["input"]
 
         return ActionResult(
             success=True,
@@ -438,9 +532,9 @@ class ReviewAction:
                 # Slice 927 D10: the model that answered, not the one requested — the
                 # same distinction the artifact's aiModel/requestedModel pair makes.
                 "model": result.model,
-                "requested_model": model_id,
-                "profile": profile_name,
-                "template": template_name,
+                "requested_model": settings.resolved.model_id,
+                "profile": settings.profile_name,
+                "template": settings.template_name,
                 # Absent when the review ran without tools, so a zero count always means
                 # "offered and declined" rather than "never offered" (design D5).
                 **(
