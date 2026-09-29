@@ -5,10 +5,10 @@ project: squadron
 lld: user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md
 parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
-projectState: Implementation complete and verified live; awaiting the PM code review gate (E3) before merge.
+projectState: Complete. Code review PASS, merged to main.
 dateCreated: 20260928
 dateUpdated: 20260928
-status: in_progress
+status: complete
 ---
 
 # Tasks: Pipeline SDK Session Control
@@ -492,8 +492,9 @@ SDK facts, checked against claude-agent-sdk 0.2.160:
   - [x] Check off slice plan entry 30 in `900-slices.maintenance-and-refactoring.md`.
   - [x] Commit: `docs: close out slice 932`
 
-- [ ] **E3 — Code review gate and merge** — **PM-gated**: the PM runs the review. The agent then addresses the findings and merges.
-  - [ ] The Project Manager runs the code review (`sq review code 932 --model <model>`). Do not run it without an explicit `--model`.
-  - [ ] Address the findings in the review file's `## Response` section, fix them, and commit.
-  - [ ] Re-read `cf config get git.integration_branch` (empty → `main`). Then `git checkout main && git merge 932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`.
-  - [ ] SC: main contains the slice, and the suite is green on main.
+- [x] **E3 — Code review gate and merge** — **PM-gated**: the PM runs the review. The agent then addresses the findings and merges.
+  - [x] The Project Manager runs the code review (`sq review code 932 --model <model>`). Do not run it without an explicit `--model`.
+  - [x] Address the findings in the review file's `## Response` section, fix them, and commit.
+  - [x] Re-read `cf config get git.integration_branch` (empty → `main`). Then `git checkout main && git merge 932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`.
+  - [x] SC: main contains the slice, and the suite is green on main.
+    Review PASS (sonnet-5-5); F002/F004 fixed in f0d6b5db, response in the review file. Fast-forward merged to main; suite on main: 4936 passed, 4 skipped, 0 failed.

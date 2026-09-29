@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20260928
 dateUpdated: 20260928
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Pipeline SDK Session Control — Seeding Without a Turn, Dispatch That Waits for Background Work, and Explicit Prompt and Settings

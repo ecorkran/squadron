@@ -14,7 +14,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 932: Pipeline SDK Session Control — Implementation Complete
 
-- Branch `932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`. Not merged: it waits on the PM code review gate (E3).
+- Branch `932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`, merged to main after code review PASS (F002/F004 fixed). Suite on main: 4936 passed.
 - **A (#162):**
   - `open_pipeline_session(seed=)` is the only session builder. `SDKExecutionSession.base_options` stays unseeded.
   - `_reconnect(seed, SeedSource)` serves `compact()` and `seed_context()`. The seed rides as preset `append`, and no `query()` is sent.
