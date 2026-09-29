@@ -7,6 +7,7 @@ import shutil
 import sys
 import tomllib
 from pathlib import Path
+from typing import Final, overload
 
 import tomli_w
 
@@ -51,9 +52,26 @@ def _read_toml(path: Path) -> dict[str, object]:
         return dict(tomllib.load(f))
 
 
+_TRUE_SPELLINGS: Final = frozenset({"true", "yes", "on", "1"})
+_FALSE_SPELLINGS: Final = frozenset({"false", "no", "off", "0"})
+
+
+def _coerce_bool(key: str, raw_value: str) -> bool:
+    """Parse a bool leniently: case-insensitive, surrounding whitespace ignored."""
+    normalized = raw_value.strip().lower()
+    if normalized in _TRUE_SPELLINGS:
+        return True
+    if normalized in _FALSE_SPELLINGS:
+        return False
+    accepted = ", ".join(sorted(_TRUE_SPELLINGS | _FALSE_SPELLINGS))
+    raise ValueError(f"{key} must be a boolean ({accepted}), got {raw_value!r}")
+
+
 def _coerce_value(key: str, raw_value: str) -> object:
     """Coerce a string value to the key's declared type."""
     key_def = CONFIG_KEYS[key]
+    if key_def.type_ is bool:
+        return _coerce_bool(key, raw_value)
     if key_def.type_ is int:
         return int(raw_value)
     if key_def.type_ is str:
@@ -91,7 +109,15 @@ def get_config(key: str, cwd: str = ".") -> object:
     return load_config(cwd)[key]
 
 
-def get_typed_config(key: str, type_: type[int] | type[float], cwd: str = ".") -> int | float:
+@overload
+def get_typed_config(key: str, type_: type[bool], cwd: str = ".") -> bool: ...
+@overload
+def get_typed_config(key: str, type_: type[int], cwd: str = ".") -> int: ...
+@overload
+def get_typed_config(key: str, type_: type[float], cwd: str = ".") -> float: ...
+def get_typed_config(
+    key: str, type_: type[bool] | type[int] | type[float], cwd: str = "."
+) -> bool | int | float:
     """Get a single config value, validated against ``type_``.
 
     Raises ``ValueError`` on a type mismatch so both core and CLI callers
@@ -100,6 +126,11 @@ def get_typed_config(key: str, type_: type[int] | type[float], cwd: str = ".") -
     raise metrology-specific error types.
     """
     value = get_config(key, cwd=cwd)
+    # bool before int: bool is a subclass of int.
+    if type_ is bool:
+        if not isinstance(value, bool):
+            raise ValueError(f"{key} must be a boolean, got {value!r}")
+        return value
     if type_ is int:
         if not isinstance(value, int):
             raise ValueError(f"{key} must be an integer, got {value!r}")

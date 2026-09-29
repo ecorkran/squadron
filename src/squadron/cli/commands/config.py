@@ -22,6 +22,15 @@ config_app = typer.Typer(
 )
 
 
+def _display_value(val: object) -> str:
+    """Render a resolved config value: TOML spelling for bools."""
+    if val is None:
+        return "(not set)"
+    if isinstance(val, bool):
+        return "true" if val else "false"
+    return str(val)
+
+
 @config_app.command("set")
 def config_set(
     key: str = typer.Argument(help="Config key to set"),
@@ -32,7 +41,7 @@ def config_set(
     """Set a config value."""
     try:
         set_config(key, value, project=project, cwd=cwd)
-    except KeyError as exc:
+    except (KeyError, ValueError) as exc:
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
@@ -73,7 +82,7 @@ def config_get(
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from exc
 
-    rprint(f"{key} = {val}  ({source})")
+    rprint(f"{key} = {_display_value(val)}  ({source})")
 
 
 @config_app.command("list")
@@ -88,7 +97,7 @@ def config_list(
             source = resolve_config_source(key_name, cwd=cwd)
         except KeyError:
             continue
-        display_val = str(val) if val is not None else "(not set)"
+        display_val = _display_value(val)
         rprint(f"  {key_name:<{max_key_len}}  {display_val:<40}  ({source})")
 
 

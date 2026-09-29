@@ -95,6 +95,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "If set, overrides compact.template. Param substitution still applies."
         ),
     ),
+    "pipeline.auto_memory": ConfigKey(
+        name="pipeline.auto_memory",
+        type_=bool,
+        default=True,
+        description=(
+            "Load (and let the agent write) Claude Code's per-project auto-memory "
+            "in pipeline sessions and pipeline dispatch only. Reviews, judges, "
+            "PR, summary, and audit paths always run with memory off."
+        ),
+    ),
     "pipeline.background_idle_timeout_s": ConfigKey(
         name="pipeline.background_idle_timeout_s",
         type_=int,

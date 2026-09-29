@@ -132,3 +132,31 @@ class TestConfigPath:
         cli_runner.invoke(app, ["config", "set", "cwd", "/test"])
         result = cli_runner.invoke(app, ["config", "path"])
         assert "exists" in result.output
+
+
+class TestBoolConfigCli:
+    """`pipeline.auto_memory` round-trips through the CLI (slice 932)."""
+
+    def test_get_default_renders_toml_spelling(
+        self, cli_runner: CliRunner, patch_config_paths: dict[str, Path]
+    ) -> None:
+        result = cli_runner.invoke(app, ["config", "get", "pipeline.auto_memory"])
+        assert result.exit_code == 0
+        assert "pipeline.auto_memory = true  (default)" in result.output
+
+    def test_set_then_get_round_trips_as_native_bool(
+        self, cli_runner: CliRunner, patch_config_paths: dict[str, Path]
+    ) -> None:
+        set_result = cli_runner.invoke(app, ["config", "set", "pipeline.auto_memory", "false"])
+        assert set_result.exit_code == 0
+        assert '"pipeline.auto_memory" = false' in patch_config_paths["user"].read_text()
+
+        get_result = cli_runner.invoke(app, ["config", "get", "pipeline.auto_memory"])
+        assert "pipeline.auto_memory = false  (user)" in get_result.output
+
+    def test_invalid_value_exits_with_error(
+        self, cli_runner: CliRunner, patch_config_paths: dict[str, Path]
+    ) -> None:
+        result = cli_runner.invoke(app, ["config", "set", "pipeline.auto_memory", "maybe"])
+        assert result.exit_code == 1
+        assert "must be a boolean" in result.output

@@ -157,3 +157,38 @@ class TestResolveConfigSource:
     def test_unknown_key_raises(self, patch_config_paths: dict[str, Path]) -> None:
         with pytest.raises(KeyError, match="Unknown config key"):
             resolve_config_source("fake_key")
+
+
+class TestBoolConfigValues:
+    """Bool coercion and typed reads (slice 932, pipeline.auto_memory)."""
+
+    @pytest.mark.parametrize(
+        ("raw", "expected"),
+        [
+            *[(s, True) for s in ["true", "True", "YES", "on", "1", "  true  ", "\tOn\n"]],
+            *[(s, False) for s in ["false", "FALSE", "no", "Off", "0", " no "]],
+        ],
+    )
+    def test_accepted_spellings(
+        self, patch_config_paths: dict[str, Path], raw: str, expected: bool
+    ) -> None:
+        set_config("pipeline.auto_memory", raw)
+        assert get_config("pipeline.auto_memory") is expected
+
+    def test_invalid_spelling_raises_naming_key(self, patch_config_paths: dict[str, Path]) -> None:
+        with pytest.raises(ValueError, match="pipeline.auto_memory must be a boolean"):
+            set_config("pipeline.auto_memory", "maybe")
+
+    def test_typed_read_returns_bool(self, patch_config_paths: dict[str, Path]) -> None:
+        from squadron.config.manager import get_typed_config
+
+        assert get_typed_config("pipeline.auto_memory", bool) is True
+        set_config("pipeline.auto_memory", "off")
+        assert get_typed_config("pipeline.auto_memory", bool) is False
+
+    def test_typed_read_rejects_non_bool(self, patch_config_paths: dict[str, Path]) -> None:
+        from squadron.config.manager import get_typed_config
+
+        (patch_config_paths["user"]).write_text('"pipeline.auto_memory" = 1\n')
+        with pytest.raises(ValueError, match="must be a boolean"):
+            get_typed_config("pipeline.auto_memory", bool)

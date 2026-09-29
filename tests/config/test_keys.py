@@ -138,3 +138,8 @@ class TestPipelineConfigKeys:
     def test_background_idle_timeout_coerces_on_set(self, patch_config_paths: dict[str, Path]) -> None:
         set_config("pipeline.background_idle_timeout_s", "60")
         assert get_typed_config("pipeline.background_idle_timeout_s", int) == 60
+
+    def test_auto_memory_registered_as_bool_defaulting_on(self) -> None:
+        key = CONFIG_KEYS["pipeline.auto_memory"]
+        assert key.type_ is bool
+        assert key.default is True
