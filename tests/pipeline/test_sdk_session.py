@@ -1081,3 +1081,45 @@ class TestBackgroundIdleTimeout:
         config.assert_not_called()
         client.stop_task.assert_not_called()
         assert session.background_tasks_stopped == 0  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Pipeline session settings (slice 932 D10/D11)
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineSessionSettings:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("auto_memory", [True, False])
+    async def test_builder_applies_policy(self, auto_memory: bool) -> None:
+        from squadron.pipeline.sdk_session import open_pipeline_session
+
+        with (
+            patch(f"{_MOD}.get_typed_config", return_value=auto_memory),
+            patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as ctor,
+        ):
+            session = await open_pipeline_session()
+
+        options = ctor.call_args.kwargs["options"]
+        assert options.setting_sources == ["project"]
+        assert ("CLAUDE_CODE_DISABLE_AUTO_MEMORY" in options.env) is (not auto_memory)
+        assert session.setting_sources == ["project"]
+        assert session.auto_memory is auto_memory
+
+    @pytest.mark.asyncio
+    async def test_settings_survive_rotation(self) -> None:
+        from squadron.pipeline.sdk_session import open_pipeline_session
+
+        with (
+            patch(f"{_MOD}.get_typed_config", return_value=False),
+            patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()),
+        ):
+            session = await open_pipeline_session()
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as ctor:
+            await session.compact(instructions="x", summary="S")
+
+        rotated = ctor.call_args.kwargs["options"]
+        assert rotated.setting_sources == ["project"]
+        assert rotated.env == {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
+        assert rotated.system_prompt["append"].endswith("S")

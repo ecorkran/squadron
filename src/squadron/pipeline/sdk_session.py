@@ -44,6 +44,11 @@ from squadron.providers.sdk.rate_limit import (
     is_throttle,
     rate_limit_backoff_s,
 )
+from squadron.providers.sdk.settings import (
+    AUTO_MEMORY_DISABLE_ENV,
+    PIPELINE_SETTING_SOURCES,
+    sdk_settings_options,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -123,6 +128,17 @@ class SDKExecutionSession:
     # many it stopped on an idle timeout (zero on every other path).
     background_tasks_waited: int = 0
     background_tasks_stopped: int = 0
+
+    @property
+    def setting_sources(self) -> list[str] | None:
+        """Settings sources every client of this session is built with."""
+        sources = self.base_options.setting_sources
+        return None if sources is None else list(sources)
+
+    @property
+    def auto_memory(self) -> bool:
+        """Whether this session's clients load Claude Code auto-memory."""
+        return AUTO_MEMORY_DISABLE_ENV not in self.base_options.env
 
     async def connect(self) -> None:
         """Connect the underlying SDK client.
@@ -431,12 +447,19 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
     "bypassPermissions")`` calls. The Claude Code preset gives dispatches the
     full Claude Code persona rather than the Agent SDK's minimal prompt. A
     ``seed`` is appended to that preset (see ``_seeded_options``), never sent
-    as a turn.
+    as a turn. Settings follow the pipeline policy (slice 932 D10/D11).
     """
+    cwd = str(Path.cwd())
+    settings = sdk_settings_options(
+        PIPELINE_SETTING_SOURCES,
+        auto_memory=get_typed_config("pipeline.auto_memory", bool, cwd=cwd),
+    )
     base = ClaudeAgentOptions(
-        cwd=str(Path.cwd()),
+        cwd=cwd,
         permission_mode="bypassPermissions",
         system_prompt={"type": "preset", "preset": "claude_code"},
+        setting_sources=settings["setting_sources"],  # pyright: ignore[reportArgumentType]
+        env=settings["env"],
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))
     session = SDKExecutionSession(client=client, base_options=base)
