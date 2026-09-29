@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 20260928
+
 ### Added
 - New settings `pipeline.auto_memory` (default `true`), `pipeline.user_settings` (default `false`; turn on to load your user CLAUDE.md and user settings in pipeline runs), and `pipeline.background_idle_timeout_s` (default `1800`). `sq config` now accepts `true`/`false`-style values (#156, #163).
 

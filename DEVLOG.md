@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260928
 
+### Release 0.16.0
+
+- **Contents:** slice 932, Pipeline SDK Session Control. Rotation, resume, and restore seed without a turn (#162). Dispatch waits for background agents and flags carry the agent's last words (#163). Dispatch `system_prompt` appends to the Claude Code preset (#155). Explicit settings sources per path and recorded prompt mode/settings (#156). New config keys `pipeline.auto_memory`, `pipeline.user_settings`, `pipeline.background_idle_timeout_s`; bool config values.
+
 ### Slice 932: Pipeline SDK Session Control — Implementation Complete
 
 - Branch `932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`, merged to main after code review PASS (F002/F004 fixed). Suite on main: 4936 passed.
