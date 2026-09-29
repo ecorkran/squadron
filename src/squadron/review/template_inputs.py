@@ -3,7 +3,7 @@
 Each template declares which ``inputs`` keys it populates and how to derive them
 from a ``SliceInfo``.  Adding a new template requires only a new entry in
 ``TEMPLATE_INPUTS``; the dispatch logic in ``_resolve_slice_inputs`` becomes a
-single call to ``resolve_template_inputs``.
+single call to ``resolve_template_input_parts``.
 """
 
 from __future__ import annotations
@@ -23,28 +23,34 @@ FILE_INPUT_KEYS = ("input", "against")
 
 @dataclass(frozen=True)
 class TemplateInputSpec:
-    """Specification for one key in the ``inputs`` dict a template requires."""
+    """Specification for one key in the ``inputs`` dict a template requires.
+
+    ``source`` returns every value it has for the key: empty when it has
+    nothing, one element for a scalar input. ``fans_out`` marks the key whose
+    values each get their own review part (a split task breakdown); a spec
+    without it uses only the first value.
+    """
 
     key: str
-    source: Callable[[SliceInfo, str], str | None]
+    source: Callable[[SliceInfo, str], list[str]]
+    fans_out: bool = False
 
 
-def _design_file(info: SliceInfo, _cwd: str) -> str | None:
-    return info["design_file"] if info["design_file"] else None
+def _design_file(info: SliceInfo, _cwd: str) -> list[str]:
+    return [info["design_file"]] if info["design_file"] else []
 
 
-def _arch_file(info: SliceInfo, _cwd: str) -> str | None:
-    return info["arch_file"] if info["arch_file"] else None
+def _arch_file(info: SliceInfo, _cwd: str) -> list[str]:
+    return [info["arch_file"]] if info["arch_file"] else []
 
 
-def _tasks_input(info: SliceInfo, _cwd: str) -> str | None:
-    if not info["task_files"]:
-        return None
-    return str(TASKS_DIR / info["task_files"][0])
+def _task_files(info: SliceInfo, _cwd: str) -> list[str]:
+    return [str(TASKS_DIR / name) for name in info["task_files"]]
 
 
-def _diff_range(info: SliceInfo, cwd: str) -> str | None:
-    return resolve_slice_diff_range(info["index"], cwd)
+def _diff_range(info: SliceInfo, cwd: str) -> list[str]:
+    # Never empty: an unresolvable range raises DiffRangeUnresolvedError.
+    return [resolve_slice_diff_range(info["index"], cwd)]
 
 
 TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]] = {
@@ -53,7 +59,7 @@ TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]] = {
         TemplateInputSpec(key="against", source=_arch_file),
     ],
     "tasks": [
-        TemplateInputSpec(key="input", source=_tasks_input),
+        TemplateInputSpec(key="input", source=_task_files, fans_out=True),
         TemplateInputSpec(key="against", source=_design_file),
     ],
     "arch": [
@@ -63,7 +69,7 @@ TEMPLATE_INPUTS: dict[str, list[TemplateInputSpec]] = {
         TemplateInputSpec(key="diff", source=_diff_range),
     ],
     "judge.tasks-vs-slice": [
-        TemplateInputSpec(key="input", source=_tasks_input),
+        TemplateInputSpec(key="input", source=_task_files, fans_out=True),
         TemplateInputSpec(key="against", source=_design_file),
     ],
     "judge.slice-vs-arch": [
@@ -94,27 +100,47 @@ def missing_input_files(inputs: dict[str, str]) -> list[tuple[str, str]]:
     return missing
 
 
-def resolve_template_inputs(
+def resolve_template_input_parts(
     template_name: str,
     info: SliceInfo,
     cwd: str,
     inputs: dict[str, str],
-) -> None:
-    """Populate ``inputs`` from the registry entry for ``template_name``.
+) -> list[dict[str, str]]:
+    """Resolve ``inputs`` for ``template_name`` into one dict per review part.
 
-    Iterates each ``TemplateInputSpec`` for the template.  When ``source``
-    returns a non-None value, ``inputs[spec.key]`` is set.  Unknown template
-    names produce no changes and no error.
+    Scalar keys are copied into every dict; the one ``fans_out`` key gets one
+    value per dict. ``inputs`` is not mutated. Unknown template names yield a
+    single unchanged copy.
 
     A key already present in ``inputs`` was supplied explicitly by the caller
-    and wins over the slice-derived value. This mirrors the CLI, where an
-    explicit ``--diff`` takes precedence over ``resolve_slice_diff_range``:
+    and wins over the slice-derived value, and is not fanned out: an explicit
+    ``input:`` means one part. This mirrors the CLI, where an explicit
+    ``--diff`` takes precedence over ``resolve_slice_diff_range``:
     ``sq review code 118 --diff main`` and a pipeline step carrying both
     ``slice`` and ``diff`` must mean the same thing.
+
+    A fan-out source with no values yields one dict without that key, so the
+    caller's missing-required-input check reports it.
+
+    Raises:
+        ValueError: If more than one spec in the entry sets ``fans_out``.
     """
-    for spec in TEMPLATE_INPUTS.get(template_name, []):
+    specs = TEMPLATE_INPUTS.get(template_name, [])
+    if sum(spec.fans_out for spec in specs) > 1:
+        raise ValueError(f"template '{template_name}' declares more than one fan-out input")
+
+    base = dict(inputs)
+    fan_key: str | None = None
+    fan_values: list[str] = []
+    for spec in specs:
         if spec.key in inputs:
             continue
-        value = spec.source(info, cwd)
-        if value is not None:
-            inputs[spec.key] = value
+        values = spec.source(info, cwd)
+        if spec.fans_out:
+            fan_key, fan_values = spec.key, values
+        elif values:
+            base[spec.key] = values[0]
+
+    if fan_key is None or not fan_values:
+        return [base]
+    return [{**base, fan_key: value} for value in fan_values]

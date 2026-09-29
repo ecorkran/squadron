@@ -10,8 +10,9 @@ import pytest
 from squadron.review.persistence import SliceInfo
 from squadron.review.template_inputs import (
     TEMPLATE_INPUTS,
+    TemplateInputSpec,
     missing_input_files,
-    resolve_template_inputs,
+    resolve_template_input_parts,
 )
 
 # ---------------------------------------------------------------------------
@@ -48,24 +49,28 @@ def test_registry_has_all_templates() -> None:
     }
 
 
+def _resolve_one(template_name: str, info: SliceInfo = SLICE_INFO) -> dict[str, str]:
+    """Resolve a template expected to yield exactly one part and return it."""
+    parts = resolve_template_input_parts(template_name, info, CWD, {})
+    assert len(parts) == 1
+    return parts[0]
+
+
 # ---------------------------------------------------------------------------
 # slice template
 # ---------------------------------------------------------------------------
 
 
 def test_slice_template_populates_input_and_against() -> None:
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("slice", SLICE_INFO, CWD, inputs)
+    inputs = _resolve_one("slice")
     assert inputs["input"] == SLICE_INFO["design_file"]
     assert inputs["against"] == SLICE_INFO["arch_file"]
 
 
 def test_slice_template_no_against_when_arch_file_empty() -> None:
-    """source returning None must not set the key (not even to an empty string)."""
+    """An empty source must not set the key (not even to an empty string)."""
     info: SliceInfo = {**SLICE_INFO, "arch_file": ""}
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("slice", info, CWD, inputs)
-    assert "against" not in inputs
+    assert "against" not in _resolve_one("slice", info)
 
 
 # ---------------------------------------------------------------------------
@@ -74,18 +79,15 @@ def test_slice_template_no_against_when_arch_file_empty() -> None:
 
 
 def test_tasks_template_populates_input_and_against() -> None:
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("tasks", SLICE_INFO, CWD, inputs)
+    inputs = _resolve_one("tasks")
     assert inputs["input"] == (f"project-documents/user/tasks/{SLICE_INFO['task_files'][0]}")
     assert inputs["against"] == SLICE_INFO["design_file"]
 
 
 def test_tasks_template_no_input_when_task_files_empty() -> None:
-    """source returning None must not set the key (not even to None)."""
-    info: SliceInfo = {**SLICE_INFO, "task_files": []}  # type: ignore[typeddict-item]
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("tasks", info, CWD, inputs)
-    assert "input" not in inputs
+    """An empty fan-out source yields one part without the key."""
+    info: SliceInfo = {**SLICE_INFO, "task_files": []}
+    assert "input" not in _resolve_one("tasks", info)
 
 
 # ---------------------------------------------------------------------------
@@ -94,9 +96,7 @@ def test_tasks_template_no_input_when_task_files_empty() -> None:
 
 
 def test_arch_template_populates_input() -> None:
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("arch", SLICE_INFO, CWD, inputs)
-    assert inputs["input"] == SLICE_INFO["arch_file"]
+    assert _resolve_one("arch")["input"] == SLICE_INFO["arch_file"]
 
 
 # ---------------------------------------------------------------------------
@@ -104,27 +104,14 @@ def test_arch_template_populates_input() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_code_template_populates_diff(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_code_template_populates_diff() -> None:
     with patch(
         "squadron.review.template_inputs.resolve_slice_diff_range",
         return_value=DIFF_RANGE,
     ) as mock_diff:
-        inputs: dict[str, str] = {}
-        resolve_template_inputs("code", SLICE_INFO, CWD, inputs)
+        inputs = _resolve_one("code")
         mock_diff.assert_called_once_with(SLICE_INFO["index"], CWD)
         assert inputs["diff"] == DIFF_RANGE
-
-
-def test_code_template_no_diff_when_source_returns_none(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with patch(
-        "squadron.review.template_inputs.resolve_slice_diff_range",
-        return_value=None,
-    ):
-        inputs: dict[str, str] = {}
-        resolve_template_inputs("code", SLICE_INFO, CWD, inputs)
-        assert "diff" not in inputs
 
 
 # ---------------------------------------------------------------------------
@@ -132,17 +119,15 @@ def test_code_template_no_diff_when_source_returns_none(
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_template_leaves_inputs_unchanged() -> None:
+def test_unknown_template_yields_one_unchanged_copy() -> None:
     inputs: dict[str, str] = {"existing": "value"}
-    resolve_template_inputs("nonexistent", SLICE_INFO, CWD, inputs)
-    assert inputs == {"existing": "value"}
+    parts = resolve_template_input_parts("nonexistent", SLICE_INFO, CWD, inputs)
+    assert parts == [{"existing": "value"}]
+    assert parts[0] is not inputs
 
 
 def test_unknown_template_does_not_raise() -> None:
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("totally-unknown", SLICE_INFO, CWD, inputs)
-    # No exception, no side effects
-    assert inputs == {}
+    assert resolve_template_input_parts("totally-unknown", SLICE_INFO, CWD, {}) == [{}]
 
 
 # ---------------------------------------------------------------------------
@@ -151,18 +136,15 @@ def test_unknown_template_does_not_raise() -> None:
 
 
 def test_judge_tasks_vs_slice_populates_input_and_against() -> None:
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("judge.tasks-vs-slice", SLICE_INFO, CWD, inputs)
+    inputs = _resolve_one("judge.tasks-vs-slice")
     assert inputs["input"] == (f"project-documents/user/tasks/{SLICE_INFO['task_files'][0]}")
     assert inputs["against"] == SLICE_INFO["design_file"]
 
 
 def test_judge_tasks_vs_slice_no_input_when_task_files_empty() -> None:
-    """source returning None must not set the key (not even to None)."""
-    info: SliceInfo = {**SLICE_INFO, "task_files": []}  # type: ignore[typeddict-item]
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("judge.tasks-vs-slice", info, CWD, inputs)
-    assert "input" not in inputs
+    """An empty fan-out source yields one part without the key."""
+    info: SliceInfo = {**SLICE_INFO, "task_files": []}
+    assert "input" not in _resolve_one("judge.tasks-vs-slice", info)
 
 
 # ---------------------------------------------------------------------------
@@ -171,18 +153,67 @@ def test_judge_tasks_vs_slice_no_input_when_task_files_empty() -> None:
 
 
 def test_judge_slice_vs_arch_populates_input_and_against() -> None:
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("judge.slice-vs-arch", SLICE_INFO, CWD, inputs)
+    inputs = _resolve_one("judge.slice-vs-arch")
     assert inputs["input"] == SLICE_INFO["design_file"]
     assert inputs["against"] == SLICE_INFO["arch_file"]
 
 
 def test_judge_slice_vs_arch_no_against_when_arch_file_empty() -> None:
-    """source returning None must not set the key (not even to an empty string)."""
+    """An empty source must not set the key (not even to an empty string)."""
     info: SliceInfo = {**SLICE_INFO, "arch_file": ""}
-    inputs: dict[str, str] = {}
-    resolve_template_inputs("judge.slice-vs-arch", info, CWD, inputs)
-    assert "against" not in inputs
+    assert "against" not in _resolve_one("judge.slice-vs-arch", info)
+
+
+# ---------------------------------------------------------------------------
+# Fan-out over split task files (slice 930)
+# ---------------------------------------------------------------------------
+
+SPLIT_INFO: SliceInfo = {
+    **SLICE_INFO,
+    "task_files": [
+        "194-tasks.loop-step-type-1.md",
+        "194-tasks.loop-step-type-2.md",
+        "194-tasks.loop-step-type-3.md",
+    ],
+}
+SPLIT_PATHS = [f"project-documents/user/tasks/{name}" for name in SPLIT_INFO["task_files"]]
+
+
+@pytest.mark.parametrize("template_name", ["tasks", "judge.tasks-vs-slice"])
+def test_split_task_files_yield_one_part_each(template_name: str) -> None:
+    parts = resolve_template_input_parts(template_name, SPLIT_INFO, CWD, {"cwd": CWD})
+    assert [part["input"] for part in parts] == SPLIT_PATHS
+    assert all(part["against"] == SLICE_INFO["design_file"] for part in parts)
+    assert all(part["cwd"] == CWD for part in parts)
+
+
+def test_caller_supplied_input_is_one_part() -> None:
+    parts = resolve_template_input_parts("tasks", SPLIT_INFO, CWD, {"input": "mine.md"})
+    assert len(parts) == 1
+    assert parts[0]["input"] == "mine.md"
+    assert parts[0]["against"] == SLICE_INFO["design_file"]
+
+
+def test_two_fan_out_specs_raise(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _two(_info: SliceInfo, _cwd: str) -> list[str]:
+        return ["a", "b"]
+
+    monkeypatch.setitem(
+        TEMPLATE_INPUTS,
+        "double-fan",
+        [
+            TemplateInputSpec(key="input", source=_two, fans_out=True),
+            TemplateInputSpec(key="against", source=_two, fans_out=True),
+        ],
+    )
+    with pytest.raises(ValueError, match="more than one fan-out"):
+        resolve_template_input_parts("double-fan", SLICE_INFO, CWD, {})
+
+
+def test_inputs_are_not_mutated() -> None:
+    inputs = {"cwd": CWD}
+    resolve_template_input_parts("tasks", SPLIT_INFO, CWD, inputs)
+    assert inputs == {"cwd": CWD}
 
 
 # ---------------------------------------------------------------------------

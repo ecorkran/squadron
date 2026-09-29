@@ -37,7 +37,10 @@ from squadron.review.rules import (
     resolve_rules_dir,
 )
 from squadron.review.save_target import StepTarget
-from squadron.review.template_inputs import missing_input_files, resolve_template_inputs
+from squadron.review.template_inputs import (
+    missing_input_files,
+    resolve_template_input_parts,
+)
 from squadron.review.templates import ReviewTemplate, get_template, load_all_templates
 
 _logger = logging.getLogger(__name__)
@@ -460,7 +463,7 @@ class ReviewAction:
     ) -> SliceInfo | None:
         """Auto-resolve review inputs from slice number via CF.
 
-        Delegates to ``resolve_template_inputs`` using the declarative registry.
+        Delegates to ``resolve_template_input_parts`` using the declarative registry.
         Returns the resolved SliceInfo for use in file persistence naming.
         """
         try:
@@ -469,7 +472,10 @@ class ReviewAction:
             _logger.warning("review: could not resolve slice %d: %s", slice_index, exc)
             return None
 
-        resolve_template_inputs(template_name, info, inputs.get("cwd", ""), inputs)
+        # TEMPORARY (slice 930 Task 4): only the first part is reviewed until the
+        # part loop lands in Task 7a, which replaces this shim.
+        parts = resolve_template_input_parts(template_name, info, inputs.get("cwd", ""), inputs)
+        inputs.update(parts[0])
         return info
 
 

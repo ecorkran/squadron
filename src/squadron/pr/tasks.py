@@ -1,6 +1,6 @@
 """Parse checkbox state out of a task file's markdown.
 
-The first checkbox reader in the codebase. ``review.template_inputs._tasks_input``
+The first checkbox reader in the codebase. ``review.template_inputs._task_files``
 passes task files to the review template as bare paths for injection; nothing
 in the tree reads their checkbox state until this module.
 """
