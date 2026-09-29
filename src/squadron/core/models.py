@@ -68,6 +68,8 @@ class AgentConfig(BaseModel):
     # caller (slice 382, design D1).
     convention_root: str | None = None
     setting_sources: list[str] | None = None  # SDK agents: e.g. ["project"]
+    # SDK agents: True only on pipeline paths (pipeline.auto_memory)
+    auto_memory: bool = False
     # SDK and API agents: tool whitelist. Note the vocabularies differ — SDK names
     # (e.g. "Read") vs. squadron registry names — see slice-262 decision D1.
     allowed_tools: list[str] | None = None

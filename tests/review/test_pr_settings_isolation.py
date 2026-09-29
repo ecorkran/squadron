@@ -123,4 +123,5 @@ async def test_no_override_still_passes_template_setting_sources(tmp_path: Path)
     options = await _built_options_for_run(cwd=str(tmp_path), setting_sources_override=None)
 
     assert list(options.setting_sources) == ["project"]
-    assert "CLAUDE_CODE_DISABLE_AUTO_MEMORY" not in dict(options.env or {})
+    # Reviews always run with auto-memory off (slice 932 D11).
+    assert options.env.get("CLAUDE_CODE_DISABLE_AUTO_MEMORY") == "1"

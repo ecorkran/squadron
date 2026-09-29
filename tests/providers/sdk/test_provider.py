@@ -364,3 +364,27 @@ class TestOutputBudgetWarning:
         with caplog.at_level("WARNING", logger="squadron.providers.sdk.provider"):
             await self._create(provider, config)
         assert not [r for r in caplog.records if "max_output_tokens" in r.getMessage()]
+
+
+class TestAutoMemory:
+    """Auto-memory comes from AgentConfig.auto_memory (slice 932 D11)."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("auto_memory", "disabled"), [(False, True), (True, False)])
+    async def test_env_follows_auto_memory(
+        self, provider: ClaudeSDKProvider, auto_memory: bool, disabled: bool
+    ) -> None:
+        config = AgentConfig(
+            name="mem",
+            agent_type="sdk",
+            provider="sdk",
+            setting_sources=["project"],
+            auto_memory=auto_memory,
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+        opts = mock_cls.call_args.kwargs["options"]
+        assert opts.setting_sources == ["project"]
+        assert ("CLAUDE_CODE_DISABLE_AUTO_MEMORY" in opts.env) is disabled

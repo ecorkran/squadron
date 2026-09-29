@@ -9,12 +9,13 @@ controlled separately through ``AUTO_MEMORY_DISABLE_ENV``.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import Final
+from typing import Final, TypedDict
 
 __all__ = [
     "AUTO_MEMORY_DISABLE_ENV",
     "PIPELINE_SETTING_SOURCES",
     "REVIEW_SETTING_SOURCES",
+    "SdkSettings",
     "sdk_settings_options",
 ]
 
@@ -28,12 +29,19 @@ REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 AUTO_MEMORY_DISABLE_ENV: Final = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
 
 
+class SdkSettings(TypedDict):
+    """``ClaudeAgentOptions`` kwargs this module decides."""
+
+    setting_sources: list[str]
+    env: dict[str, str]
+
+
 def sdk_settings_options(
     setting_sources: Sequence[str],
     *,
     auto_memory: bool,
     base_env: Mapping[str, str] | None = None,
-) -> dict[str, object]:
+) -> SdkSettings:
     """Return ``ClaudeAgentOptions`` kwargs for settings sources and auto-memory.
 
     ``env`` is ``base_env`` merged with the auto-memory disable variable when
