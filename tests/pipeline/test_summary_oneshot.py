@@ -252,3 +252,25 @@ async def test_routes_a_registered_profile_without_reference_to_sdk_ness(
 
     assert result == "SDK-PROFILE OUTPUT"
     agent.shutdown.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_summary_one_shot_records_empty_prompt_and_settings(
+    monkeypatch: pytest.MonkeyPatch, fake_provider_env: None
+) -> None:
+    """Slice 932 D12: derived from the summary's own config (instructions="", [])."""
+    from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
+    from squadron.providers import loader as loader_mod
+    from squadron.providers import registry as registry_mod
+
+    monkeypatch.setattr(loader_mod, "ensure_provider_loaded", lambda name: None)
+    agent = _make_fake_agent([_make_fake_message("S")])
+    registry_mod._REGISTRY["sdk"] = _make_fake_provider(agent)  # pyright: ignore[reportPrivateUsage]
+
+    _, telemetry = await capture_summary_via_profile_with_telemetry(
+        instructions="summarize", model_id=None, profile="sdk"
+    )
+
+    assert telemetry["system_prompt_mode"] == "empty"
+    assert telemetry["setting_sources"] == "none"
+    assert telemetry["auto_memory"] is False

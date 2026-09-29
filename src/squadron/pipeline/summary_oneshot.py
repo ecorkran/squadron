@@ -62,8 +62,9 @@ async def capture_summary_via_profile_with_telemetry(
 ) -> tuple[str, dict[str, object]]:
     """Run the one-shot summary and return its text alongside tool-use telemetry.
 
-    The telemetry dict is empty when the run had no tools, so a caller can splat it into
-    ``ActionResult.metadata`` without inventing keys (design D5).
+    The tool keys are absent when the run had no tools, so a caller can splat the dict
+    into ``ActionResult.metadata`` without inventing keys (design D5). The prompt and
+    settings keys (slice 932 D12) are always present.
     """
     from squadron.core.models import (
         RATE_LIMIT_EVENT_TYPE,
@@ -73,7 +74,9 @@ async def capture_summary_via_profile_with_telemetry(
         AgentConfig,
         Message,
         MessageType,
+        describe_run_settings,
     )
+    from squadron.providers.base import ProviderType
     from squadron.providers.loader import ensure_provider_loaded
     from squadron.providers.profiles import get_profile
     from squadron.providers.registry import get_provider
@@ -129,7 +132,8 @@ async def capture_summary_via_profile_with_telemetry(
 
     agent = await provider.create_agent(config)
     output_parts: list[str] = []
-    telemetry: dict[str, object] = {}
+    # Prompt and settings keys always present (slice 932 D12); tool keys only with tools.
+    telemetry = describe_run_settings(config, is_sdk=provider_profile.provider == ProviderType.SDK)
     try:
         message = Message(
             sender="summary-system",

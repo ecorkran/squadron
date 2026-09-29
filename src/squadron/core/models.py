@@ -122,6 +122,15 @@ def describe_setting_sources(setting_sources: Sequence[str] | None, *, is_sdk: b
     return ", ".join(setting_sources)
 
 
+def describe_run_settings(config: AgentConfig, *, is_sdk: bool) -> dict[str, object]:
+    """Step-metadata keys for the prompt and settings a one-shot agent ran with."""
+    return {
+        "system_prompt_mode": describe_system_prompt(config).value,
+        "setting_sources": describe_setting_sources(config.setting_sources, is_sdk=is_sdk),
+        "auto_memory": config.auto_memory,
+    }
+
+
 class Message(BaseModel):
     """A message routed between agents via the message bus."""
 

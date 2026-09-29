@@ -15,6 +15,9 @@ from squadron.core.models import (
     AgentConfig,
     Message,
     MessageType,
+    SystemPromptMode,
+    describe_run_settings,
+    describe_setting_sources,
 )
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
@@ -101,8 +104,10 @@ async def one_shot_dispatch_with_telemetry(
     metadata key but ``sdk_type``, which threw away the tool-call counts slice 265 needs. Its
     signature is unchanged for its other callers; this sibling carries both.
 
-    The telemetry dict is empty when the run had no tools, so callers can copy it into
-    ``ActionResult.metadata`` unconditionally without inventing keys (design D5).
+    The tool keys are absent when the run had no tools, so callers can copy the dict into
+    ``ActionResult.metadata`` unconditionally without inventing keys (design D5). The
+    prompt and settings keys (slice 932 D12) are always present, derived from the config
+    actually spawned.
     """
     profile = get_profile(profile_name)
     # The capability gate (slice 266), applied before the SDK guard below: a model whose
@@ -160,7 +165,7 @@ async def one_shot_dispatch_with_telemetry(
 
     registry = get_registry()
     agent = await registry.spawn(config)
-    telemetry: dict[str, object] = {}
+    telemetry = describe_run_settings(config, is_sdk=is_sdk)
     try:
         message = Message(
             sender="pipeline",
@@ -353,6 +358,12 @@ class DispatchAction:
                 "profile": "sdk-session",
                 "background_tasks_waited": session.background_tasks_waited,
                 "background_tasks_stopped": session.background_tasks_stopped,
+                # The session always runs the preset; a rotation seed rides as its append.
+                "system_prompt_mode": (
+                    SystemPromptMode.PRESET_APPEND if session.seeded else SystemPromptMode.PRESET
+                ).value,
+                "setting_sources": describe_setting_sources(session.setting_sources, is_sdk=True),
+                "auto_memory": session.auto_memory,
             },
         )
 

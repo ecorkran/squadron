@@ -128,6 +128,8 @@ class SDKExecutionSession:
     # many it stopped on an idle timeout (zero on every other path).
     background_tasks_waited: int = 0
     background_tasks_stopped: int = 0
+    # Whether the live client carries a seed in its system prompt.
+    seeded: bool = False
 
     @property
     def setting_sources(self) -> list[str] | None:
@@ -424,6 +426,7 @@ class SDKExecutionSession:
         self.client = ClaudeSDKClient(options=_seeded_options(self.base_options, seed))
         self.current_model = None
         self.session_id = None
+        self.seeded = seed is not None
         try:
             await self.connect()
         except Exception as exc:
@@ -462,6 +465,6 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
         env=settings["env"],
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))
-    session = SDKExecutionSession(client=client, base_options=base)
+    session = SDKExecutionSession(client=client, base_options=base, seeded=seed is not None)
     await session.connect()
     return session

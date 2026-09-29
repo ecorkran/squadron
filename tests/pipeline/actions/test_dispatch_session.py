@@ -266,3 +266,20 @@ async def test_session_path_rejects_step_system_prompt(action: DispatchAction) -
     assert "fixed at connect time" in (result.error or "")
     session.set_model.assert_not_called()
     session.dispatch.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("seeded", "mode"), [(False, "preset"), (True, "preset+append")])
+async def test_session_dispatch_records_prompt_and_settings(
+    action: DispatchAction, seeded: bool, mode: str
+) -> None:
+    session = _make_session()
+    session.seeded = seeded
+    session.setting_sources = ["project"]
+    session.auto_memory = True
+
+    result = await action.execute(_make_context(session=session))
+
+    assert result.metadata["system_prompt_mode"] == mode
+    assert result.metadata["setting_sources"] == "project"
+    assert result.metadata["auto_memory"] is True

@@ -795,3 +795,25 @@ async def test_non_sdk_dispatch_leaves_settings_unset(action: DispatchAction) ->
     config = await _config_with_profile(action, _openrouter_profile())
     assert config.setting_sources is None
     assert config.auto_memory is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("auto_memory", [True, False])
+async def test_sdk_one_shot_records_prompt_and_settings(
+    action: DispatchAction, auto_memory: bool
+) -> None:
+    """Slice 932 D12: recorded from the config actually spawned."""
+    ctx = _make_context(params={"prompt": "test", "system_prompt": "Be terse."})
+    mock_registry = _make_registry(_make_agent_mock("ok"))
+
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(f"{_P}.get_typed_config", return_value=auto_memory),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.metadata["system_prompt_mode"] == "preset+append"
+    assert result.metadata["setting_sources"] == "project"
+    assert result.metadata["auto_memory"] is auto_memory
