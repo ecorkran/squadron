@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -86,6 +87,39 @@ class AgentConfig(BaseModel):
     tool_exclude_patterns: list[str] = Field(default_factory=list)
     permission_mode: str | None = None  # SDK agents: permission handling
     credentials: dict[str, Any] = Field(default_factory=dict)
+
+
+class SystemPromptMode(StrEnum):
+    """Which system prompt an agent ran with — the four rows of the table above."""
+
+    PRESET = "preset"
+    PRESET_APPEND = "preset+append"
+    CUSTOM = "custom"
+    EMPTY = "empty"
+
+
+def describe_system_prompt(config: AgentConfig) -> SystemPromptMode:
+    """Derive the recorded mode from the same two fields the provider sends from."""
+    if config.use_default_system_prompt:
+        return SystemPromptMode.PRESET_APPEND if config.instructions else SystemPromptMode.PRESET
+    return SystemPromptMode.CUSTOM if config.instructions else SystemPromptMode.EMPTY
+
+
+SETTING_SOURCES_NON_SDK = "n/a (non-SDK)"
+SETTING_SOURCES_NONE = "none"
+# Only `sq serve` agents can still reach the SDK with None (slice 932 D10).
+SETTING_SOURCES_CLI_DEFAULT = "cli default"
+
+
+def describe_setting_sources(setting_sources: Sequence[str] | None, *, is_sdk: bool) -> str:
+    """Render the settings sources an agent ran with, for artifacts and metadata."""
+    if not is_sdk:
+        return SETTING_SOURCES_NON_SDK
+    if setting_sources is None:
+        return SETTING_SOURCES_CLI_DEFAULT
+    if not setting_sources:
+        return SETTING_SOURCES_NONE
+    return ", ".join(setting_sources)
 
 
 class Message(BaseModel):

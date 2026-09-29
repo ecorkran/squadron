@@ -262,3 +262,46 @@ def test_topology_config_json_round_trip() -> None:
     restored = TopologyConfig.model_validate_json(data)
     assert restored.topology_type == tc.topology_type
     assert restored.config == tc.config
+
+
+# -- System prompt and settings recording (slice 932 D12) ----------------------
+
+
+@pytest.mark.parametrize(
+    ("use_default", "instructions", "mode"),
+    [
+        (True, "X", "preset+append"),
+        (True, None, "preset"),
+        (True, "", "preset"),
+        (False, "X", "custom"),
+        (False, None, "empty"),
+        (False, "", "empty"),
+    ],
+)
+def test_describe_system_prompt(use_default: bool, instructions: str | None, mode: str) -> None:
+    from squadron.core.models import describe_system_prompt
+
+    config = AgentConfig(
+        name="a",
+        agent_type="sdk",
+        provider="sdk",
+        use_default_system_prompt=use_default,
+        instructions=instructions,
+    )
+    assert describe_system_prompt(config) == mode
+
+
+@pytest.mark.parametrize(
+    ("sources", "is_sdk", "rendered"),
+    [
+        (["project"], False, "n/a (non-SDK)"),
+        ([], True, "none"),
+        (["project"], True, "project"),
+        (["user", "project"], True, "user, project"),
+        (None, True, "cli default"),
+    ],
+)
+def test_describe_setting_sources(sources: list[str] | None, is_sdk: bool, rendered: str) -> None:
+    from squadron.core.models import describe_setting_sources
+
+    assert describe_setting_sources(sources, is_sdk=is_sdk) == rendered
