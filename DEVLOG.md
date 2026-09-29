@@ -10,6 +10,17 @@ dateUpdated: 20260928
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20260929
+
+### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Design Complete
+
+- Phase 5 done: `project-documents/user/tasks/930-tasks.pipeline-tasks-review-covers-every-split-task-file.md` (13 tasks, 363 lines). Committed to main; no code written, no slice branch yet.
+- Order: `review/parts.py` → CLI `review_tasks` on it → registry fan-out → `review_outputs.py` → extract `_run_part` (pure refactor) → multi-part `ReviewAction` with fold → dispatch feedback → batch report → parity test → validation → 914 walkthrough → close-out.
+- Decision in the breakdown: Task 4 removes `resolve_template_inputs` and leaves a one-line interim shim in `ReviewAction._resolve_slice_inputs` (first part only) so the build stays green; Task 7 replaces it.
+- The single-file snapshot in Task 7 must be generated from pre-change code (main), not from the branch.
+- `src/squadron/pr/tasks.py` has a docstring naming `_tasks_input`; Task 4 updates it.
+- Task 12 spends real `glm-flash` calls on slice 914 and `git rm`s its stale unsuffixed tasks review.
+
 ## 20260928
 
 ### Release 0.16.0
