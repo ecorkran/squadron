@@ -1058,32 +1058,43 @@ class TestDefaultSystemPromptPreset:
         assert config.use_default_system_prompt is False
         assert config.instructions is not None
 
-    @pytest.mark.asyncio
-    async def test_sdk_review_records_preset_used_at_verbosity_2(self) -> None:
-        template = _make_template()
-        mock_provider = _make_mock_provider(can_read_files=True)
+    @staticmethod
+    async def _run_sdk(override: list[str] | None = None) -> object:
+        from squadron.providers.base import AuthType, ProfileName, ProviderType
+        from squadron.providers.profiles import ProviderProfile
 
+        template = _make_template()
+        template.setting_sources = ["project"]
         with (
             patch(f"{_P}.get_profile") as mock_get_profile,
-            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.get_provider", return_value=_make_mock_provider(can_read_files=True)),
             patch(f"{_P}.ensure_provider_loaded"),
         ):
-            from squadron.providers.base import AuthType, ProfileName, ProviderType
-            from squadron.providers.profiles import ProviderProfile
-
             mock_get_profile.return_value = ProviderProfile(
                 name=ProfileName.SDK,
                 provider=ProviderType.SDK,
                 auth_type=AuthType.SESSION,
             )
-            result = await run_review_with_profile(
-                template, {"input": "file.md"}, profile="sdk", verbosity=2
+            return await run_review_with_profile(
+                template, {"input": "file.md"}, profile="sdk", setting_sources_override=override
             )
 
-        assert result.default_system_prompt_preset_used is True
+    @pytest.mark.asyncio
+    async def test_sdk_review_records_preset_append_and_project(self) -> None:
+        """Slice 932 D12: recorded at every verbosity, from the config actually sent."""
+        result = await self._run_sdk()
+
+        assert result.system_prompt_mode == "preset+append"  # type: ignore[attr-defined]
+        assert result.setting_sources == "project"  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
-    async def test_non_sdk_review_records_no_preset_used(self) -> None:
+    async def test_pr_review_override_records_none(self) -> None:
+        result = await self._run_sdk(override=[])
+
+        assert result.setting_sources == "none"  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_non_sdk_review_records_custom_and_non_sdk(self) -> None:
         template = _make_template()
         mock_provider = _make_mock_provider()
 
@@ -1100,10 +1111,11 @@ class TestDefaultSystemPromptPreset:
                 api_key_env="OPENAI_API_KEY",
             )
             result = await run_review_with_profile(
-                template, {"input": "file.md"}, profile="openai", model="gpt-4o", verbosity=2
+                template, {"input": "file.md"}, profile="openai", model="gpt-4o"
             )
 
-        assert result.default_system_prompt_preset_used is False
+        assert result.system_prompt_mode == "custom"
+        assert result.setting_sources == "n/a (non-SDK)"
 
 
 # The tail of a real minimax-m3 reply (925 code review, 20260922): the model wrote its own

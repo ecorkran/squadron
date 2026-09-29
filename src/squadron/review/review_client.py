@@ -19,6 +19,8 @@ from typing import Any, NamedTuple
 from squadron.config.manager import get_config
 from squadron.core.models import (
     AgentConfig,
+    describe_setting_sources,
+    describe_system_prompt,
 )
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
@@ -320,12 +322,17 @@ async def run_review_with_profile(
             ", ".join(capture.tools_given),
         )
 
+    # Recorded from the config actually sent, so the record and the prompt share one rule.
+    result.system_prompt_mode = describe_system_prompt(config)
+    result.setting_sources = describe_setting_sources(
+        config.setting_sources, is_sdk=provider_profile.provider == ProviderType.SDK
+    )
+
     # Populate prompt capture fields at verbosity >= 2
     if verbosity >= 2:
         result.system_prompt = system_prompt
         result.user_prompt = prompt
         result.rules_content_used = rules_content
-        result.default_system_prompt_preset_used = uses_preset
 
     return result
 

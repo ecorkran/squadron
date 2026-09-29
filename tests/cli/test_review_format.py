@@ -288,10 +288,14 @@ class TestDefaultSystemPromptPresetLine:
     _PRESET_MARKER = "claude_code"
 
     def _result(self, *, preset_used: bool) -> ReviewResult:
+        from squadron.core.models import SystemPromptMode
+
         result = _make_result_no_findings()
         result.system_prompt = "Review the diff."
         result.user_prompt = "diff"
-        result.default_system_prompt_preset_used = preset_used
+        result.system_prompt_mode = (
+            SystemPromptMode.PRESET_APPEND if preset_used else SystemPromptMode.CUSTOM
+        )
         return result
 
     def test_preset_line_present_when_preset_was_used(self) -> None:
@@ -310,8 +314,10 @@ class TestDefaultSystemPromptPresetLine:
 
     def test_no_appendix_means_no_preset_line(self) -> None:
         """A run below -vv captures no prompt, so there is nothing to annotate."""
+        from squadron.core.models import SystemPromptMode
+
         result = _make_result_no_findings()
-        result.default_system_prompt_preset_used = True
+        result.system_prompt_mode = SystemPromptMode.PRESET_APPEND
 
         md = format_review_markdown(result, SLICE_INFO)
 

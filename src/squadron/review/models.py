@@ -7,6 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from squadron import __version__
+from squadron.core.models import SystemPromptMode
 from squadron.models.snapshot import answers_as_requested
 
 
@@ -209,10 +210,12 @@ class ReviewResult:
     system_prompt: str | None = None
     user_prompt: str | None = None
     rules_content_used: str | None = None
-    # True when the SDK's claude_code preset carried system_prompt as its appended part
-    # (#85). Without this a reader of the -vv appendix would take the recorded text for
-    # the whole system prompt; the CLI's preset text is not squadron's to capture.
-    default_system_prompt_preset_used: bool = False
+    # Which system prompt the review ran with (slice 932 D12), and the settings sources,
+    # rendered by describe_setting_sources. Always set by a run; None on a hand-built
+    # result renders as "not reported". A preset mode also tells a reader of the -vv
+    # appendix that the recorded text is only the appended part (#85).
+    system_prompt_mode: SystemPromptMode | None = None
+    setting_sources: str | None = None
     # How much of the diff reached the model (slice 927 D2). None means the review had
     # no diff input at all (slice/arch/tasks reviews) — the key is absent from frontmatter
     # and JSON. A diff input always sets this, even when empty (DiffInjection(0, 0), not

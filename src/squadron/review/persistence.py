@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 
 from squadron import __version__
+from squadron.core.models import SystemPromptMode
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
@@ -196,6 +197,7 @@ def _findings_not_parsed_section(reason: str) -> list[str]:
 
 
 _NOT_COMPUTED = "not computed"
+_PRESET_MODES = frozenset({SystemPromptMode.PRESET, SystemPromptMode.PRESET_APPEND})
 _NOT_OFFERED = "not offered"
 
 
@@ -660,7 +662,7 @@ def format_review_markdown(
         lines.append("")
         lines.append("### System Prompt")
         lines.append("")
-        if result.default_system_prompt_preset_used:
+        if result.system_prompt_mode in _PRESET_MODES:
             # The CLI's preset text is not squadron's to capture, so say what the
             # recorded text actually is rather than letting it read as the whole prompt.
             lines.append(
