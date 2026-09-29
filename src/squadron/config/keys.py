@@ -95,6 +95,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "If set, overrides compact.template. Param substitution still applies."
         ),
     ),
+    "pipeline.background_idle_timeout_s": ConfigKey(
+        name="pipeline.background_idle_timeout_s",
+        type_=int,
+        default=1800,
+        description=(
+            "Seconds of silence a pipeline dispatch tolerates while waiting for "
+            "background agents it started. After that, the agents are stopped "
+            "and the dispatch returns what it has. Foreground turns get no timer."
+        ),
+    ),
     "review.max_file_size_bytes": ConfigKey(
         name="review.max_file_size_bytes",
         type_=int,

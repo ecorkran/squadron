@@ -125,3 +125,16 @@ class TestCfMcpBridgeConfigKeys:
     def test_cf_mcp_command_override_roundtrip(self, patch_config_paths: dict[str, Path]) -> None:
         set_config("cf.mcp_command", "node /path/to/index.js")
         assert get_config("cf.mcp_command") == "node /path/to/index.js"
+
+
+class TestPipelineConfigKeys:
+    """Keys added by slice 932 for pipeline SDK sessions."""
+
+    def test_background_idle_timeout_registered(self) -> None:
+        key = CONFIG_KEYS["pipeline.background_idle_timeout_s"]
+        assert key.type_ is int
+        assert key.default == 1800
+
+    def test_background_idle_timeout_coerces_on_set(self, patch_config_paths: dict[str, Path]) -> None:
+        set_config("pipeline.background_idle_timeout_s", "60")
+        assert get_typed_config("pipeline.background_idle_timeout_s", int) == 60
