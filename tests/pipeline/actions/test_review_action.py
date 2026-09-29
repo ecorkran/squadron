@@ -1316,27 +1316,30 @@ class TestResolveSliceInputsRegression:
     @patch(f"{_P}.resolve_slice_info")
     def test_slice_template_populates_input_and_against(self, mock_rsi: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
-        inputs: dict[str, str] = {"cwd": "/tmp"}
-        action = ReviewAction()
-        action._resolve_slice_inputs("slice", 194, self._make_cf_client(), inputs)
+        _, parts = ReviewAction()._resolve_slice_inputs(
+            "slice", 194, self._make_cf_client(), {"cwd": "/tmp"}
+        )
+        [inputs] = parts
         assert inputs["input"] == self._SLICE_INFO["design_file"]
         assert inputs["against"] == self._SLICE_INFO["arch_file"]
 
     @patch(f"{_P}.resolve_slice_info")
     def test_tasks_template_populates_input_and_against(self, mock_rsi: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
-        inputs: dict[str, str] = {"cwd": "/tmp"}
-        action = ReviewAction()
-        action._resolve_slice_inputs("tasks", 194, self._make_cf_client(), inputs)
+        _, parts = ReviewAction()._resolve_slice_inputs(
+            "tasks", 194, self._make_cf_client(), {"cwd": "/tmp"}
+        )
+        [inputs] = parts
         assert inputs["input"] == (f"project-documents/user/tasks/{self._SLICE_INFO['task_files'][0]}")
         assert inputs["against"] == self._SLICE_INFO["design_file"]
 
     @patch(f"{_P}.resolve_slice_info")
     def test_arch_template_populates_input(self, mock_rsi: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
-        inputs: dict[str, str] = {"cwd": "/tmp"}
-        action = ReviewAction()
-        action._resolve_slice_inputs("arch", 194, self._make_cf_client(), inputs)
+        _, parts = ReviewAction()._resolve_slice_inputs(
+            "arch", 194, self._make_cf_client(), {"cwd": "/tmp"}
+        )
+        [inputs] = parts
         assert inputs["input"] == self._SLICE_INFO["arch_file"]
 
     @patch("squadron.review.template_inputs.resolve_slice_diff_range")
@@ -1344,26 +1347,27 @@ class TestResolveSliceInputsRegression:
     def test_code_template_populates_diff(self, mock_rsi: MagicMock, mock_diff: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
         mock_diff.return_value = "abc123...slice-194"
-        inputs: dict[str, str] = {"cwd": "/tmp"}
-        action = ReviewAction()
-        action._resolve_slice_inputs("code", 194, self._make_cf_client(), inputs)
+        _, parts = ReviewAction()._resolve_slice_inputs(
+            "code", 194, self._make_cf_client(), {"cwd": "/tmp"}
+        )
+        [inputs] = parts
         assert inputs["diff"] == "abc123...slice-194"
 
     @patch(f"{_P}.resolve_slice_info")
     def test_unknown_template_inputs_unchanged(self, mock_rsi: MagicMock) -> None:
         mock_rsi.return_value = self._SLICE_INFO
-        inputs: dict[str, str] = {"cwd": "/tmp"}
-        action = ReviewAction()
-        action._resolve_slice_inputs("nonexistent", 194, self._make_cf_client(), inputs)
-        assert inputs == {"cwd": "/tmp"}
+        _, parts = ReviewAction()._resolve_slice_inputs(
+            "nonexistent", 194, self._make_cf_client(), {"cwd": "/tmp"}
+        )
+        assert parts == [{"cwd": "/tmp"}]
 
     def test_slice_lookup_failure_returns_none(self) -> None:
         cf = self._make_cf_client()
         with patch(f"{_P}.resolve_slice_info", side_effect=ValueError("not found")):
             inputs: dict[str, str] = {"cwd": "/tmp"}
-            result = ReviewAction()._resolve_slice_inputs("slice", 999, cf, inputs)
-        assert result is None
-        assert inputs == {"cwd": "/tmp"}
+            info, parts = ReviewAction()._resolve_slice_inputs("slice", 999, cf, inputs)
+        assert info is None
+        assert parts == [{"cwd": "/tmp"}]
 
 
 # ---------------------------------------------------------------------------

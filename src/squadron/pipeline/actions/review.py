@@ -28,6 +28,7 @@ from squadron.review.git_utils import (
     normalize_diff_spec,
 )
 from squadron.review.models import ReviewResult
+from squadron.review.parts import review_parts
 from squadron.review.persistence import (
     REVIEWS_DIR,
     CfClientProtocol,
@@ -199,15 +200,23 @@ class ReviewAction:
         # Auto-resolve template inputs from slice number when not explicit.
         # Mirrors CLI behavior: `sq review slice 154` resolves input/against
         # automatically — pipelines should do the same.
+        # A split task breakdown resolves to one inputs dict per part file.
         slice_param = context.params.get("slice")
         slice_info: SliceInfo | None = None
+        part_inputs = [inputs]
         if slice_param is not None and "input" not in inputs:
-            slice_info = self._resolve_slice_inputs(
+            slice_info, part_inputs = self._resolve_slice_inputs(
                 template_name, int(str(slice_param)), context.cf_client, inputs
             )
 
-        self._validate_inputs(template, template_name, inputs)
-        rules_content, rules_source = self._resolve_rules(context, template_name, inputs)
+        # Every part is validated before the first model call, so a missing
+        # part-3 file fails the step without paying for parts 1 and 2.
+        count = len(part_inputs)
+        for number, part in enumerate(part_inputs, 1):
+            self._validate_inputs(template, template_name, part, _part_label(number, count, part))
+        # Rules depend on the diff, file glob and rules params, never on the
+        # part's input file, so every part shares one resolution.
+        rules_content, rules_source = self._resolve_rules(context, template_name, part_inputs[0])
 
         # A step-level allowed_tools overrides the template's default; None leaves the
         # template authoritative (slice 265).
@@ -222,7 +231,27 @@ class ReviewAction:
             allowed_tools=allowed_tools,
             slice_info=slice_info,
         )
-        return await self._run_part(settings, context, inputs)
+        # One part keeps its unsuffixed name; two or more are always keyed by
+        # "input" (the fan-out key), and review_parts names them part-1..N.
+        suffixes = (
+            [None]
+            if count == 1
+            else [part.name_suffix for part in review_parts([p["input"] for p in part_inputs])]
+        )
+        results: list[ActionResult] = []
+        for number, (part, suffix) in enumerate(zip(part_inputs, suffixes, strict=True), 1):
+            if count > 1:
+                _logger.info(
+                    "review: step %s part %d/%d: %s",
+                    context.step_name,
+                    number,
+                    count,
+                    part["input"],
+                )
+            results.append(await self._run_part(settings, context, part, suffix, (number, count)))
+        # TEMPORARY (slice 930 Task 7a): a multi-part review returns the last
+        # part's result until Task 7b folds every part into one.
+        return results[-1]
 
     def _load_template(self, template_name: str) -> ReviewTemplate:
         load_all_templates()
@@ -267,15 +296,21 @@ class ReviewAction:
         return inputs
 
     def _validate_inputs(
-        self, template: ReviewTemplate, template_name: str, inputs: dict[str, str]
+        self,
+        template: ReviewTemplate,
+        template_name: str,
+        inputs: dict[str, str],
+        part_label: str,
     ) -> None:
+        """Raise KeyError naming what is missing; ``part_label`` names a split part."""
+        where = f" ({part_label})" if part_label else ""
         # Check required inputs are satisfied after auto-resolution
         missing = [inp.name for inp in template.required_inputs if inp.name not in inputs]
         if missing:
             names = ", ".join(missing)
             raise KeyError(
                 f"Review template '{template_name}' missing required "
-                f"input(s): {names}. The prior step may not have "
+                f"input(s){where}: {names}. The prior step may not have "
                 f"created the expected file."
             )
 
@@ -287,7 +322,7 @@ class ReviewAction:
             details = ", ".join(f"{key}={value}" for key, value in not_found)
             raise KeyError(
                 f"Review template '{template_name}' input file(s) not "
-                f"found: {details}. The prior step may not have created "
+                f"found{where}: {details}. The prior step may not have created "
                 f"the expected file."
             )
 
@@ -337,8 +372,13 @@ class ReviewAction:
         context: ActionContext,
         inputs: dict[str, str],
         name_suffix: str | None = None,
+        position: tuple[int, int] = (1, 1),
     ) -> ActionResult:
-        """Review one part: model call, judge enforcement, save, result."""
+        """Review one part: model call, judge enforcement, save, result.
+
+        ``position`` is (part number, part count), used only to name the part
+        in log lines when the review is split.
+        """
         try:
             result = await run_review_with_profile(
                 settings.template,
@@ -374,18 +414,27 @@ class ReviewAction:
                 run_id=context.run_id,
                 name_suffix=name_suffix,
             )
-            _logger.warning(
-                "review: provider failed in step %s; failure artifact: %s",
-                context.step_name,
-                saved if saved is not None else "not written",
-            )
+            artifact = saved if saved is not None else "not written"
+            if position[1] > 1:
+                _logger.warning(
+                    "review: provider failed in step %s part %d/%d; failure artifact: %s",
+                    context.step_name,
+                    *position,
+                    artifact,
+                )
+            else:
+                _logger.warning(
+                    "review: provider failed in step %s; failure artifact: %s",
+                    context.step_name,
+                    artifact,
+                )
             raise
 
         # Traceability (slice 195 D12, #139): the run that wrote this review.
         result.run_id = context.run_id
         verdict, provenance, verdict_override = self._enforce_verdict(settings, context, result)
         review_file_path = await self._save_part(
-            settings, context, result, inputs, verdict_override, name_suffix
+            settings, context, result, inputs, verdict_override, name_suffix, position
         )
         return self._part_result(settings, result, inputs, review_file_path, verdict, provenance)
 
@@ -432,6 +481,7 @@ class ReviewAction:
         inputs: dict[str, str],
         verdict_override: str | None,
         name_suffix: str | None,
+        position: tuple[int, int],
     ) -> str | None:
         """Persist one part's review artifact; ``None`` when the save failed.
 
@@ -494,10 +544,18 @@ class ReviewAction:
             # the review itself already succeeded and its result is returned
             # regardless. A failure to save the secondary artifact must
             # not fail the action's primary output, the review response.
-            _logger.exception(
-                "review: failed to persist review file for step %s",
-                context.step_name,
-            )
+            if position[1] > 1:
+                _logger.exception(
+                    "review: failed to persist review file for step %s part %d/%d: %s",
+                    context.step_name,
+                    *position,
+                    inputs["input"],
+                )
+            else:
+                _logger.exception(
+                    "review: failed to persist review file for step %s",
+                    context.step_name,
+                )
             return None
 
     def _part_result(
@@ -554,23 +612,27 @@ class ReviewAction:
         slice_index: int,
         cf_client: CfClientProtocol,
         inputs: dict[str, str],
-    ) -> SliceInfo | None:
-        """Auto-resolve review inputs from slice number via CF.
+    ) -> tuple[SliceInfo | None, list[dict[str, str]]]:
+        """Auto-resolve review inputs from slice number via CF, one dict per part.
 
-        Delegates to ``resolve_template_input_parts`` using the declarative registry.
-        Returns the resolved SliceInfo for use in file persistence naming.
+        Delegates to ``resolve_template_input_parts`` using the declarative
+        registry. Returns the resolved SliceInfo for use in file persistence
+        naming, or ``(None, [inputs])`` when the slice cannot be resolved.
         """
         try:
             info = resolve_slice_info(cf_client, slice_index)
         except (ValueError, TypeError) as exc:
             _logger.warning("review: could not resolve slice %d: %s", slice_index, exc)
-            return None
+            return None, [inputs]
 
-        # TEMPORARY (slice 930 Task 4): only the first part is reviewed until the
-        # part loop lands in Task 7a, which replaces this shim.
-        parts = resolve_template_input_parts(template_name, info, inputs.get("cwd", ""), inputs)
-        inputs.update(parts[0])
-        return info
+        return info, resolve_template_input_parts(template_name, info, inputs.get("cwd", ""), inputs)
+
+
+def _part_label(number: int, count: int, inputs: dict[str, str]) -> str:
+    """Name a split part for error messages; empty for a single-part review."""
+    if count == 1:
+        return ""
+    return f"part {number}/{count}: {inputs['input']}"
 
 
 register_action(ActionType.REVIEW, ReviewAction())
