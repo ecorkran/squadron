@@ -789,3 +789,34 @@ async def test_open_pipeline_session_seeds_client_options_and_connects() -> None
     assert "append" not in session.base_options.system_prompt
     client.connect.assert_called_once()
     client.query.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# unusable_reason after a failed reconnect (D13)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_failed_reconnect_marks_session_unusable(caplog: pytest.LogCaptureFixture) -> None:
+    from squadron.pipeline.sdk_session import SeedSource
+    from squadron.providers.errors import ProviderError
+    from tests.pipeline.conftest import ScriptedClient, failing_reconnect_patch, scripted_session
+
+    session = scripted_session(ScriptedClient())
+    assert isinstance(session, SDKExecutionSession)
+
+    with caplog.at_level(logging.ERROR, logger=_MOD), failing_reconnect_patch():
+        with pytest.raises(Exception, match="E2BIG"):
+            await session.seed_context("seed", SeedSource.RESTORE)
+
+    assert session.unusable_reason is not None and "E2BIG" in session.unusable_reason
+    assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records)
+
+    fresh = session.client
+    with pytest.raises(ProviderError, match="SDK session unusable"):
+        await session.dispatch("p")
+    fresh.query.assert_not_called()  # type: ignore[attr-defined]
+    with pytest.raises(ProviderError, match="SDK session unusable"):
+        await session.compact(instructions="x", summary="s")
+    with pytest.raises(ProviderError, match="SDK session unusable"):
+        await session.seed_context("again", SeedSource.RESUME)

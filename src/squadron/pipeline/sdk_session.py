@@ -121,6 +121,8 @@ class SDKExecutionSession:
     base_options: ClaudeAgentOptions
     current_model: str | None = None
     session_id: str | None = None
+    # Set when a rotation's reconnect fails; every later call then raises.
+    unusable_reason: str | None = None
 
     async def connect(self) -> None:
         """Connect the underlying SDK client.
@@ -173,8 +175,9 @@ class SDKExecutionSession:
         Raises:
             ProviderAuthError: If the CLI is not found.
             ProviderAPIError: If the CLI exits with an error code.
-            ProviderError: For other SDK errors.
+            ProviderError: For other SDK errors, or if the session is unusable.
         """
+        self._require_usable()
         try:
             await self.client.query(prompt)
             retries = 0
@@ -309,6 +312,7 @@ class SDKExecutionSession:
 
         Exceptions are allowed to propagate; the compact action wraps them.
         """
+        self._require_usable()
         if summary is None:
             summary = await self.capture_summary(
                 instructions, summary_model=summary_model, restore_model=None
@@ -327,7 +331,13 @@ class SDKExecutionSession:
         Any history since the last rotation is dropped. The caller passes
         raw text; framing happens in ``_seeded_options``. No turn is sent.
         """
+        self._require_usable()
         await self._reconnect(text, source)
+
+    def _require_usable(self) -> None:
+        """Raise if an earlier reconnect failed and left no live client."""
+        if self.unusable_reason is not None:
+            raise ProviderError(f"SDK session unusable: {self.unusable_reason}")
 
     async def _reconnect(self, seed: str | None, source: SeedSource) -> None:
         """Disconnect and connect a fresh client seeded via the system prompt."""
@@ -335,7 +345,14 @@ class SDKExecutionSession:
         self.client = ClaudeSDKClient(options=_seeded_options(self.base_options, seed))
         self.current_model = None
         self.session_id = None
-        await self.connect()
+        try:
+            await self.connect()
+        except Exception as exc:
+            # The old client is already gone, so the session cannot be used
+            # again. Record why; _require_usable() fails every later call.
+            self.unusable_reason = f"reconnect failed: {exc}"
+            _logger.exception("SDKExecutionSession: reconnect (source: %s) failed", source)
+            raise
         _logger.info(
             "seeded fresh session via system prompt (%d chars, source: %s)",
             len(seed or ""),

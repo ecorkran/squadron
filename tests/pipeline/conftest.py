@@ -86,3 +86,128 @@ def completed_pipeline_result() -> PipelineResult:
         status=ExecutionStatus.COMPLETED,
         step_results=[step],
     )
+
+
+# ---------------------------------------------------------------------------
+# SDK session fakes (slice 932)
+# ---------------------------------------------------------------------------
+
+
+def sdk_text(text: str) -> object:
+    """A real AssistantMessage carrying one text block."""
+    from claude_agent_sdk import AssistantMessage, TextBlock
+
+    return AssistantMessage(content=[TextBlock(text=text)], model="test-model")
+
+
+def sdk_result(text: str = "", *, injected: bool = False) -> object:
+    """A real ResultMessage; ``injected`` marks a task-notification turn."""
+    from claude_agent_sdk import ResultMessage
+
+    return ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=False,
+        num_turns=1,
+        session_id="sess-1",
+        result=text,
+        origin={"kind": "task-notification"} if injected else None,
+    )
+
+
+def sdk_task_started(task_id: str, task_type: str, description: str = "") -> object:
+    from claude_agent_sdk import TaskStartedMessage
+
+    return TaskStartedMessage(
+        subtype="task_started",
+        data={},
+        task_id=task_id,
+        description=description or f"task {task_id}",
+        uuid=f"u-{task_id}",
+        session_id="sess-1",
+        task_type=task_type,
+    )
+
+
+def sdk_task_notification(task_id: str) -> object:
+    from claude_agent_sdk import TaskNotificationMessage
+
+    return TaskNotificationMessage(
+        subtype="task_notification",
+        data={},
+        task_id=task_id,
+        status="completed",
+        output_file="",
+        summary="done",
+        uuid=f"n-{task_id}",
+        session_id="sess-1",
+    )
+
+
+def sdk_task_updated(task_id: str, status: str) -> object:
+    from claude_agent_sdk import TaskUpdatedMessage
+
+    return TaskUpdatedMessage(
+        subtype="task_updated",
+        data={},
+        task_id=task_id,
+        patch={},
+        status=status,  # type: ignore[arg-type]
+    )
+
+
+class ScriptedClient:
+    """Fake ClaudeSDKClient: each receive_response() call plays the next script.
+
+    A script item that is a float sleeps that many seconds before the next
+    message (to exercise timeouts). Calls past the last script yield nothing.
+    """
+
+    def __init__(self, *scripts: list[object], connect_error: Exception | None = None) -> None:
+        from unittest.mock import AsyncMock
+
+        self._scripts = list(scripts)
+        self.receive_calls = 0
+        self.connect = AsyncMock(side_effect=connect_error)
+        self.disconnect = AsyncMock()
+        self.set_model = AsyncMock()
+        self.query = AsyncMock()
+        self.stop_task = AsyncMock()
+
+    async def _play(self, script: list[object]):  # type: ignore[no-untyped-def]
+        import asyncio
+
+        for item in script:
+            if isinstance(item, float):
+                await asyncio.sleep(item)
+                continue
+            yield item
+
+    def receive_response(self):  # type: ignore[no-untyped-def]
+        index = self.receive_calls
+        self.receive_calls += 1
+        script = self._scripts[index] if index < len(self._scripts) else []
+        return self._play(script)
+
+
+def scripted_session(client: ScriptedClient) -> object:
+    """A real SDKExecutionSession around a scripted client."""
+    from claude_agent_sdk import ClaudeAgentOptions
+
+    from squadron.pipeline.sdk_session import SDKExecutionSession
+
+    return SDKExecutionSession(
+        client=client,  # type: ignore[arg-type]
+        base_options=ClaudeAgentOptions(cwd=".", permission_mode="bypassPermissions"),
+    )
+
+
+def failing_reconnect_patch(error_text: str = "spawn failed: E2BIG") -> object:
+    """Patch so the next rotation's fresh client fails to connect."""
+    from unittest.mock import patch
+
+    from claude_agent_sdk import CLIConnectionError
+
+    fresh = ScriptedClient(connect_error=CLIConnectionError(error_text))
+    return patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=fresh)

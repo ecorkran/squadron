@@ -241,3 +241,26 @@ async def test_prompt_only_timeout_raises(action: CompactAction) -> None:
     with patch(f"{_SDK}.query", side_effect=_gen):
         with pytest.raises(TimeoutError):
             await action.execute(ctx)
+
+
+# ---------------------------------------------------------------------------
+# Reconnect failure on a real session (slice 932, D13)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compact_reconnect_failure_fails_step(action: CompactAction) -> None:
+    from tests.pipeline.conftest import (
+        ScriptedClient,
+        failing_reconnect_patch,
+        scripted_session,
+        sdk_result,
+        sdk_text,
+    )
+
+    session = scripted_session(ScriptedClient([sdk_text("SUM"), sdk_result("SUM")]))
+    with failing_reconnect_patch():
+        result = await action.execute(_make_context(sdk_session=session))
+
+    assert result.success is False
+    assert "E2BIG" in (result.error or "")

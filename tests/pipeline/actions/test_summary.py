@@ -1012,3 +1012,53 @@ def test_item_reset_template_renders_its_fixed_line() -> None:
     rendered = render_instructions(template, keep=None, summarize=False, pipeline_params={})
     assert "Nothing from it carries forward" in rendered
     assert "{" not in rendered
+
+
+# ---------------------------------------------------------------------------
+# Reconnect failure on a real session (slice 932, D13)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_emit_rotate_reconnect_failure_fails_action() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+    from tests.pipeline.conftest import (
+        ScriptedClient,
+        failing_reconnect_patch,
+        scripted_session,
+        sdk_result,
+        sdk_text,
+    )
+
+    session = scripted_session(ScriptedClient([sdk_text("SUM"), sdk_result("SUM")]))
+    ctx = _make_context(sdk_session=session)
+    with failing_reconnect_patch():
+        result = await _execute_summary(
+            context=ctx,
+            instructions="x",
+            summary_model_alias=None,
+            emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
+            action_type="summary",
+        )
+
+    assert result.success is False
+    assert "E2BIG" in (result.error or "")
+    emit_results = result.outputs["emit_results"]
+    assert emit_results[0]["ok"] is False  # type: ignore[index]
+
+
+@pytest.mark.asyncio
+async def test_restore_reconnect_failure_fails_action() -> None:
+    from tests.pipeline.conftest import ScriptedClient, failing_reconnect_patch, scripted_session
+
+    session = scripted_session(ScriptedClient())
+    ctx = _make_context(
+        params={"restore": True},
+        sdk_session=session,
+        prior_outputs={"summary-0": _make_prior_summary_result()},
+    )
+    with failing_reconnect_patch():
+        result = await _make_action().execute(ctx)
+
+    assert result.success is False
+    assert "E2BIG" in (result.error or "")

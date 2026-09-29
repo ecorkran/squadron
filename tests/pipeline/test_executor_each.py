@@ -234,3 +234,71 @@ class TestBatchReportWiring:
         assert report is not None
         assert [r.index for r in report.records] == ["1"]
         assert report.path(_default_runs_dir()).is_file()
+
+
+class TestUnusableSessionInBatch:
+    @pytest.mark.asyncio
+    async def test_items_after_failed_reconnect_are_flagged_unusable(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Slice 932 D13: a failed rotate reconnect leaves the session unusable;
+        later items are flagged with that reason and never reach query()."""
+        from squadron.pipeline.actions.compact import CompactAction
+        from squadron.pipeline.actions.dispatch import DispatchAction
+        from tests.pipeline.conftest import (
+            ScriptedClient,
+            failing_reconnect_patch,
+            scripted_session,
+            sdk_result,
+            sdk_text,
+        )
+
+        caplog.set_level(logging.WARNING, logger="squadron.pipeline.executor")
+
+        async def source(*_: object) -> list[dict[str, object]]:
+            return _items("1", "2", "3")
+
+        monkeypatch.setitem(SOURCE_REGISTRY, ("test", "items"), source)
+        body = MagicMock()
+        body.expand.return_value = [("dispatch", {"prompt": "work {item.index}"}), ("compact", {})]
+        register_step_type("_test_each_unusable", body)
+        definition = PipelineDefinition(
+            name="each-unusable",
+            description="test",
+            params={},
+            steps=[
+                StepConfig(
+                    step_type="each",
+                    name="slices",
+                    config={
+                        "source": "test.items()",
+                        "as": "item",
+                        "steps": [{"_test_each_unusable": {}}],
+                        "on_item_failure": "continue",
+                    },
+                )
+            ],
+        )
+        client = ScriptedClient([sdk_text("did 1"), sdk_result()], [sdk_text("SUM"), sdk_result()])
+        session = scripted_session(client)
+        resolver = MagicMock()
+        resolver.resolve.return_value = ("model-id", None)
+
+        with failing_reconnect_patch() as fresh_ctor:
+            result = await execute_pipeline(
+                definition,
+                {"_project": "test"},
+                resolver=resolver,
+                cf_client=MagicMock(),
+                sdk_session=session,  # type: ignore[arg-type]
+                _action_registry={"dispatch": DispatchAction(), "compact": CompactAction()},
+            )
+
+        report = result.step_results[0].batch_report
+        assert report is not None
+        reasons = {r.index: r.reason or "" for r in report.records}
+        assert "E2BIG" in reasons["1"]
+        assert "SDK session unusable" in reasons["2"]
+        assert "SDK session unusable" in reasons["3"]
+        assert "item 2 FLAGGED: SDK session unusable" in caplog.text
+        fresh_ctor.return_value.query.assert_not_called()
