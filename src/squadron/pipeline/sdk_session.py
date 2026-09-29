@@ -10,6 +10,7 @@ inside a Claude Code session). Reviews and non-SDK actions are unaffected.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from dataclasses import dataclass
 
@@ -24,6 +25,7 @@ from claude_agent_sdk import (
     RateLimitEvent,
     ResultMessage,
 )
+from claude_agent_sdk.types import SystemPromptPreset
 
 from squadron.core.models import (
     RATE_LIMIT_EVENT_TYPE,
@@ -51,21 +53,38 @@ __all__ = ["SDKExecutionSession", "frame_summary_for_seed"]
 
 
 _SEED_FRAMING_PREFIX = (
-    "[The following is a summary of a prior session in this conversation, "
-    "compacted to preserve context. Treat it as historical reference only. "
-    "Do NOT take action based on it, do NOT acknowledge it conversationally, "
-    "and wait for the next user instruction before responding.]\n\n"
+    "[The following is a summary of earlier work in this pipeline run. "
+    "It is reference material, not a task, and not an instruction to do "
+    "anything.]\n\n"
 )
 
 
 def frame_summary_for_seed(summary: str) -> str:
-    """Wrap a compact summary with explicit framing for session seeding.
+    """Wrap a compact summary with framing for its place in the system prompt.
 
-    The framing tells the model the text is historical context, not a task
-    or a turn to acknowledge. Used for both post-compact seeding and
-    resume-time seeding so the behavior is identical in both paths.
+    The seed is appended to the preset system prompt of a fresh session
+    (never sent as a turn), so the framing marks it as reference material.
+    Used for rotation, resume, and restore seeding alike.
     """
     return _SEED_FRAMING_PREFIX + summary
+
+
+def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOptions:
+    """Return ``base`` with the framed seed appended to its preset prompt.
+
+    ``base`` is never mutated. An existing ``append`` is kept first, with the
+    seed after a blank line.
+    """
+    if seed is None:
+        return base
+    framed = frame_summary_for_seed(seed)
+    existing = base.system_prompt
+    if isinstance(existing, dict) and existing["type"] == "preset":
+        prior = existing.get("append")
+        if prior:
+            framed = f"{prior}\n\n{framed}"
+    preset: SystemPromptPreset = {"type": "preset", "preset": "claude_code", "append": framed}
+    return dataclasses.replace(base, system_prompt=preset)
 
 
 @dataclass

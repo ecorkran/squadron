@@ -695,3 +695,58 @@ class TestCaptureSummary:
 
         with pytest.raises(RuntimeError, match="network error"):
             await session.capture_summary("instr")
+
+
+# ---------------------------------------------------------------------------
+# _seeded_options (seed rides the system prompt, never a turn)
+# ---------------------------------------------------------------------------
+
+
+class TestSeededOptions:
+    def test_none_seed_returns_base_unchanged(self) -> None:
+        from squadron.pipeline.sdk_session import _seeded_options  # pyright: ignore[reportPrivateUsage]
+
+        base = _make_options()
+        assert _seeded_options(base, None) is base
+
+    def test_seed_becomes_preset_append(self) -> None:
+        from squadron.pipeline.sdk_session import (
+            _SEED_FRAMING_PREFIX,  # pyright: ignore[reportPrivateUsage]
+            _seeded_options,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        seeded = _seeded_options(_make_options(), "SEED TEXT")
+        prompt = seeded.system_prompt
+        assert isinstance(prompt, dict)
+        assert prompt["type"] == "preset"
+        assert prompt.get("preset") == "claude_code"
+        append = prompt.get("append")
+        assert isinstance(append, str)
+        assert append.startswith(_SEED_FRAMING_PREFIX)
+        assert append.endswith("SEED TEXT")
+
+    def test_existing_append_is_kept_first(self) -> None:
+        from squadron.pipeline.sdk_session import (
+            _SEED_FRAMING_PREFIX,  # pyright: ignore[reportPrivateUsage]
+            _seeded_options,  # pyright: ignore[reportPrivateUsage]
+        )
+
+        base = ClaudeAgentOptions(
+            system_prompt={"type": "preset", "preset": "claude_code", "append": "EXISTING"}
+        )
+        prompt = _seeded_options(base, "S").system_prompt
+        assert isinstance(prompt, dict)
+        assert prompt.get("append") == f"EXISTING\n\n{_SEED_FRAMING_PREFIX}S"
+
+    def test_base_is_not_mutated(self) -> None:
+        from squadron.pipeline.sdk_session import _seeded_options  # pyright: ignore[reportPrivateUsage]
+
+        base = ClaudeAgentOptions(
+            system_prompt={"type": "preset", "preset": "claude_code", "append": "EXISTING"}
+        )
+        _seeded_options(base, "S")
+        assert base.system_prompt == {
+            "type": "preset",
+            "preset": "claude_code",
+            "append": "EXISTING",
+        }
