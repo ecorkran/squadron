@@ -29,6 +29,7 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import SystemPromptPreset
 
+from squadron.config.manager import get_typed_config
 from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
 from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
@@ -118,8 +119,10 @@ class SDKExecutionSession:
     session_id: str | None = None
     # Set when a rotation's reconnect fails; every later call then raises.
     unusable_reason: str | None = None
-    # Set by the last dispatch(): background agents it waited for.
+    # Set by the last dispatch(): background agents it waited for, and how
+    # many it stopped on an idle timeout (zero on every other path).
     background_tasks_waited: int = 0
+    background_tasks_stopped: int = 0
 
     async def connect(self) -> None:
         """Connect the underlying SDK client.
@@ -178,6 +181,7 @@ class SDKExecutionSession:
         """
         self._require_usable()
         turns = DispatchTurns()
+        self.background_tasks_stopped = 0
         try:
             await self.client.query(prompt)
             return await self._collect_turns(turns)
@@ -192,8 +196,19 @@ class SDKExecutionSession:
 
     async def _collect_turns(self, turns: DispatchTurns) -> str:
         """Read turns until our own result arrives with no agent running."""
+        idle_s: float | None = None
         while True:
-            result = await self._read_turn_with_retry(turns)
+            if not turns.waiting:
+                # Foreground turns get no timer (#165).
+                result = await self._read_turn_with_retry(turns, idle_s=None)
+            else:
+                if idle_s is None:
+                    idle_s = self._background_idle_timeout_s()
+                try:
+                    result = await self._read_turn_with_retry(turns, idle_s=idle_s)
+                except TimeoutError:
+                    await self._stop_background(turns, idle_s)
+                    return turns.text()
             if result is None:
                 # The iterator ended without a result. With nothing tracked,
                 # this is today's behavior; with an agent tracked, the work
@@ -226,13 +241,15 @@ class SDKExecutionSession:
                     turns.ledger.descriptions(),
                 )
 
-    async def _read_turn_with_retry(self, turns: DispatchTurns) -> ResultMessage | None:
+    async def _read_turn_with_retry(
+        self, turns: DispatchTurns, *, idle_s: float | None
+    ) -> ResultMessage | None:
         """One ``receive_response()`` pass, retried on a rate-limit throttle."""
         retries = 0
         while True:
             turns.progressed = False
             try:
-                return await self._read_turn(turns)
+                return await self._read_turn(turns, idle_s=idle_s)
             except ClaudeSDKError as exc:
                 # A rejected RateLimitEvent raises RateLimitRejected in
                 # _read_turn; a genuine 429 can also surface as a plain
@@ -253,9 +270,19 @@ class SDKExecutionSession:
                 )
                 await asyncio.sleep(delay)
 
-    async def _read_turn(self, turns: DispatchTurns) -> ResultMessage | None:
-        """Read one turn; return its result, or None if the stream ended first."""
-        async for sdk_msg in self.client.receive_response():
+    async def _read_turn(self, turns: DispatchTurns, *, idle_s: float | None) -> ResultMessage | None:
+        """Read one turn; return its result, or None if the stream ended first.
+
+        With ``idle_s`` set, each wait for the next message is bounded by it
+        (the timer resets on every message) and expiry raises ``TimeoutError``.
+        """
+        stream = aiter(self.client.receive_response())
+        while True:
+            try:
+                async with asyncio.timeout(idle_s):
+                    sdk_msg = await anext(stream)
+            except StopAsyncIteration:
+                return None
             # Inspect a RateLimitEvent before anything else touches it, and
             # before collect() marks progress: a rejected event is not
             # progress and must consume retry budget.
@@ -274,7 +301,34 @@ class SDKExecutionSession:
                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
             if isinstance(sdk_msg, ResultMessage):
                 return sdk_msg
-        return None
+
+    def _background_idle_timeout_s(self) -> float:
+        """Read ``pipeline.background_idle_timeout_s`` for this session's cwd."""
+        # The CLI itself runs in the process cwd when options carry none.
+        cwd = str(self.base_options.cwd or Path.cwd())
+        return get_typed_config("pipeline.background_idle_timeout_s", int, cwd=cwd)
+
+    async def _stop_background(self, turns: DispatchTurns, idle_s: float) -> None:
+        """Stop every tracked agent after an idle timeout, best-effort (D5)."""
+        ids = turns.ledger.active_ids()
+        descriptions = turns.ledger.descriptions()
+        for task_id in ids:
+            try:
+                await self.client.stop_task(task_id)
+            except Exception:  # noqa: BLE001
+                # The SDK raises a bare Exception both when the stop control
+                # request times out (60s) and when the CLI returns an error,
+                # so no narrower type exists. Stopping is cleanup: log and go
+                # on to the next id. A late follow-up turn is handled by D6.
+                _logger.exception("dispatch: failed to stop background task %s", task_id)
+        # Clear locally: a lost terminal signal is exactly the case here.
+        turns.ledger.clear()
+        self.background_tasks_stopped = len(ids)
+        _logger.warning(
+            "dispatch: no activity for %ds with background agent(s) still running; stopped: %s",
+            idle_s,
+            descriptions,
+        )
 
     async def capture_summary(
         self,

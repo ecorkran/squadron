@@ -1016,3 +1016,68 @@ class TestDispatchWaitsForBackgroundAgents:
             "discarded a background follow-up turn" in m and "Late words from the previous step." in m
             for m in warnings
         )
+
+
+class TestBackgroundIdleTimeout:
+    @pytest.mark.asyncio
+    async def test_silence_while_waiting_stops_agents_and_returns(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client = ScriptedClient(
+            [sdk_task_started("t1", "local_agent", "Explore src"), sdk_text("Waiting."), sdk_result()],
+            [0.15],  # silent past the idle bound
+        )
+        session = scripted_session(client)
+
+        with (
+            patch(f"{_MOD}.get_typed_config", return_value=0.05),
+            caplog.at_level(logging.WARNING, logger=_MOD),
+        ):
+            response = await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert response == "Waiting."
+        client.stop_task.assert_awaited_once_with("t1")
+        assert session.background_tasks_stopped == 1  # type: ignore[attr-defined]
+        assert any(
+            "no activity" in r.getMessage() and "Explore src" in r.getMessage()
+            for r in caplog.records
+            if r.levelno == logging.WARNING
+        )
+
+    @pytest.mark.asyncio
+    async def test_stop_task_failure_is_logged_and_next_id_still_stopped(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client = ScriptedClient(
+            [
+                sdk_task_started("t1", "local_agent"),
+                sdk_task_started("t2", "local_agent"),
+                sdk_result(),
+            ],
+            [0.15],
+        )
+        client.stop_task.side_effect = [Exception("control request timeout"), None]
+        session = scripted_session(client)
+
+        with (
+            patch(f"{_MOD}.get_typed_config", return_value=0.05),
+            caplog.at_level(logging.ERROR, logger=_MOD),
+        ):
+            await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert [c.args for c in client.stop_task.await_args_list] == [("t1",), ("t2",)]
+        errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert len(errors) == 1 and "t1" in errors[0].getMessage() and errors[0].exc_info
+
+    @pytest.mark.asyncio
+    async def test_slow_foreground_turn_has_no_timer(self) -> None:
+        client = ScriptedClient([0.1, sdk_text("slow answer"), sdk_result()])
+        session = scripted_session(client)
+
+        with patch(f"{_MOD}.get_typed_config", return_value=0.05) as config:
+            response = await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert response == "slow answer"
+        config.assert_not_called()
+        client.stop_task.assert_not_called()
+        assert session.background_tasks_stopped == 0  # type: ignore[attr-defined]
