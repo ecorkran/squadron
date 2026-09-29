@@ -484,29 +484,18 @@ async def execute_pipeline(
 
     skipping = start_from is not None
 
-    # Resume: seed SDK session with most recent applicable compact summary
-    if start_from is not None and sdk_session is not None:
-        try:
-            from squadron.pipeline.sdk_session import SeedSource
-            from squadron.pipeline.state import StateManager
+    # Resume: seed the session with the most recent applicable compact summary.
+    # A connected session is rotated now; a lazy one gets the seed at connect.
+    resume_seed = (
+        _load_resume_seed(definition, start_from, runs_dir, effective_run_id)
+        if start_from is not None
+        else None
+    )
+    if resume_seed is not None and sdk_session is not None:
+        from squadron.pipeline.sdk_session import SeedSource
 
-            _state_mgr = StateManager(runs_dir=runs_dir)
-            _run_state = _state_mgr.load(effective_run_id)
-            _start_idx = next(
-                (i for i, s in enumerate(definition.steps) if s.name == start_from),
-                None,
-            )
-            if _start_idx is not None:
-                _active = _run_state.active_compact_summary_for_resume(_start_idx)
-                if _active is not None:
-                    _logger.info(
-                        "executor: resuming at step %d; seeding session from compact summary %s",
-                        _start_idx,
-                        _active.key,
-                    )
-                    await sdk_session.seed_context(_active.text, SeedSource.RESUME)
-        except FileNotFoundError:
-            _logger.debug("executor: no state file for resume seeding; skipping")
+        await sdk_session.seed_context(resume_seed, SeedSource.RESUME)
+        resume_seed = None
 
     for step_index, step in enumerate(definition.steps):
         # Handle start_from skip logic
@@ -523,7 +512,8 @@ async def execute_pipeline(
         if sdk_session is None and pool_policy == PoolClassificationPolicy.LAZY:
             if _step_needs_sdk(step, resolver, merged_params):
                 try:
-                    sdk_session = await _connect_lazy_session(run_id=effective_run_id)
+                    sdk_session = await _connect_lazy_session(run_id=effective_run_id, seed=resume_seed)
+                    resume_seed = None  # a later connect must never re-seed
                 except Exception as exc:
                     _logger.error(
                         "executor: lazy session connect failed before step '%s': %s",
@@ -633,11 +623,40 @@ def _step_needs_sdk(
     return is_sdk_profile(profile)
 
 
-async def _connect_lazy_session(*, run_id: str) -> SDKExecutionSession:
+def _load_resume_seed(
+    definition: PipelineDefinition,
+    start_from: str,
+    runs_dir: Path | None,
+    run_id: str,
+) -> str | None:
+    """Return the compact summary a resumed run should be seeded with, if any."""
+    from squadron.pipeline.state import StateManager
+
+    try:
+        run_state = StateManager(runs_dir=runs_dir).load(run_id)
+    except FileNotFoundError:
+        _logger.debug("executor: no state file for resume seeding; skipping")
+        return None
+    start_idx = next((i for i, s in enumerate(definition.steps) if s.name == start_from), None)
+    if start_idx is None:
+        return None
+    active = run_state.active_compact_summary_for_resume(start_idx)
+    if active is None:
+        return None
+    _logger.info(
+        "executor: resuming at step %d; seeding session from compact summary %s",
+        start_idx,
+        active.key,
+    )
+    return active.text
+
+
+async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKExecutionSession:
     """Construct and connect a new SDKExecutionSession for mid-run lazy auth.
 
     Called by execute_pipeline the first time a statically-confirmed SDK step
-    is about to run and no session has been connected yet.
+    is about to run and no session has been connected yet. ``seed`` is a
+    resume summary that no connected session was there to receive.
 
     On connection failure, logs at ERROR and re-raises — the caller handles
     state persistence and user-facing error messaging.
@@ -645,7 +664,7 @@ async def _connect_lazy_session(*, run_id: str) -> SDKExecutionSession:
     from squadron.pipeline.sdk_session import open_pipeline_session
 
     try:
-        return await open_pipeline_session()
+        return await open_pipeline_session(seed=seed)
     except Exception:
         _logger.exception(
             "executor: lazy session connect failed for run %s",

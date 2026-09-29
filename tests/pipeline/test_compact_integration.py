@@ -251,3 +251,55 @@ async def test_resume_without_summary_does_not_seed(tmp_path: Path) -> None:
         state_mod.StateManager = original  # type: ignore[misc]
 
     session.seed_context.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Slice 932 D4 — resume seeds the lazily connected session too
+# ---------------------------------------------------------------------------
+
+
+async def _resume_lazily(tmp_path: Path, run_id: str) -> AsyncMock:
+    """Resume at step2 with no session; return the patched lazy-connect mock."""
+    from unittest.mock import patch
+
+    from squadron.pipeline.classification import PoolClassificationPolicy
+
+    noop = _make_noop_action()
+    connect = AsyncMock(return_value=_make_session_mock())
+    with (
+        patch("squadron.pipeline.executor._step_needs_sdk", return_value=True),
+        patch("squadron.pipeline.executor._connect_lazy_session", connect),
+    ):
+        await execute_pipeline(
+            _make_definition(),
+            {"slice": "154"},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            run_id=run_id,
+            start_from="step2",
+            runs_dir=tmp_path,
+            sdk_session=None,
+            pool_policy=PoolClassificationPolicy.LAZY,
+            _action_registry={"dispatch": noop, "compact": noop},
+        )
+    return connect
+
+
+@pytest.mark.asyncio
+async def test_resume_seeds_lazy_session_at_connect(tmp_path: Path) -> None:
+    _, run_id = _prepare_paused_state(tmp_path, with_summary=True)
+
+    connect = await _resume_lazily(tmp_path, run_id)
+
+    connect.assert_awaited_once()
+    assert connect.call_args.kwargs["seed"] == "prior summary text"
+
+
+@pytest.mark.asyncio
+async def test_resume_without_summary_passes_no_seed_to_lazy_session(tmp_path: Path) -> None:
+    _, run_id = _prepare_paused_state(tmp_path, with_summary=False)
+
+    connect = await _resume_lazily(tmp_path, run_id)
+
+    connect.assert_awaited_once()
+    assert connect.call_args.kwargs["seed"] is None
