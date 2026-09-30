@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test-only pipelines (`test-*`) and the unfinished `app` pipeline are no longer shipped.
 
 ### Fixed
-- An OpenAI-compatible review whose connection drops or times out mid-response now writes a provider-failure artifact instead of ending in a traceback.
+- An OpenAI-compatible review whose connection drops, times out, or gets a mid-stream error from the provider (OpenRouter's "Network connection lost.") now writes a provider-failure artifact instead of ending in a traceback (#166).
 - A pipeline `review:` step over a split task breakdown now reviews every task file, not just the first. Each part saves as `part-N`, same as `sq review tasks`. The step reports the worst part's verdict, so a revise loop no longer skips when a later part falls short (#153).
 - `sq review tasks` no longer crashes when one part of a split breakdown gets an UNKNOWN verdict (#153).
 

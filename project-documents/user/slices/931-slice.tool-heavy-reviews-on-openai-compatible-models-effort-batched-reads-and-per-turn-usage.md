@@ -392,7 +392,7 @@ The existing keys are unchanged, except that `reasoning_chars` becomes the run t
 
 ### Verification Walkthrough
 
-Refined after Phase 6 (20260930). Each step says whether it was run in the implementing session. Steps marked **not run** need an OpenRouter, OpenAI, Gemini, or Codex key, which that session did not have.
+Refined after Phase 6 (20260930). Each step says whether it was run in the implementing session. Steps marked **not run** need OpenAI, Gemini, or Codex access, or the operator's terminal.
 
 1. **Define a low-effort alias.** Add to `~/.config/squadron/models.toml`:
    ```toml
@@ -405,27 +405,35 @@ Refined after Phase 6 (20260930). Each step says whether it was run in the imple
 
    *Run.* An existing file that uses an inline `[aliases]` table takes the same alias as one line: `glm-flash-low = { profile = "openrouter", model = "z-ai/glm-5.3-flash", effort = "low" }`. `sq models list` shows `glm-flash-low │ openrouter │ z-ai/glm-5.3-flash │ (user)` and logs no WARNING. The table has no effort column.
 
-2. **Baseline review at the default effort.** **Not run** (no OpenRouter key).
+2. **Baseline review at the default effort.**
    ```
    sq review slice 931 --model glm-flash -v
    ```
    Open the saved review in `project-documents/user/reviews/`. Frontmatter has `turns`, the four token keys, and `durationSeconds`, and no `effort` key. The Run Digest shows `Effort: backend default`, `Turns: N`, the token line, and `Duration`. `cachedTokens` answers whether OpenRouter cached the resent history. A non-zero value means yes.
 
-3. **Same review at low effort.** **Not run** (no OpenRouter key).
+   *Run (20260930, glm-flash).* PASS. `turns: 20`, `toolCallsMade: 50`, `promptTokens: 2343136`, `cachedTokens: 1537024` (OpenRouter caches the resent history: 66%), `completionTokens: 83523`, `reasoningTokens: 79466`, `durationSeconds: 1273.3`, no `effort` key; digest `Effort: backend default`. An earlier attempt died after 7 turns on OpenRouter's mid-stream "Network connection lost." error event, which escaped as bare `openai.APIError` with no artifact; fixed in this slice (#166).
+
+3. **Same review at low effort.**
    ```
    sq review slice 931 --model glm-flash-low -v
    ```
    Frontmatter has `effort: low`. Compare `reasoningTokens`, `turns`, and `durationSeconds` against step 2.
 
-4. **Batched reads happen.** **Not run** (no OpenRouter key). Run step 3 at `-vv`, or read the prompt log at `-vvv`. At least one `read_file` call carries `paths` with more than one entry, and the output shows `==> path <==` headers. `Tool calls made` is lower than the 22 seen in the amoeba run for a comparable document.
+   *Run.* PASS. `effort: low`, `turns: 2`, `toolCallsMade: 2`, `promptTokens: 21029`, `cachedTokens: 0`, `completionTokens: 892`, `reasoningTokens: 158`, `durationSeconds: 28.8`. Against step 2: 10× fewer turns, 110× fewer prompt tokens, 500× fewer reasoning tokens, 44× faster, same verdict.
 
-5. **JSON parity.** **Not run** with `glm-flash-low` (no OpenRouter key); step 7's `local` run exercised the same JSON keys.
+4. **Batched reads happen.** Run step 3 at `-vv`, or read the prompt log at `-vvv`. At least one `read_file` call carries `paths` with more than one entry, and the output shows `==> path <==` headers. `Tool calls made` is lower than the 22 seen in the amoeba run for a comparable document.
+
+   *Run (step 3 at `-vv`; arguments are logged as `Tool 'read_file' succeeded (args={...})`).* No `paths` call: glm-flash-low made two single-`path` reads as parallel calls in one turn, which is the guidance's fallback shape. `paths` itself is covered by unit and load tests; whether a model chooses it is model behavior.
+
+5. **JSON parity.**
    ```
    sq review slice 931 --model glm-flash-low --output json --no-save | jq '{effort, turns, prompt_tokens, cached_tokens, reasoning_tokens, duration_seconds}'
    ```
    The values match the markdown artifact's frontmatter for the same kind of run. Every key is present; unreported ones are `null`, never `0`.
 
-6. **Pipeline parity.** Live run **not run** (no OpenRouter key); the dry run was. The built-in `review` pipeline runs a code review of slice 931's branch through the pipeline review action, which is the `resolve_full` path:
+   *Run.* `{'effort': 'low', 'turns': 2, 'prompt_tokens': 21077, 'cached_tokens': 4224, 'completion_tokens': 1142, 'reasoning_tokens': 142, 'duration_seconds': 12.23}`: same keys and shape as step 3's frontmatter.
+
+6. **Pipeline parity.** Live run **not run**: `sq run` refuses inside a Claude Code session, so it is the operator's; the dry run was. The built-in `review` pipeline runs a code review of slice 931's branch through the pipeline review action, which is the `resolve_full` path:
    ```
    sq run review 931 --model glm-flash-low --dry-run
    sq run review 931 --model glm-flash-low

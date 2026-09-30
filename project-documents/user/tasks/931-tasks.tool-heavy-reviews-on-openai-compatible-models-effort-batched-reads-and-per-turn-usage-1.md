@@ -340,13 +340,13 @@ status: in_progress
         ["tests"]`, which already includes `tests/load/`. Confirm by running
         `pytest tests/load/test_usage_reader_loop.py` once.
 - [x] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean (5139 passed, 4 skipped; all clean)
-- [ ] Live baseline (needs an OpenRouter key; if unavailable, stop and tell the Project
+- [x] Live baseline (needs an OpenRouter key; if unavailable, stop and tell the Project
       Manager): `sq review slice 931 --model glm-flash -v`
-  - [ ] Saved review has `turns`, four token keys, `durationSeconds`, no `effort` key, and
+  - [x] Saved review has `turns`, four token keys, `durationSeconds`, no `effort` key, and
         the new digest lines (walkthrough step 2)
-  - [ ] Record `cachedTokens` (answers whether OpenRouter caches the resent history) in the
+  - [x] Record `cachedTokens` (answers whether OpenRouter caches the resent history) in the
         DEVLOG entry, not in code
-  - Not run: no OPENROUTER_API_KEY in the implementing session; handed to the Project Manager.
+  - Run 20260930 (glm-flash): PASS, turns 20, four token keys, durationSeconds 1273.3, no effort key; cachedTokens 1537024 recorded in DEVLOG.
 - [x] Commit any fixups: `fix: <what>` (skip if none)
 
 ---
@@ -423,9 +423,9 @@ status: in_progress
         exactly once
   - [x] Runs under the existing `uv run pytest` in CI; no wiring task needed (see Task 11)
 - [x] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean
-- [ ] Live run (OpenRouter key; else stop and tell the Project Manager):
+- [x] Live run (OpenRouter key; else stop and tell the Project Manager):
       `sq review slice 931 --model glm-flash -vv`
   - [ ] At least one `read_file` call carries `paths` with >1 entry and output shows
         `==> path <==` headers (walkthrough step 4)
-  - [ ] Record `Tool calls made` and `Turns` versus the Task 11 baseline in the DEVLOG entry
-  - Not run: no OPENROUTER_API_KEY in the implementing session; handed to the Project Manager.
+  - [x] Record `Tool calls made` and `Turns` versus the Task 11 baseline in the DEVLOG entry
+  - Run 20260930 (glm-flash-low, -vv): no paths call; the model made two single-path reads as parallel calls in one turn. Tool calls/turns recorded in DEVLOG.

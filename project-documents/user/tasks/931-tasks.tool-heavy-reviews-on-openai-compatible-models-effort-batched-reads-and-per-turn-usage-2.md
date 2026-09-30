@@ -156,14 +156,14 @@ status: in_progress
       If the file lacks it, add it there; this is the user's own config, so tell the Project
       Manager you did.
   - glm-flash-low added to ~/.config/squadron/models.toml (inline [aliases] form); PM told.
-- [ ] Live walkthrough steps 3, 5, 6, 10 (OpenRouter key; else stop and tell the Project
+- [x] Live walkthrough steps 3, 5, 6, 10 (OpenRouter key; else stop and tell the Project
       Manager): low-effort alias review, JSON parity, pipeline parity, invalid value
-  - [ ] `effort: low` in frontmatter; JSON matches frontmatter; `sq run review 931
+  - [x] `effort: low` in frontmatter; JSON matches frontmatter; `sq run review 931
         --model glm-flash-low` records the same fields as the CLI; invalid value logs the
         skip WARNING naming alias and file
   - [x] After step 10, set `glm-flash-low` back to `effort = "low"` and confirm
         `sq models list` loads it with no WARNING
-    - Step 10 run (skip WARNING logged, then restored). Steps 3, 5, 6 not run: no OpenRouter key.
+    - Steps 3, 5, 10 run; step 6 live run pending (operator terminal).
 - [ ] Walkthrough steps 7–9 need Ollama, OpenAI, Gemini, and Codex access. Run whichever
       the environment has; list the rest by name in the DEVLOG entry as not run
   - [ ] Step 8 (mid-loop failure on `local`): failure artifact has `providerFailure: true`,
@@ -200,4 +200,4 @@ status: in_progress
       `git checkout <target>`, `git merge 931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`;
       if either command fails, stop and ask the Project Manager
 - [ ] Commit: `docs: close out slice 931`
-  - Held: live OpenRouter runs (Tasks 11, 15, 23) are pending with the Project Manager; slice not marked complete or merged.
+  - Held: code review and the step 6 pipeline run are pending with the Project Manager; slice not marked complete or merged.
