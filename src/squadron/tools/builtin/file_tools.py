@@ -55,41 +55,45 @@ def _without_line_reference(path: str) -> str | None:
     return stripped if stripped and stripped != path else None
 
 
+def _read_one(spec: JailSpec, requested: str) -> ToolResult:
+    """Read one path: jail check, line-reference fallback, special-file rejection, truncation.
+
+    Blocking; callers run it in a worker thread. Every read shape goes through here, so a
+    single file reads the same whether it was asked for alone or in a batch (slice 931 D5).
+    """
+    target = resolve_in_jail(spec, requested)
+    if target is None:
+        return jail_violation(READ_FILE_NAME, spec, requested)
+    note = ""
+    stripped = _without_line_reference(requested)
+    if not target.exists() and stripped is not None:
+        # Models cite locations as `file.ts:1050` and then pass the citation as
+        # the path. The literal path does not exist; the file does.
+        fallback = resolve_in_jail(spec, stripped)
+        if fallback is not None and fallback.is_file():
+            _logger.info("read_file: read %s for requested %s", stripped, requested)
+            target = fallback
+            note = (
+                f"[read_file: '{requested}' does not exist; read '{stripped}' — "
+                "the trailing line reference was ignored and the whole file follows]\n"
+            )
+    rejection = reject_special_file(READ_FILE_NAME, target)
+    if rejection is not None:
+        return rejection
+    data = target.read_bytes()
+    content = truncate(data, limits.MAX_READ_BYTES, str(target))
+    return ToolResult(content=note + content)
+
+
 def _read_file_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
             path = require_str(args, "path")
-
             # Every blocking syscall — the resolve/stat walk, the special-file check, and the
             # read itself — runs in one worker thread. Resolving on the event loop would
             # stall it on a slow or network filesystem (rules/python.md: synchronous work
             # inside an async def must complete in under 1ms).
-            def _read() -> ToolResult:
-                requested = path
-                target = resolve_in_jail(spec, requested)
-                if target is None:
-                    return jail_violation(READ_FILE_NAME, spec, requested)
-                note = ""
-                stripped = _without_line_reference(requested)
-                if not target.exists() and stripped is not None:
-                    # Models cite locations as `file.ts:1050` and then pass the citation as
-                    # the path. The literal path does not exist; the file does.
-                    fallback = resolve_in_jail(spec, stripped)
-                    if fallback is not None and fallback.is_file():
-                        _logger.info("read_file: read %s for requested %s", stripped, requested)
-                        target = fallback
-                        note = (
-                            f"[read_file: '{requested}' does not exist; read '{stripped}' — "
-                            "the trailing line reference was ignored and the whole file follows]\n"
-                        )
-                rejection = reject_special_file(READ_FILE_NAME, target)
-                if rejection is not None:
-                    return rejection
-                data = target.read_bytes()
-                content = truncate(data, limits.MAX_READ_BYTES, str(target))
-                return ToolResult(content=note + content)
-
-            return await asyncio.to_thread(_read)
+            return await asyncio.to_thread(_read_one, spec, path)
 
         return await guarded(READ_FILE_NAME, run)
 

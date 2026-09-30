@@ -197,3 +197,68 @@ async def test_line_reference_cannot_escape_the_jail(tmp_path: Path, read_file: 
 
     assert result.is_error is True
     assert "secret" not in result.content
+
+
+# --- Characterization: single-path output, byte for byte (slice 931 Task 12) ---
+# Written against the pre-batch implementation and left unedited afterwards, so the helper
+# extraction and the `paths` addition cannot change what a single `path` returns (D5).
+
+
+@pytest.fixture
+def characterization_tree(tmp_path: Path) -> Path:
+    (tmp_path / "a.txt").write_text("hello\nworld\n")
+    (tmp_path / "big.txt").write_bytes(b"x" * (limits.MAX_READ_BYTES + 10))
+    (tmp_path / "sub").mkdir()
+    os.mkfifo(tmp_path / "pipe")
+    return tmp_path
+
+
+_WHOLE_FILE_NOTE = (
+    "[read_file: '{requested}' does not exist; read 'a.txt' — the trailing line reference "
+    "was ignored and the whole file follows]\nhello\nworld\n"
+)
+
+
+@pytest.mark.parametrize(
+    ("path", "is_error", "expected"),
+    [
+        ("a.txt", False, "hello\nworld\n"),
+        ("a.txt:12", False, _WHOLE_FILE_NOTE.format(requested="a.txt:12")),
+        ("a.txt#L1-L2", False, _WHOLE_FILE_NOTE.format(requested="a.txt#L1-L2")),
+        ("missing.txt", True, "Error: file not found: {tmp}/missing.txt"),
+        (
+            "../escape.txt",
+            True,
+            "Error: path '../escape.txt' resolves outside the working directory and was rejected.",
+        ),
+        ("pipe", True, "Error: path is not a regular file: pipe"),
+        ("sub", True, "Error: path is a directory: {tmp}/sub"),
+        (
+            "big.txt",
+            False,
+            "x"
+            * limits.MAX_READ_BYTES
+            + f"\n[truncated: {{tmp}}/big.txt is {limits.MAX_READ_BYTES + 10} bytes, "
+            f"showing first {limits.MAX_READ_BYTES}]",
+        ),
+    ],
+    ids=[
+        "normal",
+        "line-ref",
+        "anchor-ref",
+        "missing",
+        "jail-escape",
+        "fifo",
+        "directory",
+        "truncated",
+    ],
+)
+async def test_single_path_output_is_unchanged(
+    characterization_tree: Path, path: str, is_error: bool, expected: str
+) -> None:
+    read = registry.materialize(["read_file"], characterization_tree)["read_file"]
+
+    result = await read({"path": path})
+
+    assert result.is_error is is_error
+    assert result.content == expected.replace("{tmp}", str(characterization_tree.resolve()))
