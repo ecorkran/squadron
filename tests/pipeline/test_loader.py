@@ -30,13 +30,13 @@ class TestLoadPipelineBuiltIn:
 
     def test_load_slice_lifecycle(self) -> None:
         defn = load_pipeline(
-            "slice",
+            "P456",
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )
         assert isinstance(defn, PipelineDefinition)
-        assert defn.name == "slice"
-        assert len(defn.steps) == 10
+        assert defn.name == "p456"
+        assert len(defn.steps) == 12
 
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(FileNotFoundError, match="no-such-pipeline"):
@@ -142,7 +142,7 @@ class TestDiscoverPipelines:
         )
         names = [p.name for p in pipelines]
         assert "broken" not in names
-        assert "slice" in names
+        assert "p456" in names
 
 
 # ---------------------------------------------------------------------------

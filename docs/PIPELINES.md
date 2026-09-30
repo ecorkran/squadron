@@ -10,7 +10,7 @@ dateUpdated: 20260714
 Pipelines let you compose multi-step AI workflows and run them with a single command.
 
 ```bash
-sq run slice 152          # run the built-in slice lifecycle pipeline
+sq run P456 152           # run the built-in slice lifecycle pipeline
 sq run example --list     # list all available pipelines
 ```
 
@@ -22,7 +22,7 @@ Three commands to verify the system works before reading further:
 
 ```bash
 sq run --list                         # show all available pipelines with descriptions
-sq run slice 152                      # run the full slice lifecycle for slice 152
+sq run P456 152                       # run the full slice lifecycle for slice 152
 sq run example 152 --dry-run          # show the step plan, and the items each "each" step would select, without executing
 ```
 
@@ -622,7 +622,7 @@ Actions are the internal execution units that step types expand into. Pipeline a
 
 Squadron resolves the active model for each action through a 5-level cascade, highest priority first:
 
-1. **CLI override** — `sq run slice 152 --model haiku`
+1. **CLI override** — `sq run P456 152 --model haiku`
 2. **Action-level model** — `review.model` inside a phase step's review config
 3. **Step-level model** — `model:` on a phase, compact, summary, or review step
 4. **Pipeline-level model** — top-level `model:` in the pipeline definition
@@ -686,25 +686,25 @@ sq run --list    # shows all available pipelines with descriptions
 
 | Name | Description | Key params |
 |---|---|---|
-| `slice` | Full lifecycle: design → tasks → compact → implement → compact → devlog | `slice`, `review-model` |
-| `tasks` | Task breakdown through implementation | `slice`, `model`, `review-model` |
-| `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
-| `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
+| `P0` | Phase 0 (project concept) with arch review and checkpoint | `slice` |
+| `P2` | Phase 2 (architecture) with arch review | `slice` |
+| `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions` |
+| `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions` |
+| `P6` | Phase 6 (implement) with code review | `slice`, `model`, `review-model` |
+| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → implement → compact → devlog | `slice`, `design-model`, `model`, `review-model`, `max-revisions` |
+| `P56` | Tasks (revised like `P5`) → compact → implement → compact → devlog | `slice`, `model`, `review-model`, `max-revisions` |
 | `slices-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
+| `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
+| `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
 | `findings-addressed-cycle` | Fix-review cycle that exits only when fresh eyes pass *and* the prior round's findings were accounted for — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed) | `slice`, `model`, `review-model`, `judge-model` |
-| `P1` | Phase 1 (project vision) with arch review and checkpoint | `slice` |
-| `P2` | Phase 2 (architecture) with arch review and checkpoint | `slice` |
-| `P4` | Phase 4 (slice design) with slice review and checkpoint | `slice`, `model`, `review-model` |
-| `P5` | Phase 5 (tasks) with tasks review | `slice`, `model`, `review-model` |
-| `P6` | Phase 6 (implement) with code review | `slice`, `model`, `review-model` |
 | `example` | Annotated reference — all available options | `slice` |
 
 The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the primary authoring reference. It includes inline comments explaining every field and option. Read it before writing a custom pipeline.
 
-> **Note on naming:** The architecture document used placeholder names (`slice-lifecycle`, `review-only`, `implementation-only`). The shipped names (`slice`, `review`, `implement`) are the canonical user-facing names.
+> **Note on naming:** Phase pipelines are named for the phases they run: `P4` is phase 4, `P456` runs phases 4 through 6. The full slice lifecycle was previously named `slice`, and tasks-through-implementation was `tasks`.
 
 ---
 

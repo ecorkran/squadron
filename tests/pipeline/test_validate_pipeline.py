@@ -30,7 +30,7 @@ class TestValidateBuiltIns:
 
     def test_slice_lifecycle_valid(self) -> None:
         defn = load_pipeline(
-            "slice",
+            "P456",
             project_dir=Path("/nonexistent"),
             user_dir=Path("/nonexistent"),
         )

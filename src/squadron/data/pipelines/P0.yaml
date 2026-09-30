@@ -1,12 +1,12 @@
-name: P1
-description: Define project vision and scope (phase 1)
+name: P0
+description: Write the project concept (phase 0) with review and human checkpoint
 
 params:
   slice: required
 
 steps:
   - design:
-      phase: 1
+      phase: 0
       model: opus
       review:
         template: arch

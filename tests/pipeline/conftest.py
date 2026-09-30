@@ -8,8 +8,17 @@ from unittest.mock import MagicMock
 import pytest
 
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
-from squadron.pipeline.models import ActionResult
+from squadron.pipeline.loader import load_pipeline
+from squadron.pipeline.models import ActionResult, PipelineDefinition
 from squadron.pipeline.state import StateManager
+
+# Test-only pipelines; kept out of the shipped data/pipelines directory.
+FIXTURE_PIPELINES_DIR = Path(__file__).parent / "fixtures" / "pipelines"
+
+
+def load_fixture_pipeline(name: str) -> PipelineDefinition:
+    """Load a test-only pipeline from FIXTURE_PIPELINES_DIR by its file stem."""
+    return load_pipeline(str(FIXTURE_PIPELINES_DIR / f"{name}.yaml"))
 
 
 @pytest.fixture

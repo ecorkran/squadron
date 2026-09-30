@@ -12,7 +12,7 @@ If the pipeline name is missing after stripping verbosity tokens, show the usage
 
 **Usage:**
 ```
-/sq:run <pipeline> [target] [-v|-vv]  — run a pipeline (e.g., /sq:run slice 152 -v)
+/sq:run <pipeline> [target] [-v|-vv]  — run a pipeline (e.g., /sq:run P456 152 -v)
 ```
 
 ---

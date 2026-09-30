@@ -15,7 +15,7 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.sdk_session import SDKExecutionSession
-from tests.pipeline.conftest import phase_artifact_cf_client
+from tests.pipeline.conftest import FIXTURE_PIPELINES_DIR, phase_artifact_cf_client
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -187,7 +187,7 @@ def _make_full_registry(
 async def test_full_pipeline_cycle_completes(tmp_path: Path) -> None:
     """Full pipeline runs to completion with mock session."""
     session = _make_mock_session()
-    definition = load_pipeline("test-pipeline")
+    definition = load_pipeline(str(FIXTURE_PIPELINES_DIR / "test-pipeline.yaml"))
     cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
@@ -211,7 +211,7 @@ async def test_full_pipeline_cycle_completes(tmp_path: Path) -> None:
 async def test_sdk_session_propagated_to_all_dispatch_contexts(tmp_path: Path) -> None:
     """Session is in ActionContext for all dispatch actions."""
     session = _make_mock_session()
-    definition = load_pipeline("test-pipeline")
+    definition = load_pipeline(str(FIXTURE_PIPELINES_DIR / "test-pipeline.yaml"))
     cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
@@ -249,7 +249,7 @@ async def test_sdk_session_propagated_to_all_dispatch_contexts(tmp_path: Path) -
 async def test_compact_step_receives_session(tmp_path: Path) -> None:
     """Summary action context has the SDK session (test-pipeline uses summary:)."""
     session = _make_mock_session()
-    definition = load_pipeline("test-pipeline")
+    definition = load_pipeline(str(FIXTURE_PIPELINES_DIR / "test-pipeline.yaml"))
     cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
@@ -293,7 +293,7 @@ async def test_compact_step_receives_session(tmp_path: Path) -> None:
 async def test_checkpoint_pauses_returns_paused_status(tmp_path: Path) -> None:
     """When checkpoint fires, pipeline returns PAUSED status."""
     session = _make_mock_session()
-    definition = load_pipeline("test-pipeline")
+    definition = load_pipeline(str(FIXTURE_PIPELINES_DIR / "test-pipeline.yaml"))
     cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 
@@ -327,7 +327,7 @@ async def test_review_actions_context_has_session_but_review_does_not_call_it(
     not the SDK session. This test simulates that behavior.
     """
     session = _make_mock_session()
-    definition = load_pipeline("test-pipeline")
+    definition = load_pipeline(str(FIXTURE_PIPELINES_DIR / "test-pipeline.yaml"))
     cf_client = phase_artifact_cf_client(154, "154-slice.stub.md", "154-tasks.stub.md")
     run_id = _init_run_state(tmp_path, "test-pipeline", {"slice": "154"})
 

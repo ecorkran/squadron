@@ -6,6 +6,7 @@ Exercises the full wiring path: _run_pipeline → load_pipeline → execute_pipe
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,23 +14,18 @@ import pytest
 
 from squadron.cli.commands.run import _run_pipeline
 from squadron.pipeline.executor import ExecutionStatus
-from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager
-from tests.pipeline.conftest import artifact_writing_action, phase_artifact_cf_client
+from tests.pipeline.conftest import (
+    FIXTURE_PIPELINES_DIR,
+    artifact_writing_action,
+    load_fixture_pipeline,
+    phase_artifact_cf_client,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers (shared with test_state_integration.py)
 # ---------------------------------------------------------------------------
-
-
-def _no_project_pipeline(name: str) -> object:
-    """Load a built-in pipeline, bypassing project/user dirs."""
-    return load_pipeline(
-        name,
-        project_dir=Path("/nonexistent"),
-        user_dir=Path("/nonexistent"),
-    )
 
 
 def _mock_action(success: bool = True, verdict: str | None = None) -> MagicMock:
@@ -107,6 +103,14 @@ def _paused_checkpoint_registry(
 
 
 class TestCliIntegration:
+    @pytest.fixture(autouse=True)
+    def _project_slice_pipeline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Install the fixture 'slice' pipeline as a project pipeline, resolved by name."""
+        monkeypatch.chdir(tmp_path)
+        project_pipelines = tmp_path / "project-documents" / "user" / "pipelines"
+        project_pipelines.mkdir(parents=True)
+        shutil.copy(FIXTURE_PIPELINES_DIR / "slice.yaml", project_pipelines)
+
     @pytest.mark.asyncio
     async def test_run_pipeline_completes_successfully(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -194,7 +198,7 @@ class TestCliIntegration:
         run_id = runs[0].run_id
 
         # Resume: load definition, find next step, re-execute
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
         next_step = mgr.first_unfinished_step(run_id, definition)
         assert next_step is not None
 

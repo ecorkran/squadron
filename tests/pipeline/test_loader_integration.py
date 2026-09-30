@@ -40,15 +40,16 @@ class TestBuiltInPipelineStructure:
 
     def test_slice_lifecycle_steps(self) -> None:
         defn = load_pipeline(
-            "slice",
+            "P456",
             project_dir=_NONEXISTENT,
             user_dir=_NONEXISTENT,
         )
-        assert len(defn.steps) == 10
         step_types = [s.step_type for s in defn.steps]
         assert step_types == [
             "design",
+            "loop",
             "tasks",
+            "loop",
             "summary",
             "compact",
             "summary",

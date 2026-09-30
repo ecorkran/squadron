@@ -1,5 +1,5 @@
-name: P5
-description: Break a slice into tasks (phase 5), then revise until the review passes; checkpoint if it never does
+name: P56
+description: Tasks through implementation (phases 5-6) — tasks revised until review passes, then implement
 
 params:
   slice: required
@@ -16,6 +16,7 @@ steps:
       review: { template: tasks, model: "{review-model}" }
       checkpoint: never
   - loop:
+      name: revise-tasks
       max: "{max-revisions}"
       until: "{pass-threshold}"
       accept_if: "{accept-threshold}"
@@ -29,4 +30,27 @@ steps:
   - summary:
       template: minimal-sdk
       model: minimax
-      emit: [stdout, clipboard, file]
+      emit: [file]
+
+  - compact:
+
+  - summary:
+      restore: true
+
+  - implement:
+      phase: 6
+      model: "{model}"
+      review: { template: code, model: "{review-model}" }
+      checkpoint: on-fail
+
+  - summary:
+      template: minimal-sdk
+      model: minimax
+      emit: [file]
+
+  - compact:
+
+  - summary:
+      restore: true
+
+  - devlog: auto

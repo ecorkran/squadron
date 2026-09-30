@@ -1,22 +1,32 @@
 name: P4
-description: Design a slice (phase 4) with review and human checkpoint
+description: Design a slice (phase 4), then revise until the review passes; checkpoint if it never does
 
 params:
   slice: required
   model: sonnet
   review-model: minimax
+  max-revisions: "3"
+  pass-threshold: review.pass
+  accept-threshold: review.concerns_or_better
 
 steps:
   - design:
       phase: 4
       model: "{model}"
-      review:
-        template: slice
-        model: "{review-model}"
-      checkpoint: on-fail
+      review: { template: slice, model: "{review-model}" }
+      checkpoint: never
+  - loop:
+      max: "{max-revisions}"
+      until: "{pass-threshold}"
+      accept_if: "{accept-threshold}"
+      skip_if_met: true
+      commit_each_iteration: true
+      on_exhaust: checkpoint
+      steps:
+        - dispatch: { name: revise, model: "{model}", feedback: review }
+        - review: { template: slice, model: "{review-model}", slice: "{slice}" }
 
   - summary:
       template: minimal-sdk
       model: minimax
       emit: [stdout, clipboard, file]
-

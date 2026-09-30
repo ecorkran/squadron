@@ -163,7 +163,7 @@ See [README.md § Pipelines](../README.md#pipelines-sq-run) and [docs/PIPELINES.
 
 ```bash
 sq run --list              # see available pipelines
-sq run slice 152           # design → tasks → implement → devlog for slice 152
+sq run P456 152            # design → tasks → implement → devlog for slice 152
 ```
 
 ## Troubleshooting

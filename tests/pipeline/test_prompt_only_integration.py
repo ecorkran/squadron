@@ -9,29 +9,20 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.prompt_renderer import (
     CompletionResult,
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.state import StateManager
-
-
-def _load_slice_pipeline() -> object:
-    """Load the built-in 'slice' pipeline, bypassing project/user dirs."""
-    return load_pipeline(
-        "slice",
-        project_dir=Path("/nonexistent"),
-        user_dir=Path("/nonexistent"),
-    )
+from tests.pipeline.conftest import load_fixture_pipeline
 
 
 class TestPromptOnlyFullCycle:
     """Walk the slice pipeline from init through all 6 steps to completion."""
 
     def test_full_cycle(self, tmp_path: Path) -> None:
-        definition = _load_slice_pipeline()
+        definition = load_fixture_pipeline("slice")
         state_mgr = StateManager(runs_dir=tmp_path)
 
         # Resolver that handles all model aliases gracefully
@@ -99,7 +90,7 @@ class TestPromptOnlyFullCycle:
 
     def test_first_step_structure(self, tmp_path: Path) -> None:
         """Verify the first step (design) has the expected action structure."""
-        definition = _load_slice_pipeline()
+        definition = load_fixture_pipeline("slice")
         resolver = ModelResolver(pipeline_model="sonnet")
         params: dict[str, object] = {"slice": "152"}
 
@@ -147,7 +138,7 @@ class TestPromptOnlyFullCycle:
 
     def test_compact_step_resolves_params(self, tmp_path: Path) -> None:
         """Verify compact step has resolved instructions with slice number."""
-        definition = _load_slice_pipeline()
+        definition = load_fixture_pipeline("slice")
         resolver = ModelResolver(pipeline_model="sonnet")
         params: dict[str, object] = {"slice": "152"}
 

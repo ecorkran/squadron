@@ -12,19 +12,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
-from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager
-from tests.pipeline.conftest import artifact_writing_action, phase_artifact_cf_client
-
-
-def _no_project_pipeline(name: str) -> object:
-    """Load a built-in pipeline, bypassing project/user dirs."""
-    return load_pipeline(
-        name,
-        project_dir=Path("/nonexistent"),
-        user_dir=Path("/nonexistent"),
-    )
+from tests.pipeline.conftest import (
+    artifact_writing_action,
+    load_fixture_pipeline,
+    phase_artifact_cf_client,
+)
 
 
 def _mock_action(success: bool = True, verdict: str | None = None) -> MagicMock:
@@ -99,7 +93,7 @@ class TestStateIntegration:
     @pytest.mark.asyncio
     async def test_full_run_state_reflects_all_steps(self, tmp_path: Path) -> None:
         """Full run through slice populates state with all 5 steps."""
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("slice", {"slice": "191"})
         cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")
@@ -128,7 +122,7 @@ class TestStateIntegration:
     @pytest.mark.asyncio
     async def test_resume_from_paused_completes_all_steps(self, tmp_path: Path) -> None:
         """A paused run can be resumed; final state has all 5 steps completed."""
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("slice", {"slice": "191"})
         cf_client = phase_artifact_cf_client(191, "191-slice.stub.md", "191-tasks.stub.md")

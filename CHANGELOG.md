@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Built-in pipelines renamed: `slice` is now `P456`, `tasks` is now `P56`, and `P1` is now `P0` (it runs phase 0, the concept).
+- `P4`, `P5`, `P456` and `P56` now revise the design or tasks until the review passes (up to `max-revisions`), and stop at a checkpoint if it never does.
+- Test-only pipelines (`test-*`) and the unfinished `app` pipeline are no longer shipped.
+
 ### Fixed
 - A pipeline `review:` step over a split task breakdown now reviews every task file, not just the first. Each part saves as `part-N`, same as `sq review tasks`. The step reports the worst part's verdict, so a revise loop no longer skips when a later part falls short (#153).
 - `sq review tasks` no longer crashes when one part of a split breakdown gets an UNKNOWN verdict (#153).

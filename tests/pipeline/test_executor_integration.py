@@ -14,7 +14,11 @@ import pytest
 from squadron.pipeline.executor import ExecutionStatus, StepResult, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
-from tests.pipeline.conftest import artifact_writing_action, phase_artifact_cf_client
+from tests.pipeline.conftest import (
+    artifact_writing_action,
+    load_fixture_pipeline,
+    phase_artifact_cf_client,
+)
 
 
 def _mock_action_fn(success: bool = True, verdict: str | None = None) -> MagicMock:
@@ -28,15 +32,6 @@ def _mock_action_fn(success: bool = True, verdict: str | None = None) -> MagicMo
     action = MagicMock()
     action.execute = AsyncMock(return_value=result)
     return action
-
-
-def _no_project_pipeline(name: str) -> object:
-    """Load a built-in pipeline, bypassing project/user dirs."""
-    return load_pipeline(
-        name,
-        project_dir=Path("/nonexistent"),
-        user_dir=Path("/nonexistent"),
-    )
 
 
 def _success_registry() -> dict[str, object]:
@@ -74,12 +69,15 @@ def _artifact_writing_success_registry(cwd: Path, slice_index: int) -> dict[str,
     }
 
 
+_NONEXISTENT = Path("/nonexistent")
+
+
 class TestSliceLifecycleIntegration:
     @pytest.mark.asyncio
     async def test_all_steps_completed(self, tmp_path: Path) -> None:
         from squadron.pipeline.state import StateManager
 
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
         registry = _artifact_writing_success_registry(tmp_path, 149)
         cf_client = phase_artifact_cf_client(149, "149-slice.stub.md", "149-tasks.stub.md")
         state_mgr = StateManager(runs_dir=tmp_path)
@@ -104,7 +102,7 @@ class TestSliceLifecycleIntegration:
     async def test_on_step_complete_called_in_order(self, tmp_path: Path) -> None:
         from squadron.pipeline.state import StateManager
 
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
         registry = _artifact_writing_success_registry(tmp_path, 149)
         cf_client = phase_artifact_cf_client(149, "149-slice.stub.md", "149-tasks.stub.md")
         state_mgr = StateManager(runs_dir=tmp_path)
@@ -130,7 +128,7 @@ class TestSliceLifecycleIntegration:
 
     @pytest.mark.asyncio
     async def test_start_from_compact_skips_earlier_steps(self) -> None:
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
         registry = _success_registry()
 
         # compact-3 is the fourth step (0-indexed)
@@ -151,7 +149,7 @@ class TestSliceLifecycleIntegration:
 
     @pytest.mark.asyncio
     async def test_missing_required_param_slice(self) -> None:
-        definition = _no_project_pipeline("slice")
+        definition = load_fixture_pipeline("slice")
 
         with pytest.raises(ValueError, match="slice"):
             await execute_pipeline(
@@ -166,7 +164,7 @@ class TestSliceLifecycleIntegration:
 class TestReviewOnlyIntegration:
     @pytest.mark.asyncio
     async def test_completed_with_pass_verdict(self) -> None:
-        definition = _no_project_pipeline("review")
+        definition = load_pipeline("review", project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
         registry = _success_registry()
 
         result = await execute_pipeline(
@@ -264,7 +262,7 @@ class TestDesignPlanIntegration:
 
         run_id = StateManager(runs_dir=tmp_path).init_run("slices-plan", {"plan": "900"})
         result = await execute_pipeline(
-            _no_project_pipeline("slices-plan"),  # type: ignore[arg-type]
+            load_pipeline("slices-plan", project_dir=_NONEXISTENT, user_dir=_NONEXISTENT),  # type: ignore[arg-type]
             {"plan": "900", "max-revisions": "2"},
             resolver=MagicMock(),
             cf_client=self._cf_client(),

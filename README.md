@@ -310,7 +310,7 @@ Codex is experimental and requires active OpenAI subscriptions. The standard `co
 Pipelines compose multi-step AI workflows into a single repeatable command, defined in YAML:
 
 ```bash
-sq run slice 152          # design → tasks → implement → devlog for slice 152
+sq run P456 152           # design → tasks → implement → devlog for slice 152
 sq run --list             # show all available pipelines
 ```
 

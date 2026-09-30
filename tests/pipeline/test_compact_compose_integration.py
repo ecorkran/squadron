@@ -6,24 +6,15 @@ prompt-only (no sdk_session) and true-CLI (sdk_session present) paths.
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
-from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
+from tests.pipeline.conftest import load_fixture_pipeline
 
 _SDK = "claude_agent_sdk"
-
-
-def _no_project_pipeline(name: str) -> object:
-    return load_pipeline(
-        name,
-        project_dir=Path("/nonexistent"),
-        user_dir=Path("/nonexistent"),
-    )
 
 
 def _make_compact_boundary_message() -> object:
@@ -44,7 +35,7 @@ def _make_compact_boundary_message() -> object:
 @pytest.mark.skip(reason="fixture pipeline step count mismatch; tracked for fix in slice 248")
 async def test_compact_compose_prompt_only_steps_use_real_compact_action() -> None:
     """Prompt-only: real CompactAction dispatches /compact, all 5 steps complete."""
-    definition = _no_project_pipeline("test-compact-compose")
+    definition = load_fixture_pipeline("test-compact-compose")
 
     async def _compact_boundary_gen(*a: object, **kw: object):  # type: ignore[no-untyped-def]
         yield _make_compact_boundary_message()
@@ -115,7 +106,7 @@ async def test_compact_compose_prompt_only_steps_use_real_compact_action() -> No
 @pytest.mark.asyncio
 async def test_compact_compose_no_dead_slash_command_text() -> None:
     """Regression: prompt-only compact must not emit literal '/compact' as response."""
-    definition = _no_project_pipeline("test-compact-compose")
+    definition = load_fixture_pipeline("test-compact-compose")
     from squadron.pipeline.actions.compact import CompactAction
 
     compact_action = CompactAction()
@@ -181,7 +172,7 @@ async def test_compact_compose_no_dead_slash_command_text() -> None:
 @pytest.mark.skip(reason="fixture pipeline step count mismatch; tracked for fix in slice 248")
 async def test_compact_compose_true_cli_all_steps_complete() -> None:
     """True CLI: CompactAction delegates to sdk_session.compact(); 5 steps complete."""
-    definition = _no_project_pipeline("test-compact-compose")
+    definition = load_fixture_pipeline("test-compact-compose")
     from squadron.pipeline.actions.compact import CompactAction
 
     compact_action = CompactAction()
