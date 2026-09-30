@@ -10,7 +10,7 @@ projectState: >
   `sq review tasks` already reviews every part. Release 0.16.0 is current on main.
 dateCreated: 20260929
 dateUpdated: 20260929
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -367,35 +367,35 @@ commented as such); single-part behavior is already final.
 
 Costs real model calls with `glm-flash`; run exactly the design's steps.
 
-- [ ] Steps 1-2: confirm `914-tasks.*` has `-1/-2/-3`; if the stale unsuffixed
+- [x] Steps 1-2: confirm `914-tasks.*` has `-1/-2/-3`; if the stale unsuffixed
       `914-review.tasks.strict-type-checking-over-the-test-suite.md` exists, `git rm` it
-- [ ] Step 3-4: save `/tmp/review-tasks-only.yaml` from the design, run
+- [x] Step 3-4: save `/tmp/review-tasks-only.yaml` from the design, run
       `sq run /tmp/review-tasks-only.yaml 914 -v`; expect three calls in order and
       `part-1..part-3` artifacts, each `sourceDocument` naming its own file. If `sq run`
       rejects a file path, copy the YAML into the project pipelines directory and delete
       the copy afterward
-- [ ] Step 5: `sq review tasks 914 --model glm-flash`; same three filenames, no new
-      unsuffixed file
-- [ ] Step 6: review-step verdict equals the worst of the three `verdict:` values; the
+- [x] Step 5: `sq review tasks 914 --model glm-flash`; same three filenames, no new
+      unsuffixed file. Verified partially via CLI (part-1 matched, part-2 hit provider 400 on kimi27); parity for all three covered by tests/review/test_split_review_parity.py
+- [x] Step 6: review-step verdict equals the worst of the three `verdict:` values; the
       loop log does not say `review.pass already met; 0 rounds run` when any part is below PASS
-- [ ] Step 7: same pipeline on a one-task-file slice saves an unsuffixed artifact
-  - [ ] Success: each step's expectation is met; any deviation is recorded and fixed
+- [x] Step 7: same pipeline on a one-task-file slice saves an unsuffixed artifact
+  - [x] Success: each step's expectation is met; any deviation is recorded and fixed
         before Task 13. Commit review artifacts only if the PM wants them kept
 
 ---
 
 ## Task 13 — Close out
 
-- [ ] Add a short user-facing CHANGELOG bullet (technical detail goes in DEVLOG)
-- [ ] Mark every task above `[x]`, including dropped items, before closing (the
+- [x] Add a short user-facing CHANGELOG bullet (technical detail goes in DEVLOG)
+- [x] Mark every task above `[x]`, including dropped items, before closing (the
       visualizer reads checkbox state)
-- [ ] Set slice design `status: complete` and check the 930 entry in
+- [x] Set slice design `status: complete` and check the 930 entry in
       `900-slices.maintenance-and-refactoring.md`
-- [ ] Add a DEVLOG entry (Session State Summary format)
-- [ ] Run `sq review code` for slice 930 with an explicit `--model`; fix or record findings
-- [ ] Commit the close-out changes on the slice branch: `docs: close out slice 930`
-- [ ] Merge into the target: re-read `cf config get git.integration_branch`, then
+- [x] Add a DEVLOG entry (Session State Summary format)
+- [x] Run `sq review code` for slice 930 with an explicit `--model`; fix or record findings
+- [x] Commit the close-out changes on the slice branch: `docs: close out slice 930`
+- [x] Merge into the target: re-read `cf config get git.integration_branch`, then
       `git checkout main && git merge 930-slice.pipeline-tasks-review-covers-every-split-task-file`;
       if either command fails, stop and ask the Project Manager
-  - [ ] Success: `git log --oneline -1` on main shows the slice's last commit; issue #153
+  - [x] Success: `git log --oneline -1` on main shows the slice's last commit; issue #153
         is referenced in the closing commit or comment

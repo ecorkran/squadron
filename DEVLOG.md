@@ -12,6 +12,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260929
 
+### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Implementation Complete
+
+- Branch `930-slice.pipeline-tasks-review-covers-every-split-task-file`, fixes #153. Code review PASS (sonnet, 6 notes, none blocking). Suite: 5007 passed, 4 skipped; ruff and pyright clean.
+- The pipeline `review:` step now reviews every split task file, one call per part, saved as `part-N` like `sq review tasks`. The step's verdict is the worst part's (PASS < CONCERNS < FAIL < UNKNOWN). Single-file slices are unchanged.
+- Shared: `review/parts.py` (`review_parts`, `worst_verdict`). CLI `review_tasks` uses it, and the UNKNOWN `KeyError` in the old `_aggregate_verdicts` is gone (UNKNOWN exits 0, like a single-file UNKNOWN review).
+- Registry: `TemplateInputSpec.fans_out`; `resolve_template_input_parts` replaces `resolve_template_inputs`.
+- Pipeline: `ReviewAction` runs parts sequentially; `review_fold.py` (not in the task plan; `review.py` was too long) folds results; `review_outputs.py` holds the typed output keys. Dispatch feedback lists every part file. The batch report shows `unsaved: <paths>`.
+- Walkthrough on slice 914 (pipeline, kimi27): `part-1..3` written, no unsuffixed file, worst verdict reported. Single-file check on 932 saved unsuffixed. CLI parity was partial in the live run (kimi27 hit a context-limit 400 on part 2); `tests/review/test_split_review_parity.py` covers all three names.
+- Deferred: a stream drop (`openai.APIError`, glm-flash) writes no failure artifact, in either the CLI or the pipeline (#166). `review.py` is 637 lines, over the ~300 guideline; split further when next touched. context-forge#106 (tasks gate reads only the last `part-N`) is out of scope.
+
 ### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Design Complete
 
 - Phase 5 done: `project-documents/user/tasks/930-tasks.pipeline-tasks-review-covers-every-split-task-file.md` (13 tasks, 363 lines). Committed to main; no code written, no slice branch yet.

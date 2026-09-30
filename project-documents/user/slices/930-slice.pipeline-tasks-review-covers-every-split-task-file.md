@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [195]
 interfaces: []
 dateCreated: 20260928
-dateUpdated: 20260928
-status: not_started
+dateUpdated: 20260929
+status: complete
 ---
 
 # Slice Design: Pipeline Tasks Review Covers Every Split Task File
@@ -273,6 +273,16 @@ Use the real split slice from the issue (914, three task files):
    Expect the same three filenames (the CLI run archives and overwrites them) and no new unsuffixed file.
 6. Worst-verdict gating: in the run digest or state for step 3, the review step's verdict is the worst of the three parts' `verdict:` frontmatter values from step 4. If any part is below PASS, the loop log does **not** say `review.pass already met; 0 rounds run`.
 7. Single-file regression: run the same review-only pipeline on a slice with one task file. The review saves as `<idx>-review.tasks.<name>.md` with no suffix, as before.
+
+#### Walkthrough results
+
+Run with `uv run sq run ...`. glm-flash dropped the stream on 914 ("Network connection lost") through both the CLI and the pipeline, so the runs below used kimi27 and kimi3. That drop writes no failure artifact (#166, out of scope).
+
+- **Steps 1, 3, 4:** the pipeline logged `part 1/3`, `2/3`, `3/3` in order and wrote `part-1`, `part-2`, `part-3`. There was no unsuffixed file, and each `sourceDocument` names its own `-N.md`. Verdicts were CONCERNS, PASS and CONCERNS, and the step reported CONCERNS.
+- **Step 2:** no stale unsuffixed 914 review existed, so nothing was removed.
+- **Step 5:** the CLI saved `part-1` under the same name as the pipeline. On part 2, kimi27 returned a 400 (about 236k requested output tokens plus 35k input against a 262k context). The CLI recorded a provider-failure artifact in the `part-2` slot and stopped, so `part-3` was not exercised through the CLI. Name parity for all three parts is covered by `tests/review/test_split_review_parity.py`.
+- **Step 6:** this pipeline has no revise loop, so no `review.pass already met` line could appear. The loop behaviour is covered by the skip_if_met test in the parity test file.
+- **Step 7:** slice 932 (one task file) ran through the pipeline and saved as `932-review.tasks.<name>.md` with no `part-N` suffix.
 
 ## Implementation Notes
 
