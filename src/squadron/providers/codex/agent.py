@@ -47,6 +47,12 @@ class CodexAgent:
                 "Codex agent cannot apply max_output_tokens=%d; the backend default applies",
                 config.max_output_tokens,
             )
+        # Slice 931 D4: nor effort — thread_start's reasoning parameter is unverified here.
+        if config.effort is not None:
+            _log.warning(
+                "Codex agent cannot apply effort=%s; the backend default applies",
+                config.effort.value,
+            )
         self._codex: object | None = None
         self._thread: object | None = None
 

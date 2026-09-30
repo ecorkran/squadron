@@ -246,3 +246,22 @@ class TestOutputBudgetWarning:
         with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
             CodexAgent(name="test-codex", config=agent_config)
         assert not [r for r in caplog.records if "max_output_tokens" in r.getMessage()]
+
+    def test_effort_logs_one_warning(
+        self, agent_config: AgentConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Slice 931 D4: Codex cannot apply effort, and says so."""
+        from squadron.core.models import Effort
+
+        config = agent_config.model_copy(update={"effort": Effort.low})
+        with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
+            CodexAgent(name="test-codex", config=config)
+        messages = [r.getMessage() for r in caplog.records]
+        assert messages.count("Codex agent cannot apply effort=low; the backend default applies") == 1
+
+    def test_no_effort_logs_nothing(
+        self, agent_config: AgentConfig, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
+            CodexAgent(name="test-codex", config=agent_config)
+        assert not [r for r in caplog.records if "effort" in r.getMessage()]

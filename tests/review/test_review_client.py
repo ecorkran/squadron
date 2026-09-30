@@ -1539,3 +1539,20 @@ class TestEffortThreading:
 
         assert provider.create_agent.call_args.args[0].effort is None
         assert result.effort is None
+
+    @pytest.mark.asyncio
+    async def test_codex_artifact_has_no_effort_key(self) -> None:
+        """Slice 931 D4: Codex does not apply effort, so its artifact never claims one."""
+        from squadron.providers.codex.provider import CodexProvider
+        from squadron.review.persistence import format_review_markdown
+
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+        provider.capabilities = CodexProvider().capabilities
+
+        result = await self._run(provider, Effort.low)
+        md = format_review_markdown(result, "code")
+        frontmatter = md.split("---")[1]
+
+        assert result.effort is None
+        assert "effort:" not in frontmatter
+        assert "- Effort: backend default" in md
