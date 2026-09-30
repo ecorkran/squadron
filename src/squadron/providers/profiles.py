@@ -15,6 +15,7 @@ __all__ = [
     "get_profile",
     "is_sdk_profile",
     "load_user_profiles",
+    "profile_credentials",
     "providers_toml_path",
 ]
 
@@ -30,6 +31,10 @@ class ProviderProfile:
     default_headers: dict[str, str] | None = None
     description: str = ""
     auth_type: str = AuthType.API_KEY
+    # Whether the backend accepts ``stream_options={"include_usage": True}`` (slice 931).
+    # True is the OpenAI spec's behavior; a profile opts out only for a backend that
+    # rejects the parameter.
+    sends_stream_usage: bool = True
 
 
 BUILT_IN_PROFILES: dict[str, ProviderProfile] = {
@@ -64,6 +69,8 @@ BUILT_IN_PROFILES: dict[str, ProviderProfile] = {
         base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
         api_key_env="GEMINI_API_KEY",
         description="Google Gemini via OpenAI-compatible endpoint",
+        # Gemini's OpenAI-compatible endpoint is not verified to accept stream_options.
+        sends_stream_usage=False,
     ),
     ProfileName.SDK: ProviderProfile(
         name=ProfileName.SDK,
@@ -114,8 +121,34 @@ def load_user_profiles() -> dict[str, ProviderProfile]:
             ),
             description=str(fields.get("description", "")),
             auth_type=str(fields.get("auth_type", "api_key")),
+            sends_stream_usage=_read_sends_stream_usage(fields, name, path),
         )
     return result
+
+
+def _read_sends_stream_usage(fields: dict[str, object], profile: str, path: Path) -> bool:
+    """Read the optional ``sends_stream_usage`` flag; absent means the dataclass default."""
+    if "sends_stream_usage" not in fields:
+        return ProviderProfile.sends_stream_usage
+    value = fields["sends_stream_usage"]
+    if not isinstance(value, bool):
+        raise ValueError(
+            f"Profile {profile!r} in {path}: sends_stream_usage must be true or false, got {value!r}"
+        )
+    return value
+
+
+def profile_credentials(profile: ProviderProfile) -> dict[str, object]:
+    """The ``AgentConfig.credentials`` entries every agent built from ``profile`` carries.
+
+    One definition, so a new profile field reaches every call site at once. Callers
+    add their own keys (``hooks``, ``mode``, ...) beside these.
+    """
+    return {
+        "api_key_env": profile.api_key_env,
+        "default_headers": profile.default_headers,
+        "sends_stream_usage": profile.sends_stream_usage,
+    }
 
 
 def get_all_profiles() -> dict[str, ProviderProfile]:

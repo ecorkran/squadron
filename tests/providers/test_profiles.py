@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from squadron.providers.base import ProfileName
 from squadron.providers.profiles import (
     BUILT_IN_PROFILES,
     ProviderProfile,
@@ -14,6 +15,7 @@ from squadron.providers.profiles import (
     get_profile,
     is_sdk_profile,
     load_user_profiles,
+    profile_credentials,
 )
 
 
@@ -165,3 +167,47 @@ def test_user_profile_without_auth_type_defaults(
 )
 def test_is_sdk_profile(profile: str | None, expected: bool) -> None:
     assert is_sdk_profile(profile) is expected
+
+
+# --- sends_stream_usage and profile_credentials (slice 931) ---
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [("sends_stream_usage = true", True), ("sends_stream_usage = false", False), ("", True)],
+    ids=["true", "false", "absent"],
+)
+def test_user_profile_sends_stream_usage(
+    line: str, expected: bool, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    toml_file = tmp_path / "providers.toml"
+    toml_file.write_text(f'[profiles.mine]\nprovider = "openai"\n{line}\n')
+    monkeypatch.setattr("squadron.providers.profiles.providers_toml_path", lambda: toml_file)
+
+    assert load_user_profiles()["mine"].sends_stream_usage is expected
+
+
+def test_user_profile_non_bool_sends_stream_usage_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    toml_file = tmp_path / "providers.toml"
+    toml_file.write_text('[profiles.mine]\nprovider = "openai"\nsends_stream_usage = "no"\n')
+    monkeypatch.setattr("squadron.providers.profiles.providers_toml_path", lambda: toml_file)
+
+    with pytest.raises(ValueError, match="'mine'.*sends_stream_usage must be true or false"):
+        load_user_profiles()
+
+
+def test_only_gemini_builtin_opts_out_of_stream_usage() -> None:
+    opted_out = {name for name, p in BUILT_IN_PROFILES.items() if not p.sends_stream_usage}
+    assert opted_out == {ProfileName.GEMINI}
+
+
+def test_profile_credentials_keys_and_values() -> None:
+    profile = BUILT_IN_PROFILES[ProfileName.GEMINI]
+
+    assert profile_credentials(profile) == {
+        "api_key_env": "GEMINI_API_KEY",
+        "default_headers": None,
+        "sends_stream_usage": False,
+    }
