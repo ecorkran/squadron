@@ -12,7 +12,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260930
 
-### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Code Complete, Pipeline Run and Code Review Pending
+### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Implementation Complete
 
 - Branch `931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`; fixes #154 (effort), #157 (batched reads), #158 (per-turn usage). Order C → B → A, one or more commits per task.
 - **C (usage):** `core/usage.py` (`TokenUsage`, `RunTelemetry`, `add_optional`, a stdlib-only leaf). `providers/openai/usage.py` reads usage off every chunk before the choices guard. The agent sends `stream_options` unless the profile sets `sends_stream_usage = false` (gemini built-in), sums turns/usage/reasoning chars per `handle_message`, stamps them on the final Message, attaches a snapshot to every `ProviderError`, converts mid-stream `httpx` timeouts/transport errors, and logs the D12 exit and no-usage WARNINGs. `review_client` times every review and stamps `duration_seconds` on errors. `review/run_cost.py` renders frontmatter keys, digest lines, and JSON keys once for both success and provider-failure artifacts. `profile_credentials()` replaced six hand-copied credential dicts.
@@ -23,7 +23,9 @@ A lightweight, append-only record of development activity. Newest entries first.
 - Live OpenRouter runs on slice 931's design: glm-flash baseline PASS, 20 turns, 50 tool calls, prompt 2,343,136 / cached 1,537,024 (OpenRouter caches: 66%) / completion 83,523 / reasoning 79,466, 1273 s. glm-flash-low PASS, 2 turns, 2 tool calls, prompt 21,029 / completion 892 / reasoning 158, 28.8 s — same verdict at a fraction of the cost. JSON (`--output json`) carries the same keys. No `paths` call in practice: glm-flash-low issued two single-path reads as parallel calls in one turn.
 - #166 fixed here: the first baseline attempt died on OpenRouter's mid-stream error event (bare `openai.APIError`, no artifact). The agent now converts it to `ProviderError`, so it records a failure artifact with telemetry.
 - **Not run:** walkthrough step 6's live pipeline run (`sq run` refuses inside Claude Code), 7 for `openai`/`gemini`, 8 (would mean stopping Ollama mid-review), and 9 (no Codex).
-- Not merged; slice stays `in_progress` pending the code review and the step 6 pipeline run.
+- Code review (deepseek-v4.1-flash): CONCERNS. Fixed: batched `paths` capped at 50 entries of ≤1024 chars so the result-floor invariant is a real bound; effort parsed by value; one duration span for success and failure; spawn None-filter test. Kept: `max`/`minimal` excluded by D1 (reviewer could not verify OpenAI's list), double WARNING on empty turn, load-test bounds. Response recorded in the review file.
+- Pipeline parity (`sq run review 931 --model glm-flash-low`): artifact carries `effort: low` and all usage keys. Its two concerns (spurious exit WARNING on generator abandonment; error text crowding the batch budget) do not hold: `completed` is set before the first yield, and error results are ≤ ~1 KB against a 256 KB budget. That run overwrites the gate review's file; the gate review was restored from git.
+- A mistyped alias (`glm-flash-low.`) was accepted by the pipeline and ran a fabricated SDK review instead of failing (#175).
 - `glm-flash-low` added to `~/.config/squadron/models.toml` (inline `[aliases]` form) for the walkthrough.
 - Issues filed: #171 Codex effort, #172 SDK usage from `ResultMessage.usage`, #173 enable gemini `sends_stream_usage` after a probe, #174 `grep` empty pattern logged as an unexpected failure (pre-existing). D2 rationale commented on #154.
 - Test-suite note: `tests/metrology/test_audit_cli.py`'s two variance-series tests each sleep 120 s on the default `metrology.audit_run_cooldown_s`, which is most of the full suite's wall-clock.

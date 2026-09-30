@@ -7,7 +7,7 @@ dependencies: [924]
 interfaces: []
 dateCreated: 20260928
 dateUpdated: 20260930
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Tool-Heavy Reviews on OpenAI-Compatible Models — Effort, Batched Reads, and Per-Turn Usage
@@ -433,14 +433,16 @@ Refined after Phase 6 (20260930). Each step says whether it was run in the imple
 
    *Run.* `{'effort': 'low', 'turns': 2, 'prompt_tokens': 21077, 'cached_tokens': 4224, 'completion_tokens': 1142, 'reasoning_tokens': 142, 'duration_seconds': 12.23}`: same keys and shape as step 3's frontmatter.
 
-6. **Pipeline parity.** Live run **not run**: `sq run` refuses inside a Claude Code session, so it is the operator's; the dry run was. The built-in `review` pipeline runs a code review of slice 931's branch through the pipeline review action, which is the `resolve_full` path:
+6. **Pipeline parity.** The built-in `review` pipeline runs a code review of slice 931's branch through the pipeline review action, which is the `resolve_full` path:
    ```
    sq run review 931 --model glm-flash-low --dry-run
    sq run review 931 --model glm-flash-low
    ```
    The saved code review has `effort: low` and the usage keys. `sq run` refuses to start inside a Claude Code session, so run it from a terminal.
 
-   *Dry run, run.* It prints `Params: {'model': 'glm-flash-low', 'slice': '931'}` and `review-0 (review)`. The alias appears under Params, not on the step line.
+   *Run (operator terminal).* The saved code review has `effort: low`, `turns: 2`, `promptTokens: 126015`, `cachedTokens: 57792`, `completionTokens: 5411`, `reasoningTokens: 3852`, `durationSeconds: 68.5`, `runId` — the same keys the CLI writes. It writes the same file as `sq review code`, so commit a gate review before running this. A trailing character on the alias (`glm-flash-low.`) is not rejected by the pipeline; see #175.
+
+   *Dry run.* It prints `Params: {'model': 'glm-flash-low', 'slice': '931'}` and `review-0 (review)`. The alias appears under Params, not on the step line.
 
 7. **Every built-in OpenAI-compatible profile accepts the new request.** Run one short review per profile: `openrouter` (steps 2–3), `local` (with Ollama running, using an alias on the `local` profile), `openai`, and `gemini` (`--model gemini-flash`). Each completes. `local` shows prompt and completion tokens and `Reasoning tokens` `not reported`, matching the Interfaces table. `gemini`'s profile does not send `stream_options`, so it records only the usage the backend sends unasked. If it sends none, every token field shows `not reported` and the D12 no-usage WARNING is logged. Its request is byte-for-byte today's apart from `reasoning_effort` when an effort is set.
 

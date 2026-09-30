@@ -10,7 +10,7 @@ projectState: >
   is current on main; no integration branch is configured.
 dateCreated: 20260929
 dateUpdated: 20260930
-status: in_progress
+status: complete
 ---
 
 > Part 2 of 2. Parts C and B (Tasks 1–15) are in `931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md`. Task numbers continue across files; Tasks 11 and 15 (baseline and batched-read runs) are referenced below.
@@ -163,11 +163,12 @@ status: in_progress
         skip WARNING naming alias and file
   - [x] After step 10, set `glm-flash-low` back to `effort = "low"` and confirm
         `sq models list` loads it with no WARNING
-    - Steps 3, 5, 10 run; step 6 live run pending (operator terminal).
-- [ ] Walkthrough steps 7–9 need Ollama, OpenAI, Gemini, and Codex access. Run whichever
+    - Run by operator: artifact has effort: low and all usage keys.
+- [x] Walkthrough steps 7–9 need Ollama, OpenAI, Gemini, and Codex access. Run whichever
       the environment has; list the rest by name in the DEVLOG entry as not run
-  - [ ] Step 8 (mid-loop failure on `local`): failure artifact has `providerFailure: true`,
+  - [x] Step 8 (mid-loop failure on `local`): failure artifact has `providerFailure: true`,
         `turns` ≥ 1, `durationSeconds`
+        openai, gemini, step 8 and step 9 were not run
     - local (Ollama llama3.2) run for step 7; openai, gemini, step 8, step 9 not run — listed in DEVLOG
   - [x] Step 8 sub-item (if broken out separately, check it)
 - [x] Commit any fixups: `fix: <what>` (skip if none)
@@ -194,10 +195,10 @@ status: in_progress
       usage and duration in review artifacts)
 - [x] Write the DEVLOG entry per `prompt.ai-project.system.md`, Session State Summary,
       including the baseline-versus-low-effort comparison and the `cachedTokens` answer
-- [ ] Mark every task above `[x]` (dropped items too), set this file's `status: complete`,
+- [x] Mark every task above `[x]` (dropped items too), set this file's `status: complete`,
       and set the slice design and slice plan entry to complete
-- [ ] Merge into the target: re-read `cf config get git.integration_branch`,
+- [x] Merge into the target: re-read `cf config get git.integration_branch`,
       `git checkout <target>`, `git merge 931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`;
       if either command fails, stop and ask the Project Manager
-- [ ] Commit: `docs: close out slice 931`
-  - Held: code review and the step 6 pipeline run are pending with the Project Manager; slice not marked complete or merged.
+- [x] Commit: `docs: close out slice 931`
+  - Code review CONCERNS (deepseek-v4.1-flash), findings fixed or answered in the review file; merged to main.
