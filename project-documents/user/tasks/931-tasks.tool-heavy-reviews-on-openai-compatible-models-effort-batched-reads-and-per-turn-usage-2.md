@@ -46,13 +46,22 @@ status: not_started
 ## Task 18 — `ResolvedModel.effort` and pipeline call sites (D11)
 
 - [ ] `pipeline/resolver.py`: `ResolvedModel.effort`, filled by `model_effort(alias)` (line ~73)
-- [ ] Pass `resolved.effort` into the `AgentConfig` each site builds — one sub-task each:
-  - [ ] `pipeline/actions/review.py` (near line 390)
-  - [ ] `pipeline/actions/dispatch.py`
-  - [ ] `pipeline/summary.py`
+- [ ] Carry `resolved.effort` to where each pipeline path builds its `AgentConfig` — one
+      sub-task each:
+  - [ ] `pipeline/actions/review.py` (near line 390): pass `effort=settings.resolved.effort`
+        to `run_review_with_profile` beside `max_output_tokens`; the `AgentConfig` itself is
+        built in `review_client` (Task 19)
+  - [ ] `pipeline/actions/dispatch.py`: set `effort` on the `AgentConfig` at line ~157
+  - [ ] Summary path: `pipeline/actions/summary.py` builds no `AgentConfig`. Add an
+        `effort: Effort | None = None` keyword to `capture_summary_via_profile_with_telemetry`
+        and `capture_summary_via_profile` in `pipeline/summary_oneshot.py`, set it on the
+        `AgentConfig` at line ~102, and pass `resolved.effort` from the call at
+        `actions/summary.py` line ~274. Check `cli/commands/summary_run.py` (line ~61) and
+        pass the alias effort there too, so CLI and pipeline summaries match
 - [ ] Tests: `ResolvedModel.effort` round-trip in `tests/pipeline/test_resolver.py`; each
-      action passes it into its config (extend `test_review_action.py`, `test_dispatch.py`,
-      `test_summary.py`)
+      path gets the effort into its config (extend `test_review_action.py`, `test_dispatch.py`,
+      `test_summary.py`, and the `summary_oneshot` tests: the built `AgentConfig.effort`
+      matches the alias)
   - [ ] Success: all pass
 - [ ] Format, lint, typecheck, commit: `feat: carry alias effort through pipeline resolution`
 
@@ -148,6 +157,8 @@ status: not_started
   - [ ] `effort: low` in frontmatter; JSON matches frontmatter; `sq run review 931
         --model glm-flash-low` records the same fields as the CLI; invalid value logs the
         skip WARNING naming alias and file
+  - [ ] After step 10, set `glm-flash-low` back to `effort = "low"` and confirm
+        `sq models list` loads it with no WARNING
 - [ ] Walkthrough steps 7–9 need Ollama, OpenAI, Gemini, and Codex access. Run whichever
       the environment has; list the rest by name in the DEVLOG entry as not run
   - [ ] Step 8 (mid-loop failure on `local`): failure artifact has `providerFailure: true`,
