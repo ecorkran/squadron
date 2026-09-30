@@ -474,3 +474,28 @@ class TestReasoningEffort:
 
         assert exc_info.value.status_code == 400
         assert self._sent(agent) == ["xhigh"]
+
+
+@pytest.mark.asyncio
+async def test_stream_error_event_is_converted_with_telemetry(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#166: an SSE error event mid-stream raises bare openai.APIError; it must convert."""
+    (tmp_path / "a.txt").write_text("A")
+    raised = openai.APIError(
+        "Network connection lost.", request=httpx.Request("POST", "http://test"), body=None
+    )
+    agent = _agent(
+        *_two_tool_turns(),
+        async_stream(text_chunk("partial"), raised),
+        cwd=str(tmp_path),
+        tools=["read_file"],
+    )
+
+    with caplog.at_level(logging.WARNING), pytest.raises(ProviderError) as exc_info:
+        await _collect(agent)
+
+    assert type(exc_info.value) is ProviderError
+    assert exc_info.value.__cause__ is raised
+    assert exc_info.value.telemetry is not None
+    assert exc_info.value.telemetry.turns == 2

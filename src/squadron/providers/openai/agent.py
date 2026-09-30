@@ -290,6 +290,10 @@ class OpenAICompatibleAgent:
             raise ProviderTimeoutError(str(exc)) from exc
         except openai.APIConnectionError as exc:
             raise ProviderError(str(exc)) from exc
+        # An error event inside the stream body (OpenRouter's "Network connection lost.")
+        # arrives as the base APIError, which none of the subclasses above match (#166).
+        except openai.APIError as exc:
+            raise ProviderError(str(exc)) from exc
         # The openai SDK does not wrap errors raised while iterating a stream, so a
         # mid-body timeout or disconnect arrives as raw httpx (slice 931 D12).
         except httpx.TimeoutException as exc:
