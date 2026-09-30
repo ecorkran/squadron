@@ -22,7 +22,7 @@ from openai.types.chat import (
 # module's constructor calls registry.lookup/materialize.
 import squadron.tools as tools
 from squadron.config.keys import CONFIG_KEYS
-from squadron.core.models import AgentState, Message
+from squadron.core.models import AgentState, Effort, Message
 from squadron.core.usage import RunTelemetry, TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.errors import (
@@ -147,6 +147,7 @@ class OpenAICompatibleAgent:
         max_history_chars: int | None = None,
         max_tool_result_chars: int | None = None,
         sends_stream_usage: bool = True,
+        effort: Effort | None = None,
     ) -> None:
         self._name = name
         self._client = client
@@ -157,6 +158,7 @@ class OpenAICompatibleAgent:
         self._cwd = cwd
         self._max_output_tokens = max_output_tokens
         self._sends_stream_usage = sends_stream_usage
+        self._effort = effort
         # Opaque to this agent: a sequence of path patterns to withhold from the tool jail,
         # threaded to ``materialize`` exactly as ``cwd`` is. The agent is a generic provider
         # and deliberately does not know why any pattern is here or what a review type is
@@ -345,6 +347,9 @@ class OpenAICompatibleAgent:
             max_completion_tokens=(
                 self._max_output_tokens if self._max_output_tokens is not None else omit
             ),
+            # Slice 931 D3: top-level reasoning_effort on every turn, including tool-loop
+            # and recovery turns; a backend that rejects the level answers 400, loudly.
+            reasoning_effort=self._effort.value if self._effort is not None else omit,
             # Slice 931 D8: ask for the usage chunk unless the profile's backend rejects it.
             stream_options={"include_usage": True} if self._sends_stream_usage else omit,
         )

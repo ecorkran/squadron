@@ -45,3 +45,15 @@ class TestProviderCapabilities:
         from squadron.providers.sdk.provider import ClaudeSDKProvider
 
         assert ClaudeSDKProvider().capabilities.supports_streaming is True
+
+
+class TestAppliesEffort:
+    """Slice 931 D4: openai and sdk apply effort; codex and the default do not."""
+
+    def test_defaults_false(self) -> None:
+        assert ProviderCapabilities().applies_effort is False
+
+    def test_openai_applies_effort(self) -> None:
+        from squadron.providers.openai.provider import OpenAICompatibleProvider
+
+        assert OpenAICompatibleProvider().capabilities.applies_effort is True

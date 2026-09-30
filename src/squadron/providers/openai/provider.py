@@ -34,6 +34,7 @@ class OpenAICompatibleProvider:
             supports_system_prompt=True,
             supports_streaming=True,
             applies_output_budget=True,
+            applies_effort=True,
         )
 
     async def create_agent(self, config: AgentConfig) -> OpenAICompatibleAgent:
@@ -77,7 +78,13 @@ class OpenAICompatibleProvider:
                 f"credentials sends_stream_usage must be a bool, got {sends_stream_usage!r}"
             )
 
-        _log.debug("Creating OpenAI agent %r (model=%s)", config.name, config.model)
+        # D11: dispatch and summary have no artifact, so this is their record of the level.
+        _log.debug(
+            "Creating OpenAI agent %r (model=%s, effort=%s)",
+            config.name,
+            config.model,
+            config.effort.value if config.effort else "backend default",
+        )
         return OpenAICompatibleAgent(
             name=config.name,
             client=client,
@@ -92,6 +99,7 @@ class OpenAICompatibleProvider:
             max_history_chars=max_history_chars,
             max_tool_result_chars=max_tool_result_chars,
             sends_stream_usage=sends_stream_usage,
+            effort=config.effort,
         )
 
     async def validate_credentials(self) -> bool:

@@ -11,7 +11,7 @@ import httpx
 import openai
 import pytest
 
-from squadron.core.models import Message
+from squadron.core.models import Effort, Message
 from squadron.core.usage import TokenUsage
 from squadron.providers.errors import (
     EmptyFinalTurnError,
@@ -42,6 +42,7 @@ def _agent(
     tools: list[str] | None = None,
     max_tool_iterations: int = 10,
     sends_stream_usage: bool = True,
+    effort: Effort | None = None,
 ) -> OpenAICompatibleAgent:
     client = MagicMock()
     client.chat.completions.create = AsyncMock(side_effect=list(streams))
@@ -56,6 +57,7 @@ def _agent(
         max_tool_iterations=max_tool_iterations,
         max_history_chars=10_000_000,
         sends_stream_usage=sends_stream_usage,
+        effort=effort,
     )
 
 
@@ -410,3 +412,65 @@ class TestFailureTelemetry:
         assert telemetry is not None
         assert (telemetry.turns, telemetry.reasoning_chars) == (2, 6)
         assert telemetry.usage.prompt == 30
+
+
+class TestReasoningEffort:
+    """Slice 931 D3: reasoning_effort rides every request when set, and never otherwise."""
+
+    @staticmethod
+    def _sent(agent: OpenAICompatibleAgent) -> list[object]:
+        client: Any = agent._client  # pyright: ignore[reportPrivateUsage]
+        return [
+            call.kwargs["reasoning_effort"] for call in client.chat.completions.create.call_args_list
+        ]
+
+    @pytest.mark.asyncio
+    async def test_every_loop_turn_and_the_recovery_turn_carry_it(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("A")
+        agent = _agent(
+            async_stream(_read_call("c1")),
+            async_stream(text_chunk("draft")),
+            # A second handle_message on the same agent: the review's recovery turn.
+            async_stream(text_chunk("review")),
+            cwd=str(tmp_path),
+            tools=["read_file"],
+            effort=Effort.low,
+        )
+
+        await _collect(agent)
+        await _collect(agent)
+
+        assert self._sent(agent) == ["low", "low", "low"]
+
+    @pytest.mark.asyncio
+    async def test_none_is_sent_as_the_string_none(self) -> None:
+        agent = _agent(async_stream(text_chunk("hi")), effort=Effort.none)
+
+        await _collect(agent)
+
+        assert self._sent(agent) == ["none"]
+
+    @pytest.mark.asyncio
+    async def test_unset_effort_is_omitted(self) -> None:
+        from openai import omit
+
+        agent = _agent(async_stream(text_chunk("hi")))
+
+        await _collect(agent)
+
+        assert self._sent(agent) == [omit]
+
+    @pytest.mark.asyncio
+    async def test_rejected_level_surfaces_as_provider_api_error(self) -> None:
+        """D12 "backend rejects reasoning_effort": a 400 stays loud."""
+        request = httpx.Request("POST", "http://test")
+        rejected = openai.BadRequestError(
+            "unsupported reasoning_effort", response=httpx.Response(400, request=request), body=None
+        )
+        agent = _agent(rejected, effort=Effort.xhigh)
+
+        with pytest.raises(ProviderAPIError) as exc_info:
+            await _collect(agent)
+
+        assert exc_info.value.status_code == 400
+        assert self._sent(agent) == ["xhigh"]
