@@ -9,8 +9,8 @@ projectState: >
   effort, `read_file` takes one path, and `_stream_turn` never reads usage. Release 0.16.0
   is current on main; no integration branch is configured.
 dateCreated: 20260929
-dateUpdated: 20260929
-status: not_started
+dateUpdated: 20260930
+status: in_progress
 ---
 
 ## Context Summary
@@ -40,32 +40,32 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
+- [x] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
       `git status` is clean
-- [ ] `git checkout -b 931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage main`
-  - [ ] Success: `git branch --show-current` prints the new branch name
+- [x] `git checkout -b 931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage main`
+  - [x] Success: `git branch --show-current` prints the new branch name
 
 ---
 
 ## Task 2 — `core/usage.py`: neutral types and `add_optional` (D8)
 
-- [ ] Run `pytest tests/review/test_turn_capture.py` once first; note it passes (the guard
+- [x] Run `pytest tests/review/test_turn_capture.py` once first; note it passes (the guard
       for this move)
-- [ ] Create `src/squadron/core/usage.py`, standard-library imports only
-  - [ ] Frozen dataclass `TokenUsage`: `prompt`, `cached`, `completion`, `reasoning`, each
+- [x] Create `src/squadron/core/usage.py`, standard-library imports only
+  - [x] Frozen dataclass `TokenUsage`: `prompt`, `cached`, `completion`, `reasoning`, each
         `int | None = None`; a method returning the field-wise `add_optional` sum of two
-  - [ ] Mutable dataclass `RunTelemetry`: `turns: int = 0`, `reasoning_chars: int = 0`,
+  - [x] Mutable dataclass `RunTelemetry`: `turns: int = 0`, `reasoning_chars: int = 0`,
         `usage: TokenUsage`; a method that folds one turn in; a method returning a snapshot copy
-  - [ ] `add_optional(total, value)`: moved from `turn_capture._add`, body unchanged
-- [ ] Replace `_add` in `review/turn_capture.py` with an import of `add_optional`; update all
+  - [x] `add_optional(total, value)`: moved from `turn_capture._add`, body unchanged
+- [x] Replace `_add` in `review/turn_capture.py` with an import of `add_optional`; update all
       call sites (lines ~103–151)
-- [ ] Create `tests/core/test_usage.py`
-  - [ ] `add_optional`: None+None → None, None+n → n, n+None → n, n+m → sum
-  - [ ] `TokenUsage` sum keeps None only when both sides are None, per field
-  - [ ] `RunTelemetry` fold-in accumulates turns, reasoning chars, and usage; a snapshot is
+- [x] Create `tests/core/test_usage.py`
+  - [x] `add_optional`: None+None → None, None+n → n, n+None → n, n+m → sum
+  - [x] `TokenUsage` sum keeps None only when both sides are None, per field
+  - [x] `RunTelemetry` fold-in accumulates turns, reasoning chars, and usage; a snapshot is
         independent of later folds
-  - [ ] Success: `tests/review/test_turn_capture.py` passes unedited
-- [ ] Format, lint, typecheck, commit: `refactor: move None-preserving sum to core/usage`
+  - [x] Success: `tests/review/test_turn_capture.py` passes unedited
+- [x] Format, lint, typecheck, commit: `refactor: move None-preserving sum to core/usage`
 
 ---
 

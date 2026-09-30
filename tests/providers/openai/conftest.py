@@ -73,3 +73,23 @@ def tool_chunk(
         model="gpt-4o",
         object="chat.completion.chunk",
     )
+
+
+def usage_chunk(usage: dict[str, object], *, openrouter_shape: bool = False) -> ChatCompletionChunk:
+    """A usage-bearing chunk as a backend sends it with ``include_usage`` (slice 931 D8).
+
+    OpenAI and Ollama send usage on a chunk with no choices; OpenRouter sends one empty
+    choice. Built with ``construct`` — the SDK's own unvalidated path — so malformed
+    values reach the reader exactly as a misbehaving backend would deliver them.
+    """
+    choices: list[dict[str, object]] = (
+        [{"delta": {}, "finish_reason": None, "index": 0}] if openrouter_shape else []
+    )
+    return ChatCompletionChunk.construct(
+        id="chunk-usage",
+        choices=choices,
+        created=1700000000,
+        model="gpt-4o",
+        object="chat.completion.chunk",
+        usage=usage,
+    )
