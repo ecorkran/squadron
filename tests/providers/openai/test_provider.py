@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from squadron.config.manager import set_config
 from squadron.core.models import AgentConfig
+from squadron.providers.base import ProfileName
 from squadron.providers.errors import ProviderAuthError, ProviderError
 from squadron.providers.openai.provider import OpenAICompatibleProvider
+from squadron.providers.profiles import BUILT_IN_PROFILES, profile_credentials
 
 _BASE_CONFIG = dict(name="agent", agent_type="api", provider="openai", model="gpt-4o-mini")
 
@@ -253,3 +256,79 @@ class TestValidateCredentials:
         # Should not raise even when openai is importable but key is absent
         result = await provider.validate_credentials()
         assert isinstance(result, bool)
+
+
+class TestStreamOptions:
+    """Slice 931: stream_options goes out unless a profile opts out."""
+
+    @staticmethod
+    async def _create_kwargs(
+        provider: OpenAICompatibleProvider, credentials: dict[str, object]
+    ) -> dict[str, object]:
+        from openai import omit
+
+        from squadron.core.models import Message, MessageType
+
+        from .conftest import text_chunk
+
+        async def _stream() -> AsyncIterator[object]:
+            yield text_chunk("hi")
+
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock(return_value=_stream())
+        config = AgentConfig(**{**_BASE_CONFIG, "credentials": credentials})
+        with patch("squadron.providers.openai.provider.AsyncOpenAI", return_value=client):
+            agent = await provider.create_agent(config)
+        message = Message(sender="u", recipients=["agent"], content="q", message_type=MessageType.chat)
+        async for _ in agent.handle_message(message):
+            pass
+        kwargs: dict[str, object] = client.chat.completions.create.call_args.kwargs
+        return {k: v for k, v in kwargs.items() if v is not omit}
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("profile_name", "sends"),
+        [(ProfileName.GEMINI, False), (ProfileName.OPENROUTER, True)],
+    )
+    async def test_profile_decides_stream_options(
+        self,
+        provider: OpenAICompatibleProvider,
+        monkeypatch: pytest.MonkeyPatch,
+        profile_name: str,
+        sends: bool,
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        credentials = profile_credentials(BUILT_IN_PROFILES[profile_name])
+        credentials["api_key_env"] = "OPENAI_API_KEY"
+
+        kwargs = await self._create_kwargs(provider, credentials)
+
+        if sends:
+            assert kwargs["stream_options"] == {"include_usage": True}
+        else:
+            assert "stream_options" not in kwargs
+
+    @pytest.mark.asyncio
+    async def test_agent_without_profile_sends_stream_options(
+        self, provider: OpenAICompatibleProvider, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The daemon's request-body agents carry no profile keys at all."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+
+        kwargs = await self._create_kwargs(provider, {})
+
+        assert kwargs["stream_options"] == {"include_usage": True}
+        # Apart from stream_options, the request is today's.
+        assert set(kwargs) == {"model", "messages", "stream", "extra_body", "stream_options"}
+
+    @pytest.mark.asyncio
+    async def test_non_bool_flag_rejected(
+        self, provider: OpenAICompatibleProvider, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-env")
+        config = AgentConfig(**{**_BASE_CONFIG, "credentials": {"sends_stream_usage": "no"}})
+        with (
+            patch("squadron.providers.openai.provider.AsyncOpenAI"),
+            pytest.raises(ProviderError, match="sends_stream_usage must be a bool"),
+        ):
+            await provider.create_agent(config)

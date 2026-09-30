@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -93,3 +94,17 @@ def usage_chunk(usage: dict[str, object], *, openrouter_shape: bool = False) -> 
         object="chat.completion.chunk",
         usage=usage,
     )
+
+
+def async_stream(*chunks: object) -> AsyncMock:
+    """An AsyncMock stream whose ``__aiter__`` yields the given chunks (or raises one)."""
+
+    async def _gen() -> AsyncIterator[object]:
+        for chunk in chunks:
+            if isinstance(chunk, BaseException):
+                raise chunk
+            yield chunk
+
+    mock = AsyncMock()
+    mock.__aiter__ = lambda _: _gen()  # pyright: ignore[reportAttributeAccessIssue]
+    return mock

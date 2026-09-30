@@ -175,15 +175,26 @@ class TestErrorMapping:
         assert exc_info.value.status_code == 429
 
     @pytest.mark.asyncio
-    async def test_error_api_status(self) -> None:
-        exc = openai.InternalServerError("server error", response=_mock_response(503), body=None)
+    @pytest.mark.parametrize(
+        ("error_cls", "status"),
+        [(openai.BadRequestError, 400), (openai.InternalServerError, 503)],
+        ids=["400-rejects-request", "503"],
+    )
+    async def test_error_api_status(self, error_cls: type[openai.APIStatusError], status: int) -> None:
+        # 400 is D12's "backend rejects stream_options" row (slice 931): the request that
+        # failed carried stream_options, and the rejection surfaces as ProviderAPIError.
+        exc = error_cls("rejected", response=_mock_response(status), body=None)
         client = MagicMock()
         client.chat.completions.create = AsyncMock(side_effect=exc)
         client.close = AsyncMock()
         agent = _make_agent(client=client)
         with pytest.raises(ProviderAPIError) as exc_info:
             await _collect(agent, _USER_MSG)
-        assert exc_info.value.status_code == 503
+        assert exc_info.value.status_code == status
+        assert client.chat.completions.create.call_args.kwargs["stream_options"] == {
+            "include_usage": True
+        }
+        assert exc_info.value.telemetry is not None
 
     @pytest.mark.asyncio
     async def test_error_connection(self) -> None:

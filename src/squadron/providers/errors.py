@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from squadron.core.usage import RunTelemetry
+
 
 class ProviderError(Exception):
     """Base exception for all provider errors.
@@ -10,18 +12,31 @@ class ProviderError(Exception):
     can still be told apart from one that never had tools: "given tools, said
     nothing" and "ran without tools" look identical in an artifact otherwise
     (slice 265 D5). ``None`` means the raiser had no count to offer.
+
+    ``telemetry`` and ``duration_seconds`` carry what the run cost before it failed
+    (slice 931 D12): the agent attaches the first, ``review_client`` the second, so a
+    failure artifact records turns, tokens, and wall-clock like a success does.
     """
 
-    def __init__(self, *args: object, tool_calls_made: int | None = None) -> None:
+    def __init__(
+        self,
+        *args: object,
+        tool_calls_made: int | None = None,
+        telemetry: RunTelemetry | None = None,
+        duration_seconds: float | None = None,
+    ) -> None:
         super().__init__(*args)
         self.tool_calls_made = tool_calls_made
+        self.telemetry = telemetry
+        self.duration_seconds = duration_seconds
 
 
 class EmptyFinalTurnError(ProviderError):
     """The model ended its turn with no text and no tool calls.
 
     The turn's telemetry rides the error because ``collect_turn`` cannot fold it after a
-    raise (slice 924 D7).
+    raise (slice 924 D7). ``reasoning_chars`` is the empty turn's own, which diagnoses it;
+    the run's total rides the inherited ``telemetry`` (slice 931 D8).
     """
 
     def __init__(

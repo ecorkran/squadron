@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+import httpx
 import openai
 from openai import AsyncOpenAI, AsyncStream, omit
 from openai.types.chat import (
@@ -22,6 +23,7 @@ from openai.types.chat import (
 import squadron.tools as tools
 from squadron.config.keys import CONFIG_KEYS
 from squadron.core.models import AgentState, Message
+from squadron.core.usage import RunTelemetry, TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.errors import (
     EmptyFinalTurnError,
@@ -31,6 +33,7 @@ from squadron.providers.errors import (
     ProviderTimeoutError,
 )
 from squadron.providers.openai import translation
+from squadron.providers.openai.usage import read_chunk_usage
 from squadron.tools import ToolExecutor, ToolResult, limits
 
 _log = get_logger("squadron.providers.openai.agent")
@@ -116,6 +119,9 @@ class TurnResult:
     # from ``chunk.model`` on every chunk including choice-less ones (the usage chunk
     # carries it too). None only when no chunk in the stream ever set it.
     model: str | None = None
+    # Token usage the backend reported for this turn (slice 931 D8): the last usage
+    # chunk's value. None when no chunk in the stream carried usage.
+    usage: TokenUsage | None = None
 
     def is_empty(self) -> bool:
         """True when the turn carries nothing a caller can act on."""
@@ -140,6 +146,7 @@ class OpenAICompatibleAgent:
         max_tool_iterations: int | None = None,
         max_history_chars: int | None = None,
         max_tool_result_chars: int | None = None,
+        sends_stream_usage: bool = True,
     ) -> None:
         self._name = name
         self._client = client
@@ -149,6 +156,7 @@ class OpenAICompatibleAgent:
         self._state = AgentState.idle
         self._cwd = cwd
         self._max_output_tokens = max_output_tokens
+        self._sends_stream_usage = sends_stream_usage
         # Opaque to this agent: a sequence of path patterns to withhold from the tool jail,
         # threaded to ``materialize`` exactly as ``cwd`` is. The agent is a generic provider
         # and deliberately does not know why any pattern is here or what a review type is
@@ -191,6 +199,12 @@ class OpenAICompatibleAgent:
         # first-seen order (slice 927 D8, D12). Reset at the top of handle_message,
         # like the tool counters, so a second call never inherits the first's models.
         self._answering_models: list[str] = []
+        # Malformed usage fields already logged in this handle_message call, so D12's
+        # WARNING fires once per field per call. Reset beside _answering_models.
+        self._usage_warned: set[str] = set()
+        # What this handle_message call has cost so far (slice 931 D8). Reset beside
+        # _answering_models; stamped on the final Message and attached to errors.
+        self._telemetry = RunTelemetry()
         # Set only when the capability gate emptied a non-empty declared set (slice 266).
         # This is the third state slice 265 never needed: without it, a suppressed run and
         # a run that declared no tools persist identically.
@@ -236,31 +250,32 @@ class OpenAICompatibleAgent:
         """Append message to history, stream from API, yield response Messages."""
         self._state = AgentState.processing
         self._answering_models = []
+        self._usage_warned = set()
+        self._telemetry = RunTelemetry()
         self._append_history({"role": "user", "content": message.content})
+        # Set only once a final response exists; the finally below reports every
+        # other exit, whatever raised (slice 931 D12).
+        completed = False
         try:
-            if not self._tool_executors:
-                turn = await self._stream_turn(self._history, tool_schemas=None)
-                self._record_answering_model(turn.model)
-                # D7: an empty assistant entry carries nothing, and no backend is
-                # verified to accept one on the next request.
-                if not turn.is_empty():
-                    self._append_history(
-                        translation.build_assistant_history_entry(turn.text, turn.tool_calls)
-                    )
-                _require_final_content(turn, tool_calls_made=0, failed_tool_calls=0)
-                messages = translation.build_messages(
-                    turn.text, turn.tool_calls, self._name, self._model
-                )
-                # Reached only when no tools were configured at all, so this stamps nothing
-                # (_stamp_tool_telemetry returns early on an empty tools_given). Kept so the
-                # two branches stay symmetrical: if this path ever becomes reachable with
-                # tools configured, it already carries the zero-calls telemetry. The genuine
-                # "offered tools, called none" case runs through _run_agentic_loop below.
-                self._stamp_tool_telemetry(messages, tool_calls_made=0, turn=turn, failed_tool_calls=0)
-            else:
-                messages = await self._run_agentic_loop()
+            messages = await self._respond()
+            completed = True
             for msg in messages:
                 yield msg
+        except ProviderError as exc:
+            # Every provider failure leaving this call carries what the run cost so far
+            # (slice 931 D12). Nothing is swallowed.
+            exc.telemetry = self._telemetry.snapshot()
+            raise
+        finally:
+            self._state = AgentState.idle
+            self._log_run_signals(completed=completed)
+
+    async def _respond(self) -> list[Message]:
+        """Produce the call's final Messages, converting SDK and transport failures."""
+        try:
+            if not self._tool_executors:
+                return await self._respond_without_tools()
+            return await self._run_agentic_loop()
         except openai.AuthenticationError as exc:
             raise ProviderAuthError(str(exc)) from exc
         except openai.PermissionDeniedError as exc:
@@ -273,8 +288,29 @@ class OpenAICompatibleAgent:
             raise ProviderTimeoutError(str(exc)) from exc
         except openai.APIConnectionError as exc:
             raise ProviderError(str(exc)) from exc
-        finally:
-            self._state = AgentState.idle
+        # The openai SDK does not wrap errors raised while iterating a stream, so a
+        # mid-body timeout or disconnect arrives as raw httpx (slice 931 D12).
+        except httpx.TimeoutException as exc:
+            raise ProviderTimeoutError(str(exc)) from exc
+        except httpx.TransportError as exc:
+            raise ProviderError(str(exc)) from exc
+
+    async def _respond_without_tools(self) -> list[Message]:
+        """One turn, no tools: the reply is the response."""
+        turn = await self._take_turn(tool_schemas=None)
+        # D7: an empty assistant entry carries nothing, and no backend is
+        # verified to accept one on the next request.
+        if not turn.is_empty():
+            self._append_history(translation.build_assistant_history_entry(turn.text, turn.tool_calls))
+        _require_final_content(turn, tool_calls_made=0, failed_tool_calls=0)
+        messages = translation.build_messages(turn.text, turn.tool_calls, self._name, self._model)
+        # Reached only when no tools were configured at all, so this stamps no tool keys
+        # (_stamp_tool_telemetry returns early on an empty tools_given). Kept so the
+        # two branches stay symmetrical: if this path ever becomes reachable with
+        # tools configured, it already carries the zero-calls telemetry. The genuine
+        # "offered tools, called none" case runs through _run_agentic_loop.
+        self._stamp_tool_telemetry(messages, tool_calls_made=0, turn=turn, failed_tool_calls=0)
+        return messages
 
     async def _stream_turn(
         self,
@@ -291,6 +327,7 @@ class OpenAICompatibleAgent:
         finish_reason: str | None = None
         reasoning_chars = 0
         turn_model: str | None = None
+        turn_usage: TokenUsage | None = None
 
         app_name = os.environ.get("SQUADRON_APP_NAME")
         extra_body = {"user": app_name} if app_name else None
@@ -308,12 +345,19 @@ class OpenAICompatibleAgent:
             max_completion_tokens=(
                 self._max_output_tokens if self._max_output_tokens is not None else omit
             ),
+            # Slice 931 D8: ask for the usage chunk unless the profile's backend rejects it.
+            stream_options={"include_usage": True} if self._sends_stream_usage else omit,
         )
         async for chunk in stream:
             # Read from every chunk, including choice-less ones — the usage chunk
             # carries model too (slice 927 D8) — and keep the last non-empty value.
             if chunk.model:
                 turn_model = chunk.model
+            # Before the choices guard: OpenAI and Ollama send usage on a chunk with no
+            # choices (slice 931 D8). The last reported value wins.
+            chunk_usage = read_chunk_usage(chunk, warned=self._usage_warned)
+            if chunk_usage is not None:
+                turn_usage = chunk_usage
             if not chunk.choices:
                 continue
             choice = chunk.choices[0]
@@ -349,6 +393,7 @@ class OpenAICompatibleAgent:
             finish_reason=finish_reason,
             reasoning_chars=reasoning_chars,
             model=turn_model,
+            usage=turn_usage,
         )
 
     async def _execute_tool_call(self, tool_call: dict[str, Any]) -> tuple[str, bool]:
@@ -474,8 +519,7 @@ class OpenAICompatibleAgent:
                     }
                 )
 
-            turn = await self._stream_turn(self._history, tool_schemas=turn_tool_schemas)
-            self._record_answering_model(turn.model)
+            turn = await self._take_turn(tool_schemas=turn_tool_schemas)
             # D7: an empty turn leaves no assistant entry behind (see handle_message).
             if not turn.is_empty():
                 self._append_history(
@@ -566,6 +610,35 @@ class OpenAICompatibleAgent:
             "without the model producing a final response."
         )
 
+    def _log_run_signals(self, *, completed: bool) -> None:
+        """The D12 WARNINGs a call owes its operator once it ends (slice 931)."""
+        telemetry = self._telemetry
+        usage = telemetry.usage
+        # A profile that opts out of stream_options never gets usage; saying so on
+        # every call would be noise about a known choice.
+        if telemetry.turns and not usage.reported and self._sends_stream_usage:
+            _log.warning(
+                "backend reported no token usage across %d turn(s); usage will not be recorded",
+                telemetry.turns,
+            )
+        if not completed:
+            _log.warning(
+                "OpenAI agent ended without a final response after %d turn(s) "
+                "(prompt=%s, cached=%s, completion=%s, reasoning=%s tokens)",
+                telemetry.turns,
+                usage.prompt,
+                usage.cached,
+                usage.completion,
+                usage.reasoning,
+            )
+
+    async def _take_turn(self, *, tool_schemas: list[dict[str, object]] | None) -> TurnResult:
+        """Send the history as one request and record what it reported and cost."""
+        turn = await self._stream_turn(self._history, tool_schemas=tool_schemas)
+        self._record_answering_model(turn.model)
+        self._telemetry.fold_turn(reasoning_chars=turn.reasoning_chars, usage=turn.usage)
+        return turn
+
     def _record_answering_model(self, model: str | None) -> None:
         """Append a turn's reported model to the distinct, first-seen-order list."""
         if model is not None and model not in self._answering_models:
@@ -601,7 +674,11 @@ class OpenAICompatibleAgent:
         if not messages:
             return
         messages[-1].metadata["stop_reason"] = turn.finish_reason
-        messages[-1].metadata["reasoning_chars"] = turn.reasoning_chars
+        # Slice 931 D8: the run's total, not the final turn's, beside the requests sent
+        # and the tokens they cost.
+        messages[-1].metadata["reasoning_chars"] = self._telemetry.reasoning_chars
+        messages[-1].metadata["turns"] = self._telemetry.turns
+        messages[-1].metadata["usage"] = self._telemetry.usage
         messages[-1].metadata["failed_tool_calls"] = failed_tool_calls
         # Slice 927 D8: distinct, first-seen-order models reported across this
         # handle_message call's turns. A new key, not a repurposing of the existing

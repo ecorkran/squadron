@@ -69,6 +69,14 @@ class OpenAICompatibleProvider:
         except ValueError as exc:
             raise ProviderError(f"invalid agentic-loop configuration: {exc}") from exc
 
+        # Only a profile opts out (slice 931). An absent key means no profile built this
+        # config (the daemon's request-body agents), and those follow the OpenAI spec.
+        sends_stream_usage = config.credentials.get("sends_stream_usage", True)
+        if not isinstance(sends_stream_usage, bool):
+            raise ProviderError(
+                f"credentials sends_stream_usage must be a bool, got {sends_stream_usage!r}"
+            )
+
         _log.debug("Creating OpenAI agent %r (model=%s)", config.name, config.model)
         return OpenAICompatibleAgent(
             name=config.name,
@@ -83,6 +91,7 @@ class OpenAICompatibleProvider:
             max_tool_iterations=max_tool_iterations,
             max_history_chars=max_history_chars,
             max_tool_result_chars=max_tool_result_chars,
+            sends_stream_usage=sends_stream_usage,
         )
 
     async def validate_credentials(self) -> bool:
