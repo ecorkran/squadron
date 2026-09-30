@@ -1026,8 +1026,8 @@ class TestDegradedRawResponse:
         """SC4's other half: a non-degraded artifact must not shift by one byte.
 
         The fixture is regenerated only when a change to the clean path is *intended*;
-        any other drift fails here. Last regenerated for slice 918, which added the four
-        stop-reason evidence lines to the Run Digest.
+        any other drift fails here. Last regenerated for slice 931, which added the Turns,
+        Tokens, and Duration lines to the Run Digest.
         """
         result = ReviewResult(
             verdict=Verdict.PASS,

@@ -8,7 +8,9 @@ from enum import StrEnum
 
 from squadron import __version__
 from squadron.core.models import SystemPromptMode
+from squadron.core.usage import TokenUsage
 from squadron.models.snapshot import answers_as_requested
+from squadron.review.run_cost import RunCost
 
 
 class Verdict(StrEnum):
@@ -234,6 +236,12 @@ class ReviewResult:
     # The pipeline run that produced this review (slice 195 D12, #139). None on the CLI,
     # where a review belongs to no run.
     run_id: str | None = None
+    # What the run cost (slice 931 D8, D9). turns and usage come from providers that stamp
+    # them (openai); None fields mean "not reported", never 0. duration_seconds is set by
+    # review_client for every provider and is None only on a hand-built result.
+    turns: int | None = None
+    usage: TokenUsage = field(default_factory=TokenUsage)
+    duration_seconds: float | None = None
 
     @property
     def model_substituted(self) -> bool:
@@ -337,6 +345,8 @@ class ReviewResult:
             "squadron_version": __version__,
             # Slice 195 D12: the parse-scan counts, null for a hand-built result.
             "finding_scan": asdict(self.finding_scan) if self.finding_scan else None,
+            # Slice 931 D10: always present, null when not reported.
+            **RunCost(self.turns, self.usage, self.duration_seconds).json_fields(),
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.

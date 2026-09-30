@@ -11,6 +11,7 @@ import glob as glob_mod
 import logging
 import re
 import subprocess
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -25,7 +26,7 @@ from squadron.core.models import (
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
 from squadron.providers.base import ProviderType
-from squadron.providers.errors import EmptyFinalTurnError
+from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, profile_credentials
 from squadron.providers.registry import get_provider
@@ -255,21 +256,32 @@ async def run_review_with_profile(
     # log a WARNING and the backend default applies), so the artifact must not claim it.
     sent_budget = max_output_tokens if provider.capabilities.applies_output_budget else None
 
-    agent = await provider.create_agent(config)
+    # Slice 931 D9: wall-clock from agent creation through the recovery turn, for every
+    # provider. A failure carries it on the error to its artifact.
+    started = time.monotonic()
     capture = TurnCapture()
     try:
-        result, recovery_turn_used = await _collect_review(
-            agent,
-            prompt=prompt,
-            recipient=config.name,
-            capture=capture,
-            parse=parse,
-            template_name=template.name,
-            model=resolved_model,
-            max_output_tokens=sent_budget,
-        )
-    finally:
-        await agent.shutdown()
+        agent = await provider.create_agent(config)
+        try:
+            result, recovery_turn_used = await _collect_review(
+                agent,
+                prompt=prompt,
+                recipient=config.name,
+                capture=capture,
+                parse=parse,
+                template_name=template.name,
+                model=resolved_model,
+                max_output_tokens=sent_budget,
+            )
+            duration_seconds = time.monotonic() - started
+        finally:
+            await agent.shutdown()
+    except ProviderError as exc:
+        exc.duration_seconds = time.monotonic() - started
+        raise
+    result.duration_seconds = duration_seconds
+    result.turns = capture.turns
+    result.usage = capture.usage
 
     result.recovery_turn_used = recovery_turn_used
     result.output_budget_exhausted = budget_exhausted(capture.stop_reason)

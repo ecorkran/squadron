@@ -1421,3 +1421,71 @@ class TestOutputBudgetThreading:
 
         assert provider.create_agent.call_args.args[0].max_output_tokens == 4096
         assert result.max_output_tokens is None
+
+
+class TestRunCost:
+    """Slice 931 D8, D9: turns, usage, and wall-clock land on the result or the error."""
+
+    async def _run(self, provider_type: str, agent: MagicMock, *, clock: list[float]) -> ReviewResult:
+        from squadron.providers.profiles import ProviderProfile
+
+        provider = _make_mock_provider(agent=agent)
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+            patch(f"{_P}.time.monotonic", side_effect=clock),
+        ):
+            mock_get_profile.return_value = ProviderProfile(name="p", provider=provider_type)
+            return await run_review_with_profile(_make_template(), {"input": "file.md"}, profile="p")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider_type", ["openai", "sdk", "openai_oauth"])
+    async def test_duration_is_stamped_for_every_provider(self, provider_type: str) -> None:
+        result = await self._run(provider_type, _make_mock_agent(), clock=[100.0, 103.5])
+
+        assert result.duration_seconds == pytest.approx(3.5)
+
+    @pytest.mark.asyncio
+    async def test_stamped_turns_and_usage_land_on_result(self) -> None:
+        from squadron.core.usage import TokenUsage
+
+        agent = MagicMock()
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            yield Message(
+                sender="a",
+                recipients=[],
+                content=_SAMPLE_REVIEW_OUTPUT,
+                message_type=MessageType.chat,
+                metadata={"turns": 4, "usage": TokenUsage(prompt=100, completion=9)},
+            )
+
+        agent.handle_message = _handle
+
+        result = await self._run("openai", agent, clock=[0.0, 1.0])
+
+        assert result.turns == 4
+        assert result.usage == TokenUsage(prompt=100, completion=9)
+
+    @pytest.mark.asyncio
+    async def test_provider_error_leaves_with_duration_and_is_the_same_object(self) -> None:
+        from squadron.providers.errors import ProviderAPIError
+
+        raised = ProviderAPIError("boom", status_code=500)
+        agent = MagicMock()
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            raise raised
+            yield  # pragma: no cover - makes this an async generator
+
+        agent.handle_message = _handle
+
+        with pytest.raises(ProviderAPIError) as exc_info:
+            await self._run("openai", agent, clock=[10.0, 12.25])
+
+        assert exc_info.value is raised
+        assert raised.duration_seconds == pytest.approx(2.25)
+        agent.shutdown.assert_awaited_once()

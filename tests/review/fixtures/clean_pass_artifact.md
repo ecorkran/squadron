@@ -31,6 +31,9 @@ No specific findings.
 - System prompt: not computed
 - Settings sources: not computed
 - Reasoning characters: not computed
+- Turns: not computed
+- Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
+- Duration: not computed
 - `## Summary` located: not computed
 - `## Findings` located: not computed
 - Finding-shaped matches — whole response: not computed

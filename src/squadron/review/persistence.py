@@ -18,6 +18,7 @@ from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
+from squadron.review.run_cost import NOT_COMPUTED, RunCost
 from squadron.review.turn_capture import describe_budget, ended_mid_task
 
 _logger = logging.getLogger(__name__)
@@ -196,7 +197,7 @@ def _findings_not_parsed_section(reason: str) -> list[str]:
     ]
 
 
-_NOT_COMPUTED = "not computed"
+_NOT_COMPUTED = NOT_COMPUTED
 _NOT_OFFERED = "not offered"
 _PRESET_MODES = frozenset({SystemPromptMode.PRESET, SystemPromptMode.PRESET_APPEND})
 
@@ -255,6 +256,8 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         f"- System prompt: {_render_optional(result.system_prompt_mode)}",
         f"- Settings sources: {_render_optional(result.setting_sources)}",
         f"- Reasoning characters: {_render_optional(result.reasoning_chars)}",
+        # Slice 931 D10: always present, so every artifact says what the run cost.
+        *RunCost(result.turns, result.usage, result.duration_seconds).digest_lines(),
         f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
         f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",
         f"- Finding-shaped matches — whole response: {scan.total if scan else _NOT_COMPUTED}",
@@ -364,6 +367,7 @@ def _review_frontmatter_lines(
     run_id: str | None = None,
     squadron_version: str,
     provider_failure: bool = False,
+    run_cost: RunCost | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -440,6 +444,9 @@ def _review_frontmatter_lines(
     # Slice 927 D2: present exactly when the review had a diff input, true or false.
     if diff_truncated is not None:
         lines.append(f"diffTruncated: {'true' if diff_truncated else 'false'}")
+    # Slice 931 D10: what the run cost, each key only when reported.
+    if run_cost is not None:
+        lines.extend(run_cost.frontmatter_lines())
     # Slice 195 D12 (#139): the pipeline run that wrote this review. Absent from a
     # CLI review, which belongs to no run.
     if run_id is not None:
@@ -560,6 +567,7 @@ def format_review_markdown(
         recovery_turn=result.recovery_turn_used,
         run_id=result.run_id,
         squadron_version=squadron_version,
+        run_cost=RunCost(result.turns, result.usage, result.duration_seconds),
     )
 
     if result.score is not None:
@@ -925,6 +933,9 @@ def format_provider_failure_markdown(
     slice_index = slice_info["index"] if slice_info else 0
     project_name = slice_info["project"] if slice_info else "unknown"
     source_doc = source_document or (slice_info.get("design_file") or "" if slice_info else "")
+    # Slice 931 D12: what the run cost before it failed rides the error, like
+    # tool_calls_made; the CLI and pipeline call sites pass nothing new.
+    run_cost = RunCost.from_error(exc)
 
     lines = _review_frontmatter_lines(
         review_type=review_type,
@@ -945,6 +956,7 @@ def format_provider_failure_markdown(
         run_id=run_id,
         squadron_version=squadron_version,
         provider_failure=True,
+        run_cost=run_cost,
     )
     lines.append("---")
     lines.append("")
@@ -969,6 +981,10 @@ def format_provider_failure_markdown(
     lines.append("```")
     lines.append(str(exc))
     lines.append("```")
+    lines.append("")
+    lines.append("### Run Digest")
+    lines.append("")
+    lines.extend(run_cost.digest_lines())
     lines.append("")
     return "\n".join(lines)
 
