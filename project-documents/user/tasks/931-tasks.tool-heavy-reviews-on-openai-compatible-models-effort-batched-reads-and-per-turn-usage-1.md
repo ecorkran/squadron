@@ -325,28 +325,29 @@ status: in_progress
 
 ## Task 11 — Part C verification
 
-- [ ] Grep gates, run once each
-  - [ ] `grep -rn "providers.openai" src/squadron/review/` returns nothing
-  - [ ] `grep -n "squadron" src/squadron/core/usage.py` returns nothing
-- [ ] Load test for the event-loop NFR (`.claude/rules/python.md`, load-test tier). Create
+- [x] Grep gates, run once each
+  - [x] `grep -rn "providers.openai" src/squadron/review/` returns nothing
+  - [x] `grep -n "squadron" src/squadron/core/usage.py` returns nothing
+- [x] Load test for the event-loop NFR (`.claude/rules/python.md`, load-test tier). Create
       `tests/load/test_usage_reader_loop.py`, styled after `tests/load/test_grep_timeout.py`
       (module docstring naming the rule and design NFR; generous bounds)
-  - [ ] Feed a stubbed 5,000-chunk stream (usage on the last chunk, plus a few malformed
+  - [x] Feed a stubbed 5,000-chunk stream (usage on the last chunk, plus a few malformed
         ones) through `_stream_turn` while a concurrent `asyncio` ticker task records its
         scheduling gaps; assert the largest gap stays under a generous bound (for example
         50 ms), so per-chunk usage reading does not starve the loop
-  - [ ] Assert mean `read_chunk_usage` cost under 1 ms per call over 1,000 calls
-  - [ ] No CI wiring task is needed: `ci.yml` runs `uv run pytest` over `testpaths =
+  - [x] Assert mean `read_chunk_usage` cost under 1 ms per call over 1,000 calls
+  - [x] No CI wiring task is needed: `ci.yml` runs `uv run pytest` over `testpaths =
         ["tests"]`, which already includes `tests/load/`. Confirm by running
         `pytest tests/load/test_usage_reader_loop.py` once.
-- [ ] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean
+- [x] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean (5139 passed, 4 skipped; all clean)
 - [ ] Live baseline (needs an OpenRouter key; if unavailable, stop and tell the Project
       Manager): `sq review slice 931 --model glm-flash -v`
   - [ ] Saved review has `turns`, four token keys, `durationSeconds`, no `effort` key, and
         the new digest lines (walkthrough step 2)
   - [ ] Record `cachedTokens` (answers whether OpenRouter caches the resent history) in the
         DEVLOG entry, not in code
-- [ ] Commit any fixups: `fix: <what>` (skip if none)
+  - Not run: no OPENROUTER_API_KEY in the implementing session; handed to the Project Manager.
+- [x] Commit any fixups: `fix: <what>` (skip if none)
 
 ---
 
@@ -354,74 +355,77 @@ status: in_progress
 
 ## Task 12 — Extract the single-file read helper (D5)
 
-- [ ] Add a byte-for-byte characterization test **before any source change**, in a new
+- [x] Add a byte-for-byte characterization test **before any source change**, in a new
       `tests/tools/test_read_file.py` (or the existing file-tools test)
-  - [ ] Cover: normal file, truncation at `MAX_READ_BYTES`, jail escape, missing file,
+  - [x] Cover: normal file, truncation at `MAX_READ_BYTES`, jail escape, missing file,
         line-reference fallback, special-file rejection; assert exact `ToolResult` content
-  - [ ] Success: passes on unmodified code
-- [ ] `tools/builtin/file_tools.py`: extract the existing single-file body (jail check,
+  - [x] Success: passes on unmodified code
+- [x] `tools/builtin/file_tools.py`: extract the existing single-file body (jail check,
       line-ref fallback, special-file rejection, truncation) into a helper; `read_file`
       calls it for `path`
-  - [ ] Success: characterization test passes unedited
-- [ ] Format, lint, typecheck, commit: `refactor: extract single-file read helper from read_file`
+  - [x] Success: characterization test passes unedited
+- [x] Format, lint, typecheck, commit: `refactor: extract single-file read helper from read_file`
+  - Characterization fixture now resolves tmp_path itself (ruff ASYNC240); assertions unchanged.
 
 ---
 
 ## Task 13 — `paths` and the batch budget (D5, D6, D12)
 
-- [ ] `tools/limits.py`: add `MAX_READ_BATCH_BYTES = MAX_READ_BYTES` with a comment tying it
+- [x] `tools/limits.py`: add `MAX_READ_BATCH_BYTES = MAX_READ_BYTES` with a comment tying it
       to `min_tool_result_chars()`
-- [ ] `tools/builtin/file_tools.py`
-  - [ ] Schema per the design's API Contracts: `path` and `paths`, `required: []`
-  - [ ] Executor: both or neither → error naming the rule; empty `paths` → error
-  - [ ] `path` alone → unchanged result, no header
-  - [ ] `paths` (even one entry) → `==> {requested path} <==` header per file, request order,
+- [x] `tools/builtin/file_tools.py`
+  - [x] Schema per the design's API Contracts: `path` and `paths`, `required: []`
+  - [x] Executor: both or neither → error naming the rule; empty `paths` → error
+  - [x] `path` alone → unchanged result, no header
+  - [x] `paths` (even one entry) → `==> {requested path} <==` header per file, request order,
         each through the Task 12 helper; per-file failures render inline
-  - [ ] `is_error` True only when every file failed
-  - [ ] Budget: append files until the next would exceed `MAX_READ_BATCH_BYTES`; each
+  - [x] `is_error` True only when every file failed
+  - [x] Budget: append files until the next would exceed `MAX_READ_BATCH_BYTES`; each
         remaining path gets `[not read: batch budget of N bytes reached; request it in another call]`;
         a first file over budget is still read with normal truncation
-  - [ ] WARNING `read_file: batch budget of %d bytes reached; %d path(s) not read`
-- [ ] Tests in `tests/tools/test_read_file.py`
-  - [ ] Batch: order, headers, single-entry `paths`
-  - [ ] Mixed failure inline with `is_error` False; all-fail `is_error` True
-  - [ ] Budget cutoff with marker lines and WARNING (`caplog`); oversize first file
-  - [ ] Both / neither / empty `paths` errors
-  - [ ] Invariant: `MAX_READ_BATCH_BYTES` plus header overhead for a full batch is below
+  - [x] WARNING `read_file: batch budget of %d bytes reached; %d path(s) not read`
+- [x] Tests in `tests/tools/test_read_file.py`
+  - [x] Batch: order, headers, single-entry `paths`
+  - [x] Mixed failure inline with `is_error` False; all-fail `is_error` True
+  - [x] Budget cutoff with marker lines and WARNING (`caplog`); oversize first file
+  - [x] Both / neither / empty `paths` errors
+  - [x] Invariant: `MAX_READ_BATCH_BYTES` plus header overhead for a full batch is below
         `min_tool_result_chars()`
-  - [ ] The registered tool schema contains both properties
-  - [ ] The event-loop NFR check for batches lives in the load-test tier (Task 15), not here
-  - [ ] Success: all pass, Task 12 characterization test still unedited
-- [ ] Format, lint, typecheck, commit: `feat: let read_file take several paths under a batch byte budget`
+  - [x] The registered tool schema contains both properties
+  - [x] The event-loop NFR check for batches lives in the load-test tier (Task 15), not here
+  - [x] Success: all pass, Task 12 characterization test still unedited
+- [x] Format, lint, typecheck, commit: `feat: let read_file take several paths under a batch byte budget`
+  - Per-file FileNotFoundError etc. are converted with the same wording guarded uses (new shared expected_failure in tools/builtin/_shared.py), so one missing file does not fail the batch.
 
 ---
 
 ## Task 14 — Guidance paragraph (D7)
 
-- [ ] `tools/guidance.py`: add the D7 paragraph verbatim from the design; keep the
+- [x] `tools/guidance.py`: add the D7 paragraph verbatim from the design; keep the
       docstring's rule that prose names no specific tool
-  - [ ] Keep the existing "Do not read files a claim does not depend on" sentence
-- [ ] `tests/tools/test_guidance.py`: block contains the paragraph; contains no tool name
+  - [x] Keep the existing "Do not read files a claim does not depend on" sentence
+- [x] `tests/tools/test_guidance.py`: block contains the paragraph; contains no tool name
       (`read_file`, `grep`, etc.), consistent with existing assertions
-  - [ ] Success: all pass; update any snapshot of the block once, reviewing the diff
-- [ ] Format, lint, typecheck, commit: `feat: tell models to batch independent reads`
+  - [x] Success: all pass; update any snapshot of the block once, reviewing the diff
+- [x] Format, lint, typecheck, commit: `feat: tell models to batch independent reads`
 
 ---
 
 ## Task 15 — Part B verification
 
-- [ ] Load test for the event-loop NFR: create `tests/load/test_read_file_batch_loop.py`,
+- [x] Load test for the event-loop NFR: create `tests/load/test_read_file_batch_loop.py`,
       styled after `tests/load/test_grep_timeout.py`
-  - [ ] Real files on disk (a batch of several files near the byte budget) read through the
+  - [x] Real files on disk (a batch of several files near the byte budget) read through the
         registered `read_file` executor while an `asyncio` ticker task records scheduling
         gaps; assert the largest gap stays under a generous bound, so a batch does not
         block the loop
-  - [ ] Patch `asyncio.to_thread` with a counting wrapper: a five-path batch calls it
+  - [x] Patch `asyncio.to_thread` with a counting wrapper: a five-path batch calls it
         exactly once
-  - [ ] Runs under the existing `uv run pytest` in CI; no wiring task needed (see Task 11)
-- [ ] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean
+  - [x] Runs under the existing `uv run pytest` in CI; no wiring task needed (see Task 11)
+- [x] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean
 - [ ] Live run (OpenRouter key; else stop and tell the Project Manager):
       `sq review slice 931 --model glm-flash -vv`
   - [ ] At least one `read_file` call carries `paths` with >1 entry and output shows
         `==> path <==` headers (walkthrough step 4)
   - [ ] Record `Tool calls made` and `Turns` versus the Task 11 baseline in the DEVLOG entry
+  - Not run: no OPENROUTER_API_KEY in the implementing session; handed to the Project Manager.

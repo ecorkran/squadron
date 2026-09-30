@@ -15,12 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Model aliases take an optional `effort` (`none`, `low`, `medium`, `high`, `xhigh`). Define a variant such as `glm-flash-low` in `~/.config/squadron/models.toml` and pass it to `--model` or a step's `model:`. OpenAI-compatible models get it as `reasoning_effort`; Claude models via the SDK get `effort`, and `none` turns thinking off. Codex ignores it with a warning (#154).
+- Review artifacts record the effort sent, the number of model requests (`turns`), prompt / cached / completion / reasoning tokens, and wall-clock duration, in frontmatter, the Run Digest, and `--json` output. A provider failure records what the run had used before it failed (#158).
+- The `read_file` review tool accepts `paths` to read several files in one call, and the tool guidance asks models to batch reads, so reviews take fewer turns (#157).
+
 ### Changed
+- `Reasoning characters` in the Run Digest is now the whole run's total, not the last turn's.
+- A provider profile in `providers.toml` accepts `sends_stream_usage = false` for an OpenAI-compatible backend that rejects `stream_options`. The built-in `gemini` profile ships with it off (#173).
 - Built-in pipelines renamed: `slice` is now `P456`, `tasks` is now `P56`, and `P1` is now `P0` (it runs phase 0, the concept).
 - `P4`, `P5`, `P456` and `P56` now revise the design or tasks until the review passes (up to `max-revisions`), and stop at a checkpoint if it never does.
 - Test-only pipelines (`test-*`) and the unfinished `app` pipeline are no longer shipped.
 
 ### Fixed
+- An OpenAI-compatible review whose connection drops or times out mid-response now writes a provider-failure artifact instead of ending in a traceback.
 - A pipeline `review:` step over a split task breakdown now reviews every task file, not just the first. Each part saves as `part-N`, same as `sq review tasks`. The step reports the worst part's verdict, so a revise loop no longer skips when a later part falls short (#153).
 - `sq review tasks` no longer crashes when one part of a split breakdown gets an UNKNOWN verdict (#153).
 

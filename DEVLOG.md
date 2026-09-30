@@ -2,13 +2,29 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260928
+dateUpdated: 20260930
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20260930
+
+### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Code Complete, Live Runs Pending
+
+- Branch `931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`; fixes #154 (effort), #157 (batched reads), #158 (per-turn usage). Order C → B → A, one or more commits per task.
+- **C (usage):** `core/usage.py` (`TokenUsage`, `RunTelemetry`, `add_optional`, a stdlib-only leaf). `providers/openai/usage.py` reads usage off every chunk before the choices guard. The agent sends `stream_options` unless the profile sets `sends_stream_usage = false` (gemini built-in), sums turns/usage/reasoning chars per `handle_message`, stamps them on the final Message, attaches a snapshot to every `ProviderError`, converts mid-stream `httpx` timeouts/transport errors, and logs the D12 exit and no-usage WARNINGs. `review_client` times every review and stamps `duration_seconds` on errors. `review/run_cost.py` renders frontmatter keys, digest lines, and JSON keys once for both success and provider-failure artifacts. `profile_credentials()` replaced six hand-copied credential dicts.
+- **B (batched reads):** `read_file` takes `path` or `paths` (exactly one), `==> path <==` headers, per-file errors inline, `MAX_READ_BATCH_BYTES` budget with a not-read marker and WARNING. Guarded's expected-failure conversion moved to a shared `expected_failure` so a batch reports each file's failure with the same wording. D7 guidance paragraph added.
+- **A (effort):** `Effort` StrEnum on `AgentConfig`; alias field + `model_effort()`; `ResolvedModel.effort`; CLI, pipeline review, dispatch, and summary carry it. OpenAI sends `reasoning_effort`, SDK maps to `effort` (`none` → `thinking` disabled), Codex warns. `applies_effort` capability; the artifact records only a level actually sent.
+- Deviations: Tasks 5–7 and 9–10B each landed as one commit (shared files). The digest's unreported sentinel is the existing `not computed`, not `not reported`. The `Effort:` digest line always renders per D10, so pinned digest fixtures changed (the task said unchanged). The failure artifact has no JSON surface; it gained a Run Digest section instead. The no-usage WARNING is skipped for a profile that opted out of `stream_options`. `sq _summary-run` gained a hidden `--effort` so prompt-only summaries keep the alias's effort.
+- Verification: full suite, ruff, pyright clean; both import greps clean; `cf validate frontmatter` accepts the new keys; walkthrough steps 1, 10, and the step 6 dry run run. Live `local` (Ollama `llama3.2`) review: 2 turns, prompt 8142 / cached 1025 / completion 426 / reasoning not reported, 13.4 s. The same with `effort = "low"` fails 400 ("does not support thinking"), which is D12's rejection row working as designed.
+- **Not run** (no OpenRouter/OpenAI/Gemini/Codex key in the session): Task 11 baseline and Task 15 batched-read runs (so the `cachedTokens` answer for OpenRouter and the baseline-vs-low-effort comparison are still open), walkthrough steps 2–5, the live half of 6, 7 for `openai`/`gemini`, 8 (would mean stopping Ollama mid-review), and 9.
+- Not merged; slice status stays `in_progress` until the OpenRouter runs (Tasks 11, 15, 23) are done.
+- `glm-flash-low` added to `~/.config/squadron/models.toml` (inline `[aliases]` form) for the walkthrough.
+- Issues filed: #171 Codex effort, #172 SDK usage from `ResultMessage.usage`, #173 enable gemini `sends_stream_usage` after a probe, #174 `grep` empty pattern logged as an unexpected failure (pre-existing). D2 rationale commented on #154.
+- Test-suite note: `tests/metrology/test_audit_cli.py`'s two variance-series tests each sleep 120 s on the default `metrology.audit_run_cooldown_s`, which is most of the full suite's wall-clock.
 
 ## 20260929
 

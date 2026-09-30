@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [924]
 interfaces: []
 dateCreated: 20260928
-dateUpdated: 20260928
-status: not_started
+dateUpdated: 20260930
+status: in_progress
 ---
 
 # Slice Design: Tool-Heavy Reviews on OpenAI-Compatible Models — Effort, Batched Reads, and Per-Turn Usage
@@ -392,7 +392,7 @@ The existing keys are unchanged, except that `reasoning_chars` becomes the run t
 
 ### Verification Walkthrough
 
-Draft; refined after Phase 6.
+Refined after Phase 6 (20260930). Each step says whether it was run in the implementing session. Steps marked **not run** need an OpenRouter, OpenAI, Gemini, or Codex key, which that session did not have.
 
 1. **Define a low-effort alias.** Add to `~/.config/squadron/models.toml`:
    ```toml
@@ -403,40 +403,54 @@ Draft; refined after Phase 6.
    ```
    The model id must match the built-in `glm-flash` alias, which `sq models list` shows. `sq models list` also shows the new alias.
 
-2. **Baseline review at the default effort.**
+   *Run.* An existing file that uses an inline `[aliases]` table takes the same alias as one line: `glm-flash-low = { profile = "openrouter", model = "z-ai/glm-5.3-flash", effort = "low" }`. `sq models list` shows `glm-flash-low │ openrouter │ z-ai/glm-5.3-flash │ (user)` and logs no WARNING. The table has no effort column.
+
+2. **Baseline review at the default effort.** **Not run** (no OpenRouter key).
    ```
    sq review slice 931 --model glm-flash -v
    ```
    Open the saved review in `project-documents/user/reviews/`. Frontmatter has `turns`, the four token keys, and `durationSeconds`, and no `effort` key. The Run Digest shows `Effort: backend default`, `Turns: N`, the token line, and `Duration`. `cachedTokens` answers whether OpenRouter cached the resent history. A non-zero value means yes.
 
-3. **Same review at low effort.**
+3. **Same review at low effort.** **Not run** (no OpenRouter key).
    ```
    sq review slice 931 --model glm-flash-low -v
    ```
    Frontmatter has `effort: low`. Compare `reasoningTokens`, `turns`, and `durationSeconds` against step 2.
 
-4. **Batched reads happen.** Run step 3 at `-vv`, or read the prompt log at `-vvv`. At least one `read_file` call carries `paths` with more than one entry, and the output shows `==> path <==` headers. `Tool calls made` is lower than the 22 seen in the amoeba run for a comparable document.
+4. **Batched reads happen.** **Not run** (no OpenRouter key). Run step 3 at `-vv`, or read the prompt log at `-vvv`. At least one `read_file` call carries `paths` with more than one entry, and the output shows `==> path <==` headers. `Tool calls made` is lower than the 22 seen in the amoeba run for a comparable document.
 
-5. **JSON parity.**
+5. **JSON parity.** **Not run** with `glm-flash-low` (no OpenRouter key); step 7's `local` run exercised the same JSON keys.
    ```
    sq review slice 931 --model glm-flash-low --output json --no-save | jq '{effort, turns, prompt_tokens, cached_tokens, reasoning_tokens, duration_seconds}'
    ```
-   The values match the markdown artifact's frontmatter for the same kind of run.
+   The values match the markdown artifact's frontmatter for the same kind of run. Every key is present; unreported ones are `null`, never `0`.
 
-6. **Pipeline parity.** The built-in `review` pipeline runs a code review of slice 931's branch through the pipeline review action, which is the `resolve_full` path:
+6. **Pipeline parity.** Live run **not run** (no OpenRouter key); the dry run was. The built-in `review` pipeline runs a code review of slice 931's branch through the pipeline review action, which is the `resolve_full` path:
    ```
    sq run review 931 --model glm-flash-low --dry-run
    sq run review 931 --model glm-flash-low
    ```
-   The dry run shows `glm-flash-low` on the review step. The saved code review has `effort: low` and the usage keys.
+   The saved code review has `effort: low` and the usage keys. `sq run` refuses to start inside a Claude Code session, so run it from a terminal.
+
+   *Dry run, run.* It prints `Params: {'model': 'glm-flash-low', 'slice': '931'}` and `review-0 (review)`. The alias appears under Params, not on the step line.
 
 7. **Every built-in OpenAI-compatible profile accepts the new request.** Run one short review per profile: `openrouter` (steps 2–3), `local` (with Ollama running, using an alias on the `local` profile), `openai`, and `gemini` (`--model gemini-flash`). Each completes. `local` shows prompt and completion tokens and `Reasoning tokens` `not reported`, matching the Interfaces table. `gemini`'s profile does not send `stream_options`, so it records only the usage the backend sends unasked. If it sends none, every token field shows `not reported` and the D12 no-usage WARNING is logged. Its request is byte-for-byte today's apart from `reasoning_effort` when an effort is set.
 
-8. **Mid-loop failure is recorded.** Run a review against the `local` profile and stop Ollama (`ollama stop` / quit the app) once the first tool call appears at `-v`. The failure artifact has `providerFailure: true`, `turns` ≥ 1, `durationSeconds`, and the `## Provider Failure` section, and the D12 WARNING is logged.
+   *`local` run (Ollama, `llama3.2:latest`), not a thinking model:*
+   ```
+   sq review slice 931 --profile local --model llama3.2:latest --output json --no-save -v
+   ```
+   Completed in 13.4 s: `turns: 2`, `prompt_tokens: 8142`, `cached_tokens: 1025`, `completion_tokens: 426`, `reasoning_tokens: null`, `effort: null`. Ollama reports cached tokens but no completion details, as the Interfaces table says. The same review through a `local` alias with `effort = "low"` fails with a 400, `"llama3.2:latest" does not support thinking`: that is D12's "backend rejects `reasoning_effort`" row, reported as `Error: Review failed — Error code: 400 …`, with the exit WARNING `OpenAI agent ended without a final response after 0 turn(s) …`. Give `effort` only to aliases whose model reasons. `openai`, `gemini`: **not run**.
 
-9. **Codex refuses loudly.** Define an alias on the `openai-oauth` profile with `effort = "low"` and run a review. A WARNING says effort cannot be applied, and the artifact has no `effort` key.
+8. **Mid-loop failure is recorded.** **Not run** (it means stopping the operator's Ollama mid-review); the unit tests in `tests/providers/openai/test_usage_loop.py` (`TestFailureTelemetry`) and `tests/review/test_run_cost_rendering.py` cover it. Run a review against the `local` profile and stop Ollama (`ollama stop` / quit the app) once the first tool call appears at `-v`. The failure artifact has `providerFailure: true`, `turns` ≥ 1, `durationSeconds`, and the `## Provider Failure` section, and the D12 WARNING is logged.
+
+9. **Codex refuses loudly.** **Not run** (no Codex access); `tests/providers/codex/test_agent.py` and `TestEffortThreading.test_codex_artifact_has_no_effort_key` cover it. Define an alias on the `openai-oauth` profile with `effort = "low"` and run a review. A WARNING says effort cannot be applied, and the artifact has no `effort` key.
 
 10. **Invalid value.** Set `effort = "extreme"` on the test alias. Any `sq` command that loads aliases logs the skip WARNING naming the alias and file.
+
+    *Run.* `sq models list` logs `Skipping effort for alias 'glm-flash-low' in /Users/<you>/.config/squadron/models.toml — expected one of none, low, medium, high, xhigh, got 'extreme'`. Set it back to `"low"` afterwards; `sq models list` then logs nothing.
+
+11. **Checks with no key.** `cf validate frontmatter` on a review artifact carrying `effort`, `turns`, the four token keys, and `durationSeconds` reports no inconsistencies. The import greps return nothing: `grep -rn "providers.openai" src/squadron/review/` and `grep -n "squadron" src/squadron/core/usage.py`.
 
 ## Risk Assessment
 
