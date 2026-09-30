@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.prompt_renderer import (
@@ -23,6 +24,7 @@ from squadron.pipeline.prompt_renderer import (
     _render_summary,
     render_step_instructions,
 )
+from squadron.pipeline.resolver import ResolvedModel
 
 # ---------------------------------------------------------------------------
 # T2: Data model tests
@@ -126,9 +128,13 @@ class TestCompletionResult:
 # ---------------------------------------------------------------------------
 
 
-def _make_resolver(model_id: str = "resolved-model") -> MagicMock:
+def _make_resolver(
+    model_id: str = "resolved-model", profile: str | None = None, effort: Effort | None = None
+) -> MagicMock:
+    """A resolver whose ``resolve`` and ``resolve_full`` agree on one alias."""
     resolver = MagicMock()
-    resolver.resolve.return_value = (model_id, None)
+    resolver.resolve.return_value = (model_id, profile)
+    resolver.resolve_full.return_value = ResolvedModel(model_id, profile, effort=effort)
     return resolver
 
 
@@ -340,8 +346,7 @@ class TestRenderSummary:
         """SDK profile alias → model_switch set, command is None."""
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
-        resolver = MagicMock()
-        resolver.resolve.return_value = ("haiku-model-id", "sdk")
+        resolver = _make_resolver("haiku-model-id", "sdk")
 
         result = _render_summary({"model": "haiku"}, {}, resolver)
 
@@ -356,8 +361,7 @@ class TestRenderSummary:
         """profile=None (unannotated alias) is treated as SDK → model_switch."""
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
-        resolver = MagicMock()
-        resolver.resolve.return_value = ("some-id", None)
+        resolver = _make_resolver("some-id", None)
 
         result = _render_summary({"model": "some-alias"}, {}, resolver)
 
@@ -370,8 +374,7 @@ class TestRenderSummary:
         """Non-SDK profile → command set with sq _summary-run, model_switch is None."""
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
-        resolver = MagicMock()
-        resolver.resolve.return_value = ("minimax-01", "openrouter")
+        resolver = _make_resolver("minimax-01", "openrouter")
 
         result = _render_summary({"model": "minimax", "template": "minimal-sdk"}, {}, resolver)
 
@@ -390,8 +393,7 @@ class TestRenderSummary:
 
         mock_load.return_value = MagicMock()
         mock_render.return_value = "instructions"
-        resolver = MagicMock()
-        resolver.resolve.return_value = ("minimax-01", "openrouter")
+        resolver = _make_resolver("minimax-01", "openrouter")
 
         result = _render_summary(
             {"model": "minimax"},
@@ -641,3 +643,37 @@ class TestRenderStepInstructions:
         parsed = json.loads(raw)
         assert parsed["step_name"] == "devlog-0"
         assert len(parsed["actions"]) == 1
+
+
+class TestRenderSummaryEffort:
+    """Slice 931 D11: the CLI summary gets the alias's effort, as the pipeline's does."""
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_non_sdk_command_carries_the_alias_effort(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        import shlex
+
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+        resolver = _make_resolver("glm-id", "openrouter", Effort.low)
+
+        result = _render_summary({"model": "glm-flash-low"}, {}, resolver)
+
+        assert result.command is not None
+        parsed = shlex.split(result.command)
+        assert parsed[parsed.index("--effort") + 1] == "low"
+
+    @patch("squadron.pipeline.prompt_renderer.load_compaction_template")
+    @patch("squadron.pipeline.prompt_renderer.render_instructions")
+    def test_command_has_no_effort_when_the_alias_sets_none(
+        self, mock_render: MagicMock, mock_load: MagicMock
+    ) -> None:
+        mock_load.return_value = MagicMock()
+        mock_render.return_value = "instructions"
+
+        result = _render_summary({"model": "glm-flash"}, {}, _make_resolver("glm-id", "openrouter"))
+
+        assert result.command is not None
+        assert "--effort" not in result.command

@@ -13,6 +13,7 @@ import sys
 
 import typer
 
+from squadron.core.models import Effort
 from squadron.pipeline.compaction_templates import (
     load_compaction_template,
     render_instructions,
@@ -31,6 +32,11 @@ def summary_run(
         "--param",
         "-p",
         help="key=value pipeline parameters (repeatable).",
+    ),
+    effort: Effort | None = typer.Option(
+        None,
+        "--effort",
+        help="Reasoning effort of the resolved alias (slice 931); omitted when it sets none.",
     ),
 ) -> None:
     """[hidden] Run a one-shot summary via a non-SDK provider profile."""
@@ -62,6 +68,7 @@ def summary_run(
                 instructions=instructions,
                 model_id=model,
                 profile=profile,
+                effort=effort,
             )
         )
     except KeyError as exc:

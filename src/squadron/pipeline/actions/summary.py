@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
@@ -218,10 +219,12 @@ async def _execute_summary(
     # No alias means no alias metadata to read, so the capability defaults to allow —
     # the same default-allow absence means everywhere else (slice 266).
     model_allows_tools = True
+    effort: Effort | None = None
     if summary_model_alias:
         resolved = context.resolver.resolve_full(action_model=summary_model_alias, step_model=None)
         model_id, profile = resolved.model_id, resolved.profile
         model_allows_tools = resolved.allows_tools
+        effort = resolved.effort
 
     # Validate: rotate emit is incompatible with non-SDK profiles.
     has_rotate = any(d.kind is EmitKind.ROTATE for d in emit_destinations)
@@ -278,6 +281,7 @@ async def _execute_summary(
                 allowed_tools=resolve_allowed_tools(context, action_type),
                 model_allows_tools=model_allows_tools,
                 cwd=context.cwd,
+                effort=effort,
             )
     except Exception as exc:  # noqa: BLE001
         # Boundary by design: this wraps SDK session dispatch (capture_summary)

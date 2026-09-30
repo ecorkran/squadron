@@ -24,8 +24,10 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NamedTuple
 
+from squadron.core.models import Effort
 from squadron.models.aliases import (
     model_allows_tools,
+    model_effort,
     model_max_output_tokens,
     resolve_model_alias,
 )
@@ -61,6 +63,8 @@ class ResolvedModel(NamedTuple):
     allows_tools: bool = True
     # Slice 924 D4: the alias's per-request output budget; None sends no budget.
     max_output_tokens: int | None = None
+    # Slice 931 D1, D11: the alias's reasoning effort; None sends none.
+    effort: Effort | None = None
 
 
 def _resolved(alias: str) -> ResolvedModel:
@@ -70,7 +74,13 @@ def _resolved(alias: str) -> ResolvedModel:
     the last point at which it can be.
     """
     model_id, profile = resolve_model_alias(alias)
-    return ResolvedModel(model_id, profile, model_allows_tools(alias), model_max_output_tokens(alias))
+    return ResolvedModel(
+        model_id,
+        profile,
+        model_allows_tools(alias),
+        model_max_output_tokens(alias),
+        model_effort(alias),
+    )
 
 
 class ModelResolutionError(Exception):

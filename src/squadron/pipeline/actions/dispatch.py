@@ -13,6 +13,7 @@ from squadron.core.models import (
     RATE_LIMIT_EVENT_TYPE,
     SDK_RESULT_TYPE,
     AgentConfig,
+    Effort,
     Message,
     MessageType,
     SystemPromptMode,
@@ -65,6 +66,7 @@ async def one_shot_dispatch(
     allowed_tools: list[str] | None = None,
     model_allows_tools: bool = True,
     cwd: str | None = None,
+    effort: Effort | None = None,
 ) -> str:
     """Spawn a one-shot agent and return the concatenated response text.
 
@@ -82,6 +84,7 @@ async def one_shot_dispatch(
         allowed_tools=allowed_tools,
         model_allows_tools=model_allows_tools,
         cwd=cwd,
+        effort=effort,
     )
     return text
 
@@ -98,6 +101,7 @@ async def one_shot_dispatch_with_telemetry(
     allowed_tools: list[str] | None = None,
     model_allows_tools: bool = True,
     cwd: str | None = None,
+    effort: Effort | None = None,
 ) -> tuple[str, dict[str, object]]:
     """Spawn a one-shot agent and return its text alongside tool-use telemetry.
 
@@ -167,9 +171,9 @@ async def one_shot_dispatch_with_telemetry(
         auto_memory=auto_memory,
         allowed_tools=allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
-        credentials={
-            **profile_credentials(profile),
-        },
+        # Slice 931 D11: no artifact records it here; the provider's own DEBUG log does.
+        effort=effort,
+        credentials=profile_credentials(profile),
     )
 
     registry = get_registry()
@@ -597,6 +601,7 @@ class DispatchAction:
             prompt=self._resolve_prompt(context),
             model_id=model_id,
             model_allows_tools=resolved.allows_tools,
+            effort=resolved.effort,
             profile_name=profile_name,
             system_prompt=str(context.params.get("system_prompt", "")),
             step_name=context.step_name,

@@ -15,6 +15,10 @@ like any other profile (385, D3). Profile-routing predicates live in
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from squadron.core.models import Effort
 
 _logger = logging.getLogger(__name__)
 
@@ -29,6 +33,7 @@ async def capture_summary_via_profile(
     allowed_tools: list[str] | None = None,
     model_allows_tools: bool = True,
     cwd: str | None = None,
+    effort: Effort | None = None,
 ) -> str:
     """Execute a one-shot summary call through the specified provider profile.
 
@@ -47,6 +52,7 @@ async def capture_summary_via_profile(
         allowed_tools=allowed_tools,
         model_allows_tools=model_allows_tools,
         cwd=cwd,
+        effort=effort,
     )
     return text
 
@@ -59,6 +65,7 @@ async def capture_summary_via_profile_with_telemetry(
     allowed_tools: list[str] | None = None,
     model_allows_tools: bool = True,
     cwd: str | None = None,
+    effort: Effort | None = None,
 ) -> tuple[str, dict[str, object]]:
     """Run the one-shot summary and return its text alongside tool-use telemetry.
 
@@ -113,6 +120,7 @@ async def capture_summary_via_profile_with_telemetry(
         # Always a list after the gate above, which normalizes None to [].
         allowed_tools=allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
+        effort=effort,
         permission_mode="default",
         setting_sources=[],
         credentials={

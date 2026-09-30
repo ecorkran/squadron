@@ -322,7 +322,8 @@ def _render_summary(
 
     if model_raw is not None:
         alias = str(model_raw)
-        model_id, profile = resolver.resolve(alias)
+        resolved_model = resolver.resolve_full(alias)
+        model_id, profile = resolved_model.model_id, resolved_model.profile
 
         if is_sdk_profile(profile):
             model_switch = f"/model {alias}"
@@ -338,6 +339,10 @@ def _render_summary(
                 "--model",
                 model_id or alias,
             ]
+            # The command carries the resolved id, not the alias, so the alias's effort
+            # rides along explicitly or the CLI summary would drop it (slice 931 D11).
+            if resolved_model.effort is not None:
+                cmd_parts.extend(["--effort", resolved_model.effort.value])
             for key, value in params.items():
                 cmd_parts.extend(["--param", f"{key}={shlex.quote(str(value))}"])
             command = " ".join(cmd_parts)

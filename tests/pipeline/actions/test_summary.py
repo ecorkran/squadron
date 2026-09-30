@@ -471,6 +471,7 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
         allowed_tools=None,
         model_allows_tools=True,
         cwd=ctx.cwd,
+        effort=None,
     )
 
 

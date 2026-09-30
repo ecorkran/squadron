@@ -96,3 +96,14 @@ def test_resolve_full_has_no_budget_for_an_alias_without_one(tmp_path: Path) -> 
     with patch("squadron.models.aliases.models_toml_path", return_value=tmp_path / "none.toml"):
         resolved = ModelResolver(cli_override="opus").resolve_full()
     assert resolved.max_output_tokens is None
+
+
+def test_resolve_full_carries_the_alias_effort(tmp_path: Path) -> None:
+    """Slice 931 D11: read while the alias name is still known."""
+    from squadron.core.models import Effort
+
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text('[aliases.glm-low]\nprofile = "openrouter"\nmodel = "x/y"\neffort = "low"\n')
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        assert ModelResolver(cli_override="glm-low").resolve_full().effort is Effort.low
+        assert ModelResolver(cli_override="opus").resolve_full().effort is None
