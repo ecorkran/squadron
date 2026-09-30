@@ -45,6 +45,7 @@ No test covers the loop exit.
 - System prompt: not computed
 - Settings sources: not computed
 - Reasoning characters: not computed
+- Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
 - Duration: not computed

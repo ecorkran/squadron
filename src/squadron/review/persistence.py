@@ -13,13 +13,13 @@ from pathlib import Path
 from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 
 from squadron import __version__
-from squadron.core.models import SystemPromptMode
+from squadron.core.models import Effort, SystemPromptMode
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
 from squadron.review.run_cost import NOT_COMPUTED, RunCost
-from squadron.review.turn_capture import describe_budget, ended_mid_task
+from squadron.review.turn_capture import describe_budget, describe_effort, ended_mid_task
 
 _logger = logging.getLogger(__name__)
 
@@ -256,7 +256,8 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         f"- System prompt: {_render_optional(result.system_prompt_mode)}",
         f"- Settings sources: {_render_optional(result.setting_sources)}",
         f"- Reasoning characters: {_render_optional(result.reasoning_chars)}",
-        # Slice 931 D10: always present, so every artifact says what the run cost.
+        # Slice 931 D10: always present, so every artifact says what it ran with and cost.
+        f"- Effort: {describe_effort(result.effort)}",
         *RunCost(result.turns, result.usage, result.duration_seconds).digest_lines(),
         f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
         f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",
@@ -368,6 +369,7 @@ def _review_frontmatter_lines(
     squadron_version: str,
     provider_failure: bool = False,
     run_cost: RunCost | None = None,
+    effort: Effort | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -444,7 +446,9 @@ def _review_frontmatter_lines(
     # Slice 927 D2: present exactly when the review had a diff input, true or false.
     if diff_truncated is not None:
         lines.append(f"diffTruncated: {'true' if diff_truncated else 'false'}")
-    # Slice 931 D10: what the run cost, each key only when reported.
+    # Slice 931 D10: the effort actually sent, and what the run cost, each only when known.
+    if effort is not None:
+        lines.append(f"effort: {effort.value}")
     if run_cost is not None:
         lines.extend(run_cost.frontmatter_lines())
     # Slice 195 D12 (#139): the pipeline run that wrote this review. Absent from a
@@ -568,6 +572,7 @@ def format_review_markdown(
         run_id=result.run_id,
         squadron_version=squadron_version,
         run_cost=RunCost(result.turns, result.usage, result.duration_seconds),
+        effort=result.effort,
     )
 
     if result.score is not None:

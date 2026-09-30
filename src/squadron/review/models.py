@@ -349,7 +349,8 @@ class ReviewResult:
             "squadron_version": __version__,
             # Slice 195 D12: the parse-scan counts, null for a hand-built result.
             "finding_scan": asdict(self.finding_scan) if self.finding_scan else None,
-            # Slice 931 D10: always present, null when not reported.
+            # Slice 931 D10: always present, null when not reported or not sent.
+            "effort": self.effort.value if self.effort else None,
             **RunCost(self.turns, self.usage, self.duration_seconds).json_fields(),
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so

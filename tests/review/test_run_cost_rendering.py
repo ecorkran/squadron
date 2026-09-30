@@ -137,3 +137,28 @@ def test_failure_without_telemetry_renders_no_fabricated_zeros() -> None:
         assert key not in front
     assert _digest_value(md, "- Turns: ") == NOT_COMPUTED
     assert _digest_value(md, "- Duration: ") == NOT_COMPUTED
+
+
+# --- Effort (slice 931 Task 19B) ---
+
+
+def test_sent_effort_agrees_across_frontmatter_digest_and_json() -> None:
+    from squadron.core.models import Effort
+
+    result = _result(effort=Effort.low)
+
+    md = format_review_markdown(result, "code", _SLICE_INFO)  # type: ignore[arg-type]
+
+    assert _frontmatter(md)["effort"] == "low"
+    assert _digest_value(md, "- Effort: ") == "low"
+    assert result.to_dict()["effort"] == "low"
+
+
+def test_unsent_effort_is_absent_backend_default_and_null() -> None:
+    result = _result()
+
+    md = format_review_markdown(result, "code", _SLICE_INFO)  # type: ignore[arg-type]
+
+    assert "effort" not in _frontmatter(md)
+    assert _digest_value(md, "- Effort: ") == "backend default"
+    assert result.to_dict()["effort"] is None

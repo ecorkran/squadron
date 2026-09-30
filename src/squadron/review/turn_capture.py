@@ -19,6 +19,7 @@ from squadron.core.models import (
     SDK_RESULT_TYPE,
     TOOL_RESULT_TYPE,
     TOOL_USE_TYPE,
+    Effort,
     Message,
     MessageType,
 )
@@ -47,6 +48,11 @@ OUTPUT_BUDGET_STOP_REASONS = frozenset({"length", "max_tokens"})
 def budget_exhausted(stop_reason: str | None) -> bool:
     """Did the turn stop because it hit its output budget? ``None`` (Codex) is not."""
     return stop_reason in OUTPUT_BUDGET_STOP_REASONS
+
+
+def describe_effort(effort: Effort | None) -> str:
+    """The one wording for an effort: its level, or ``"backend default"`` when none was sent."""
+    return "backend default" if effort is None else effort.value
 
 
 def describe_budget(max_output_tokens: int | None) -> str:
