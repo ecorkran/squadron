@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20260930
 
+### Release 0.17.0
+
+- **Contents:** slice 930 (pipeline tasks review covers every split task file, #153); slice 931 (alias effort #154, batched `read_file` #157, per-turn usage and duration in review artifacts #158, mid-stream provider errors #166); built-in pipeline grooming (renames to `P0`/`P456`/`P56`, revise-until-pass loops, test pipelines no longer shipped); claude-agent-sdk 0.2.162; `luna` alias.
+
 ### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Implementation Complete
 
 - Branch `931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`; fixes #154 (effort), #157 (batched reads), #158 (per-turn usage). Order C → B → A, one or more commits per task.

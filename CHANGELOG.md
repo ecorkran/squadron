@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 20260930
+
 ### Added
 - Model aliases take an optional `effort` (`none`, `low`, `medium`, `high`, `xhigh`). Define a variant such as `glm-flash-low` in `~/.config/squadron/models.toml` and pass it to `--model` or a step's `model:`. OpenAI-compatible models get it as `reasoning_effort`; Claude models via the SDK get `effort`, and `none` turns thinking off. Codex ignores it with a warning (#154).
 - Review artifacts record the effort sent, the number of model requests (`turns`), prompt / cached / completion / reasoning tokens, and wall-clock duration, in frontmatter, the Run Digest, and `--json` output. A provider failure records what the run had used before it failed (#158).
