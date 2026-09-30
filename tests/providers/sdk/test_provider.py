@@ -5,8 +5,9 @@ from __future__ import annotations
 from unittest.mock import MagicMock, patch
 
 import pytest
+from claude_agent_sdk import ClaudeAgentOptions
 
-from squadron.core.models import AgentConfig
+from squadron.core.models import AgentConfig, Effort
 from squadron.providers.errors import ProviderError
 from squadron.providers.sdk.provider import ClaudeSDKProvider
 
@@ -388,3 +389,45 @@ class TestAutoMemory:
         opts = mock_cls.call_args.kwargs["options"]
         assert opts.setting_sources == ["project"]
         assert ("CLAUDE_CODE_DISABLE_AUTO_MEMORY" in opts.env) is disabled
+
+
+# ---------------------------------------------------------------------------
+# effort (slice 931 D1, D4)
+# ---------------------------------------------------------------------------
+
+
+async def _options_for(provider: ClaudeSDKProvider, effort: Effort | None) -> ClaudeAgentOptions:
+    config = AgentConfig(name="e", agent_type="sdk", provider="sdk", effort=effort)
+    with patch(_AGENT_PATCH, create=True) as mock_cls:
+        mock_cls.return_value = MagicMock()
+        await provider.create_agent(config)
+    return mock_cls.call_args.kwargs["options"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("level", [Effort.low, Effort.medium, Effort.high, Effort.xhigh])
+async def test_each_level_maps_to_sdk_effort(provider: ClaudeSDKProvider, level: Effort) -> None:
+    options = await _options_for(provider, level)
+
+    assert options.effort == level.value
+    assert options.thinking is None
+
+
+@pytest.mark.asyncio
+async def test_none_disables_thinking_and_sends_no_effort(provider: ClaudeSDKProvider) -> None:
+    options = await _options_for(provider, Effort.none)
+
+    assert options.thinking == {"type": "disabled"}
+    assert options.effort is None
+
+
+@pytest.mark.asyncio
+async def test_unset_effort_sends_neither(provider: ClaudeSDKProvider) -> None:
+    options = await _options_for(provider, None)
+
+    assert options.effort is None
+    assert options.thinking is None
+
+
+def test_sdk_applies_effort(provider: ClaudeSDKProvider) -> None:
+    assert provider.capabilities.applies_effort is True

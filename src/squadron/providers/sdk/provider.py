@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from claude_agent_sdk import ClaudeAgentOptions
 
-from squadron.core.models import AgentConfig
+from squadron.core.models import AgentConfig, Effort
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
 from squadron.providers.sdk.settings import sdk_settings_options
@@ -19,6 +19,19 @@ _log = get_logger("squadron.providers.sdk.provider")
 
 # Default permission mode for programmatic agents — interactive mode hangs.
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
+
+
+def _effort_options(effort: Effort | None) -> dict[str, object]:
+    """``ClaudeAgentOptions`` entries for ``effort`` (slice 931 D1).
+
+    ``none`` has no SDK effort level; it disables thinking instead. Every other level is
+    one the SDK accepts as-is. Unset sends neither, so the backend default applies.
+    """
+    if effort is None:
+        return {}
+    if effort is Effort.none:
+        return {"thinking": {"type": "disabled"}}
+    return {"effort": effort.value}
 
 
 class ClaudeSDKProvider:
@@ -34,6 +47,7 @@ class ClaudeSDKProvider:
             can_read_files=True,
             supports_system_prompt=True,
             supports_streaming=True,
+            applies_effort=True,
         )
 
     async def create_agent(self, config: AgentConfig) -> ClaudeSDKAgent:
@@ -96,6 +110,8 @@ class ClaudeSDKProvider:
         hooks = config.credentials.get("hooks")
         if hooks is not None:
             kwargs["hooks"] = hooks
+
+        kwargs.update(_effort_options(config.effort))
 
         options = ClaudeAgentOptions(**kwargs)  # type: ignore[arg-type]
         mode = config.credentials.get("mode", "query")
