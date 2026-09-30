@@ -14,7 +14,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Task Breakdown Complete
 
-- Phase 5 done: `project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-{1,2}.md` (29 tasks including 4B, 6B, 10B, 19B; split at Part A because the total ran 112 lines over target; -1 holds Parts C and B, -2 holds Part A and wrap-up). No code yet.
+- Phase 5 done: `project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-{1,2}.md` (30 tasks including 4B, 5B, 6B, 10B, 19B; split at Part A because the total ran 112 lines over target; -1 holds Parts C and B, -2 holds Part A and wrap-up). No code yet.
 - Order is C → B → A per the design: usage (Tasks 2–11), batched reads (12–15), effort (16–22), then verification, follow-up issues, close-out (23–25). Each part ends at a green, separately revertible commit.
 - Live runs (Tasks 11, 15, 23) need an OpenRouter key; Ollama/OpenAI/Gemini/Codex walkthrough steps 7–9 run only where the environment has them, and the rest are listed in the DEVLOG as not run.
 - Task 21 checks the installed SDK's `effort` levels before mapping; Task 4 leaves `providers/auth.py` alone (not one of the six credential sites).

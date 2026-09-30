@@ -97,6 +97,9 @@ status: not_started
 - [ ] Tests in `tests/providers/openai/`: `reasoning_effort` on every turn of a tool loop and
       on the recovery turn; absent when unset; `none` is sent as `"none"`; capability flag
       true in `test_capabilities.py`
+  - [ ] D12 "backend rejects `reasoning_effort`" row: a stubbed 400 on a request carrying
+        `reasoning_effort` surfaces as `ProviderAPIError` (extend the existing 4xx test
+        from Task 7 if it fits)
   - [ ] Success: all pass
 - [ ] Format, lint, typecheck, commit: `feat: send reasoning_effort from the OpenAI-compatible agent`
 
@@ -135,6 +138,11 @@ status: not_started
 - [ ] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean; both import
       greps from Task 11 re-run clean
 - [ ] `cf validate frontmatter` passes on a saved review that carries the new keys
+- [ ] Walkthrough step 1 first, since steps 3, 5, 6, 8–10 depend on it: confirm
+      `~/.config/squadron/models.toml` defines `glm-flash-low` (profile `openrouter`, same
+      model id as built-in `glm-flash`, `effort = "low"`), and that `sq models list` shows it.
+      If the file lacks it, add it there; this is the user's own config, so tell the Project
+      Manager you did.
 - [ ] Live walkthrough steps 3, 5, 6, 10 (OpenRouter key; else stop and tell the Project
       Manager): low-effort alias review, JSON parity, pipeline parity, invalid value
   - [ ] `effort: low` in frontmatter; JSON matches frontmatter; `sq run review 931

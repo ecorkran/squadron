@@ -72,7 +72,9 @@ status: not_started
 ## Task 3 — `providers/openai/usage.py`: chunk usage reader (D8, D12 malformed row)
 
 - [ ] Create `src/squadron/providers/openai/usage.py` with
-      `read_chunk_usage(chunk) -> TokenUsage | None`
+      `read_chunk_usage(chunk, *, warned: set[str] | None = None) -> TokenUsage | None`.
+      The design's contract is the one-argument form; `warned` is an additive keyword-only
+      parameter whose default keeps that form working (see below)
   - [ ] Returns `None` when `chunk.usage` is absent
   - [ ] `prompt`/`completion` from `prompt_tokens`/`completion_tokens`; `cached` from
         `prompt_tokens_details.cached_tokens`; `reasoning` from
@@ -80,14 +82,15 @@ status: not_started
   - [ ] A non-int count or a wrong-typed details object makes that field `None`, leaves the
         siblings intact, and logs a WARNING naming the field and `%.200r` of the raw value.
         Never raises.
-  - [ ] Signature is `read_chunk_usage(chunk, warned: set[str])`. The reader logs each
-        malformed field only if its name is not yet in `warned`, then adds it. The agent
-        owns the set and clears it at the top of `handle_message` (Task 5), which gives
-        "once per call" without agent state in the reader.
+  - [ ] `warned` handling: with `warned=None` the reader logs every malformed field it sees.
+        With a set, it logs a field only if its name is not yet in the set, then adds it.
+        The agent owns the set and clears it at the top of `handle_message` (Task 5B),
+        which gives D12's "once per call" without agent state in the reader.
 - [ ] Create `tests/providers/openai/test_usage.py`
   - [ ] OpenAI/Ollama shape (empty `choices`), OpenRouter shape (one choice, empty delta)
   - [ ] Ollama: `cached_tokens` present, no `completion_tokens_details` → `reasoning` None
   - [ ] Parametrized malformed shapes: field None, siblings intact, WARNING via `caplog`
+  - [ ] Called with only `chunk` (the design's form): returns usage and logs each malformed field
   - [ ] Passing the same `warned` set on a second malformed chunk logs no second WARNING
   - [ ] The event-loop NFR check for this reader lives in the load-test tier (Task 11), not here
   - [ ] Success: all pass; no `openai` package types are imported by `core/usage.py`
@@ -132,7 +135,7 @@ status: not_started
 
 ---
 
-## Task 5 — `_stream_turn` reads usage and sends `stream_options` (D8, D12)
+## Task 5 — Wire `sends_stream_usage` to the agent and send `stream_options` (D8, D12)
 
 - [ ] Wire the flag to the agent: `OpenAICompatibleAgent` has no `credentials` member today
       (`provider.create_agent` passes named arguments only)
@@ -140,23 +143,32 @@ status: not_started
   - [ ] `providers/openai/provider.py` `create_agent` passes
         `sends_stream_usage=config.credentials.get("sends_stream_usage", True)`; an absent
         key (no profile involved, e.g. `server/routes/agents.py`) sends it, per the design
-- [ ] `providers/openai/agent.py`: in `_stream_turn`
-  - [ ] Pass `stream_options={"include_usage": True}` explicitly (not via `**kwargs`) unless
-        the agent's `sends_stream_usage` is `False`
-  - [ ] Call `read_chunk_usage` on every chunk **before** the `if not chunk.choices: continue`
-        guard, next to the existing `chunk.model` read; last non-None value in a turn wins.
-        Pass the agent's `warned` set (a new per-call attribute, cleared at the top of
-        `handle_message`, beside `_answering_models`)
-  - [ ] Return it on `TurnResult.usage`
-- [ ] Extend `tests/providers/openai/test_agentic_loop.py` (or a new sibling file) with
-      stubbed streams
-  - [ ] Both chunk shapes yield the turn's usage and the turn's text and tool calls intact
-  - [ ] A stream with no usage chunk completes with `usage=None`
+- [ ] `providers/openai/agent.py`: in `_stream_turn`, pass
+      `stream_options={"include_usage": True}` explicitly (not via `**kwargs`) unless the
+      agent's `sends_stream_usage` is `False`
+- [ ] Tests in `tests/providers/openai/test_provider.py` and a stubbed-stream agent test
   - [ ] gemini-profile agent omits `stream_options`; openrouter-profile agent sends it; an
         agent built with no profile (server-route shape) sends it
   - [ ] A request with no effort set is otherwise identical to today's
   - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: request and read per-turn usage in the OpenAI agent`
+- [ ] Format, lint, typecheck, commit: `feat: send stream_options from the OpenAI agent unless a profile opts out`
+
+---
+
+## Task 5B — `_stream_turn` reads usage (D8, D12)
+
+- [ ] `providers/openai/agent.py`
+  - [ ] Call `read_chunk_usage` on every chunk **before** the `if not chunk.choices: continue`
+        guard, next to the existing `chunk.model` read; last non-None value in a turn wins
+  - [ ] Pass the agent's `warned` set: a new per-call attribute, cleared at the top of
+        `handle_message`, beside `_answering_models`
+  - [ ] Return it on `TurnResult.usage`
+- [ ] Tests with stubbed streams in `tests/providers/openai/test_agentic_loop.py` (or a new
+      sibling file)
+  - [ ] Both chunk shapes yield the turn's usage and the turn's text and tool calls intact
+  - [ ] A stream with no usage chunk completes with `usage=None`
+  - [ ] Success: all pass
+- [ ] Format, lint, typecheck, commit: `feat: read per-turn usage in the OpenAI agent`
 
 ---
 
@@ -192,7 +204,7 @@ status: not_started
         WARNING when unset (text in D12 last row)
   - [ ] Log the once-per-call "backend reported no token usage" WARNING when no turn
         reported usage (D12)
-  - [ ] Confirm malformed-usage WARNINGs are once per call via the `warned` set from Task 5
+  - [ ] Confirm malformed-usage WARNINGs are once per call via the `warned` set from Task 5B
 - [ ] Tests in `tests/providers/openai/test_agentic_loop.py`
   - [ ] No-usage stream: exactly one WARNING per call across three turns; fields `None`
   - [ ] Malformed usage on two turns: one WARNING per field per call
@@ -222,6 +234,10 @@ status: not_started
         mid-iteration: converted type, attached telemetry, exit WARNING
   - [ ] `RuntimeError` on turn 2 propagates unchanged; exit WARNING carries `turns=1`
   - [ ] Iteration-guard `ProviderError` carries telemetry
+  - [ ] D12 "backend rejects `stream_options`" row: a stubbed 400 on the first turn of a
+        request that includes `stream_options` surfaces as `ProviderAPIError`, and the
+        failure artifact records it. Read the existing 4xx tests first; if one already
+        covers this path, extend it to send `stream_options` instead of adding a duplicate.
   - [ ] Success: the exit WARNING text matches D12 and all pass
 - [ ] Format, lint, typecheck, commit: `feat: attach run telemetry to provider errors and convert mid-stream transport failures`
 
@@ -275,13 +291,15 @@ status: not_started
   - [ ] Frontmatter, digest, and JSON agree from one `ReviewResult`
   - [ ] Unreported fields: key absent, `not reported`, null; never 0
   - [ ] Existing artifact still parses under the existing frontmatter parsers
-- [ ] Format, lint, typecheck; commit the code and tests **without** the snapshot fixture:
-      `feat: render turns, token usage, and duration for successful reviews`
-  - [ ] Expected: the `clean_pass_artifact.md` snapshot test fails until Task 10B
+- [ ] Regenerate the `clean_pass_artifact.md` snapshot **once** (D10) here, because the
+      successful-review output is what changes it: run the snapshot test on the new code,
+      review the diff to confirm only the new keys/lines changed, then keep the fixture
+  - [ ] Success: full `pytest` passes, so this commit is green on its own
+- [ ] Format, lint, typecheck, commit: `feat: render turns, token usage, and duration for successful reviews`
 
 ---
 
-## Task 10B — Failure artifact and snapshot regeneration (D10, D12)
+## Task 10B — Failure artifact rendering (D10, D12)
 
 - [ ] `review/persistence.py`: `format_provider_failure_markdown` reads `telemetry` and
       `duration_seconds` off the error, like `exc.tool_calls_made`; CLI and pipeline call
@@ -289,11 +307,8 @@ status: not_started
 - [ ] Tests in `tests/review/test_persistence.py`
   - [ ] Frontmatter, digest, and JSON agree from one failed `ProviderError`
   - [ ] An error with `telemetry=None` renders no fabricated zeros
-- [ ] Regenerate `clean_pass_artifact.md` snapshot **once** (D10): run the snapshot test on
-      the new code, review the diff to confirm only the new keys/lines changed, then commit
-      the fixture
-  - [ ] Success: full `pytest` passes
-- [ ] Format, lint, typecheck, commit: `feat: record usage in provider-failure artifacts and refresh snapshot`
+  - [ ] Success: full `pytest` passes, and no snapshot changes in this task
+- [ ] Format, lint, typecheck, commit: `feat: record usage in provider-failure artifacts`
 
 ---
 
