@@ -59,8 +59,8 @@ It is not "a new feature or capability" in the excluded sense: no new command, w
 - Preloading predictable reads into the prompt ([#159](https://github.com/ecorkran/squadron/issues/159), which touches cf).
 - #155 and #156 (SDK system prompt and setting sources).
 - A `--effort` CLI flag and a per-step `effort:` key (D2).
-- Codex effort. The Codex SDK is not installed in this environment, so its parameter cannot be verified. Filed as a follow-up issue during implementation (D4).
-- Token usage for SDK and Codex runs. Those rows render `not reported`. SDK usage from `ResultMessage` is a follow-up issue. The neutral types in D8 are what that issue plugs into.
+- Codex effort. The Codex SDK is not installed in this environment, so its parameter cannot be verified. Follow-up: [#171](https://github.com/ecorkran/squadron/issues/171) (D4).
+- Token usage for SDK and Codex runs. Those rows render `not reported`. SDK usage from `ResultMessage` is a follow-up: [#172](https://github.com/ecorkran/squadron/issues/172). The neutral types in D8 are what that issue plugs into.
 - Recording OpenRouter's `usage.cost`.
 - Effort on AgentConfig sites that do not resolve an alias: `pr/composer.py`, `metrology/audit.py`, `server/routes/agents.py`, `providers/auth.py`.
 - A timeout on `read_file` reads (D12, hung reads).
@@ -180,7 +180,7 @@ A backend that rejects the level returns a 400. That surfaces as `ProviderAPIErr
 
 ### D4 — Capability flag `applies_effort`; Codex warns
 
-This mirrors `applies_output_budget` exactly. `ProviderCapabilities.applies_effort` is True for openai and sdk. Codex logs `"Codex agent cannot apply effort=%s; the backend default applies"` and records nothing. The artifact never claims a level that was not sent. Codex applies nothing because `codex_app_server` is not installed here, so `thread_start`'s reasoning parameter cannot be verified. A follow-up issue is filed at implementation.
+This mirrors `applies_output_budget` exactly. `ProviderCapabilities.applies_effort` is True for openai and sdk. Codex logs `"Codex agent cannot apply effort=%s; the backend default applies"` and records nothing. The artifact never claims a level that was not sent. Codex applies nothing because `codex_app_server` is not installed here, so `thread_start`'s reasoning parameter cannot be verified. Follow-up: [#171](https://github.com/ecorkran/squadron/issues/171).
 
 ### D5 — `read_file`: `path` or `paths`, exactly one
 
@@ -450,7 +450,7 @@ Draft; refined after Phase 6.
 
 - **Gemini ships unchanged instead of gating the merge.** The gemini built-in profile sets `sends_stream_usage = False`, so its requests stay exactly as today. Nothing in the slice depends on the Gemini answer, and no part waits on it.
   - The cost is that Gemini reviews record usage only if the backend sends it unasked. The D12 WARNING makes that visible.
-  - Turning it on is a one-line change in `BUILT_IN_PROFILES` once a probe succeeds. A follow-up issue tracks it and records the probe command: one `curl` with `stream_options` and `reasoning_effort="low"` against `gemini-3.8-flash`.
+  - Turning it on is a one-line change in `BUILT_IN_PROFILES` once a probe succeeds. [#173](https://github.com/ecorkran/squadron/issues/173) tracks it and records the probe command: one `curl` with `stream_options` and `reasoning_effort="low"` against `gemini-3.8-flash`.
   - This is a declared per-profile field, not string dispatch on the profile name.
 - **User-defined profiles** on other OpenAI-compatible backends default to sending the parameter, because that is the OpenAI spec's behavior. If a backend rejects it, the failure is a loud 400 (D12) naming it, and the fix is `sends_stream_usage = false` in the user's profile table. That needs no code change.
 
