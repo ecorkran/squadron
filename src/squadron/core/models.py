@@ -41,9 +41,12 @@ class TopologyType(StrEnum):
 class Effort(StrEnum):
     """How hard a model reasons before answering (slice 931 D1).
 
-    The intersection of OpenAI-style ``reasoning_effort`` and the Claude SDK's ``effort``,
-    plus ``none``, which disables reasoning — the most useful setting for a tool-heavy
-    loop. Unset (``None`` on AgentConfig) sends nothing and the backend default applies.
+    The intersection of OpenAI-style ``reasoning_effort`` (none, minimal, low, medium,
+    high, xhigh) and the Claude SDK's ``effort`` (low, medium, high, xhigh, max), plus
+    ``none``, which disables reasoning — the most useful setting for a tool-heavy loop.
+    ``minimal`` (OpenAI only) and ``max`` (SDK only) are left out on purpose: each would
+    need a "valid here, unappliable there" rule. Unset (``None`` on AgentConfig) sends
+    nothing and the backend default applies.
     """
 
     none = "none"

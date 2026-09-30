@@ -117,3 +117,13 @@ The load tier is required for these paths and is otherwise well-constructed (rea
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 8
 - Finding-shaped matches — surviving validation: 8
+
+## Response (20260930)
+
+- **Batch byte budget not bounded (concern): fixed.** `paths` is capped at `MAX_READ_BATCH_PATHS` (50) entries of at most `MAX_READ_PATH_CHARS` (1024) characters; a longer request is a correctable error result. `test_full_batch_stays_under_the_per_result_floor` now computes the executor's true worst case from those limits instead of a sample.
+- **`Effort` rejects `max` (concern): intended, now stated.** OpenAI's `ReasoningEffort` (openai 2.24.0) is `none|minimal|low|medium|high|xhigh`, so the vocabulary is the intersection with the SDK's `low|medium|high|xhigh|max`, plus `none` — the docstring was right. D1 excludes `minimal` and `max` deliberately; the docstring and the skip WARNING now say so.
+- **Effort validation keys on names: fixed.** Parsed with `Effort(value)`.
+- **Two WARNINGs on an empty final turn: kept.** The empty-turn WARNING diagnoses the turn; the exit WARNING carries the run's token totals, which the first does not.
+- **Duration spans differ: fixed.** Success now reads the clock after shutdown, as failure does.
+- **spawn None-filter untested: fixed** (`test_spawn_omits_unset_profile_fields`). `profile_credentials` documents that only the OpenAI provider reads `sends_stream_usage`.
+- **Load-test timing thresholds: kept.** Generous by design (the load-test tier asserts on latency bounds).

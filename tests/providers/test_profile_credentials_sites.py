@@ -70,3 +70,15 @@ def test_spawn_credentials_carry_profile_credentials() -> None:
     credentials = _resolve_profile(ProfileName.SDK, None, None)["credentials"]
 
     assert credentials == profile_credentials(_DISTINCT_SDK)
+
+
+def test_spawn_omits_unset_profile_fields(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The daemon request body leaves out None fields, as it did before the helper."""
+    partial = dataclasses.replace(_DISTINCT_SDK, default_headers=None)
+    monkeypatch.setitem(profiles.BUILT_IN_PROFILES, ProfileName.SDK, partial)
+    monkeypatch.setattr(profiles, "providers_toml_path", lambda: tmp_path / "absent.toml")
+
+    credentials = _resolve_profile(ProfileName.SDK, None, None)["credentials"]
+
+    assert "default_headers" not in credentials
+    assert credentials == {"api_key_env": "SQ_TEST_KEY_ENV", "sends_stream_usage": False}

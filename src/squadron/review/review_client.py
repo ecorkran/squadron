@@ -278,13 +278,13 @@ async def run_review_with_profile(
                 model=resolved_model,
                 max_output_tokens=sent_budget,
             )
-            duration_seconds = time.monotonic() - started
         finally:
             await agent.shutdown()
     except ProviderError as exc:
         exc.duration_seconds = time.monotonic() - started
         raise
-    result.duration_seconds = duration_seconds
+    # Read after shutdown, as the failure path's is, so the two artifacts measure one span.
+    result.duration_seconds = time.monotonic() - started
     result.turns = capture.turns
     result.usage = capture.usage
 

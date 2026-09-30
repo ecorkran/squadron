@@ -154,6 +154,15 @@ def _requested_paths(args: dict[str, object]) -> str | list[str]:
     paths = cast(list[str], raw)
     if not paths:
         raise ValueError("argument 'paths' must name at least one file")
+    if len(paths) > limits.MAX_READ_BATCH_PATHS:
+        raise ValueError(
+            f"argument 'paths' names {len(paths)} files; request at most "
+            f"{limits.MAX_READ_BATCH_PATHS} per call"
+        )
+    if any(len(p) > limits.MAX_READ_PATH_CHARS for p in paths):
+        raise ValueError(
+            f"every entry in 'paths' must be at most {limits.MAX_READ_PATH_CHARS} characters"
+        )
     return paths
 
 

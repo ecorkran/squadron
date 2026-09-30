@@ -90,11 +90,13 @@ def _extract_metadata(
 
     effort_val = table.get("effort")
     if effort_val is not None:
-        if isinstance(effort_val, str) and effort_val in Effort.__members__:
-            alias["effort"] = Effort(effort_val)
+        effort = _parse_effort(effort_val)
+        if effort is not None:
+            alias["effort"] = effort
         else:
             _logger.warning(
-                "Skipping effort for alias '%s' in %s — expected one of %s, got %r",
+                "Skipping effort for alias '%s' in %s — expected one of %s "
+                "(minimal and max are not supported), got %r",
                 name,
                 path,
                 ", ".join(Effort),
@@ -114,6 +116,17 @@ def _extract_metadata(
         pricing = _extract_pricing(cast(dict[str, Any], pricing_val), name, path)
         if pricing:
             alias["pricing"] = pricing
+
+
+def _parse_effort(raw: object) -> Effort | None:
+    """``raw`` as an Effort, matched by value; ``None`` when it is not one."""
+    if not isinstance(raw, str):
+        return None
+    try:
+        return Effort(raw)
+    except ValueError:
+        # Not in the vocabulary; the caller logs the skip with the alias and file.
+        return None
 
 
 def _extract_pricing(

@@ -142,7 +142,8 @@ def profile_credentials(profile: ProviderProfile) -> dict[str, object]:
     """The ``AgentConfig.credentials`` entries every agent built from ``profile`` carries.
 
     One definition, so a new profile field reaches every call site at once. Callers
-    add their own keys (``hooks``, ``mode``, ...) beside these.
+    add their own keys (``hooks``, ``mode``, ...) beside these. ``sends_stream_usage``
+    is read only by the OpenAI provider; the others ignore it.
     """
     return {
         "api_key_env": profile.api_key_env,

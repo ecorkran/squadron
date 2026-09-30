@@ -27,9 +27,16 @@ MAX_READ_BYTES = 256_000
 
 # Total bytes of file content one batched ``read_file`` call (``paths``) returns (slice 931
 # D6). Kept equal to MAX_READ_BYTES so a whole batch, headers included, stays under
-# min_tool_result_chars() and the agent's per-result cap never cuts one mid-file; a test
-# pins that invariant, so raising one without the other fails.
+# min_tool_result_chars() and the agent's per-result cap never cuts one mid-file.
 MAX_READ_BATCH_BYTES = MAX_READ_BYTES
+
+# Every requested path is echoed in a header, and each one past the byte budget gets a
+# not-read marker, so the count and length of requested paths bound the rest of the
+# result. Both are capped (a longer request is a correctable error), which makes the
+# floor invariant a real bound rather than a sample; a test pins it, so raising any of
+# these without the floor fails.
+MAX_READ_BATCH_PATHS = 50
+MAX_READ_PATH_CHARS = 1024
 
 # Maximum number of bytes of each captured stream (stdout, stderr) ``bash`` returns.
 MAX_OUTPUT_BYTES = 64_000

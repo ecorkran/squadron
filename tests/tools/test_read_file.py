@@ -368,16 +368,17 @@ async def test_malformed_path_arguments_are_errors_naming_the_rule(
 
 
 def test_full_batch_stays_under_the_per_result_floor() -> None:
-    """D6: raising MAX_READ_BATCH_BYTES without the floor (or vice versa) fails here.
+    """D6: raising a batch bound without the floor (or vice versa) fails here.
 
-    A realistic worst case: the budget spent, then 100 more requested paths of 200
-    characters each, every one carrying a header and a not-read marker.
+    The true worst case the executor allows: the byte budget spent, and every one of
+    the most paths a call may name, each of the longest allowed length, carrying a
+    header and a not-read marker.
     """
-    path = "p" * 200
+    path = "p" * limits.MAX_READ_PATH_CHARS
     marker = _BUDGET_MARKER.format(budget=limits.MAX_READ_BATCH_BYTES)
     per_path_overhead = len(f"==> {path} <==\n{marker}\n\n")
 
-    batch_chars = limits.MAX_READ_BATCH_BYTES + 100 * per_path_overhead
+    batch_chars = limits.MAX_READ_BATCH_BYTES + limits.MAX_READ_BATCH_PATHS * per_path_overhead
 
     assert batch_chars < limits.min_tool_result_chars()
 
@@ -389,3 +390,19 @@ def test_registered_schema_offers_path_and_paths() -> None:
 
     assert set(parameters["properties"]) == {"path", "paths"}  # type: ignore[index]
     assert parameters["required"] == []
+
+
+async def test_too_many_paths_is_a_correctable_error(read_file: ToolExecutor) -> None:
+    paths = [f"f{i}.txt" for i in range(limits.MAX_READ_BATCH_PATHS + 1)]
+
+    result = await read_file({"paths": paths})
+
+    assert result.is_error is True
+    assert f"at most {limits.MAX_READ_BATCH_PATHS} per call" in result.content
+
+
+async def test_overlong_path_in_a_batch_is_a_correctable_error(read_file: ToolExecutor) -> None:
+    result = await read_file({"paths": ["a.txt", "p" * (limits.MAX_READ_PATH_CHARS + 1)]})
+
+    assert result.is_error is True
+    assert f"at most {limits.MAX_READ_PATH_CHARS} characters" in result.content
