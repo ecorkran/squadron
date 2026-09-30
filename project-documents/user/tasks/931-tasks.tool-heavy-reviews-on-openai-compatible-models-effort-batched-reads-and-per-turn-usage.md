@@ -80,13 +80,18 @@ status: not_started
   - [ ] A non-int count or a wrong-typed details object makes that field `None`, leaves the
         siblings intact, and logs a WARNING naming the field and `%.200r` of the raw value.
         Never raises.
-  - [ ] "Once per `handle_message`" logging: the reader takes a caller-owned set of
-        already-warned field names, or returns the malformed field names for the caller to log
-        (pick one; keep the reader free of agent state)
+  - [ ] Signature is `read_chunk_usage(chunk, warned: set[str])`. The reader logs each
+        malformed field only if its name is not yet in `warned`, then adds it. The agent
+        owns the set and clears it at the top of `handle_message` (Task 6), which gives
+        "once per call" without agent state in the reader.
 - [ ] Create `tests/providers/openai/test_usage.py`
   - [ ] OpenAI/Ollama shape (empty `choices`), OpenRouter shape (one choice, empty delta)
   - [ ] Ollama: `cached_tokens` present, no `completion_tokens_details` → `reasoning` None
   - [ ] Parametrized malformed shapes: field None, siblings intact, WARNING via `caplog`
+  - [ ] Passing the same `warned` set on a second malformed chunk logs no second WARNING
+  - [ ] NFR (design: Special Considerations, event loop): a test times 1,000 calls to
+        `read_chunk_usage` on a full usage chunk and asserts the mean is under 1 ms per call
+        (a generous bound that catches accidental I/O or regex work, not a benchmark)
   - [ ] Success: all pass; no `openai` package types are imported by `core/usage.py`
 
 - [ ] Format, lint, typecheck, commit: `feat: read token usage from OpenAI-shaped stream chunks`
@@ -103,6 +108,12 @@ status: not_started
         `default_headers`, `sends_stream_usage`
 - [ ] `tests/providers/test_profiles.py`: user-table parsing (true, false, absent, non-bool),
       gemini built-in is False, every other built-in is True, `profile_credentials` keys
+- [ ] Format, lint, typecheck, commit: `feat: add sends_stream_usage profile flag and profile_credentials`
+
+---
+
+## Task 4B — Switch the six credential call sites (Technical Requirements)
+
 - [ ] Switch each of the six call sites from hand-copied fields to `**profile_credentials(profile)`
       — one sub-task each, keeping each diff reviewable:
   - [ ] `review/review_client.py`
@@ -126,7 +137,9 @@ status: not_started
   - [ ] Pass `stream_options={"include_usage": True}` explicitly (not via `**kwargs`) unless
         `credentials.get("sends_stream_usage")` is `False`; an absent key sends it
   - [ ] Call `read_chunk_usage` on every chunk **before** the `if not chunk.choices: continue`
-        guard, next to the existing `chunk.model` read; last non-None value in a turn wins
+        guard, next to the existing `chunk.model` read; last non-None value in a turn wins.
+        Pass the agent's `warned` set (a new per-call attribute, cleared at the top of
+        `handle_message`, beside `_answering_models`)
   - [ ] Return it on `TurnResult.usage`
 - [ ] Extend `tests/providers/openai/test_agentic_loop.py` (or a new sibling file) with
       stubbed streams
@@ -140,7 +153,7 @@ status: not_started
 
 ---
 
-## Task 6 — Loop accumulation, stamping, and exit WARNING (D8, D12)
+## Task 6 — Loop accumulation and stamping (D8)
 
 - [ ] `providers/openai/agent.py`
   - [ ] Add per-call `RunTelemetry`, reset at the top of `handle_message` beside
@@ -148,24 +161,34 @@ status: not_started
         `_stream_turn` calls
   - [ ] `_stamp_tool_telemetry` stamps `turns`, `usage`, and `RunTelemetry.reasoning_chars`
         (run total) onto the final Message metadata
-  - [ ] `EmptyFinalTurnError` keeps final-turn `reasoning_chars` for its message and
-        attribute; its `telemetry` carries the total
-  - [ ] Set a `completed` flag on the normal return; the existing `finally` logs the exit
-        WARNING when unset (text in D12 last row)
-  - [ ] Log the once-per-call "backend reported no token usage" WARNING when no turn
-        reported usage (D12)
-  - [ ] Log the once-per-call malformed-usage WARNING (from Task 3)
-  - [ ] `handle_message` file stays readable: keep the wrapper a few lines. The file is
-        already over 300 lines; do not split it in this task (design: Special Considerations)
+  - [ ] Keep the `handle_message` change to a few lines. The file is already over 300
+        lines; do not split it in this task (design: Special Considerations)
 - [ ] Tests in `tests/providers/openai/test_agentic_loop.py`
   - [ ] Three-turn loop: metadata `turns == 3`, usage summed per field, reasoning chars is
         the run total (not the final turn's)
   - [ ] A backend reporting only some fields keeps the others `None`, never 0
   - [ ] Two consecutive `handle_message` calls do not leak telemetry into each other
-  - [ ] No-usage stream: one WARNING per call, not per turn; fields `None`
   - [ ] Success: existing `reasoning_chars` assertions updated only where the run total
         differs from the final turn, each with a comment
 - [ ] Format, lint, typecheck, commit: `feat: accumulate turns, usage, and reasoning chars per run`
+
+---
+
+## Task 6B — Usage WARNINGs and the exit signal (D12)
+
+- [ ] `providers/openai/agent.py`
+  - [ ] Set a `completed` flag on the normal return; the existing `finally` logs the exit
+        WARNING when unset (text in D12 last row)
+  - [ ] Log the once-per-call "backend reported no token usage" WARNING when no turn
+        reported usage (D12)
+  - [ ] Confirm malformed-usage WARNINGs are once per call via the `warned` set from Task 5
+- [ ] Tests in `tests/providers/openai/test_agentic_loop.py`
+  - [ ] No-usage stream: exactly one WARNING per call across three turns; fields `None`
+  - [ ] Malformed usage on two turns: one WARNING per field per call
+  - [ ] Exit WARNING fires when the loop ends without a final response (iteration guard)
+        and carries the turn and token counts; does not fire on a normal return
+  - [ ] Success: all pass
+- [ ] Format, lint, typecheck, commit: `feat: warn on missing usage and non-normal agent exits`
 
 ---
 
@@ -174,6 +197,8 @@ status: not_started
 - [ ] `providers/errors.py`: add keyword-only `telemetry: RunTelemetry | None = None` and
       `duration_seconds: float | None = None` to `ProviderError`; existing raisers unchanged;
       `EmptyFinalTurnError` uses the inherited `telemetry`
+  - [ ] In the agent, `EmptyFinalTurnError` keeps final-turn `reasoning_chars` for its message
+        and attribute, and its `telemetry` carries the run total
 - [ ] `providers/openai/agent.py`
   - [ ] Add `httpx.TimeoutException` → `ProviderTimeoutError` and `httpx.TransportError` →
         `ProviderError` conversions next to the existing ones
@@ -215,8 +240,8 @@ status: not_started
         success (recovery turn included); copy `turns`, `usage`, `duration_seconds` onto
         `ReviewResult`
   - [ ] Narrow `except ProviderError` sets `exc.duration_seconds` and re-raises
-- [ ] `review/models.py`: `ReviewResult` gains `turns`, `usage` (or the four token fields),
-      and `duration_seconds: float | None = None`
+- [ ] `review/models.py`: `ReviewResult` gains `turns: int | None`, `usage: TokenUsage`
+      (from `core.usage`; not four loose fields), and `duration_seconds: float | None = None`
 - [ ] Tests in `tests/review/test_review_client.py`
   - [ ] Duration is stamped on success (fake clock) for an SDK-shaped and a Codex-shaped
         provider stub, not only openai
@@ -306,6 +331,8 @@ status: not_started
   - [ ] Invariant: `MAX_READ_BATCH_BYTES` plus header overhead for a full batch is below
         `min_tool_result_chars()`
   - [ ] The registered tool schema contains both properties
+  - [ ] NFR (event loop): a five-path batch calls `asyncio.to_thread` exactly once (patch it
+        with a counting wrapper), so no blocking read runs on the event loop
   - [ ] Success: all pass, Task 12 characterization test still unedited
 - [ ] Format, lint, typecheck, commit: `feat: let read_file take several paths under a batch byte budget`
 
