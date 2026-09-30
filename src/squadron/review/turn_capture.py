@@ -22,6 +22,7 @@ from squadron.core.models import (
     Message,
     MessageType,
 )
+from squadron.core.usage import add_optional
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.models import ReviewResult, Verdict
 
@@ -90,19 +91,12 @@ def ended_mid_task(result: ReviewResult) -> bool:
     return result.verdict is Verdict.UNKNOWN and not result.findings and bool(result.raw_output.strip())
 
 
-def _add(total: int | None, value: int | None) -> int | None:
-    """Sum two per-turn counts, keeping ``None`` only when neither turn reported."""
-    if value is None:
-        return total
-    return (total or 0) + value
-
-
 def fold_empty_turn(capture: TurnCapture, error: EmptyFinalTurnError) -> None:
     """Fold an empty turn's telemetry, which rode the error, into ``capture`` (D7)."""
     capture.stop_reason = error.finish_reason
-    capture.reasoning_chars = _add(capture.reasoning_chars, error.reasoning_chars)
-    capture.tool_calls_made = _add(capture.tool_calls_made, error.tool_calls_made)
-    capture.failed_tool_calls = _add(capture.failed_tool_calls, error.failed_tool_calls)
+    capture.reasoning_chars = add_optional(capture.reasoning_chars, error.reasoning_chars)
+    capture.tool_calls_made = add_optional(capture.tool_calls_made, error.tool_calls_made)
+    capture.failed_tool_calls = add_optional(capture.failed_tool_calls, error.failed_tool_calls)
 
 
 async def collect_turn(agent: Any, *, content: str, recipient: str, capture: TurnCapture) -> None:
@@ -146,6 +140,6 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
             continue
         capture.text_parts.append(response.content)
 
-    capture.tool_calls_made = _add(capture.tool_calls_made, turn_calls)
-    capture.failed_tool_calls = _add(capture.failed_tool_calls, turn_failures)
-    capture.reasoning_chars = _add(capture.reasoning_chars, turn_reasoning)
+    capture.tool_calls_made = add_optional(capture.tool_calls_made, turn_calls)
+    capture.failed_tool_calls = add_optional(capture.failed_tool_calls, turn_failures)
+    capture.reasoning_chars = add_optional(capture.reasoning_chars, turn_reasoning)
