@@ -82,16 +82,14 @@ status: not_started
         Never raises.
   - [ ] Signature is `read_chunk_usage(chunk, warned: set[str])`. The reader logs each
         malformed field only if its name is not yet in `warned`, then adds it. The agent
-        owns the set and clears it at the top of `handle_message` (Task 6), which gives
+        owns the set and clears it at the top of `handle_message` (Task 5), which gives
         "once per call" without agent state in the reader.
 - [ ] Create `tests/providers/openai/test_usage.py`
   - [ ] OpenAI/Ollama shape (empty `choices`), OpenRouter shape (one choice, empty delta)
   - [ ] Ollama: `cached_tokens` present, no `completion_tokens_details` → `reasoning` None
   - [ ] Parametrized malformed shapes: field None, siblings intact, WARNING via `caplog`
   - [ ] Passing the same `warned` set on a second malformed chunk logs no second WARNING
-  - [ ] NFR (design: Special Considerations, event loop): a test times 1,000 calls to
-        `read_chunk_usage` on a full usage chunk and asserts the mean is under 1 ms per call
-        (a generous bound that catches accidental I/O or regex work, not a benchmark)
+  - [ ] The event-loop NFR check for this reader lives in the load-test tier (Task 11), not here
   - [ ] Success: all pass; no `openai` package types are imported by `core/usage.py`
 
 - [ ] Format, lint, typecheck, commit: `feat: read token usage from OpenAI-shaped stream chunks`
@@ -123,9 +121,12 @@ status: not_started
   - [ ] `pr/composer.py`
   - [ ] `cli/commands/spawn.py`
   - [ ] `providers/auth.py` is NOT one of the six; leave it unchanged
-- [ ] Add a parametrized test asserting each site's built `credentials` equals
-      `profile_credentials(profile)` for the same profile (use each site's existing test
-      seam; add the smallest seam if one is missing)
+- [ ] Add a parametrized test per site asserting the built `credentials` **contains every
+      item of** `profile_credentials(profile)` for the same profile, and that the site's
+      extra keys are unchanged (`review_client.py` also carries `hooks` and `mode`; check
+      each other site's current extras before writing its assertion). Equality would fail
+      wherever a site adds keys of its own. Use each site's existing test seam; add the
+      smallest seam if one is missing.
   - [ ] Success: existing tests for all six sites still pass
 - [ ] Format, lint, typecheck, commit: `refactor: build agent credentials from one profile_credentials helper`
 
@@ -133,9 +134,15 @@ status: not_started
 
 ## Task 5 — `_stream_turn` reads usage and sends `stream_options` (D8, D12)
 
+- [ ] Wire the flag to the agent: `OpenAICompatibleAgent` has no `credentials` member today
+      (`provider.create_agent` passes named arguments only)
+  - [ ] Add a constructor argument `sends_stream_usage: bool = True` on the agent
+  - [ ] `providers/openai/provider.py` `create_agent` passes
+        `sends_stream_usage=config.credentials.get("sends_stream_usage", True)`; an absent
+        key (no profile involved, e.g. `server/routes/agents.py`) sends it, per the design
 - [ ] `providers/openai/agent.py`: in `_stream_turn`
   - [ ] Pass `stream_options={"include_usage": True}` explicitly (not via `**kwargs`) unless
-        `credentials.get("sends_stream_usage")` is `False`; an absent key sends it
+        the agent's `sends_stream_usage` is `False`
   - [ ] Call `read_chunk_usage` on every chunk **before** the `if not chunk.choices: continue`
         guard, next to the existing `chunk.model` read; last non-None value in a turn wins.
         Pass the agent's `warned` set (a new per-call attribute, cleared at the top of
@@ -160,7 +167,11 @@ status: not_started
         `_answering_models`; fold each `_stream_turn` result in; `turns` counts
         `_stream_turn` calls
   - [ ] `_stamp_tool_telemetry` stamps `turns`, `usage`, and `RunTelemetry.reasoning_chars`
-        (run total) onto the final Message metadata
+        (run total) onto the final Message metadata. Place them beside `stop_reason`, before
+        the `if not self._tools_given:` early return, and unconditionally, so a run with no
+        tools still records them (the same rule slice 918 set for `stop_reason`). Replace
+        the existing `turn.reasoning_chars` stamp; do not add a second key.
+  - [ ] Test a no-tools run: `turns` and `usage` are present on the final Message
   - [ ] Keep the `handle_message` change to a few lines. The file is already over 300
         lines; do not split it in this task (design: Special Considerations)
 - [ ] Tests in `tests/providers/openai/test_agentic_loop.py`
@@ -260,18 +271,29 @@ status: not_started
         `Duration` (one decimal), always rendered, `not reported` via `_render_optional`
   - [ ] `to_dict()` adds `turns`, `prompt_tokens`, `cached_tokens`, `completion_tokens`,
         `reasoning_tokens`, `duration_seconds`, always present, null when unreported
-  - [ ] `format_provider_failure_markdown` reads `telemetry` and `duration_seconds` off the
-        error, like `exc.tool_calls_made`; CLI and pipeline call sites unchanged
 - [ ] Tests in `tests/review/test_persistence.py` and `tests/review/test_models.py`
-  - [ ] Frontmatter, digest, and JSON agree from one `ReviewResult`, and from one failed
-        `ProviderError`
+  - [ ] Frontmatter, digest, and JSON agree from one `ReviewResult`
   - [ ] Unreported fields: key absent, `not reported`, null; never 0
   - [ ] Existing artifact still parses under the existing frontmatter parsers
+- [ ] Format, lint, typecheck; commit the code and tests **without** the snapshot fixture:
+      `feat: render turns, token usage, and duration for successful reviews`
+  - [ ] Expected: the `clean_pass_artifact.md` snapshot test fails until Task 10B
+
+---
+
+## Task 10B — Failure artifact and snapshot regeneration (D10, D12)
+
+- [ ] `review/persistence.py`: `format_provider_failure_markdown` reads `telemetry` and
+      `duration_seconds` off the error, like `exc.tool_calls_made`; CLI and pipeline call
+      sites unchanged
+- [ ] Tests in `tests/review/test_persistence.py`
+  - [ ] Frontmatter, digest, and JSON agree from one failed `ProviderError`
+  - [ ] An error with `telemetry=None` renders no fabricated zeros
 - [ ] Regenerate `clean_pass_artifact.md` snapshot **once** (D10): run the snapshot test on
       the new code, review the diff to confirm only the new keys/lines changed, then commit
       the fixture
   - [ ] Success: full `pytest` passes
-- [ ] Format, lint, typecheck, commit: `feat: record turns, token usage, and duration in review artifacts`
+- [ ] Format, lint, typecheck, commit: `feat: record usage in provider-failure artifacts and refresh snapshot`
 
 ---
 
@@ -280,6 +302,17 @@ status: not_started
 - [ ] Grep gates, run once each
   - [ ] `grep -rn "providers.openai" src/squadron/review/` returns nothing
   - [ ] `grep -n "squadron" src/squadron/core/usage.py` returns nothing
+- [ ] Load test for the event-loop NFR (`.claude/rules/python.md`, load-test tier). Create
+      `tests/load/test_usage_reader_loop.py`, styled after `tests/load/test_grep_timeout.py`
+      (module docstring naming the rule and design NFR; generous bounds)
+  - [ ] Feed a stubbed 5,000-chunk stream (usage on the last chunk, plus a few malformed
+        ones) through `_stream_turn` while a concurrent `asyncio` ticker task records its
+        scheduling gaps; assert the largest gap stays under a generous bound (for example
+        50 ms), so per-chunk usage reading does not starve the loop
+  - [ ] Assert mean `read_chunk_usage` cost under 1 ms per call over 1,000 calls
+  - [ ] No CI wiring task is needed: `ci.yml` runs `uv run pytest` over `testpaths =
+        ["tests"]`, which already includes `tests/load/`. Confirm by running
+        `pytest tests/load/test_usage_reader_loop.py` once.
 - [ ] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean
 - [ ] Live baseline (needs an OpenRouter key; if unavailable, stop and tell the Project
       Manager): `sq review slice 931 --model glm-flash -v`
@@ -331,8 +364,7 @@ status: not_started
   - [ ] Invariant: `MAX_READ_BATCH_BYTES` plus header overhead for a full batch is below
         `min_tool_result_chars()`
   - [ ] The registered tool schema contains both properties
-  - [ ] NFR (event loop): a five-path batch calls `asyncio.to_thread` exactly once (patch it
-        with a counting wrapper), so no blocking read runs on the event loop
+  - [ ] The event-loop NFR check for batches lives in the load-test tier (Task 15), not here
   - [ ] Success: all pass, Task 12 characterization test still unedited
 - [ ] Format, lint, typecheck, commit: `feat: let read_file take several paths under a batch byte budget`
 
@@ -352,162 +384,18 @@ status: not_started
 
 ## Task 15 — Part B verification
 
+- [ ] Load test for the event-loop NFR: create `tests/load/test_read_file_batch_loop.py`,
+      styled after `tests/load/test_grep_timeout.py`
+  - [ ] Real files on disk (a batch of several files near the byte budget) read through the
+        registered `read_file` executor while an `asyncio` ticker task records scheduling
+        gaps; assert the largest gap stays under a generous bound, so a batch does not
+        block the loop
+  - [ ] Patch `asyncio.to_thread` with a counting wrapper: a five-path batch calls it
+        exactly once
+  - [ ] Runs under the existing `uv run pytest` in CI; no wiring task needed (see Task 11)
 - [ ] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean
 - [ ] Live run (OpenRouter key; else stop and tell the Project Manager):
       `sq review slice 931 --model glm-flash -vv`
   - [ ] At least one `read_file` call carries `paths` with >1 entry and output shows
         `==> path <==` headers (walkthrough step 4)
   - [ ] Record `Tool calls made` and `Turns` versus the Task 11 baseline in the DEVLOG entry
-
----
-
-# Part A — Effort (#154)
-
-## Task 16 — `Effort` enum and `AgentConfig.effort` (D1)
-
-- [ ] `core/models.py`: `Effort(StrEnum)` with `none`, `low`, `medium`, `high`, `xhigh`;
-      `AgentConfig.effort: Effort | None = None` beside `max_output_tokens`
-- [ ] Test in `tests/test_models.py`: values, construction from string, invalid value raises
-  - [ ] Success: passes
-- [ ] Format, lint, typecheck, commit: `feat: add Effort vocabulary and AgentConfig.effort`
-
----
-
-## Task 17 — Alias field and reader (D1, D2)
-
-- [ ] `models/aliases.py`: `ModelAlias.effort`; `_extract_metadata` validates it against
-      `Effort` following the `max_output_tokens` block (line ~73)
-  - [ ] Invalid values, including a bool and a non-string, log a WARNING naming the alias
-        and file, and the field is skipped
-  - [ ] New reader `model_effort(name) -> Effort | None`, mirroring `model_max_output_tokens`
-        (unknown/None alias → None)
-- [ ] `data/models.toml`: header comment documents `effort`; no built-in alias sets it
-- [ ] Tests in `tests/models/test_aliases.py`: parametrized valid / invalid / bool / absent;
-      WARNING content via `caplog`; `model_effort` for known, unknown, and None alias
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: add optional effort to model aliases`
-
----
-
-## Task 18 — `ResolvedModel.effort` and pipeline call sites (D11)
-
-- [ ] `pipeline/resolver.py`: `ResolvedModel.effort`, filled by `model_effort(alias)` (line ~73)
-- [ ] Pass `resolved.effort` into the `AgentConfig` each site builds — one sub-task each:
-  - [ ] `pipeline/actions/review.py` (near line 390)
-  - [ ] `pipeline/actions/dispatch.py`
-  - [ ] `pipeline/summary.py`
-- [ ] Tests: `ResolvedModel.effort` round-trip in `tests/pipeline/test_resolver.py`; each
-      action passes it into its config (extend `test_review_action.py`, `test_dispatch.py`,
-      `test_summary.py`)
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: carry alias effort through pipeline resolution`
-
----
-
-## Task 19 — CLI and `review_client` recording (D4, D10)
-
-- [ ] `cli/commands/review.py`: read `model_effort(alias_name)` next to
-      `model_max_output_tokens` (line ~703) and pass it through the same path (lines ~721, ~784)
-- [ ] `providers/base.py`: `ProviderCapabilities.applies_effort: bool = False`
-- [ ] `review/review_client.py`: accept `effort`, put it on `AgentConfig`, record
-      `sent_effort = effort if provider.capabilities.applies_effort else None` on
-      `ReviewResult.effort` (mirror lines ~257–277)
-- [ ] `review/models.py`, `review/persistence.py`: `ReviewResult.effort`; frontmatter `effort`
-      only when sent; digest `Effort: <level>` or `backend default`; `to_dict()` `effort`
-      always present, null when unset
-- [ ] Tests
-  - [ ] `test_review_client.py`: recorded only when `applies_effort` is True
-  - [ ] `test_persistence.py` / `test_models.py`: frontmatter, digest, JSON agree; absent
-        key when unset
-  - [ ] `test_cli_review.py`: alias effort reaches the client; CLI and pipeline produce the
-        same effort field for the same alias (interface parity)
-  - [ ] Success: all pass; artifact snapshot unchanged when no effort is set
-- [ ] Format, lint, typecheck, commit: `feat: record the effort a review actually ran with`
-
----
-
-## Task 20 — OpenAI provider applies effort (D3, D4)
-
-- [ ] `providers/openai/provider.py`: `applies_effort=True`; pass `config.effort` to the agent
-      (mirror line ~80); DEBUG log of the sent level in `create_agent` (D11)
-- [ ] `providers/openai/agent.py`: send `reasoning_effort=<value>` explicitly in
-      `_stream_turn` on every turn when set; omit when unset
-- [ ] Tests in `tests/providers/openai/`: `reasoning_effort` on every turn of a tool loop and
-      on the recovery turn; absent when unset; `none` is sent as `"none"`; capability flag
-      true in `test_capabilities.py`
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: send reasoning_effort from the OpenAI-compatible agent`
-
----
-
-## Task 21 — SDK provider applies effort (D1, D4)
-
-- [ ] `providers/sdk/provider.py`: `applies_effort=True`; map `Effort` → `ClaudeAgentOptions.effort`;
-      `none` → `thinking={"type": "disabled"}` with no `effort`
-  - [ ] Confirm `ClaudeAgentOptions.effort` accepts `low|medium|high|xhigh` in the installed
-        `claude-agent-sdk` (0.2.162) before writing the mapping; if `xhigh` differs, stop and
-        ask the Project Manager
-- [ ] Tests in `tests/providers/sdk/test_provider.py`: each level maps; `none` yields
-      `thinking` and no `effort`; unset yields neither; capability flag true
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: apply alias effort in the SDK provider`
-
----
-
-## Task 22 — Codex warns (D4)
-
-- [ ] `providers/codex/agent.py`: WARNING `Codex agent cannot apply effort=%s; the backend
-      default applies` when `config.effort` is set, beside the `max_output_tokens` warning
-      (line ~45); `applies_effort` stays False
-- [ ] Test in `tests/providers/codex/test_agent.py`: WARNING with `caplog`; and a
-      `review_client` test that the artifact has no `effort` key for this provider
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: warn when Codex cannot apply effort`
-
----
-
-# Wrap-up
-
-## Task 23 — Full verification and live walkthrough
-
-- [ ] Full `pytest`, `ruff format --check`, `ruff check`, `pyright`: all clean; both import
-      greps from Task 11 re-run clean
-- [ ] `cf validate frontmatter` passes on a saved review that carries the new keys
-- [ ] Live walkthrough steps 3, 5, 6, 10 (OpenRouter key; else stop and tell the Project
-      Manager): low-effort alias review, JSON parity, pipeline parity, invalid value
-  - [ ] `effort: low` in frontmatter; JSON matches frontmatter; `sq run review 931
-        --model glm-flash-low` records the same fields as the CLI; invalid value logs the
-        skip WARNING naming alias and file
-- [ ] Walkthrough steps 7–9 need Ollama, OpenAI, Gemini, and Codex access. Run whichever
-      the environment has; list the rest by name in the DEVLOG entry as not run
-  - [ ] Step 8 (mid-loop failure on `local`): failure artifact has `providerFailure: true`,
-        `turns` ≥ 1, `durationSeconds`
-- [ ] Commit any fixups: `fix: <what>` (skip if none)
-
----
-
-## Task 24 — Follow-up issues and #154 comment (Implementation Notes step 4)
-
-- [ ] File three GitHub issues with `gh issue create`, then link each number from the
-      decision that defers it (D4, Out of scope, Risk Assessment)
-  - [ ] Codex effort (needs `codex_app_server` to verify `thread_start`'s reasoning parameter)
-  - [ ] SDK usage from `ResultMessage.usage` onto `core.usage.TokenUsage`
-  - [ ] Enable `sends_stream_usage` on gemini once a probe succeeds; include the probe
-        command from Risk Assessment
-- [ ] Comment the D2 decision (aliases, not flags) on #154
-- [ ] Commit the design-doc links: `docs: link follow-up issues from slice 931 design`
-
----
-
-## Task 25 — Close out
-
-- [ ] Add a CHANGELOG entry (short user-facing bullets: alias `effort`, `read_file` `paths`,
-      usage and duration in review artifacts)
-- [ ] Write the DEVLOG entry per `prompt.ai-project.system.md`, Session State Summary,
-      including the baseline-versus-low-effort comparison and the `cachedTokens` answer
-- [ ] Mark every task above `[x]` (dropped items too), set this file's `status: complete`,
-      and set the slice design and slice plan entry to complete
-- [ ] Merge into the target: re-read `cf config get git.integration_branch`,
-      `git checkout <target>`, `git merge 931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`;
-      if either command fails, stop and ask the Project Manager
-- [ ] Commit: `docs: close out slice 931`
