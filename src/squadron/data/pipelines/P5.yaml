@@ -4,7 +4,7 @@ description: Break a slice into tasks (phase 5), then revise until the review pa
 params:
   slice: required
   model: sonnet
-  review-model: minimax
+  review-model: deepseek4-flash
   max-revisions: "3"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better
