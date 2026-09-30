@@ -17,6 +17,12 @@
 #                OpenRouter values are top_provider.max_completion_tokens from
 #                https://openrouter.ai/api/v1/models, read 20260927; aliases
 #                the listing reports null or omits stay unset.
+#   effort     (optional) — "none" | "low" | "medium" | "high" | "xhigh"; the
+#                reasoning effort sent on every request (reasoning_effort on an
+#                OpenAI-compatible agent, effort on the SDK; "none" disables
+#                reasoning). Absent means none is sent and the backend default
+#                applies. No built-in alias sets it: define a variant such as
+#                glm-flash-low in ~/.config/squadron/models.toml instead.
 #   [aliases.<name>.pricing]  (optional sub-table)
 #     input, output, cache_read, cache_write — USD per 1M tokens
 #

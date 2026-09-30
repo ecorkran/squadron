@@ -7,10 +7,12 @@ from unittest.mock import patch
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.models.aliases import (
     get_all_aliases,
     load_builtin_aliases,
     load_user_aliases,
+    model_effort,
     model_max_output_tokens,
     resolve_model_alias,
 )
@@ -244,3 +246,44 @@ def test_shipped_models_toml_loads_with_budgets() -> None:
     budgets = [alias.get("max_output_tokens") for alias in builtin.values()]
     assert any(budget is not None for budget in budgets)
     assert all(budget is None or budget >= 1 for budget in budgets)
+
+
+# ---------------------------------------------------------------------------
+# effort (slice 931 D1, D2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("level", list(Effort))
+def test_effort_is_read_back(tmp_path: Path, level: Effort) -> None:
+    toml_file = _user_aliases(tmp_path, f'effort = "{level.value}"')
+
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        assert model_effort("budgeted") is level
+
+
+@pytest.mark.parametrize("raw", ['"max"', '"minimal"', '"LOW"', "true", "3"])
+def test_invalid_effort_is_skipped_with_a_warning(
+    tmp_path: Path, raw: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    toml_file = _user_aliases(tmp_path, f"effort = {raw}")
+
+    with (
+        patch("squadron.models.aliases.models_toml_path", return_value=toml_file),
+        caplog.at_level("WARNING", logger="squadron.models.aliases"),
+    ):
+        assert model_effort("budgeted") is None
+    messages = [r.getMessage() for r in caplog.records]
+    assert any("Skipping effort for alias 'budgeted'" in m and str(toml_file) in m for m in messages)
+
+
+def test_effort_is_none_when_unset_or_unknown(tmp_path: Path) -> None:
+    toml_file = _user_aliases(tmp_path, "")
+
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        assert model_effort("budgeted") is None
+        assert model_effort("no-such-alias") is None
+        assert model_effort(None) is None
+
+
+def test_no_builtin_alias_sets_effort() -> None:
+    assert all("effort" not in alias for alias in load_builtin_aliases().values())

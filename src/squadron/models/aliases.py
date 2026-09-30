@@ -11,6 +11,8 @@ import tomllib
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
+from squadron.core.models import Effort
+
 _logger = logging.getLogger(__name__)
 
 
@@ -48,6 +50,9 @@ class ModelAlias(_ModelAliasRequired, total=False):
     tool_use: bool
     # Slice 924 D4: absent means no budget is sent (the backend default applies).
     max_output_tokens: int
+    # Slice 931 D1, D2: absent means no effort is sent (the backend default applies).
+    # The alias is the per-invocation and per-step selector; there is no --effort flag.
+    effort: Effort
 
 
 def models_toml_path() -> Path:
@@ -81,6 +86,19 @@ def _extract_metadata(
                 name,
                 path,
                 budget_val,
+            )
+
+    effort_val = table.get("effort")
+    if effort_val is not None:
+        if isinstance(effort_val, str) and effort_val in Effort.__members__:
+            alias["effort"] = Effort(effort_val)
+        else:
+            _logger.warning(
+                "Skipping effort for alias '%s' in %s — expected one of %s, got %r",
+                name,
+                path,
+                ", ".join(Effort),
+                effort_val,
             )
 
     cost_tier_val = table.get("cost_tier")
@@ -235,6 +253,20 @@ def model_max_output_tokens(name: str | None) -> int | None:
     if alias is None:
         return None
     return alias.get("max_output_tokens")
+
+
+def model_effort(name: str | None) -> Effort | None:
+    """Return the reasoning effort for ``name`` (slice 931 D1).
+
+    An unknown name, a ``None`` name, and an alias that does not set ``effort``
+    all return ``None``: no effort is sent. This is the single reader of the field.
+    """
+    if name is None:
+        return None
+    alias = get_all_aliases().get(name)
+    if alias is None:
+        return None
+    return alias.get("effort")
 
 
 def estimate_cost(
