@@ -38,6 +38,21 @@ class TopologyType(StrEnum):
     custom = "custom"
 
 
+class Effort(StrEnum):
+    """How hard a model reasons before answering (slice 931 D1).
+
+    The intersection of OpenAI-style ``reasoning_effort`` and the Claude SDK's ``effort``,
+    plus ``none``, which disables reasoning — the most useful setting for a tool-heavy
+    loop. Unset (``None`` on AgentConfig) sends nothing and the backend default applies.
+    """
+
+    none = "none"
+    low = "low"
+    medium = "medium"
+    high = "high"
+    xhigh = "xhigh"
+
+
 class AgentConfig(BaseModel):
     """Configuration for creating an agent instance."""
 
@@ -80,6 +95,9 @@ class AgentConfig(BaseModel):
     tools_suppressed_reason: str | None = None
     # Per-request output budget; None sends no budget (slice 924 D4).
     max_output_tokens: int | None = None
+    # Reasoning effort from the alias; None sends none and the backend default applies
+    # (slice 931 D1). Providers that cannot apply it say so (D4).
+    effort: Effort | None = None
     # API agents: path patterns withheld from the tool jail, relative to cwd. Opaque to
     # every layer below the caller that sets it — the agent threads them to tool binding
     # without knowing why any pattern is present (slice 918, design D5). Empty means plain

@@ -11,6 +11,7 @@ from squadron.core.models import (
     AgentConfig,
     AgentInfo,
     AgentState,
+    Effort,
     Message,
     MessageType,
     ShutdownReport,
@@ -305,3 +306,21 @@ def test_describe_setting_sources(sources: list[str] | None, is_sdk: bool, rende
     from squadron.core.models import describe_setting_sources
 
     assert describe_setting_sources(sources, is_sdk=is_sdk) == rendered
+
+
+# --- Effort (slice 931 D1) ---
+
+
+def test_effort_vocabulary() -> None:
+    assert [e.value for e in Effort] == ["none", "low", "medium", "high", "xhigh"]
+
+
+def test_agent_config_effort_defaults_to_none_and_accepts_a_string() -> None:
+    assert AgentConfig(name="a", agent_type="api", provider="openai").effort is None
+    config = AgentConfig(name="a", agent_type="api", provider="openai", effort="low")  # type: ignore[arg-type]
+    assert config.effort is Effort.low
+
+
+def test_agent_config_rejects_an_effort_outside_the_vocabulary() -> None:
+    with pytest.raises(ValidationError):
+        AgentConfig(name="a", agent_type="api", provider="openai", effort="max")  # type: ignore[arg-type]
