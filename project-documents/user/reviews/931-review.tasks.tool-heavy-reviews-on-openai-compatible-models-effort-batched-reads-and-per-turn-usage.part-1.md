@@ -4,88 +4,97 @@ layer: project
 reviewType: tasks
 slice: tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md
 aiModel: deepseek/deepseek-v4.1-flash
 status: complete
 dateCreated: 20260929
 dateUpdated: 20260929
-reviewedSha: c444e4a4670dc6bcbfcc876debe5c4ac01ecfb4d
-revision_number: 2
+reviewedSha: 233c9bb339c093f19fd83ea01972edad41bed5c8
+revision_number: 3
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 36
+toolCallsMade: 22
 runId: run-20260930-p5-f12cfe4d
 squadronVersion: 0.16.0
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Task 10 commits a knowingly failing test, contradicting the stated per-commit-green invariant"
-    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md:278-280"
+    severity: pass
+    category: traceability
+    summary: "All success criteria trace to tasks"
+    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md"
   - id: F002
-    severity: concern
-    category: api-contract
-    summary: "`read_chunk_usage` signature both self-contradicts and diverges from the design contract"
-    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md:74-83"
-  - id: F003
-    severity: note
-    category: test-coverage
-    summary: "One D12 row delegates to \"existing 4xx tests\" with no task to confirm they cover the new parameters"
-    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
-  - id: F004
-    severity: note
-    category: task-granularity
-    summary: "Task 5 bundles flag wiring across provider and agent, plus five test scenarios"
-    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md:126-158"
-  - id: F005
     severity: pass
     category: nfr-coverage
-    summary: "Load tests for the event-loop NFR exist and CI gating is explicitly resolved"
-    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md:305-316"
+    summary: "Load-test NFR covered and CI gating is explicit, not implicit"
+    location: ".github/workflows/ci.yml:44"
+  - id: F003
+    severity: pass
+    category: sequencing
+    summary: "Sequencing and dependency ordering are sound"
+    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md"
+  - id: F004
+    severity: note
+    category: contract-drift
+    summary: "`read_chunk_usage` signature is extended past the design's stated contract"
+    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md"
+  - id: F005
+    severity: note
+    category: verification-coverage
+    summary: "Walkthrough steps 7–9 (local/openai/gemini profiles) are environment-gated"
+    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-2.md"
+  - id: F006
+    severity: note
+    category: task-sizing
+    summary: "Task 4B carries a comparatively large test-surface obligation"
+    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-1.md"
 ---
 
 # Review: tasks — slice 931
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** deepseek/deepseek-v4.1-flash
 
 ## Findings
 
-### [CONCERN] Task 10 commits a knowingly failing test, contradicting the stated per-commit-green invariant
+### [PASS] All success criteria trace to tasks
 
-Task 10 instructs committing the code and tests "**without** the snapshot fixture" and states "Expected: the `clean_pass_artifact.md` snapshot test fails until Task 10B." The document's own Context Summary asserts the invariant this violates: "Each part lands as its own commits, each green on the full suite and revertible alone." The slice design repeats it ("Each commit passes the full suite on its own"). A commit whose tree has a failing test is not green and is not independently revertible — reverting Task 10B alone leaves Task 10 red, and CI (`.github/workflows/ci.yml` runs `uv run pytest`) would fail on that commit if ever pushed or bisected. The design permits regenerating the fixture once (D10); it does not require splitting it across two commits. Either fold the fixture regeneration into Task 10, or drop the "green on the full suite" claim from the Context Summary so the plan is internally consistent.
+Every slice Success Criteria item maps: FR1→Task 20, FR2→Task 21, FR3→Task 22, FR4→Task 17, FR6→Tasks 12–13, FR7→Task 14, FR8→Tasks 6/8/9/10, FR9→Tasks 6/10, FR10→Tasks 7/8, FR11→Task 9, FR12→Tasks 7/10B, FR13→D12 rows distributed across Tasks 3, 5B, 6B, 7, 13. The Technical Requirement "sends_stream_usage tests" → Tasks 4/4B/5; "alias parsing parametrized" → Task 17; "ResolvedModel.effort round-trip" → Task 18; "MAX_READ_BATCH_BYTES vs floor invariant" → Task 13; "frontmatter/digest/JSON from one ReviewResult and one failed ProviderError" → Tasks 10/10B. Integration parity → Task 19; `cf validate frontmatter` → Task 23. Every entry in the design's Component Structure table is covered, including `data/models.toml` (Task 17), `providers/base.py` (Task 19), and the six credential sites (Task 4B).
 
-### [CONCERN] `read_chunk_usage` signature both self-contradicts and diverges from the design contract
+### [PASS] Load-test NFR covered and CI gating is explicit, not implicit
 
-Task 3 opens by specifying the reader as `read_chunk_usage(chunk) -> TokenUsage | None` (line 75), then later states "Signature is `read_chunk_usage(chunk, warned: set[str])`" (line 83). A junior implementer reading the first bullet will build the wrong signature. Separately, the design's API Contracts section declares the same reader as `read_chunk_usage(chunk) -> TokenUsage | None`, with no `warned` parameter — so the task introduces a parameter the design's stated interface does not carry. The intent (achieving the D12 "once per call" WARNING without agent state in the reader) is reasonable, but it is a contract change that should be stated once, unambiguously, and reconciled with the design so the two documents agree.
+The design's only NFR (event-loop responsiveness) produces two load-test tasks: Task 11 (`tests/load/test_usage_reader_loop.py`) and Task 15 (`tests/load/test_read_file_batch_loop.py`). I verified the gating claim rather than accepting it: `pyproject.toml` sets `[tool.pytest.ini_options] testpaths = ["tests"]` and `ci.yml` runs `uv run pytest` with no `addopts`/marker deselection, so `tests/load/` is exercised on every push. Task 11 states this and instructs a confirming run; the existing `tests/load/test_grep_timeout.py` is styled the same way. Gating is therefore satisfied by the pre-existing CI step and is stated, not left implicit.
 
-### [NOTE] One D12 row delegates to "existing 4xx tests" with no task to confirm they cover the new parameters
+### [PASS] Sequencing and dependency ordering are sound
 
-Success criterion 13 requires that "Each D12 failure mode with a listed signal emits it." The D12 row "Backend rejects `reasoning_effort` or `stream_options` (400)" lists its test as "Covered by existing 4xx tests," and no task in either file inspects or extends those tests to ensure they now exercise `reasoning_effort`/`stream_options` (the request shape this slice changes). Relative to every other D12 row, which gets an explicit assertion, this is the sole un-verified signal. A one-line task bullet confirming an existing 4xx test covers the new request path would close the gap; without it, Task 11/Task 23's "every D12 row" claim is untested for this row.
+The C → B → A order holds with no cycles. Within Part C, dependencies flow strictly forward: Task 2 (`core/usage.py`) → 3 (reader) → 4/4B (`profile_credentials`) → 5/5B (flag + read) → 6/6B (accumulate/stamp) → 7 (`ProviderError.telemetry`) → 8 (`TurnCapture`) → 9 (`review_client`) → 10/10B (render). Task 3's forward reference to "the agent owns the set and clears it at the top of `handle_message` (Task 5B)" is a correct forward pointer, not a backward dependency. Part A's Task 19/19B correctly layer on Part C's `ReviewResult`/persistence changes. Commit checkpoints appear after every task.
 
-### [NOTE] Task 5 bundles flag wiring across provider and agent, plus five test scenarios
+### [NOTE] `read_chunk_usage` signature is extended past the design's stated contract
 
-Task 5 changes three files (`providers/openai/provider.py` `create_agent`, the agent constructor, and `_stream_turn`), and carries five distinct test bullets spanning two chunk shapes, three profile shapes, and the no-effort equivalence. It is coherent and each sub-item is actionable, so I am not flagging it as blocking — but it is on the large side for a single commit, and splitting the constructor/`create_agent` wiring from the `_stream_turn` read would make each diff independently reviewable, consistent with how Task 4/4B separates the helper from its call sites.
+The design (Technical Decisions D8, Component Structure) states the contract as `read_chunk_usage(chunk) -> TokenUsage | None` (one argument). Task 3 adds a keyword-only `warned: set[str] | None = None` so D12's "WARNING … once per `handle_message`" can be satisfied without agent state inside the reader. The addition is justified and preserves the one-arg form, but it is a deviation from the design's written signature that a downstream reader of the design won't see. Not a blocker; worth recording so the design and task agree.
 
-### [PASS] Load tests for the event-loop NFR exist and CI gating is explicitly resolved
+### [NOTE] Walkthrough steps 7–9 (local/openai/gemini profiles) are environment-gated
 
-The slice's one NFR (the event loop must not be starved by per-chunk usage reads or batched file reads) is covered by load tests in `tests/load/` (Task 11 for `read_chunk_usage`; Task 15 for the read batch), styled after the existing `tests/load/test_grep_timeout.py`. CI gating is not left implicit: Task 11 states that `.github/workflows/ci.yml` runs `uv run pytest` over `testpaths = ["tests"]`, which includes `tests/load/`. I verified this claim — `pyproject.toml:83` sets `testpaths = ["tests"]`, `pyproject.toml:81-90` has no `addopts` exclusion, and `.github/workflows/ci.yml:38` runs `uv run pytest` — so the load tests do run in CI without a separate wiring task.
+Task 23 instructs running steps 7–9 "whichever the environment has; list the rest by name in the DEVLOG entry as not run," and Task 11's live baseline stops if an OpenRouter key is absent. This is a reasonable accommodation the design already anticipates (probes returned only 503/429), but it means the end-to-end verification of the local/openai/gemini request shapes may be deferred to a DEVLOG note rather than executed. Acceptable given the design's stated constraints; flagged so the gap is a conscious one.
+
+### [NOTE] Task 4B carries a comparatively large test-surface obligation
+
+Task 4B switches six sites and requires a parametrized test per site, with instruction to "add the smallest seam if one is missing" at any site that lacks one. This traces directly to the Technical Requirement ("All six call sites produce the same credentials as `profile_credentials`"), so it is not scope creep, but it is the heaviest single task in Part C and could be split per-site if the seams prove to need more than trivial work. Tasks 7, 10, and 13 are similarly at the upper bound of a single task but each remains internally coherent.
 
 ### Run Digest
 
-- Response length: 5559 chars
+- Response length: 5565 chars
 - Response is newline-free: no
-- Tool calls made: 36
-- Tool calls failed: 0
+- Tool calls made: 22
+- Tool calls failed: 1
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 32644
+- Reasoning characters: 28811
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 5
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 5
-- Finding-shaped matches — surviving validation: 5
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
