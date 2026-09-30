@@ -3,6 +3,7 @@ description: Implement slice (phase 6) with review
 
 params:
   slice: required
+  summary-model: sonnet
   model: sonnet
   review-model: minimax
 
@@ -17,6 +18,6 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [stdout, clipboard, file]
   - devlog: auto

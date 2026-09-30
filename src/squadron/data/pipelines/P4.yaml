@@ -3,6 +3,7 @@ description: Design a slice (phase 4), then revise until the review passes; chec
 
 params:
   slice: required
+  summary-model: sonnet
   model: sonnet
   review-model: minimax
   max-revisions: "3"
@@ -28,5 +29,5 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [stdout, clipboard, file]

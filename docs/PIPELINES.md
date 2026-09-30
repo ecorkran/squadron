@@ -686,13 +686,13 @@ sq run --list    # shows all available pipelines with descriptions
 
 | Name | Description | Key params |
 |---|---|---|
-| `P0` | Phase 0 (project concept) with arch review and checkpoint | `slice` |
-| `P2` | Phase 2 (architecture) with arch review | `slice` |
-| `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions` |
-| `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions` |
-| `P6` | Phase 6 (implement) with code review | `slice`, `model`, `review-model` |
-| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → implement → compact → devlog | `slice`, `design-model`, `model`, `review-model`, `max-revisions` |
-| `P56` | Tasks (revised like `P5`) → compact → implement → compact → devlog | `slice`, `model`, `review-model`, `max-revisions` |
+| `P0` | Phase 0 (project concept) with arch review and checkpoint | `slice`, `summary-model` |
+| `P2` | Phase 2 (architecture) with arch review | `slice`, `summary-model` |
+| `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P6` | Phase 6 (implement) with code review | `slice`, `model`, `review-model`, `summary-model` |
+| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → implement → compact → devlog | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P56` | Tasks (revised like `P5`) → compact → implement → compact → devlog | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `slices-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |

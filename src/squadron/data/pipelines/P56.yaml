@@ -3,6 +3,7 @@ description: Tasks through implementation (phases 5-6) — tasks revised until r
 
 params:
   slice: required
+  summary-model: sonnet
   model: sonnet
   review-model: minimax
   max-revisions: "3"
@@ -29,7 +30,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [file]
 
   - compact:
@@ -45,7 +46,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [file]
 
   - compact:

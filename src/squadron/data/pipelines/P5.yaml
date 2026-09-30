@@ -3,6 +3,7 @@ description: Break a slice into tasks (phase 5), then revise until the review pa
 
 params:
   slice: required
+  summary-model: sonnet
   model: sonnet
   review-model: deepseek4-flash
   max-revisions: "3"
@@ -28,5 +29,5 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [stdout, clipboard, file]

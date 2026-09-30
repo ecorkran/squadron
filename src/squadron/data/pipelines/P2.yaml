@@ -3,6 +3,7 @@ description: Design an architectural initiative (phase 2) with review and human 
 
 params:
   slice: required
+  summary-model: sonnet
 
 steps:
   - design:
@@ -14,5 +15,5 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [stdout, clipboard, file]

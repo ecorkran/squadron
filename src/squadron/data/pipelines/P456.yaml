@@ -3,6 +3,7 @@ description: Full slice lifecycle (phases 4-6) — design and tasks each revised
 
 params:
   slice: required
+  summary-model: sonnet
   design-model: opus
   model: sonnet
   review-model: minimax
@@ -47,7 +48,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [file]
 
   - compact:
@@ -63,7 +64,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [file]
 
   - compact:

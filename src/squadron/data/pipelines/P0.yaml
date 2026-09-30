@@ -3,6 +3,7 @@ description: Write the project concept (phase 0) with review and human checkpoin
 
 params:
   slice: required
+  summary-model: sonnet
 
 steps:
   - design:
@@ -15,5 +16,5 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: sonnet
+      model: "{summary-model}"
       emit: [stdout, clipboard, file]
