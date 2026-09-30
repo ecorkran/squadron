@@ -56,3 +56,22 @@ def test_block_does_not_name_tools_outside_the_effective_list() -> None:
     assert composed is not None
     assert "write_file" not in composed
     assert "list_files" not in composed
+
+
+_BATCHING = (
+    "When you already know several files you need, request them together — in one call if "
+    "the\ntool accepts several paths, and as parallel tool calls in one turn otherwise. "
+    "Every turn\nresends the whole conversation, so one file per turn is the slowest way "
+    "to read."
+)
+
+
+def test_block_asks_for_batched_reads_without_naming_a_tool() -> None:
+    """Slice 931 D7: the batching paragraph, beside the do-not-over-read sentence."""
+    composed = compose_system_prompt(None, ["list_files"])
+
+    assert composed is not None
+    assert _BATCHING in composed
+    assert "Do not read files a\nclaim does not depend on" in composed
+    for name in ("read_file", "grep", "write_file"):
+        assert name not in composed.split("\n", 2)[2].replace("list_files", "")

@@ -15,6 +15,7 @@ TOOL_USE_HEADING = "## Tool Use"
 # Substance per the slice design's "The guidance block": a hunk cannot prove absence;
 # verify before asserting absence or say it is unverified; read only what a claim depends
 # on (#81); produce files rather than describe them. Tool-call count is not a goal (#82).
+# Batch independent reads (slice 931 D7, #157), worded without naming any tool.
 _GUIDANCE_BODY = """\
 You have these tools available: {tool_names}.
 
@@ -29,6 +30,10 @@ it, say so explicitly — mark the point unverified rather than asserting it.
 Use a tool when a claim depends on code that is not in front of you. Do not read files a
 claim does not depend on; reading everything is as wrong as reading nothing. The number of
 tool calls is not a measure of quality.
+
+When you already know several files you need, request them together — in one call if the
+tool accepts several paths, and as parallel tool calls in one turn otherwise. Every turn
+resends the whole conversation, so one file per turn is the slowest way to read.
 
 If the task asks for a file to be created or changed, do it with the tools. A description
 of a file is not the file."""
