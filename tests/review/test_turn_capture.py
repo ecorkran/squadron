@@ -8,11 +8,14 @@ from typing import Any
 import pytest
 
 from squadron.core.models import Message, MessageType
+from squadron.core.usage import RunTelemetry, TokenUsage
+from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.turn_capture import (
     TurnCapture,
     budget_exhausted,
     collect_turn,
     describe_budget,
+    fold_empty_turn,
 )
 
 
@@ -112,3 +115,82 @@ def test_describe_budget_names_the_sent_budget() -> None:
 
 def test_describe_budget_names_the_backend_default_when_none_was_sent() -> None:
     assert describe_budget(None) == "backend default"
+
+
+# --- turns and usage (slice 931 D8) ---
+
+
+def _empty_turn_error(telemetry: RunTelemetry | None) -> EmptyFinalTurnError:
+    error = EmptyFinalTurnError(
+        "empty", finish_reason="length", reasoning_chars=40, tool_calls_made=1, failed_tool_calls=0
+    )
+    # Attached after construction, as the agent's handler does.
+    error.telemetry = telemetry
+    return error
+
+
+@pytest.mark.asyncio
+async def test_empty_turn_then_recovery_sums_turns_usage_and_run_reasoning() -> None:
+    capture = TurnCapture()
+    fold_empty_turn(
+        capture,
+        _empty_turn_error(
+            RunTelemetry(turns=3, reasoning_chars=100, usage=TokenUsage(prompt=30, completion=3))
+        ),
+    )
+    agent = _FakeAgent(
+        [
+            [
+                _stamped(
+                    "review",
+                    turns=2,
+                    reasoning_chars=10,
+                    usage=TokenUsage(prompt=50, cached=20, completion=5),
+                )
+            ]
+        ]
+    )
+
+    await collect_turn(agent, content="finish", recipient="r", capture=capture)
+
+    assert capture.turns == 5
+    assert capture.usage == TokenUsage(prompt=80, cached=20, completion=8, reasoning=None)
+    # The run totals (100 + 10), not the empty turn's own 40.
+    assert capture.reasoning_chars == 110
+
+
+@pytest.mark.asyncio
+async def test_two_calls_sum_turns_and_usage() -> None:
+    capture = TurnCapture()
+    agent = _FakeAgent(
+        [
+            [_stamped("a", turns=1, usage=TokenUsage(prompt=5))],
+            [_stamped("b", turns=2, usage=TokenUsage(prompt=7, reasoning=1))],
+        ]
+    )
+
+    await collect_turn(agent, content="x", recipient="r", capture=capture)
+    await collect_turn(agent, content="y", recipient="r", capture=capture)
+
+    assert capture.turns == 3
+    assert capture.usage == TokenUsage(prompt=12, reasoning=1)
+
+
+def test_error_without_telemetry_folds_as_before() -> None:
+    capture = TurnCapture()
+
+    fold_empty_turn(capture, _empty_turn_error(None))
+
+    assert capture.reasoning_chars == 40
+    assert capture.turns is None
+    assert capture.usage == TokenUsage()
+
+
+@pytest.mark.asyncio
+async def test_provider_that_stamps_no_usage_leaves_fields_unreported() -> None:
+    capture = TurnCapture()
+
+    await collect_turn(_FakeAgent([[_stamped("a")]]), content="x", recipient="r", capture=capture)
+
+    assert capture.turns is None
+    assert capture.usage == TokenUsage()

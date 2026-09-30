@@ -22,7 +22,7 @@ from squadron.core.models import (
     Message,
     MessageType,
 )
-from squadron.core.usage import add_optional
+from squadron.core.usage import TokenUsage, add_optional
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.models import ReviewResult, Verdict
 
@@ -75,6 +75,10 @@ class TurnCapture:
     # D8, D12). Accumulates across the #92 recovery turn, unlike the counts above,
     # which sum — a model id is identity, not a quantity to add.
     answering_models: list[str] = field(default_factory=list[str])
+    # Requests sent and tokens spent, summed across calls (slice 931 D8). Only
+    # providers that stamp them (openai) report them; the rest leave None.
+    turns: int | None = None
+    usage: TokenUsage = field(default_factory=TokenUsage)
 
     @property
     def raw_output(self) -> str:
@@ -92,9 +96,19 @@ def ended_mid_task(result: ReviewResult) -> bool:
 
 
 def fold_empty_turn(capture: TurnCapture, error: EmptyFinalTurnError) -> None:
-    """Fold an empty turn's telemetry, which rode the error, into ``capture`` (D7)."""
+    """Fold an empty turn's telemetry, which rode the error, into ``capture`` (D7).
+
+    The run's totals ride ``error.telemetry`` (slice 931 D8); ``error.reasoning_chars``
+    is only the empty turn's own, so it is used only when no telemetry came along.
+    """
     capture.stop_reason = error.finish_reason
-    capture.reasoning_chars = add_optional(capture.reasoning_chars, error.reasoning_chars)
+    telemetry = error.telemetry
+    if telemetry is None:
+        capture.reasoning_chars = add_optional(capture.reasoning_chars, error.reasoning_chars)
+    else:
+        capture.reasoning_chars = add_optional(capture.reasoning_chars, telemetry.reasoning_chars)
+        capture.turns = add_optional(capture.turns, telemetry.turns)
+        capture.usage = capture.usage.plus(telemetry.usage)
     capture.tool_calls_made = add_optional(capture.tool_calls_made, error.tool_calls_made)
     capture.failed_tool_calls = add_optional(capture.failed_tool_calls, error.failed_tool_calls)
 
@@ -116,6 +130,8 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
     turn_calls: int | None = None
     turn_failures: int | None = None
     turn_reasoning: int | None = None
+    turn_count: int | None = None
+    turn_usage: TokenUsage | None = None
     async for response in agent.handle_message(message):
         metadata: dict[str, Any] = response.metadata
         given = metadata.get("tools_given")
@@ -133,6 +149,10 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
             turn_reasoning = metadata["reasoning_chars"]
         if metadata.get("failed_tool_calls") is not None:
             turn_failures = metadata["failed_tool_calls"]
+        if metadata.get("turns") is not None:
+            turn_count = metadata["turns"]
+        if metadata.get("usage") is not None:
+            turn_usage = metadata["usage"]
         for model in metadata.get("answering_models") or ():
             if model not in capture.answering_models:
                 capture.answering_models.append(model)
@@ -143,3 +163,6 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
     capture.tool_calls_made = add_optional(capture.tool_calls_made, turn_calls)
     capture.failed_tool_calls = add_optional(capture.failed_tool_calls, turn_failures)
     capture.reasoning_chars = add_optional(capture.reasoning_chars, turn_reasoning)
+    capture.turns = add_optional(capture.turns, turn_count)
+    if turn_usage is not None:
+        capture.usage = capture.usage.plus(turn_usage)
