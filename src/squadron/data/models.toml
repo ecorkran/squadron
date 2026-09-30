@@ -147,6 +147,19 @@ private = true
 cost_tier = "subscription"
 notes = "Near-instant, Pro only"
 
+# OpenAI through OpenRouter
+[aliases.luna]
+profile = "openrouter"
+model = "openai/gpt-6-luna"
+private = true
+cost_tier = "cheap"
+
+[aliases.luna.pricing]
+input = 0.10
+output = 0.50
+cache_read = 0.01
+cache_write = 0.50
+
 # ---------------------------------------------------------------------------
 # Google Gemini
 # ---------------------------------------------------------------------------
