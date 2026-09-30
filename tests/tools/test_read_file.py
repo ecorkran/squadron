@@ -210,7 +210,8 @@ def characterization_tree(tmp_path: Path) -> Path:
     (tmp_path / "big.txt").write_bytes(b"x" * (limits.MAX_READ_BYTES + 10))
     (tmp_path / "sub").mkdir()
     os.mkfifo(tmp_path / "pipe")
-    return tmp_path
+    # Resolved here, not in the async test: error messages carry the resolved path.
+    return tmp_path.resolve()
 
 
 _WHOLE_FILE_NOTE = (
@@ -261,4 +262,130 @@ async def test_single_path_output_is_unchanged(
     result = await read({"path": path})
 
     assert result.is_error is is_error
-    assert result.content == expected.replace("{tmp}", str(characterization_tree.resolve()))
+    assert result.content == expected.replace("{tmp}", str(characterization_tree))
+
+
+# --- Batched reads: `paths` and the batch budget (slice 931 D5, D6, D12) ---
+
+_BUDGET_MARKER = "[not read: batch budget of {budget} bytes reached; request it in another call]"
+
+
+async def test_batch_returns_headed_sections_in_request_order(
+    tmp_path: Path, read_file: ToolExecutor
+) -> None:
+    (tmp_path / "a.txt").write_text("A\n")
+    (tmp_path / "b.txt").write_text("B")
+
+    result = await read_file({"paths": ["b.txt", "a.txt"]})
+
+    assert result.is_error is False
+    assert result.content == "==> b.txt <==\nB\n\n==> a.txt <==\nA\n"
+
+
+async def test_single_entry_paths_still_gets_a_header(tmp_path: Path, read_file: ToolExecutor) -> None:
+    (tmp_path / "a.txt").write_text("A\n")
+
+    result = await read_file({"paths": ["a.txt"]})
+
+    assert result.content == "==> a.txt <==\nA\n"
+
+
+async def test_mixed_failure_renders_inline_and_is_not_an_error(
+    tmp_path: Path, read_file: ToolExecutor
+) -> None:
+    (tmp_path / "a.txt").write_text("A\n")
+
+    result = await read_file({"paths": ["a.txt", "../escape.txt", "missing.txt"]})
+
+    assert result.is_error is False
+    sections = result.content.split("\n\n")
+    assert sections[0] == "==> a.txt <==\nA"
+    assert sections[1].startswith("==> ../escape.txt <==\nError: path '../escape.txt'")
+    assert sections[2].startswith("==> missing.txt <==\nError: file not found:")
+
+
+async def test_every_file_failing_is_an_error(read_file: ToolExecutor) -> None:
+    result = await read_file({"paths": ["missing-1.txt", "missing-2.txt"]})
+
+    assert result.is_error is True
+    assert "==> missing-1.txt <==\nError:" in result.content
+    assert "==> missing-2.txt <==\nError:" in result.content
+
+
+async def test_budget_cutoff_marks_remaining_paths_and_warns(
+    tmp_path: Path,
+    read_file: ToolExecutor,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(limits, "MAX_READ_BATCH_BYTES", 10)
+    for name in ("a.txt", "b.txt", "c.txt", "d.txt"):
+        (tmp_path / name).write_text("12345\n")
+    marker = _BUDGET_MARKER.format(budget=10)
+
+    with caplog.at_level(logging.WARNING):
+        result = await read_file({"paths": ["a.txt", "b.txt", "c.txt", "d.txt"]})
+
+    assert result.content == (
+        "==> a.txt <==\n12345\n\n"
+        f"==> b.txt <==\n{marker}\n\n"
+        f"==> c.txt <==\n{marker}\n\n"
+        f"==> d.txt <==\n{marker}\n"
+    )
+    assert result.is_error is False
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings == ["read_file: batch budget of 10 bytes reached; 3 path(s) not read"]
+
+
+async def test_oversize_first_file_is_read_with_normal_truncation(
+    tmp_path: Path, read_file: ToolExecutor, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(limits, "MAX_READ_BYTES", 8)
+    monkeypatch.setattr(limits, "MAX_READ_BATCH_BYTES", 8)
+    (tmp_path / "big.txt").write_text("0123456789abcdef")
+    (tmp_path / "small.txt").write_text("s")
+
+    single = await read_file({"path": "big.txt"})
+    batch = await read_file({"paths": ["big.txt", "small.txt"]})
+
+    assert batch.content.startswith(f"==> big.txt <==\n{single.content}")
+    assert "==> small.txt <==\n[not read: batch budget of 8 bytes" in batch.content
+
+
+@pytest.mark.parametrize(
+    "args",
+    [{"path": "a.txt", "paths": ["a.txt"]}, {}, {"paths": []}, {"paths": "a.txt"}, {"paths": [1]}],
+    ids=["both", "neither", "empty-paths", "paths-not-list", "paths-not-strings"],
+)
+async def test_malformed_path_arguments_are_errors_naming_the_rule(
+    read_file: ToolExecutor, args: dict[str, object]
+) -> None:
+    result = await read_file(args)
+
+    assert result.is_error is True
+    assert "paths" in result.content
+    assert "unexpected failure" not in result.content
+
+
+def test_full_batch_stays_under_the_per_result_floor() -> None:
+    """D6: raising MAX_READ_BATCH_BYTES without the floor (or vice versa) fails here.
+
+    A realistic worst case: the budget spent, then 100 more requested paths of 200
+    characters each, every one carrying a header and a not-read marker.
+    """
+    path = "p" * 200
+    marker = _BUDGET_MARKER.format(budget=limits.MAX_READ_BATCH_BYTES)
+    per_path_overhead = len(f"==> {path} <==\n{marker}\n\n")
+
+    batch_chars = limits.MAX_READ_BATCH_BYTES + 100 * per_path_overhead
+
+    assert batch_chars < limits.min_tool_result_chars()
+
+
+def test_registered_schema_offers_path_and_paths() -> None:
+    descriptor = registry.lookup("read_file")
+    assert descriptor is not None
+    parameters = descriptor.parameters
+
+    assert set(parameters["properties"]) == {"path", "paths"}  # type: ignore[index]
+    assert parameters["required"] == []

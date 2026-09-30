@@ -8,14 +8,17 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+from typing import cast
 
 from squadron.tools import limits
 from squadron.tools.builtin._shared import (
+    EXPECTED_FAILURES,
     LIST_FILES_NAME,
     READ_FILE_NAME,
     WRITE_FILE_NAME,
     contained_in_jail,
     error,
+    expected_failure,
     format_entry,
     guarded,
     jail_violation,
@@ -33,15 +36,25 @@ from squadron.tools.registry import register
 _logger = logging.getLogger(__name__)
 
 
+# Both properties, ``required: []``, not ``oneOf``: several backends mishandle ``oneOf`` in
+# tool schemas, so the executor enforces "exactly one" instead (slice 931 D5).
 READ_FILE_PARAMETERS: dict[str, object] = {
     "type": "object",
     "properties": {
         "path": {
             "type": "string",
-            "description": "Path to the file to read, relative to the working directory.",
-        }
+            "description": "One file to read, relative to the working directory.",
+        },
+        "paths": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Several files to read in one call. Use this instead of one call per file. "
+                "Give either path or paths, not both."
+            ),
+        },
     },
-    "required": ["path"],
+    "required": [],
 }
 
 
@@ -85,15 +98,81 @@ def _read_one(spec: JailSpec, requested: str) -> ToolResult:
     return ToolResult(content=note + content)
 
 
+def _section(requested: str, content: str) -> str:
+    """One batch entry under ``head``'s header convention, which models already know."""
+    return f"==> {requested} <==\n{content}" + ("" if content.endswith("\n") else "\n")
+
+
+def _read_batch(spec: JailSpec, paths: list[str]) -> ToolResult:
+    """Read ``paths`` in request order until the batch byte budget is spent (D5, D6).
+
+    A file that would push the batch past ``MAX_READ_BATCH_BYTES`` is not returned, and
+    neither is anything after it; each gets a marker telling the model to ask again. The
+    first file is always returned, so a batch never gives back less than a single read.
+    """
+    budget = limits.MAX_READ_BATCH_BYTES
+    sections: list[str] = []
+    used = 0
+    failed = 0
+    for index, requested in enumerate(paths):
+        try:
+            result = _read_one(spec, requested)
+        except EXPECTED_FAILURES as exc:
+            # Per file, as guarded words it for a single read, so one missing file does
+            # not cost the model the rest of the batch.
+            result = expected_failure(READ_FILE_NAME, exc)
+        size = len(result.content.encode("utf-8"))
+        if sections and used + size > budget:
+            remaining = paths[index:]
+            _logger.warning(
+                "read_file: batch budget of %d bytes reached; %d path(s) not read",
+                budget,
+                len(remaining),
+            )
+            marker = f"[not read: batch budget of {budget} bytes reached; request it in another call]"
+            sections.extend(_section(path, marker) for path in remaining)
+            break
+        used += size
+        failed += result.is_error
+        sections.append(_section(requested, result.content))
+    # An error only when the call gave the model nothing: failed_tool_calls keeps meaning
+    # that. A per-file failure is already visible inline under its header.
+    return ToolResult(content="\n".join(sections), is_error=failed == len(paths))
+
+
+def _requested_paths(args: dict[str, object]) -> str | list[str]:
+    """``path`` or ``paths``, exactly one; raise ValueError naming the rule otherwise."""
+    has_path = args.get("path") is not None
+    has_paths = args.get("paths") is not None
+    if has_path == has_paths:
+        raise ValueError("give exactly one of 'path' (one file) or 'paths' (several files)")
+    if has_path:
+        return require_str(args, "path")
+    raw = args["paths"]
+    if not isinstance(raw, list) or not all(isinstance(p, str) for p in cast(list[object], raw)):
+        raise ValueError("argument 'paths' must be a list of strings")
+    paths = cast(list[str], raw)
+    if not paths:
+        raise ValueError("argument 'paths' must name at least one file")
+    return paths
+
+
 def _read_file_factory(spec: JailSpec) -> ToolExecutor:
     async def execute(args: dict[str, object]) -> ToolResult:
         async def run() -> ToolResult:
-            path = require_str(args, "path")
+            try:
+                requested = _requested_paths(args)
+            except ValueError as exc:
+                # A malformed call the model can correct, not an unexpected failure.
+                return error(READ_FILE_NAME, str(exc))
             # Every blocking syscall — the resolve/stat walk, the special-file check, and the
-            # read itself — runs in one worker thread. Resolving on the event loop would
-            # stall it on a slow or network filesystem (rules/python.md: synchronous work
-            # inside an async def must complete in under 1ms).
-            return await asyncio.to_thread(_read_one, spec, path)
+            # read itself — runs in one worker thread, one per call however many paths it
+            # names. Resolving on the event loop would stall it on a slow or network
+            # filesystem (rules/python.md: synchronous work inside an async def must
+            # complete in under 1ms).
+            if isinstance(requested, str):
+                return await asyncio.to_thread(_read_one, spec, requested)
+            return await asyncio.to_thread(_read_batch, spec, requested)
 
         return await guarded(READ_FILE_NAME, run)
 

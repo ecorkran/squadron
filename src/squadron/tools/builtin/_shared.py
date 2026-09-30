@@ -208,6 +208,41 @@ def error(tool: str, message: str) -> ToolResult:
     return ToolResult(content=f"Error: {message}", is_error=True)
 
 
+#: Failures a tool call routinely meets, converted to error results the model can act on.
+EXPECTED_FAILURES = (
+    FileNotFoundError,
+    IsADirectoryError,
+    NotADirectoryError,
+    PermissionError,
+    UnicodeDecodeError,
+    TimeoutError,
+)
+
+
+def expected_failure(tool: str, exc: Exception) -> ToolResult:
+    """The error result for one of ``EXPECTED_FAILURES``.
+
+    Shared by ``guarded`` and by any tool that must report a failure per item rather than
+    for its whole call (a batched ``read_file``), so both word it the same way.
+    """
+    filename = getattr(exc, "filename", None) or exc
+    match exc:
+        case FileNotFoundError():
+            return error(tool, f"file not found: {filename}")
+        case IsADirectoryError():
+            return error(tool, f"path is a directory: {filename}")
+        case NotADirectoryError():
+            return error(tool, f"path component is not a directory: {filename}")
+        case PermissionError():
+            return error(tool, f"permission denied: {filename}")
+        case UnicodeDecodeError():
+            return error(tool, f"could not decode content: {exc}")
+        case TimeoutError():
+            return error(tool, f"operation timed out: {exc}")
+        case _:
+            raise TypeError(f"not an expected tool failure: {exc!r}") from exc
+
+
 async def guarded(tool: str, run: Callable[[], Awaitable[ToolResult]]) -> ToolResult:
     """Run *run*, converting expected failures into error results.
 
@@ -217,18 +252,8 @@ async def guarded(tool: str, run: Callable[[], Awaitable[ToolResult]]) -> ToolRe
     """
     try:
         return await run()
-    except FileNotFoundError as exc:
-        return error(tool, f"file not found: {exc.filename or exc}")
-    except IsADirectoryError as exc:
-        return error(tool, f"path is a directory: {exc.filename or exc}")
-    except NotADirectoryError as exc:
-        return error(tool, f"path component is not a directory: {exc.filename or exc}")
-    except PermissionError as exc:
-        return error(tool, f"permission denied: {exc.filename or exc}")
-    except UnicodeDecodeError as exc:
-        return error(tool, f"could not decode content: {exc}")
-    except TimeoutError as exc:
-        return error(tool, f"operation timed out: {exc}")
+    except EXPECTED_FAILURES as exc:
+        return expected_failure(tool, exc)
     except Exception as exc:  # noqa: BLE001
         _logger.exception("%s: unexpected failure", tool)
         return ToolResult(content=f"Error: unexpected failure in {tool}: {exc}", is_error=True)

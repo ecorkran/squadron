@@ -25,6 +25,12 @@ _logger = logging.getLogger(__name__)
 # Maximum number of bytes ``read_file`` returns before truncating with a visible marker.
 MAX_READ_BYTES = 256_000
 
+# Total bytes of file content one batched ``read_file`` call (``paths``) returns (slice 931
+# D6). Kept equal to MAX_READ_BYTES so a whole batch, headers included, stays under
+# min_tool_result_chars() and the agent's per-result cap never cuts one mid-file; a test
+# pins that invariant, so raising one without the other fails.
+MAX_READ_BATCH_BYTES = MAX_READ_BYTES
+
 # Maximum number of bytes of each captured stream (stdout, stderr) ``bash`` returns.
 MAX_OUTPUT_BYTES = 64_000
 
