@@ -575,3 +575,35 @@ class TestUnknownAliasGuard:
 
         assert mock_exec.call_args[0][3] is None
         assert mock_exec.call_args[0][4] == "sdk"
+
+
+def test_alias_effort_reaches_the_review(
+    monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str], tmp_path: Path
+) -> None:
+    """Slice 931: the CLI reads the alias's effort, as the pipeline does (interface parity)."""
+    from unittest.mock import AsyncMock, patch
+
+    from squadron.cli.commands.review import _run_review_command
+    from squadron.core.models import Effort
+    from squadron.review.models import ReviewResult, Verdict
+
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text('[aliases.glm-low]\nprofile = "openrouter"\nmodel = "x/y"\neffort = "low"\n')
+    monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+    monkeypatch.setattr("squadron.cli.commands.review.get_template", lambda name: _make_template())
+    monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
+    result = ReviewResult(
+        verdict=Verdict.PASS, findings=[], raw_output="raw", template_name="slice", input_files={}
+    )
+
+    with (
+        patch("squadron.models.aliases.models_toml_path", return_value=toml_file),
+        patch(
+            "squadron.cli.commands.review._execute_review",
+            new_callable=AsyncMock,
+            return_value=result,
+        ) as mock_exec,
+    ):
+        _run_review_command("slice", doc_inputs, "terminal", None, 0, model_flag="glm-low")
+
+    assert mock_exec.call_args.kwargs["effort"] is Effort.low

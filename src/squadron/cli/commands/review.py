@@ -20,6 +20,7 @@ from rich.text import Text
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.config.manager import get_config
+from squadron.core.models import Effort
 from squadron.integrations.context_forge import (
     ContextForgeClient,
     ContextForgeError,
@@ -29,6 +30,7 @@ from squadron.integrations.context_forge import (
 from squadron.models.aliases import (
     get_all_aliases,
     model_allows_tools,
+    model_effort,
     model_max_output_tokens,
     resolve_model_alias,
 )
@@ -701,6 +703,7 @@ def _run_review_command(
     alias_name = _resolve_model(model_flag, template, template_name)
     allows_tools = model_allows_tools(alias_name)
     max_output_tokens = model_max_output_tokens(alias_name)
+    effort = model_effort(alias_name)
     resolved_model, resolved_profile = _resolve_model_and_profile(
         model_flag, profile_flag, template, template_name
     )
@@ -719,6 +722,7 @@ def _run_review_command(
                 convention_root=convention_root,
                 setting_sources_override=setting_sources_override,
                 max_output_tokens=max_output_tokens,
+                effort=effort,
             )
         )
     except RateLimitError as exc:
@@ -768,6 +772,7 @@ async def _execute_review(
     convention_root: str | None = None,
     setting_sources_override: list[str] | None = None,
     max_output_tokens: int | None = None,
+    effort: Effort | None = None,
 ) -> ReviewResult:
     """Execute the review asynchronously."""
     return await run_review_with_profile(
@@ -782,6 +787,7 @@ async def _execute_review(
         convention_root=convention_root,
         setting_sources_override=setting_sources_override,
         max_output_tokens=max_output_tokens,
+        effort=effort,
     )
 
 

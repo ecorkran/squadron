@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from squadron import __version__
-from squadron.core.models import SystemPromptMode
+from squadron.core.models import Effort, SystemPromptMode
 from squadron.core.usage import TokenUsage
 from squadron.models.snapshot import answers_as_requested
 from squadron.review.run_cost import RunCost
@@ -241,6 +241,10 @@ class ReviewResult:
     # review_client for every provider and is None only on a hand-built result.
     turns: int | None = None
     usage: TokenUsage = field(default_factory=TokenUsage)
+    # The reasoning effort actually sent (slice 931 D4, D10). None when the alias set
+    # none or the provider cannot apply one (Codex): the artifact never claims a level
+    # that did not reach the model.
+    effort: Effort | None = None
     duration_seconds: float | None = None
 
     @property

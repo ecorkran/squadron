@@ -56,6 +56,9 @@ class ProviderCapabilities:
     applies_output_budget: bool = False
     """Agent sends ``AgentConfig.max_output_tokens`` on its requests (slice 924)."""
 
+    applies_effort: bool = False
+    """Agent sends ``AgentConfig.effort`` on its requests (slice 931 D4)."""
+
 
 @runtime_checkable
 class Agent(Protocol):

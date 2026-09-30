@@ -388,6 +388,7 @@ class ReviewAction:
                 allowed_tools=settings.allowed_tools,
                 model_allows_tools=settings.resolved.allows_tools,
                 max_output_tokens=settings.resolved.max_output_tokens,
+                effort=settings.resolved.effort,
             )
         except ProviderError as exc:
             # For a pipeline run the artifact is the whole durable record, so a

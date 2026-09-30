@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from squadron.core.models import AgentConfig, AgentState, Message, MessageType
+from squadron.core.models import AgentConfig, AgentState, Effort, Message, MessageType
 from squadron.providers.base import ProviderCapabilities
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.git_utils import EmptyDiffError
@@ -1489,3 +1489,53 @@ class TestRunCost:
         assert exc_info.value is raised
         assert raised.duration_seconds == pytest.approx(2.25)
         agent.shutdown.assert_awaited_once()
+
+
+class TestEffortThreading:
+    """Slice 931 D4: effort reaches AgentConfig; the result records it only if sent."""
+
+    _scripted_provider = TestRecoveryTurn._scripted_provider  # pyright: ignore[reportPrivateUsage]
+
+    async def _run(self, provider: MagicMock, effort: Effort | None) -> ReviewResult:
+        from squadron.providers.profiles import ProviderProfile
+
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(f"{_P}.get_provider", return_value=provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            mock_get_profile.return_value = ProviderProfile(name="p", provider="openai")
+            return await run_review_with_profile(
+                _make_template(), {"input": "file.md"}, profile="p", effort=effort
+            )
+
+    @pytest.mark.asyncio
+    async def test_applied_effort_reaches_config_and_result(self) -> None:
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+        provider.capabilities = ProviderCapabilities(applies_effort=True)
+
+        result = await self._run(provider, Effort.low)
+
+        assert provider.create_agent.call_args.args[0].effort is Effort.low
+        assert result.effort is Effort.low
+
+    @pytest.mark.asyncio
+    async def test_provider_that_cannot_apply_effort_records_none(self) -> None:
+        """The agent still gets it (so it can warn), but the artifact won't claim it."""
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+        provider.capabilities = ProviderCapabilities(applies_effort=False)
+
+        result = await self._run(provider, Effort.high)
+
+        assert provider.create_agent.call_args.args[0].effort is Effort.high
+        assert result.effort is None
+
+    @pytest.mark.asyncio
+    async def test_no_effort_leaves_both_none(self) -> None:
+        provider, _ = self._scripted_provider([_SAMPLE_REVIEW_OUTPUT])
+        provider.capabilities = ProviderCapabilities(applies_effort=True)
+
+        result = await self._run(provider, None)
+
+        assert provider.create_agent.call_args.args[0].effort is None
+        assert result.effort is None

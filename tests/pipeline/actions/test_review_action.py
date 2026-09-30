@@ -10,6 +10,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
@@ -387,6 +388,7 @@ class TestReviewAliasParity:
             'model = "x/y"\n'
             "tool_use = false\n"
             "max_output_tokens = 4096\n"
+            'effort = "low"\n'
         )
         with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
             yield
@@ -422,6 +424,8 @@ class TestReviewAliasParity:
         assert kwargs["model"] == "x/y"
         assert kwargs["model_allows_tools"] is False
         assert kwargs["max_output_tokens"] == 4096
+        # Slice 931: the same alias gives the same effort as the CLI path.
+        assert kwargs["effort"] is Effort.low
 
 
 # ---------------------------------------------------------------------------

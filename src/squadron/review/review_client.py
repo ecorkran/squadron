@@ -20,6 +20,7 @@ from typing import Any, NamedTuple
 from squadron.config.manager import get_config
 from squadron.core.models import (
     AgentConfig,
+    Effort,
     describe_setting_sources,
     describe_system_prompt,
 )
@@ -88,6 +89,7 @@ async def run_review_with_profile(
     convention_root: str | None = None,
     setting_sources_override: list[str] | None = None,
     max_output_tokens: int | None = None,
+    effort: Effort | None = None,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
@@ -210,6 +212,7 @@ async def run_review_with_profile(
         allowed_tools=resolved_allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
         max_output_tokens=max_output_tokens,
+        effort=effort,
         # A document review must not read its own predecessors: they sit inside the tool
         # jail under the reviewed document's name prefix (#94). Passed as a list, empty when
         # the template declares none, so no layer below has to interpret None.
@@ -255,6 +258,8 @@ async def run_review_with_profile(
     # The budget the request actually carries. SDK and Codex agents cannot send one (they
     # log a WARNING and the backend default applies), so the artifact must not claim it.
     sent_budget = max_output_tokens if provider.capabilities.applies_output_budget else None
+    # Slice 931 D4: likewise, the artifact never claims an effort that was not sent.
+    sent_effort = effort if provider.capabilities.applies_effort else None
 
     # Slice 931 D9: wall-clock from agent creation through the recovery turn, for every
     # provider. A failure carries it on the error to its artifact.
@@ -286,6 +291,7 @@ async def run_review_with_profile(
     result.recovery_turn_used = recovery_turn_used
     result.output_budget_exhausted = budget_exhausted(capture.stop_reason)
     result.max_output_tokens = sent_budget
+    result.effort = sent_effort
     result.tools_given = capture.tools_given
     result.tool_calls_made = capture.tool_calls_made
     # Slice 266: the gate's own result is authoritative — SDK providers do not stamp it.
