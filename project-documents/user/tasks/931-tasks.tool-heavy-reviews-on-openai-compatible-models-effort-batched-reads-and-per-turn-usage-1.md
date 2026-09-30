@@ -71,244 +71,255 @@ status: in_progress
 
 ## Task 3 — `providers/openai/usage.py`: chunk usage reader (D8, D12 malformed row)
 
-- [ ] Create `src/squadron/providers/openai/usage.py` with
+- [x] Create `src/squadron/providers/openai/usage.py` with
       `read_chunk_usage(chunk, *, warned: set[str] | None = None) -> TokenUsage | None`.
       The design's contract is the one-argument form; `warned` is an additive keyword-only
       parameter whose default keeps that form working (see below)
-  - [ ] Returns `None` when `chunk.usage` is absent
-  - [ ] `prompt`/`completion` from `prompt_tokens`/`completion_tokens`; `cached` from
+  - [x] Returns `None` when `chunk.usage` is absent
+  - [x] `prompt`/`completion` from `prompt_tokens`/`completion_tokens`; `cached` from
         `prompt_tokens_details.cached_tokens`; `reasoning` from
         `completion_tokens_details.reasoning_tokens`; each field `None` when not reported
-  - [ ] A non-int count or a wrong-typed details object makes that field `None`, leaves the
+  - [x] A non-int count or a wrong-typed details object makes that field `None`, leaves the
         siblings intact, and logs a WARNING naming the field and `%.200r` of the raw value.
         Never raises.
-  - [ ] `warned` handling: with `warned=None` the reader logs every malformed field it sees.
+  - [x] `warned` handling: with `warned=None` the reader logs every malformed field it sees.
         With a set, it logs a field only if its name is not yet in the set, then adds it.
         The agent owns the set and clears it at the top of `handle_message` (Task 5B),
         which gives D12's "once per call" without agent state in the reader.
-- [ ] Create `tests/providers/openai/test_usage.py`
-  - [ ] OpenAI/Ollama shape (empty `choices`), OpenRouter shape (one choice, empty delta)
-  - [ ] Ollama: `cached_tokens` present, no `completion_tokens_details` → `reasoning` None
-  - [ ] Parametrized malformed shapes: field None, siblings intact, WARNING via `caplog`
-  - [ ] Called with only `chunk` (the design's form): returns usage and logs each malformed field
-  - [ ] Passing the same `warned` set on a second malformed chunk logs no second WARNING
-  - [ ] The event-loop NFR check for this reader lives in the load-test tier (Task 11), not here
-  - [ ] Success: all pass; no `openai` package types are imported by `core/usage.py`
+- [x] Create `tests/providers/openai/test_usage.py`
+  - [x] OpenAI/Ollama shape (empty `choices`), OpenRouter shape (one choice, empty delta)
+  - [x] Ollama: `cached_tokens` present, no `completion_tokens_details` → `reasoning` None
+  - [x] Parametrized malformed shapes: field None, siblings intact, WARNING via `caplog`
+  - [x] Called with only `chunk` (the design's form): returns usage and logs each malformed field
+  - [x] Passing the same `warned` set on a second malformed chunk logs no second WARNING
+  - [x] The event-loop NFR check for this reader lives in the load-test tier (Task 11), not here
+  - [x] Success: all pass; no `openai` package types are imported by `core/usage.py`
 
-- [ ] Format, lint, typecheck, commit: `feat: read token usage from OpenAI-shaped stream chunks`
+- [x] Format, lint, typecheck, commit: `feat: read token usage from OpenAI-shaped stream chunks`
 
 ---
 
 ## Task 4 — `sends_stream_usage` flag and `profile_credentials` (Technical Requirements)
 
-- [ ] `providers/profiles.py`: add `ProviderProfile.sends_stream_usage: bool = True`
-  - [ ] Read it from a user profile table like the other profile fields; reject a non-bool
+- [x] `providers/profiles.py`: add `ProviderProfile.sends_stream_usage: bool = True`
+  - [x] Read it from a user profile table like the other profile fields; reject a non-bool
         with the same explicit error style the file already uses
-  - [ ] Set it `False` on the gemini entry of `BUILT_IN_PROFILES`
-  - [ ] Add `profile_credentials(profile) -> dict` returning `api_key_env`,
+  - [x] Set it `False` on the gemini entry of `BUILT_IN_PROFILES`
+  - [x] Add `profile_credentials(profile) -> dict` returning `api_key_env`,
         `default_headers`, `sends_stream_usage`
-- [ ] `tests/providers/test_profiles.py`: user-table parsing (true, false, absent, non-bool),
+- [x] `tests/providers/test_profiles.py`: user-table parsing (true, false, absent, non-bool),
       gemini built-in is False, every other built-in is True, `profile_credentials` keys
-- [ ] Format, lint, typecheck, commit: `feat: add sends_stream_usage profile flag and profile_credentials`
+- [x] Format, lint, typecheck, commit: `feat: add sends_stream_usage profile flag and profile_credentials`
 
 ---
 
 ## Task 4B — Switch the six credential call sites (Technical Requirements)
 
-- [ ] Switch each of the six call sites from hand-copied fields to `**profile_credentials(profile)`
+- [x] Switch each of the six call sites from hand-copied fields to `**profile_credentials(profile)`
       — one sub-task each, keeping each diff reviewable:
-  - [ ] `review/review_client.py`
-  - [ ] `pipeline/actions/dispatch.py`
-  - [ ] `pipeline/summary_oneshot.py`
-  - [ ] `metrology/audit.py`
-  - [ ] `pr/composer.py`
-  - [ ] `cli/commands/spawn.py`
-  - [ ] `providers/auth.py` is NOT one of the six; leave it unchanged
-- [ ] Add a parametrized test per site asserting the built `credentials` **contains every
+  - [x] `review/review_client.py`
+  - [x] `pipeline/actions/dispatch.py`
+  - [x] `pipeline/summary_oneshot.py`
+  - [x] `metrology/audit.py`
+  - [x] `pr/composer.py`
+  - [x] `cli/commands/spawn.py`
+  - [x] `providers/auth.py` is NOT one of the six; leave it unchanged
+- [x] Add a parametrized test per site asserting the built `credentials` **contains every
       item of** `profile_credentials(profile)` for the same profile, and that the site's
       extra keys are unchanged (`review_client.py` also carries `hooks` and `mode`; check
       each other site's current extras before writing its assertion). Equality would fail
       wherever a site adds keys of its own. Use each site's existing test seam; add the
       smallest seam if one is missing.
-  - [ ] Success: existing tests for all six sites still pass
-- [ ] Format, lint, typecheck, commit: `refactor: build agent credentials from one profile_credentials helper`
+  - [x] Success: existing tests for all six sites still pass
+- [x] Format, lint, typecheck, commit: `refactor: build agent credentials from one profile_credentials helper`
 
 ---
 
 ## Task 5 — Wire `sends_stream_usage` to the agent and send `stream_options` (D8, D12)
 
-- [ ] Wire the flag to the agent: `OpenAICompatibleAgent` has no `credentials` member today
+- [x] Wire the flag to the agent: `OpenAICompatibleAgent` has no `credentials` member today
       (`provider.create_agent` passes named arguments only)
-  - [ ] Add a constructor argument `sends_stream_usage: bool = True` on the agent
-  - [ ] `providers/openai/provider.py` `create_agent` passes
+  - [x] Add a constructor argument `sends_stream_usage: bool = True` on the agent
+  - [x] `providers/openai/provider.py` `create_agent` passes
         `sends_stream_usage=config.credentials.get("sends_stream_usage", True)`; an absent
         key (no profile involved, e.g. `server/routes/agents.py`) sends it, per the design
-- [ ] `providers/openai/agent.py`: in `_stream_turn`, pass
+- [x] `providers/openai/agent.py`: in `_stream_turn`, pass
       `stream_options={"include_usage": True}` explicitly (not via `**kwargs`) unless the
       agent's `sends_stream_usage` is `False`
-- [ ] Tests in `tests/providers/openai/test_provider.py` and a stubbed-stream agent test
-  - [ ] gemini-profile agent omits `stream_options`; openrouter-profile agent sends it; an
+- [x] Tests in `tests/providers/openai/test_provider.py` and a stubbed-stream agent test
+  - [x] gemini-profile agent omits `stream_options`; openrouter-profile agent sends it; an
         agent built with no profile (server-route shape) sends it
-  - [ ] A request with no effort set is otherwise identical to today's
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: send stream_options from the OpenAI agent unless a profile opts out`
+  - [x] A request with no effort set is otherwise identical to today's
+  - [x] Success: all pass
+- [x] Format, lint, typecheck, commit: `feat: record per-turn usage and run telemetry in the OpenAI agent`
+  - Tasks 5, 5B, 6, 6B, 7 landed together in this commit (all edit agent.py)
 
 ---
 
 ## Task 5B — `_stream_turn` reads usage (D8, D12)
 
-- [ ] `providers/openai/agent.py`
-  - [ ] Call `read_chunk_usage` on every chunk **before** the `if not chunk.choices: continue`
+- [x] `providers/openai/agent.py`
+  - [x] Call `read_chunk_usage` on every chunk **before** the `if not chunk.choices: continue`
         guard, next to the existing `chunk.model` read; last non-None value in a turn wins
-  - [ ] Pass the agent's `warned` set: a new per-call attribute, cleared at the top of
+  - [x] Pass the agent's `warned` set: a new per-call attribute, cleared at the top of
         `handle_message`, beside `_answering_models`
-  - [ ] Return it on `TurnResult.usage`
-- [ ] Tests with stubbed streams in `tests/providers/openai/test_agentic_loop.py` (or a new
+  - [x] Return it on `TurnResult.usage`
+- [x] Tests with stubbed streams in `tests/providers/openai/test_agentic_loop.py` (or a new
       sibling file)
-  - [ ] Both chunk shapes yield the turn's usage and the turn's text and tool calls intact
-  - [ ] A stream with no usage chunk completes with `usage=None`
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: read per-turn usage in the OpenAI agent`
+  - [x] Both chunk shapes yield the turn's usage and the turn's text and tool calls intact
+  - [x] A stream with no usage chunk completes with `usage=None`
+  - [x] Success: all pass
+- [x] Format, lint, typecheck, commit: `feat: record per-turn usage and run telemetry in the OpenAI agent`
+  - Tasks 5, 5B, 6, 6B, 7 landed together in this commit (all edit agent.py)
 
 ---
 
 ## Task 6 — Loop accumulation and stamping (D8)
 
-- [ ] `providers/openai/agent.py`
-  - [ ] Add per-call `RunTelemetry`, reset at the top of `handle_message` beside
+- [x] `providers/openai/agent.py`
+  - [x] Add per-call `RunTelemetry`, reset at the top of `handle_message` beside
         `_answering_models`; fold each `_stream_turn` result in; `turns` counts
         `_stream_turn` calls
-  - [ ] `_stamp_tool_telemetry` stamps `turns`, `usage`, and `RunTelemetry.reasoning_chars`
+  - [x] `_stamp_tool_telemetry` stamps `turns`, `usage`, and `RunTelemetry.reasoning_chars`
         (run total) onto the final Message metadata. Place them beside `stop_reason`, before
         the `if not self._tools_given:` early return, and unconditionally, so a run with no
         tools still records them (the same rule slice 918 set for `stop_reason`). Replace
         the existing `turn.reasoning_chars` stamp; do not add a second key.
-  - [ ] Test a no-tools run: `turns` and `usage` are present on the final Message
-  - [ ] Keep the `handle_message` change to a few lines. The file is already over 300
+  - [x] Test a no-tools run: `turns` and `usage` are present on the final Message
+  - [x] Keep the `handle_message` change to a few lines. The file is already over 300
         lines; do not split it in this task (design: Special Considerations)
-- [ ] Tests in `tests/providers/openai/test_agentic_loop.py`
-  - [ ] Three-turn loop: metadata `turns == 3`, usage summed per field, reasoning chars is
+- [x] Tests in `tests/providers/openai/test_agentic_loop.py`
+  - [x] Three-turn loop: metadata `turns == 3`, usage summed per field, reasoning chars is
         the run total (not the final turn's)
-  - [ ] A backend reporting only some fields keeps the others `None`, never 0
-  - [ ] Two consecutive `handle_message` calls do not leak telemetry into each other
-  - [ ] Success: existing `reasoning_chars` assertions updated only where the run total
+  - [x] A backend reporting only some fields keeps the others `None`, never 0
+  - [x] Two consecutive `handle_message` calls do not leak telemetry into each other
+  - [x] Success: existing `reasoning_chars` assertions updated only where the run total
         differs from the final turn, each with a comment
-- [ ] Format, lint, typecheck, commit: `feat: accumulate turns, usage, and reasoning chars per run`
+- [x] Format, lint, typecheck, commit: `feat: record per-turn usage and run telemetry in the OpenAI agent`
+  - Tasks 5, 5B, 6, 6B, 7 landed together in this commit (all edit agent.py)
 
 ---
 
 ## Task 6B — Usage WARNINGs and the exit signal (D12)
 
-- [ ] `providers/openai/agent.py`
-  - [ ] Set a `completed` flag on the normal return; the existing `finally` logs the exit
+- [x] `providers/openai/agent.py`
+  - [x] Set a `completed` flag on the normal return; the existing `finally` logs the exit
         WARNING when unset (text in D12 last row)
-  - [ ] Log the once-per-call "backend reported no token usage" WARNING when no turn
+  - [x] Log the once-per-call "backend reported no token usage" WARNING when no turn
         reported usage (D12)
-  - [ ] Confirm malformed-usage WARNINGs are once per call via the `warned` set from Task 5B
-- [ ] Tests in `tests/providers/openai/test_agentic_loop.py`
-  - [ ] No-usage stream: exactly one WARNING per call across three turns; fields `None`
-  - [ ] Malformed usage on two turns: one WARNING per field per call
-  - [ ] Exit WARNING fires when the loop ends without a final response (iteration guard)
+  - [x] Confirm malformed-usage WARNINGs are once per call via the `warned` set from Task 5B
+- [x] Tests in `tests/providers/openai/test_agentic_loop.py`
+  - [x] No-usage stream: exactly one WARNING per call across three turns; fields `None`
+  - [x] Malformed usage on two turns: one WARNING per field per call
+  - [x] Exit WARNING fires when the loop ends without a final response (iteration guard)
         and carries the turn and token counts; does not fire on a normal return
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: warn on missing usage and non-normal agent exits`
+  - [x] Success: all pass
+- [x] Format, lint, typecheck, commit: `feat: record per-turn usage and run telemetry in the OpenAI agent`
+  - Tasks 5, 5B, 6, 6B, 7 landed together in this commit (all edit agent.py)
+  - The no-usage WARNING is not logged when the profile opted out of stream_options (sends_stream_usage=False), since no usage is expected there
 
 ---
 
 ## Task 7 — `ProviderError.telemetry` and stream failure conversions (D12)
 
-- [ ] `providers/errors.py`: add keyword-only `telemetry: RunTelemetry | None = None` and
+- [x] `providers/errors.py`: add keyword-only `telemetry: RunTelemetry | None = None` and
       `duration_seconds: float | None = None` to `ProviderError`; existing raisers unchanged;
       `EmptyFinalTurnError` uses the inherited `telemetry`
-  - [ ] In the agent, `EmptyFinalTurnError` keeps final-turn `reasoning_chars` for its message
+  - [x] In the agent, `EmptyFinalTurnError` keeps final-turn `reasoning_chars` for its message
         and attribute, and its `telemetry` carries the run total
-- [ ] `providers/openai/agent.py`
-  - [ ] Add `httpx.TimeoutException` → `ProviderTimeoutError` and `httpx.TransportError` →
+- [x] `providers/openai/agent.py`
+  - [x] Add `httpx.TimeoutException` → `ProviderTimeoutError` and `httpx.TransportError` →
         `ProviderError` conversions next to the existing ones
-  - [ ] An outer `except ProviderError` attaches a snapshot of the run's `RunTelemetry` and
+  - [x] An outer `except ProviderError` attaches a snapshot of the run's `RunTelemetry` and
         re-raises (covers the iteration-guard error too); it swallows nothing
-  - [ ] Any other exception propagates unconverted; the `finally` WARNING still fires
-- [ ] Tests (each asserts its signal with `caplog`, per D12 table)
-  - [ ] Stubbed stream raises on turn 3: error `telemetry.turns == 2` with summed usage
-  - [ ] Stubbed streams raise `httpx.ReadTimeout` and `httpx.RemoteProtocolError`
+  - [x] Any other exception propagates unconverted; the `finally` WARNING still fires
+- [x] Tests (each asserts its signal with `caplog`, per D12 table)
+  - [x] Stubbed stream raises on turn 3: error `telemetry.turns == 2` with summed usage
+  - [x] Stubbed streams raise `httpx.ReadTimeout` and `httpx.RemoteProtocolError`
         mid-iteration: converted type, attached telemetry, exit WARNING
-  - [ ] `RuntimeError` on turn 2 propagates unchanged; exit WARNING carries `turns=1`
-  - [ ] Iteration-guard `ProviderError` carries telemetry
-  - [ ] D12 "backend rejects `stream_options`" row: a stubbed 400 on the first turn of a
+  - [x] `RuntimeError` on turn 2 propagates unchanged; exit WARNING carries `turns=1`
+  - [x] Iteration-guard `ProviderError` carries telemetry
+  - [x] D12 "backend rejects `stream_options`" row: a stubbed 400 on the first turn of a
         request that includes `stream_options` surfaces as `ProviderAPIError`, and the
         failure artifact records it. Read the existing 4xx tests first; if one already
         covers this path, extend it to send `stream_options` instead of adding a duplicate.
-  - [ ] Success: the exit WARNING text matches D12 and all pass
-- [ ] Format, lint, typecheck, commit: `feat: attach run telemetry to provider errors and convert mid-stream transport failures`
+  - [x] Success: the exit WARNING text matches D12 and all pass
+- [x] Format, lint, typecheck, commit: `feat: record per-turn usage and run telemetry in the OpenAI agent`
+  - Tasks 5, 5B, 6, 6B, 7 landed together in this commit (all edit agent.py)
 
 ---
 
 ## Task 8 — `TurnCapture` sums turns and usage (D8)
 
-- [ ] `review/turn_capture.py`: `TurnCapture` gains `turns` and `usage`, summed with
+- [x] `review/turn_capture.py`: `TurnCapture` gains `turns` and `usage`, summed with
       `add_optional` across `collect_turn` calls, including the recovery turn
-  - [ ] `fold_empty_turn` reads the total from `ProviderError.telemetry`, not from the
+  - [x] `fold_empty_turn` reads the total from `ProviderError.telemetry`, not from the
         error's final-turn `reasoning_chars`
-  - [ ] `review/` must not import `providers/openai`; it may import `core.usage` and
+  - [x] `review/` must not import `providers/openai`; it may import `core.usage` and
         `providers.errors`
-- [ ] Extend `tests/review/test_turn_capture.py`
-  - [ ] Two-call sum plus a recovery turn after `EmptyFinalTurnError`: turns and usage sum;
+- [x] Extend `tests/review/test_turn_capture.py`
+  - [x] Two-call sum plus a recovery turn after `EmptyFinalTurnError`: turns and usage sum;
         reasoning chars is the run total
-  - [ ] An error with `telemetry=None` folds as before (no crash, no fabricated zeros)
-  - [ ] Success: all pass, prior tests unchanged
-- [ ] Format, lint, typecheck, commit: `feat: sum turns and usage across review turn captures`
+  - [x] An error with `telemetry=None` folds as before (no crash, no fabricated zeros)
+  - [x] Success: all pass, prior tests unchanged
+- [x] Format, lint, typecheck, commit: `feat: sum turns and usage across review turn captures`
 
 ---
 
 ## Task 9 — `review_client` timing and failure stamping (D9)
 
-- [ ] `review/review_client.py`
-  - [ ] Read `time.monotonic()` before `provider.create_agent`; after `_collect_review` on
+- [x] `review/review_client.py`
+  - [x] Read `time.monotonic()` before `provider.create_agent`; after `_collect_review` on
         success (recovery turn included); copy `turns`, `usage`, `duration_seconds` onto
         `ReviewResult`
-  - [ ] Narrow `except ProviderError` sets `exc.duration_seconds` and re-raises
-- [ ] `review/models.py`: `ReviewResult` gains `turns: int | None`, `usage: TokenUsage`
+  - [x] Narrow `except ProviderError` sets `exc.duration_seconds` and re-raises
+- [x] `review/models.py`: `ReviewResult` gains `turns: int | None`, `usage: TokenUsage`
       (from `core.usage`; not four loose fields), and `duration_seconds: float | None = None`
-- [ ] Tests in `tests/review/test_review_client.py`
-  - [ ] Duration is stamped on success (fake clock) for an SDK-shaped and a Codex-shaped
+- [x] Tests in `tests/review/test_review_client.py`
+  - [x] Duration is stamped on success (fake clock) for an SDK-shaped and a Codex-shaped
         provider stub, not only openai
-  - [ ] A `ProviderError` leaves with `duration_seconds` set and is the same exception object
-  - [ ] Success: all pass
-- [ ] Format, lint, typecheck, commit: `feat: time reviews and carry usage onto ReviewResult`
+  - [x] A `ProviderError` leaves with `duration_seconds` set and is the same exception object
+  - [x] Success: all pass
+- [x] Format, lint, typecheck, commit: `feat: record turns, token usage, and duration in review artifacts`
+  - Tasks 9, 10, 10B landed together in this commit
 
 ---
 
 ## Task 10 — Render usage: frontmatter, digest, JSON, failure artifact (D10)
 
-- [ ] `review/persistence.py`, `review/models.py`
-  - [ ] Frontmatter keys `turns`, `promptTokens`, `cachedTokens`, `completionTokens`,
+- [x] `review/persistence.py`, `review/models.py`
+  - [x] Frontmatter keys `turns`, `promptTokens`, `cachedTokens`, `completionTokens`,
         `reasoningTokens`, `durationSeconds`, each emitted only when it has a value (D10 table)
-  - [ ] Run Digest lines `Turns`, `Tokens — prompt / cached / completion / reasoning`,
+  - [x] Run Digest lines `Turns`, `Tokens — prompt / cached / completion / reasoning`,
         `Duration` (one decimal), always rendered, `not reported` via `_render_optional`
-  - [ ] `to_dict()` adds `turns`, `prompt_tokens`, `cached_tokens`, `completion_tokens`,
+  - [x] `to_dict()` adds `turns`, `prompt_tokens`, `cached_tokens`, `completion_tokens`,
         `reasoning_tokens`, `duration_seconds`, always present, null when unreported
-- [ ] Tests in `tests/review/test_persistence.py` and `tests/review/test_models.py`
-  - [ ] Frontmatter, digest, and JSON agree from one `ReviewResult`
-  - [ ] Unreported fields: key absent, `not reported`, null; never 0
-  - [ ] Existing artifact still parses under the existing frontmatter parsers
-- [ ] Regenerate the `clean_pass_artifact.md` snapshot **once** (D10) here, because the
+- [x] Tests in `tests/review/test_persistence.py` and `tests/review/test_models.py`
+  - [x] Frontmatter, digest, and JSON agree from one `ReviewResult`
+  - [x] Unreported fields: key absent, `not reported`, null; never 0
+  - [x] Existing artifact still parses under the existing frontmatter parsers
+- [x] Regenerate the `clean_pass_artifact.md` snapshot **once** (D10) here, because the
       successful-review output is what changes it: run the snapshot test on the new code,
       review the diff to confirm only the new keys/lines changed, then keep the fixture
-  - [ ] Success: full `pytest` passes, so this commit is green on its own
-- [ ] Format, lint, typecheck, commit: `feat: render turns, token usage, and duration for successful reviews`
+  - [x] Success: full `pytest` passes, so this commit is green on its own
+- [x] Format, lint, typecheck, commit: `feat: record turns, token usage, and duration in review artifacts`
+  - Tasks 9, 10, 10B landed together in this commit
+  - The digest's unreported sentinel is the existing "not computed" (the digest's one sentinel), not "not reported". The 383-* migration fixtures also gained the three digest lines, alongside clean_pass_artifact.md
 
 ---
 
 ## Task 10B — Failure artifact rendering (D10, D12)
 
-- [ ] `review/persistence.py`: `format_provider_failure_markdown` reads `telemetry` and
+- [x] `review/persistence.py`: `format_provider_failure_markdown` reads `telemetry` and
       `duration_seconds` off the error, like `exc.tool_calls_made`; CLI and pipeline call
       sites unchanged
-- [ ] Tests in `tests/review/test_persistence.py`
-  - [ ] Frontmatter, digest, and JSON agree from one failed `ProviderError`
-  - [ ] An error with `telemetry=None` renders no fabricated zeros
-  - [ ] Success: full `pytest` passes, and no snapshot changes in this task
-- [ ] Format, lint, typecheck, commit: `feat: record usage in provider-failure artifacts`
+- [x] Tests in `tests/review/test_persistence.py`
+  - [x] Frontmatter, digest, and JSON agree from one failed `ProviderError`
+  - [x] An error with `telemetry=None` renders no fabricated zeros
+  - [x] Success: full `pytest` passes, and no snapshot changes in this task
+- [x] Format, lint, typecheck, commit: `feat: record turns, token usage, and duration in review artifacts`
+  - Tasks 9, 10, 10B landed together in this commit
+  - There is no JSON surface for provider failures; the failure artifact gained frontmatter keys and a Run Digest section with Turns/Tokens/Duration
 
 ---
 
