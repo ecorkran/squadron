@@ -29,7 +29,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: minimax
+      model: sonnet
       emit: [file]
 
   - compact:
@@ -45,7 +45,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: minimax
+      model: sonnet
       emit: [file]
 
   - compact:

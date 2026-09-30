@@ -126,7 +126,7 @@ steps:
   #
   #   - summary:                    # (a) capture artifact
   #       template: minimal-sdk
-  #       model: minimax
+  #       model: sonnet
   #       emit: [file]
   #
   #   - compact:                    # rotate the session

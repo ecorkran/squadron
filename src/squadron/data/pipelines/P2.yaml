@@ -14,5 +14,5 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: minimax
+      model: sonnet
       emit: [stdout, clipboard, file]
