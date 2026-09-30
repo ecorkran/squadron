@@ -11,36 +11,42 @@ aiModel: deepseek/deepseek-v4.1-flash
 status: complete
 dateCreated: 20260929
 dateUpdated: 20260929
-reviewedSha: 467ed4555b2799edd89de4be68bf286eab5379a9
+reviewedSha: d45e735369c7a8f2816da5a1c55d11182863aa98
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 11
+toolCallsMade: 33
 runId: run-20260930-p5-f12cfe4d
 squadronVersion: 0.16.0
 findings:
   - id: F001
-    severity: pass
-    category: uncategorized
-    summary: "Every functional success criterion traces to a task"
+    severity: concern
+    category: testing
+    summary: "Event-loop NFR tests are placed in unit files, not the load-test tier, and no CI wiring task exists"
     location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
   - id: F002
-    severity: pass
-    category: uncategorized
-    summary: "Sequencing and test-with pattern are sound"
-    location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
+    severity: concern
+    category: error-handling
+    summary: "Task 4B's equality assertion contradicts the extra credential keys four sites carry"
+    location: "src/squadron/review/review_client.py:224-229"
   - id: F003
     severity: concern
-    category: uncategorized
-    summary: "The slice's one stated NFR has no load test task"
-    location: "project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
+    category: error-handling
+    summary: "Task 5 reads `credentials.get(\"sends_stream_usage\")` on the agent, but no task gives the agent a `credentials` member"
+    location: "src/squadron/providers/openai/agent.py"
   - id: F004
     severity: note
-    category: uncategorized
-    summary: "Two task interfaces are left as an open choice"
+    category: code-structure
+    summary: "Task 3's `warned`-set cross-reference points at the wrong task"
     location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
   - id: F005
     severity: note
-    category: uncategorized
-    summary: "Task 4 and Task 6 are large but defensible"
+    category: code-structure
+    summary: "Task 6 does not state the stamping order relative to the `_stamp_tool_telemetry` early return"
+    location: "src/squadron/providers/openai/agent.py:574-609"
+  - id: F006
+    severity: note
+    category: code-structure
+    summary: "Tasks 10 and 19 are large, multi-file, multi-concern units"
     location: "project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md"
 ---
 
@@ -51,40 +57,44 @@ findings:
 
 ## Findings
 
-### [PASS] Every functional success criterion traces to a task
+### [CONCERN] Event-loop NFR tests are placed in unit files, not the load-test tier, and no CI wiring task exists
 
-I cross-referenced the slice design's Success Criteria (Functional 1–13, Technical, Integration) against the tasks. Effort send/mapping/warn/invalid (1–4) → Tasks 17, 18, 19, 20, 21, 22. Request parity when unset (5) → Tasks 5, 20. `read_file` path/paths/budget/is_error (6) → Tasks 12, 13. Guidance paragraph (7) → Task 14. Summed usage + turns + run-total reasoning chars (8) → Tasks 5, 6, 8, 10. Unreported-never-zero (9) → Task 10 tests. Empty-final-turn contribution (10) → Tasks 6, 8. durationSeconds for every provider (11) → Task 9. Mid-loop failure artifact + D12 warnings (12) → Tasks 7, 10, 23. D12 signals (13) → Tasks 3, 5, 6, 7, 13. Integration parity and `cf validate frontmatter` → Tasks 19, 23. No criterion is orphaned, and no task implements behavior outside the design.
+The slice design explicitly restates one NFR ("the event-loop constraint above is the one NFR this slice has"). The breakdown acknowledges it twice — Task 3 ("a test times 1,000 calls to `read_chunk_usage` ... mean is under 1 ms per call") and Task 13 ("a five-path batch calls `asyncio.to_thread` exactly once") — but places both in unit test files (`tests/providers/openai/test_usage.py`, `tests/tools/test_read_file.py`). `.claude/rules/python.md` requires the load-test tier (`tests/load/`) for "network, concurrency, or environment-layer paths," and the repo's existing precedent (`tests/load/test_grep_timeout.py`) covers exactly this `asyncio.to_thread` + event-loop-starvation concern for the same `squadron.tools` package, with a docstring citing the tier rule. Neither NFR test is a `tests/load/` task, and no task wires load-test gating into CI (the Python rule states "CI must gate load tests for slices touching these paths"; `.github/workflows/ci.yml` runs a single `uv run pytest`, leaving gating implicit rather than an explicit step). Add a `tests/load/` task (or move the two NFR tests there) and make the CI gate explicit.
 
-### [PASS] Sequencing and test-with pattern are sound
+### [CONCERN] Task 4B's equality assertion contradicts the extra credential keys four sites carry
 
-Dependencies flow correctly: `core/usage` (Task 2) precedes its consumers (Tasks 3, 6, 8); `profile_credentials`/`sends_stream_usage` (Task 4) precedes the agent that reads the flag (Task 5); the `ProviderError.telemetry` extension (Task 7) precedes `fold_empty_turn` reading it (Task 8). Task 12 adds a byte-identical characterization test before the source extraction, and every implementation task carries its tests and a semantic commit. No circular dependencies.
+Task 4B instructs: "Add a parametrized test asserting each site's built `credentials` equals `profile_credentials(profile)` for the same profile." But `profile_credentials` per the design returns only `api_key_env`, `default_headers`, `sends_stream_usage`. Four of the six call sites carry additional keys today: `review/review_client.py` adds `hooks` and `mode` (lines 227-229), `pipeline/summary_oneshot.py` adds `hooks` and `mode` (lines 121-122), `pr/composer.py` adds `hooks` and `mode` (lines 90-91), and `metrology/audit.py` adds `mode`, `max_rate_limit_retries`, and `rate_limit_cap_s` (lines 653-656). An `==` assertion against `profile_credentials(profile)` would fail for these four. The task should specify a superset/subset assertion (e.g. that `profile_credentials(profile)` is a subset of each site's credentials) and require the extra keys be preserved through the `**profile_credentials(profile)` splat.
 
-### [CONCERN] The slice's one stated NFR has no load test task
+### [CONCERN] Task 5 reads `credentials.get("sends_stream_usage")` on the agent, but no task gives the agent a `credentials` member
 
-The slice restates a performance/concurrency NFR in Special Considerations ("`_stream_turn` runs inside the event loop … well under the 1 ms rule. `read_file` batches keep every blocking read inside the one existing `asyncio.to_thread` call … a hung read never blocks the event loop") and calls it out explicitly: "The event-loop constraint above is the one NFR this slice has." The task file contains no `tests/load/` task exercising that constraint. `tests/load/test_grep_timeout.py` already has an event-loop-liveness harness (`probe_ticks`), but nothing gates the new per-chunk usage read or the batched-read path against it. Per the review rules, a restated NFR should have a load test task in `tests/load/` (or this breakdown should add one). Either add a load task asserting the batch read stays on one worker hop and does not stall the loop, or state in the task file that the NFR is covered by inspection — otherwise the claim is untested.
+Task 5 states that `_stream_turn` should gate `stream_options` "unless `credentials.get("sends_stream_usage")` is `False`" and asserts gemini/openrouter/no-profile agent behavior in tests. `OpenAICompatibleAgent.__init__` (agent.py:135-230) has no `credentials` attribute — it holds `_client`, `_model`, `_max_output_tokens`, etc. `providers/openai/provider.py` currently reads only `config.credentials.get("default_headers")` and passes no credential value into the agent constructor. Task 4B adds `sends_stream_usage` to the six call-site `credentials` dicts, but no task adds a constructor parameter to `OpenAICompatibleAgent` and threads the flag from `provider.py`. Without that step, Task 5's gemini/absent-key tests cannot pass. Add an explicit step (in Task 4B or Task 5) to pass the flag from `config.credentials` through `provider.py` into the agent.
 
-### [NOTE] Two task interfaces are left as an open choice
+### [NOTE] Task 3's `warned`-set cross-reference points at the wrong task
 
-Task 3 leaves the malformed-usage logging mechanism undecided ("takes a caller-owned set of already-warned field names, or returns the malformed field names for the caller to log … pick one"), and Task 9 leaves the `ReviewResult` shape open ("`turns`, `usage` (or the four token fields)"). Neither breaks downstream tasks, but a junior implementer has to choose the contract that Task 6 and Task 10 then depend on. Pinning one here would remove an unnecessary decision point.
+Task 3 says the agent "owns the set and clears it at the top of `handle_message` (Task 6)," but the per-call `warned` attribute is actually created and cleared in Task 5 ("Pass the agent's `warned` set (a new per-call attribute, cleared at the top of `handle_message`, beside `_answering_models`)"). The stale back-reference is harmless but could misdirect a junior implementer to defer the set creation to Task 6.
 
-### [NOTE] Task 4 and Task 6 are large but defensible
+### [NOTE] Task 6 does not state the stamping order relative to the `_stamp_tool_telemetry` early return
 
-Task 4 bundles the profile flag, the new `profile_credentials` helper, six call-site migrations, and a parametrized parity test; Task 6 bundles loop accumulation, stamping, exception telemetry, the `completed`-flag exit warning, and two once-per-call warnings. Both are coherent single-file changes with their own commits and existing-test guards (the design mandates the six-site migration so `sends_stream_usage` reaches the agent from one definition), so neither crosses into scope creep. Flagging only so the implementer keeps each diff reviewable rather than squatting in one task.
+Task 6 says `_stamp_tool_telemetry` "stamps `turns`, `usage`, and `RunTelemetry.reasoning_chars` (run total) onto the final Message metadata," but does not say these new keys must be stamped *before* the `if not self._tools_given: return` early return (as the design's existing stop-reason keys already are). It also does not state whether the tool-less `handle_message` branch (agent.py:242-259) folds its single `_stream_turn` result into `RunTelemetry`. The design's D10 table expects `turns` for an OpenAI review "on success or failure," so both details affect the rendered artifact; call them out explicitly.
+
+### [NOTE] Tasks 10 and 19 are large, multi-file, multi-concern units
+
+Task 10 bundles `review/persistence.py` + `review/models.py` changes (frontmatter, digest, `to_dict()`, failure render) plus tests in two files plus a fixture regeneration. Task 19 bundles the CLI read, `providers/base.py`, `review_client.py`, `review/models.py`, `review/persistence.py`, and tests across four files. Each is internally coherent (one feature) and both follow the repo's "test-with" pattern, so this is a judgment call rather than a defect — but they are the two largest tasks and the design's D10 gives a natural split boundary (rendering vs. provider-record) if they prove unwieldy.
 
 ### Run Digest
 
-- Response length: 4780 chars
+- Response length: 6383 chars
 - Response is newline-free: no
-- Tool calls made: 11
+- Tool calls made: 33
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 17491
+- Reasoning characters: 21312
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 5
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 5
-- Finding-shaped matches — surviving validation: 5
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
