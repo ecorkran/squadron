@@ -14,6 +14,7 @@ from squadron.integrations.context_forge import (
     SliceEntry,
     TaskEntry,
 )
+from squadron.review.models import Verdict
 
 # ---------------------------------------------------------------------------
 # Sample typed fixtures (matching ContextForgeClient return types)
@@ -219,25 +220,28 @@ def test_review_tasks_single_file_no_suffix(
     assert save_kwargs["name_suffix"] is None
 
 
+@pytest.mark.parametrize(
+    "part_verdicts",
+    [
+        (Verdict.PASS, Verdict.FAIL),
+        # #176: a FAIL part must not hide behind an UNKNOWN one, in either order.
+        (Verdict.FAIL, Verdict.UNKNOWN),
+        (Verdict.UNKNOWN, Verdict.FAIL),
+    ],
+)
 @patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_tasks_split_files_aggregates_verdict(
-    mock_review: object,
-    mock_save: object,
+    mock_review: MagicMock,
+    mock_save: MagicMock,
+    part_verdicts: tuple[Verdict, Verdict],
 ) -> None:
     """If any part FAILs, the overall exit code is 2."""
-    from unittest.mock import MagicMock
-
     from typer.testing import CliRunner
 
     from squadron.cli.app import app
-    from squadron.review.models import Verdict
 
-    # Part 1 passes, part 2 fails → overall FAIL → exit 2.
-    mock_review.side_effect = [  # type: ignore[attr-defined]
-        MagicMock(verdict=Verdict.PASS),
-        MagicMock(verdict=Verdict.FAIL),
-    ]
+    mock_review.side_effect = [MagicMock(verdict=verdict) for verdict in part_verdicts]
 
     split_entries = [
         TaskEntry(
@@ -272,8 +276,8 @@ def test_review_tasks_split_files_aggregates_verdict(
 
     assert result.exit_code == 2
     # Both parts were still reviewed and saved despite the failure.
-    assert mock_review.call_count == 2  # type: ignore[union-attr]
-    assert mock_save.call_count == 2  # type: ignore[union-attr]
+    assert mock_review.call_count == 2
+    assert mock_save.call_count == 2
 
 
 @patch("squadron.cli.commands.review.save_review_result")

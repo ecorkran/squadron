@@ -9,7 +9,7 @@ import pytest
 from squadron.review.models import Verdict
 from squadron.review.parts import ReviewPart, review_parts, worst_verdict
 
-_ORDER = [Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL, Verdict.UNKNOWN]
+_ORDER = [Verdict.PASS, Verdict.CONCERNS, Verdict.UNKNOWN, Verdict.FAIL]
 
 
 class TestReviewParts:
@@ -44,6 +44,10 @@ class TestWorstVerdict:
 
     def test_unknown_outranks_pass(self) -> None:
         assert worst_verdict(["PASS", "UNKNOWN"]) == "UNKNOWN"
+
+    def test_fail_outranks_unknown(self) -> None:
+        # #176: a FAIL part must not hide behind an unreadable one.
+        assert worst_verdict(["FAIL", "UNKNOWN"]) == "FAIL"
 
     def test_accepts_enum_members(self) -> None:
         assert worst_verdict([Verdict.PASS, Verdict.FAIL]) == Verdict.FAIL

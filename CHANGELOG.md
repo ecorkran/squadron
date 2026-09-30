@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A split `sq review tasks` exits 2 when any part fails, even if another part's verdict could not be read. It used to report UNKNOWN and exit 0. A pipeline `review:` step over split task files now reports FAIL in that case too (#176).
+
 ## [0.17.0] - 20260930
 
 ### Added

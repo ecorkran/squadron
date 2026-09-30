@@ -13,11 +13,12 @@ from dataclasses import dataclass
 
 from squadron.review.models import Verdict
 
-#: Fold order, best to worst. UNKNOWN ranks worst: a part nobody could read
-#: must never let the whole review pass.
+#: Fold order, best to worst. UNKNOWN outranks PASS and CONCERNS: a part nobody
+#: could read must never let the whole review pass. FAIL outranks UNKNOWN: a
+#: definite FAIL must not hide behind an unreadable part (#176).
 _VERDICT_RANK: dict[Verdict, int] = {
     verdict: rank
-    for rank, verdict in enumerate((Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL, Verdict.UNKNOWN))
+    for rank, verdict in enumerate((Verdict.PASS, Verdict.CONCERNS, Verdict.UNKNOWN, Verdict.FAIL))
 }
 
 
@@ -46,7 +47,7 @@ def review_parts(input_paths: list[str]) -> list[ReviewPart]:
 
 
 def worst_verdict(verdicts: Iterable[str]) -> str:
-    """The worst of ``verdicts`` by PASS < CONCERNS < FAIL < UNKNOWN.
+    """The worst of ``verdicts`` by PASS < CONCERNS < UNKNOWN < FAIL.
 
     Ties return the first occurrence.
 
