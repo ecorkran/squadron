@@ -11,7 +11,7 @@ from rich import print as rprint
 
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 from squadron.config.manager import get_config
-from squadron.providers.profiles import get_profile
+from squadron.providers.profiles import get_profile, profile_credentials
 
 _logger = logging.getLogger(__name__)
 
@@ -34,11 +34,9 @@ def _resolve_profile(
     CLI flags take precedence over profile fields when explicitly set.
     """
     profile = get_profile(profile_name)
-    credentials: dict[str, Any] = {}
-    if profile.api_key_env is not None:
-        credentials["api_key_env"] = profile.api_key_env
-    if profile.default_headers is not None:
-        credentials["default_headers"] = profile.default_headers
+    # The daemon request body has always omitted unset fields; the daemon reads an
+    # absent key and a null one the same way.
+    credentials = {k: v for k, v in profile_credentials(profile).items() if v is not None}
     return {
         "agent_type": "api",
         "provider": cli_provider or profile.provider,

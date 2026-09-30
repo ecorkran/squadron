@@ -53,7 +53,7 @@ async def compose_one_shot(prompt: str, *, model: str | None, profile: str) -> s
     """
     from squadron.core.models import AgentConfig, Message, MessageType
     from squadron.providers.loader import ensure_provider_loaded
-    from squadron.providers.profiles import get_profile
+    from squadron.providers.profiles import get_profile, profile_credentials
     from squadron.providers.registry import get_provider
     from squadron.tools import resolve_effective_tools
 
@@ -85,8 +85,7 @@ async def compose_one_shot(prompt: str, *, model: str | None, profile: str) -> s
             permission_mode="default",
             setting_sources=[],
             credentials={
-                "api_key_env": provider_profile.api_key_env,
-                "default_headers": provider_profile.default_headers,
+                **profile_credentials(provider_profile),
                 "hooks": [],
                 "mode": "client",
             },

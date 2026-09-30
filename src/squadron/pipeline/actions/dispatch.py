@@ -27,7 +27,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.loader import ensure_provider_loaded
-from squadron.providers.profiles import get_profile, is_sdk_profile
+from squadron.providers.profiles import get_profile, is_sdk_profile, profile_credentials
 from squadron.providers.sdk.settings import pipeline_setting_sources
 from squadron.tools import resolve_effective_tools
 
@@ -168,8 +168,7 @@ async def one_shot_dispatch_with_telemetry(
         allowed_tools=allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
         credentials={
-            "api_key_env": profile.api_key_env,
-            "default_headers": profile.default_headers,
+            **profile_credentials(profile),
         },
     )
 

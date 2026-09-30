@@ -30,6 +30,7 @@ from squadron.metrology.audit import (
     run_audit,
 )
 from squadron.metrology.store import MetrologyStore
+from squadron.providers.profiles import ProviderProfile
 
 # --------------------------------------------------------------------------
 # Stub agent / provider plumbing
@@ -114,20 +115,15 @@ class _StubProvider:
         return agent
 
 
-@dataclass
-class _StubProfile:
-    provider: str = "stub"
-    base_url: str | None = None
-    api_key_env: str | None = None
-    default_headers: dict[str, str] = field(default_factory=dict[str, str])
-
-
 @pytest.fixture
 def stub_provider() -> Iterator[_StubProvider]:
     """Patch the provider plumbing run_audit resolves at call time."""
     provider = _StubProvider()
     with (
-        patch("squadron.providers.profiles.get_profile", return_value=_StubProfile()),
+        patch(
+            "squadron.providers.profiles.get_profile",
+            return_value=ProviderProfile(name="stub", provider="stub", default_headers={}),
+        ),
         patch("squadron.providers.loader.ensure_provider_loaded"),
         patch("squadron.providers.registry.get_provider", return_value=provider),
         patch("squadron.metrology.audit.resolve_audit_profile", return_value="stub"),

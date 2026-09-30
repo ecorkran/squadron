@@ -78,7 +78,7 @@ async def capture_summary_via_profile_with_telemetry(
     )
     from squadron.providers.base import ProviderType
     from squadron.providers.loader import ensure_provider_loaded
-    from squadron.providers.profiles import get_profile
+    from squadron.providers.profiles import get_profile, profile_credentials
     from squadron.providers.registry import get_provider
     from squadron.tools import resolve_effective_tools
 
@@ -116,8 +116,7 @@ async def capture_summary_via_profile_with_telemetry(
         permission_mode="default",
         setting_sources=[],
         credentials={
-            "api_key_env": provider_profile.api_key_env,
-            "default_headers": provider_profile.default_headers,
+            **profile_credentials(provider_profile),
             "hooks": [],
             "mode": "client",
         },

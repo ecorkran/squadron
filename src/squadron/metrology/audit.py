@@ -592,7 +592,7 @@ async def run_audit(
     """
     from squadron.core.models import AgentConfig
     from squadron.providers.loader import ensure_provider_loaded
-    from squadron.providers.profiles import get_profile
+    from squadron.providers.profiles import get_profile, profile_credentials
     from squadron.providers.registry import get_provider
 
     # --- Pre-flight: everything here precedes token spend --------------
@@ -649,8 +649,7 @@ async def run_audit(
         permission_mode=_AUDIT_PERMISSION_MODE,
         setting_sources=["project"],
         credentials={
-            "api_key_env": provider_profile.api_key_env,
-            "default_headers": provider_profile.default_headers,
+            **profile_credentials(provider_profile),
             "mode": "client",
             "max_rate_limit_retries": rate_limit_retries,
             "rate_limit_cap_s": rate_limit_cap_s,

@@ -27,7 +27,7 @@ from squadron.models.aliases import model_allows_tools as _alias_allows_tools
 from squadron.providers.base import ProviderType
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.providers.loader import ensure_provider_loaded
-from squadron.providers.profiles import get_profile
+from squadron.providers.profiles import get_profile, profile_credentials
 from squadron.providers.registry import get_provider
 from squadron.review.coverage import impose_diff_coverage
 from squadron.review.git_utils import EmptyDiffError
@@ -223,8 +223,7 @@ async def run_review_with_profile(
             else template.setting_sources
         ),
         credentials={
-            "api_key_env": provider_profile.api_key_env,
-            "default_headers": provider_profile.default_headers,
+            **profile_credentials(provider_profile),
             "hooks": template.hooks,
             "mode": "client",
         },
