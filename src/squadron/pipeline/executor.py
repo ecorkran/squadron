@@ -1311,7 +1311,7 @@ async def _execute_loop_body(
             commit_ctx = ActionContext(
                 pipeline_name=pipeline_name,
                 run_id=run_id,
-                params={"message_prefix": f"loop-{step.name}"},
+                params={"message_prefix": step.name},
                 step_name=step.name,
                 step_index=step_index,
                 prior_outputs=running_prior,
