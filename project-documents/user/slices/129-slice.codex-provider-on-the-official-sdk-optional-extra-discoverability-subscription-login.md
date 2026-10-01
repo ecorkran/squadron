@@ -4,7 +4,7 @@ slice: codex-provider-on-the-official-sdk-optional-extra-discoverability-subscri
 project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
 dependencies: [review-transport-unification-provider-decoupling, tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage]
-interfaces: []
+interfaces: []  # none: InteractiveLogin, ExtraRequirement and CodexRuntime are provided but no planned slice consumes them
 dateCreated: 20261001
 dateUpdated: 20261001
 status: not_started
@@ -66,6 +66,8 @@ providers/codex/
   auth.py      EDIT  OAuthFileStrategy implements InteractiveLogin
   login.py     NEW   async login/logout/account flows over AsyncCodex (with agent.py, one of two modules using SDK types)
 providers/auth.py    EDIT  add InteractiveLogin Protocol (runtime_checkable)
+providers/base.py    EDIT  add ExtraRequirement Protocol (runtime_checkable)
+config/keys.py       EDIT  codex.turn_timeout_s, codex.login_timeout_s, codex.account_timeout_s
 cli/commands/auth.py EDIT  login/logout/status use InteractiveLogin
 cli/commands/doctor_checks.py  EDIT  check_codex_provider row
 cli/commands/models.py         EDIT  marker for aliases needing the extra
@@ -93,7 +95,16 @@ No squadron state added. Credentials live in `~/.codex/auth.json`, written and r
 - **D4 — Sandbox and approval via enums.** `credentials["sandbox"]` (today a free string defaulting to `"read-only"`) is validated through `Sandbox(value)`; an invalid value raises `ProviderError` listing the valid ones. The default is defined once as `Sandbox.read_only`. Today's `approval_policy="never"` becomes `ApprovalMode.deny_all` (the SDK maps it to `AskForApproval.never`).
 - **D5 — Effort:** `ReasoningEffort(config.effort.value)`. Every squadron `Effort` value (`none, low, medium, high, xhigh`) exists in `ReasoningEffort`, so no mapping table. Passed on `thread.run(effort=…)`. Drops the slice-931 WARNING; sets `applies_effort=True`.
 - **D6 — Token usage:** map `TurnResult.usage.last` (`input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`) to `TokenUsage(prompt, cached, completion, reasoning)`; `None` when `usage` is `None` (never 0). Stamp via the same metadata keys the OpenAI agent uses so review artifacts need no change.
-- **D7 — Login timeout** is one module-level constant in `login.py`, overridable by `--timeout`. On timeout or Ctrl-C the handle is cancelled (`handle.cancel()`) so the local callback listener is released.
+- **D7 — Timeouts are config keys, not constants,** registered in `config/keys.py` beside `cf.mcp_timeout_s` and read through the config layer (no module-level defaults). Each is a wall-clock cap in seconds:
+
+  | Key | Default | Bounds |
+  |---|---|---|
+  | `codex.turn_timeout_s` | 1800 | one `thread.run` (agentic reviews are legitimately slow; this bounds a hung runtime, it does not pace work) |
+  | `codex.login_timeout_s` | 300 | `handle.wait()` for browser or device-code login; `sq auth login --timeout` overrides it |
+  | `codex.account_timeout_s` | 30 | runtime start + `account()` in `sq auth status` and post-login confirmation |
+
+  On login timeout or Ctrl-C the handle is cancelled (`handle.cancel()`) so the local callback listener is released.
+- **D9 — "Extra missing" signal is a provider-side Protocol.** `ExtraRequirement` (runtime_checkable, in `providers/base.py`) has one method, `missing_extra_hint() -> str | None`: `None` when nothing is missing, otherwise the install command. `CodexProvider` implements it using `resolve_codex_runtime()`. `sq model list` resolves each alias's profile through `ensure_provider_loaded` + `get_provider` and tests `isinstance(provider, ExtraRequirement)`; no profile-name check. `sq doctor`'s `codex provider` row calls the Codex runtime resolver directly, since that row is Codex-specific by design. Providers with no optional dependency do not implement it.
 
 - **D8 — Turn result is checked, not trusted.** After `thread.run`, `TurnResult.status` must be `TurnStatus.completed`; `failed` raises `ProviderError` carrying `TurnResult.error.message`, `interrupted` raises `ProviderError("Codex turn interrupted")`. A `completed` turn whose `final_response` is `None` or blank raises `ProviderError("Codex turn completed with no response text")`. The current `result.final_response or ""` is removed: an empty review must never reach the parser as a valid, empty Message (the dispatch no-op class of bug, issue #15).
 
@@ -106,7 +117,9 @@ Each row is logged at WARNING or above (or raised as `ProviderError`, which call
 | `openai_codex` not installed | `ProviderError` with the install command, at `create_agent` |
 | No bundled binary and none on PATH | `ProviderError` naming both remedies, at `create_agent` |
 | Runtime subprocess fails to start / `initialize` fails | `ProviderError` wrapping the SDK error; client closed (the SDK closes on init failure) |
-| Hang: no response from the runtime | Turn-level timeout (one constant, `--timeout`-style config, defined once) wrapping `thread.run`; on expiry cancel the turn, raise `ProviderError("Codex turn timed out after N s")` |
+| Hang: no response from the runtime | `asyncio.timeout(codex.turn_timeout_s)` (D7) around `thread.run`; on expiry cancel the turn, raise `ProviderError("Codex turn timed out after N s")` |
+| Hang or failure in `account()` / runtime start during `sq auth status` or post-login confirmation | `asyncio.timeout(codex.account_timeout_s)` (D7); on timeout or SDK error log WARNING, show validity and source without account details, never fail the command or block the other profiles' rows |
+| Login `wait()` never completes | `codex.login_timeout_s` (D7); handle cancelled, command exits non-zero with a timeout message |
 | Timeout or cancellation mid-turn | Turn handle interrupted and `shutdown()` still runs in `finally`, so no orphaned runtime process |
 | Runtime exits / transport closes mid-turn (`TransportClosedError`) | `ProviderError` chained from the SDK error; agent state reset so a later message does not reuse the dead client (`_codex`/`_thread` cleared) |
 | Server busy / rate-limited (`ServerBusyError`, `RetryLimitExceededError`) | `ProviderError` with the SDK message; no squadron-side retry |
@@ -152,13 +165,14 @@ class InteractiveLogin(Protocol):
 ### Sub-part B surfaces
 - **Missing-package error:** `Codex support needs the optional extra: pip install 'squadron-ai[codex]'` (final distribution name confirmed against `pyproject.toml` `name` during implementation).
 - **`sq doctor`:** new row `codex provider` in the integrations section, non-required: package importable + version, runtime source (`bundled` | `PATH: <path>`), login state from `auth.json` presence (no subprocess in doctor). The existing `codex CLI` row stays — it gates the `codex skills` row and is unrelated to the SDK.
-- **`sq model list`:** for aliases whose profile's provider reports the extra missing, add `(needs [codex] extra)` to the Notes/Profile cell. Determined through the provider/strategy, not a hard-coded `"openai-oauth"` string. Shown in default and verbose output; absent when the extra is installed.
+- **`sq model list`:** for aliases whose profile's provider reports the extra missing, add `(needs [codex] extra)` to the Notes/Profile cell. Determined through `ExtraRequirement.missing_extra_hint()` (D9), not a hard-coded `"openai-oauth"` string; the hint text is the marker's source. Shown in default and verbose output; absent when the extra is installed.
 - **README:** replace the Codex install instructions with extra install → `sq auth login openai-oauth` → example review; note `--device-code` for SSH.
 
 ## Integration Points
 
 ### Provides to Other Slices
 - `InteractiveLogin` — a pattern future OAuth-backed providers can implement without CLI changes.
+- `ExtraRequirement` — lets any provider with an optional dependency surface an install hint to `sq model list` without CLI changes.
 - `CodexRuntime` resolver — reusable by any later Codex-adjacent feature.
 
 ### Consumes from Other Slices
