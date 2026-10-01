@@ -42,20 +42,23 @@ Effort scale: 1 (trivial) – 5 (largest).
 
 ## Task 1 — Verify the `OPENAI_API_KEY` fallback against the real runtime (Effort 2)
 
-Design: Special Considerations. Must complete before any port work. Needs a real
-`openai-codex` install, an `OPENAI_API_KEY`, and a machine state with no `~/.codex/auth.json`.
-If any of those cannot be arranged by the agent, stop and ask the Project Manager to run the
-check or supply the outcome — do not pick an outcome.
+Design: Special Considerations. Must be resolved before any port work.
+
+**Precondition (Project Manager):** the check needs resources an agent cannot produce — a real
+`OPENAI_API_KEY`, a real runtime, and a machine with no `~/.codex/auth.json`. The Project
+Manager runs it, or supplies its outcome, and records it under "Outcome" below. The agent must
+not infer or choose an outcome, and must not touch the real `~/.codex`.
+
+Procedure for whoever runs it: in a throwaway venv install `openai-codex`; with no `auth.json`
+(a throwaway `CODEX_HOME`-style location only if the runtime supports one) and `OPENAI_API_KEY`
+set, run one real turn via the SDK.
 
 - [ ] Create the slice branch (see Context Summary)
-- [ ] Install `openai-codex` into a throwaway venv (not the project env)
-- [ ] With no `auth.json` (throwaway `CODEX_HOME`-style location only if the runtime supports
-      one) and `OPENAI_API_KEY` set, run one real turn via the SDK
-- [ ] Record the outcome in this task, one of:
-  - [ ] **works** — key honored without `login_api_key`
-  - [ ] **fails** — record the runtime's error text verbatim
-  - [ ] Outcome: _(fill in)_
-  - [ ] Success: outcome recorded with the evidence (error text or response) — not inferred
+- [ ] Read the Outcome below. If it is still blank, stop and ask the Project Manager for it
+- [ ] Outcome (filled in by the Project Manager, with evidence — response text or the runtime's
+      error text verbatim): _(blank)_ — one of **works** (key honored without `login_api_key`)
+      or **fails**
+- [ ] Success: Outcome is non-blank and carries evidence; Task 2 proceeds from it
 
 ## Task 2 — Apply the Task 1 outcome to `OAuthFileStrategy` (Effort 2)
 
@@ -248,6 +251,7 @@ New test in `tests/providers/codex/` (e.g. `test_sdk_surface.py`).
       `login_chatgpt_device_code`, `account`, `logout` (used in Part C)
 - [ ] Success: passes with the extra installed in a throwaway venv; reports skipped (not failed)
       without it
+- [ ] Commit: `test: pin openai_codex SDK surface against real types`
 
 ## Task 13 — Part A gate: default-install suite (Effort 1)
 
@@ -310,13 +314,16 @@ File: `src/squadron/cli/commands/models.py`.
 
 - [ ] For each alias, resolve its profile's provider through `ensure_provider_loaded` +
       `get_provider`; if `isinstance(provider, ExtraRequirement)` and `missing_extra_hint()` is
-      not `None`, add `(needs [codex] extra)` to the Notes/Profile cell. No profile-name check;
-      the marker text derives from the hint
+      not `None`, append the marker `(needs extra: <hint>)` to the Notes/Profile cell, where `<hint>` is
+      the string `missing_extra_hint()` returned. No profile-name check and no literal extra
+      name (`codex`) in `models.py`; the marker text derives entirely from the hint (a
+      deliberate wording change from the design's `(needs [codex] extra)`, so the install
+      command has one source)
 - [ ] Shown in default and verbose output; absent when the extra is installed
 - [ ] A profile whose provider cannot be resolved must not break the listing (specific
       exception, WARNING log, no marker)
 - [ ] Tests in `tests/cli/test_model_list.py`: marker present for `codex-agent` and
-      `codex-spark` when missing, in default and verbose; absent when installed; other
+      `codex-spark` when missing, containing the exact hint string, in default and verbose; absent when installed; other
       aliases never marked
   - [ ] Success: tests pass
 - [ ] Commit: `feat: mark Codex aliases that need the extra in sq models list`
@@ -422,12 +429,17 @@ File: `src/squadron/cli/commands/auth.py`; tests `tests/cli/test_auth.py`.
 - [ ] Strategy is `InteractiveLogin` → `strategy.login(...)` with `notify` printing via Rich;
       on success re-read `account_summary()` and print
       `✓ <profile>: authenticated (<email>, <plan>)`; failure/timeout → red error, exit 1
+  - [ ] Login succeeded but `account_summary()` returns `None` (post-login `account()`
+        failure or `codex.account_timeout_s` timeout; Task 21 already logged a WARNING): the
+        login is still a success. Print `✓ <profile>: authenticated` with the source and no
+        account details, exit 0 — never report a completed login as failed
 - [ ] Not `InteractiveLogin` and `--device-code` given → error that the profile does not support
       interactive login, exit non-zero
 - [ ] Not `InteractiveLogin`, no flag → today's validate path, output byte-for-byte unchanged
 - [ ] Extra absent → exit non-zero with the install command, no traceback
 - [ ] Tests: interactive success line; device-code mode passed through; `--timeout` override;
-      failure and timeout exit non-zero; `sdk --device-code` error; unchanged output for a
+      failure and timeout exit non-zero; login succeeds but `account_summary()` is `None` →
+      exit 0, success line without account details; `sdk --device-code` error; unchanged output for a
       non-interactive profile (compare to existing test expectation); extra absent
   - [ ] Success: tests pass
 - [ ] Commit: `feat: sq auth login performs interactive login for supporting profiles`
