@@ -11,59 +11,59 @@ aiModel: deepseek/deepseek-v4.1-flash
 status: complete
 dateCreated: 20261001
 dateUpdated: 20261001
-reviewedSha: 7b7f3ae3eea336acede77ae93b0e996e16f94cc6
-revision_number: 2
+reviewedSha: dd709b1d18d83c0919d9d0d2be5ecb9b392e87d2
+revision_number: 3
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 38
+toolCallsMade: 49
 turns: 20
-promptTokens: 1334266
-cachedTokens: 1075840
-completionTokens: 76349
-reasoningTokens: 71449
-durationSeconds: 427.9
+promptTokens: 1167217
+cachedTokens: 975360
+completionTokens: 82402
+reasoningTokens: 77233
+durationSeconds: 480.4
 runId: run-20261001-p5-9c2f4175
 squadronVersion: 0.17.0
 findings:
   - id: F001
     severity: pass
-    category: traceability
-    summary: "Every Failure Modes row and D-decision traces to a task"
+    category: uncategorized
+    summary: "Every success criterion traces to at least one task"
     location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F002
-    severity: concern
-    category: test-coverage
-    summary: "Task 8 names the wrong tests; the test that actually breaks is not in any task"
-    location: "tests/review/test_review_client.py:1546"
+    severity: pass
+    category: uncategorized
+    summary: "Sequencing and dependencies are respected; no cycles"
+    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F003
-    severity: concern
-    category: integration
-    summary: "New `codex provider` doctor row leaks into `sq setup` with no name-keyed-table entries"
-    location: "src/squadron/cli/commands/setup_steps.py:48-140"
+    severity: pass
+    category: uncategorized
+    summary: "Test-with pattern and commit checkpoints are distributed, not batched"
+    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F004
-    severity: concern
-    category: documentation
-    summary: "README is updated but `docs/QUICKSTART.md` still prescribes the npm install this slice removes"
-    location: "docs/QUICKSTART.md:139"
+    severity: pass
+    category: uncategorized
+    summary: "No NFR restatement in this slice; no load-test obligation"
+    location: "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F005
-    severity: note
-    category: dependency-management
-    summary: "`uv.lock` is not regenerated after declaring the extra"
-    location: "uv.lock:1032"
+    severity: concern
+    category: uncategorized
+    summary: "CI never installs the `codex` extra, so the SDK drift test always skips"
+    location: ".github/workflows/ci.yml:33"
   - id: F006
-    severity: note
-    category: task-scoping
-    summary: "Task 9 mixes two subsystems and a cross-module end-to-end test"
-    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:194"
+    severity: concern
+    category: uncategorized
+    summary: "The `sq models list` marker's target cell is ambiguous for default output"
+    location: "src/squadron/cli/commands/models.py:82-90"
   - id: F007
     severity: note
-    category: test-coverage
-    summary: "Task 2's \"works\" branch duplicates existing coverage"
-    location: "tests/providers/codex/test_auth.py:69-75"
+    category: uncategorized
+    summary: "Task 15a adds a Part B surface the slice design does not enumerate"
+    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F008
-    severity: pass
-    category: nfr-coverage
-    summary: "No NFR is restated, so no load test or CI gate is owed"
-    location: "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
+    severity: note
+    category: uncategorized
+    summary: "Task 6 is the largest unit and bundles two separable behaviors"
+    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
 ---
 
 # Review: tasks — slice 129
@@ -73,53 +73,53 @@ findings:
 
 ## Findings
 
-### [PASS] Every Failure Modes row and D-decision traces to a task
+### [PASS] Every success criterion traces to at least one task
 
-Cross-referencing the slice design's Failure Modes table against the tasks: package missing (T5/T10/T20/T21/T23/T24/T25), no binary anywhere (T5/T10), initialize failure (T7b), turn hang→timeout (T7a), `account()` hang (T21/T25), `logout()` hang (T21/T24), login `wait()` timeout (T20/T23), turn timeout with `shutdown()` in `finally` (T7a), `TransportClosedError` with state reset (T7b), `ServerBusyError`/`RetryLimitExceededError` (T7b), `CodexRpcError` naming `sq auth login openai-oauth` (T7b), `failed`/`interrupted` (T7a), empty/blank `final_response` (T7a), `usage` absent (T9), teardown error logged-not-raised (T6/T7b). D1→T3, D2→T5/T6/T10, D3→T19/T22, D4→T6, D5→T8, D6→T9, D7→T4, D8→T7a, D9→T14/T15/T16/T18. No criterion is unowned and no task is scope creep.
+Cross-reference: FR "review completes with no API key / no PATH codex" → Tasks 5, 6, 10, 13, 26 (+ PM walkthrough step 6); FR "without the extra, error contains the exact install command" → Tasks 5, 10, 14, 23, 24, 25; FR "sq auth login browser + --device-code" → Tasks 20, 23; FR "status shows email/plan; logout removes login" → Tasks 21, 24, 25; FR "other profiles byte-for-byte unchanged" → Task 23; FR "effort reaches the SDK; artifact records effort and usage" → Tasks 8, 9, 9b. Technical: `codex_app_server`/`AppServerConfig`/`resolve_codex_binary` removal → Task 11 + Task 26; no profile-name/auth-type string dispatch → Task 26 diff review; one test per Failure Modes row → Tasks 6, 7a, 7b, 9, 20, 21, 23, 24, 25; real-types SDK test → Task 12; ruff/format/pyright → Tasks 13, 26. Integration: default-install suite → Tasks 13, 26; `sq doctor` / `sq models list` with and without the extra → Tasks 15, 16. Verification-walkthrough steps 1–8 each map to a task (3, 4, 6, 8 are correctly carved out as PM-only manual steps). No criterion is orphaned, and no task except Task 15a (see NOTE) lacks a criterion behind it.
 
-### [CONCERN] Task 8 names the wrong tests; the test that actually breaks is not in any task
+### [PASS] Sequencing and dependencies are respected; no cycles
 
-Task 8 says to "Update the existing capabilities test that expects `applies_effort=False` for `openai-oauth` (`tests/providers/test_capabilities.py` / codex provider tests)". That test does not exist where named — I read `tests/providers/test_capabilities.py` and its `TestAppliesEffort` class only asserts the dataclass default and `OpenAICompatibleProvider().capabilities.applies_effort is True`; neither `tests/providers/codex/test_provider.py` nor `test_capabilities.py` mentions `applies_effort` for `openai-oauth`. The assertion that will fail is `TestEffortThreading::test_codex_artifact_has_no_effort_key` in `tests/review/test_review_client.py` (it builds `provider.capabilities = CodexProvider().capabilities`, then asserts `result.effort is None` and `"effort:" not in frontmatter`), plus `DEVLOG.md`-era expectations noted in the slice-931 follow-up. An agent following Task 8 literally will edit a file with nothing to change, then fail "Success: tests pass" in `tests/review/`. Task 8 should name `tests/review/test_review_client.py` (and state that the `TestEffortThreading` Codex case must be inverted, since the artifact now legitimately carries `effort:`).
+Part 0 (1→2) gates the port; Part A order is 3→4→5→6→7a→7b→8→9→9b→10→11→12→13, with `runtime.py` (5) preceding every consumer (6, 10, 14), and the Part A gate (13) before Part B. Task 14 precedes its two consumers (15 doctor, 16 models); 15a follows 15; 18 is explicitly deferred until 15–17 exist so the hint-source test can assert a single `src` definition site. Part C orders 19 (Protocol) → 20/21 (`login.py`) → 22 (`OAuthFileStrategy` implements it) → 23/24/25 (CLI), which is the only order in which Tasks 23–25 can pass. No circular dependency and no task depends on a later one.
 
-### [CONCERN] New `codex provider` doctor row leaks into `sq setup` with no name-keyed-table entries
+### [PASS] Test-with pattern and commit checkpoints are distributed, not batched
 
-Task 15 registers `check_codex_provider` in `run_all_checks`, and `run_all_checks` is exactly what `sq setup` drives (`src/squadron/cli/commands/setup.py` via `build_steps`; `tests/cli/test_setup.py` patches it). `build_steps` renders a step for every result, so the new row will appear in `sq setup`/`sq setup --check-only` as a bare `codex provider` title (the `_TITLE_MAP` fallback is `result.name`), with no `DOCS_ANCHOR` link and no `_EXPLANATION` text — the four maps at `setup_steps.py:56`, `:106`, `:126`, and `:198` are all name-keyed and untouched by any task. `tests/cli/test_setup.py::test_both_command_check_names_are_registered_in_every_name_keyed_table` is deliberately scoped to the two command names, so this will not fail a gate — it will ship as a degraded setup step. Either add the entries as part of Task 15 or explicitly declare `sq setup` out of scope for this row.
+Every implementation task carries its own tests in the same task (5, 6, 7a, 7b, 8, 9, 10, 14, 15, 15a, 16, 19, 20, 21, 22, 23, 24, 25) and its own commit, so no task ends without a verifiable success statement. Only Tasks 11, 13, 18, 26 are audit/gate tasks, and each states "commit only if the audit required edits" rather than deferring commits to the end. The two exceptions are deliberate and labelled: 9b is a cross-module assertion over 8 and 9 ("no production code expected"), and Task 12 is a real-types test that follows the port.
 
-### [CONCERN] README is updated but `docs/QUICKSTART.md` still prescribes the npm install this slice removes
+### [PASS] No NFR restatement in this slice; no load-test obligation
 
-Task 17 covers only `README.md` §"Using Codex (experimental)". But `docs/QUICKSTART.md` is the document `sq setup`'s remediation links point at (`docs/QUICKSTART.md#configure-a-provider`, asserted resolvable by `tests/cli/test_setup.py`), and it still tells users, verbatim: `npm i -g @openai/codex` followed by `codex auth login` as the way to configure `openai-oauth` (line 139), with the same command repeated in the `sq doctor` sample output (line 86). The slice's stated value is "then `sq review … --model codex-agent` works on a ChatGPT login with no API key and no npm" — a user routed through QUICKSTART by our own setup output lands on the removed path. The `codex CLI` row's `npm i -g @openai/codex` fix hint is a separate, legitimate surface (the `codex skills` gate) and should stay, so the task needs to distinguish the two rather than blanket-replace.
+The slice design has no Non-Functional Requirements section and sets no latency/throughput target — it explicitly declines one ("No latency target is set: the cost is dominated by the agentic turn itself, and the hang case is already bounded by `codex.turn_timeout_s`"), converting the one startup-cost concern into a DEBUG log (Task 6) instead of a benchmark. `tests/load/` holds prior slices' event-loop load tests; nothing here restates one, so no `tests/load/` task and no load-test CI gate are owed.
 
-### [NOTE] `uv.lock` is not regenerated after declaring the extra
+### [CONCERN] CI never installs the `codex` extra, so the SDK drift test always skips
 
-Task 3 changes `[project.optional-dependencies]` but no task mentions re-locking. `uv.lock` is committed and carries the `squadron-ai` package entry (line 1032). CI runs `uv sync --dev` (not `--frozen`/`--locked`), which re-locks rather than failing, so this will not break the build — but it leaves a checked-in lockfile that disagrees with `pyproject.toml` until someone runs `uv sync`, and a future `--locked` invocation would fail. Worth one line in Task 3.
+D1 keeps the pin loose (`openai-codex>=0.159.3,<1`) precisely on the argument that "API drift is caught by the real-types test (Technical Requirements) instead." Task 12 writes that test with `pytest.importorskip("openai_codex")`, and Task 13/26 run the extra-installed suite only locally ("in a throwaway venv"). The `test` job installs the default dependency set (`uv sync --dev`) and the `hermetic` job clones the default install, so `test_sdk_surface.py` reports *skipped* in every automated run — the mitigation D1 relies on is never executed where it matters. The breakdown needs a CI wiring task (e.g. a job or matrix leg that does `uv sync --extra codex` and runs the suite, or at minimum the new test module) and a Gate on its result; as written, the guard is implicit and unenforced.
 
-### [NOTE] Task 9 mixes two subsystems and a cross-module end-to-end test
+### [CONCERN] The `sq models list` marker's target cell is ambiguous for default output
 
-Task 9 bundles (a) the four-field `TurnResult.usage.last` mapping inside `agent.py`, (b) the `metadata["usage"]`/`["turns"]` stamping convention shared with `src/squadron/providers/openai/agent.py:689-690`, and (c) an integration test that drives `review/review_client.py` (`sent_effort`, `capture.usage`) through `CodexProvider` and asserts lines persisted by `review/persistence.py` (`format_review_markdown` emits `effort: <value>` and `RunCost` digest lines, per `persistence.py:260-261,449-453`). The implementation half is a few lines; the test half spans three modules and depends on Task 8's capability flag. It is completable as written, but splitting the integration/artifact test into its own task would give each half a success criterion the agent can evaluate without holding both in flight.
+Task 16 requires the marker in "the Notes/Profile cell" and asserts it is present "in default and verbose". Those cannot be the same cell: `_show_aliases` adds `Profile` unconditionally (line 82) but adds `Notes` only under `if verbose:` (line 90), so a marker written only into Notes is invisible in default output and a marker written only into Profile never appears under the Notes heading in verbose. The task also changes the marker wording from the design's `(needs [codex] extra)` to `(needs extra: <hint>)`, which is disclosed and justified (single hint source) but compounds the cell question, since the design located the marker in the Notes/Profile cell. A junior AI following the bullet literally can satisfy one assertion and fail the other; the task should name the cell per mode (or state that the marker is concatenated into Profile in both modes).
 
-### [NOTE] Task 2's "works" branch duplicates existing coverage
+### [NOTE] Task 15a adds a Part B surface the slice design does not enumerate
 
-Task 2's `works` path asks for "a test pinning `active_source == "OPENAI_API_KEY"` for a key-only environment (existing source label is already `OPENAI_API_KEY`)" — `TestActiveSource::test_api_key_source` in `tests/providers/codex/test_auth.py` already asserts exactly that. The task acknowledges it parenthetically; the checklist item would be sharper as "confirm the existing pin still holds" rather than implying a new test.
+The design's "Sub-part B surfaces" list is exhaustive — missing-package error, `sq doctor` row, `sq models list` marker, README — and its Integration Requirements mention only `sq doctor` and `sq models list` running cleanly. Task 15a additionally wires `codex provider` into `sq setup`'s four name-keyed tables plus its tests. This is defensible plumbing (without it the new doctor row renders as a raw check name with no recheck/explanation/anchor, per `setup_steps.py`), and no success criterion is contradicted by it, but it is scope beyond the design and worth confirming with the PM rather than treating it as implied.
 
-### [PASS] No NFR is restated, so no load test or CI gate is owed
+### [NOTE] Task 6 is the largest unit and bundles two separable behaviors
 
-The slice design explicitly declines a latency target ("No latency target is set: the cost is dominated by the agentic turn itself") and declines a benchmark task ("Startup duration is logged at DEBUG so a slow start is diagnosable without a benchmark task"), so there is no NFR requiring a `tests/load/` task and consequently no CI-gating task to add. The three timeouts in D7 are correctness bounds, and each has a unit test (T4, T7a, T20, T21). The remaining integration requirement ("`sq doctor` and `sq models list` run cleanly with and without the extra") is covered by T15/T16 and re-run in T26.
+Task 6 (Effort 4) simultaneously removes the legacy `resolve_codex_binary`/`_SDK_INSTALL_URL`/`_CLI_INSTALL_CMD`/GitHub-install error text, rebuilds the client lifecycle on `resolve_codex_runtime()`, introduces `Sandbox(value)` validation with its own error path (D4), changes the `thread_start` signature, adds startup-duration logging, preserves the `shutdown()` teardown contract, *and* re-points the whole `test_agent.py` fake set plus seven new assertions. The sandbox decision (D4) is independent of the port and carries its own error contract; splitting it into its own task/commit would leave the port commit failing for one reason at a time. Not blocking — the bullets are explicit enough to execute — but it is the one task where a mid-task failure would be hard to localise.
 
 ### Run Digest
 
-- Response length: 8119 chars
+- Response length: 7903 chars
 - Response is newline-free: no
-- Tool calls made: 38
+- Tool calls made: 49
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 280835
+- Reasoning characters: 304266
 - Effort: backend default
 - Turns: 20
-- Tokens — prompt / cached / completion / reasoning: 1334266 / 1075840 / 76349 / 71449
-- Duration: 427.9 s
+- Tokens — prompt / cached / completion / reasoning: 1167217 / 975360 / 82402 / 77233
+- Duration: 480.4 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8
