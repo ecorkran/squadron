@@ -3,7 +3,7 @@ docType: slice-design
 slice: codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login
 project: squadron
 parent: project-documents/user/architecture/100-slices.orchestration-v2.md
-dependencies: [review-transport-unification-provider-decoupling]
+dependencies: [review-transport-unification-provider-decoupling, tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage]
 interfaces: []
 dateCreated: 20261001
 dateUpdated: 20261001
@@ -60,18 +60,18 @@ Three parts: **A** port + packaging, **B** discoverability, **C** `sq auth login
 
 ```
 providers/codex/
-  runtime.py   NEW   resolve_codex_runtime() → CodexRuntime(source, path|None); import guard + install hint
+  runtime.py   NEW   resolve_codex_runtime() → CodexRuntime(source, path|None); probes importability only, no SDK types
   agent.py     EDIT  openai_codex port; effort; usage
   provider.py  EDIT  uses runtime.py; applies_effort=True
   auth.py      EDIT  OAuthFileStrategy implements InteractiveLogin
-  login.py     NEW   async login/logout/account flows over AsyncCodex (only module besides agent that imports openai_codex)
+  login.py     NEW   async login/logout/account flows over AsyncCodex (with agent.py, one of two modules using SDK types)
 providers/auth.py    EDIT  add InteractiveLogin Protocol (runtime_checkable)
 cli/commands/auth.py EDIT  login/logout/status use InteractiveLogin
 cli/commands/doctor_checks.py  EDIT  check_codex_provider row
 cli/commands/models.py         EDIT  marker for aliases needing the extra
 ```
 
-`runtime.py` and `login.py` import `openai_codex` lazily inside functions so the module graph imports cleanly without the extra (the loader already swallows `ImportError`, and the provider must still register so `get_provider("openai-oauth")` can raise the install hint rather than "unknown provider").
+`openai_codex` is imported only inside functions, never at module top level, in `runtime.py`, `login.py`, and `agent.py`. The module graph therefore imports cleanly without the extra, and the provider still registers so `get_provider("openai-oauth")` can raise the install hint rather than "unknown provider". `agent.py` and `login.py` are the only modules that use SDK types; `runtime.py` only probes importability.
 
 ### Data Flow
 
@@ -95,8 +95,29 @@ No squadron state added. Credentials live in `~/.codex/auth.json`, written and r
 - **D6 — Token usage:** map `TurnResult.usage.last` (`input_tokens`, `cached_input_tokens`, `output_tokens`, `reasoning_output_tokens`) to `TokenUsage(prompt, cached, completion, reasoning)`; `None` when `usage` is `None` (never 0). Stamp via the same metadata keys the OpenAI agent uses so review artifacts need no change.
 - **D7 — Login timeout** is one module-level constant in `login.py`, overridable by `--timeout`. On timeout or Ctrl-C the handle is cancelled (`handle.cancel()`) so the local callback listener is released.
 
+- **D8 — Turn result is checked, not trusted.** After `thread.run`, `TurnResult.status` must be `TurnStatus.completed`; `failed` raises `ProviderError` carrying `TurnResult.error.message`, `interrupted` raises `ProviderError("Codex turn interrupted")`. A `completed` turn whose `final_response` is `None` or blank raises `ProviderError("Codex turn completed with no response text")`. The current `result.final_response or ""` is removed: an empty review must never reach the parser as a valid, empty Message (the dispatch no-op class of bug, issue #15).
+
+### Failure Modes — Codex Turn
+
+Each row is logged at WARNING or above (or raised as `ProviderError`, which callers log) and has a test asserting the signal.
+
+| Failure | Behavior |
+|---|---|
+| `openai_codex` not installed | `ProviderError` with the install command, at `create_agent` |
+| No bundled binary and none on PATH | `ProviderError` naming both remedies, at `create_agent` |
+| Runtime subprocess fails to start / `initialize` fails | `ProviderError` wrapping the SDK error; client closed (the SDK closes on init failure) |
+| Hang: no response from the runtime | Turn-level timeout (one constant, `--timeout`-style config, defined once) wrapping `thread.run`; on expiry cancel the turn, raise `ProviderError("Codex turn timed out after N s")` |
+| Timeout or cancellation mid-turn | Turn handle interrupted and `shutdown()` still runs in `finally`, so no orphaned runtime process |
+| Runtime exits / transport closes mid-turn (`TransportClosedError`) | `ProviderError` chained from the SDK error; agent state reset so a later message does not reuse the dead client (`_codex`/`_thread` cleared) |
+| Server busy / rate-limited (`ServerBusyError`, `RetryLimitExceededError`) | `ProviderError` with the SDK message; no squadron-side retry |
+| Not logged in / token rejected | Surfaces as `CodexRpcError` from the runtime → `ProviderError` whose text includes `sq auth login openai-oauth` |
+| Turn `failed` or `interrupted` | `ProviderError` per D8 |
+| Completed with empty `final_response` | `ProviderError` per D8 |
+| `usage` absent | `TokenUsage` left `None` and a DEBUG log; not an error |
+| Teardown error in `shutdown()` | Existing behavior: logged with `logger.exception`, not re-raised (process-boundary teardown) |
+
 ### Patterns and Conventions
-- Failure modes are explicit and observable: missing package, missing binary, login timeout, login `success=False` (surface `error`), `account()` failure in `status` (log WARNING, still show validity). No silent fallbacks.
+- Failure modes are explicit and observable: the turn table above, plus login timeout, login `success=False` (surface `error`), and `account()` failure in `status` (log WARNING, still show validity). No silent fallbacks.
 - The install hint string (`pip install 'squadron-ai[codex]'` form) is defined once in `runtime.py` and referenced by agent, provider, doctor, and `model list`.
 - `CodexAgent` keeps its `except ProviderError: raise` / wrap-other-exceptions shape; SDK `CodexError` subclasses are wrapped into `ProviderError` with the original chained.
 
@@ -156,7 +177,7 @@ class InteractiveLogin(Protocol):
 ### Technical Requirements
 - No remaining reference to `codex_app_server`, `AppServerConfig`, or `resolve_codex_binary`.
 - No profile-name or auth-type string comparison added; capability via `isinstance(…, InteractiveLogin)` and the provider's own report.
-- Tests (SDK faked at the `openai_codex` import boundary, as existing codex tests do): runtime resolution (bundled / PATH / neither / package missing), sandbox validation, effort mapping, usage mapping incl. `None`, login success / `success=False` / timeout-cancels-handle, device-code path, status with and without `account()` failure, logout, `--device-code` on a non-interactive profile, doctor row states, model-list marker present/absent.
+- Tests (SDK faked at the `openai_codex` import boundary, as existing codex tests do): runtime resolution (bundled / PATH / neither / package missing), one test per row of the Failure Modes — Codex Turn table asserting the raised `ProviderError`/log signal (including failed, interrupted, empty-response, timeout, transport-closed), sandbox validation, effort mapping, usage mapping incl. `None`, login success / `success=False` / timeout-cancels-handle, device-code path, status with and without `account()` failure, logout, `--device-code` on a non-interactive profile, doctor row states, model-list marker present/absent.
 - At least one test imports against the real `openai_codex` types (skipped when the extra is absent) so a drifted SDK surface fails loudly.
 - `ruff format`, `ruff check`, `pyright` clean.
 
