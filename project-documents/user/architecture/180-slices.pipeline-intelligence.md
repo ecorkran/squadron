@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 180-arch.pipeline-intelligence.md
 project: squadron
 dateCreated: 20260411
-dateUpdated: 20260928
+dateUpdated: 20261001
 status: in_progress
 ---
 
@@ -64,11 +64,13 @@ The initiative follows its own dependency graph — model pools and fan-out deli
 
 17. [ ] **(197) Implementation Batch Pipeline (`implement-plan`)** *(added 20260927)* — Vertical, per-slice Phase 6 over a plan: `each` over slices with reviewed tasks, and per slice: branch (196b) → implement → code review → revise loop (same pass/accept thresholds as 195) → merge (196b). A slice that ends flagged (review not resolved within `max-revisions`, merge conflict, or any step failure) is left on its branch unmerged, and its dependents are flagged (196c); independent slices continue. Vertical rather than breadth-first because each slice's branch must merge before dependent work starts (git rules: one branch per unit, merged before the next). Also refreshes the single-slice `slice.yaml` onto the 195/196 machinery (revise loops, item reset, flagging) so the one-slice and whole-plan paths share steps. **Escalation seam (Amoeba):** a flagged item is an escalation event; the batch report's flag list is the machine-readable handoff. This slice adds resuming a single flagged item after a decision (human or Amoeba judge) without rerunning the batch. The contract is agreed with Amoeba during design. Deciding on flags is Amoeba's job, not squadron's. Dependencies: [196]. Risk: Med. Effort: 4/5
 
+18. [ ] **(198) Planning-Phase Pipelines: Concept and Architecture with Review Loops (P0, P2)** *(added 20261001)* — P0 and P2 use the `design` phase step, which is keyed entirely by slice. It runs `cf set slice` first, its dispatch artifact check expects the slice's design file (`ArtifactKind.DESIGN` → `info["design_file"]`), and the `arch` review template takes `arch_file` from the slice's cf info. A concept or a new initiative has no slice yet, so P0 and P2 work only when the caller passes a slice from an existing initiative and is revising its architecture doc; P0 reviews the architecture doc instead of the concept. **(a) Initiative-keyed planning steps:** phase 0 and 2 steps take `plan:` (the existing `set_arch` operation) instead of `slice:`; validation rejects `slice:` on them. **(b) Artifact kinds:** add `CONCEPT` and `ARCH` to `ArtifactKind`, with paths resolved from cf's project fields (Concept, Architecture) instead of slice info, so the dispatch artifact check and revision stamp work for both. **(c) Review inputs:** `arch` and a new `concept` template resolve their input from the same project-level source; a review step in these pipelines carries no slice. **(d) Pipelines:** give P0 and P2 the P4-style loop (design → review → revise until pass, accept on concerns-or-better, checkpoint on exhaustion), with `review-model` as a parameter. Verify with one live P2 run on a throwaway initiative and one P0 run. Dependencies: [194, 195]. Risk: Medium (adds a second keying mode to phase steps; cf project-field semantics for concept and architecture need confirming). Effort: 3/5
+
 ---
 
 ## Integration Work
 
-18. [ ] **(190) Pipeline Intelligence Documentation and Examples** — Authoring guide covering model pools, fan-out, convergence strategies, escalation, finding triage, conversation persistence, and ensemble review. Example pipelines in `examples/`: weighted-decay review loop, pool-based model selection, escalation + convergence combined, ensemble review with fan-out. Configuration reference (`pools.toml` schema, convergence parameter matrix, escalation config). Observability and tuning notes: how to read the ledger, how to calibrate decay/threshold from logged data, how to debug pool selections. Dependencies: [all feature slices]. Risk: Low. Effort: 2/5
+19. [ ] **(190) Pipeline Intelligence Documentation and Examples** — Authoring guide covering model pools, fan-out, convergence strategies, escalation, finding triage, conversation persistence, and ensemble review. Example pipelines in `examples/`: weighted-decay review loop, pool-based model selection, escalation + convergence combined, ensemble review with fan-out. Configuration reference (`pools.toml` schema, convergence parameter matrix, escalation config). Observability and tuning notes: how to read the ledger, how to calibrate decay/threshold from logged data, how to debug pool selections. Dependencies: [all feature slices]. Risk: Low. Effort: 2/5
 
 ---
 
@@ -95,6 +97,7 @@ Feature Slices:
   195. Plan Batch Pipelines: Design and Tasks         (after 194; absorbs issue #139)
   196. Branch Steps, Scoped Commits, Dependency Flags (after 195; fixes #150)
   197. Implementation Batch Pipeline                  (after 196; Amoeba resume contract)
+  198. Planning-Phase Pipelines (P0, P2)              (after 195; independent of 196-197)
 
 Integration:
   190. Pipeline Intelligence Documentation           (after all prior)
