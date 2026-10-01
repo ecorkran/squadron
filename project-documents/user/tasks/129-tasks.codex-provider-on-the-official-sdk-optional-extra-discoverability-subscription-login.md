@@ -64,14 +64,19 @@ set, run one real turn via the SDK.
 
 File: `src/squadron/providers/codex/auth.py`; tests: `tests/providers/codex/test_auth.py`.
 
-- [ ] **If works:** keep the key fallback; add a test pinning `active_source == "OPENAI_API_KEY"`
-      for a key-only environment (existing source label is already `OPENAI_API_KEY`)
+- [ ] **If works:** no code or test change — `tests/providers/codex/test_auth.py` already pins
+      the key fallback (`get_credentials` with a key, `is_valid` with a key, and
+      `active_source == "OPENAI_API_KEY"` for a key-only environment). Confirm those tests
+      still pass and note "no change needed" under Task 1's Outcome
 - [ ] **If fails:** remove the key fallback from `is_valid`, `active_source`, `get_credentials`,
       and `setup_hint`; `setup_hint` points to `sq auth login openai-oauth` or the `openai` profile
-  - [ ] Update existing tests that assert key-only is valid; add a test that a key-only
-        environment is not valid and `get_credentials` raises `ProviderAuthError`
+  - [ ] Update the existing tests that assert the fallback: the API-key `get_credentials` and
+        `is_valid` cases, the `active_source == "OPENAI_API_KEY"` case, the auth-file-preferred
+        case that sets a key, and the `setup_hint` test asserting `OPENAI_API_KEY` appears
+  - [ ] Add a test that a key-only environment is not valid and `get_credentials` raises
+        `ProviderAuthError`
 - [ ] Success: tests for the chosen outcome pass; the other outcome's behavior is absent
-- [ ] Commit: `fix: resolve OPENAI_API_KEY fallback in OAuthFileStrategy against real runtime`
+- [ ] Commit (only if the **fails** branch changed code): `fix: resolve OPENAI_API_KEY fallback in OAuthFileStrategy against real runtime`
 
 ---
 
@@ -86,8 +91,12 @@ File: `pyproject.toml`.
 - [ ] Confirm the distribution name in `[project] name` (`squadron-ai`) matches the install
       hint in Task 5
 - [ ] Do not add `openai-codex` to core dependencies or `dev`
+- [ ] Regenerate `uv.lock` with `uv lock`; the diff adds `openai-codex` (and its
+      `openai-codex-cli-bin` / `pydantic` dependencies) only under the `codex` extra of
+      `squadron-ai`, and changes no other package's pinned version unintentionally
 - [ ] Success: `pip install -e '.[codex]'` resolves in a throwaway venv; `pip install -e .`
-      does not pull `openai-codex`
+      does not pull `openai-codex`; `uv lock --check` passes
+- [ ] Commit: `package: declare codex optional extra`
 
 ## Task 4 — Timeout config keys (D7) (Effort 1)
 
@@ -184,8 +193,13 @@ Files: `agent.py`, `provider.py`.
 - [ ] Pass `effort=ReasoningEffort(config.effort.value)` to `thread.run` when
       `config.effort` is set; omit when `None`
 - [ ] `CodexProvider.capabilities`: `applies_effort=True`
-- [ ] Update the existing capabilities test that expects `applies_effort=False` for
-      `openai-oauth` (`tests/providers/test_capabilities.py` / codex provider tests)
+- [ ] Update `test_codex_artifact_has_no_effort_key` in `tests/review/test_review_client.py`
+      (class around line 1546): it asserts a Codex artifact never claims effort, which is false
+      once `applies_effort=True`. Rewrite it (rename to match) to assert that with
+      `Effort.low` the `ReviewResult.effort` is `Effort.low`, the artifact frontmatter has
+      `effort: low`, and the body shows `- Effort: low`
+- [ ] Add `test_codex_applies_effort` in `tests/providers/test_capabilities.py` beside
+      `test_openai_applies_effort`
 - [ ] Tests: each squadron `Effort` value reaches `thread.run` as the same-named
       `ReasoningEffort`; `None` passes no effort; no effort WARNING emitted
   - [ ] Success: tests pass
@@ -203,16 +217,23 @@ File: `agent.py`. Reuse `TokenUsage` / `RunTelemetry` from `core/usage.py`.
       so review artifacts need no change
 - [ ] Tests: full mapping; a field the SDK omits stays `None`; `usage=None` → `not reported`
       plus DEBUG log; metadata keys present on the yielded Message
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: record Codex per-turn token usage`
+
+## Task 9b — Effort and usage reach the review artifact (Effort 2)
+
+Cross-module check of Tasks 8 and 9 through `review/`. New test beside the existing review
+tests under `tests/review/`; no production code expected.
+
 - [ ] End-to-end artifact test (Functional Requirements: "artifact records effort and usage"):
       drive the review path in `review/review_client.py` (the `sent_effort` /
       `capture.usage` code) with `CodexProvider` and a faked SDK returning usage, for an
       alias with `effort = "high"`; assert the `ReviewResult` has `effort == Effort.high` and
       reported `usage`, and the persisted artifact (`review/persistence.py`) contains the
-      `effort: high` line and the usage figures. Put it beside the existing review tests
-      under `tests/review/`
-  - [ ] Also assert a turn with no `usage` persists no usage figures (not zeros)
+      `effort: high` line and the usage figures
+- [ ] Also assert a turn with no `usage` persists no usage figures (not zeros)
   - [ ] Success: tests pass
-- [ ] Commit: `feat: record Codex per-turn token usage`
+- [ ] Commit: `test: Codex effort and usage reach the review artifact`
 
 ## Task 10 — Port `CodexProvider` to the runtime resolver (D2) (Effort 2)
 
@@ -308,6 +329,25 @@ doctor module itself (the existing `codex CLI` row stays unchanged).
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add codex provider row to sq doctor`
 
+## Task 15a — Wire the `codex provider` row into `sq setup` (Effort 2)
+
+`sq setup` converts every doctor row into a step via name-keyed tables in
+`src/squadron/cli/commands/setup_steps.py`; a row absent from them gets no recheck, no
+explanation, no docs anchor, and its raw check name as title. Add `"codex provider"` to each:
+
+- [ ] `_RECHECK_MAP`: `check_codex_provider` (so setup re-verifies after the user installs)
+- [ ] `_human_title` `_TITLE_MAP`: a human title (e.g. "Install Codex extra")
+- [ ] `_EXPLANATION`: 1–2 sentences — the extra enables `openai-oauth` / `codex-agent`; optional
+- [ ] `DOCS_ANCHOR`: `docs/QUICKSTART.md#configure-a-provider` (the heading must exist; the
+      anchor test in `tests/cli/test_setup.py` enforces it)
+- [ ] The step's `command` is the row's `fix_hint` (the install command) — no duplicate string
+- [ ] Tests in `tests/cli/test_setup_steps.py` / `tests/cli/test_setup.py`: `build_steps` on a
+      WARN `codex provider` result yields an OPTIONAL step with the title, explanation,
+      anchor, recheck, and the install command; the existing name-keyed-table coverage test in
+      `test_setup.py` (around line 433–457) is extended if it enumerates check names
+  - [ ] Success: tests pass; `sq setup` with the extra missing shows the step with the hint
+- [ ] Commit: `feat: add codex provider step to sq setup`
+
 ## Task 16 — `sq models list` marker (D9) (Effort 2)
 
 File: `src/squadron/cli/commands/models.py`.
@@ -328,16 +368,23 @@ File: `src/squadron/cli/commands/models.py`.
   - [ ] Success: tests pass
 - [ ] Commit: `feat: mark Codex aliases that need the extra in sq models list`
 
-## Task 17 — README (Effort 1)
+## Task 17 — README and QUICKSTART (Effort 1)
 
 File: `README.md`, section "Using Codex (experimental)".
 
 - [ ] Replace the npm + GitHub SDK instructions with: install the extra →
       `sq auth login openai-oauth` → example `sq review … --model codex-agent`; note
       `--device-code` for SSH/headless
-- [ ] Success: no mention of `npm i -g @openai/codex` as a requirement for this path (the
-      separate `codex CLI` skills note stays); install command matches the single definition
-- [ ] Commit: `docs: document Codex extra install and login in README`
+- [ ] `docs/QUICKSTART.md`: update the `openai-oauth` provider-table row (~line 126) and the
+      "authenticate via the Codex CLI" block (~lines 135–141) from `npm i -g @openai/codex` +
+      `codex auth login` to the extra install + `sq auth login openai-oauth`; keep the
+      anchor target `configure-a-provider` intact. The doctor-output sample showing the
+      `codex CLI` row (~lines 85–86) stays (that row is unchanged) — add a `codex provider` row
+      to the sample if the sample lists integrations rows
+- [ ] Success: neither README nor QUICKSTART presents `npm i -g @openai/codex` as a requirement
+      for this path (the separate `codex CLI` skills note stays); install command matches the
+      single definition; `grep -n "codex auth login" README.md docs/` returns nothing
+- [ ] Commit: `docs: document Codex extra install and login in README and QUICKSTART`
 
 ## Task 18 — Hint-source audit (Effort 1)
 
