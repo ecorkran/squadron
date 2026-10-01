@@ -12,6 +12,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261001
 
+### Slice 129: Task Breakdown Complete
+
+- **Tasks:** `project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md` — 27 tasks, Part 0 (API-key fallback check) then A/B/C, test-with ordering, commit per group.
+- **Gate:** Task 1 needs a real `openai-codex` runtime plus an `OPENAI_API_KEY`; if the agent cannot arrange it, it stops and asks the PM. Browser/device-code/real-review smoke tests are PM-run, listed outside the checklist.
+- **Open:** `login.py` may need the same pyright exclusion `agent.py` has if strict mode rejects SDK types; decide at implementation.
+
 ### Slice 129: Codex Provider on the Official SDK — Design Complete
 
 - **Design:** `project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md`. Validator PASS. Slice-plan entry already carried the `(129)` index.
