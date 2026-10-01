@@ -11,53 +11,44 @@ aiModel: deepseek/deepseek-v4.1-flash
 status: complete
 dateCreated: 20261001
 dateUpdated: 20261001
-reviewedSha: 40ae840b84f1cbc35acb5fe0c99efc7f20b8a449
+reviewedSha: 97b6c9f507f344d81eb7a9a2f3735f8195468db8
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 24
-turns: 10
-promptTokens: 517206
-cachedTokens: 355200
-completionTokens: 34511
-reasoningTokens: 31540
-durationSeconds: 183.2
+toolCallsMade: 12
+turns: 8
+promptTokens: 271277
+cachedTokens: 227200
+completionTokens: 20185
+reasoningTokens: 18211
+durationSeconds: 63.3
 runId: run-20261001-p5-9c2f4175
 squadronVersion: 0.17.0
 findings:
   - id: F001
     severity: pass
-    category: requirements-coverage
-    summary: "Success criteria cross-reference"
+    category: traceability
+    summary: "Success criteria and failure modes are broadly covered"
     location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F002
-    severity: pass
-    category: nfr-coverage
-    summary: "No NFR restatement requiring a load test"
-    location: "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
-  - id: F003
-    severity: concern
-    category: type-checking
-    summary: "pyright-strict handling for new SDK-importing modules is under-specified"
-    location: "pyproject.toml:95"
-  - id: F004
     severity: concern
     category: error-handling
-    summary: "`missing_extra_hint()` must catch the resolver's raise, but the task does not say so"
-    location: "src/squadron/providers/codex/provider.py"
+    summary: "Post-login account-summary failure is unspecified in `sq auth login`"
+    location: "src/squadron/cli/commands/auth.py"
+  - id: F003
+    severity: note
+    category: process
+    summary: "`Task 1` precondition may not be completable by the agent"
+    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
+  - id: F004
+    severity: note
+    category: process
+    summary: "`Task 12` has no commit checkpoint"
+    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
   - id: F005
     severity: note
-    category: sequencing
-    summary: "Hint-source audit is scheduled before its targets exist"
-    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
-  - id: F006
-    severity: note
-    category: requirements-coverage
-    summary: "Functional success criterion \"artifact records effort and usage\" is only covered indirectly"
-    location: "src/squadron/review/review_client.py:262"
-  - id: F007
-    severity: note
-    category: task-sizing
-    summary: "Task 7 is large but cohesive"
-    location: "project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md"
+    category: dry-principle
+    summary: "Models-list marker hardcodes the extra name, escaping the single-source audit"
+    location: "src/squadron/cli/commands/models.py"
 ---
 
 # Review: tasks — slice 129
@@ -67,52 +58,44 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria cross-reference
+### [PASS] Success criteria and failure modes are broadly covered
 
-Every Functional, Technical, and Integration success criterion in the slice design has a corresponding task: extra install + login review smoke (Tasks 3–10, 13; PM manual step), missing-extra error text (Tasks 5, 10, 14, 20–25), browser/device-code login (Tasks 20, 23), status/logout (Tasks 21, 24, 25), unchanged non-interactive behavior (Task 23), effort/usage (Tasks 8, 9), no stale references (Task 11), real-type drift test (Task 12), default-install suite (Tasks 13, 26), doctor + models clean with/without extra (Tasks 16, 17).
+Every Functional, Technical, and Integration success criterion maps to a task: runtime resolver and port (Tasks 5/6/10), extra packaging (Task 3), effort/usage incl. the `effort = "high"` artifact test (Tasks 8/9), discoverability error text / doctor row / models marker / README (Tasks 14–17), interactive login/logout/status (Tasks 20–25), stale-reference grep (Task 11), real-types drift test (Task 12), and default-install gates (Tasks 13/26). Each row of the slice design's Failure Modes table has a producing task and a test. Sequencing respects dependencies (config keys before their consumers, `ExtraRequirement` before doctor/models, `InteractiveLogin` before the CLI commands), with no circular dependencies. No slice NFR is restated that would require a `tests/load/` task, and the design explicitly sets no latency target.
 
-### [PASS] No NFR restatement requiring a load test
+### [CONCERN] Post-login account-summary failure is unspecified in `sq auth login`
 
-The slice explicitly sets "No latency target" for runtime startup; D7 timeouts are bounded caps on hangs, not throughput/latency NFRs. No `tests/load/` task is therefore required, and none is expected. Consistent with the existing `tests/load/` suite.
+The slice design's Failure Modes row for "Hang or failure in `account()` / runtime start during `sq auth status` **or post-login confirmation**" requires that on timeout or SDK error the command "never fail the command", showing validity and source without account details. Task 23 only specifies the success path — "on success re-read `account_summary()` and print `✓ <profile>: authenticated (<email>, <plan>)`" — and its test list omits the `account_summary() -> None` case after a successful `login()`. Since Task 21/22 make `account_summary()` return `None` on timeout/SDK error (and `None` for an invalid strategy), a junior implementer following Task 23 literally would print a success line with empty/`None` account fields, or crash, rather than degrading gracefully as the design mandates. Task 23 should state the `None` branch (print success with validity/source only, no failure) and add a test for it.
 
-### [CONCERN] pyright-strict handling for new SDK-importing modules is under-specified
+### [NOTE] `Task 1` precondition may not be completable by the agent
 
-`[tool.pyright]` includes all of `src` and excludes only `src/squadron/providers/codex/agent.py`. CI runs `uv run pyright` after `uv sync --dev`, and Task 3 explicitly says *not* to add `openai-codex` to `dev`, so `openai_codex` is absent in CI. The new `login.py` (Task 20: "`openai_codex` imported inside functions") will therefore trip `reportMissingImports` at strict mode. Task 13 only anticipates this for `runtime.py` ("If `pyright` reports missing-import errors in `runtime.py` … fix there") and never names `login.py`, nor does it say to use the existing `# pyright: ignore[reportMissingImports]` pattern (or a stated alternative). As written, Task 20 can be marked complete while `pyright` fails. Add explicit guidance for every new module that names `openai_codex` (login.py, and confirm runtime.py if it imports rather than only `find_spec`).
+Task 1 is a blocker for the whole slice ("Must complete before any port work") and requires a real `openai-codex` install, an `OPENAI_API_KEY`, and a machine with no `~/.codex/auth.json` plus a real SDK turn. The task correctly instructs the agent to stop and ask the PM if it cannot arrange this, so the outcome is not fabricated — but reviewers should be aware the slice's first gate is not agent-completable in a typical sandbox. No change strictly required.
 
-### [CONCERN] `missing_extra_hint()` must catch the resolver's raise, but the task does not say so
+### [NOTE] `Task 12` has no commit checkpoint
 
-`resolve_codex_runtime()` raises `ProviderError` when the package is missing (Task 5), yet Task 14 specifies `CodexProvider.missing_extra_hint()` as "`None` when `resolve_codex_runtime()` succeeds, otherwise the hint from `runtime.py`". A literal reading leaves an uncaught `ProviderError` propagating out of a method both `sq doctor` (Task 16) and `sq models list` (Task 17) call to compute a *non-fatal* row/marker — the opposite of their stated "must not break the listing" behavior. The task should state that the resolver's `ProviderError` is caught and its message reused as the hint (single hint source), so the two callers stay fail-safe.
+Every other implementation task ends with a `Commit:` line (per CLAUDE.md "Git add and commit from project root at least once per task"), but Task 12 adds a new test file (`test_sdk_surface.py`) with no commit instruction; its work would only be captured by Task 13's conditional `chore: part A validation fixes`. Add an explicit commit to Task 12 for consistency.
 
-### [NOTE] Hint-source audit is scheduled before its targets exist
+### [NOTE] Models-list marker hardcodes the extra name, escaping the single-source audit
 
-Task 15 ("no duplicated install string anywhere in `src`") runs before Task 16 (`doctor`) and Task 17 (`models list`) add their hint consumers; its own text hedges with "(later)". The real enforcement already recurs in Task 26 ("Technical Requirements grep from Task 11 still clean"). Consider folding Task 15's assertion into Task 26 or explicitly restating it after Task 17 so the audit runs against the completed surface.
-
-### [NOTE] Functional success criterion "artifact records effort and usage" is only covered indirectly
-
-Task 8 flips `applies_effort=True` and tests that `thread.run` receives `ReasoningEffort`, and Task 9 tests the message metadata keys — but no task asserts the end-to-end review artifact records effort/usage for `codex-agent` (the slice's Functional Requirement). `review_client` records `sent_effort` from `capabilities.applies_effort`, so the behavior follows, but it is left to the PM manual walkthrough (step 6). A targeted test (or an explicit note that slice 931's review_client tests cover it) would make the criterion independently verifiable.
-
-### [NOTE] Task 7 is large but cohesive
-
-Task 7 (Effort 4) bundles timeout, three turn-status branches, four SDK-error wraps, and ~11 tests. It maps 1:1 to the Failure Modes — Codex Turn table, so splitting may fragment the table's test-per-row contract; flagging only so the implementer budgets for it. No change required.
+Task 16 specifies the marker literal `(needs [codex] extra)` and simultaneously says "the marker text derives from the hint", while Task 18's single-source test only asserts "the literal install command appears in exactly one `src` module". The extra name `[codex]` therefore ends up encoded both in `runtime.py`'s hint and in `models.py`'s marker, and the audit in Task 18 would not catch the divergence. Either derive the marker entirely from `missing_extra_hint()` (no `[codex]` literal), or extend the Task 18 audit to cover the extra name.
 
 ### Run Digest
 
-- Response length: 5413 chars
+- Response length: 4498 chars
 - Response is newline-free: no
-- Tool calls made: 24
+- Tool calls made: 12
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 127596
+- Reasoning characters: 73248
 - Effort: backend default
-- Turns: 10
-- Tokens — prompt / cached / completion / reasoning: 517206 / 355200 / 34511 / 31540
-- Duration: 183.2 s
+- Turns: 8
+- Tokens — prompt / cached / completion / reasoning: 271277 / 227200 / 20185 / 18211
+- Duration: 63.3 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 5
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 5
+- Finding-shaped matches — surviving validation: 5
