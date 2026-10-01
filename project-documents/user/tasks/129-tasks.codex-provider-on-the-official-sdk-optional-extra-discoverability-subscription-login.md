@@ -140,7 +140,7 @@ File: `src/squadron/providers/codex/agent.py`. Imports of `openai_codex` stay in
   - [ ] Success: tests pass
 - [ ] Commit: `refactor: port CodexAgent to openai_codex client and runtime resolver`
 
-## Task 7 — Turn result checks, timeout, SDK error wrapping (D8, D7, Failure Modes) (Effort 4)
+## Task 7a — Turn timeout and result checks (D7, D8) (Effort 2)
 
 File: `agent.py`. One test per Failure Modes row that applies to a turn; each asserts the raised
 `ProviderError` or the WARNING+ log.
@@ -152,17 +152,26 @@ File: `agent.py`. One test per Failure Modes row that applies to a turn; each as
       `interrupted` → `ProviderError("Codex turn interrupted")`; `completed` with `None`/blank
       `final_response` → `ProviderError("Codex turn completed with no response text")`;
       remove `final_response or ""`
+- [ ] Tests (one each): timeout (turn interrupted, `shutdown()` still runs), failed (error
+      message carried), interrupted, empty response, blank response
+  - [ ] Success: tests pass; no test relies on a real subprocess
+- [ ] Commit: `feat: check Codex turn results and bound turns with a timeout`
+
+## Task 7b — Wrap SDK errors (Failure Modes) (Effort 2)
+
+File: `agent.py`. One test per row; each asserts the raised `ProviderError` (original chained)
+or the WARNING+ log.
+
 - [ ] Wrap SDK `CodexError` subclasses into `ProviderError` with the original chained:
   - [ ] startup/`initialize` failure
   - [ ] `TransportClosedError` — also clear `_codex` and `_thread` so the next message does not
         reuse the dead client
   - [ ] `ServerBusyError` / `RetryLimitExceededError` — SDK message, no retry
   - [ ] `CodexRpcError` (not logged in / rejected) — text includes `sq auth login openai-oauth`
-- [ ] Tests (one each): timeout, failed, interrupted, empty response, blank response,
-      startup failure, transport closed (state reset, then a later message starts a new
+- [ ] Tests (one each): startup failure, transport closed (state reset, then a later message starts a new
       client), server busy, rpc error (hint text), teardown error still logged-not-raised
   - [ ] Success: tests pass; no test relies on a real subprocess
-- [ ] Commit: `feat: check Codex turn results and bound turns with a timeout`
+- [ ] Commit: `feat: wrap Codex SDK errors into ProviderError`
 
 ## Task 8 — Effort (D5, closes #171) (Effort 2)
 
@@ -191,6 +200,14 @@ File: `agent.py`. Reuse `TokenUsage` / `RunTelemetry` from `core/usage.py`.
       so review artifacts need no change
 - [ ] Tests: full mapping; a field the SDK omits stays `None`; `usage=None` → `not reported`
       plus DEBUG log; metadata keys present on the yielded Message
+- [ ] End-to-end artifact test (Functional Requirements: "artifact records effort and usage"):
+      drive the review path in `review/review_client.py` (the `sent_effort` /
+      `capture.usage` code) with `CodexProvider` and a faked SDK returning usage, for an
+      alias with `effort = "high"`; assert the `ReviewResult` has `effort == Effort.high` and
+      reported `usage`, and the persisted artifact (`review/persistence.py`) contains the
+      `effort: high` line and the usage figures. Put it beside the existing review tests
+      under `tests/review/`
+  - [ ] Also assert a turn with no `usage` persists no usage figures (not zeros)
   - [ ] Success: tests pass
 - [ ] Commit: `feat: record Codex per-turn token usage`
 
@@ -236,9 +253,10 @@ New test in `tests/providers/codex/` (e.g. `test_sdk_surface.py`).
 
 - [ ] Run the full test suite in an environment **without** `openai_codex`; all pass
 - [ ] `tests/test_import_purity.py` passes (no import-time home/.env reads in new modules)
-- [ ] `ruff format`, `ruff check`, `pyright` clean. If `pyright` reports missing-import errors in
-      `runtime.py` (function-local imports only; expected none), fix there rather than widening
-      the exclude list
+- [ ] `ruff format`, `ruff check`, `pyright` clean. `agent.py` stays in the pyright exclude list
+      (unchanged); `runtime.py`, `provider.py` and `base.py` are type-checked and must not need
+      an exclusion — any `openai_codex` reference there is a function-local import or
+      `find_spec`, so fix errors in the code rather than widening the exclude list
 - [ ] Commit any fixes: `chore: part A validation fixes`
 
 ---
@@ -251,23 +269,24 @@ Files: `src/squadron/providers/base.py`, `providers/codex/provider.py`.
 
 - [ ] Add `ExtraRequirement` (`@runtime_checkable`) with `missing_extra_hint() -> str | None`
       beside `AgentProvider`
-- [ ] `CodexProvider.missing_extra_hint()`: `None` when `resolve_codex_runtime()` succeeds,
-      otherwise the hint from `runtime.py` (the one definition; no new string)
+- [ ] `CodexProvider.missing_extra_hint()`: `resolve_codex_runtime()` **raises** `ProviderError`
+      when the package or binary is missing (Task 5), so catch that specific exception (with a
+      comment: the raise is the "missing" signal here, not a failure). Return `None` when it
+      returns normally; on `ProviderError` return the hint from `runtime.py` (the one
+      definition; no new string). Never let the `ProviderError` escape — `sq models list` and
+      `sq doctor` call this on every run
+  - [ ] Only the package-missing case yields the `[codex]` install hint; if the package is
+        present but neither binary exists, return the no-binary message from `runtime.py`
+        (also a non-`None` string) rather than the extra hint
 - [ ] Providers without optional dependencies do not implement it
-- [ ] Tests: `isinstance(CodexProvider(), ExtraRequirement)`; hint returned when package missing,
-      `None` when present; a provider without the method is not an `ExtraRequirement`
+- [ ] Tests: `isinstance(CodexProvider(), ExtraRequirement)`; hint returned when package missing
+      (call does not raise); package present but no binary → the no-binary message, not the
+      extra hint; `None` when runtime resolves; a provider without the method is not an
+      `ExtraRequirement`
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add ExtraRequirement protocol and Codex implementation`
 
-## Task 15 — Missing-package error text audit (Effort 1)
-
-- [ ] Confirm agent, provider, and (later) doctor / model list all take the hint from
-      `runtime.py`; no duplicated install string anywhere in `src`
-- [ ] Test: grep-style assertion or targeted test that the literal install command appears in
-      exactly one source module
-  - [ ] Success: one definition site
-
-## Task 16 — `sq doctor` `codex provider` row (D9, Sub-part B) (Effort 3)
+## Task 15 — `sq doctor` `codex provider` row (D9, Sub-part B) (Effort 3)
 
 File: `src/squadron/cli/commands/doctor_checks.py`. No import probing or `shutil.which` in the
 doctor module itself (the existing `codex CLI` row stays unchanged).
@@ -285,7 +304,7 @@ doctor module itself (the existing `codex CLI` row stays unchanged).
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add codex provider row to sq doctor`
 
-## Task 17 — `sq models list` marker (D9) (Effort 2)
+## Task 16 — `sq models list` marker (D9) (Effort 2)
 
 File: `src/squadron/cli/commands/models.py`.
 
@@ -302,7 +321,7 @@ File: `src/squadron/cli/commands/models.py`.
   - [ ] Success: tests pass
 - [ ] Commit: `feat: mark Codex aliases that need the extra in sq models list`
 
-## Task 18 — README (Effort 1)
+## Task 17 — README (Effort 1)
 
 File: `README.md`, section "Using Codex (experimental)".
 
@@ -312,6 +331,17 @@ File: `README.md`, section "Using Codex (experimental)".
 - [ ] Success: no mention of `npm i -g @openai/codex` as a requirement for this path (the
       separate `codex CLI` skills note stays); install command matches the single definition
 - [ ] Commit: `docs: document Codex extra install and login in README`
+
+## Task 18 — Hint-source audit (Effort 1)
+
+Runs after Tasks 15–17 so every consumer (agent, provider, doctor, model list, README) exists.
+
+- [ ] Confirm agent, provider, doctor row, and models marker all take the install hint from
+      `runtime.py`; no duplicated install string anywhere in `src`
+- [ ] Test: assert the literal install command appears in exactly one `src` module (README is
+      documentation and may repeat it)
+  - [ ] Success: one definition site; test passes
+- [ ] Commit only if the audit required edits: `refactor: single source for Codex install hint`
 
 ---
 
@@ -334,6 +364,10 @@ File: `src/squadron/providers/auth.py`. `AuthStrategy` is not changed.
 New file: `src/squadron/providers/codex/login.py`. `openai_codex` imported inside functions.
 Calls `resolve_codex_runtime()` before touching the SDK.
 
+- [ ] Pyright: add `src/squadron/providers/codex/login.py` to `[tool.pyright] exclude` in
+      `pyproject.toml` beside `agent.py`, with the same rationale (SDK types are unresolved
+      because pyright runs without the extra; `reportMissingImports = true`). Both excluded
+      files are the only SDK-type users (design: Component Structure); `runtime.py` stays checked
 - [ ] `login(*, device_code, timeout, notify)`: build `AsyncCodex(CodexConfig(codex_bin=…))`;
       browser mode → `login_chatgpt()`, `notify(auth_url)`, attempt `webbrowser.open`;
       device-code mode → `login_chatgpt_device_code()`, `notify` the `verification_url` and

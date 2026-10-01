@@ -16,7 +16,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 - **Tasks:** `project-documents/user/tasks/129-tasks.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md` — 27 tasks, Part 0 (API-key fallback check) then A/B/C, test-with ordering, commit per group.
 - **Gate:** Task 1 needs a real `openai-codex` runtime plus an `OPENAI_API_KEY`; if the agent cannot arrange it, it stops and asks the PM. Browser/device-code/real-review smoke tests are PM-run, listed outside the checklist.
-- **Open:** `login.py` may need the same pyright exclusion `agent.py` has if strict mode rejects SDK types; decide at implementation.
+- **Pyright:** `login.py` joins `agent.py` in the pyright exclude list (Task 20); `runtime.py` stays type-checked.
 
 ### Slice 129: Codex Provider on the Official SDK — Design Complete
 
