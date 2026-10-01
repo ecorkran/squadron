@@ -10,6 +10,15 @@ dateUpdated: 20260930
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20261001
+
+### Slice 129: Codex Provider on the Official SDK — Design Complete
+
+- **Design:** `project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md`. Validator PASS. Slice-plan entry already carried the `(129)` index.
+- **SDK surface checked against `openai-codex` 0.159.3** (installed in a throwaway venv, not the project): `login_chatgpt`/`login_chatgpt_device_code` handles, `account()` → `ChatgptAccount(email, plan_type)`, `thread.run(effort=ReasoningEffort)`, `TurnResult.usage.last`, bundled binary via `codex_cli_bin`.
+- **Decisions:** `InteractiveLogin` as a separate runtime-checkable Protocol (no `AuthStrategy` change); one `CodexRuntime` resolver shared by agent/provider/doctor; `Effort` → `ReasoningEffort` by value, no table; sandbox validated via `Sandbox` enum.
+- **Open for PM:** upper version cap on `openai-codex` (0.x SDK); whether `OAuthFileStrategy`'s `OPENAI_API_KEY` fallback works with the app-server (unverified, to be checked during implementation).
+
 ## 20260930
 
 ### Release 0.17.0
