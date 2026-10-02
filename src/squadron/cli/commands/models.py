@@ -14,10 +14,8 @@ from rich.markup import escape
 from rich.table import Table
 
 from squadron.models.aliases import ModelAlias, get_all_aliases, load_builtin_aliases
-from squadron.providers.base import ExtraRequirement
-from squadron.providers.loader import ensure_provider_loaded
+from squadron.providers.loader import missing_extra_hint
 from squadron.providers.profiles import get_profile
-from squadron.providers.registry import get_provider
 
 _log = logging.getLogger(__name__)
 
@@ -135,17 +133,13 @@ def _extra_marker(profile_name: str, cache: dict[str, str]) -> str:
         return cache[profile_name]
     marker = ""
     try:
-        provider_type = get_profile(profile_name).provider
-        ensure_provider_loaded(provider_type)
-        provider = get_provider(provider_type)
+        hint = missing_extra_hint(get_profile(profile_name).provider)
     except KeyError:
         # An alias naming an unknown profile or provider must not break the listing.
         _log.warning("models list: cannot resolve provider for profile %r", profile_name)
     else:
-        if isinstance(provider, ExtraRequirement):
-            hint = provider.missing_extra_hint()
-            if hint is not None:
-                marker = f" (needs extra: {hint})"
+        if hint is not None:
+            marker = f" (needs extra: {hint})"
     cache[profile_name] = marker
     return marker
 

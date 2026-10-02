@@ -15,11 +15,10 @@ import typer
 from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
-from squadron.providers.base import ExtraRequirement, ProfileName, ProviderType
+from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.codex.runtime import RuntimeSource, resolve_codex_runtime
-from squadron.providers.loader import ensure_provider_loaded
+from squadron.providers.loader import missing_extra_hint
 from squadron.providers.profiles import get_all_profiles, get_profile, providers_toml_path
-from squadron.providers.registry import get_provider
 from squadron.skills.manifest import load_effective
 from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
 
@@ -347,9 +346,7 @@ def check_codex_provider() -> CheckResult:
     profile's auth strategy. Spawns nothing.
     """
     name = "codex provider"
-    ensure_provider_loaded(ProviderType.OPENAI_OAUTH)
-    provider = get_provider(ProviderType.OPENAI_OAUTH)
-    hint = provider.missing_extra_hint() if isinstance(provider, ExtraRequirement) else None
+    hint = missing_extra_hint(ProviderType.OPENAI_OAUTH)
     if hint is not None:
         return CheckResult(
             name=name,
