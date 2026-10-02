@@ -13,6 +13,13 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.12", "3.13"]
+        # The codex leg runs the SDK drift test against real openai_codex
+        # types (slice 129). `extras: [""]` makes the include below a new
+        # leg instead of merging into the existing 3.12 one.
+        extras: [""]
+        include:
+          - python-version: "3.12"
+            extras: codex
     steps:
       - uses: actions/checkout@v7
         with:
@@ -30,7 +37,10 @@ jobs:
       - run: cf init --lite --no-ide
       - uses: astral-sh/setup-uv@v9.0.0
       - run: uv python install ${{ matrix.python-version }}
-      - run: uv sync --dev
+      - run: uv sync --dev ${{ matrix.extras && format('--extra {0}', matrix.extras) || '' }}
+      # Fail the leg on a broken install rather than letting the drift test skip.
+      - if: matrix.extras == 'codex'
+        run: uv run python -c "import openai_codex"
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run pyright
