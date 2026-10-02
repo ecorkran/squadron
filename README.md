@@ -282,28 +282,18 @@ The `codex-agent` alias enables **OpenAI Codex** agentic mode for reviews and ag
 sq review slice 120 --model codex-agent -v
 ```
 
-**Setup**: Codex support requires two additional components:
+**Setup**: install the `codex` extra (it bundles the Codex runtime; no npm install needed), then sign in with your ChatGPT account:
 
-1. **Codex CLI** (via npm):
-   ```bash
-   npm i -g @openai/codex
-   ```
+```bash
+pip install 'squadron-ai[codex]'
+sq auth login openai-oauth                 # opens a browser
+sq auth login openai-oauth --device-code   # SSH / headless: prints a URL and code
+sq review slice 120 --model codex-agent -v
+```
 
-2. **Codex Python SDK** (from GitHub):
-   ```bash
-   pip install 'codex-app-server-sdk @ git+https://github.com/openai/codex.git#subdirectory=sdk/python'
-   ```
+`sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row, and `sq models list` marks the Codex aliases while the extra is missing. `OPENAI_API_KEY` is not used by this profile — for API-key access use the `openai` profile.
 
-3. **Authenticate** via OpenAI API key:
-   ```bash
-   # Option A: Set environment variable
-   export OPENAI_API_KEY="sk-..."
-
-   # Option B: Use Codex CLI (saves to ~/.codex/auth.json)
-   codex auth login
-   ```
-
-Codex is experimental and requires active OpenAI subscriptions. The standard `codex` alias (without `-agent` suffix) uses OpenAI's Chat Completions API and doesn't require this setup.
+Codex is experimental and requires an active ChatGPT subscription. The standard `codex` alias (without `-agent` suffix) uses OpenAI's Chat Completions API and doesn't require this setup.
 
 ## Pipelines (`sq run`)
 

@@ -84,6 +84,7 @@ Integrations
   ✓ context-forge               cf at /path/to/cf
   ! codex CLI                   not on PATH
     fix: npm i -g @openai/codex
+  ✓ codex provider              openai-codex 0.160.0, runtime: bundled; logged in
   ✓ Claude Code CLI             SDK provider available
   ✓ gh CLI                      gh at /opt/homebrew/bin/gh
   ✓ gh hosts file               hosts file at ~/.config/gh/hosts.yml
@@ -123,7 +124,7 @@ Squadron ships six built-in provider profiles. Verified against `BUILT_IN_PROFIL
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | Multi-model gateway |
 | Google Gemini | `gemini` | `GEMINI_API_KEY` | Via OpenAI-compatible endpoint |
 | Local (Ollama / vLLM / LM Studio) | `local` | None | Points at `http://localhost:11434/v1` by default |
-| OpenAI Codex (agentic) | `openai-oauth` | `codex auth login` (saves to `~/.codex/auth.json`) or `OPENAI_API_KEY` | See README's [Using Codex](../README.md#using-codex-experimental) section for full setup |
+| OpenAI Codex (agentic) | `openai-oauth` | `pip install 'squadron-ai[codex]'`, then `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; see README's [Using Codex](../README.md#using-codex-experimental) section |
 
 To configure a profile, either set its env var:
 
@@ -133,11 +134,11 @@ export OPENROUTER_API_KEY="..."
 export GEMINI_API_KEY="..."
 ```
 
-or, for `openai-oauth`, authenticate via the Codex CLI:
+or, for `openai-oauth`, install the `codex` extra and sign in with your ChatGPT account:
 
 ```bash
-npm i -g @openai/codex
-codex auth login
+pip install 'squadron-ai[codex]'
+sq auth login openai-oauth   # add --device-code on SSH / headless machines
 ```
 
 `sdk` and `local` need no credentials — `sdk` uses your Claude Code session, `local` assumes a model server already running on your machine.
