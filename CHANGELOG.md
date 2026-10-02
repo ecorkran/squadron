@@ -16,16 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The Codex provider (`openai-oauth`, `--model codex-agent`) installs with `uv tool install 'squadron-ai[codex]'` (or the pip/pipx equivalent). It uses OpenAI's official SDK with a bundled runtime, so `npm i -g @openai/codex` and the GitHub SDK install are no longer needed.
+- The Codex provider (`openai-oauth`, `--model codex-agent`) works out of the box: squadron now ships OpenAI's official Codex SDK with its bundled runtime, so `npm i -g @openai/codex` and the GitHub SDK install are no longer needed.
 - `sq auth login openai-oauth` signs in with your ChatGPT account in the browser, or with `--device-code` on SSH and headless machines. `--timeout` sets how long to wait. `sq auth logout openai-oauth` signs out, and `sq auth status` shows the signed-in email and plan.
-- `sq doctor` has a `codex provider` row (extra installed, runtime, login state), and `sq setup` offers the install as an optional step. `sq models list` marks Codex aliases with the install command while the extra is missing.
+- `sq doctor` has a `codex provider` row (SDK version, login state), and `sq setup` offers Codex sign-in as an optional step.
 - Codex reviews apply the alias `effort` and record token usage in the review artifact (#171).
 
 ### Changed
 - `openai-oauth` no longer treats `OPENAI_API_KEY` as a login: the Codex runtime ignores it. Use `sq auth login openai-oauth`, or the `openai` profile for API-key access.
 
 ### Fixed
-- Install hints containing brackets (such as `squadron-ai[codex]`) print intact in `sq doctor`, `sq setup`, `sq auth` and review errors.
+- Hints and errors containing square brackets print intact in `sq doctor`, `sq setup`, `sq auth` and review errors.
 - A split `sq review tasks` exits 2 when any part fails, even if another part's verdict could not be read. It used to report UNKNOWN and exit 0. A pipeline `review:` step over split task files now reports FAIL in that case too (#176).
 
 ## [0.17.0] - 20260930

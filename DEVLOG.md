@@ -2,13 +2,22 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261001
+dateUpdated: 20261002
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261002
+
+### Slice 129: Codex SDK Becomes a Core Dependency (code review pending)
+
+- **Why:** the `codex` extra was fragile. `uv tool install --upgrade squadron-ai` (the usual upgrade command) replaces the saved install spec and silently uninstalls the SDK; only `uv tool upgrade` keeps an extra (both verified, uv 0.11.2). The original design also said `pip install`, which lands outside a `uv tool` environment.
+- **Change:** `openai-codex>=0.159.3,<1` moved to core dependencies. Removed: the `codex` extra, `providers/codex/runtime.py` (install hint, bundled/PATH resolution, `CodexExtraMissingError`), the `ExtraRequirement` protocol and `loader.missing_extra_hint()`, the `sq models list` marker, the install hint in `sq auth status`, the CI extras leg, and the pyright exclude for `agent.py`/`login.py`, which now type-check against the real SDK. The doctor row reports SDK version and login state; the `sq setup` step is now "Sign in to Codex".
+- **Cost:** the bundled runtime adds 302 MB (the Claude SDK already bundles 223 MB); wheels cover macOS, Linux glibc/musl and Windows on x86 and ARM. pydantic floor rises to 2.12 via the SDK.
+- **Tests:** 5226 passed / 4 skipped; `test_sdk_surface.py` now always runs. ruff + pyright clean.
 
 ## 20261001
 

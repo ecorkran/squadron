@@ -282,18 +282,15 @@ The `codex-agent` alias enables **OpenAI Codex** agentic mode for reviews and ag
 sq review slice 120 --model codex-agent -v
 ```
 
-**Setup**: install the `codex` extra (it bundles the Codex runtime; no npm install needed), then sign in with your ChatGPT account:
+**Setup**: squadron ships the Codex SDK and its bundled runtime (no npm install needed), so just sign in with your ChatGPT account:
 
 ```bash
-uv tool install 'squadron-ai[codex]'
 sq auth login openai-oauth                 # opens a browser
 sq auth login openai-oauth --device-code   # SSH / headless: prints a URL and code
 sq review slice 120 --model codex-agent -v
 ```
 
-This reinstalls squadron with the extra. To update later, run `uv tool upgrade squadron-ai`, which keeps the extra. Do not use `uv tool install --upgrade squadron-ai`: it reinstalls without the extra and removes Codex support (use `uv tool install --upgrade 'squadron-ai[codex]'` if you prefer that form). If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
-
-`sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row, and `sq models list` marks the Codex aliases while the extra is missing. `OPENAI_API_KEY` is not used by this profile — for API-key access use the `openai` profile.
+`sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row with the SDK version and login state. `OPENAI_API_KEY` is not used by this profile — for API-key access use the `openai` profile.
 
 Codex is experimental and requires an active ChatGPT subscription. The standard `codex` alias (without `-agent` suffix) uses OpenAI's Chat Completions API and doesn't require this setup.
 
