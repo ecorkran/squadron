@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from enum import StrEnum
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -13,7 +14,7 @@ import pytest
 from squadron.providers.codex import login as codex_login
 from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 from squadron.providers.errors import ProviderError
-from tests.providers.codex.fake_sdk import FakeSdk
+from tests.providers.codex.fake_sdk import CodexError, FakeSdk
 
 _AUTH_URL = "https://auth.openai.com/oauth/authorize?state=secret-state"
 _DEVICE_URL = "https://auth.openai.com/codex/device"
@@ -150,3 +151,71 @@ class TestLogin:
         logged = caplog.text
         for secret in (_AUTH_URL, _DEVICE_URL, _USER_CODE):
             assert secret not in logged
+
+
+class _PlanType(StrEnum):
+    plus = "plus"
+
+
+def _account(email: str | None = "you@example.com") -> SimpleNamespace:
+    details = SimpleNamespace(email=email, plan_type=_PlanType.plus, type="chatgpt")
+    return SimpleNamespace(account=SimpleNamespace(root=details), requires_openai_auth=True)
+
+
+async def _hang() -> None:
+    await asyncio.sleep(10)
+    raise AssertionError("call should have timed out")
+
+
+class TestAccountSummary:
+    def test_formats_email_and_plan(self, fake_sdk: FakeSdk) -> None:
+        fake_sdk.client.account = AsyncMock(return_value=_account())
+        assert asyncio.run(codex_login.account_summary()) == "you@example.com, plus"
+        fake_sdk.client.close.assert_awaited_once()
+
+    def test_sdk_error_returns_none_and_warns(
+        self, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        fake_sdk.client.account = AsyncMock(side_effect=CodexError("rpc failed"))
+        with caplog.at_level("WARNING", logger="squadron.providers.codex.login"):
+            assert asyncio.run(codex_login.account_summary()) is None
+        assert any("account lookup failed" in r.getMessage() for r in caplog.records)
+
+    def test_timeout_returns_none_and_warns(
+        self, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        fake_sdk.client.account = AsyncMock(side_effect=_hang)
+        with patch(_CONFIG, return_value=0), caplog.at_level("WARNING"):
+            assert asyncio.run(codex_login.account_summary()) is None
+        assert any("timed out" in r.getMessage() for r in caplog.records)
+
+    def test_extra_absent_returns_none_with_hint_logged(self, caplog: pytest.LogCaptureFixture) -> None:
+        with patch(_MODULE_AVAILABLE, return_value=False), caplog.at_level("WARNING"):
+            assert asyncio.run(codex_login.account_summary()) is None
+        assert CODEX_INSTALL_COMMAND in caplog.text
+
+
+class TestLogout:
+    def test_success(self, fake_sdk: FakeSdk) -> None:
+        asyncio.run(codex_login.logout())
+        fake_sdk.client.logout.assert_awaited_once()
+        fake_sdk.client.close.assert_awaited_once()
+
+    def test_timeout_raises(self, fake_sdk: FakeSdk) -> None:
+        fake_sdk.client.logout = AsyncMock(side_effect=_hang)
+        with patch(_CONFIG, return_value=0):
+            with pytest.raises(ProviderError, match="logout timed out after 0 s"):
+                asyncio.run(codex_login.logout())
+
+    def test_sdk_error_raises(self, fake_sdk: FakeSdk) -> None:
+        sdk_error = CodexError("rpc failed")
+        fake_sdk.client.logout = AsyncMock(side_effect=sdk_error)
+        with pytest.raises(ProviderError, match="rpc failed") as exc_info:
+            asyncio.run(codex_login.logout())
+        assert exc_info.value.__cause__ is sdk_error
+
+    def test_extra_absent_gives_install_hint(self) -> None:
+        with patch(_MODULE_AVAILABLE, return_value=False):
+            with pytest.raises(ProviderError) as exc_info:
+                asyncio.run(codex_login.logout())
+        assert CODEX_INSTALL_COMMAND in str(exc_info.value)
