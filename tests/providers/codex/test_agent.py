@@ -13,7 +13,7 @@ from squadron.core.usage import TokenUsage
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 from squadron.providers.errors import ProviderError
-from tests.providers.codex.conftest import (
+from tests.providers.codex.fake_sdk import (
     PATH_RUNTIME,
     ApprovalMode,
     CodexError,
