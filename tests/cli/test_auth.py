@@ -193,3 +193,54 @@ def test_interactive_login_extra_absent_prints_install_command(runner: CliRunner
     assert result.exit_code == 1
     assert CODEX_INSTALL_COMMAND in result.output
     assert "Traceback" not in result.output
+
+
+# --- slice 129: logout ---
+
+
+def test_logout_success(runner: CliRunner) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    with patch(f"{_LOGIN}.logout", new=AsyncMock()) as logout:
+        result = runner.invoke(app, ["auth", "logout", "openai-oauth"])
+    assert result.exit_code == 0, result.output
+    assert "✓ openai-oauth: logged out" in result.output
+    logout.assert_awaited_once()
+
+
+def test_logout_non_interactive_profile_errors(runner: CliRunner) -> None:
+    result = runner.invoke(app, ["auth", "logout", "openai"])
+    assert result.exit_code == 1
+    assert "does not support interactive login" in result.output
+
+
+def test_logout_unknown_profile(runner: CliRunner) -> None:
+    result = runner.invoke(app, ["auth", "logout", "nonexistent-profile"])
+    assert result.exit_code == 1
+    assert "nonexistent-profile" in result.output
+
+
+@pytest.mark.parametrize(
+    "message", ["Codex logout timed out after 30 s", "Codex logout failed: rpc failed"]
+)
+def test_logout_error_exits_nonzero(runner: CliRunner, message: str) -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from squadron.providers.errors import ProviderError
+
+    with patch(f"{_LOGIN}.logout", new=AsyncMock(side_effect=ProviderError(message))):
+        result = runner.invoke(app, ["auth", "logout", "openai-oauth"])
+    assert result.exit_code == 1
+    assert message in result.output
+
+
+def test_logout_extra_absent_prints_install_command(runner: CliRunner) -> None:
+    from unittest.mock import patch
+
+    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
+
+    with patch("squadron.providers.codex.runtime._module_available", return_value=False):
+        result = runner.invoke(app, ["auth", "logout", "openai-oauth"])
+    assert result.exit_code == 1
+    assert CODEX_INSTALL_COMMAND in result.output
+    assert "Traceback" not in result.output

@@ -65,6 +65,22 @@ def auth_login(
     rprint(f"[green]✓[/green] {escape(profile_name)}: authenticated ({escape(detail)})")
 
 
+@auth_app.command("logout")
+def auth_logout(
+    profile_name: str = typer.Argument(help="Profile to log out of"),
+) -> None:
+    """Log out of a profile that supports interactive login."""
+    profile = _profile_or_exit(profile_name)
+    strategy = resolve_auth_strategy_for_profile(profile)
+    if not isinstance(strategy, InteractiveLogin):
+        _fail(f"profile {profile_name!r} does not support interactive login")
+    try:
+        asyncio.run(strategy.logout())
+    except ProviderError as exc:
+        _fail(str(exc))
+    rprint(f"[green]✓[/green] {escape(profile_name)}: logged out")
+
+
 def _profile_or_exit(profile_name: str) -> ProviderProfile:
     try:
         return get_profile(profile_name)
