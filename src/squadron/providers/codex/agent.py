@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from collections.abc import AsyncIterator
 
+from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
@@ -15,6 +17,8 @@ from squadron.providers.errors import ProviderError
 _log = get_logger("squadron.providers.codex.agent")
 
 _SANDBOX_KEY = "sandbox"
+_TURN_TIMEOUT_KEY = "codex.turn_timeout_s"
+_RPC_TIMEOUT_KEY = "codex.account_timeout_s"
 
 
 class CodexAgent:
@@ -101,9 +105,49 @@ class CodexAgent:
             )
         if self._thread is None:
             await self._start_thread(self._config.model)
+        result = await self._run_turn(prompt)
+        return self._checked_response(result)
 
-        result = await self._thread.run(prompt)  # type: ignore[union-attr]
-        return result.final_response or ""  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+    async def _run_turn(self, prompt: str) -> object:
+        """Run one turn under ``codex.turn_timeout_s``; interrupt it on expiry."""
+        timeout_s = get_typed_config(_TURN_TIMEOUT_KEY, int)
+        turn: object | None = None
+        try:
+            async with asyncio.timeout(timeout_s):
+                turn = await self._thread.turn(prompt)  # type: ignore[union-attr]
+                return await turn.run()  # type: ignore[union-attr]
+        except TimeoutError as exc:
+            if turn is not None:
+                await self._interrupt(turn)
+            raise ProviderError(f"Codex turn timed out after {timeout_s} s") from exc
+        except RuntimeError as exc:
+            # The SDK reports a failed turn (and a missing completion event)
+            # as a bare RuntimeError carrying the runtime's error message.
+            raise ProviderError(f"Codex turn failed: {exc}") from exc
+
+    async def _interrupt(self, turn: object) -> None:
+        """Best-effort interrupt of a timed-out turn, bounded so a hung runtime cannot block."""
+        from openai_codex import CodexError  # pyright: ignore[reportMissingImports]
+
+        try:
+            async with asyncio.timeout(get_typed_config(_RPC_TIMEOUT_KEY, int)):
+                await turn.interrupt()  # type: ignore[attr-defined]
+        except (TimeoutError, CodexError):
+            # The turn already failed with a timeout, which is what gets raised;
+            # shutdown() tears down the runtime either way.
+            _log.warning("Codex turn interrupt after timeout did not complete", exc_info=True)
+
+    @staticmethod
+    def _checked_response(result: object) -> str:
+        """Return the turn's response text, or raise for an interrupted or empty turn."""
+        from openai_codex.types import TurnStatus  # pyright: ignore[reportMissingImports]
+
+        if result.status == TurnStatus.interrupted:  # type: ignore[attr-defined]
+            raise ProviderError("Codex turn interrupted")
+        text = result.final_response  # type: ignore[attr-defined]
+        if text is None or not text.strip():
+            raise ProviderError("Codex turn completed with no response text")
+        return text
 
     async def _start_thread(self, model: str) -> None:
         """Start the SDK client and open a thread (first message only)."""

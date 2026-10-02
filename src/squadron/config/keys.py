@@ -385,8 +385,9 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         type_=int,
         default=30,
         description=(
-            "Wall-clock cap in seconds on Codex runtime start plus the account "
-            "lookup (sq auth status, post-login) or logout (sq auth logout)."
+            "Wall-clock cap in seconds on short Codex runtime calls: runtime start "
+            "plus the account lookup (sq auth status, post-login) or logout "
+            "(sq auth logout), and interrupting a timed-out turn."
         ),
     ),
 }

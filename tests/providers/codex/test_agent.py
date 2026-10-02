@@ -17,7 +17,10 @@ from tests.providers.codex.conftest import (
     FakeSdk,
     Sandbox,
     TurnResult,
+    TurnStatus,
 )
+
+_CONFIG = "squadron.providers.codex.agent.get_typed_config"
 
 
 @pytest.fixture()
@@ -146,6 +149,53 @@ class TestSandbox:
         for member in Sandbox:
             assert member.value in message
         fake_sdk.client.thread_start.assert_not_called()
+
+
+class TestTurnResultChecks:
+    """One test per Failure Modes row that applies to a turn (D7, D8)."""
+
+    def test_timeout_interrupts_turn_and_shutdown_still_runs(
+        self, agent: CodexAgent, fake_sdk: FakeSdk
+    ) -> None:
+        async def hang() -> TurnResult:
+            await asyncio.sleep(10)
+            raise AssertionError("turn should have timed out")
+
+        fake_sdk.turn.run.side_effect = hang
+
+        async def run() -> None:
+            try:
+                async for _ in agent.handle_message(_make_message()):
+                    pass
+            finally:
+                await agent.shutdown()
+
+        with patch(_CONFIG, return_value=0):
+            with pytest.raises(ProviderError, match="Codex turn timed out after 0 s"):
+                asyncio.run(run())
+        fake_sdk.turn.interrupt.assert_awaited_once()
+        fake_sdk.client.__aexit__.assert_awaited_once()
+        assert agent.state == AgentState.terminated
+
+    def test_failed_turn_carries_sdk_message(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        sdk_error = RuntimeError("unexpected status 401 Unauthorized")
+        fake_sdk.turn.run.side_effect = sdk_error
+        with pytest.raises(ProviderError, match="401 Unauthorized") as exc_info:
+            _send(agent, "hi")
+        assert exc_info.value.__cause__ is sdk_error
+
+    def test_interrupted_turn_raises(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        fake_sdk.turn.run.return_value = TurnResult(status=TurnStatus.interrupted)
+        with pytest.raises(ProviderError, match="Codex turn interrupted"):
+            _send(agent, "hi")
+
+    @pytest.mark.parametrize("response", [None, "", "  \n "])
+    def test_empty_or_blank_response_raises(
+        self, agent: CodexAgent, fake_sdk: FakeSdk, response: str | None
+    ) -> None:
+        fake_sdk.turn.run.return_value = TurnResult(final_response=response)
+        with pytest.raises(ProviderError, match="Codex turn completed with no response text"):
+            _send(agent, "hi")
 
 
 class TestHandleMessage:
