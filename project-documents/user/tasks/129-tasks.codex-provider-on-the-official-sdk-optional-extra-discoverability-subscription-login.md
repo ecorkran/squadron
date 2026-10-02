@@ -55,9 +55,12 @@ set, run one real turn via the SDK.
 
 - [ ] Create the slice branch (see Context Summary)
 - [ ] Read the Outcome below. If it is still blank, stop and ask the Project Manager for it
-- [ ] Outcome (filled in by the Project Manager, with evidence — response text or the runtime's
-      error text verbatim): _(blank)_ — one of **works** (key honored without `login_api_key`)
-      or **fails**
+- [x] Outcome (filled in by the Project Manager, with evidence — response text or the runtime's
+      error text verbatim): **fails** (20261001, `openai-codex` 0.159.x, empty `CODEX_HOME`,
+      `OPENAI_API_KEY` set, model `gpt-5.3-codex`). The turn raised
+      `RuntimeError: unexpected status 401 Unauthorized: Missing bearer or basic authentication
+      in header, url: https://api.openai.com/v1/responses`. The runtime sent no credentials, so
+      it neither read the key from the environment nor fell back to the real `~/.codex`
 - [ ] Success: Outcome is non-blank and carries evidence; Task 2 proceeds from it
 
 ## Task 2 — Apply the Task 1 outcome to `OAuthFileStrategy` (Effort 2)
@@ -137,7 +140,7 @@ File: `src/squadron/providers/codex/agent.py`. Imports of `openai_codex` stay in
 - [ ] Obtain the runtime via `resolve_codex_runtime()` (raises `ProviderError` with the hint);
       build `CodexConfig(codex_bin=runtime.path)` lazily on first message; update the class
       docstring to describe the extra and bundled binary
-- [ ] `thread_start(model, sandbox=Sandbox.read_only, cwd, approval_mode=ApprovalMode.deny_all,
+- [ ] `thread_start(model=…, sandbox=Sandbox.read_only, cwd=…, approval_mode=ApprovalMode.deny_all,
       base_instructions)`; keep the `model is None` guard and lazy single-client reuse.
       `credentials["sandbox"]` is passed through unvalidated until Task 6b
 - [ ] Log client startup duration at DEBUG
@@ -170,8 +173,11 @@ File: `agent.py`. One test per Failure Modes row that applies to a turn; each as
 - [ ] Wrap `thread.run` in `asyncio.timeout(codex.turn_timeout_s)` (read via the config layer,
       no module default); on expiry interrupt the turn, raise
       `ProviderError("Codex turn timed out after N s")`; `shutdown()` still runs in `finally`
-- [ ] After `run`: `TurnStatus.failed` → `ProviderError` carrying `TurnResult.error.message`;
-      `interrupted` → `ProviderError("Codex turn interrupted")`; `completed` with `None`/blank
+- [ ] Failed turn: `thread.run` never returns `TurnStatus.failed` — the SDK raises a bare
+      `RuntimeError` carrying `turn.error.message` (also for "turn completed event not
+      received"; see `openai_codex/_run.py` `_raise_for_failed_turn`). Catch `RuntimeError`
+      around `thread.run` only and raise `ProviderError` with the SDK message, original chained
+- [ ] After `run`: `interrupted` → `ProviderError("Codex turn interrupted")`; `completed` with `None`/blank
       `final_response` → `ProviderError("Codex turn completed with no response text")`;
       remove `final_response or ""`
 - [ ] Tests (one each): timeout (turn interrupted, `shutdown()` still runs), failed (error
