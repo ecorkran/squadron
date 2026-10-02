@@ -14,6 +14,7 @@ import typer
 from openai import RateLimitError
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -731,7 +732,8 @@ def _run_review_command(
     except ProviderError as exc:
         # The provider collected the only evidence there is about why the model
         # stopped. Printing and exiting discards it; the artifact keeps it.
-        rprint(f"[red]Error: Review failed — {exc}[/red]")
+        # Escaped: provider messages carry text like squadron-ai[codex].
+        rprint(f"[red]Error: Review failed — {escape(str(exc))}[/red]")
         if failure_target is not None and not no_save:
             saved = save_provider_failure(
                 exc,
@@ -752,7 +754,8 @@ def _run_review_command(
                 rprint(f"[yellow]Provider failure recorded: {saved}[/yellow]")
         raise typer.Exit(code=1) from exc
     except Exception as exc:
-        rprint(f"[red]Error: Review failed — {exc}[/red]")
+        # Escaped: provider messages carry text like squadron-ai[codex].
+        rprint(f"[red]Error: Review failed — {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     display_result(result, output, output_path, verbosity)
