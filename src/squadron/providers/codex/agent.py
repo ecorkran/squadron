@@ -1,40 +1,30 @@
-"""CodexAgent — agentic provider via Codex Python SDK."""
+"""CodexAgent — agentic provider via the official Codex Python SDK (``openai_codex``)."""
 
 from __future__ import annotations
 
 import os
-import shutil
+import time
 from collections.abc import AsyncIterator
 
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
+from squadron.providers.codex.runtime import resolve_codex_runtime
 from squadron.providers.errors import ProviderError
 
 _log = get_logger("squadron.providers.codex.agent")
 
 _DEFAULT_SANDBOX = "read-only"
 
-# The Codex Python SDK is installed from the openai/codex GitHub repo.
-# It requires the Codex CLI binary on PATH (installed via npm).
-_SDK_INSTALL_URL = "https://github.com/openai/codex/tree/main/sdk/python"
-_CLI_INSTALL_CMD = "npm i -g @openai/codex"
-
-
-def resolve_codex_binary() -> str | None:
-    """Find the Codex CLI binary on PATH (installed via npm)."""
-    return shutil.which("codex")
-
 
 class CodexAgent:
-    """Agentic provider backed by the Codex Python SDK.
+    """Agentic provider backed by the official Codex Python SDK.
 
-    Requires:
-    - ``codex-app-server-sdk`` Python package (from openai/codex GitHub repo)
-    - ``codex`` CLI binary on PATH (``npm i -g @openai/codex``)
+    Requires the ``codex`` extra (``openai-codex``), which bundles the Codex
+    runtime binary; a ``codex`` on PATH is the fallback (see ``runtime.py``).
 
-    The SDK client is started lazily on first ``handle_message()`` call.
-    Subsequent messages continue the same thread.
+    The SDK client is started lazily on first ``handle_message()`` call and
+    reused; subsequent messages continue the same thread.
     """
 
     def __init__(self, name: str, config: AgentConfig) -> None:
@@ -104,56 +94,40 @@ class CodexAgent:
 
     async def _run_prompt(self, prompt: str) -> str:
         """Send prompt via SDK and return response text."""
-        try:
-            from codex_app_server import (
-                AsyncCodex,  # pyright: ignore[reportMissingImports]
-            )
-            from codex_app_server.client import (
-                AppServerConfig,  # pyright: ignore[reportMissingImports]
-            )
-        except ImportError as exc:
-            raise ProviderError(
-                "Codex Python SDK (codex_app_server) not installed. "
-                "Install the official OpenAI SDK from GitHub:\n"
-                "  pip install 'codex-app-server-sdk @ "
-                "git+https://github.com/openai/codex.git"
-                "#subdirectory=sdk/python'\n"
-                "Note: do NOT install the similarly-named PyPI package."
-            ) from exc
-
         if self._config.model is None:
             raise ProviderError(
                 "model is required for Codex agents. "
                 "Specify --model or use a model alias (e.g. codex-agent)."
             )
-
-        if self._codex is None:
-            codex_bin = resolve_codex_binary()
-            if codex_bin is None:
-                raise ProviderError(f"Codex CLI not found on PATH. Install with: {_CLI_INSTALL_CMD}")
-
-            config = AppServerConfig(codex_bin=codex_bin)  # pyright: ignore[reportUnknownVariableType]
-            self._codex = await AsyncCodex(config=config).__aenter__()  # pyright: ignore[reportUnknownMemberType]
-            sandbox = self._config.credentials.get("sandbox", _DEFAULT_SANDBOX)
-            cwd = self._config.cwd or os.getcwd()
-
-            thread_kwargs: dict[str, object] = {
-                "model": self._config.model,
-                "sandbox": sandbox,
-                "cwd": cwd,
-                "approval_policy": "never",
-            }
-            if self._config.instructions:
-                thread_kwargs["base_instructions"] = self._config.instructions
-
-            self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
-                **thread_kwargs,
-            )
-            _log.debug(
-                "Codex SDK session started: model=%s, bin=%s",
-                self._config.model,
-                codex_bin,
-            )
+        if self._thread is None:
+            await self._start_thread(self._config.model)
 
         result = await self._thread.run(prompt)  # type: ignore[union-attr]
         return result.final_response or ""  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+
+    async def _start_thread(self, model: str) -> None:
+        """Start the SDK client and open a thread (first message only)."""
+        runtime = resolve_codex_runtime()
+        from openai_codex import (  # pyright: ignore[reportMissingImports]
+            ApprovalMode,
+            AsyncCodex,
+            CodexConfig,
+        )
+
+        started = time.monotonic()
+        codex = AsyncCodex(CodexConfig(codex_bin=runtime.path))
+        self._codex = await codex.__aenter__()
+        _log.debug(
+            "Codex runtime started in %.2fs (%s, bin=%s)",
+            time.monotonic() - started,
+            runtime.source,
+            runtime.path,
+        )
+        self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
+            model=model,
+            sandbox=self._config.credentials.get("sandbox", _DEFAULT_SANDBOX),
+            cwd=self._config.cwd or os.getcwd(),
+            approval_mode=ApprovalMode.deny_all,
+            base_instructions=self._config.instructions or None,
+        )
+        _log.debug("Codex thread started: model=%s", model)
