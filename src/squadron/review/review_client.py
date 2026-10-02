@@ -25,6 +25,7 @@ from squadron.core.models import (
     describe_system_prompt,
 )
 from squadron.core.subprocess_text import TEXT_DECODING
+from squadron.integrations.context_forge import DOCS_ROOT
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
 from squadron.providers.base import ProviderType
 from squadron.providers.errors import EmptyFinalTurnError, ProviderError
@@ -50,6 +51,21 @@ from squadron.review.turn_capture import (
 from squadron.tools import resolve_effective_tools
 
 _logger = logging.getLogger(__name__)
+
+
+_DOCS_ROOT_NOTE = f"""
+
+## Document Paths
+
+Paths written inside project documents (frontmatter fields and body references)
+that start with `user/` are relative to `{DOCS_ROOT}/`, not the repository root.
+Prefix them with `{DOCS_ROOT}/` when reading or listing them.
+"""
+
+
+def _docs_root_note(cwd: str) -> str:
+    """Tell a file-reading model where cf document paths resolve; empty without a docs root."""
+    return _DOCS_ROOT_NOTE if (Path(cwd) / DOCS_ROOT).is_dir() else ""
 
 
 _STRUCTURED_OUTPUT_INSTRUCTIONS = """
@@ -163,17 +179,22 @@ async def run_review_with_profile(
     # Always called: the diff must reach the model even on the tools path, because no
     # read-only tool can produce one (issue #81, and slice 265's stated intent — "omits
     # injected file bodies but retains the diff"). Only the *bodies* are conditional.
+    include_bodies = should_inject_file_bodies(
+        can_read_files=provider.capabilities.can_read_files,
+        allowed_tools=resolved_allowed_tools,
+        provider=provider_profile.provider,
+    )
     prompt, diff_injection = _inject_file_contents(
         prompt,
         inputs,
         template.diff_exclude_patterns,
-        include_bodies=should_inject_file_bodies(
-            can_read_files=provider.capabilities.can_read_files,
-            allowed_tools=resolved_allowed_tools,
-            provider=provider_profile.provider,
-        ),
+        include_bodies=include_bodies,
         convention_root=convention_root,
     )
+    # A model that reads files follows document references literally; cf writes them
+    # relative to its docs root, so without this a `user/slices/...` lookup misses.
+    if not include_bodies:
+        system_prompt += _docs_root_note(inputs.get("cwd", "."))
 
     # Debug output at -vvv (verbosity >= 3)
     if verbosity >= 3:

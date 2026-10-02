@@ -15,8 +15,11 @@ from typing import Any
 
 from squadron.core.subprocess_text import TEXT_DECODING
 
+#: cf's document root, relative to the project. Paths inside cf documents
+#: (frontmatter ``lld:``/``parent:``, body references) are relative to it.
+DOCS_ROOT = "project-documents"
 #: Where cf keeps architecture documents and slice plans, relative to the project.
-ARCHITECTURE_DIR = "project-documents/user/architecture"
+ARCHITECTURE_DIR = f"{DOCS_ROOT}/user/architecture"
 
 # ---------------------------------------------------------------------------
 # Exceptions

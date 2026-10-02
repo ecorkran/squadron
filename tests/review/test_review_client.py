@@ -1556,3 +1556,46 @@ class TestEffortThreading:
         assert result.effort is Effort.low
         assert "effort: low" in frontmatter
         assert "- Effort: low" in md
+
+
+class TestDocsRootNote:
+    """A file-reading model is told where cf document paths resolve."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("can_read_files", "has_docs_root", "expect_note"),
+        [
+            (True, True, True),
+            (True, False, False),
+            (False, True, False),
+        ],
+    )
+    async def test_note_only_for_file_readers_in_a_cf_project(
+        self, tmp_path: Path, can_read_files: bool, has_docs_root: bool, expect_note: bool
+    ) -> None:
+        from squadron.integrations.context_forge import DOCS_ROOT
+        from squadron.providers.profiles import ProviderProfile
+
+        (tmp_path / "file.md").write_text("doc")
+        if has_docs_root:
+            (tmp_path / DOCS_ROOT).mkdir()
+        with (
+            patch(f"{_P}.get_profile") as mock_get_profile,
+            patch(
+                f"{_P}.get_provider", return_value=_make_mock_provider(can_read_files=can_read_files)
+            ),
+            patch(f"{_P}.ensure_provider_loaded"),
+        ):
+            mock_get_profile.return_value = ProviderProfile(
+                name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
+            )
+            result = await run_review_with_profile(
+                _make_template(model="test-model"),
+                {"input": "file.md", "cwd": str(tmp_path)},
+                profile="openai",
+                model="test-model",
+                verbosity=2,
+            )
+
+        assert result.system_prompt is not None
+        assert (f"relative to `{DOCS_ROOT}/`" in result.system_prompt) is expect_note
