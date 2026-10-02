@@ -14,7 +14,7 @@ from squadron.providers.errors import ProviderError
 
 _log = get_logger("squadron.providers.codex.agent")
 
-_DEFAULT_SANDBOX = "read-only"
+_SANDBOX_KEY = "sandbox"
 
 
 class CodexAgent:
@@ -112,7 +112,10 @@ class CodexAgent:
             ApprovalMode,
             AsyncCodex,
             CodexConfig,
+            Sandbox,
         )
+
+        sandbox = self._resolve_sandbox(Sandbox)
 
         started = time.monotonic()
         codex = AsyncCodex(CodexConfig(codex_bin=runtime.path))
@@ -125,9 +128,20 @@ class CodexAgent:
         )
         self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
             model=model,
-            sandbox=self._config.credentials.get("sandbox", _DEFAULT_SANDBOX),
+            sandbox=sandbox,
             cwd=self._config.cwd or os.getcwd(),
             approval_mode=ApprovalMode.deny_all,
             base_instructions=self._config.instructions or None,
         )
         _log.debug("Codex thread started: model=%s", model)
+
+    def _resolve_sandbox(self, sandbox_enum: type) -> object:
+        """Validate ``credentials["sandbox"]`` against the SDK enum (default read-only)."""
+        raw = self._config.credentials.get(_SANDBOX_KEY)
+        if raw is None:
+            return sandbox_enum.read_only  # type: ignore[attr-defined]
+        try:
+            return sandbox_enum(raw)
+        except ValueError as exc:
+            valid = ", ".join(member.value for member in sandbox_enum)  # type: ignore[attr-defined]
+            raise ProviderError(f"Invalid Codex sandbox {raw!r}; valid values: {valid}") from exc

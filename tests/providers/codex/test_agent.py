@@ -15,6 +15,7 @@ from tests.providers.codex.conftest import (
     PATH_RUNTIME,
     ApprovalMode,
     FakeSdk,
+    Sandbox,
     TurnResult,
 )
 
@@ -122,6 +123,29 @@ class TestClientLifecycle:
         with pytest.raises(ProviderError, match="model is required"):
             _send(CodexAgent(name="no-model", config=config), "hi")
         fake_sdk.async_codex.assert_not_called()
+
+
+class TestSandbox:
+    def test_defaults_to_read_only(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        _send(agent, "hi")
+        assert fake_sdk.client.thread_start.call_args.kwargs["sandbox"] is Sandbox.read_only
+
+    def test_valid_value_passed_through(self, agent_config: AgentConfig, fake_sdk: FakeSdk) -> None:
+        config = agent_config.model_copy(update={"credentials": {"sandbox": "workspace-write"}})
+        _send(CodexAgent(name="test-codex", config=config), "hi")
+        assert fake_sdk.client.thread_start.call_args.kwargs["sandbox"] is Sandbox.workspace_write
+
+    def test_invalid_value_names_valid_values(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk
+    ) -> None:
+        config = agent_config.model_copy(update={"credentials": {"sandbox": "wide-open"}})
+        with pytest.raises(ProviderError) as exc_info:
+            _send(CodexAgent(name="test-codex", config=config), "hi")
+        message = str(exc_info.value)
+        assert "wide-open" in message
+        for member in Sandbox:
+            assert member.value in message
+        fake_sdk.client.thread_start.assert_not_called()
 
 
 class TestHandleMessage:
