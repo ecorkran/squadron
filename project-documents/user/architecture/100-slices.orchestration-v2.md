@@ -117,7 +117,7 @@ Post-M1:
   127. Scoped Code Review & Prompt Logging              ✅ complete
   124. Codex Agent Integration                          ⏪ superseded by 128
   128. Review Transport Unification & Provider Decoupling  ✅ complete
-  129. Codex Provider on the Official SDK                  ✅ complete
+  129. Codex Provider on the Official SDK                  🔶 in review
 ```
 
 ### Parallelization Notes
