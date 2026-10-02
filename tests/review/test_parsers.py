@@ -1929,3 +1929,40 @@ class TestFenceMarkerIsolation:
 
         assert result == "prose\n~~~\ncode\n~~~\nmore prose"
         assert inserted == 4
+
+
+class TestFencedCodeInFindingBody:
+    """A code block inside a real finding keeps its text (129 review: fences came out blank).
+
+    Fences are masked only to *locate* findings; the body is sliced from the original.
+    """
+
+    RESPONSE = """\
+## Summary
+CONCERNS
+
+## Findings
+
+### [CONCERN] Setup renders the Codex prose setup hint as a runnable command
+`build_steps` maps `command=result.fix_hint`, which is prose:
+
+```
+Run 'sq auth login openai-oauth' or set OPENAI_API_KEY
+```
+
+`sq setup` will therefore print:
+
+```
+  $ Run 'sq auth login openai-oauth' or set OPENAI_API_KEY
+```
+
+### [PASS] Other hints are commands
+Fine.
+"""
+
+    def test_fence_contents_survive_in_description(self) -> None:
+        result = parse_review_output(self.RESPONSE, "code", {})
+        assert len(result.findings) == 2
+        body = result.findings[0].description
+        assert "```\nRun 'sq auth login openai-oauth' or set OPENAI_API_KEY\n```" in body
+        assert "  $ Run 'sq auth login openai-oauth' or set OPENAI_API_KEY" in body

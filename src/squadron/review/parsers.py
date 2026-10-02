@@ -802,6 +802,9 @@ def _extract_findings(
 
     span = _locate_section(masked, "findings")
     scanned = masked[span[0] : span[1]] if span is not None else masked
+    # Masking preserves offsets, so a match found in the masked scan slices the
+    # same block out of the original; finding bodies keep their code blocks.
+    original = text[span[0] : span[1]] if span is not None else text
     in_section = _count_finding_matches(scanned)
 
     findings: list[ReviewFinding] = []
@@ -814,7 +817,7 @@ def _extract_findings(
         if severity is None:
             continue
         title = title_raw.strip().split("\n")[0]
-        full_block = match.group(0)
+        full_block = original[match.start() : match.end()]
         lines = full_block.split("\n")
         body = "\n".join(lines[1:]).strip()
 
