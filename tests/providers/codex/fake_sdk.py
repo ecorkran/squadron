@@ -157,5 +157,9 @@ def installed_fake_sdk() -> Iterator[FakeSdk]:
             "squadron.providers.codex.provider.resolve_codex_runtime",
             return_value=BUNDLED_RUNTIME,
         ),
+        patch(
+            "squadron.providers.codex.login.resolve_codex_runtime",
+            return_value=BUNDLED_RUNTIME,
+        ),
     ):
         yield sdk

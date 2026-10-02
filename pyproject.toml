@@ -91,7 +91,12 @@ markers = [
 # include is tracked with the ruff rule-set adoption above (issue #50) rather
 # than done piecemeal.
 include = ["src"]
-exclude = ["src/squadron/providers/codex/agent.py"]
+# The two modules that use openai_codex types: pyright runs without the codex
+# extra, so those types are unresolved there (reportMissingImports = true).
+exclude = [
+    "src/squadron/providers/codex/agent.py",
+    "src/squadron/providers/codex/login.py",
+]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingImports = true
