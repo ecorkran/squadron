@@ -128,6 +128,11 @@ class TurnResult:
         return not self.tool_calls and not self.text.strip()
 
 
+def _describe_error(exc: BaseException) -> str:
+    """The error's text, or its type name when it has none (raw httpx errors often don't)."""
+    return str(exc) or f"{type(exc).__name__} (no error text)"
+
+
 class OpenAICompatibleAgent:
     """Conversational agent backed by the OpenAI Chat Completions API."""
 
@@ -279,27 +284,27 @@ class OpenAICompatibleAgent:
                 return await self._respond_without_tools()
             return await self._run_agentic_loop()
         except openai.AuthenticationError as exc:
-            raise ProviderAuthError(str(exc)) from exc
+            raise ProviderAuthError(_describe_error(exc)) from exc
         except openai.PermissionDeniedError as exc:
-            raise ProviderAuthError(str(exc)) from exc
+            raise ProviderAuthError(_describe_error(exc)) from exc
         except openai.RateLimitError as exc:
-            raise ProviderAPIError(str(exc), status_code=429) from exc
+            raise ProviderAPIError(_describe_error(exc), status_code=429) from exc
         except openai.APIStatusError as exc:
-            raise ProviderAPIError(str(exc), status_code=exc.status_code) from exc
+            raise ProviderAPIError(_describe_error(exc), status_code=exc.status_code) from exc
         except openai.APITimeoutError as exc:
-            raise ProviderTimeoutError(str(exc)) from exc
+            raise ProviderTimeoutError(_describe_error(exc)) from exc
         except openai.APIConnectionError as exc:
-            raise ProviderError(str(exc)) from exc
+            raise ProviderError(_describe_error(exc)) from exc
         # An error event inside the stream body (OpenRouter's "Network connection lost.")
         # arrives as the base APIError, which none of the subclasses above match (#166).
         except openai.APIError as exc:
-            raise ProviderError(str(exc)) from exc
+            raise ProviderError(_describe_error(exc)) from exc
         # The openai SDK does not wrap errors raised while iterating a stream, so a
         # mid-body timeout or disconnect arrives as raw httpx (slice 931 D12).
         except httpx.TimeoutException as exc:
-            raise ProviderTimeoutError(str(exc)) from exc
+            raise ProviderTimeoutError(_describe_error(exc)) from exc
         except httpx.TransportError as exc:
-            raise ProviderError(str(exc)) from exc
+            raise ProviderError(_describe_error(exc)) from exc
 
     async def _respond_without_tools(self) -> list[Message]:
         """One turn, no tools: the reply is the response."""

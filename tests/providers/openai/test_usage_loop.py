@@ -323,6 +323,22 @@ class TestFailureTelemetry:
         assert len(_warnings(caplog, _EXIT)) == 1
 
     @pytest.mark.asyncio
+    async def test_textless_transport_failure_names_its_type(self, tmp_path: Path) -> None:
+        # httpcore raises ReadTimeout/ReadError with no text; the CLI then printed
+        # "Review failed — " and nothing else.
+        (tmp_path / "a.txt").write_text("A")
+        raised = httpx.ReadError("")
+        agent = _agent(
+            *_two_tool_turns(),
+            async_stream(text_chunk("partial"), raised),
+            cwd=str(tmp_path),
+            tools=["read_file"],
+        )
+        with pytest.raises(ProviderError) as exc_info:
+            await _collect(agent)
+        assert str(exc_info.value) == "ReadError (no error text)"
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("raised", "converted"),
         [
