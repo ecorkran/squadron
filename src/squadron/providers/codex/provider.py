@@ -26,6 +26,7 @@ class CodexProvider:
             can_read_files=True,
             supports_system_prompt=True,
             supports_streaming=False,
+            applies_effort=True,
         )
 
     async def create_agent(self, config: AgentConfig) -> CodexAgent:

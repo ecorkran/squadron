@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from squadron.core.models import AgentConfig, AgentState, Message, MessageType
+from squadron.core.models import AgentConfig, AgentState, Effort, Message, MessageType
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 from squadron.providers.errors import ProviderError
@@ -17,6 +17,7 @@ from tests.providers.codex.conftest import (
     CodexError,
     CodexRpcError,
     FakeSdk,
+    ReasoningEffort,
     RetryLimitExceededError,
     Sandbox,
     ServerBusyError,
@@ -323,21 +324,27 @@ class TestOutputBudgetWarning:
             CodexAgent(name="test-codex", config=agent_config)
         assert not [r for r in caplog.records if "max_output_tokens" in r.getMessage()]
 
-    def test_effort_logs_one_warning(
+
+class TestEffort:
+    """Slice 129 D5: squadron Effort reaches the turn as the same-named ReasoningEffort."""
+
+    @pytest.mark.parametrize("effort", list(Effort))
+    def test_effort_maps_by_name(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk, effort: Effort
+    ) -> None:
+        config = agent_config.model_copy(update={"effort": effort})
+        _send(CodexAgent(name="test-codex", config=config), "hi")
+        sent = fake_sdk.thread.turn.call_args.kwargs["effort"]
+        assert sent is ReasoningEffort(effort.value)
+
+    def test_no_effort_sends_none(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        _send(agent, "hi")
+        assert "effort" not in fake_sdk.thread.turn.call_args.kwargs
+
+    def test_effort_logs_no_warning(
         self, agent_config: AgentConfig, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Slice 931 D4: Codex cannot apply effort, and says so."""
-        from squadron.core.models import Effort
-
-        config = agent_config.model_copy(update={"effort": Effort.low})
+        config = agent_config.model_copy(update={"effort": Effort.high})
         with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
             CodexAgent(name="test-codex", config=config)
-        messages = [r.getMessage() for r in caplog.records]
-        assert messages.count("Codex agent cannot apply effort=low; the backend default applies") == 1
-
-    def test_no_effort_logs_nothing(
-        self, agent_config: AgentConfig, caplog: pytest.LogCaptureFixture
-    ) -> None:
-        with caplog.at_level("WARNING", logger="squadron.providers.codex.agent"):
-            CodexAgent(name="test-codex", config=agent_config)
         assert not [r for r in caplog.records if "effort" in r.getMessage()]

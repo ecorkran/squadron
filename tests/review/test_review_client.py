@@ -1541,8 +1541,8 @@ class TestEffortThreading:
         assert result.effort is None
 
     @pytest.mark.asyncio
-    async def test_codex_artifact_has_no_effort_key(self) -> None:
-        """Slice 931 D4: Codex does not apply effort, so its artifact never claims one."""
+    async def test_codex_artifact_records_effort(self) -> None:
+        """Slice 129 D5: Codex applies effort, so its artifact records it."""
         from squadron.providers.codex.provider import CodexProvider
         from squadron.review.persistence import format_review_markdown
 
@@ -1553,6 +1553,6 @@ class TestEffortThreading:
         md = format_review_markdown(result, "code")
         frontmatter = md.split("---")[1]
 
-        assert result.effort is None
-        assert "effort:" not in frontmatter
-        assert "- Effort: backend default" in md
+        assert result.effort is Effort.low
+        assert "effort: low" in frontmatter
+        assert "- Effort: low" in md

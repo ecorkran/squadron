@@ -42,12 +42,6 @@ class CodexAgent:
                 "Codex agent cannot apply max_output_tokens=%d; the backend default applies",
                 config.max_output_tokens,
             )
-        # Slice 931 D4: nor effort — thread_start's reasoning parameter is unverified here.
-        if config.effort is not None:
-            _log.warning(
-                "Codex agent cannot apply effort=%s; the backend default applies",
-                config.effort.value,
-            )
         self._codex: object | None = None
         self._thread: object | None = None
 
@@ -141,7 +135,7 @@ class CodexAgent:
         turn: object | None = None
         try:
             async with asyncio.timeout(timeout_s):
-                turn = await self._thread.turn(prompt)  # type: ignore[union-attr]
+                turn = await self._thread.turn(prompt, **self._turn_options())  # type: ignore[union-attr]
                 return await turn.run()  # type: ignore[union-attr]
         except TimeoutError as exc:
             if turn is not None:
@@ -151,6 +145,14 @@ class CodexAgent:
             # The SDK reports a failed turn (and a missing completion event)
             # as a bare RuntimeError carrying the runtime's error message.
             raise ProviderError(f"Codex turn failed: {exc}") from exc
+
+    def _turn_options(self) -> dict[str, object]:
+        """Per-turn SDK options: effort maps by name to ``ReasoningEffort`` (D5)."""
+        if self._config.effort is None:
+            return {}
+        from openai_codex.types import ReasoningEffort  # pyright: ignore[reportMissingImports]
+
+        return {"effort": ReasoningEffort(self._config.effort.value)}
 
     async def _interrupt(self, turn: object) -> None:
         """Best-effort interrupt of a timed-out turn, bounded so a hung runtime cannot block."""

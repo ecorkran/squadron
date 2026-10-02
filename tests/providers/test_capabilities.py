@@ -57,3 +57,8 @@ class TestAppliesEffort:
         from squadron.providers.openai.provider import OpenAICompatibleProvider
 
         assert OpenAICompatibleProvider().capabilities.applies_effort is True
+
+    def test_codex_applies_effort(self) -> None:
+        from squadron.providers.codex.provider import CodexProvider
+
+        assert CodexProvider().capabilities.applies_effort is True
