@@ -127,6 +127,33 @@ class TestCfMcpBridgeConfigKeys:
         assert get_config("cf.mcp_command") == "node /path/to/index.js"
 
 
+class TestCodexTimeoutConfigKeys:
+    """Tests for the codex.* timeout keys (slice 129, D7)."""
+
+    @pytest.mark.parametrize(
+        ("key_name", "default"),
+        [
+            ("codex.turn_timeout_s", 1800),
+            ("codex.login_timeout_s", 300),
+            ("codex.account_timeout_s", 30),
+        ],
+    )
+    def test_registered_typed_and_readable(
+        self,
+        key_name: str,
+        default: int,
+        patch_config_paths: dict[str, Path],
+    ) -> None:
+        key = CONFIG_KEYS[key_name]
+        assert key.name == key_name
+        assert key.type_ is int
+        assert key.default == default
+        assert key.description
+        value = get_typed_config(key_name, int)
+        assert value == default
+        assert isinstance(value, int)
+
+
 class TestPipelineConfigKeys:
     """Keys added by slice 932 for pipeline SDK sessions."""
 

@@ -362,6 +362,33 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "covering spawn, initialize, and the tool call together."
         ),
     ),
+    "codex.turn_timeout_s": ConfigKey(
+        name="codex.turn_timeout_s",
+        type_=int,
+        default=1800,
+        description=(
+            "Wall-clock cap in seconds on one Codex turn (thread.run). Bounds a hung "
+            "runtime; agentic reviews are legitimately slow, so keep it generous."
+        ),
+    ),
+    "codex.login_timeout_s": ConfigKey(
+        name="codex.login_timeout_s",
+        type_=int,
+        default=300,
+        description=(
+            "Wall-clock cap in seconds on waiting for browser or device-code login "
+            "in 'sq auth login'. Overridden by --timeout."
+        ),
+    ),
+    "codex.account_timeout_s": ConfigKey(
+        name="codex.account_timeout_s",
+        type_=int,
+        default=30,
+        description=(
+            "Wall-clock cap in seconds on Codex runtime start plus the account "
+            "lookup (sq auth status, post-login) or logout (sq auth logout)."
+        ),
+    ),
 }
 
 
