@@ -124,7 +124,7 @@ Squadron ships six built-in provider profiles. Verified against `BUILT_IN_PROFIL
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | Multi-model gateway |
 | Google Gemini | `gemini` | `GEMINI_API_KEY` | Via OpenAI-compatible endpoint |
 | Local (Ollama / vLLM / LM Studio) | `local` | None | Points at `http://localhost:11434/v1` by default |
-| OpenAI Codex (agentic) | `openai-oauth` | `pip install 'squadron-ai[codex]'`, then `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; see README's [Using Codex](../README.md#using-codex-experimental) section |
+| OpenAI Codex (agentic) | `openai-oauth` | `uv tool install 'squadron-ai[codex]'`, then `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; see README's [Using Codex](../README.md#using-codex-experimental) section |
 
 To configure a profile, either set its env var:
 
@@ -137,9 +137,11 @@ export GEMINI_API_KEY="..."
 or, for `openai-oauth`, install the `codex` extra and sign in with your ChatGPT account:
 
 ```bash
-pip install 'squadron-ai[codex]'
+uv tool install 'squadron-ai[codex]'
 sq auth login openai-oauth   # add --device-code on SSH / headless machines
 ```
+
+This reinstalls squadron with the extra; `uv tool upgrade squadron-ai` keeps it afterwards. If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
 
 `sdk` and `local` need no credentials — `sdk` uses your Claude Code session, `local` assumes a model server already running on your machine.
 

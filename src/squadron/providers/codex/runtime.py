@@ -15,7 +15,7 @@ from enum import StrEnum
 
 from squadron.providers.errors import ProviderError
 
-CODEX_INSTALL_COMMAND = "pip install 'squadron-ai[codex]'"
+CODEX_INSTALL_COMMAND = "uv tool install 'squadron-ai[codex]'"
 
 _SDK_MODULE = "openai_codex"
 _SDK_DISTRIBUTION = "openai-codex"

@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The Codex provider (`openai-oauth`, `--model codex-agent`) installs with `pip install 'squadron-ai[codex]'`. It uses OpenAI's official SDK with a bundled runtime, so `npm i -g @openai/codex` and the GitHub SDK install are no longer needed.
+- The Codex provider (`openai-oauth`, `--model codex-agent`) installs with `uv tool install 'squadron-ai[codex]'` (or the pip/pipx equivalent). It uses OpenAI's official SDK with a bundled runtime, so `npm i -g @openai/codex` and the GitHub SDK install are no longer needed.
 - `sq auth login openai-oauth` signs in with your ChatGPT account in the browser, or with `--device-code` on SSH and headless machines. `--timeout` sets how long to wait. `sq auth logout openai-oauth` signs out, and `sq auth status` shows the signed-in email and plan.
 - `sq doctor` has a `codex provider` row (extra installed, runtime, login state), and `sq setup` offers the install as an optional step. `sq models list` marks Codex aliases with the install command while the extra is missing.
 - Codex reviews apply the alias `effort` and record token usage in the review artifact (#171).

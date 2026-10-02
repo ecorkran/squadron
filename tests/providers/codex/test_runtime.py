@@ -60,7 +60,7 @@ class TestResolveCodexRuntime:
         with pytest.raises(ProviderError) as exc_info:
             resolve_codex_runtime()
         assert CODEX_INSTALL_COMMAND in str(exc_info.value)
-        assert CODEX_INSTALL_COMMAND == "pip install 'squadron-ai[codex]'"
+        assert CODEX_INSTALL_COMMAND == "uv tool install 'squadron-ai[codex]'"
 
 
 class TestImportSafety:

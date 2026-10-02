@@ -118,7 +118,7 @@ File: `src/squadron/config/keys.py` (beside `cf.mcp_timeout_s`, same `ConfigKey`
 New file: `src/squadron/providers/codex/runtime.py`. No SDK types; `openai_codex` /
 `codex_cli_bin` are probed with `importlib.util.find_spec` or a function-local import only.
 
-- [x] Define the install-hint constant once here (`pip install 'squadron-ai[codex]'` form) and
+- [x] Define the install-hint constant once here (`uv tool install 'squadron-ai[codex]'` form) and
       the message text for "package missing" and "no binary anywhere" (names both remedies)
 - [x] `CodexRuntime` frozen dataclass: `source` (enum: `bundled` | `path`), `path: str | None`
       (`None` for bundled), `package_version: str | None`

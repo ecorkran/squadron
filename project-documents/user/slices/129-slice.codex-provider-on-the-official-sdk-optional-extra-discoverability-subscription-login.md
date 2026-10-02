@@ -22,7 +22,7 @@ Three parts: **A** port + packaging, **B** discoverability, **C** `sq auth login
 
 ## Value
 
-- `pip install 'squadron-ai[codex]'` (or the equivalent for the project's published name) then `sq auth login openai-oauth` then `sq review … --model codex-agent` works on a ChatGPT login with no API key and no npm.
+- `uv tool install 'squadron-ai[codex]'` (the README's primary install path; pip/pipx equivalents documented) then `sq auth login openai-oauth` then `sq review … --model codex-agent` works on a ChatGPT login with no API key and no npm.
 - Users who do not want Codex install nothing extra.
 - Effort on Codex reviews is applied rather than dropped (closes #171), and per-turn token usage is recorded when the SDK reports it.
 - A missing piece is named at the point of failure with the exact command to fix it.
@@ -113,6 +113,8 @@ No squadron state added. Credentials live in `~/.codex/auth.json`, written and r
 
 - **D9 — "Extra missing" signal is a provider-side Protocol.** `ExtraRequirement` (runtime_checkable, in `providers/base.py`) has one method, `missing_extra_hint() -> str | None`: `None` when nothing is missing, otherwise the install command. `CodexProvider` implements it using `resolve_codex_runtime()`. `sq models list` resolves each alias's profile through `ensure_provider_loaded` + `get_provider` and tests `isinstance(provider, ExtraRequirement)`; no profile-name check. `sq doctor`'s `codex provider` row goes through the same two abstractions rather than around them: the missing-extra determination and hint come from the registered provider's `ExtraRequirement.missing_extra_hint()`, so the hint has one source; the row's detail (package version, runtime source `bundled` | `PATH: <path>`) comes from `resolve_codex_runtime()`, the shared `CodexRuntime` abstraction from D2, which doctor consumes exactly as agent and provider do. Doctor contains no import probing or `shutil.which` of its own. Providers with no optional dependency do not implement it.
 
+- **D10 — Install command is `uv tool install 'squadron-ai[codex]'`.** The README's primary install is `uv tool install squadron-ai`, which puts squadron in an isolated tool environment; a plain `pip install` lands in a different environment, so `sq` never sees the SDK. Rerunning `uv tool install` with the extra reinstalls in place (no `--force`), uv's receipt records the extra, and `uv tool upgrade squadron-ai` keeps it (verified with uv 0.11.2). The single hint constant carries the uv form; README and QUICKSTART list `pipx install --force 'squadron-ai[codex]'` and `pip install 'squadron-ai[codex]'` for those install paths (pipx form verified; pipx metadata keeps the extra). Earlier drafts of this design specified `pip install`, which was wrong for the primary path.
+
 ### Failure Modes — Codex Turn
 
 Each row is logged at WARNING or above (or raised as `ProviderError`, which callers log) and has a test asserting the signal.
@@ -137,7 +139,7 @@ Each row is logged at WARNING or above (or raised as `ProviderError`, which call
 
 ### Patterns and Conventions
 - Failure modes are explicit and observable: the turn table above, plus login timeout, login `success=False` (surface `error`), and `account()` failure in `status` (log WARNING, still show validity). No silent fallbacks.
-- The install hint string (`pip install 'squadron-ai[codex]'` form) is defined once in `runtime.py` and referenced by agent, provider, doctor, and `model list`.
+- The install hint string (`uv tool install 'squadron-ai[codex]'` form) is defined once in `runtime.py` and referenced by agent, provider, doctor, and `model list`.
 - `CodexAgent` keeps its `except ProviderError: raise` / wrap-other-exceptions shape; SDK `CodexError` subclasses are wrapped into `ProviderError` with the original chained.
 
 ## Implementation Details
@@ -171,9 +173,9 @@ class InteractiveLogin(Protocol):
 *Implemented as `timeout_s` (ruff ASYNC109 rejects an async parameter named `timeout`); it bounds only `handle.wait()`, so the handle can be cancelled on expiry.*
 
 ### Sub-part B surfaces
-- **Missing-package error:** `The Codex provider needs the codex extra. Install it with: pip install 'squadron-ai[codex]'` (`CODEX_PACKAGE_MISSING_MESSAGE` in `runtime.py`; distribution name `squadron-ai` confirmed against `pyproject.toml`).
+- **Missing-package error:** `The Codex provider needs the codex extra. Install it with: uv tool install 'squadron-ai[codex]'` (`CODEX_PACKAGE_MISSING_MESSAGE` in `runtime.py`; distribution name `squadron-ai` confirmed against `pyproject.toml`).
 - **`sq doctor`:** new row `codex provider` in the integrations section, non-required: package importable + version, runtime source (`bundled` | `PATH: <path>`), login state from `auth.json` presence (no subprocess in doctor). The existing `codex CLI` row stays — it gates the `codex skills` row and is unrelated to the SDK.
-- **`sq models list`:** for aliases whose profile's provider reports the extra missing, add `(needs extra: pip install 'squadron-ai[codex]')` to the Profile cell (the marker is built from the hint, so the install command has one source; Notes exists only under `--verbose`). Determined through `ExtraRequirement.missing_extra_hint()` (D9), not a hard-coded `"openai-oauth"` string; the hint text is the marker's source. Shown in default and verbose output; absent when the extra is installed.
+- **`sq models list`:** for aliases whose profile's provider reports the extra missing, add `(needs extra: uv tool install 'squadron-ai[codex]')` to the Profile cell (the marker is built from the hint, so the install command has one source; Notes exists only under `--verbose`). Determined through `ExtraRequirement.missing_extra_hint()` (D9), not a hard-coded `"openai-oauth"` string; the hint text is the marker's source. Shown in default and verbose output; absent when the extra is installed.
 - **README:** replace the Codex install instructions with extra install → `sq auth login openai-oauth` → example review; note `--device-code` for SSH.
 
 ## Integration Points
@@ -212,13 +214,13 @@ class InteractiveLogin(Protocol):
 Verified 20261001 on macOS, `openai-codex` 0.160.0. Steps 1, 2, 5 and 7 were run by the implementing agent; steps 3, 4, 6 and 8 need a real ChatGPT account, a browser, or would log the account out, and are Project Manager checks. Each automated step is also covered by tests (named below).
 
 1. **Without the extra** (default `uv sync --dev`, or `pip install squadron-ai`):
-   - `sq review code 128 --model codex-agent` → exit 1, `Error: Review failed — The Codex provider needs the codex extra. Install it with: pip install 'squadron-ai[codex]'`. **Caveat:** like any `ProviderError`, this writes a provider-failure artifact into the slice's review slot (the prior review is archived under `reviews/archive/`). Restore it with `git checkout` if you run this against a slice with a committed review.
-   - `sq models list` → `codex-agent` and `codex-spark` Profile cells read `openai-oauth (needs extra: pip install 'squadron-ai[codex]')`; no other alias is marked (`tests/cli/test_model_list.py`).
-   - `sq doctor -v` → `! codex provider    codex extra not installed` / `fix: pip install 'squadron-ai[codex]'`. WARN rows only show with `-v`, so plain `sq doctor` lists it in the warning count only (`tests/cli/test_doctor.py`, `test_doctor_checks.py`).
-2. **With the extra** (`pip install 'squadron-ai[codex]'`, or `uv sync --dev --extra codex`): `sq doctor` → `✓ codex provider    openai-codex 0.160.0, runtime: bundled; logged in`. With no `~/.codex/auth.json` the row is WARN `…; not logged in` with fix `Run 'sq auth login openai-oauth' to sign in with ChatGPT, or use the 'openai' profile for API-key access` (`test_codex_provider_not_logged_in_points_to_login`).
+   - `sq review code 128 --model codex-agent` → exit 1, `Error: Review failed — The Codex provider needs the codex extra. Install it with: uv tool install 'squadron-ai[codex]'`. **Caveat:** like any `ProviderError`, this writes a provider-failure artifact into the slice's review slot (the prior review is archived under `reviews/archive/`). Restore it with `git checkout` if you run this against a slice with a committed review.
+   - `sq models list` → `codex-agent` and `codex-spark` Profile cells read `openai-oauth (needs extra: uv tool install 'squadron-ai[codex]')`; no other alias is marked (`tests/cli/test_model_list.py`).
+   - `sq doctor -v` → `! codex provider    codex extra not installed` / `fix: uv tool install 'squadron-ai[codex]'`. WARN rows only show with `-v`, so plain `sq doctor` lists it in the warning count only (`tests/cli/test_doctor.py`, `test_doctor_checks.py`).
+2. **With the extra** (`uv tool install 'squadron-ai[codex]'`, or `uv sync --dev --extra codex`): `sq doctor` → `✓ codex provider    openai-codex 0.160.0, runtime: bundled; logged in`. With no `~/.codex/auth.json` the row is WARN `…; not logged in` with fix `Run 'sq auth login openai-oauth' to sign in with ChatGPT, or use the 'openai' profile for API-key access` (`test_codex_provider_not_logged_in_points_to_login`).
 3. *(PM)* `sq auth login openai-oauth` → `Sign in at: <url>` printed, browser opens; after sign-in → `✓ openai-oauth: authenticated (<email>, <plan>)`. If the browser cannot open, a WARNING is logged and the printed URL still works.
 4. *(PM)* Headless/SSH: `sq auth login openai-oauth --device-code` → `Open <verification_url> and enter code: <code>`; enter it on another device → same success line. `--timeout N` overrides `codex.login_timeout_s` (default 300).
-5. `sq auth status` → `openai-oauth │ oauth │ ✓ authenticated │ ~/.codex/auth.json (<email>, <plan>)` (verified live: account and plan shown). Without the extra the Source cell shows `~/.codex/auth.json (pip install 'squadron-ai[codex]')` and no runtime is spawned. Other profiles unchanged.
+5. `sq auth status` → `openai-oauth │ oauth │ ✓ authenticated │ ~/.codex/auth.json (<email>, <plan>)` (verified live: account and plan shown). Without the extra the Source cell shows `~/.codex/auth.json (uv tool install 'squadron-ai[codex]')` and no runtime is spawned. Other profiles unchanged.
 6. *(PM)* `env -u OPENAI_API_KEY sq review code 128 --model codex-agent -v` → review completes; the artifact lists the model, `effort` (if the alias sets one) and token usage. The artifact path is covered end to end with a faked SDK in `tests/review/test_codex_review_artifact.py`. Restore the slice 128 review afterwards if it is committed.
 7. `sq auth login sdk --device-code` → `Error: profile 'sdk' does not support interactive login`, exit 1 (verified).
 8. *(PM)* `sq auth logout openai-oauth` → `✓ openai-oauth: logged out`; `sq auth status` → `✗ not authenticated`. Logout and status are bounded by `codex.account_timeout_s` (default 30).

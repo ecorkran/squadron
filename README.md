@@ -285,11 +285,13 @@ sq review slice 120 --model codex-agent -v
 **Setup**: install the `codex` extra (it bundles the Codex runtime; no npm install needed), then sign in with your ChatGPT account:
 
 ```bash
-pip install 'squadron-ai[codex]'
+uv tool install 'squadron-ai[codex]'
 sq auth login openai-oauth                 # opens a browser
 sq auth login openai-oauth --device-code   # SSH / headless: prints a URL and code
 sq review slice 120 --model codex-agent -v
 ```
+
+This reinstalls squadron with the extra; `uv tool upgrade squadron-ai` keeps it afterwards. If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
 
 `sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row, and `sq models list` marks the Codex aliases while the extra is missing. `OPENAI_API_KEY` is not used by this profile — for API-key access use the `openai` profile.
 
