@@ -14,8 +14,13 @@ from squadron.providers.errors import ProviderError
 from tests.providers.codex.conftest import (
     PATH_RUNTIME,
     ApprovalMode,
+    CodexError,
+    CodexRpcError,
     FakeSdk,
+    RetryLimitExceededError,
     Sandbox,
+    ServerBusyError,
+    TransportClosedError,
     TurnResult,
     TurnStatus,
 )
@@ -196,6 +201,68 @@ class TestTurnResultChecks:
         fake_sdk.turn.run.return_value = TurnResult(final_response=response)
         with pytest.raises(ProviderError, match="Codex turn completed with no response text"):
             _send(agent, "hi")
+
+
+class TestSdkErrors:
+    """One test per SDK-error Failure Modes row; each chains the original."""
+
+    def test_startup_failure(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        sdk_error = CodexError("initialize failed")
+        fake_sdk.client.__aenter__.side_effect = sdk_error
+        with pytest.raises(ProviderError, match="Codex runtime failed to start") as exc_info:
+            _send(agent, "hi")
+        assert exc_info.value.__cause__ is sdk_error
+        assert agent._codex is None
+
+    def test_thread_start_failure_closes_client(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        fake_sdk.client.thread_start.side_effect = CodexError("bad thread")
+        with pytest.raises(ProviderError, match="Codex thread start failed"):
+            _send(agent, "hi")
+        fake_sdk.client.__aexit__.assert_awaited_once()
+        assert agent._codex is None
+        assert agent.state == AgentState.idle
+
+    def test_transport_closed_resets_and_next_message_starts_new_client(
+        self, agent: CodexAgent, fake_sdk: FakeSdk
+    ) -> None:
+        sdk_error = TransportClosedError("Codex process is not running")
+        fake_sdk.turn.run.side_effect = [sdk_error, TurnResult()]
+        with pytest.raises(ProviderError, match="connection closed") as exc_info:
+            _send(agent, "first")
+        assert exc_info.value.__cause__ is sdk_error
+        assert agent._codex is None
+        assert agent._thread is None
+        (msg,) = _send(agent, "second")
+        assert msg.content == "Codex response"
+        assert fake_sdk.async_codex.call_count == 2
+
+    @pytest.mark.parametrize("error_type", [ServerBusyError, RetryLimitExceededError])
+    def test_server_busy_not_retried(
+        self, agent: CodexAgent, fake_sdk: FakeSdk, error_type: type[Exception]
+    ) -> None:
+        sdk_error = error_type("server overloaded")
+        fake_sdk.turn.run.side_effect = sdk_error
+        with pytest.raises(ProviderError, match="server overloaded") as exc_info:
+            _send(agent, "hi")
+        assert exc_info.value.__cause__ is sdk_error
+        assert fake_sdk.turn.run.await_count == 1
+
+    def test_rpc_error_points_to_login(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        sdk_error = CodexRpcError("not logged in")
+        fake_sdk.turn.run.side_effect = sdk_error
+        with pytest.raises(ProviderError, match="sq auth login openai-oauth") as exc_info:
+            _send(agent, "hi")
+        assert exc_info.value.__cause__ is sdk_error
+
+    def test_teardown_error_logged_not_raised(
+        self, agent: CodexAgent, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        _send(agent, "hi")
+        fake_sdk.client.__aexit__.side_effect = CodexError("close failed")
+        with caplog.at_level("ERROR", logger="squadron.providers.codex.agent"):
+            asyncio.run(agent.shutdown())
+        assert any("ignoring error during SDK teardown" in r.getMessage() for r in caplog.records)
+        assert agent.state == AgentState.terminated
 
 
 class TestHandleMessage:

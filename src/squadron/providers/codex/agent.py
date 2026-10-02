@@ -11,6 +11,7 @@ from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
+from squadron.providers.codex.auth import OAuthFileStrategy
 from squadron.providers.codex.runtime import resolve_codex_runtime
 from squadron.providers.errors import ProviderError
 
@@ -82,6 +83,11 @@ class CodexAgent:
 
     async def shutdown(self) -> None:
         """Tear down the SDK client."""
+        await self._close_client()
+        self._state = AgentState.terminated
+
+    async def _close_client(self) -> None:
+        """Close the SDK client (if any) and forget it and its thread."""
         if self._codex is not None:
             try:
                 await self._codex.__aexit__(None, None, None)  # type: ignore[union-attr]
@@ -91,10 +97,9 @@ class CodexAgent:
                 # the SDK and not enumerable here. A cleanup failure at
                 # shutdown must not block finishing teardown — logged for
                 # diagnosability, never re-raised.
-                _log.exception("CodexAgent.shutdown: ignoring error during SDK teardown")
+                _log.exception("CodexAgent: ignoring error during SDK teardown")
         self._codex = None
         self._thread = None
-        self._state = AgentState.terminated
 
     async def _run_prompt(self, prompt: str) -> str:
         """Send prompt via SDK and return response text."""
@@ -105,8 +110,30 @@ class CodexAgent:
             )
         if self._thread is None:
             await self._start_thread(self._config.model)
-        result = await self._run_turn(prompt)
+        result = await self._run_turn_translating_errors(prompt)
         return self._checked_response(result)
+
+    async def _run_turn_translating_errors(self, prompt: str) -> object:
+        """Run a turn, mapping SDK errors to ``ProviderError`` (Failure Modes)."""
+        from openai_codex import (  # pyright: ignore[reportMissingImports]
+            CodexRpcError,
+            ServerBusyError,
+            TransportClosedError,
+        )
+
+        try:
+            return await self._run_turn(prompt)
+        except TransportClosedError as exc:
+            # The runtime is gone; drop it so the next message starts a new one.
+            self._codex = None
+            self._thread = None
+            raise ProviderError(f"Codex runtime connection closed: {exc}") from exc
+        except ServerBusyError as exc:  # includes RetryLimitExceededError
+            raise ProviderError(f"Codex server busy: {exc}") from exc
+        except CodexRpcError as exc:
+            raise ProviderError(
+                f"Codex rejected the request: {exc}. {OAuthFileStrategy().setup_hint}."
+            ) from exc
 
     async def _run_turn(self, prompt: str) -> object:
         """Run one turn under ``codex.turn_timeout_s``; interrupt it on expiry."""
@@ -156,6 +183,7 @@ class CodexAgent:
             ApprovalMode,
             AsyncCodex,
             CodexConfig,
+            CodexError,
             Sandbox,
         )
 
@@ -163,20 +191,29 @@ class CodexAgent:
 
         started = time.monotonic()
         codex = AsyncCodex(CodexConfig(codex_bin=runtime.path))
-        self._codex = await codex.__aenter__()
+        try:
+            # Spawn + initialize: CodexError from the protocol, OSError when the
+            # binary cannot run, RuntimeError from initialize-metadata checks.
+            self._codex = await codex.__aenter__()
+        except (CodexError, OSError, RuntimeError) as exc:
+            raise ProviderError(f"Codex runtime failed to start: {exc}") from exc
         _log.debug(
             "Codex runtime started in %.2fs (%s, bin=%s)",
             time.monotonic() - started,
             runtime.source,
             runtime.path,
         )
-        self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
-            model=model,
-            sandbox=sandbox,
-            cwd=self._config.cwd or os.getcwd(),
-            approval_mode=ApprovalMode.deny_all,
-            base_instructions=self._config.instructions or None,
-        )
+        try:
+            self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
+                model=model,
+                sandbox=sandbox,
+                cwd=self._config.cwd or os.getcwd(),
+                approval_mode=ApprovalMode.deny_all,
+                base_instructions=self._config.instructions or None,
+            )
+        except CodexError as exc:
+            await self._close_client()
+            raise ProviderError(f"Codex thread start failed: {exc}") from exc
         _log.debug("Codex thread started: model=%s", model)
 
     def _resolve_sandbox(self, sandbox_enum: type) -> object:
