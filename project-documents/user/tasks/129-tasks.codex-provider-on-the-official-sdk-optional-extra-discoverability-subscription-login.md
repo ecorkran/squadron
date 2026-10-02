@@ -128,7 +128,7 @@ New file: `src/squadron/providers/codex/runtime.py`. No SDK types; `openai_codex
   - [ ] Success: tests pass with `openai_codex` absent from the environment
 - [ ] Commit: `feat: add Codex runtime resolver`
 
-## Task 6 — Port `CodexAgent` client lifecycle to `openai_codex` (D2, D4) (Effort 4)
+## Task 6 — Port `CodexAgent` client lifecycle to `openai_codex` (D2) (Effort 3)
 
 File: `src/squadron/providers/codex/agent.py`. Imports of `openai_codex` stay inside functions.
 
@@ -137,20 +137,30 @@ File: `src/squadron/providers/codex/agent.py`. Imports of `openai_codex` stay in
 - [ ] Obtain the runtime via `resolve_codex_runtime()` (raises `ProviderError` with the hint);
       build `CodexConfig(codex_bin=runtime.path)` lazily on first message; update the class
       docstring to describe the extra and bundled binary
-- [ ] Sandbox: define the default once as `Sandbox.read_only`; validate
-      `credentials["sandbox"]` through `Sandbox(value)`; invalid value → `ProviderError`
-      listing valid values (D4)
-- [ ] `thread_start(model, sandbox=Sandbox(...), cwd, approval_mode=ApprovalMode.deny_all,
-      base_instructions)`; keep the `model is None` guard and lazy single-client reuse
+- [ ] `thread_start(model, sandbox=Sandbox.read_only, cwd, approval_mode=ApprovalMode.deny_all,
+      base_instructions)`; keep the `model is None` guard and lazy single-client reuse.
+      `credentials["sandbox"]` is passed through unvalidated until Task 6b
 - [ ] Log client startup duration at DEBUG
 - [ ] Keep `except ProviderError: raise` / wrap-others shape; keep `shutdown()` teardown
       behavior (logged with `logger.exception`, not re-raised)
 - [ ] Update `tests/providers/codex/test_agent.py` fakes to the new module name and symbols
   - [ ] Tests: lazy start once and reuse across messages; `codex_bin=None` for bundled and path
-        for PATH runtime; sandbox default; sandbox invalid value; `deny_all` passed;
-        `base_instructions` only when set; package-missing error contains the hint
+        for PATH runtime; `deny_all` passed; `base_instructions` only when set;
+        package-missing error contains the hint
   - [ ] Success: tests pass
 - [ ] Commit: `refactor: port CodexAgent to openai_codex client and runtime resolver`
+
+## Task 6b — Sandbox validation (D4) (Effort 1)
+
+File: `src/squadron/providers/codex/agent.py`.
+
+- [ ] Define the default once as `Sandbox.read_only`; validate `credentials["sandbox"]` through
+      `Sandbox(value)`; invalid value → `ProviderError` listing valid values; pass the result
+      to `thread_start`
+- [ ] Tests in `tests/providers/codex/test_agent.py`: sandbox default when absent; valid value
+      passed through; invalid value raises `ProviderError` naming the valid values
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: validate Codex sandbox setting against the SDK enum`
 
 ## Task 7a — Turn timeout and result checks (D7, D8) (Effort 2)
 
@@ -272,6 +282,14 @@ New test in `tests/providers/codex/` (e.g. `test_sdk_surface.py`).
       `login_chatgpt_device_code`, `account`, `logout` (used in Part C)
 - [ ] Success: passes with the extra installed in a throwaway venv; reports skipped (not failed)
       without it
+- [ ] CI leg: D1's loose pin relies on this test, so it must run in CI, not only locally. In
+      `.github/workflows/ci.yml`, add one `include` entry to the `test` job matrix (Python
+      3.12, `extras: codex`) whose sync step adds `--extra codex`. On that leg only, run
+      `uv run python -c "import openai_codex"` before `pytest` so a failed install fails the
+      job instead of turning the drift test into a skip. Existing legs are unchanged
+  - [ ] Success: in a local venv synced with `uv sync --dev --extra codex`, the full suite passes
+        and `pytest -rs` lists `test_sdk_surface.py` as passed, not skipped. The leg's result on
+        GitHub is checked when the branch is next pushed (release CI watch covers it)
 - [ ] Commit: `test: pin openai_codex SDK surface against real types`
 
 ## Task 13 — Part A gate: default-install suite (Effort 1)
@@ -333,7 +351,9 @@ doctor module itself (the existing `codex CLI` row stays unchanged).
 
 `sq setup` converts every doctor row into a step via name-keyed tables in
 `src/squadron/cli/commands/setup_steps.py`; a row absent from them gets no recheck, no
-explanation, no docs anchor, and its raw check name as title. Add `"codex provider"` to each:
+explanation, no docs anchor, and its raw check name as title. The design does not list `sq setup`
+as a Part B surface; this task is kept because without it the new doctor row (Task 15) renders
+raw in setup. Add `"codex provider"` to each:
 
 - [ ] `_RECHECK_MAP`: `check_codex_provider` (so setup re-verifies after the user installs)
 - [ ] `_human_title` `_TITLE_MAP`: a human title (e.g. "Install Codex extra")
@@ -354,7 +374,8 @@ File: `src/squadron/cli/commands/models.py`.
 
 - [ ] For each alias, resolve its profile's provider through `ensure_provider_loaded` +
       `get_provider`; if `isinstance(provider, ExtraRequirement)` and `missing_extra_hint()` is
-      not `None`, append the marker `(needs extra: <hint>)` to the Notes/Profile cell, where `<hint>` is
+      not `None`, append the marker `(needs extra: <hint>)` to the **Profile** cell (present in
+      both modes; Notes exists only under `--verbose`, so it is not used), where `<hint>` is
       the string `missing_extra_hint()` returned. No profile-name check and no literal extra
       name (`codex`) in `models.py`; the marker text derives entirely from the hint (a
       deliberate wording change from the design's `(needs [codex] extra)`, so the install
