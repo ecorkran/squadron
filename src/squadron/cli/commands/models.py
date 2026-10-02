@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from enum import StrEnum
 
 import httpx
 import typer
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from squadron.models.aliases import ModelAlias, get_all_aliases, load_builtin_aliases
+from squadron.providers.base import ExtraRequirement
+from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
+from squadron.providers.registry import get_provider
+
+_log = logging.getLogger(__name__)
 
 # cost_tier display mapping
 _COST_TIER_LABELS: dict[str, str] = {
@@ -99,12 +106,15 @@ def _show_aliases(*, verbose: bool = False, sort: ModelSort = ModelSort.PROFILE)
             all_aliases.items(),
             key=lambda item: (_profile_rank(item[1]["profile"]), item[1]["profile"], item[0]),
         )
+    marker_cache: dict[str, str] = {}
     for name, alias in rows:
         source = "(user)" if name not in builtin_aliases else ""
         if name in builtin_aliases and alias != builtin_aliases[name]:
             source = "(user override)"
 
-        row: list[str] = [name, alias["profile"], alias["model"]]
+        profile_cell = alias["profile"] + _extra_marker(alias["profile"], marker_cache)
+        # Escaped: the marker's install hint has brackets that are not Rich tags.
+        row: list[str] = [name, escape(profile_cell), alias["model"]]
 
         if verbose:
             row.extend(_verbose_columns(alias))
@@ -113,6 +123,31 @@ def _show_aliases(*, verbose: bool = False, sort: ModelSort = ModelSort.PROFILE)
         table.add_row(*row)
 
     console.print(table)
+
+
+def _extra_marker(profile_name: str, cache: dict[str, str]) -> str:
+    """`` (needs extra: <hint>)`` when the profile's provider is missing an extra, else ``""``.
+
+    The hint is whatever the provider's ``ExtraRequirement`` returns; this module
+    names no extra. Memoized per profile for the duration of one listing.
+    """
+    if profile_name in cache:
+        return cache[profile_name]
+    marker = ""
+    try:
+        provider_type = get_profile(profile_name).provider
+        ensure_provider_loaded(provider_type)
+        provider = get_provider(provider_type)
+    except KeyError:
+        # An alias naming an unknown profile or provider must not break the listing.
+        _log.warning("models list: cannot resolve provider for profile %r", profile_name)
+    else:
+        if isinstance(provider, ExtraRequirement):
+            hint = provider.missing_extra_hint()
+            if hint is not None:
+                marker = f" (needs extra: {hint})"
+    cache[profile_name] = marker
+    return marker
 
 
 def _verbose_columns(alias: ModelAlias) -> list[str]:
