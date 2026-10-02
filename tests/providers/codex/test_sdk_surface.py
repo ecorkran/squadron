@@ -1,18 +1,13 @@
 """Pin the ``openai_codex`` surface squadron uses against the real SDK types.
 
-D1's pin is loose (``>=0.159.3,<1``), so this is the drift alarm: it runs only where
-the ``codex`` extra is installed (the CI codex leg) and skips everywhere else.
+D1's pin is loose (``>=0.159.3,<1``), so this is the drift alarm.
 """
 
 from __future__ import annotations
 
 import inspect
 
-import pytest
-
 from squadron.core.models import Effort
-
-openai_codex = pytest.importorskip("openai_codex")
 
 
 def test_client_and_config_names() -> None:

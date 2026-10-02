@@ -143,8 +143,8 @@ _EXPLANATION: dict[str, str] = {
         "Only required if you plan to use the openai/codex provider."
     ),
     "codex provider": (
-        "The codex extra installs the official Codex SDK and runtime, enabling the "
-        "openai-oauth profile and the codex-agent alias. Optional."
+        "The openai-oauth profile and the codex-agent alias run through the bundled "
+        "Codex runtime and need a ChatGPT sign-in. Optional."
     ),
     "git pre-commit hook": (
         "A tracked pre-commit hook that runs cf validate frontmatter against "
@@ -211,7 +211,7 @@ def _human_title(result: CheckResult) -> str:
         "git pre-commit hook": "Install frontmatter pre-commit gate",
         "context-forge": "Install Context Forge",
         "codex CLI": "Install Codex CLI",
-        "codex provider": "Install Codex extra",
+        "codex provider": "Sign in to Codex",
         "Claude Code CLI": "Claude Code CLI",
         "at least one provider OK": "At least one provider authenticated",
         "providers.toml": "providers.toml valid",

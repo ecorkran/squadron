@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import AbstractContextManager
-
 import pytest
 from typer.testing import CliRunner
 
@@ -185,21 +183,6 @@ def test_non_interactive_profile_output_unchanged(
     assert result.output == "✓ openai: authenticated (OPENAI_API_KEY)\n"
 
 
-def test_interactive_login_extra_absent_prints_install_command(runner: CliRunner) -> None:
-    from unittest.mock import patch
-
-    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
-
-    with patch("squadron.providers.codex.runtime._module_available", return_value=False):
-        result = runner.invoke(app, ["auth", "login", "openai-oauth"])
-    assert result.exit_code == 1
-    assert CODEX_INSTALL_COMMAND in result.output
-    assert "Traceback" not in result.output
-
-
-# --- slice 129: logout ---
-
-
 def test_logout_success(runner: CliRunner) -> None:
     from unittest.mock import AsyncMock, patch
 
@@ -236,32 +219,8 @@ def test_logout_error_exits_nonzero(runner: CliRunner, message: str) -> None:
     assert message in result.output
 
 
-def test_logout_extra_absent_prints_install_command(runner: CliRunner) -> None:
-    from unittest.mock import patch
-
-    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
-
-    with patch("squadron.providers.codex.runtime._module_available", return_value=False):
-        result = runner.invoke(app, ["auth", "logout", "openai-oauth"])
-    assert result.exit_code == 1
-    assert CODEX_INSTALL_COMMAND in result.output
-    assert "Traceback" not in result.output
-
-
-# --- slice 129: status account details ---
-
-
 def _status_line(output: str, profile: str) -> str:
     return next(line for line in output.splitlines() if f" {profile} " in line)
-
-
-def _sdk_present() -> AbstractContextManager[object]:
-    from unittest.mock import patch
-
-    return patch(
-        "squadron.providers.codex.runtime._module_available",
-        side_effect=lambda n: n in {"openai_codex", "codex_cli_bin"},
-    )
 
 
 def test_status_shows_account_for_interactive_profile(runner: CliRunner) -> None:
@@ -269,7 +228,6 @@ def test_status_shows_account_for_interactive_profile(runner: CliRunner) -> None
 
     _write_codex_auth_file()
     with (
-        _sdk_present(),
         patch(f"{_LOGIN}.account_summary", new=AsyncMock(return_value="you@example.com, plus")),
     ):
         result = runner.invoke(app, ["auth", "status"], env={"COLUMNS": "300"})
@@ -282,7 +240,6 @@ def test_status_account_lookup_failure_shows_source_only(runner: CliRunner) -> N
 
     _write_codex_auth_file()
     with (
-        _sdk_present(),
         patch(f"{_LOGIN}.account_summary", new=AsyncMock(return_value=None)),
     ):
         result = runner.invoke(app, ["auth", "status"], env={"COLUMNS": "300"})
@@ -293,23 +250,6 @@ def test_status_account_lookup_failure_shows_source_only(runner: CliRunner) -> N
     # Rows sorted after openai-oauth still render.
     assert _status_line(result.output, "openrouter")
     assert _status_line(result.output, "sdk")
-
-
-def test_status_extra_absent_shows_install_command_without_spawning(runner: CliRunner) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
-
-    _write_codex_auth_file()
-    with (
-        patch("squadron.providers.codex.runtime._module_available", return_value=False),
-        patch(f"{_LOGIN}.account_summary", new=AsyncMock()) as summary,
-    ):
-        result = runner.invoke(app, ["auth", "status"], env={"COLUMNS": "300"})
-    assert result.exit_code == 0, result.output
-    line = _status_line(result.output, "openai-oauth")
-    assert f"~/.codex/auth.json ({CODEX_INSTALL_COMMAND})" in line
-    summary.assert_not_awaited()
 
 
 def test_status_non_interactive_rows_unchanged(

@@ -11,6 +11,6 @@ from tests.providers.codex.fake_sdk import FakeSdk, installed_fake_sdk
 
 @pytest.fixture()
 def fake_sdk() -> Generator[FakeSdk]:
-    """Install the fake ``openai_codex`` SDK and resolve the runtime as bundled."""
+    """Install the fake ``openai_codex`` SDK."""
     with installed_fake_sdk() as sdk:
         yield sdk

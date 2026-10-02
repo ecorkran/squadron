@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from pathlib import Path
 
 import pytest
 
@@ -46,25 +45,3 @@ class TestAutoRegistration:
         _import_codex_package()
         provider = get_provider(ProviderType.OPENAI_OAUTH)
         assert provider.provider_type == ProviderType.OPENAI_OAUTH
-
-    def test_registers_without_the_sdk_and_raises_install_hint(self) -> None:
-        """With the extra absent the provider still registers; using it gives the hint."""
-        import asyncio
-        from unittest.mock import patch
-
-        from squadron.core.models import AgentConfig
-        from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
-        from squadron.providers.errors import ProviderError
-
-        auth_file = Path.home() / ".codex" / "auth.json"
-        auth_file.parent.mkdir(parents=True, exist_ok=True)
-        auth_file.write_text("{}")
-        with patch("squadron.providers.codex.runtime._module_available", return_value=False):
-            _import_codex_package()
-            provider = get_provider(ProviderType.OPENAI_OAUTH)
-            config = AgentConfig(
-                name="c", agent_type="openai-oauth", provider="openai-oauth", model="m"
-            )
-            with pytest.raises(ProviderError) as exc_info:
-                asyncio.run(provider.create_agent(config))
-        assert CODEX_INSTALL_COMMAND in str(exc_info.value)

@@ -1067,6 +1067,7 @@ dependencies = [
     { name = "httpx" },
     { name = "mcp" },
     { name = "openai" },
+    { name = "openai-codex" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "pyperclip" },
@@ -1080,9 +1081,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-codex = [
-    { name = "openai-codex" },
-]
 dev = [
     { name = "packaging" },
     { name = "pyright" },
@@ -1106,7 +1104,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mcp", specifier = ">=1.0.0,<3.0.0" },
     { name = "openai", specifier = ">=1.0.0" },
-    { name = "openai-codex", marker = "extra == 'codex'", specifier = ">=0.159.3,<1" },
+    { name = "openai-codex", specifier = ">=0.159.3,<1" },
     { name = "packaging", marker = "extra == 'dev'", specifier = ">=24.0" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
@@ -1123,7 +1121,7 @@ requires-dist = [
     { name = "typer", specifier = ">=0.12.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30.0" },
 ]
-provides-extras = ["codex", "dev"]
+provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
 dev = [

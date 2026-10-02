@@ -175,11 +175,3 @@ class TestInteractiveLogin:
         with patch("squadron.providers.codex.login.account_summary", new=AsyncMock()) as delegate:
             assert asyncio.run(OAuthFileStrategy(auth_file=missing).account_summary()) is None
         delegate.assert_not_awaited()
-
-    def test_extra_absent_returns_none_without_spawning(self, tmp_path: pytest.TempPathFactory) -> None:
-        from unittest.mock import patch
-
-        auth_file = tmp_path / "auth.json"  # type: ignore[operator]
-        auth_file.write_text("{}")
-        with patch("squadron.providers.codex.runtime._module_available", return_value=False):
-            assert asyncio.run(OAuthFileStrategy(auth_file=auth_file).account_summary()) is None

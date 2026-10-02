@@ -1,7 +1,7 @@
 """A fake ``openai_codex`` SDK for tests, installed at the import boundary.
 
-The default install has no ``openai_codex``; tests that exercise SDK calls
-patch this fake into ``sys.modules`` and the resolver into "bundled".
+Tests that exercise SDK calls patch this fake into ``sys.modules`` so no real
+Codex runtime is spawned.
 """
 
 from __future__ import annotations
@@ -12,13 +12,6 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
 from unittest.mock import AsyncMock, MagicMock, patch
-
-from squadron.providers.codex.runtime import CodexRuntime, RuntimeSource
-
-BUNDLED_RUNTIME = CodexRuntime(source=RuntimeSource.bundled, path=None, package_version="0.160.0")
-PATH_RUNTIME = CodexRuntime(
-    source=RuntimeSource.path, path="/usr/local/bin/codex", package_version="0.160.0"
-)
 
 
 class Sandbox(StrEnum):
@@ -141,25 +134,9 @@ def _build_fake_sdk() -> FakeSdk:
 
 @contextmanager
 def installed_fake_sdk() -> Iterator[FakeSdk]:
-    """Install a fresh fake SDK and resolve the runtime as bundled."""
+    """Install a fresh fake SDK in place of ``openai_codex``."""
     sdk = _build_fake_sdk()
-    with (
-        patch.dict("sys.modules", {"openai_codex": sdk.module, "openai_codex.types": sdk.module.types}),
-        patch(
-            "squadron.providers.codex.runtime.resolve_codex_runtime",
-            return_value=BUNDLED_RUNTIME,
-        ),
-        patch(
-            "squadron.providers.codex.agent.resolve_codex_runtime",
-            return_value=BUNDLED_RUNTIME,
-        ),
-        patch(
-            "squadron.providers.codex.provider.resolve_codex_runtime",
-            return_value=BUNDLED_RUNTIME,
-        ),
-        patch(
-            "squadron.providers.codex.login.resolve_codex_runtime",
-            return_value=BUNDLED_RUNTIME,
-        ),
+    with patch.dict(
+        "sys.modules", {"openai_codex": sdk.module, "openai_codex.types": sdk.module.types}
     ):
         yield sdk

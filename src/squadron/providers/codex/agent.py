@@ -6,6 +6,7 @@ import asyncio
 import os
 import time
 from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING, Any
 
 from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
@@ -13,8 +14,10 @@ from squadron.core.usage import TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
 from squadron.providers.codex.auth import OAuthFileStrategy
-from squadron.providers.codex.runtime import resolve_codex_runtime
 from squadron.providers.errors import ProviderError
+
+if TYPE_CHECKING:
+    from openai_codex import AsyncCodex, AsyncThread, AsyncTurnHandle, Sandbox, TurnResult
 
 _log = get_logger("squadron.providers.codex.agent")
 
@@ -26,8 +29,7 @@ _RPC_TIMEOUT_KEY = "codex.account_timeout_s"
 class CodexAgent:
     """Agentic provider backed by the official Codex Python SDK.
 
-    Requires the ``codex`` extra (``openai-codex``), which bundles the Codex
-    runtime binary; a ``codex`` on PATH is the fallback (see ``runtime.py``).
+    ``openai-codex`` bundles the Codex runtime binary; the SDK locates it itself.
 
     The SDK client is started lazily on first ``handle_message()`` call and
     reused; subsequent messages continue the same thread.
@@ -43,8 +45,8 @@ class CodexAgent:
                 "Codex agent cannot apply max_output_tokens=%d; the backend default applies",
                 config.max_output_tokens,
             )
-        self._codex: object | None = None
-        self._thread: object | None = None
+        self._codex: AsyncCodex | None = None
+        self._thread: AsyncThread | None = None
 
     @property
     def name(self) -> str:
@@ -87,7 +89,7 @@ class CodexAgent:
         """Close the SDK client (if any) and forget it and its thread."""
         if self._codex is not None:
             try:
-                await self._codex.__aexit__(None, None, None)  # type: ignore[union-attr]
+                await self._codex.close()
             except Exception:  # noqa: BLE001
                 # Teardown boundary: __aexit__ closes the Codex SDK's
                 # subprocess/transport, whose failure modes are internal to
@@ -110,9 +112,9 @@ class CodexAgent:
         result = await self._run_turn_translating_errors(prompt)
         return self._checked_response(result), _turn_usage(result)
 
-    async def _run_turn_translating_errors(self, prompt: str) -> object:
+    async def _run_turn_translating_errors(self, prompt: str) -> TurnResult:
         """Run a turn, mapping SDK errors to ``ProviderError`` (Failure Modes)."""
-        from openai_codex import (  # pyright: ignore[reportMissingImports]
+        from openai_codex import (
             CodexRpcError,
             ServerBusyError,
             TransportClosedError,
@@ -132,14 +134,16 @@ class CodexAgent:
                 f"Codex rejected the request: {exc}. {OAuthFileStrategy().setup_hint}."
             ) from exc
 
-    async def _run_turn(self, prompt: str) -> object:
+    async def _run_turn(self, prompt: str) -> TurnResult:
         """Run one turn under ``codex.turn_timeout_s``; interrupt it on expiry."""
         timeout_s = get_typed_config(_TURN_TIMEOUT_KEY, int)
-        turn: object | None = None
+        if self._thread is None:
+            raise ProviderError("Codex turn requested before the thread started")
+        turn: AsyncTurnHandle | None = None
         try:
             async with asyncio.timeout(timeout_s):
-                turn = await self._thread.turn(prompt, **self._turn_options())  # type: ignore[union-attr]
-                return await turn.run()  # type: ignore[union-attr]
+                turn = await self._thread.turn(prompt, **self._turn_options())
+                return await turn.run()
         except TimeoutError as exc:
             if turn is not None:
                 await self._interrupt(turn)
@@ -149,67 +153,60 @@ class CodexAgent:
             # as a bare RuntimeError carrying the runtime's error message.
             raise ProviderError(f"Codex turn failed: {exc}") from exc
 
-    def _turn_options(self) -> dict[str, object]:
+    def _turn_options(self) -> dict[str, Any]:
         """Per-turn SDK options: effort maps by name to ``ReasoningEffort`` (D5)."""
         if self._config.effort is None:
             return {}
-        from openai_codex.types import ReasoningEffort  # pyright: ignore[reportMissingImports]
+        from openai_codex.types import ReasoningEffort
 
         return {"effort": ReasoningEffort(self._config.effort.value)}
 
-    async def _interrupt(self, turn: object) -> None:
+    async def _interrupt(self, turn: AsyncTurnHandle) -> None:
         """Best-effort interrupt of a timed-out turn, bounded so a hung runtime cannot block."""
-        from openai_codex import CodexError  # pyright: ignore[reportMissingImports]
+        from openai_codex import CodexError
 
         try:
             async with asyncio.timeout(get_typed_config(_RPC_TIMEOUT_KEY, int)):
-                await turn.interrupt()  # type: ignore[attr-defined]
+                await turn.interrupt()
         except (TimeoutError, CodexError):
             # The turn already failed with a timeout, which is what gets raised;
             # shutdown() tears down the runtime either way.
             _log.warning("Codex turn interrupt after timeout did not complete", exc_info=True)
 
     @staticmethod
-    def _checked_response(result: object) -> str:
+    def _checked_response(result: TurnResult) -> str:
         """Return the turn's response text, or raise for an interrupted or empty turn."""
-        from openai_codex.types import TurnStatus  # pyright: ignore[reportMissingImports]
+        from openai_codex.types import TurnStatus
 
-        if result.status == TurnStatus.interrupted:  # type: ignore[attr-defined]
+        if result.status == TurnStatus.interrupted:
             raise ProviderError("Codex turn interrupted")
-        text = result.final_response  # type: ignore[attr-defined]
+        text = result.final_response
         if text is None or not text.strip():
             raise ProviderError("Codex turn completed with no response text")
         return text
 
     async def _start_thread(self, model: str) -> None:
         """Start the SDK client and open a thread (first message only)."""
-        runtime = resolve_codex_runtime()
-        from openai_codex import (  # pyright: ignore[reportMissingImports]
+        from openai_codex import (
             ApprovalMode,
             AsyncCodex,
             CodexConfig,
             CodexError,
-            Sandbox,
         )
 
-        sandbox = self._resolve_sandbox(Sandbox)
+        sandbox = self._resolve_sandbox()
 
         started = time.monotonic()
-        codex = AsyncCodex(CodexConfig(codex_bin=runtime.path))
+        codex = AsyncCodex(CodexConfig())
         try:
             # Spawn + initialize: CodexError from the protocol, OSError when the
             # binary cannot run, RuntimeError from initialize-metadata checks.
             self._codex = await codex.__aenter__()
         except (CodexError, OSError, RuntimeError) as exc:
             raise ProviderError(f"Codex runtime failed to start: {exc}") from exc
-        _log.debug(
-            "Codex runtime started in %.2fs (%s, bin=%s)",
-            time.monotonic() - started,
-            runtime.source,
-            runtime.path,
-        )
+        _log.debug("Codex runtime started in %.2fs", time.monotonic() - started)
         try:
-            self._thread = await self._codex.thread_start(  # type: ignore[union-attr]
+            self._thread = await self._codex.thread_start(
                 model=model,
                 sandbox=sandbox,
                 cwd=self._config.cwd or os.getcwd(),
@@ -221,15 +218,17 @@ class CodexAgent:
             raise ProviderError(f"Codex thread start failed: {exc}") from exc
         _log.debug("Codex thread started: model=%s", model)
 
-    def _resolve_sandbox(self, sandbox_enum: type) -> object:
+    def _resolve_sandbox(self) -> Sandbox:
         """Validate ``credentials["sandbox"]`` against the SDK enum (default read-only)."""
+        from openai_codex import Sandbox
+
         raw = self._config.credentials.get(_SANDBOX_KEY)
         if raw is None:
-            return sandbox_enum.read_only  # type: ignore[attr-defined]
+            return Sandbox.read_only
         try:
-            return sandbox_enum(raw)
+            return Sandbox(raw)
         except ValueError as exc:
-            valid = ", ".join(member.value for member in sandbox_enum)  # type: ignore[attr-defined]
+            valid = ", ".join(member.value for member in Sandbox)
             raise ProviderError(f"Invalid Codex sandbox {raw!r}; valid values: {valid}") from exc
 
 

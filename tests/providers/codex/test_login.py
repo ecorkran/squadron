@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from squadron.providers.codex import login as codex_login
-from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 from squadron.providers.errors import ProviderError
 from tests.providers.codex.fake_sdk import CodexError, FakeSdk
 
@@ -20,7 +19,6 @@ _AUTH_URL = "https://auth.openai.com/oauth/authorize?state=secret-state"
 _DEVICE_URL = "https://auth.openai.com/codex/device"
 _USER_CODE = "WXYZ-1234"
 _CONFIG = "squadron.providers.codex.login.get_typed_config"
-_MODULE_AVAILABLE = "squadron.providers.codex.runtime._module_available"
 
 
 @dataclass
@@ -130,12 +128,6 @@ class TestLogin:
         notes = _login()
         assert any(_AUTH_URL in note for note in notes)
 
-    def test_extra_absent_gives_install_hint(self) -> None:
-        with patch(_MODULE_AVAILABLE, return_value=False):
-            with pytest.raises(ProviderError) as exc_info:
-                _login()
-        assert CODEX_INSTALL_COMMAND in str(exc_info.value)
-
     @pytest.mark.parametrize("device_code", [False, True])
     def test_url_and_code_never_logged(
         self,
@@ -189,11 +181,6 @@ class TestAccountSummary:
             assert asyncio.run(codex_login.account_summary()) is None
         assert any("timed out" in r.getMessage() for r in caplog.records)
 
-    def test_extra_absent_returns_none_with_hint_logged(self, caplog: pytest.LogCaptureFixture) -> None:
-        with patch(_MODULE_AVAILABLE, return_value=False), caplog.at_level("WARNING"):
-            assert asyncio.run(codex_login.account_summary()) is None
-        assert CODEX_INSTALL_COMMAND in caplog.text
-
 
 class TestLogout:
     def test_success(self, fake_sdk: FakeSdk) -> None:
@@ -213,9 +200,3 @@ class TestLogout:
         with pytest.raises(ProviderError, match="rpc failed") as exc_info:
             asyncio.run(codex_login.logout())
         assert exc_info.value.__cause__ is sdk_error
-
-    def test_extra_absent_gives_install_hint(self) -> None:
-        with patch(_MODULE_AVAILABLE, return_value=False):
-            with pytest.raises(ProviderError) as exc_info:
-                asyncio.run(codex_login.logout())
-        assert CODEX_INSTALL_COMMAND in str(exc_info.value)

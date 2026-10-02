@@ -19,7 +19,6 @@ from squadron.providers.auth import (
 )
 from squadron.providers.codex.login import LOGIN_TIMEOUT_KEY
 from squadron.providers.errors import ProviderError
-from squadron.providers.loader import missing_extra_hint
 from squadron.providers.profiles import ProviderProfile, get_all_profiles, get_profile
 
 #: soft_wrap: commands and sign-in URLs must reach the terminal unbroken.
@@ -126,7 +125,7 @@ def auth_status() -> None:
             status = "[green]✓ authenticated[/green]"
             source = strategy.active_source or ""
             if isinstance(strategy, InteractiveLogin):
-                source += _account_detail(profile, strategy)
+                source += _account_detail(strategy)
         else:
             status = "[red]✗ not authenticated[/red]"
             source = strategy.setup_hint
@@ -137,18 +136,10 @@ def auth_status() -> None:
     Console().print(table)
 
 
-def _account_detail(profile: ProviderProfile, strategy: InteractiveLogin) -> str:
-    """`` (<email>, <plan>)``; the install command when the extra is missing; else ``""``.
+def _account_detail(strategy: InteractiveLogin) -> str:
+    """`` (<email>, <plan>)`` for the signed-in account, else ``""``.
 
-    The extra check comes first so a missing extra never spawns a runtime. A failed
-    lookup already logged a WARNING; the row still shows validity and source.
+    A failed lookup already logged a WARNING; the row still shows validity and source.
     """
-    try:
-        hint = missing_extra_hint(profile.provider)
-    except KeyError:
-        # Unregistered provider: nothing to add, and the other rows must still render.
-        return ""
-    if hint is not None:
-        return f" ({hint})"
     summary = asyncio.run(strategy.account_summary())
     return f" ({summary})" if summary is not None else ""

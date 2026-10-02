@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Callable
-from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
 
@@ -672,61 +671,31 @@ def test_agents_check_warns_when_the_bundle_raises_oserror(
 
 # --- slice 129: codex provider row ---
 
-_CODEX_RUNTIME = "squadron.providers.codex.runtime"
+
+def _write_codex_auth() -> None:
+    auth_file = Path.home() / ".codex" / "auth.json"
+    auth_file.parent.mkdir(parents=True, exist_ok=True)
+    auth_file.write_text("{}")
 
 
-def _codex_env(*, modules: set[str], path_binary: str | None = None, logged_in: bool) -> ExitStack:
-    """Patch the Codex runtime probes; optionally write ~/.codex/auth.json."""
-    if logged_in:
-        auth_file = Path.home() / ".codex" / "auth.json"
-        auth_file.parent.mkdir(parents=True, exist_ok=True)
-        auth_file.write_text("{}")
-    stack = ExitStack()
-    available = patch(f"{_CODEX_RUNTIME}._module_available", side_effect=lambda n: n in modules)
-    stack.enter_context(available)
-    stack.enter_context(patch(f"{_CODEX_RUNTIME}.shutil.which", return_value=path_binary))
-    stack.enter_context(patch(f"{_CODEX_RUNTIME}._sdk_version", return_value="0.160.0"))
-    return stack
-
-
-def test_codex_provider_extra_missing_warns_with_install_command() -> None:
-    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
-
-    with _codex_env(modules=set(), logged_in=True):
-        result = check_codex_provider()
-    assert result.status == CheckStatus.WARN
-    assert result.fix_hint == CODEX_INSTALL_COMMAND
+def test_codex_provider_logged_in_is_ok_with_version() -> None:
+    _write_codex_auth()
+    result = check_codex_provider()
+    assert result.status == CheckStatus.OK
+    assert result.detail.startswith("openai-codex ")
+    assert result.detail.endswith("; logged in")
+    assert result.fix_hint is None
     assert result.section == SECTION_INTEGRATIONS
     assert result.required is False
 
 
-def test_codex_provider_installed_and_logged_in_is_ok_bundled() -> None:
-    with _codex_env(modules={"openai_codex", "codex_cli_bin"}, logged_in=True):
-        result = check_codex_provider()
-    assert result.status == CheckStatus.OK
-    assert "openai-codex 0.160.0" in result.detail
-    assert "runtime: bundled" in result.detail
-    assert result.fix_hint is None
-
-
-def test_codex_provider_path_runtime_detail() -> None:
-    with _codex_env(modules={"openai_codex"}, path_binary="/opt/bin/codex", logged_in=True):
-        result = check_codex_provider()
-    assert result.status == CheckStatus.OK
-    assert "runtime: PATH: /opt/bin/codex" in result.detail
-
-
 def test_codex_provider_not_logged_in_points_to_login() -> None:
-    with _codex_env(modules={"openai_codex", "codex_cli_bin"}, logged_in=False):
-        result = check_codex_provider()
+    result = check_codex_provider()
     assert result.status == CheckStatus.WARN
     assert result.fix_hint is not None
     assert "sq auth login openai-oauth" in result.fix_hint
 
 
-@pytest.mark.parametrize("modules", [set(), {"openai_codex", "codex_cli_bin"}])
-def test_run_all_checks_includes_codex_provider_row(modules: set[str]) -> None:
-    with _codex_env(modules=modules, logged_in=False):
-        results = run_all_checks()
-    (row,) = [r for r in results if r.name == "codex provider"]
+def test_run_all_checks_includes_codex_provider_row() -> None:
+    (row,) = [r for r in run_all_checks() if r.name == "codex provider"]
     assert "check failed" not in row.detail

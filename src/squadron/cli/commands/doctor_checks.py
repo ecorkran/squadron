@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import logging
 import os
 import shutil
@@ -15,9 +16,7 @@ import typer
 from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
-from squadron.providers.base import ProfileName, ProviderType
-from squadron.providers.codex.runtime import RuntimeSource, resolve_codex_runtime
-from squadron.providers.loader import missing_extra_hint
+from squadron.providers.base import ProfileName
 from squadron.providers.profiles import get_all_profiles, get_profile, providers_toml_path
 from squadron.skills.manifest import load_effective
 from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
@@ -339,26 +338,13 @@ def check_codex_cli() -> CheckResult:
 
 
 def check_codex_provider() -> CheckResult:
-    """Report the Codex provider: extra installed, runtime source, login state.
+    """Report the Codex provider: SDK version and login state.
 
-    The missing-extra decision and hint come from the provider's
-    ``ExtraRequirement``; login state is ``auth.json`` presence via the
-    profile's auth strategy. Spawns nothing.
+    Login state is ``auth.json`` presence via the profile's auth strategy.
+    Spawns nothing.
     """
     name = "codex provider"
-    hint = missing_extra_hint(ProviderType.OPENAI_OAUTH)
-    if hint is not None:
-        return CheckResult(
-            name=name,
-            status=CheckStatus.WARN,
-            detail="codex extra not installed",
-            fix_hint=hint,
-            section=SECTION_INTEGRATIONS,
-            required=False,
-        )
-    runtime = resolve_codex_runtime()
-    source = "bundled" if runtime.source is RuntimeSource.bundled else f"PATH: {runtime.path}"
-    detail = f"openai-codex {runtime.package_version or '(unknown version)'}, runtime: {source}"
+    detail = f"openai-codex {importlib.metadata.version('openai-codex')}"
     strategy = resolve_auth_strategy_for_profile(get_profile(ProfileName.OPENAI_OAUTH))
     if not strategy.is_valid():
         return CheckResult(

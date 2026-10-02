@@ -612,19 +612,18 @@ def test_alias_effort_reaches_the_review(
 def test_provider_error_text_is_not_parsed_as_markup(
     doc_inputs: dict[str, str], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """Slice 129: a provider message like squadron-ai[codex] prints intact."""
+    """Slice 129: a provider message with brackets prints intact."""
     from unittest.mock import AsyncMock, patch
 
     import typer
 
     from squadron.cli.commands.review import _run_review_command
-    from squadron.providers.codex.runtime import CODEX_PACKAGE_MISSING_MESSAGE
     from squadron.providers.errors import ProviderError
 
     with patch(
         "squadron.cli.commands.review._execute_review",
-        new=AsyncMock(side_effect=ProviderError(CODEX_PACKAGE_MISSING_MESSAGE)),
+        new=AsyncMock(side_effect=ProviderError("Install it with: pip install 'pkg[extra]'")),
     ):
         with pytest.raises(typer.Exit):
             _run_review_command("slice", doc_inputs, "terminal", None, no_save=True)
-    assert "'squadron-ai[codex]'" in capsys.readouterr().out
+    assert "'pkg[extra]'" in capsys.readouterr().out

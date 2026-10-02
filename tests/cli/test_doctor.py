@@ -11,6 +11,7 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.cli.commands.doctor_checks import SECTION_INTEGRATIONS, CheckResult, CheckStatus
 from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.profiles import ProviderProfile
 
@@ -214,10 +215,16 @@ def test_doctor_exits_zero_when_gh_is_absent(monkeypatch: pytest.MonkeyPatch) ->
     assert result.exit_code == 0
 
 
-def test_codex_extra_hint_brackets_survive_rendering() -> None:
-    """Slice 129: the [codex] in the install hint is text, not Rich markup."""
-    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
-
-    with patch("squadron.providers.codex.runtime._module_available", return_value=False):
+def test_fix_hint_brackets_survive_rendering() -> None:
+    """Slice 129: brackets in a fix hint are text, not Rich markup."""
+    bracketed = CheckResult(
+        name="codex provider",
+        status=CheckStatus.WARN,
+        detail="not logged in",
+        fix_hint="install 'pkg[extra]'",
+        section=SECTION_INTEGRATIONS,
+        required=False,
+    )
+    with patch("squadron.cli.commands.doctor_checks.check_codex_provider", return_value=bracketed):
         result = runner.invoke(app, ["doctor", "-v"])
-    assert f"fix: {CODEX_INSTALL_COMMAND}" in result.output
+    assert "fix: install 'pkg[extra]'" in result.output

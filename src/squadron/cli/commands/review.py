@@ -732,7 +732,7 @@ def _run_review_command(
     except ProviderError as exc:
         # The provider collected the only evidence there is about why the model
         # stopped. Printing and exiting discards it; the artifact keeps it.
-        # Escaped: provider messages carry text like squadron-ai[codex].
+        # Escaped: provider messages can carry brackets that are not Rich tags.
         rprint(f"[red]Error: Review failed — {escape(str(exc))}[/red]")
         if failure_target is not None and not no_save:
             saved = save_provider_failure(
@@ -754,7 +754,7 @@ def _run_review_command(
                 rprint(f"[yellow]Provider failure recorded: {saved}[/yellow]")
         raise typer.Exit(code=1) from exc
     except Exception as exc:
-        # Escaped: provider messages carry text like squadron-ai[codex].
+        # Escaped: provider messages can carry brackets that are not Rich tags.
         rprint(f"[red]Error: Review failed — {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 

@@ -212,24 +212,23 @@ def test_build_steps_provider_profile_has_synthesised_recheck() -> None:
     assert isinstance(outcome, CheckResult)
 
 
-def test_codex_provider_warn_yields_optional_install_step() -> None:
+def test_codex_provider_warn_yields_optional_sign_in_step() -> None:
     """Slice 129: the codex provider doctor row becomes a full setup step."""
     from squadron.cli.commands.doctor_checks import check_codex_provider
     from squadron.cli.commands.setup_steps import StepKind, build_steps
-    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 
     result = CheckResult(
         name="codex provider",
         status=CheckStatus.WARN,
-        detail="codex extra not installed",
-        fix_hint=CODEX_INSTALL_COMMAND,
+        detail="openai-codex 0.160.0; not logged in",
+        fix_hint="sq auth login openai-oauth",
         section=SECTION_INTEGRATIONS,
         required=False,
     )
     (step,) = build_steps([result])
     assert step.kind is StepKind.OPTIONAL
-    assert step.title == "Install Codex extra"
+    assert step.title == "Sign in to Codex"
     assert step.explanation is not None and "openai-oauth" in step.explanation
     assert step.docs_anchor == "docs/QUICKSTART.md#configure-a-provider"
     assert step.recheck is check_codex_provider
-    assert step.command == CODEX_INSTALL_COMMAND
+    assert step.command == "sq auth login openai-oauth"

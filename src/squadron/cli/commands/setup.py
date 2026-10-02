@@ -66,7 +66,7 @@ def _render_step_block(console: Console, step: SetupStep, n: int, total: int, ve
     header.append(step.title, style="bold")
     console.print(header)
     console.print("─" * 48)
-    # Plain Text, not markup: details and commands such as squadron-ai[codex]
+    # Plain Text, not markup: details and commands such as pkg[extra]
     # carry brackets that are not Rich tags.
     console.print(Text(f"  {step.detail}"))
     if step.command:

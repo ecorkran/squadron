@@ -11,10 +11,8 @@ import pytest
 from squadron.core.models import AgentConfig, AgentState, Effort, Message, MessageType
 from squadron.core.usage import TokenUsage
 from squadron.providers.codex.agent import CodexAgent
-from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 from squadron.providers.errors import ProviderError
 from tests.providers.codex.fake_sdk import (
-    PATH_RUNTIME,
     ApprovalMode,
     CodexError,
     CodexRpcError,
@@ -93,16 +91,10 @@ class TestClientLifecycle:
         fake_sdk.client.thread_start.assert_awaited_once()
         assert fake_sdk.turn.run.await_count == 2
 
-    def test_bundled_runtime_passes_no_binary(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+    def test_uses_bundled_runtime(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
         _send(agent, "hi")
         (config,) = fake_sdk.async_codex.call_args.args
         assert config.codex_bin is None
-
-    def test_path_runtime_passes_its_binary(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
-        with patch("squadron.providers.codex.agent.resolve_codex_runtime", return_value=PATH_RUNTIME):
-            _send(agent, "hi")
-        (config,) = fake_sdk.async_codex.call_args.args
-        assert config.codex_bin == "/usr/local/bin/codex"
 
     def test_thread_start_denies_approvals(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
         _send(agent, "hi")
@@ -122,12 +114,6 @@ class TestClientLifecycle:
         _send(CodexAgent(name="test-codex", config=config), "hi")
         kwargs = fake_sdk.client.thread_start.call_args.kwargs
         assert kwargs["base_instructions"] == "Review carefully."
-
-    def test_package_missing_raises_install_hint(self, agent: CodexAgent) -> None:
-        with patch("squadron.providers.codex.runtime._module_available", return_value=False):
-            with pytest.raises(ProviderError) as exc_info:
-                _send(agent, "hi")
-        assert CODEX_INSTALL_COMMAND in str(exc_info.value)
 
     def test_missing_model_raises(self, fake_sdk: FakeSdk) -> None:
         config = AgentConfig(
@@ -184,7 +170,7 @@ class TestTurnResultChecks:
             with pytest.raises(ProviderError, match="Codex turn timed out after 0 s"):
                 asyncio.run(run())
         fake_sdk.turn.interrupt.assert_awaited_once()
-        fake_sdk.client.__aexit__.assert_awaited_once()
+        fake_sdk.client.close.assert_awaited_once()
         assert agent.state == AgentState.terminated
 
     def test_failed_turn_carries_sdk_message(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
@@ -223,7 +209,7 @@ class TestSdkErrors:
         fake_sdk.client.thread_start.side_effect = CodexError("bad thread")
         with pytest.raises(ProviderError, match="Codex thread start failed"):
             _send(agent, "hi")
-        fake_sdk.client.__aexit__.assert_awaited_once()
+        fake_sdk.client.close.assert_awaited_once()
         assert agent._codex is None
         assert agent.state == AgentState.idle
 
@@ -263,7 +249,7 @@ class TestSdkErrors:
         self, agent: CodexAgent, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
     ) -> None:
         _send(agent, "hi")
-        fake_sdk.client.__aexit__.side_effect = CodexError("close failed")
+        fake_sdk.client.close.side_effect = CodexError("close failed")
         with caplog.at_level("ERROR", logger="squadron.providers.codex.agent"):
             asyncio.run(agent.shutdown())
         assert any("ignoring error during SDK teardown" in r.getMessage() for r in caplog.records)
@@ -342,7 +328,7 @@ class TestShutdown:
 
         asyncio.run(agent.shutdown())
 
-        mock_codex.__aexit__.assert_awaited_once()
+        mock_codex.close.assert_awaited_once()
         assert agent._codex is None
         assert agent._thread is None
 

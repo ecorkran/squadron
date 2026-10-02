@@ -4,16 +4,13 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from squadron.core.models import AgentConfig
-from squadron.providers.base import ExtraRequirement
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.provider import CodexProvider
-from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND, CODEX_NO_BINARY_MESSAGE
-from squadron.providers.errors import ProviderAuthError, ProviderError
+from squadron.providers.errors import ProviderAuthError
 
 
 @pytest.fixture()
@@ -57,102 +54,25 @@ class TestCapabilities:
         assert provider.capabilities.supports_streaming is False
 
 
-_MODULE_AVAILABLE = "squadron.providers.codex.runtime._module_available"
-_WHICH = "squadron.providers.codex.runtime.shutil.which"
-
-
-def _sdk_installed(name: str) -> bool:
-    return name in {"openai_codex", "codex_cli_bin"}
-
-
-def _sdk_without_bundled_bin(name: str) -> bool:
-    return name == "openai_codex"
-
-
 class TestCreateAgent:
     @pytest.mark.usefixtures("_codex_logged_in")
     def test_returns_codex_agent(self, provider: CodexProvider, agent_config: AgentConfig) -> None:
-        with patch(_MODULE_AVAILABLE, side_effect=_sdk_installed):
-            agent = asyncio.run(provider.create_agent(agent_config))
+        agent = asyncio.run(provider.create_agent(agent_config))
         assert isinstance(agent, CodexAgent)
         assert agent.name == "test-codex"
-
-    @pytest.mark.usefixtures("_codex_logged_in")
-    def test_package_missing_raises_install_hint(
-        self, provider: CodexProvider, agent_config: AgentConfig
-    ) -> None:
-        with patch(_MODULE_AVAILABLE, return_value=False):
-            with pytest.raises(ProviderError) as exc_info:
-                asyncio.run(provider.create_agent(agent_config))
-        assert CODEX_INSTALL_COMMAND in str(exc_info.value)
-
-    @pytest.mark.usefixtures("_codex_logged_in")
-    def test_no_binary_names_both_remedies(
-        self, provider: CodexProvider, agent_config: AgentConfig
-    ) -> None:
-        with (
-            patch(_MODULE_AVAILABLE, side_effect=_sdk_without_bundled_bin),
-            patch(_WHICH, return_value=None),
-        ):
-            with pytest.raises(ProviderError) as exc_info:
-                asyncio.run(provider.create_agent(agent_config))
-        message = str(exc_info.value)
-        assert CODEX_INSTALL_COMMAND in message
-        assert "PATH" in message
 
     def test_raises_when_no_credentials(
         self, provider: CodexProvider, agent_config: AgentConfig
     ) -> None:
         # The per-test home has no ~/.codex/auth.json.
-        with patch(_MODULE_AVAILABLE, side_effect=_sdk_installed):
-            with pytest.raises(ProviderAuthError, match="No Codex credentials"):
-                asyncio.run(provider.create_agent(agent_config))
+        with pytest.raises(ProviderAuthError, match="No Codex credentials"):
+            asyncio.run(provider.create_agent(agent_config))
 
 
 class TestValidateCredentials:
     @pytest.mark.usefixtures("_codex_logged_in")
-    def test_true_when_runtime_resolves_and_logged_in(self, provider: CodexProvider) -> None:
-        with patch(_MODULE_AVAILABLE, side_effect=_sdk_installed):
-            assert asyncio.run(provider.validate_credentials()) is True
+    def test_true_when_logged_in(self, provider: CodexProvider) -> None:
+        assert asyncio.run(provider.validate_credentials()) is True
 
-    def test_false_when_runtime_resolves_but_not_logged_in(self, provider: CodexProvider) -> None:
-        with patch(_MODULE_AVAILABLE, side_effect=_sdk_installed):
-            assert asyncio.run(provider.validate_credentials()) is False
-
-    @pytest.mark.usefixtures("_codex_logged_in")
-    def test_false_when_package_missing(self, provider: CodexProvider) -> None:
-        with patch(_MODULE_AVAILABLE, return_value=False):
-            assert asyncio.run(provider.validate_credentials()) is False
-
-    @pytest.mark.usefixtures("_codex_logged_in")
-    def test_false_when_no_binary(self, provider: CodexProvider) -> None:
-        with (
-            patch(_MODULE_AVAILABLE, side_effect=_sdk_without_bundled_bin),
-            patch(_WHICH, return_value=None),
-        ):
-            assert asyncio.run(provider.validate_credentials()) is False
-
-
-class TestExtraRequirement:
-    def test_codex_provider_is_extra_requirement(self, provider: CodexProvider) -> None:
-        assert isinstance(provider, ExtraRequirement)
-
-    def test_hint_when_package_missing(self, provider: CodexProvider) -> None:
-        with patch(_MODULE_AVAILABLE, return_value=False):
-            assert provider.missing_extra_hint() == CODEX_INSTALL_COMMAND
-
-    def test_no_binary_message_when_package_present(self, provider: CodexProvider) -> None:
-        with (
-            patch(_MODULE_AVAILABLE, side_effect=_sdk_without_bundled_bin),
-            patch(_WHICH, return_value=None),
-        ):
-            assert provider.missing_extra_hint() == CODEX_NO_BINARY_MESSAGE
-
-    def test_none_when_runtime_resolves(self, provider: CodexProvider) -> None:
-        with patch(_MODULE_AVAILABLE, side_effect=_sdk_installed):
-            assert provider.missing_extra_hint() is None
-
-    def test_provider_without_method_is_not_extra_requirement(self) -> None:
-        from squadron.providers.openai.provider import OpenAICompatibleProvider
-
-        assert not isinstance(OpenAICompatibleProvider(), ExtraRequirement)
+    def test_false_when_not_logged_in(self, provider: CodexProvider) -> None:
+        assert asyncio.run(provider.validate_credentials()) is False

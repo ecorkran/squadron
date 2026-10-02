@@ -75,7 +75,7 @@ def _render_table(results: list[CheckResult], verbose: bool) -> None:
             # WARN implies verbose. Show the remedy whenever we have one —
             # printing a problem while withholding its fix is the worst of both.
             if row.fix_hint:
-                # Plain Text, not markup: a hint like squadron-ai[codex] is not a tag.
+                # Plain Text, not markup: brackets in a hint (pkg[extra]) are not tags.
                 console.print(Text(f"    fix: {row.fix_hint}", style="dim"))
 
     console.print()
