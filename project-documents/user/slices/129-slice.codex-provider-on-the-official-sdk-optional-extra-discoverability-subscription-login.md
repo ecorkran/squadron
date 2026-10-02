@@ -7,7 +7,7 @@ dependencies: [review-transport-unification-provider-decoupling, tool-heavy-revi
 interfaces: []  # none: InteractiveLogin, ExtraRequirement and CodexRuntime are provided but no planned slice consumes them
 dateCreated: 20261001
 dateUpdated: 20261001
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: Codex Provider on the Official SDK — Optional Extra, Discoverability, Subscription Login
@@ -106,7 +106,7 @@ No squadron state added. Credentials live in `~/.codex/auth.json`, written and r
   |---|---|---|
   | `codex.turn_timeout_s` | 1800 | one `thread.run` (agentic reviews are legitimately slow; this bounds a hung runtime, it does not pace work) |
   | `codex.login_timeout_s` | 300 | `handle.wait()` for browser or device-code login; `sq auth login --timeout` overrides it |
-  | `codex.account_timeout_s` | 30 | runtime start + `account()` in `sq auth status` and post-login confirmation; runtime start + `logout()` in `sq auth logout` |
+  | `codex.account_timeout_s` | 30 | runtime start + `account()` in `sq auth status` and post-login confirmation; runtime start + `logout()` in `sq auth logout`; also bounds `turn.interrupt()` after a turn timeout and `handle.cancel()` after a login timeout, so a hung runtime cannot defeat those timeouts |
 
   On login timeout or Ctrl-C the handle is cancelled (`handle.cancel()`) so the local callback listener is released.
 - **D8 — Turn result is checked, not trusted.** After `thread.run`, `TurnResult.status` must be `TurnStatus.completed`; `failed` raises `ProviderError` carrying `TurnResult.error.message`, `interrupted` raises `ProviderError("Codex turn interrupted")`. A `completed` turn whose `final_response` is `None` or blank raises `ProviderError("Codex turn completed with no response text")`. The current `result.final_response or ""` is removed: an empty review must never reach the parser as a valid, empty Message (the dispatch no-op class of bug, issue #15).
@@ -161,17 +161,19 @@ sq auth status
 ```python
 @runtime_checkable
 class InteractiveLogin(Protocol):
-    async def login(self, *, device_code: bool, timeout: float, notify: Callable[[str], None]) -> None: ...
+    async def login(self, *, device_code: bool, timeout_s: float, notify: Callable[[str], None]) -> None: ...
     async def logout(self) -> None: ...
     async def account_summary(self) -> str | None: ...
 ```
 
 `notify` is how the strategy hands the URL / user code to the CLI without importing Rich.
 
+*Implemented as `timeout_s` (ruff ASYNC109 rejects an async parameter named `timeout`); it bounds only `handle.wait()`, so the handle can be cancelled on expiry.*
+
 ### Sub-part B surfaces
-- **Missing-package error:** `Codex support needs the optional extra: pip install 'squadron-ai[codex]'` (final distribution name confirmed against `pyproject.toml` `name` during implementation).
+- **Missing-package error:** `The Codex provider needs the codex extra. Install it with: pip install 'squadron-ai[codex]'` (`CODEX_PACKAGE_MISSING_MESSAGE` in `runtime.py`; distribution name `squadron-ai` confirmed against `pyproject.toml`).
 - **`sq doctor`:** new row `codex provider` in the integrations section, non-required: package importable + version, runtime source (`bundled` | `PATH: <path>`), login state from `auth.json` presence (no subprocess in doctor). The existing `codex CLI` row stays — it gates the `codex skills` row and is unrelated to the SDK.
-- **`sq models list`:** for aliases whose profile's provider reports the extra missing, add `(needs [codex] extra)` to the Notes/Profile cell. Determined through `ExtraRequirement.missing_extra_hint()` (D9), not a hard-coded `"openai-oauth"` string; the hint text is the marker's source. Shown in default and verbose output; absent when the extra is installed.
+- **`sq models list`:** for aliases whose profile's provider reports the extra missing, add `(needs extra: pip install 'squadron-ai[codex]')` to the Profile cell (the marker is built from the hint, so the install command has one source; Notes exists only under `--verbose`). Determined through `ExtraRequirement.missing_extra_hint()` (D9), not a hard-coded `"openai-oauth"` string; the hint text is the marker's source. Shown in default and verbose output; absent when the extra is installed.
 - **README:** replace the Codex install instructions with extra install → `sq auth login openai-oauth` → example review; note `--device-code` for SSH.
 
 ## Integration Points
@@ -207,17 +209,19 @@ class InteractiveLogin(Protocol):
 
 ### Verification Walkthrough
 
-1. Without the extra (fresh venv, `pip install squadron-ai`):
-   `sq review code 128 --model codex-agent` → fails with the `pip install 'squadron-ai[codex]'` message.
-   `sq models list` → `codex-agent` and `codex-spark` marked as needing the extra.
-   `sq doctor` → `codex provider` row WARN with the same command.
-2. `pip install 'squadron-ai[codex]'`; `sq doctor` → row shows package version, `runtime: bundled`, login: not logged in.
-3. `sq auth login openai-oauth` → URL printed, browser opens, complete sign-in → `✓ openai-oauth: authenticated (you@example.com, <plan>)`.
-4. On a headless/SSH box: `sq auth login openai-oauth --device-code` → URL + code printed; enter code on another device → same success line.
-5. `sq auth status` → `openai-oauth` row shows source and account. Other profiles unchanged.
-6. `env -u OPENAI_API_KEY sq review code 128 --model codex-agent -v` → review completes; saved artifact lists model, effort (if the alias sets one), and token usage.
-7. `sq auth login sdk --device-code` → error: profile does not support interactive login.
-8. `sq auth logout openai-oauth`; `sq auth status` → `✗ not authenticated`.
+Verified 20261001 on macOS, `openai-codex` 0.160.0. Steps 1, 2, 5 and 7 were run by the implementing agent; steps 3, 4, 6 and 8 need a real ChatGPT account, a browser, or would log the account out, and are Project Manager checks. Each automated step is also covered by tests (named below).
+
+1. **Without the extra** (default `uv sync --dev`, or `pip install squadron-ai`):
+   - `sq review code 128 --model codex-agent` → exit 1, `Error: Review failed — The Codex provider needs the codex extra. Install it with: pip install 'squadron-ai[codex]'`. **Caveat:** like any `ProviderError`, this writes a provider-failure artifact into the slice's review slot (the prior review is archived under `reviews/archive/`). Restore it with `git checkout` if you run this against a slice with a committed review.
+   - `sq models list` → `codex-agent` and `codex-spark` Profile cells read `openai-oauth (needs extra: pip install 'squadron-ai[codex]')`; no other alias is marked (`tests/cli/test_model_list.py`).
+   - `sq doctor -v` → `! codex provider    codex extra not installed` / `fix: pip install 'squadron-ai[codex]'`. WARN rows only show with `-v`, so plain `sq doctor` lists it in the warning count only (`tests/cli/test_doctor.py`, `test_doctor_checks.py`).
+2. **With the extra** (`pip install 'squadron-ai[codex]'`, or `uv sync --dev --extra codex`): `sq doctor` → `✓ codex provider    openai-codex 0.160.0, runtime: bundled; logged in`. With no `~/.codex/auth.json` the row is WARN `…; not logged in` with fix `Run 'sq auth login openai-oauth' to sign in with ChatGPT, or use the 'openai' profile for API-key access` (`test_codex_provider_not_logged_in_points_to_login`).
+3. *(PM)* `sq auth login openai-oauth` → `Sign in at: <url>` printed, browser opens; after sign-in → `✓ openai-oauth: authenticated (<email>, <plan>)`. If the browser cannot open, a WARNING is logged and the printed URL still works.
+4. *(PM)* Headless/SSH: `sq auth login openai-oauth --device-code` → `Open <verification_url> and enter code: <code>`; enter it on another device → same success line. `--timeout N` overrides `codex.login_timeout_s` (default 300).
+5. `sq auth status` → `openai-oauth │ oauth │ ✓ authenticated │ ~/.codex/auth.json (<email>, <plan>)` (verified live: account and plan shown). Without the extra the Source cell shows `~/.codex/auth.json (pip install 'squadron-ai[codex]')` and no runtime is spawned. Other profiles unchanged.
+6. *(PM)* `env -u OPENAI_API_KEY sq review code 128 --model codex-agent -v` → review completes; the artifact lists the model, `effort` (if the alias sets one) and token usage. The artifact path is covered end to end with a faked SDK in `tests/review/test_codex_review_artifact.py`. Restore the slice 128 review afterwards if it is committed.
+7. `sq auth login sdk --device-code` → `Error: profile 'sdk' does not support interactive login`, exit 1 (verified).
+8. *(PM)* `sq auth logout openai-oauth` → `✓ openai-oauth: logged out`; `sq auth status` → `✗ not authenticated`. Logout and status are bounded by `codex.account_timeout_s` (default 30).
 
 ## Implementation Notes
 

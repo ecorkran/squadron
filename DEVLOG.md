@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20260930
+dateUpdated: 20261001
 
 ---
 
@@ -11,6 +11,17 @@ dateUpdated: 20260930
 A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261001
+
+### Slice 129: Codex Provider on the Official SDK — Implementation Complete (code review pending)
+
+- Branch `129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login`, 29 commits `ba0b689a`…`9a9478f0` plus closeout docs. Not merged: `cf check` requires the slice code review, which diffs the branch against `main`, so the merge waits for it. Closes #171.
+- **Part 0:** the real-runtime check showed the Codex runtime ignores `OPENAI_API_KEY` (401), so `OAuthFileStrategy` dropped the key fallback; the setup hint points to `sq auth login openai-oauth` or the `openai` profile.
+- **Part A:** `codex = ["openai-codex>=0.159.3,<1"]` extra (lock resolves 0.160.0; `packaging` 26.0→26.3 is required by it). `providers/codex/runtime.py` is the single source of the install hint and resolves the bundled binary (`codex_cli_bin`) before PATH; `CodexExtraMissingError` distinguishes package-missing from no-binary. The agent uses `thread.turn()` + `handle.run()` (same SDK path as `thread.run`) so a turn timeout can `interrupt()`; startup/transport/busy/RPC errors map to `ProviderError`, a closed transport resets the client; effort maps by value to `ReasoningEffort`; `TurnResult.usage.last` → `TokenUsage` on `metadata["usage"]`/`["turns"]`. Three `codex.*_timeout_s` config keys; `account_timeout_s` also bounds the post-timeout interrupt and login cancel.
+- **Part B:** `ExtraRequirement` protocol; `providers/loader.missing_extra_hint()` serves doctor, `sq models list` (marker in the Profile cell) and `sq auth status`. Doctor `codex provider` row (WARN rows show under `-v`), `sq setup` step, README/QUICKSTART rewritten.
+- **Part C:** `InteractiveLogin` protocol (`login(device_code, timeout_s, notify)` — `timeout_s` because ruff ASYNC109 rejects `timeout`), `providers/codex/login.py` (pyright-excluded beside `agent.py`), `sq auth login --device-code --timeout`, `sq auth logout`, account in `sq auth status`.
+- **Tests:** default env 5255 passed / 5 skipped (incl. `test_sdk_surface.py`); codex env 5260 passed / 4 skipped (`uv sync --dev --extra codex`) with the drift test running. ruff + pyright clean. CI gained a `test` matrix leg (3.12, `extras: codex`) that fails on a broken install before pytest; its first GitHub run is at the next push.
+- **Surprises:** Rich parsed `squadron-ai[codex]` as a markup tag and dropped it — fixed in doctor, setup, auth and review error output; the other ~76 unescaped exception prints are #177. Walkthrough step 1 (`sq review … --model codex-agent` without the extra) writes a provider-failure artifact over the slice's committed review (prior one archived) — existing `ProviderError` behavior; restore with `git checkout`.
+- **Pending (PM):** walkthrough steps 3, 4, 6, 8 — browser login, device-code login, a real `codex-agent` review with `OPENAI_API_KEY` unset, logout. `sq auth status` with the real SDK was verified live (account and plan shown).
 
 ### Slice 129: Task Breakdown Complete
 

@@ -316,42 +316,42 @@ New test in `tests/providers/codex/` (e.g. `test_sdk_surface.py`).
 
 Files: `src/squadron/providers/base.py`, `providers/codex/provider.py`.
 
-- [ ] Add `ExtraRequirement` (`@runtime_checkable`) with `missing_extra_hint() -> str | None`
+- [x] Add `ExtraRequirement` (`@runtime_checkable`) with `missing_extra_hint() -> str | None`
       beside `AgentProvider`
-- [ ] `CodexProvider.missing_extra_hint()`: `resolve_codex_runtime()` **raises** `ProviderError`
+- [x] `CodexProvider.missing_extra_hint()`: `resolve_codex_runtime()` **raises** `ProviderError`
       when the package or binary is missing (Task 5), so catch that specific exception (with a
       comment: the raise is the "missing" signal here, not a failure). Return `None` when it
       returns normally; on `ProviderError` return the hint from `runtime.py` (the one
       definition; no new string). Never let the `ProviderError` escape — `sq models list` and
       `sq doctor` call this on every run
-  - [ ] Only the package-missing case yields the `[codex]` install hint; if the package is
+  - [x] Only the package-missing case yields the `[codex]` install hint; if the package is
         present but neither binary exists, return the no-binary message from `runtime.py`
         (also a non-`None` string) rather than the extra hint
-- [ ] Providers without optional dependencies do not implement it
-- [ ] Tests: `isinstance(CodexProvider(), ExtraRequirement)`; hint returned when package missing
+- [x] Providers without optional dependencies do not implement it
+- [x] Tests: `isinstance(CodexProvider(), ExtraRequirement)`; hint returned when package missing
       (call does not raise); package present but no binary → the no-binary message, not the
       extra hint; `None` when runtime resolves; a provider without the method is not an
       `ExtraRequirement`
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add ExtraRequirement protocol and Codex implementation`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add ExtraRequirement protocol and Codex implementation`
 
 ## Task 15 — `sq doctor` `codex provider` row (D9, Sub-part B) (Effort 3)
 
 File: `src/squadron/cli/commands/doctor_checks.py`. No import probing or `shutil.which` in the
 doctor module itself (the existing `codex CLI` row stays unchanged).
 
-- [ ] `check_codex_provider()`: non-required row in the integrations section
-- [ ] Missing-extra determination and hint from the registered provider's
+- [x] `check_codex_provider()`: non-required row in the integrations section
+- [x] Missing-extra determination and hint from the registered provider's
       `ExtraRequirement.missing_extra_hint()` (via `ensure_provider_loaded` + `get_provider`)
-- [ ] Detail (package version, `runtime: bundled` | `runtime: PATH: <path>`) from
+- [x] Detail (package version, `runtime: bundled` | `runtime: PATH: <path>`) from
       `resolve_codex_runtime()`; login state from `auth.json` presence only (no subprocess)
-- [ ] States: extra missing → WARN with the install command as `fix_hint`; installed + logged in
+- [x] States: extra missing → WARN with the install command as `fix_hint`; installed + logged in
       → OK; installed + not logged in → WARN pointing to `sq auth login openai-oauth`
-- [ ] Register in `run_all_checks` beside `codex CLI` via `_run`
-- [ ] Tests in `tests/cli/test_doctor_checks.py` (match existing style): the three states plus
+- [x] Register in `run_all_checks` beside `codex CLI` via `_run`
+- [x] Tests in `tests/cli/test_doctor_checks.py` (match existing style): the three states plus
       bundled vs PATH detail; `sq doctor` end-to-end runs cleanly with and without the extra
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add codex provider row to sq doctor`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add codex provider row to sq doctor`
 
 ## Task 15a — Wire the `codex provider` row into `sq setup` (Effort 2)
 
@@ -361,24 +361,24 @@ explanation, no docs anchor, and its raw check name as title. The design does no
 as a Part B surface; this task is kept because without it the new doctor row (Task 15) renders
 raw in setup. Add `"codex provider"` to each:
 
-- [ ] `_RECHECK_MAP`: `check_codex_provider` (so setup re-verifies after the user installs)
-- [ ] `_human_title` `_TITLE_MAP`: a human title (e.g. "Install Codex extra")
-- [ ] `_EXPLANATION`: 1–2 sentences — the extra enables `openai-oauth` / `codex-agent`; optional
-- [ ] `DOCS_ANCHOR`: `docs/QUICKSTART.md#configure-a-provider` (the heading must exist; the
+- [x] `_RECHECK_MAP`: `check_codex_provider` (so setup re-verifies after the user installs)
+- [x] `_human_title` `_TITLE_MAP`: a human title (e.g. "Install Codex extra")
+- [x] `_EXPLANATION`: 1–2 sentences — the extra enables `openai-oauth` / `codex-agent`; optional
+- [x] `DOCS_ANCHOR`: `docs/QUICKSTART.md#configure-a-provider` (the heading must exist; the
       anchor test in `tests/cli/test_setup.py` enforces it)
-- [ ] The step's `command` is the row's `fix_hint` (the install command) — no duplicate string
-- [ ] Tests in `tests/cli/test_setup_steps.py` / `tests/cli/test_setup.py`: `build_steps` on a
+- [x] The step's `command` is the row's `fix_hint` (the install command) — no duplicate string
+- [x] Tests in `tests/cli/test_setup_steps.py` / `tests/cli/test_setup.py`: `build_steps` on a
       WARN `codex provider` result yields an OPTIONAL step with the title, explanation,
       anchor, recheck, and the install command; the existing name-keyed-table coverage test in
       `test_setup.py` (around line 433–457) is extended if it enumerates check names
-  - [ ] Success: tests pass; `sq setup` with the extra missing shows the step with the hint
-- [ ] Commit: `feat: add codex provider step to sq setup`
+  - [x] Success: tests pass; `sq setup` with the extra missing shows the step with the hint
+- [x] Commit: `feat: add codex provider step to sq setup`
 
 ## Task 16 — `sq models list` marker (D9) (Effort 2)
 
 File: `src/squadron/cli/commands/models.py`.
 
-- [ ] For each alias, resolve its profile's provider through `ensure_provider_loaded` +
+- [x] For each alias, resolve its profile's provider through `ensure_provider_loaded` +
       `get_provider`; if `isinstance(provider, ExtraRequirement)` and `missing_extra_hint()` is
       not `None`, append the marker `(needs extra: <hint>)` to the **Profile** cell (present in
       both modes; Notes exists only under `--verbose`, so it is not used), where `<hint>` is
@@ -386,43 +386,43 @@ File: `src/squadron/cli/commands/models.py`.
       name (`codex`) in `models.py`; the marker text derives entirely from the hint (a
       deliberate wording change from the design's `(needs [codex] extra)`, so the install
       command has one source)
-- [ ] Shown in default and verbose output; absent when the extra is installed
-- [ ] A profile whose provider cannot be resolved must not break the listing (specific
+- [x] Shown in default and verbose output; absent when the extra is installed
+- [x] A profile whose provider cannot be resolved must not break the listing (specific
       exception, WARNING log, no marker)
-- [ ] Tests in `tests/cli/test_model_list.py`: marker present for `codex-agent` and
+- [x] Tests in `tests/cli/test_model_list.py`: marker present for `codex-agent` and
       `codex-spark` when missing, containing the exact hint string, in default and verbose; absent when installed; other
       aliases never marked
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: mark Codex aliases that need the extra in sq models list`
+  - [x] Success: tests pass
+- [x] Commit: `feat: mark Codex aliases that need the extra in sq models list`
 
 ## Task 17 — README and QUICKSTART (Effort 1)
 
 File: `README.md`, section "Using Codex (experimental)".
 
-- [ ] Replace the npm + GitHub SDK instructions with: install the extra →
+- [x] Replace the npm + GitHub SDK instructions with: install the extra →
       `sq auth login openai-oauth` → example `sq review … --model codex-agent`; note
       `--device-code` for SSH/headless
-- [ ] `docs/QUICKSTART.md`: update the `openai-oauth` provider-table row (~line 126) and the
+- [x] `docs/QUICKSTART.md`: update the `openai-oauth` provider-table row (~line 126) and the
       "authenticate via the Codex CLI" block (~lines 135–141) from `npm i -g @openai/codex` +
       `codex auth login` to the extra install + `sq auth login openai-oauth`; keep the
       anchor target `configure-a-provider` intact. The doctor-output sample showing the
       `codex CLI` row (~lines 85–86) stays (that row is unchanged) — add a `codex provider` row
       to the sample if the sample lists integrations rows
-- [ ] Success: neither README nor QUICKSTART presents `npm i -g @openai/codex` as a requirement
+- [x] Success: neither README nor QUICKSTART presents `npm i -g @openai/codex` as a requirement
       for this path (the separate `codex CLI` skills note stays); install command matches the
       single definition; `grep -n "codex auth login" README.md docs/` returns nothing
-- [ ] Commit: `docs: document Codex extra install and login in README and QUICKSTART`
+- [x] Commit: `docs: document Codex extra install and login in README and QUICKSTART`
 
 ## Task 18 — Hint-source audit (Effort 1)
 
 Runs after Tasks 15–17 so every consumer (agent, provider, doctor, model list, README) exists.
 
-- [ ] Confirm agent, provider, doctor row, and models marker all take the install hint from
+- [x] Confirm agent, provider, doctor row, and models marker all take the install hint from
       `runtime.py`; no duplicated install string anywhere in `src`
-- [ ] Test: assert the literal install command appears in exactly one `src` module (README is
-      documentation and may repeat it)
-  - [ ] Success: one definition site; test passes
-- [ ] Commit only if the audit required edits: `refactor: single source for Codex install hint`
+- [x] Test: assert the literal install command appears in exactly one `src` module (README is
+      documentation and may repeat it) — committed as `test: Codex install hint has a single source` (the audit test itself)
+  - [x] Success: one definition site; test passes
+- [x] Commit only if the audit required edits: `refactor: single source for Codex install hint`
 
 ---
 
@@ -432,122 +432,122 @@ Runs after Tasks 15–17 so every consumer (agent, provider, doctor, model list,
 
 File: `src/squadron/providers/auth.py`. `AuthStrategy` is not changed.
 
-- [ ] Add `InteractiveLogin` (`@runtime_checkable`): `async login(*, device_code: bool,
-      timeout: float, notify: Callable[[str], None]) -> None`, `async logout() -> None`,
-      `async account_summary() -> str | None`
-- [ ] Tests in `tests/providers/test_auth.py`: a stub implementing all three is an
+- [x] Add `InteractiveLogin` (`@runtime_checkable`): `async login(*, device_code: bool,
+      timeout_s: float, notify: Callable[[str], None]) -> None`, `async logout() -> None`,
+      `async account_summary() -> str | None` — parameter implemented as `timeout_s` (ruff ASYNC109 rejects `timeout`)
+- [x] Tests in `tests/providers/test_auth.py`: a stub implementing all three is an
       `InteractiveLogin`; `ApiKeyStrategy`-style strategies are not
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add InteractiveLogin protocol`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add InteractiveLogin protocol`
 
 ## Task 20 — `login.py`: login flows (D7, Login data flow) (Effort 4)
 
 New file: `src/squadron/providers/codex/login.py`. `openai_codex` imported inside functions.
 Calls `resolve_codex_runtime()` before touching the SDK.
 
-- [ ] Pyright: add `src/squadron/providers/codex/login.py` to `[tool.pyright] exclude` in
+- [x] Pyright: add `src/squadron/providers/codex/login.py` to `[tool.pyright] exclude` in
       `pyproject.toml` beside `agent.py`, with the same rationale (SDK types are unresolved
       because pyright runs without the extra; `reportMissingImports = true`). Both excluded
       files are the only SDK-type users (design: Component Structure); `runtime.py` stays checked
-- [ ] `login(*, device_code, timeout, notify)`: build `AsyncCodex(CodexConfig(codex_bin=…))`;
+- [x] `login(*, device_code, timeout_s, notify)`: build `AsyncCodex(CodexConfig(codex_bin=…))`;
       browser mode → `login_chatgpt()`, `notify(auth_url)`, attempt `webbrowser.open`;
       device-code mode → `login_chatgpt_device_code()`, `notify` the `verification_url` and
-      `user_code`; `await handle.wait()` under `asyncio.timeout(timeout)`
-- [ ] Notification `success=False` → raise with its `error`; timeout or Ctrl-C /
+      `user_code`; `await handle.wait()` under `asyncio.timeout(timeout_s)`
+- [x] Notification `success=False` → raise with its `error`; timeout or Ctrl-C /
       `CancelledError` → `handle.cancel()` (releases the callback listener), then raise a
       timeout/cancel error; runtime always shut down in `finally`
-- [ ] Auth URLs and device codes are only passed to `notify`, never logged
-- [ ] Tests (SDK faked): browser success; device-code success (URL + code reach `notify`);
+- [x] Auth URLs and device codes are only passed to `notify`, never logged
+- [x] Tests (SDK faked): browser success; device-code success (URL + code reach `notify`);
       `success=False` surfaces `error`; timeout cancels the handle; cancellation cancels the
       handle; `webbrowser.open` failure does not fail the login; extra absent → install hint,
       no `ImportError`
-  - [ ] Success: tests pass; no URL/code appears in captured logs
-- [ ] Commit: `feat: add Codex login flows`
+  - [x] Success: tests pass; no URL/code appears in captured logs
+- [x] Commit: `feat: add Codex login flows`
 
 ## Task 21 — `login.py`: logout and account summary (D7, Failure Modes) (Effort 3)
 
 File: `login.py`.
 
-- [ ] `account_summary()`: runtime start + `account()` under
+- [x] `account_summary()`: runtime start + `account()` under
       `asyncio.timeout(codex.account_timeout_s)`; returns `"<email>, <plan_type>"`; on timeout or
       SDK error log WARNING and return `None` (never raise)
-- [ ] `logout()`: runtime start + `logout()` under the same timeout; timeout or SDK error
+- [x] `logout()`: runtime start + `logout()` under the same timeout; timeout or SDK error
       propagates as an error (command exits non-zero in Task 24)
-- [ ] Only email/plan are read; `auth.json` contents are never read or logged
-- [ ] Tests: summary format; `account()` raising → `None` + WARNING; `account()` timeout →
+- [x] Only email/plan are read; `auth.json` contents are never read or logged
+- [x] Tests: summary format; `account()` raising → `None` + WARNING; `account()` timeout →
       `None` + WARNING; logout success; logout timeout raises; logout SDK error raises;
       extra absent → install hint
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add Codex logout and account summary`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add Codex logout and account summary`
 
 ## Task 22 — `OAuthFileStrategy` implements `InteractiveLogin` (D3) (Effort 2)
 
 File: `src/squadron/providers/codex/auth.py`.
 
-- [ ] Add `login`, `logout`, `account_summary` delegating to `login.py`; no change to the
+- [x] Add `login`, `logout`, `account_summary` delegating to `login.py`; no change to the
       `AuthStrategy` surface
-- [ ] `account_summary()` returns `None` when the strategy is not valid (no spawn for an
+- [x] `account_summary()` returns `None` when the strategy is not valid (no spawn for an
       unauthenticated profile); when the extra is absent it returns `None` without spawning
       (status shows the install command; see Task 25)
-- [ ] Tests in `tests/providers/codex/test_auth.py`: `isinstance(OAuthFileStrategy(),
+- [x] Tests in `tests/providers/codex/test_auth.py`: `isinstance(OAuthFileStrategy(),
       InteractiveLogin)`; delegation to `login.py`; invalid strategy skips the runtime
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: OAuthFileStrategy supports interactive login`
+  - [x] Success: tests pass
+- [x] Commit: `feat: OAuthFileStrategy supports interactive login`
 
 ## Task 23 — `sq auth login` (Effort 3)
 
 File: `src/squadron/cli/commands/auth.py`; tests `tests/cli/test_auth.py`.
 
-- [ ] Add `--device-code` and `--timeout SECONDS` options; `--timeout` defaults to
-      `codex.login_timeout_s` read through the config layer (no literal in the command)
-- [ ] Strategy is `InteractiveLogin` → `strategy.login(...)` with `notify` printing via Rich;
+- [x] Add `--device-code` and `--timeout SECONDS` options; `--timeout` defaults to
+      `codex.login_timeout_s` read through the config layer (no literal in the command) — `--timeout` default read via `LOGIN_TIMEOUT_KEY` in `providers/codex/login.py`
+- [x] Strategy is `InteractiveLogin` → `strategy.login(...)` with `notify` printing via Rich;
       on success re-read `account_summary()` and print
       `✓ <profile>: authenticated (<email>, <plan>)`; failure/timeout → red error, exit 1
-  - [ ] Login succeeded but `account_summary()` returns `None` (post-login `account()`
+  - [x] Login succeeded but `account_summary()` returns `None` (post-login `account()`
         failure or `codex.account_timeout_s` timeout; Task 21 already logged a WARNING): the
         login is still a success. Print `✓ <profile>: authenticated` with the source and no
         account details, exit 0 — never report a completed login as failed
-- [ ] Not `InteractiveLogin` and `--device-code` given → error that the profile does not support
+- [x] Not `InteractiveLogin` and `--device-code` given → error that the profile does not support
       interactive login, exit non-zero
-- [ ] Not `InteractiveLogin`, no flag → today's validate path, output byte-for-byte unchanged
-- [ ] Extra absent → exit non-zero with the install command, no traceback
-- [ ] Tests: interactive success line; device-code mode passed through; `--timeout` override;
+- [x] Not `InteractiveLogin`, no flag → today's validate path, output byte-for-byte unchanged
+- [x] Extra absent → exit non-zero with the install command, no traceback
+- [x] Tests: interactive success line; device-code mode passed through; `--timeout` override;
       failure and timeout exit non-zero; login succeeds but `account_summary()` is `None` →
       exit 0, success line without account details; `sdk --device-code` error; unchanged output for a
       non-interactive profile (compare to existing test expectation); extra absent
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: sq auth login performs interactive login for supporting profiles`
+  - [x] Success: tests pass
+- [x] Commit: `feat: sq auth login performs interactive login for supporting profiles`
 
 ## Task 24 — `sq auth logout` (Effort 2)
 
 File: `cli/commands/auth.py`.
 
-- [ ] New command `logout <profile>`: `InteractiveLogin` → `strategy.logout()`, print
+- [x] New command `logout <profile>`: `InteractiveLogin` → `strategy.logout()`, print
       confirmation; non-interactive profile → same "does not support interactive login" error
       (nothing squadron can clear), exit non-zero; unknown profile → existing error style
-- [ ] SDK error or `codex.account_timeout_s` timeout → exit non-zero with the error text
-- [ ] Extra absent → exit non-zero with the install command, no traceback
-- [ ] Tests: success; non-interactive profile; unknown profile; logout timeout; SDK error;
+- [x] SDK error or `codex.account_timeout_s` timeout → exit non-zero with the error text
+- [x] Extra absent → exit non-zero with the install command, no traceback
+- [x] Tests: success; non-interactive profile; unknown profile; logout timeout; SDK error;
       extra absent
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add sq auth logout`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add sq auth logout`
 
 ## Task 25 — `sq auth status` account details (Effort 2)
 
 File: `cli/commands/auth.py`.
 
-- [ ] For each valid profile whose strategy is `InteractiveLogin`, append
+- [x] For each valid profile whose strategy is `InteractiveLogin`, append
       `(<email>, <plan>)` from `account_summary()` to the Source cell
       (`~/.codex/auth.json (you@example.com, plus)`)
-- [ ] `account_summary()` returns `None` (failure/timeout) → row shows validity and source only;
+- [x] `account_summary()` returns `None` (failure/timeout) → row shows validity and source only;
       other profiles' rows still render; the command never fails because of it
-- [ ] Extra absent → Source cell shows the install command in place of account details; the
+- [x] Extra absent → Source cell shows the install command in place of account details; the
       runtime is not spawned
-- [ ] Non-interactive and invalid profiles unchanged
-- [ ] Tests: row with account; `account_summary` → `None`; a failing profile does not block
+- [x] Non-interactive and invalid profiles unchanged
+- [x] Tests: row with account; `account_summary` → `None`; a failing profile does not block
       later rows; extra absent; non-interactive rows unchanged
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: show Codex account in sq auth status`
+  - [x] Success: tests pass
+- [x] Commit: `feat: show Codex account in sq auth status`
 
 ---
 
@@ -555,24 +555,24 @@ File: `cli/commands/auth.py`.
 
 ## Task 26 — Full validation (Effort 1)
 
-- [ ] Full test suite in an environment without `openai_codex`: all pass
-- [ ] Full test suite with the extra installed (throwaway venv): all pass, real-types test runs
-- [ ] `ruff format --check`, `ruff check`, `pyright`: zero errors
-- [ ] No string dispatch added: no profile-name or auth-type comparison in the diff
+- [x] Full test suite in an environment without `openai_codex`: all pass
+- [x] Full test suite with the extra installed (throwaway venv): all pass, real-types test runs
+- [x] `ruff format --check`, `ruff check`, `pyright`: zero errors
+- [x] No string dispatch added: no profile-name or auth-type comparison in the diff
       (`git diff` review of `cli/commands/*.py`, `providers/codex/*.py`)
-- [ ] Technical Requirements grep from Task 11 still clean
-- [ ] Commit any fixes: `chore: slice 129 validation fixes`
+- [x] Technical Requirements grep from Task 11 still clean
+- [x] Commit any fixes: `fix: print review provider errors without Rich markup parsing`
 
 ## Task 27 — Slice closeout (Effort 1)
 
-- [ ] `CHANGELOG.md`: short user-facing bullets (extra install, `sq auth login/logout`,
+- [x] `CHANGELOG.md`: short user-facing bullets (extra install, `sq auth login/logout`,
       doctor row, models marker, effort/usage on Codex; closes #171)
-- [ ] Mark every task above `[x]` (including dropped/skipped items) before closing; delegate
+- [x] Mark every task above `[x]` (including dropped/skipped items) before closing; delegate
       to `task-checker`
-- [ ] Set slice design `status` and the slice-plan entry to complete
-- [ ] DEVLOG entry per `prompt.ai-project.system.md` Session State Summary
+- [x] Set slice design `status` and the slice-plan entry to complete — set by cf check to in_progress until the merge
+- [x] DEVLOG entry per `prompt.ai-project.system.md` Session State Summary
 - [ ] Merge the slice branch into the target (re-read `cf config get git.integration_branch`
-      first); stop and ask the Project Manager if checkout or merge fails
+      first); stop and ask the Project Manager if checkout or merge fails — held: slice code review (cf check gate) diffs the branch against main, so merge after the review
 - [ ] Commit: `docs: complete slice 129`
 
 ## Manual verification (Project Manager, not a checklist item)
