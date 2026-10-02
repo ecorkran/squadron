@@ -194,3 +194,31 @@ class TestConfigDefaultVerbosity:
             result = cli_runner.invoke(app, ["review", "slice", input_doc, "--against", against_doc])
             assert result.exit_code == 0
             assert "Input not validated" in result.output
+
+
+def test_model_text_with_bracket_literals_is_not_markup() -> None:
+    """A finding quoting `[//]` or `[bold]` printed verbatim, not raising MarkupError."""
+    result = ReviewResult(
+        verdict=Verdict.PASS,
+        findings=[
+            ReviewFinding(
+                severity=Severity.NOTE,
+                title="Marker [/bold] in title",
+                description="The `<!-- marker -->` vs `[//]: # (marker)` literal.",
+                category="docs [/x]",
+                file_ref="guide.md [//]",
+            ),
+        ],
+        raw_output="",
+        template_name="tasks",
+        input_files={},
+    )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False, width=200)
+    with patch("squadron.cli.commands.review.Console", return_value=console):
+        _display_terminal(result, verbosity=1)
+    out = buf.getvalue()
+    assert "[//]: # (marker)" in out
+    assert "Marker [/bold] in title" in out
+    assert "docs [/x]" in out
+    assert "guide.md [//]" in out

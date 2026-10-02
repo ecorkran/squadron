@@ -228,18 +228,20 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
     for finding in result.findings:
         sev_color = _SEVERITY_COLORS.get(finding.severity, "dim")
         console.print()  # blank line before each finding
-        console.print(
-            f"[{sev_color}][{finding.severity.value}][/{sev_color}] "
-            f"[bold white]{finding.title}[/bold white]"
-        )
+        # Everything below is model text, so it is never parsed as Rich markup: a
+        # literal like `[//]` in a finding otherwise raises MarkupError mid-display.
+        title = Text(f"[{finding.severity.value}]", style=sev_color)
+        title.append(" ")
+        title.append(finding.title, style="bold white")
+        console.print(title)
         if verbosity >= 1 and finding.category:
-            console.print(f"  category: {finding.category}", style="dim")
+            console.print(f"  category: {finding.category}", style="dim", markup=False)
             console.print()  # blank line after category
         if verbosity >= 1 and finding.description:
             for line in finding.description.split("\n"):
-                console.print(line)
+                console.print(line, markup=False)
         if verbosity >= 1 and finding.file_ref:
-            console.print(f"  -> {finding.file_ref}", style="cyan")
+            console.print(f"  -> {finding.file_ref}", style="cyan", markup=False)
 
 
 def _display_json(result: ReviewResult) -> None:
