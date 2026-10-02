@@ -68,3 +68,11 @@ class TestImportSafety:
         # The resolver must load on a default install, so no top-level SDK import.
         assert "openai_codex" not in vars(runtime)
         assert "codex_cli_bin" not in vars(runtime)
+
+
+def test_package_missing_is_a_distinct_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    from squadron.providers.codex.runtime import CodexExtraMissingError
+
+    _fake_environment(monkeypatch, modules=set(), path_binary=None)
+    with pytest.raises(CodexExtraMissingError):
+        resolve_codex_runtime()

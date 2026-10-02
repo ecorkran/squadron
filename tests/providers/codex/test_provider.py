@@ -9,9 +9,10 @@ from unittest.mock import patch
 import pytest
 
 from squadron.core.models import AgentConfig
+from squadron.providers.base import ExtraRequirement
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.provider import CodexProvider
-from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
+from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND, CODEX_NO_BINARY_MESSAGE
 from squadron.providers.errors import ProviderAuthError, ProviderError
 
 
@@ -130,3 +131,28 @@ class TestValidateCredentials:
             patch(_WHICH, return_value=None),
         ):
             assert asyncio.run(provider.validate_credentials()) is False
+
+
+class TestExtraRequirement:
+    def test_codex_provider_is_extra_requirement(self, provider: CodexProvider) -> None:
+        assert isinstance(provider, ExtraRequirement)
+
+    def test_hint_when_package_missing(self, provider: CodexProvider) -> None:
+        with patch(_MODULE_AVAILABLE, return_value=False):
+            assert provider.missing_extra_hint() == CODEX_INSTALL_COMMAND
+
+    def test_no_binary_message_when_package_present(self, provider: CodexProvider) -> None:
+        with (
+            patch(_MODULE_AVAILABLE, side_effect=_sdk_without_bundled_bin),
+            patch(_WHICH, return_value=None),
+        ):
+            assert provider.missing_extra_hint() == CODEX_NO_BINARY_MESSAGE
+
+    def test_none_when_runtime_resolves(self, provider: CodexProvider) -> None:
+        with patch(_MODULE_AVAILABLE, side_effect=_sdk_installed):
+            assert provider.missing_extra_hint() is None
+
+    def test_provider_without_method_is_not_extra_requirement(self) -> None:
+        from squadron.providers.openai.provider import OpenAICompatibleProvider
+
+        assert not isinstance(OpenAICompatibleProvider(), ExtraRequirement)

@@ -32,6 +32,10 @@ CODEX_NO_BINARY_MESSAGE = (
 )
 
 
+class CodexExtraMissingError(ProviderError):
+    """The ``openai_codex`` package is not installed (the ``codex`` extra is missing)."""
+
+
 class RuntimeSource(StrEnum):
     """Where the Codex runtime binary comes from."""
 
@@ -69,11 +73,12 @@ def resolve_codex_runtime() -> CodexRuntime:
     """Resolve the Codex runtime: bundled binary first, then ``codex`` on PATH.
 
     Raises:
-        ProviderError: the SDK package is missing (message carries the
-            install hint), or no binary exists anywhere (names both remedies).
+        CodexExtraMissingError: the SDK package is missing (message carries
+            the install hint).
+        ProviderError: no binary exists anywhere (names both remedies).
     """
     if not _module_available(_SDK_MODULE):
-        raise ProviderError(CODEX_PACKAGE_MISSING_MESSAGE)
+        raise CodexExtraMissingError(CODEX_PACKAGE_MISSING_MESSAGE)
     version = _sdk_version()
     if _module_available(_BUNDLED_BIN_MODULE):
         return CodexRuntime(source=RuntimeSource.bundled, path=None, package_version=version)

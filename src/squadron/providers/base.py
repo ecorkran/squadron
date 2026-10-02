@@ -109,3 +109,16 @@ class AgentProvider(Protocol):
     async def validate_credentials(self) -> bool:
         """Check that credentials are valid and the provider is reachable."""
         ...
+
+
+@runtime_checkable
+class ExtraRequirement(Protocol):
+    """A provider that needs an optional install extra (slice 129 D9).
+
+    Implemented only by providers with optional dependencies; discovery surfaces
+    (``sq models list``, ``sq doctor``) check ``isinstance`` and never name the extra.
+    """
+
+    def missing_extra_hint(self) -> str | None:
+        """``None`` when usable; otherwise what to install. Never raises."""
+        ...

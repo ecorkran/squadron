@@ -7,7 +7,12 @@ from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.auth import OAuthFileStrategy
-from squadron.providers.codex.runtime import resolve_codex_runtime
+from squadron.providers.codex.runtime import (
+    CODEX_INSTALL_COMMAND,
+    CODEX_NO_BINARY_MESSAGE,
+    CodexExtraMissingError,
+    resolve_codex_runtime,
+)
 from squadron.providers.errors import ProviderAuthError, ProviderError
 
 _log = get_logger("squadron.providers.codex.provider")
@@ -51,3 +56,19 @@ class CodexProvider:
             # boolean check exists to give, not a failure of the check.
             return False
         return OAuthFileStrategy().is_valid()
+
+    def missing_extra_hint(self) -> str | None:
+        """``None`` when the runtime resolves; the install command when the extra is
+        missing; the no-binary message when the package is present but no binary is.
+
+        Called on every ``sq models list`` and ``sq doctor`` run, so it never raises.
+        """
+        try:
+            resolve_codex_runtime()
+        except CodexExtraMissingError:
+            # The raise is the "missing" signal here, not a failure.
+            return CODEX_INSTALL_COMMAND
+        except ProviderError:
+            # Likewise: package present, no binary — report it, don't fail.
+            return CODEX_NO_BINARY_MESSAGE
+        return None
