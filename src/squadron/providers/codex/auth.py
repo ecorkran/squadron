@@ -6,12 +6,16 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from squadron.providers.base import ProfileName
 from squadron.providers.codex import login as codex_login
 from squadron.providers.errors import ProviderAuthError
 
 if TYPE_CHECKING:
     from squadron.core.models import AgentConfig
     from squadron.providers.profiles import ProviderProfile
+
+#: Signs in to the Codex runtime; ``sq setup`` shows it as a runnable step.
+LOGIN_COMMAND = f"sq auth login {ProfileName.OPENAI_OAUTH}"
 
 
 # Default location for Codex CLI cached credentials.
@@ -54,7 +58,7 @@ class OAuthFileStrategy:
     def setup_hint(self) -> str:
         """Return actionable setup instructions."""
         return (
-            "Run 'sq auth login openai-oauth' to sign in with ChatGPT, "
+            f"Run '{LOGIN_COMMAND}' to sign in with ChatGPT, "
             "or use the 'openai' profile for API-key access"
         )
 

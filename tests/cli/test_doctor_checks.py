@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -692,8 +693,19 @@ def test_codex_provider_logged_in_is_ok_with_version() -> None:
 def test_codex_provider_not_logged_in_points_to_login() -> None:
     result = check_codex_provider()
     assert result.status == CheckStatus.WARN
-    assert result.fix_hint is not None
-    assert "sq auth login openai-oauth" in result.fix_hint
+    assert result.fix_hint == "sq auth login openai-oauth"
+
+
+def test_codex_provider_missing_distribution_warns_actionably(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing(_name: str) -> str:
+        raise importlib.metadata.PackageNotFoundError("openai-codex")
+
+    monkeypatch.setattr(importlib.metadata, "version", missing)
+    result = check_codex_provider()
+    assert result.status == CheckStatus.WARN
+    assert "reinstall squadron-ai" in result.detail
 
 
 def test_run_all_checks_includes_codex_provider_row() -> None:

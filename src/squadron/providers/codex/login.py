@@ -51,16 +51,24 @@ async def login(*, device_code: bool, timeout_s: float, notify: Callable[[str], 
         ProviderError: login failed or timed out.
         asyncio.CancelledError: interrupted (Ctrl-C); the attempt is cancelled first.
     """
-    async with _codex_session() as codex:
-        if device_code:
-            device_handle = await codex.login_chatgpt_device_code()
-            notify(f"Open {device_handle.verification_url} and enter code: {device_handle.user_code}")
-            await _wait_for_login(device_handle, timeout_s)
-        else:
-            browser_handle = await codex.login_chatgpt()
-            notify(f"Sign in at: {browser_handle.auth_url}")
-            _open_browser(browser_handle.auth_url)
-            await _wait_for_login(browser_handle, timeout_s)
+    from openai_codex import CodexError
+
+    try:
+        async with _codex_session() as codex:
+            if device_code:
+                device_handle = await codex.login_chatgpt_device_code()
+                notify(
+                    f"Open {device_handle.verification_url} and enter code: {device_handle.user_code}"
+                )
+                await _wait_for_login(device_handle, timeout_s)
+            else:
+                browser_handle = await codex.login_chatgpt()
+                notify(f"Sign in at: {browser_handle.auth_url}")
+                _open_browser(browser_handle.auth_url)
+                await _wait_for_login(browser_handle, timeout_s)
+    except (CodexError, OSError, RuntimeError) as exc:
+        # The runtime could not start (OSError: binary cannot run) or the SDK failed.
+        raise ProviderError(f"Codex login failed: {exc}") from exc
 
 
 def _open_browser(url: str) -> None:

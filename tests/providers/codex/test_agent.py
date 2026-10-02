@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -172,6 +173,20 @@ class TestTurnResultChecks:
         fake_sdk.turn.interrupt.assert_awaited_once()
         fake_sdk.client.close.assert_awaited_once()
         assert agent.state == AgentState.terminated
+
+    def test_timeout_still_reported_when_interrupt_raises_runtime_error(
+        self, agent: CodexAgent, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        async def hang() -> TurnResult:
+            await asyncio.sleep(10)
+            raise AssertionError("turn should have timed out")
+
+        fake_sdk.turn.run.side_effect = hang
+        fake_sdk.turn.interrupt.side_effect = RuntimeError("runtime gone")
+        with patch(_CONFIG, return_value=0), caplog.at_level(logging.WARNING):
+            with pytest.raises(ProviderError, match="Codex turn timed out after 0 s"):
+                _send(agent, "hi")
+        assert "interrupt after timeout did not complete" in caplog.text
 
     def test_failed_turn_carries_sdk_message(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
         sdk_error = RuntimeError("unexpected status 401 Unauthorized")

@@ -85,8 +85,7 @@ def _profile_or_exit(profile_name: str) -> ProviderProfile:
     try:
         return get_profile(profile_name)
     except KeyError as exc:
-        rprint(f"[red]Error:[/red] {escape(str(exc))}")
-        raise typer.Exit(1) from exc
+        _fail(str(exc))
 
 
 def _fail(message: str) -> NoReturn:
@@ -102,10 +101,10 @@ def _print_notice(message: str) -> None:
 def _report_validity(profile_name: str, valid: bool, strategy: AuthStrategy) -> None:
     if valid:
         source = strategy.active_source or "(valid)"
-        rprint(f"[green]✓[/green] {profile_name}: authenticated ({source})")
+        rprint(f"[green]✓[/green] {escape(profile_name)}: authenticated ({escape(source)})")
     else:
-        rprint(f"[red]✗[/red] {profile_name}: not authenticated")
-        rprint(f"  {strategy.setup_hint}")
+        rprint(f"[red]✗[/red] {escape(profile_name)}: not authenticated")
+        rprint(f"  {escape(strategy.setup_hint)}")
 
 
 @auth_app.command("status")

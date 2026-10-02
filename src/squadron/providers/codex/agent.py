@@ -168,7 +168,7 @@ class CodexAgent:
         try:
             async with asyncio.timeout(get_typed_config(_RPC_TIMEOUT_KEY, int)):
                 await turn.interrupt()
-        except (TimeoutError, CodexError):
+        except (TimeoutError, CodexError, RuntimeError):
             # The turn already failed with a timeout, which is what gets raised;
             # shutdown() tears down the runtime either way.
             _log.warning("Codex turn interrupt after timeout did not complete", exc_info=True)

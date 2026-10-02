@@ -17,6 +17,7 @@ from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
 from squadron.providers.base import ProfileName
+from squadron.providers.codex.auth import LOGIN_COMMAND as CODEX_LOGIN_COMMAND
 from squadron.providers.profiles import get_all_profiles, get_profile, providers_toml_path
 from squadron.skills.manifest import load_effective
 from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
@@ -344,14 +345,24 @@ def check_codex_provider() -> CheckResult:
     Spawns nothing.
     """
     name = "codex provider"
-    detail = f"openai-codex {importlib.metadata.version('openai-codex')}"
+    try:
+        detail = f"openai-codex {importlib.metadata.version('openai-codex')}"
+    except importlib.metadata.PackageNotFoundError:
+        # A core dependency is missing, so the install itself is broken.
+        return CheckResult(
+            name=name,
+            status=CheckStatus.WARN,
+            detail="openai-codex is not installed; reinstall squadron-ai",
+            section=SECTION_INTEGRATIONS,
+            required=False,
+        )
     strategy = resolve_auth_strategy_for_profile(get_profile(ProfileName.OPENAI_OAUTH))
     if not strategy.is_valid():
         return CheckResult(
             name=name,
             status=CheckStatus.WARN,
             detail=f"{detail}; not logged in",
-            fix_hint=strategy.setup_hint,
+            fix_hint=CODEX_LOGIN_COMMAND,
             section=SECTION_INTEGRATIONS,
             required=False,
         )

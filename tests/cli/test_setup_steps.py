@@ -217,15 +217,9 @@ def test_codex_provider_warn_yields_optional_sign_in_step() -> None:
     from squadron.cli.commands.doctor_checks import check_codex_provider
     from squadron.cli.commands.setup_steps import StepKind, build_steps
 
-    result = CheckResult(
-        name="codex provider",
-        status=CheckStatus.WARN,
-        detail="openai-codex 0.160.0; not logged in",
-        fix_hint="sq auth login openai-oauth",
-        section=SECTION_INTEGRATIONS,
-        required=False,
-    )
-    (step,) = build_steps([result])
+    # Driven by the real check (isolated HOME: not logged in), so the command
+    # asserted below is what production emits.
+    (step,) = build_steps([check_codex_provider()])
     assert step.kind is StepKind.OPTIONAL
     assert step.title == "Sign in to Codex"
     assert step.explanation is not None and "openai-oauth" in step.explanation

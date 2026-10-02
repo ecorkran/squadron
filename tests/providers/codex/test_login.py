@@ -182,6 +182,17 @@ class TestAccountSummary:
         assert any("timed out" in r.getMessage() for r in caplog.records)
 
 
+class TestLoginStartFailure:
+    def test_runtime_start_failure_raises_provider_error(self, fake_sdk: FakeSdk) -> None:
+        start_error = OSError("codex binary cannot run")
+        fake_sdk.client.__aenter__ = AsyncMock(side_effect=start_error)
+        with pytest.raises(
+            ProviderError, match="Codex login failed: codex binary cannot run"
+        ) as exc_info:
+            _login()
+        assert exc_info.value.__cause__ is start_error
+
+
 class TestLogout:
     def test_success(self, fake_sdk: FakeSdk) -> None:
         asyncio.run(codex_login.logout())
