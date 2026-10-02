@@ -20,6 +20,8 @@ from squadron.providers.errors import ProviderError
 _log = get_logger("squadron.providers.codex.login")
 
 _ACCOUNT_TIMEOUT_KEY = "codex.account_timeout_s"
+#: Default for ``sq auth login --timeout``; the CLI reads it through the config layer.
+LOGIN_TIMEOUT_KEY = "codex.login_timeout_s"
 
 
 @asynccontextmanager

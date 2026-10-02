@@ -1,13 +1,28 @@
-"""auth subcommand — credential validation and status reporting."""
+"""auth subcommand — interactive login/logout, credential validation, status."""
 
 from __future__ import annotations
 
+import asyncio
+from typing import NoReturn
+
 import typer
 from rich import print as rprint
+from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
-from squadron.providers.auth import resolve_auth_strategy_for_profile
-from squadron.providers.profiles import get_all_profiles, get_profile
+from squadron.config.manager import get_typed_config
+from squadron.providers.auth import (
+    AuthStrategy,
+    InteractiveLogin,
+    resolve_auth_strategy_for_profile,
+)
+from squadron.providers.codex.login import LOGIN_TIMEOUT_KEY
+from squadron.providers.errors import ProviderError
+from squadron.providers.profiles import ProviderProfile, get_all_profiles, get_profile
+
+#: soft_wrap: commands and sign-in URLs must reach the terminal unbroken.
+_console = Console(soft_wrap=True)
 
 auth_app = typer.Typer(
     name="auth",
@@ -18,17 +33,58 @@ auth_app = typer.Typer(
 
 @auth_app.command("login")
 def auth_login(
-    profile_name: str = typer.Argument(help="Profile name to validate credentials for"),
+    profile_name: str = typer.Argument(help="Profile to log in to, or validate credentials for"),
+    device_code: bool = typer.Option(
+        False, "--device-code", help="Log in with a device code (SSH / headless machines)"
+    ),
+    timeout: int | None = typer.Option(
+        None,
+        "--timeout",
+        help=f"Seconds to wait for login to finish (default: config {LOGIN_TIMEOUT_KEY})",
+    ),
 ) -> None:
-    """Validate credentials for the given profile."""
+    """Log in interactively where the profile supports it; otherwise validate credentials."""
+    profile = _profile_or_exit(profile_name)
+    strategy = resolve_auth_strategy_for_profile(profile)
+    if not isinstance(strategy, InteractiveLogin):
+        if device_code or timeout is not None:
+            _fail(f"profile {profile_name!r} does not support interactive login")
+        _report_validity(profile_name, strategy.is_valid(), strategy)
+        return
+
+    timeout_s = timeout if timeout is not None else get_typed_config(LOGIN_TIMEOUT_KEY, int)
     try:
-        profile = get_profile(profile_name)
+        asyncio.run(strategy.login(device_code=device_code, timeout_s=timeout_s, notify=_print_notice))
+    except ProviderError as exc:
+        _fail(str(exc))
+    except KeyboardInterrupt:
+        _fail("login cancelled")
+    # A completed login is a success even when the account lookup fails (it warned).
+    summary = asyncio.run(strategy.account_summary())
+    detail = summary or strategy.active_source or "(valid)"
+    rprint(f"[green]✓[/green] {escape(profile_name)}: authenticated ({escape(detail)})")
+
+
+def _profile_or_exit(profile_name: str) -> ProviderProfile:
+    try:
+        return get_profile(profile_name)
     except KeyError as exc:
-        rprint(f"[red]Error:[/red] {exc}")
+        rprint(f"[red]Error:[/red] {escape(str(exc))}")
         raise typer.Exit(1) from exc
 
-    strategy = resolve_auth_strategy_for_profile(profile)
-    if strategy.is_valid():
+
+def _fail(message: str) -> NoReturn:
+    _console.print(f"[red]Error:[/red] {escape(message)}")
+    raise typer.Exit(1)
+
+
+def _print_notice(message: str) -> None:
+    """``notify`` for interactive login: URLs and codes go to the user, as plain text."""
+    _console.print(escape(message))
+
+
+def _report_validity(profile_name: str, valid: bool, strategy: AuthStrategy) -> None:
+    if valid:
         source = strategy.active_source or "(valid)"
         rprint(f"[green]✓[/green] {profile_name}: authenticated ({source})")
     else:
