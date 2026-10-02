@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from squadron.providers.base import AuthType
@@ -52,6 +53,34 @@ class AuthStrategy(Protocol):
         profile: ProviderProfile | None = None,
     ) -> AuthStrategy:
         """Construct a strategy instance from config and optional profile."""
+        ...
+
+
+@runtime_checkable
+class InteractiveLogin(Protocol):
+    """An auth strategy that can sign in and out interactively (slice 129 D3).
+
+    Separate from ``AuthStrategy``: only strategies backed by a login flow
+    implement it, and ``sq auth login/logout/status`` check ``isinstance``.
+    """
+
+    async def login(
+        self, *, device_code: bool, timeout_s: float, notify: Callable[[str], None]
+    ) -> None:
+        """Run the login flow, waiting at most ``timeout_s`` for the user to finish.
+
+        ``notify`` receives what the user must see (URL, code).
+
+        Raises on failure, timeout, or cancellation.
+        """
+        ...
+
+    async def logout(self) -> None:
+        """Sign out. Raises on failure or timeout."""
+        ...
+
+    async def account_summary(self) -> str | None:
+        """Return ``"<email>, <plan>"``, or ``None`` when unavailable. Never raises."""
         ...
 
 

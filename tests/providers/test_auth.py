@@ -115,3 +115,26 @@ def test_refresh_is_noop() -> None:
 def test_isinstance_auth_strategy() -> None:
     strategy = ApiKeyStrategy(explicit_key="sk-test")
     assert isinstance(strategy, AuthStrategy)
+
+
+class _StubInteractive:
+    async def login(self, *, device_code: bool, timeout_s: float, notify: object) -> None:
+        return None
+
+    async def logout(self) -> None:
+        return None
+
+    async def account_summary(self) -> str | None:
+        return None
+
+
+def test_stub_with_all_three_methods_is_interactive_login() -> None:
+    from squadron.providers.auth import InteractiveLogin
+
+    assert isinstance(_StubInteractive(), InteractiveLogin)
+
+
+def test_api_key_strategy_is_not_interactive_login() -> None:
+    from squadron.providers.auth import InteractiveLogin
+
+    assert not isinstance(ApiKeyStrategy(), InteractiveLogin)
