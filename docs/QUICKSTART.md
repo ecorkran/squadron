@@ -141,7 +141,7 @@ uv tool install 'squadron-ai[codex]'
 sq auth login openai-oauth   # add --device-code on SSH / headless machines
 ```
 
-This reinstalls squadron with the extra; `uv tool upgrade squadron-ai` keeps it afterwards. If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
+This reinstalls squadron with the extra. To update later, run `uv tool upgrade squadron-ai`, which keeps the extra. Do not use `uv tool install --upgrade squadron-ai`: it reinstalls without the extra and removes Codex support (use `uv tool install --upgrade 'squadron-ai[codex]'` if you prefer that form). If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
 
 `sdk` and `local` need no credentials — `sdk` uses your Claude Code session, `local` assumes a model server already running on your machine.
 

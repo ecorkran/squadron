@@ -291,7 +291,7 @@ sq auth login openai-oauth --device-code   # SSH / headless: prints a URL and co
 sq review slice 120 --model codex-agent -v
 ```
 
-This reinstalls squadron with the extra; `uv tool upgrade squadron-ai` keeps it afterwards. If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
+This reinstalls squadron with the extra. To update later, run `uv tool upgrade squadron-ai`, which keeps the extra. Do not use `uv tool install --upgrade squadron-ai`: it reinstalls without the extra and removes Codex support (use `uv tool install --upgrade 'squadron-ai[codex]'` if you prefer that form). If you installed with pipx or pip instead, use `pipx install --force 'squadron-ai[codex]'` or `pip install 'squadron-ai[codex]'` in the same environment.
 
 `sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row, and `sq models list` marks the Codex aliases while the extra is missing. `OPENAI_API_KEY` is not used by this profile — for API-key access use the `openai` profile.
 
