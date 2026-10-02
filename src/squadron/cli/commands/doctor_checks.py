@@ -15,7 +15,11 @@ import typer
 from squadron.codehost.github_config import gh_hosts_file_path
 from squadron.models.aliases import models_toml_path
 from squadron.providers.auth import resolve_auth_strategy_for_profile
-from squadron.providers.profiles import get_all_profiles, providers_toml_path
+from squadron.providers.base import ExtraRequirement, ProfileName, ProviderType
+from squadron.providers.codex.runtime import RuntimeSource, resolve_codex_runtime
+from squadron.providers.loader import ensure_provider_loaded
+from squadron.providers.profiles import get_all_profiles, get_profile, providers_toml_path
+from squadron.providers.registry import get_provider
 from squadron.skills.manifest import load_effective
 from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
 
@@ -330,6 +334,48 @@ def check_codex_cli() -> CheckResult:
         status=CheckStatus.WARN,
         detail="not on PATH",
         fix_hint="npm i -g @openai/codex",
+        section=SECTION_INTEGRATIONS,
+        required=False,
+    )
+
+
+def check_codex_provider() -> CheckResult:
+    """Report the Codex provider: extra installed, runtime source, login state.
+
+    The missing-extra decision and hint come from the provider's
+    ``ExtraRequirement``; login state is ``auth.json`` presence via the
+    profile's auth strategy. Spawns nothing.
+    """
+    name = "codex provider"
+    ensure_provider_loaded(ProviderType.OPENAI_OAUTH)
+    provider = get_provider(ProviderType.OPENAI_OAUTH)
+    hint = provider.missing_extra_hint() if isinstance(provider, ExtraRequirement) else None
+    if hint is not None:
+        return CheckResult(
+            name=name,
+            status=CheckStatus.WARN,
+            detail="codex extra not installed",
+            fix_hint=hint,
+            section=SECTION_INTEGRATIONS,
+            required=False,
+        )
+    runtime = resolve_codex_runtime()
+    source = "bundled" if runtime.source is RuntimeSource.bundled else f"PATH: {runtime.path}"
+    detail = f"openai-codex {runtime.package_version or '(unknown version)'}, runtime: {source}"
+    strategy = resolve_auth_strategy_for_profile(get_profile(ProfileName.OPENAI_OAUTH))
+    if not strategy.is_valid():
+        return CheckResult(
+            name=name,
+            status=CheckStatus.WARN,
+            detail=f"{detail}; not logged in",
+            fix_hint=strategy.setup_hint,
+            section=SECTION_INTEGRATIONS,
+            required=False,
+        )
+    return CheckResult(
+        name=name,
+        status=CheckStatus.OK,
+        detail=f"{detail}; logged in",
         section=SECTION_INTEGRATIONS,
         required=False,
     )
@@ -655,6 +701,7 @@ def run_all_checks(
     _run("at least one provider OK", check_at_least_one_provider, profile_results)
     _run("context-forge", check_context_forge)
     _run("codex CLI", check_codex_cli)
+    _run("codex provider", check_codex_provider)
     _run("Claude Code CLI", check_claude_code_cli)
     _run("gh CLI", check_github_cli)
     _run("gh hosts file", check_github_cli_hosts_file)

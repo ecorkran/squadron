@@ -212,3 +212,12 @@ def test_doctor_exits_zero_when_gh_is_absent(monkeypatch: pytest.MonkeyPatch) ->
     runner = CliRunner()
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
+
+
+def test_codex_extra_hint_brackets_survive_rendering() -> None:
+    """Slice 129: the [codex] in the install hint is text, not Rich markup."""
+    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
+
+    with patch("squadron.providers.codex.runtime._module_available", return_value=False):
+        result = runner.invoke(app, ["doctor", "-v"])
+    assert f"fix: {CODEX_INSTALL_COMMAND}" in result.output
