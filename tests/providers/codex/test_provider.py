@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -28,6 +29,14 @@ def agent_config() -> AgentConfig:
     )
 
 
+@pytest.fixture()
+def _codex_logged_in() -> None:
+    """Write ~/.codex/auth.json in the per-test home."""
+    auth_file = Path.home() / ".codex" / "auth.json"
+    auth_file.parent.mkdir(parents=True, exist_ok=True)
+    auth_file.write_text("{}")
+
+
 class TestProviderType:
     def test_returns_openai_oauth(self, provider: CodexProvider) -> None:
         from squadron.providers.base import ProviderType
@@ -47,13 +56,12 @@ class TestCapabilities:
 
 
 class TestCreateAgent:
+    @pytest.mark.usefixtures("_codex_logged_in")
     def test_returns_codex_agent(
         self,
         provider: CodexProvider,
         agent_config: AgentConfig,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         with patch(
             "squadron.providers.codex.agent.resolve_codex_binary",
             return_value="/usr/local/bin/codex",
@@ -62,13 +70,12 @@ class TestCreateAgent:
         assert isinstance(agent, CodexAgent)
         assert agent.name == "test-codex"
 
+    @pytest.mark.usefixtures("_codex_logged_in")
     def test_raises_when_binary_absent(
         self,
         provider: CodexProvider,
         agent_config: AgentConfig,
-        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
         with patch(
             "squadron.providers.codex.agent.resolve_codex_binary",
             return_value=None,
@@ -89,12 +96,8 @@ class TestCreateAgent:
 
 
 class TestValidateCredentials:
-    def test_true_when_sdk_importable_and_creds(
-        self,
-        provider: CodexProvider,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    @pytest.mark.usefixtures("_codex_logged_in")
+    def test_true_when_sdk_importable_and_creds(self, provider: CodexProvider) -> None:
         # Mock the SDK as importable
         with patch.dict("sys.modules", {"codex_app_server": MagicMock()}):
             with patch(
