@@ -66,10 +66,12 @@ def _render_step_block(console: Console, step: SetupStep, n: int, total: int, ve
     header.append(step.title, style="bold")
     console.print(header)
     console.print("─" * 48)
-    console.print(f"  {step.detail}")
+    # Plain Text, not markup: details and commands such as squadron-ai[codex]
+    # carry brackets that are not Rich tags.
+    console.print(Text(f"  {step.detail}"))
     if step.command:
         console.print()
-        console.print(f"  [bold]$ {step.command}[/bold]")
+        console.print(Text(f"  $ {step.command}", style="bold"))
     if verbose and step.explanation:
         console.print()
         console.print(f"  [dim]{step.explanation}[/dim]")

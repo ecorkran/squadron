@@ -468,3 +468,13 @@ def test_both_command_check_names_are_registered_in_every_name_keyed_table() -> 
             )
         )
         assert titled != check_name, f"{check_name!r} has no entry in _TITLE_MAP"
+
+
+def test_non_interactive_shows_codex_extra_step_with_hint() -> None:
+    """Slice 129: with the extra missing, setup shows the step and the bracketed hint intact."""
+    from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
+
+    with patch("squadron.providers.codex.runtime._module_available", return_value=False):
+        result = runner.invoke(app, ["setup", "--non-interactive"])
+    assert "Install Codex extra" in result.output
+    assert f"$ {CODEX_INSTALL_COMMAND}" in result.output

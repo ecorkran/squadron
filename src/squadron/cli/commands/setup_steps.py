@@ -16,6 +16,7 @@ from squadron.cli.commands.doctor_checks import (
     CheckStatus,
     check_at_least_one_provider,
     check_codex_cli,
+    check_codex_provider,
     check_commands_installed,
     check_context_forge,
     check_git_hooks,
@@ -63,6 +64,7 @@ _RECHECK_MAP: dict[str, Callable[[], CheckResult]] = {
     ),
     "context-forge": check_context_forge,
     "codex CLI": check_codex_cli,
+    "codex provider": check_codex_provider,
     # "Claude Code CLI" is intentionally absent: it is informational only
     # (no in-loop recheck), so setup renders it and moves on without prompting.
     "providers.toml": check_providers_toml,
@@ -114,6 +116,7 @@ DOCS_ANCHOR: dict[str, str] = {
     DELIVERIES[CommandTarget.AGENTS].check_name: "docs/QUICKSTART.md#install",
     "context-forge": "docs/QUICKSTART.md#prerequisites",
     "codex CLI": "docs/QUICKSTART.md#configure-a-provider",
+    "codex provider": "docs/QUICKSTART.md#configure-a-provider",
     "openai": "docs/QUICKSTART.md#configure-a-provider",
     "openrouter": "docs/QUICKSTART.md#configure-a-provider",
     "gemini": "docs/QUICKSTART.md#configure-a-provider",
@@ -138,6 +141,10 @@ _EXPLANATION: dict[str, str] = {
     "codex CLI": (
         "The Codex CLI enables the codex provider for AI-assisted shell tasks. "
         "Only required if you plan to use the openai/codex provider."
+    ),
+    "codex provider": (
+        "The codex extra installs the official Codex SDK and runtime, enabling the "
+        "openai-oauth profile and the codex-agent alias. Optional."
     ),
     "git pre-commit hook": (
         "A tracked pre-commit hook that runs cf validate frontmatter against "
@@ -204,6 +211,7 @@ def _human_title(result: CheckResult) -> str:
         "git pre-commit hook": "Install frontmatter pre-commit gate",
         "context-forge": "Install Context Forge",
         "codex CLI": "Install Codex CLI",
+        "codex provider": "Install Codex extra",
         "Claude Code CLI": "Claude Code CLI",
         "at least one provider OK": "At least one provider authenticated",
         "providers.toml": "providers.toml valid",
