@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from squadron.providers.codex import login as codex_login
 from squadron.providers.errors import ProviderAuthError
 
 if TYPE_CHECKING:
@@ -68,3 +70,21 @@ class OAuthFileStrategy:
     def is_valid(self) -> bool:
         """Return True if the auth file exists."""
         return self._has_auth_file()
+
+    # --- InteractiveLogin (slice 129 D3): delegates to login.py ---
+
+    async def login(
+        self, *, device_code: bool, timeout_s: float, notify: Callable[[str], None]
+    ) -> None:
+        """Sign in with ChatGPT; writes the auth file this strategy reads."""
+        await codex_login.login(device_code=device_code, timeout_s=timeout_s, notify=notify)
+
+    async def logout(self) -> None:
+        """Sign out of the Codex runtime."""
+        await codex_login.logout()
+
+    async def account_summary(self) -> str | None:
+        """``"<email>, <plan>"``; ``None`` without spawning when not logged in."""
+        if not self.is_valid():
+            return None
+        return await codex_login.account_summary()
