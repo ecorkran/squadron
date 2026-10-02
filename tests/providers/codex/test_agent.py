@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Effort, Message, MessageType
+from squadron.core.usage import TokenUsage
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.codex.runtime import CODEX_INSTALL_COMMAND
 from squadron.providers.errors import ProviderError
@@ -21,9 +23,11 @@ from tests.providers.codex.conftest import (
     RetryLimitExceededError,
     Sandbox,
     ServerBusyError,
+    ThreadTokenUsage,
     TransportClosedError,
     TurnResult,
     TurnStatus,
+    Usage,
 )
 
 _CONFIG = "squadron.providers.codex.agent.get_typed_config"
@@ -266,12 +270,50 @@ class TestSdkErrors:
         assert agent.state == AgentState.terminated
 
 
+class TestUsage:
+    """Slice 129 D6: per-turn usage rides the Message as the OpenAI agent stamps it."""
+
+    def test_full_mapping(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        fake_sdk.turn.run.return_value = TurnResult(
+            usage=ThreadTokenUsage(
+                last=Usage(
+                    input_tokens=1200,
+                    cached_input_tokens=300,
+                    output_tokens=450,
+                    reasoning_output_tokens=90,
+                )
+            )
+        )
+        (msg,) = _send(agent, "hi")
+        assert msg.metadata["usage"] == TokenUsage(
+            prompt=1200, cached=300, completion=450, reasoning=90
+        )
+        assert msg.metadata["turns"] == 1
+
+    def test_omitted_field_stays_none(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
+        last = SimpleNamespace(input_tokens=10, cached_input_tokens=0, output_tokens=5)
+        fake_sdk.turn.run.return_value = TurnResult(usage=SimpleNamespace(last=last))  # type: ignore[arg-type]
+        (msg,) = _send(agent, "hi")
+        assert msg.metadata["usage"] == TokenUsage(prompt=10, cached=0, completion=5)
+        assert msg.metadata["usage"].reasoning is None
+
+    def test_no_usage_is_not_reported(
+        self, agent: CodexAgent, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level("DEBUG", logger="squadron.providers.codex.agent"):
+            (msg,) = _send(agent, "hi")
+        usage = msg.metadata["usage"]
+        assert usage == TokenUsage()
+        assert not usage.reported
+        assert any("reported no token usage" in r.getMessage() for r in caplog.records)
+
+
 class TestHandleMessage:
     def test_state_transitions(self, agent: CodexAgent, fake_sdk: FakeSdk) -> None:
         observed_states: list[AgentState] = []
         original_run = agent._run_prompt
 
-        async def spy_run(prompt: str) -> str:
+        async def spy_run(prompt: str) -> tuple[str, TokenUsage]:
             observed_states.append(agent.state)
             return await original_run(prompt)
 

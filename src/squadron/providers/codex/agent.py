@@ -9,6 +9,7 @@ from collections.abc import AsyncIterator
 
 from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
+from squadron.core.usage import TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
 from squadron.providers.codex.auth import OAuthFileStrategy
@@ -61,12 +62,14 @@ class CodexAgent:
         """Send a message to the Codex agent and yield response Messages."""
         self._state = AgentState.processing
         try:
-            response_text = await self._run_prompt(message.content)
+            response_text, usage = await self._run_prompt(message.content)
+            # Same telemetry keys the OpenAI agent stamps, read by review's collect_turn.
             yield Message(
                 sender=self._name,
                 recipients=[],
                 content=response_text,
                 message_type=MessageType.chat,
+                metadata={"turns": 1, "usage": usage},
             )
         except ProviderError:
             raise
@@ -95,8 +98,8 @@ class CodexAgent:
         self._codex = None
         self._thread = None
 
-    async def _run_prompt(self, prompt: str) -> str:
-        """Send prompt via SDK and return response text."""
+    async def _run_prompt(self, prompt: str) -> tuple[str, TokenUsage]:
+        """Send prompt via SDK and return the response text and the turn's usage."""
         if self._config.model is None:
             raise ProviderError(
                 "model is required for Codex agents. "
@@ -105,7 +108,7 @@ class CodexAgent:
         if self._thread is None:
             await self._start_thread(self._config.model)
         result = await self._run_turn_translating_errors(prompt)
-        return self._checked_response(result)
+        return self._checked_response(result), _turn_usage(result)
 
     async def _run_turn_translating_errors(self, prompt: str) -> object:
         """Run a turn, mapping SDK errors to ``ProviderError`` (Failure Modes)."""
@@ -228,3 +231,18 @@ class CodexAgent:
         except ValueError as exc:
             valid = ", ".join(member.value for member in sandbox_enum)  # type: ignore[attr-defined]
             raise ProviderError(f"Invalid Codex sandbox {raw!r}; valid values: {valid}") from exc
+
+
+def _turn_usage(result: object) -> TokenUsage:
+    """Map ``TurnResult.usage.last`` to ``TokenUsage`` (D6); unreported fields stay ``None``."""
+    usage = getattr(result, "usage", None)
+    if usage is None:
+        _log.debug("Codex turn reported no token usage")
+        return TokenUsage()
+    last = usage.last
+    return TokenUsage(
+        prompt=getattr(last, "input_tokens", None),
+        cached=getattr(last, "cached_input_tokens", None),
+        completion=getattr(last, "output_tokens", None),
+        reasoning=getattr(last, "reasoning_output_tokens", None),
+    )
