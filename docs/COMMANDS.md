@@ -291,6 +291,68 @@ sq pr create --dry-run
 sq pr create
 ```
 
+## auth
+
+Log in, log out, and check credentials for provider profiles. Interactive login is supported
+by `openai-oauth` (ChatGPT sign-in for the `codex-agent` alias); credentials are saved to
+`~/.codex/auth.json`. Other profiles authenticate from environment variables or files and
+only support validation.
+
+### auth login
+
+Log in interactively where the profile supports it; otherwise validate the profile's
+existing credentials.
+
+```
+sq auth login [OPTIONS] PROFILE_NAME
+```
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `PROFILE_NAME` | string | yes | Profile to log in to, or validate credentials for |
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--device-code` | flag | no | off | Print a URL and code instead of opening a browser (SSH / headless machines) |
+| `--timeout` | int | no | `codex.login_timeout_s` (300) | Seconds to wait for login to finish |
+
+Both options apply only to profiles with interactive login; passing either for another profile
+is an error. On success the command prints the signed-in account and plan. Ctrl-C cancels
+the login and exits 1.
+
+```bash
+# Sign in with a browser
+sq auth login openai-oauth
+
+# Sign in on a headless machine
+sq auth login openai-oauth --device-code
+
+# Check that an API-key profile has a usable key
+sq auth login openai
+```
+
+### auth logout
+
+Sign out of a profile that supports interactive login. Errors for any other profile.
+
+```
+sq auth logout PROFILE_NAME
+```
+
+```bash
+sq auth logout openai-oauth
+```
+
+### auth status
+
+Show a table of every configured profile: auth type, whether it is authenticated, and the
+credential source. Signed-in interactive profiles also show the account email and plan;
+unauthenticated profiles show a setup hint instead of a source.
+
+```
+sq auth status
+```
+
 ## config
 
 Manage persistent configuration.
