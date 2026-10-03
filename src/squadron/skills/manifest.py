@@ -7,6 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, ValidationError
 
 from squadron.skills.models import PackEntry
+from squadron.skills.targets import reserved_receipt_suffixes
 
 
 def user_manifest_path() -> Path:
@@ -41,7 +42,20 @@ def load(path: Path) -> SkillsManifest:
         packs = {name: PackEntry(**entry) for name, entry in data.get("packs", {}).items()}
     except (ValidationError, TypeError) as exc:
         raise ValueError(f"Invalid pack entry in skills.toml at {path}: {exc}") from exc
+    _check_pack_names(packs, path)
     return SkillsManifest(packs=packs, origin=str(path))
+
+
+def _check_pack_names(packs: dict[str, PackEntry], path: Path) -> None:
+    """Reject pack names that would share an install receipt with another pack's."""
+    suffixes = reserved_receipt_suffixes()
+    for name in packs:
+        clash = next((suffix for suffix in sorted(suffixes) if name.endswith(suffix)), None)
+        if clash is not None:
+            raise ValueError(
+                f"Pack name {name!r} in skills.toml at {path} ends in {clash!r}, which squadron "
+                f"uses to name install receipts. Rename the pack."
+            )
 
 
 def merge(user: SkillsManifest, project: SkillsManifest) -> SkillsManifest:

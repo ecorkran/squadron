@@ -159,3 +159,13 @@ class TestLoadEffectiveWithDefault:
         assert result.origin == "merged"
         assert "analysis" in result.packs
         assert "extra" in result.packs
+
+
+@pytest.mark.parametrize("name", ["mypack-agents", "mypack-local"])
+def test_pack_name_with_a_receipt_suffix_is_rejected(tmp_path: Path, name: str) -> None:
+    from squadron.skills.manifest import load
+
+    manifest = tmp_path / "skills.toml"
+    manifest.write_text(f'[packs.{name}]\nsource = "bundled"\nprefix = "x"\n')
+    with pytest.raises(ValueError, match="uses to name install receipts"):
+        load(manifest)

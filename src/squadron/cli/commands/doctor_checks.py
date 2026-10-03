@@ -557,11 +557,14 @@ def check_skill_packs(
             )
         ]
 
-    return [
+    results = [
         _skill_pack_row(name, entry, target, root)
         for name, entry in manifest.packs.items()
         for target, root in roots.items()
     ]
+    # Sorted by row name, as before 928: "demo" sorts before "demo (codex)".
+    results.sort(key=lambda r: r.name)
+    return results
 
 
 def check_providers_toml() -> CheckResult:

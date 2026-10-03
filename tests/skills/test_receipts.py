@@ -94,9 +94,7 @@ def test_remove_receipt_files_prunes_nested_dirs_deepest_first(tmp_path: Path) -
     files = ["demo-a/SKILL.md", "demo-a/agents/openai.yaml", "demo-b/SKILL.md"]
     _write_files(dest, files)
 
-    removed = remove_receipt_files(_receipt_for(dest, files))
-
-    assert removed == 3
+    assert remove_receipt_files(_receipt_for(dest, files)).removed == 3
     assert not (dest / "demo-a").exists()
     assert not (dest / "demo-b").exists()
 
@@ -115,28 +113,24 @@ def test_remove_receipt_files_keeps_dir_with_unrelated_file(tmp_path: Path) -> N
     dest = tmp_path / "skills"
     _write_files(dest, ["demo-a/SKILL.md", "demo-a/mine.txt"])
 
-    removed = remove_receipt_files(_receipt_for(dest, ["demo-a/SKILL.md"]))
-
-    assert removed == 1
+    assert remove_receipt_files(_receipt_for(dest, ["demo-a/SKILL.md"])).removed == 1
     assert (dest / "demo-a" / "mine.txt").exists()
 
 
-def test_remove_receipt_files_skips_entries_outside_destination(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_remove_receipt_files_skips_entries_outside_destination(tmp_path: Path) -> None:
     dest = tmp_path / "skills"
     dest.mkdir()
     outside = tmp_path / "victim.md"
     outside.write_text("keep")
 
-    removed = remove_receipt_files(_receipt_for(dest, ["../victim.md"]))
+    result = remove_receipt_files(_receipt_for(dest, ["../victim.md"]))
 
-    assert removed == 0
+    assert result.removed == 0
+    assert result.skipped_outside == ["../victim.md"]
     assert outside.exists()
-    assert "Skipping receipt entry outside the install destination" in capsys.readouterr().out
 
 
 def test_remove_receipt_files_tolerates_already_missing_file(tmp_path: Path) -> None:
     dest = tmp_path / "skills"
     dest.mkdir()
-    assert remove_receipt_files(_receipt_for(dest, ["gone.md"])) == 0
+    assert remove_receipt_files(_receipt_for(dest, ["gone.md"])).removed == 0

@@ -10,7 +10,7 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
-from squadron.cli.commands.install import parse_ide_option
+from squadron.cli.commands.install_options import parse_ide_option, report_skipped_entries
 from squadron.skills.installer import install_pack
 from squadron.skills.manifest import (
     PROJECT_MANIFEST_NAME,
@@ -151,7 +151,9 @@ def uninstall(
             )
             raise typer.Exit(code=1)
 
-    removed = remove_receipt_files(receipt)
+    removal = remove_receipt_files(receipt)
+    report_skipped_entries(removal)
+    removed = removal.removed
     # A Claude prefix directory is the pack's own; drop it once empty, but leave it if
     # the user has unrelated files there. Shared roots are never removed (F001).
     owned = receipt.surface in PACK_LAYOUTS[target].owned_destination_surfaces

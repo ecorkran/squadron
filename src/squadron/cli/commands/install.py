@@ -13,6 +13,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from squadron.cli.commands.install_options import parse_ide_option, report_skipped_entries
 from squadron.skills.codex_rules import codex_home, remove_sq_rules, write_sq_rules
 from squadron.skills.models import InstallReceipt
 from squadron.skills.receipts import (
@@ -25,7 +26,6 @@ from squadron.skills.targets import (
     DELIVERIES,
     CommandTarget,
     TargetDelivery,
-    normalize_target,
     receipt_name,
 )
 
@@ -54,14 +54,6 @@ def get_commands_source() -> Path:
 
     rprint("[red]Error: Could not locate bundled command files.[/red]")
     raise typer.Exit(code=1)
-
-
-def parse_ide_option(ide: str) -> CommandTarget:
-    """Resolve the ``--ide`` value, or exit 2 naming the accepted spellings."""
-    try:
-        return normalize_target(ide)
-    except ValueError as exc:
-        raise typer.BadParameter(str(exc)) from None
 
 
 def _resolve_destination(
@@ -218,7 +210,16 @@ def _ensure_codex_rules() -> None:
             f"skills need. Re-run after installing Codex.[/yellow]"
         )
         return
-    rules_path = write_sq_rules(home)
+    try:
+        rules_path = write_sq_rules(home)
+    except OSError as exc:
+        # The skills and receipt are already installed; an unwritable rules file must
+        # not turn that into a failed install. Say what to fix instead.
+        rprint(
+            f"[yellow]Installed, but could not write the Codex sandbox rules under {home}: "
+            f"{exc}. Fix the permissions and re-run the install.[/yellow]"
+        )
+        return
     rprint(f"[green]Wrote Codex sandbox rules to {rules_path}[/green]")
 
 
@@ -294,15 +295,18 @@ def uninstall_commands(
 
     # Every subdirectory the install touched, not just sq/ (issue #65 finding 1: the old
     # rmtree of sq/ left analysis/ and any other subdirectory behind).
-    removed = remove_receipt_files(receipt)
+    removal = remove_receipt_files(receipt)
+    report_skipped_entries(removal)
+    removed = removal.removed
 
     (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
 
     rprint(f"[green]Removed {removed} command(s) from {destination}.[/green]")
 
-    # The rules file is machine-wide; a project-local uninstall leaves it for any
-    # machine install that still needs it.
-    if command_target is CommandTarget.AGENTS and not local_honored:
+    # The rules file is machine-wide. Only an uninstall of the default machine install
+    # removes it; a --local or --target uninstall leaves it for the machine install
+    # that may still need it.
+    if command_target is CommandTarget.AGENTS and not local and target is None:
         rules_path = remove_sq_rules(codex_home())
         if rules_path is not None:
             rprint(f"[green]Removed Codex sandbox rules {rules_path}.[/green]")

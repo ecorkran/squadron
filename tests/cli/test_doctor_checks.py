@@ -538,6 +538,26 @@ def test_skill_pack_rows_follow_codex_presence(tmp_path: Path, monkeypatch: pyte
     assert [r.name for r in check_skill_packs(cwd=tmp_path)] == ["analysis", "analysis (codex)"]
 
 
+def test_skill_pack_rows_are_sorted_by_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    manifest = SkillsManifest(
+        packs={
+            "zeta": PackEntry(source="github:o/z", prefix="zeta"),
+            "alpha": PackEntry(source="github:o/a", prefix="alpha"),
+        },
+        origin="user",
+    )
+    monkeypatch.setattr(doctor_checks, "load_effective", lambda cwd=None: manifest)
+
+    names = [r.name for r in _rows_for(tmp_path)]
+
+    assert names == ["alpha", "alpha (codex)", "zeta", "zeta (codex)"]
+
+
+def _rows_for(tmp_path: Path) -> list[CheckResult]:
+    roots = {CommandTarget.CLAUDE: tmp_path / "claude", CommandTarget.AGENTS: tmp_path / "agents"}
+    return check_skill_packs(roots=roots, cwd=tmp_path)
+
+
 # --- T19: check_git_hooks ---
 
 

@@ -123,6 +123,22 @@ def test_missing_frontmatter(tmp_path: Path) -> None:
     assert "has no YAML frontmatter" in _install_error(tmp_path / "src", tmp_path / "root")
 
 
+def test_broken_yaml_is_reported_as_invalid_not_missing(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "src" / "agents" / "demo-a"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: [unclosed\n---\n")
+    message = _install_error(tmp_path / "src", tmp_path / "root")
+    assert "has invalid YAML frontmatter" in message
+    assert "has no YAML frontmatter" not in message
+
+
+def test_non_mapping_frontmatter(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "src" / "agents" / "demo-a"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\n- just\n- a list\n---\n")
+    assert "frontmatter is not a mapping" in _install_error(tmp_path / "src", tmp_path / "root")
+
+
 def test_missing_skill_md(tmp_path: Path) -> None:
     (tmp_path / "src" / "agents" / "demo-a").mkdir(parents=True)
     assert "agents/demo-a/SKILL.md is missing" in _install_error(tmp_path / "src", tmp_path / "root")

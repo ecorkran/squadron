@@ -193,6 +193,19 @@ DELIVERIES: dict[CommandTarget, TargetDelivery] = {
 assert set(DELIVERIES) == set(CommandTarget), "every CommandTarget needs a TargetDelivery"
 
 
+LOCAL_RECEIPT_SUFFIX = "-local"
+
+
+def reserved_receipt_suffixes() -> frozenset[str]:
+    """Suffixes ``receipt_name`` appends; a pack name ending in one would collide.
+
+    ``mypack-agents`` as a Claude pack would share a receipt with ``mypack``'s
+    agents install, and ``mypack-local`` with ``mypack``'s local install.
+    """
+    target_suffixes = {d.receipt_suffix for d in DELIVERIES.values() if d.receipt_suffix}
+    return frozenset({*target_suffixes, LOCAL_RECEIPT_SUFFIX})
+
+
 def receipt_name(base: str, target: CommandTarget, *, local: bool) -> str:
     """The receipt key for one install of ``base`` at a target/scope pair.
 
@@ -202,4 +215,4 @@ def receipt_name(base: str, target: CommandTarget, *, local: bool) -> str:
     what to remove (D5).
     """
     suffix = DELIVERIES[target].receipt_suffix
-    return f"{base}{suffix}-local" if local else f"{base}{suffix}"
+    return f"{base}{suffix}{LOCAL_RECEIPT_SUFFIX}" if local else f"{base}{suffix}"

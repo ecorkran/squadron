@@ -138,15 +138,37 @@ def test_claude_install_never_touches_codex(tmp_path: Path) -> None:
 def test_codex_uninstall_removes_the_rules(tmp_path: Path) -> None:
     home = codex_home()
     home.mkdir()
+    receipts = str(tmp_path / "receipts")
+    _invoke("install-commands", "--ide", "codex", "--receipts-dir", receipts)
+
+    output = _invoke("uninstall-commands", "--ide", "codex", "--receipts-dir", receipts)
+
+    assert not (home / RULES_RELATIVE_PATH).exists()
+    assert "Removed Codex sandbox rules" in output
+
+
+def test_target_codex_uninstall_keeps_the_machine_wide_rules(tmp_path: Path) -> None:
+    home = codex_home()
+    home.mkdir()
     _install_codex(tmp_path / "skills")
 
-    output = _invoke(
+    _invoke(
         "uninstall-commands", "--ide", "codex", "--target", str(tmp_path / "skills"),
         "--receipts-dir", str(tmp_path / "skills" / "receipts"),
     )  # fmt: skip
 
-    assert not (home / RULES_RELATIVE_PATH).exists()
-    assert "Removed Codex sandbox rules" in output
+    assert (home / RULES_RELATIVE_PATH).exists()
+
+
+def test_unwritable_rules_warn_without_failing_the_install(tmp_path: Path) -> None:
+    home = codex_home()
+    home.mkdir()
+    (home / "rules").write_text("a file where the rules directory should be")
+
+    output = _install_codex(tmp_path / "skills")
+
+    assert "could not write the Codex sandbox rules" in output
+    assert (tmp_path / "skills" / "sq-review" / "SKILL.md").is_file()
 
 
 def test_local_codex_uninstall_keeps_the_machine_wide_rules(

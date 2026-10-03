@@ -7,10 +7,10 @@ them deterministically, without re-resolving (and re-cloning) the source.
 from __future__ import annotations
 
 import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import tomli_w
-from rich import print as rprint
 
 from squadron.skills.models import InstallReceipt
 
@@ -60,35 +60,42 @@ def read_receipt(pack_name: str, receipts_dir: Path) -> InstallReceipt | None:
         raise ValueError(f"Malformed install receipt at {path}: {exc}") from exc
 
 
-def remove_receipt_files(receipt: InstallReceipt) -> int:
+@dataclass
+class RemovalResult:
+    """What ``remove_receipt_files`` did: files removed, and entries it refused to follow."""
+
+    removed: int = 0
+    skipped_outside: list[str] = field(default_factory=list[str])
+
+
+def remove_receipt_files(receipt: InstallReceipt) -> RemovalResult:
     """Delete exactly the files ``receipt`` records and prune directories left empty.
 
-    Entries resolving outside ``receipt.destination`` are skipped with a warning — a
-    corrupted or hand-edited receipt must not delete anything squadron did not write.
+    Entries resolving outside ``receipt.destination`` are skipped and returned in
+    ``skipped_outside`` for the caller to report — a corrupted or hand-edited receipt
+    must not delete anything squadron did not write.
     Directories are shared with the user's own files, so this never removes a tree:
     a directory goes only once it holds nothing, deepest first, so a skill's nested
     ``agents/`` is gone before its parent is tested. ``receipt.destination`` itself is
     never removed; a caller that owns it (a Claude prefix pack) removes it separately.
 
-    Returns the number of files removed. A recorded file that is already gone is not
-    an error — the desired end state, absent, already holds.
+    A recorded file that is already gone is not an error — the desired end state,
+    absent, already holds.
     """
     destination = receipt.destination
     resolved_destination = destination.resolve()
-    removed = 0
+    result = RemovalResult()
     touched_dirs: set[Path] = set()
     for relative in receipt.files_written:
         path = destination / relative
         resolved_path = path.resolve()
         if resolved_path != resolved_destination and resolved_destination not in resolved_path.parents:
-            rprint(
-                f"[yellow]Skipping receipt entry outside the install destination: {relative!r}[/yellow]"
-            )
+            result.skipped_outside.append(relative)
             continue
         touched_dirs.add(path.parent)
         if path.exists():
             path.unlink()
-            removed += 1
+            result.removed += 1
 
     for directory in sorted(touched_dirs, key=lambda p: len(p.parts), reverse=True):
         while (
@@ -99,4 +106,4 @@ def remove_receipt_files(receipt: InstallReceipt) -> int:
         ):
             directory.rmdir()
             directory = directory.parent
-    return removed
+    return result

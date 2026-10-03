@@ -10,6 +10,7 @@ re-deriving paths (D6).
 
 from __future__ import annotations
 
+import glob
 import re
 import shutil
 from collections.abc import Callable
@@ -117,23 +118,37 @@ def _agents_source_has_content(source: Path) -> bool:
     return (source / AGENTS_SOURCE_DIR).is_dir()
 
 
-def _skill_frontmatter(skill_md: Path) -> dict[str, object] | None:
+class _FrontmatterProblem(Exception):
+    """A SKILL.md's frontmatter is absent or unusable; the message says which."""
+
+
+def _skill_frontmatter(skill_md: Path) -> dict[str, object]:
     """Parse a SKILL.md's frontmatter, tolerating a leading HTML comment.
 
     Forked skills carry an attribution comment above the fence (squadron's own
     ``analysis-tech-debt-audit`` does), so the fence need not be on line 1.
+    Raises ``_FrontmatterProblem`` distinguishing a missing block from broken YAML,
+    so the pack author is told the real cause.
     """
     text = _LEADING_HTML_COMMENT.sub("", skill_md.read_text(encoding="utf-8"), count=1)
     split = split_document(text)
     if split is None:
-        return None
+        raise _FrontmatterProblem("has no YAML frontmatter")
     try:
         loaded = yaml.safe_load(split[1])
-    except yaml.YAMLError:
-        return None
+    except yaml.YAMLError as exc:
+        raise _FrontmatterProblem(f"has invalid YAML frontmatter: {exc}") from exc
     if not isinstance(loaded, dict):
-        return None
+        raise _FrontmatterProblem("frontmatter is not a mapping of keys to values")
     return {str(k): v for k, v in cast("dict[object, object]", loaded).items()}
+
+
+def _dispatch_file(entry: PackEntry) -> str:
+    """The entry's dispatch file; only called once ``prefix`` is known to be unset."""
+    if entry.dispatch_file is None:
+        # PackEntry's validator guarantees exactly one surface — this is unreachable.
+        raise SkillSourceError("Pack entry has neither prefix nor dispatch_file.")
+    return entry.dispatch_file
 
 
 def _skill_dir_problems(skill_dir: Path) -> list[str]:
@@ -142,9 +157,10 @@ def _skill_dir_problems(skill_dir: Path) -> list[str]:
     skill_md = skill_dir / SKILL_FILE
     if not skill_md.is_file():
         return [f"{label}/{SKILL_FILE} is missing"]
-    frontmatter = _skill_frontmatter(skill_md)
-    if frontmatter is None:
-        return [f"{label}/{SKILL_FILE} has no YAML frontmatter"]
+    try:
+        frontmatter = _skill_frontmatter(skill_md)
+    except _FrontmatterProblem as problem:
+        return [f"{label}/{SKILL_FILE} {problem}"]
     problems: list[str] = []
     name = frontmatter.get("name")
     if name != skill_dir.name:
@@ -167,7 +183,7 @@ def _naming_problems(entry: PackEntry, skill_dirs: list[Path]) -> list[str]:
                     "(lowercase a-z, 0-9 and hyphens)"
                 )
         return problems
-    expected = dispatch_skill_name(str(entry.dispatch_file))
+    expected = dispatch_skill_name(_dispatch_file(entry))
     names = {d.name for d in skill_dirs}
     if expected not in names:
         problems.append(f"{AGENTS_SOURCE_DIR}/{expected}/ is missing")
@@ -212,9 +228,9 @@ def _agents_install(pack_name: str, entry: PackEntry, source: Path, root: Path) 
 
 def _agents_installed_path(entry: PackEntry, root: Path) -> Path | None:
     if entry.prefix is not None:
-        skill_files = sorted(root.glob(f"{entry.prefix}-*/{SKILL_FILE}"))
+        skill_files = sorted(root.glob(f"{glob.escape(entry.prefix)}-*/{SKILL_FILE}"))
         return skill_files[0] if skill_files else None
-    skill_md = root / dispatch_skill_name(str(entry.dispatch_file)) / SKILL_FILE
+    skill_md = root / dispatch_skill_name(_dispatch_file(entry)) / SKILL_FILE
     return skill_md if skill_md.is_file() else None
 
 
