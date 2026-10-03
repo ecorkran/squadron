@@ -1,268 +1,98 @@
 # Squadron
 
-Repeatable AI workflows from the terminal — structured reviews, YAML pipelines, and project artifacts, using whatever model you want.
-
-Point `sq` at an architecture doc, a slice design, a task plan, or a diff and get back a structured verdict with specific findings. Define a pipeline in YAML and it chains reviews, artifact generation, judges, and loops into one repeatable command. Every step can run on the model of your choice.
+Repeatable AI workflows from the terminal: structured reviews, customizable YAML pipelines, and context handoffs between agents. It runs on your existing Claude and ChatGPT subscriptions or on any API model.
 
 ```bash
-sq review slice 120 -v
+sq review slice 120 -v --model {model-alias}
 ```
 ![Review output from current squadron branch](assets/review-image.png)
 
 ## What Squadron does
 
-- **Repeatable reviews with structured findings** — for architecture documents, slice designs, task breakdowns, and code. Each review runs against a purpose-built template that tells the agent exactly what to evaluate and how to report it: a verdict (PASS, CONCERNS, or FAIL) plus findings with severity levels. Same template, structurally consistent output, every run.
-- **Any model** — Anthropic, OpenAI, anything supported by OpenRouter, or local models. Any step of any workflow can use any model.
-- **YAML-definable pipelines** — automate reviews, summaries, and context lifetimes, and generate project artifacts: architectural concepts, slice designs, task breakdowns.
-- **Pipeline control flow** — `loop-each` and `loop-until` iteration, judge nodes for resolution, configurable escalation checkpoints, and composition of steps and loops into extended pipelines.
-- **Context summaries and handoffs** — carry working context from a plain terminal to an agent CLI to VS Code. Squadron doesn't care where you run it.
+**Structured reviews.** Point `sq` at an architecture doc, a slice design, a task plan, or a diff. You get back a verdict (PASS, CONCERNS, or FAIL) plus specific findings ranked by severity. Each review type runs from a purpose-built template, so the output has the same shape on every run and with any model. Once you've fixed the findings, `sq review resolve` checks them against the actual diff and records whether they were really addressed. → [Reviews](#reviews)
 
-## Review templates
+**Customizable pipelines.** A pipeline is a YAML file that chains steps into one command: design, review, revise, judge, implement, commit, summarize. Loops run until a review passes. Judges settle disagreements. Checkpoints stop for a human when a gate fails. Every step names its own model, so a cheap model can draft while a strong one reviews. Squadron ships pipelines for each phase of a project. Copy any of them and change it, or write your own. → [Pipelines](#pipelines-sq-run)
 
-Four built-in templates cover the common review patterns:
+**Handoffs between sessions and tools.** `/sq:summary` saves a project-aware summary of the current session. `/sq:summary --restore` loads it into a fresh one. Use it to reset a long session without losing the thread, or to carry work from Claude Code to Codex and back. → [Summaries and handoffs](#summaries-and-handoffs)
 
-| Template | What it reviews |
-|----------|----------------|
-| `arch` | An architecture document on its own merits — completeness, consistency, feasibility |
-| `slice` | A design document against an architecture reference |
-| `tasks` | A task breakdown against its parent slice design |
-| `code` | Source code, optionally scoped to a diff or glob |
+**Your accounts, any model.** Claude runs through the Claude Agent SDK on your Claude subscription. GPT-6 runs through the Codex agent on your ChatGPT subscription. OpenAI, Gemini, OpenRouter, and local models work with API keys. Any step of any workflow can use any of them. → [Connecting providers](#connecting-providers)
 
-The template system is extensible — each template is a YAML file, and adding new review types means writing a new YAML definition and optionally a prompt builder function. See [docs/TEMPLATES.md](docs/TEMPLATES.md) for details.
+**Same commands everywhere.** Every command works from a plain shell (`sq review`), from Claude Code (`/sq:review`), and from Codex (`$sq-review`). All three run the same CLI command and write the same artifacts. → [Claude Code and Codex](#claude-code-and-codex)
+
+It also opens and reviews pull requests, installs skill packs, and reports environment problems with `sq doctor`.
 
 ## Install
 
-### Global install (recommended)
+```bash
+uv tool install squadron-ai     # or: pipx install squadron-ai
+sq setup                        # installs Context Forge (cf) and the /sq: and /cf: commands, then checks providers
+```
 
-Squadron ships on PyPI as `squadron-ai`:
+`sq setup` is interactive and safe to re-run. Squadron drives its project workflow through Context Forge (the `cf` CLI). `cf` ships on npm, not PyPI, so `sq setup` installs it for you. Then, in each project you want to work on:
 
 ```bash
-# Using uv (recommended)
-uv tool install squadron-ai
-
-# Or using pipx
-pipx install squadron-ai
+cf init           # installs the AI project guides and IDE config
 ```
 
-This installs Squadron **only**. Squadron drives its pipelines through Context Forge (the `cf` CLI), which ships on npm rather than PyPI, so `uv`/`pipx` cannot pull it in. Run `sq setup` next and it installs the rest for you:
+Other install routes (one-line script, development checkout) are under [Other install options](#other-install-options).
 
-```bash
-sq --version
-sq setup          # installs cf, /sq: and /cf: slash commands, then checks providers
-```
+## Connecting providers
 
-`sq setup` is interactive and idempotent — safe to re-run. Use `--non-interactive` to print the commands instead of running them.
-
-The `/sq:` and `/cf:` slash commands land in `~/.claude/commands` — user-level, so they're available in every project. To reinstall or update them later without a full setup pass:
-
-```bash
-sq install-commands   # refresh /sq:* commands (sq uninstall-commands removes them)
-```
-
-### Codex and other agent-skill runtimes
-
-Squadron ships the same commands as agent skills for Codex. Install them with `--ide`:
-
-```bash
-sq install-commands --ide codex   # or --ide agents; --ide openai is the same thing
-```
-
-They land in `~/.agents/skills`, one directory per skill, and you invoke them by name:
-`$sq-review`, `$sq-run`, `$sq-auth`. Add `--local` to install into the current project
-(`.agents/skills`) rather than for the whole machine.
-
-Codex performs no argument substitution, so each skill reads what you typed after its name
-as prose — `$sq-review code 925` works the same way `/sq:review code 925` does in Claude Code.
-
-`sq setup --ide codex` walks the same setup pass with the Codex target selected, and
-`sq doctor` reports a `codex skills` row on any machine that has the Codex CLI.
-
-**Run long commands from the terminal, not from a Codex session.** `sq review` and `sq run`
-take minutes, and a Codex session polls while they run — one review can consume a whole
-session allowance in the time the review itself takes
-([#126](https://github.com/ecorkran/squadron/issues/126)). Run those two from a shell and
-point Codex at the saved output. The short commands (`$sq-list`, `$sq-auth`, `$sq-spawn`)
-return immediately and are fine to invoke directly.
-
-Codex's sandbox also needs an explicit rule before `sq review` may reach a provider, or it
-fails with a misleading "provider connection failed"
-([#127](https://github.com/ecorkran/squadron/issues/127)). Add to `~/.codex/rules/default.rules`:
+See what's connected:
 
 ```
-prefix_rule(
-    pattern = ["sq", "review"],
-    decision = "allow",
-)
+$ sq auth status
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ Profile      ┃ Auth Type ┃ Status          ┃ Source             ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ gemini       │ api_key   │ ✓ authenticated │ GEMINI_API_KEY     │
+│ local        │ api_key   │ ✓ authenticated │ OPENAI_API_KEY     │
+│ openai       │ api_key   │ ✓ authenticated │ OPENAI_API_KEY     │
+│ openai-oauth │ oauth     │ ✓ authenticated │ ~/.codex/auth.json │
+│ openrouter   │ api_key   │ ✓ authenticated │ OPENROUTER_API_KEY │
+│ sdk          │ session   │ ✓ authenticated │ (session)          │
+└──────────────┴───────────┴─────────────────┴────────────────────┘
 ```
 
-Then, inside a project you want to work on:
+Each model alias belongs to a **profile**. A profile is how squadron reaches a provider and authenticates with it:
 
-```bash
-cf init           # per-project: installs AI project guides and IDE config
-```
+| Profile | Account | How to connect |
+|---|---|---|
+| `sdk` | Claude subscription (or API key) | Sign in to Claude Code. Nothing else needed. Set `ANTHROPIC_API_KEY` to bill per token instead. |
+| `openai-oauth` | ChatGPT subscription | `sq auth login openai-oauth` (add `--device-code` over SSH) |
+| `openai` | OpenAI API | `export OPENAI_API_KEY=...` |
+| `openrouter` | OpenRouter API | `export OPENROUTER_API_KEY=...` |
+| `gemini` | Google Gemini API | `export GEMINI_API_KEY=...` |
+| `local` | Ollama, vLLM, LM Studio | A model server on `http://localhost:11434/v1` |
 
-The guides install as plain files in your repo and are committed for you (never pushed), so teammates and CI get them like any other file. That is the default from Context Forge 0.16; on an older `cf`, a bare `cf init` installs a git submodule instead — update with `npm i -g @context-forge/cli`, or pass `--strategy tarball`. If you want the submodule (the exact guide commit pinned in your repo), ask for it with `cf init --strategy submodule`.
+`sq doctor` checks the whole environment (providers, `cf`, installed commands) and prints a copy-paste fix for anything missing. [docs/QUICKSTART.md](docs/QUICKSTART.md) covers every profile in detail, including how Claude Agent SDK usage is billed.
 
-Already installed as a submodule? Switch over:
+### Models
 
-```bash
-cf guides uninstall                     # removes the submodule and commits the removal
-cf guides install --strategy tarball    # installs as plain files and commits
-git add .context-forge.toml && git commit -m "chore: set guide strategy to tarball"
-```
-
-The last line commits the saved strategy so a teammate's install uses it too.
-
-New to Squadron? See **[docs/QUICKSTART.md](docs/QUICKSTART.md)** to verify your install and configure a provider.
-
-### Install script (alternative)
-
-The one-line installer does the same steps — installs Squadron and Context Forge, then guides setup:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh | sh
-```
-
-You can inspect the script first:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh \
-    -o install.sh && less install.sh && bash install.sh
-```
-
-Either path ends in the same place.
-
-### Development install
-
-```bash
-git clone https://github.com/manta/squadron.git
-cd squadron
-uv sync --dev
-```
-
-#### Pre-commit hook (recommended)
-
-A self-healing pre-commit hook auto-formats code and fixes import order before every commit, keeping CI green:
-
-```bash
-cat > .git/hooks/pre-commit << 'EOF'
-#!/bin/sh
-uv run ruff format .
-uv run ruff check --fix --exit-zero .
-git add -u
-EOF
-chmod +x .git/hooks/pre-commit
-```
-
-> **Note:** `.git/hooks/` is not tracked by git. Run the above after every fresh clone or worktree creation.
-
-## Quickstart
-
-### 1. Configure credentials
-
-The default provider is Claude via the Claude Agent SDK, which supports two authentication methods:
-
-**Claude Max subscription** (recommended): If you're already signed into Claude Code, you're set — the SDK uses your existing session. No API key needed.
-```bash
-# Verify you're authenticated
-claude --version
-```
-
-**API key**: Alternatively, set an Anthropic API key:
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-Other providers (OpenAI, Gemini, OpenRouter, local) are configured with their own keys — see [Using different models](#using-different-models) and [docs/QUICKSTART.md](docs/QUICKSTART.md).
-
-### 2. Review a design before writing code
-
-Everyone reviews code. Almost nobody reviews the spec before writing the code. Start there:
-
-```bash
-# Does this slice design align with the architecture?
-sq review slice 120 -v
-```
-
-The CLI resolves file paths automatically when you pass a slice number (requires [Context Forge](https://github.com/context-forge/context-forge)). Or pass paths directly:
-
-```bash
-sq review slice design.md --against architecture.md -v
-```
-
-You should see Rich-formatted output with a verdict and findings within about 30 seconds.
-
-### 3. Review the task breakdown, then the code
-
-```bash
-# Does this task plan cover everything in the design?
-sq review tasks 118 -v
-
-# Review code changes
-sq review code --diff main -v
-```
-
-### 4. After you fix the findings, record that you did
-
-A review is a fact about the code at a moment. Once you've fixed what it found, the file still says `verdict: FAIL` — correctly, because editing it would make the record unfalsifiable. So squadron writes a *second* record instead:
-
-```bash
-sq review resolve 118 -v
-```
-
-It measures what changed since the review was written, settles what it can for free, asks a judge only about the rest, and writes a `118-resolution.*.md` beside the review. The review file is never touched. Exits 0 on `ADDRESSED`, 1 otherwise, so it composes in CI.
-
-## Using different models
-
-Use `--model` with a built-in alias to run any review or pipeline step through any supported provider:
-
-```bash
-# Claude (default — uses SDK)
-sq review slice 120 -v
-
-# OpenAI
-sq review code --diff main --model sol -v
-
-# Google Gemini
-sq review slice 120 --model gemini-flash -v
-
-# OpenRouter
-sq review tasks 118 --model kimi27 -v
-```
-
-Non-SDK models automatically get file contents and diffs injected into the prompt, so they can review actual code without tool access.
-
-Run `sq models` to see all available aliases (trimmed here — around 30 ship built-in):
+Pick a model with `--model` and an alias. List the aliases with `sq models list` (`sq models` works too):
 
 ```
-$ sq models
-┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
-┃ Alias           ┃ Profile      ┃ Model ID                           ┃ Source ┃
-┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
-│ fable           │ sdk          │ claude-fable-5-1                   │        │
-│ haiku           │ sdk          │ claude-haiku-4-5-20251001          │        │
-│ opus            │ sdk          │ claude-opus-5-5                    │        │
-│ sonnet          │ sdk          │ claude-sonnet-5-5                  │        │
-│ codex           │ openai       │ gpt-5.3-codex                      │        │
-│ gpt54           │ openai       │ gpt-5.4                            │        │
-│ gpt54-mini      │ openai       │ gpt-5.4-mini                       │        │
-│ astra           │ openai-oauth │ gpt-6-astra                        │        │
-│ luna            │ openai-oauth │ gpt-6-luna                         │        │
-│ sol             │ openai-oauth │ gpt-6-sol                          │        │
-│ gemini          │ gemini       │ gemini-3.1-pro-preview-customtools │        │
-│ gemini-flash    │ gemini       │ gemini-3.8-flash                   │        │
-│ deepseek4-flash │ openrouter   │ deepseek/deepseek-v4.1-flash       │        │
-│ glm53           │ openrouter   │ z-ai/glm-5.3                       │        │
-│ kimi27          │ openrouter   │ moonshotai/kimi-k2.7-code          │        │
-│ minimax         │ openrouter   │ minimax/minimax-m3                 │        │
-│ qwen38          │ openrouter   │ qwen/qwen3.8-2.4t-a95b             │        │
-│ …               │              │                                    │        │
-└─────────────────┴──────────────┴────────────────────────────────────┴────────┘
+$ sq models list
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Alias           ┃ Profile      ┃ Model ID                           ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ fable           │ sdk          │ claude-fable-5-1                   │
+│ opus            │ sdk          │ claude-opus-5-5                    │
+│ sonnet          │ sdk          │ claude-sonnet-5-5                  │
+│ haiku           │ sdk          │ claude-haiku-4-5-20251001          │
+│ sol             │ openai-oauth │ gpt-6-sol                          │
+│ luna            │ openai-oauth │ gpt-6-luna                         │
+│ gpt54           │ openai       │ gpt-5.4                            │
+│ gemini-flash    │ gemini       │ gemini-3.8-flash                   │
+│ kimi27          │ openrouter   │ moonshotai/kimi-k2.7-code          │
+│ deepseek4-flash │ openrouter   │ deepseek/deepseek-v4.1-flash       │
+│ …               │              │                                    │
+└─────────────────┴──────────────┴────────────────────────────────────┘
 ```
 
-`sq models list -v` adds privacy, cost tier, per-million-token pricing, and notes columns.
+About 30 aliases ship built in. `sq models list -v` adds privacy, cost tier, and per-million-token pricing. Models without tool access get file contents and diffs injected into the prompt, so they still review the real code.
 
-Add your own aliases in `~/.config/squadron/models.toml`. Only `profile` and `model` are required — the rest feeds the `-v` display (shown: the built-in `deepseek4-flash` definition):
+To add your own aliases, put them in `~/.config/squadron/models.toml`. Only `profile` and `model` are required. The other fields feed the `-v` display:
 
 ```toml
 [aliases.deepseek4-flash]
@@ -275,200 +105,212 @@ cost_tier = "cheap"
 [aliases.deepseek4-flash.pricing]
 input = 0.12
 output = 0.48
-cache_read = 0.01
-cache_write = 0.48
 ```
 
-### Using ChatGPT models (subscription)
+Custom provider profiles go in `~/.config/squadron/providers.toml`.
 
-The `astra`, `sol` and `luna` aliases run OpenAI's GPT-6 models on the `openai-oauth` profile, billed to your ChatGPT subscription instead of per token. They run through the Codex agent, which gives the model sandboxed file access and command execution:
+### ChatGPT subscription models
+
+The `astra`, `sol`, and `luna` aliases run GPT-6 on the `openai-oauth` profile. They're billed to your ChatGPT plan instead of per token. They run through the Codex agent, which gives the model sandboxed file access and command execution. The Codex SDK ships inside squadron, so signing in is the only setup:
 
 ```bash
-sq review slice 120 --model sol -v
+sq auth login openai-oauth
+sq auth status                    # shows the signed-in account and plan
 ```
 
-**Setup**: squadron ships the Codex SDK and its bundled runtime (no npm install needed), so just sign in with your ChatGPT account:
+`OPENAI_API_KEY` isn't used by this profile. The pricing shown for these aliases is what the same call would cost on the API, for comparison.
+
+## Reviews
 
 ```bash
-sq auth login openai-oauth                 # opens a browser
-sq auth login openai-oauth --device-code   # SSH / headless: prints a URL and code
+sq review arch 100 -v --model {model-alias}                # architecture doc on its own merits
+sq review slice 120 -v --model {model-alias}               # slice design against the architecture
+sq review tasks 120 -v --model {model-alias}               # task breakdown against the slice design
+sq review code 120 -v --model {model-alias}                # the slice's code changes
+sq review code --diff main -v --model {model-alias}        # or any diff or file glob
 ```
 
-`sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row with the SDK version and login state. `OPENAI_API_KEY` is not used by this profile. The `pricing` on these aliases is what the same call would cost on the API, shown for comparison.
+A slice number resolves its files through Context Forge. You can also pass paths directly: `sq review slice design.md --against architecture.md`. Reviews land in the project's reviews directory as markdown with frontmatter that other tools read.
 
-The `openai` profile aliases (`gpt54`, `gpt54-mini`, `codex`) use the OpenAI API with `OPENAI_API_KEY` and per-token billing. `luna-r` runs `luna` through OpenRouter.
+Start with the spec, not the code. Reviewing a design before anyone writes it is where reviews pay off most.
 
-## Pipelines (`sq run`)
+| Template | Reviews |
+|---|---|
+| `arch` | An architecture document: completeness, consistency, feasibility |
+| `slice` | A design document against an architecture reference |
+| `tasks` | A task breakdown against its parent slice design |
+| `code` | Source code, optionally scoped to a diff or glob |
 
-Pipelines compose multi-step AI workflows into a single repeatable command, defined in YAML:
+Templates are YAML files. Adding a review type means writing a new one. See [docs/TEMPLATES.md](docs/TEMPLATES.md).
 
-```bash
-sq run P456 152           # design → tasks → implement → devlog for slice 152
-sq run --list             # show all available pipelines
-```
+### Re-running a review
 
-Pipelines can review, summarize, manage context lifetimes, and generate project artifacts — architectural concepts, slice designs, task breakdowns. Steps compose with `loop-each` and `loop-until` iteration, judge nodes that resolve disagreement, and configurable escalation checkpoints that pause for a human when a gate fails. Each step names its own model, so a cheap model can draft while a stronger one judges.
-
-When running inside Claude Code (VS Code or terminal), use `--prompt-only` to get step-by-step instructions instead of direct LLM dispatch — or use the `/sq:run` slash command (installed by `sq setup`), which wraps this automatically.
-
-See **[docs/PIPELINES.md](docs/PIPELINES.md)** for the full authoring guide: YAML grammar, step types, model resolution, and how to write custom pipelines.
-
-## Reviews in depth
-
-### Scoping code reviews
-
-Code reviews can be scoped by diff, file pattern, or both:
-
-```bash
-# Everything in the project
-sq review code
-
-# Only changes since main
-sq review code --diff main
-
-# Only Python files
-sq review code --files "src/**/*.py"
-
-# Changes to Python files since main
-sq review code --diff main --files "src/**/*.py"
-```
+Re-running a review writes the new result to the same file. The previous version moves to `reviews/archive/`, so nothing is lost and the live directory holds only the current review for each slice and type.
 
 ### Recording that findings were addressed
 
-`sq review resolve <n>` answers "did the work actually fix what the review found?" — derived from evidence, not asserted:
+A review is a fact about the code at one moment. After you fix what it found, the file still says `verdict: FAIL`, and it should. Editing it would make the record meaningless. So squadron writes a second record instead:
 
 ```bash
-# The common case: resolve the only review for slice 118
-sq review resolve 118 -v
-
-# Disambiguate when several reviews exist for one slice
-sq review resolve 118 code
-
-# Deterministic checks only — no model call, no tokens
-sq review resolve 118 --no-judge
-
-# Measure from a ref you pick instead of the review's own anchor
-sq review resolve 118 --since v1.4.0
+sq review resolve 120 -v --model {model-alias}
 ```
 
-Three outcomes. `ADDRESSED` means every CONCERN-or-worse finding was settled *and* each claim survived checking against the real diff — a judge that claims it fixed a file the diff never touched is overruled. `UNADDRESSED` means at least one finding demonstrably wasn't. `UNKNOWN` means the check couldn't run or couldn't be trusted, and is never treated as a soft pass.
+It looks at what changed since the review was written, settles every finding it can with deterministic checks, and asks a judge model only about the rest. A judge claiming it fixed a file the diff never touched gets overruled. Result:
 
-Each run writes a new `-r{n}` file; resolutions are append-only. See [docs/COMMANDS.md](docs/COMMANDS.md) for the frontmatter schema.
+- `ADDRESSED`: every CONCERN-or-worse finding was settled and checked against the real diff (exit 0)
+- `UNADDRESSED`: at least one finding demonstrably wasn't fixed (exit 1)
+- `UNKNOWN`: the check couldn't run or couldn't be trusted. It never counts as a pass (exit 1)
 
-### Adding project-specific rules
-
-Point reviews at a rules file to include project conventions in the agent's system prompt:
+It writes `120-resolution.{type}.{slice}-r1.md` next to the review and never touches the review itself. Each later run writes the next revision (`-r2`, `-r3`, ...). Resolutions are an audit trail, so they're never overwritten or archived.
 
 ```bash
-sq review code --diff main --rules ./rules/python.md
+sq review resolve 120 code         # pick one when the slice has several reviews
+sq review resolve 120 --no-judge   # deterministic checks only, no model call
+sq review resolve 120 --since v1.4 # measure from a ref you choose
 ```
 
-Your project's `CLAUDE.md` is loaded automatically via the SDK's `setting_sources` mechanism — the `--rules` flag is for additional guidance on top of that.
+`sq review resolve` is the manual, after-the-fact check. Inside a pipeline loop, use the `findings-addressed` gate instead. It runs the same checks every round and writes one `{index}-gate.findings-addressed.{name}-r{n}.md` per round, so a three-round loop leaves three gate files and one current review. See the `findings-addressed-cycle` pipeline.
 
-### Verbosity
-
-Default output is compact — just the verdict and finding headings. Turn up verbosity when you want details:
-
-| Flag | Shows |
-|------|-------|
-| *(default)* | Verdict + finding headings |
-| `-v` | Above + full finding descriptions |
-| `-vv` | Above + raw agent tool usage |
-
-### Output formats
+### Options
 
 ```bash
-# Rich terminal output (default)
-sq review code --diff main
-
-# JSON to stdout (for piping / scripting)
-sq review code --diff main --output json
-
-# JSON to file
-sq review code --diff main --output file --output-path result.json
+sq review code --diff main --files "src/**/*.py"   # scope by diff, glob, or both
+sq review code --rules ./rules/python.md           # add project rules (CLAUDE.md loads automatically)
+sq review code --output json                       # JSON to stdout; --output file --output-path x.json
 ```
+
+The default output shows the verdict and finding headings. `-v` adds full finding descriptions. `-vv` adds the agent's raw tool use.
+
+## Pipelines (`sq run`)
+
+```bash
+sq run --list                                  # every pipeline, with its source
+sq run P4 152                                  # design slice 152, revise until the review passes
+sq run P456 152 --model {model-alias}          # design → tasks → implement → devlog
+sq run P4 152 -p review-model={model-alias}    # override any pipeline param
+sq run P4 152 --dry-run                        # show the plan without running it
+```
+
+A pipeline is plain YAML. Here's the built-in `P4`, lightly trimmed:
+
+```yaml
+name: P4
+description: Design a slice (phase 4), then revise until the review passes; checkpoint if it never does
+
+params:
+  slice: required
+  model: sonnet
+  review-model: deepseek4-flash
+  max-revisions: "3"
+
+steps:
+  - design:
+      phase: 4
+      model: "{model}"
+      review: { template: slice, model: "{review-model}" }
+  - loop:
+      max: "{max-revisions}"
+      until: review.pass
+      accept_if: review.concerns_or_better
+      commit_each_iteration: true
+      on_exhaust: checkpoint
+      steps:
+        - dispatch: { name: revise, model: "{model}", feedback: review }
+        - review: { template: slice, model: "{review-model}", slice: "{slice}" }
+  - summary:
+      template: minimal-sdk
+      emit: [stdout, clipboard, file]
+```
+
+The building blocks are phase steps (`design`, `tasks`, `implement`), `dispatch` (send a prompt to a model), `review`, `gate` (decide from a review or a judge), `loop` (with `until`, `accept_if`, and an exhaustion policy), `each` (fan out over a list), `summary`, `compact`, and `devlog`. Loops can commit each round, so you can see the revision history in git.
+
+**Making your own.** Squadron looks for a pipeline by name in three places, first match wins:
+
+1. `project-documents/user/pipelines/` in the current project
+2. `~/.config/squadron/pipelines/` for every project
+3. The built-ins
+
+To change a built-in, copy it into either directory under the same name. Your copy shadows the original. Give it a new name to keep both. `sq run --list` shows which source each pipeline came from. `sq run my-pipeline --validate` checks a file before you run it.
+
+**Inside an agent session,** `/sq:run P4 152` (Claude Code) or `$sq-run P4 152` (Codex) drives the pipeline step by step from the session itself.
+
+[docs/PIPELINES.md](docs/PIPELINES.md) is the full authoring guide: YAML grammar, every step type, model resolution, and judge-gated cycles.
+
+## Summaries and handoffs
+
+```
+/sq:summary              # Claude Code: summarize this session, copy it, save it
+/sq:summary --restore    # in a fresh session: load the most recent summary
+$sq-summary              # Codex: same thing
+$sq-summary --restore
+```
+
+The summary knows the project, slice, and phase from Context Forge. It's saved under `~/.config/squadron/runs/summaries/` and copied to the clipboard. Since every tool reads the same store, you can summarize in Claude Code and `--restore` in Codex, or the other way around. Add a key after `--restore` to load a specific older summary instead of the latest.
+
+Choose what the summary keeps:
+
+```bash
+sq config set compact.template minimal --project     # a named template
+sq config set compact.instructions "Keep slice {slice} design and tasks only." --project
+```
+
+Named templates come from `~/.config/squadron/compaction/`, then the built-ins. `compact.instructions` wins if both keys are set.
+
+## Claude Code and Codex
+
+`sq setup` installs the `/sq:` and `/cf:` commands into `~/.claude/commands` for every project. To refresh them later: `sq install-commands`.
+
+For Codex, install the same commands as agent skills:
+
+```bash
+sq install-commands --ide codex     # or: sq setup --ide codex
+```
+
+They go in `~/.agents/skills` (`--local` puts them in the current project instead). Invoke them by name: `$sq-review code 925`, `$sq-run P4 152`, `$sq-pr create`, `$sq-summary`. Codex doesn't substitute arguments, so each skill reads whatever you type after its name.
+
+Long commands like `sq review` and `sq run` are fine to run from inside Codex. The skills wait on the command without polling it.
+
+### Codex sandbox approval rule
+
+Codex's sandbox blocks network access unless a rule allows it. When it blocks `sq review`, the error looks like a provider failure ("provider connection failed"), but it isn't one. `sq install-commands --ide codex` adds the rules for `sq review`, `sq run`, and `sq pr` to `~/.codex/rules/default.rules` (or `$CODEX_HOME/rules/`). It only appends missing rules and never rewrites your existing ones. If you installed the Codex skills before this existed, run the install again.
 
 ## Pull requests
 
-Squadron can resolve a pull request, review it, post the review as a comment, and open a pull
-request from your current branch. Reachable from the CLI (`sq pr`, `sq review pr`) and from
-inside a Claude Code session (`/sq:pr`, `/sq:review pr`) — both transports pass your arguments
-through to the same CLI command, unchanged.
+```bash
+sq review pr 42 -v --model {model-alias}          # review a PR (number, owner/repo#n, URL, or branch)
+sq review pr 42 --post --dry-run                  # preview the review comment
+sq review pr 42 --post                            # post it; re-posting updates the same comment
+sq pr create --dry-run                            # open a PR from this branch, built from its slice, tasks, and commits
+```
 
-### Reviewing a pull request
+The same commands run from Claude Code (`/sq:review pr 42`, `/sq:pr create`) and Codex (`$sq-review pr 42`, `$sq-pr create`). `sq pr create` uses the project's integration branch (or `main`) as the base. It never pushes for you. If the branch isn't pushed, it prints the `git push` to run and stops. Full flags: [docs/COMMANDS.md](docs/COMMANDS.md#pr).
 
-`sq review pr` targets a pull request instead of a local diff. Accepts a number,
-`owner/repo#number`, `repo#number`, a pull-request URL, or a branch; omit the target to use the
-current branch's pull request:
+PR reviews save to the project's reviews directory, or to `review.external_reviews_dir` when the PR belongs to a different repository. `--reviews-dir` overrides both.
+
+## Configuration
 
 ```bash
-sq review pr <n>
+sq config set cwd ~/projects/myapp                          # user-level
+sq config set default_rules ./rules/python.md --project     # project-level
+sq config get cwd                                           # value and where it came from
+sq config list
 ```
 
-Post the review as a single comment on the pull request. Preview what would be posted first —
-`--dry-run` prints the comment and writes nothing to the host:
+Precedence, highest first: CLI flag, then project (`.squadron.toml`), then user (`~/.config/squadron/config.toml`), then the built-in default. Everything user-level lives under `~/.config/squadron/`:
 
-```bash
-sq review pr <n> --post --dry-run
-sq review pr <n> --post
-```
-
-Posting again on the same pull request updates that one comment rather than adding a second.
-
-From inside a session, the same review runs as:
-
-```
-/sq:review pr <n> --post
-```
-
-The session runs that exact `sq review pr` command once — no shorthand is injected, so
-`/sq:review pr <n> [flags]` and `sq review pr <n> [flags]` are the same invocation.
-
-### Creating a pull request
-
-`sq pr create` opens a pull request from your current branch, with a title and body assembled
-from the branch's own artifacts (slice design, task file, commits). Preview before creating:
-
-```bash
-sq pr create --dry-run
-sq pr create
-```
-
-The base branch defaults to your project's configured integration branch (or `main`), printed
-along with where that choice came from. `sq pr create` refuses — and never works around — an
-unpushed branch or an unresolvable base; it prints the remediation (e.g. the `git push` to run)
-rather than running it for you.
-
-The resulting pull request body has five sections: summary, changes, testing, and two more
-assembled from the branch's slice and task artifacts. See
-[docs/COMMANDS.md](docs/COMMANDS.md#pr) for the full section list and every flag.
-
-From a session:
-
-```
-/sq:pr create --dry-run
-```
-
-Squadron never pushes a branch on your behalf. If `/sq:pr create` shows a refusal with a printed
-`git push` line, that command is shown for you to run yourself — the session does not run it.
-
-### Where the review artifact goes
-
-A pull-request review is saved like any other: under the project's reviews directory, or
-`review.external_reviews_dir` when the repository being reviewed isn't the current project
-(useful when reviewing a pull request in a different checkout). Override either with
-`--reviews-dir`. The CLI prints the chosen location and its source.
-
-### Provider profile
-
-`sq review pr` and `sq pr create` default to the `sdk` provider profile. Verified from inside a
-Claude Code session: the default profile runs correctly with no `--profile` override needed —
-pass `--profile` only to use a different provider (e.g. `openrouter`).
+| Path | Holds |
+|---|---|
+| `config.toml` | User config values |
+| `models.toml` | Your model aliases |
+| `providers.toml` | Your provider profiles |
+| `pipelines/` | Your pipelines (override built-ins by name) |
+| `compaction/` | Your summary templates |
+| `skills.toml` | Skill pack sources |
+| `runs/summaries/` | Saved summaries |
 
 ## Skill packs (`sq skills`)
 
-A skill pack is a set of commands installed from a source you name in `skills.toml`
-(`~/.config/squadron/skills.toml`, or `skills.toml` in a project). Squadron ships one, `analysis`.
+A skill pack is a set of commands installed from a source named in `skills.toml` (user-level or in a project). Squadron ships one, `analysis`.
 
 ```toml
 [packs.mypack]
@@ -477,130 +319,75 @@ prefix = "mypack"              # commands become /mypack:<name>; or dispatch_fil
 ```
 
 ```bash
-sq skills list                        # every pack, with install status
+sq skills list
 sq skills install mypack              # Claude Code: ~/.claude/commands/mypack/
 sq skills install mypack --ide codex  # Codex: ~/.agents/skills/mypack-*/
 sq skills uninstall mypack --ide codex
 ```
 
-`--ide` takes the same values as `install-commands` (`claude`, `agents`, `codex`, `openai`),
-and `--local` installs into the current project instead of the whole machine. Uninstall removes
-exactly the files the install recorded.
-
-A pack's source holds Claude commands at its top level and, optionally, Codex skills under
-`agents/`:
-
-```
-<pack source>/
-  *.md                          Claude commands (prefix packs), or <dispatch_file>.md
-  agents/                       required for --ide codex
-    <prefix>-<name>/SKILL.md      prefix packs: one directory per skill
-    sq-<dispatch_file>/SKILL.md   dispatch_file packs: exactly this one
-```
-
-Each `SKILL.md` needs frontmatter with `name` equal to its directory and a non-empty
-`description`. A Codex install checks all of this first and writes nothing if anything is wrong.
-Claude commands are never converted: a pack with no `agents/` directory installs for Claude only.
-
-## Configuration
-
-Avoid repeating flags with persistent config. Two levels with clear precedence:
-
-```bash
-# Set your default working directory (user-level)
-sq config set cwd ~/projects/myapp
-
-# Set project-specific rules (project-level)
-sq config set default_rules ./rules/python.md --project
-
-# Check where a value is coming from
-sq config get cwd
-
-# See everything
-sq config list
-```
-
-**Precedence** (highest wins): CLI flag → project config (`.squadron.toml`) → user config (`~/.config/squadron/config.toml`) → built-in default.
-
-Available keys: `cwd`, `verbosity`, `default_rules`, `compact.template`, `compact.instructions`. See [docs/COMMANDS.md](docs/COMMANDS.md) for full details.
-
-## Context summaries and handoffs (`/sq:summary`)
-
-Inside an interactive Claude Code session (VS Code extension or CLI), `/sq:summary` generates a project-aware summary of the conversation, copies it to the clipboard, and saves it under `~/.config/squadron/runs/summaries/`. `/sq:summary --restore` seeds a fresh session from a saved summary — so you can end a session in a plain terminal and pick the same context up in an agent CLI or VS Code, or just reset a long session without losing the thread.
-
-Pick the summary template with either of two config keys:
-
-```bash
-# Named template (resolved from ~/.config/squadron/compaction/ then built-ins)
-sq config set compact.template minimal --project
-
-# Or a literal string — wins over compact.template if both are set.
-# Params {slice}, {phase}, and {project} are substituted from Context Forge.
-sq config set compact.instructions "Keep slice {slice} design and tasks only." --project
-```
-
-Both keys honour the usual `--project` / user layering.
-
-## Agent management (experimental)
-
-Squadron retains agent lifecycle commands, but they're no longer a primary feature — this functionality is slated to move to the Amoeba project, where it can be addressed more completely. The commands require the Squadron daemon:
-
-```bash
-sq serve            # start daemon (included in uv tool install squadron-ai)
-sq serve --status   # check if running
-sq serve --stop     # stop daemon
-```
-
-Then use the agent commands:
-
-```bash
-sq spawn --name my-agent
-sq task my-agent "Analyze the error handling in src/core/"
-sq list
-sq shutdown my-agent
-```
+A pack holds Claude commands at its top level and, optionally, Codex skills under `agents/<name>/SKILL.md`. Each `SKILL.md` needs frontmatter whose `name` matches its directory, plus a non-empty `description`. A Codex install validates everything first and writes nothing if anything is wrong. A pack with no `agents/` directory installs for Claude only. Uninstall removes exactly the files the install wrote.
 
 ## Exit codes
 
 | Code | Meaning |
-|------|---------|
-| 0 | Success (PASS or CONCERNS verdict) |
-| 1 | Error (invalid arguments, missing files, runtime error), or a review that ran but could not be saved |
-| 2 | Review verdict is FAIL |
+|---|---|
+| 0 | PASS or CONCERNS |
+| 1 | Error, or a review that ran but couldn't be saved |
+| 2 | FAIL |
 
-CONCERNS returns exit code 0 — it's informational, not a failure. This makes `sq` usable in CI pipelines where you want to gate on FAIL but not on warnings.
+CONCERNS exits 0, so CI can gate on FAIL without failing on warnings. A review whose file couldn't be written exits 1 even though you saw the output, because tools read the file. `sq review resolve` exits 0 for `ADDRESSED` and 1 otherwise.
 
-A review that ran but whose file could not be written exits 1 even though you saw the output: the artifact is what tooling reads, so reporting success with nothing on disk would be a silent failure.
+## Agent management (experimental)
 
-`sq review resolve` uses its own two codes — 0 for `ADDRESSED`, 1 for `UNADDRESSED` or `UNKNOWN`.
+Squadron still has agent lifecycle commands (`sq serve`, `sq spawn`, `sq task`, `sq list`, `sq shutdown`). They're no longer a main feature and are moving to the Amoeba project. They need the daemon: `sq serve`.
+
+## Other install options
+
+### Install script
+
+Installs Squadron and Context Forge, then runs setup:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/ecorkran/squadron/main/scripts/install.sh | sh
+```
+
+To read it first: download with `-o install.sh`, read it, then run `bash install.sh`.
+
+### Context Forge guide strategy
+
+`cf init` installs the guides as plain files and commits them (it never pushes), so teammates and CI get them like any other file. That's the default from Context Forge 0.16. Older `cf` versions install a git submodule instead. Update with `npm i -g @context-forge/cli`, or pass `--strategy tarball`. To keep the submodule on purpose, use `cf init --strategy submodule`. To switch an existing submodule install to plain files:
+
+```bash
+cf guides uninstall
+cf guides install --strategy tarball
+git add .context-forge.toml && git commit -m "chore: set guide strategy to tarball"
+```
+
+### Development install
+
+```bash
+git clone https://github.com/ecorkran/squadron.git
+cd squadron
+uv sync --dev
+git config core.hooksPath .githooks   # tracked pre-commit hook (sq setup does this too)
+```
+
+```bash
+uv run pytest
+uv run pyright
+uv run ruff check
+uv run ruff format
+```
+
+The tracked hook runs `cf validate frontmatter` on staged markdown. `sq doctor` reports whether it's set.
 
 ## Documentation
 
-- **[docs/QUICKSTART.md](docs/QUICKSTART.md)** — Verify your install, configure any provider, troubleshoot `sq doctor`/`sq setup` output
-- **[docs/COMMANDS.md](docs/COMMANDS.md)** — Full command reference with all options and arguments
-- **[docs/TEMPLATES.md](docs/TEMPLATES.md)** — How review templates work and how to create new ones
-- **[docs/PIPELINES.md](docs/PIPELINES.md)** — Pipeline authoring guide
-- **[docs/EVENTS.md](docs/EVENTS.md)** — Bind project-specific Python callables to squadron's execution lifecycle
-
-## Development
-
-```bash
-uv sync                # Install with dev dependencies
-uv run pytest          # Tests
-uv run pyright         # Type checking
-uv run ruff check      # Linting
-uv run ruff format     # Formatting
-```
-
-`sq setup` installs the tracked pre-commit hook — it runs `cf validate frontmatter`
-(Context Forge) against staged markdown and refuses a commit with invalid
-frontmatter. To install it manually instead:
-
-```bash
-git config core.hooksPath .githooks
-```
-
-`sq doctor` reports whether the hook is set and whether `cf` is available.
+- **[docs/QUICKSTART.md](docs/QUICKSTART.md)**: verify your install, configure each provider, read `sq doctor` output
+- **[docs/COMMANDS.md](docs/COMMANDS.md)**: every command and flag
+- **[docs/PIPELINES.md](docs/PIPELINES.md)**: pipeline authoring guide
+- **[docs/TEMPLATES.md](docs/TEMPLATES.md)**: review templates and how to write new ones
+- **[docs/EVENTS.md](docs/EVENTS.md)**: bind your own Python callables to squadron's lifecycle events
 
 ## License
 

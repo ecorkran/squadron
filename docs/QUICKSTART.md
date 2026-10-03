@@ -45,6 +45,11 @@ Skills land in `~/.agents/skills` (add `--local` for `.agents/skills` in the cur
 one directory per skill. Invoke them by name in a Codex session: `$sq-review`, `$sq-run`,
 `$sq-auth`. `sq doctor` reports a `codex skills` row wherever the Codex CLI is present.
 
+The Codex install also adds sandbox rules to `~/.codex/rules/default.rules` that let `sq review`,
+`sq run`, and `sq pr` reach the network. Without them, Codex blocks a review with an error that
+looks like a provider failure. See README's
+[Codex sandbox approval rule](../README.md#codex-sandbox-approval-rule).
+
 ## Verify your install
 
 Two commands report on your environment. Both read the same checks; they differ in presentation.
@@ -124,7 +129,7 @@ Squadron ships six built-in provider profiles. Verified against `BUILT_IN_PROFIL
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | Multi-model gateway |
 | Google Gemini | `gemini` | `GEMINI_API_KEY` | Via OpenAI-compatible endpoint |
 | Local (Ollama / vLLM / LM Studio) | `local` | None | Points at `http://localhost:11434/v1` by default |
-| OpenAI ChatGPT (agentic) | `openai-oauth` | `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; `astra`, `sol`, `luna` aliases; see README's [Using ChatGPT models](../README.md#using-chatgpt-models-subscription) section |
+| OpenAI ChatGPT (agentic) | `openai-oauth` | `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; `astra`, `sol`, `luna` aliases; see README's [ChatGPT subscription models](../README.md#chatgpt-subscription-models) section |
 
 To configure a profile, either set its env var:
 
@@ -155,7 +160,7 @@ The `sdk` profile (and the `haiku`/`sonnet`/`opus` aliases that route through it
 
 ## Your first review
 
-See [README.md § Quickstart](../README.md#quickstart) for a full walkthrough — configuring credentials, then running your first `sq review slice`, `sq review tasks`, and `sq review code`, and closing the loop with `sq review resolve` once you've fixed what a review found.
+See [README.md § Reviews](../README.md#reviews) for running your first `sq review slice`, `sq review tasks`, and `sq review code`, and closing the loop with `sq review resolve` once you've fixed what a review found.
 
 ## Your first pipeline run
 
@@ -180,4 +185,4 @@ Every `fix:` hint printed by `sq doctor` is a copy-pastable command. If a profil
 
 ## Windows
 
-`install.sh` targets macOS and Linux only. On Windows, follow README's [Global install](../README.md#global-install-recommended) section manually (`pipx install squadron-ai` or `uv tool install squadron-ai`), then run `sq setup` to configure a provider — `sq setup` itself is pure Python and works cross-platform even though the bootstrap shell script does not.
+`install.sh` targets macOS and Linux only. On Windows, follow README's [Install](../README.md#install) section manually (`pipx install squadron-ai` or `uv tool install squadron-ai`), then run `sq setup` to configure a provider — `sq setup` itself is pure Python and works cross-platform even though the bootstrap shell script does not.
