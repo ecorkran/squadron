@@ -21,8 +21,13 @@ from squadron.providers.codex.login import LOGIN_TIMEOUT_KEY
 from squadron.providers.errors import ProviderError
 from squadron.providers.profiles import ProviderProfile, get_all_profiles, get_profile
 
-#: soft_wrap: commands and sign-in URLs must reach the terminal unbroken.
-_console = Console(soft_wrap=True)
+
+def _console() -> Console:
+    """A console built per call, so it reads the color/terminal environment at print
+    time rather than at import. soft_wrap: commands and sign-in URLs must reach the
+    terminal unbroken."""
+    return Console(soft_wrap=True)
+
 
 auth_app = typer.Typer(
     name="auth",
@@ -89,13 +94,13 @@ def _profile_or_exit(profile_name: str) -> ProviderProfile:
 
 
 def _fail(message: str) -> NoReturn:
-    _console.print(f"[red]Error:[/red] {escape(message)}")
+    _console().print(f"[red]Error:[/red] {escape(message)}")
     raise typer.Exit(1)
 
 
 def _print_notice(message: str) -> None:
     """``notify`` for interactive login: URLs and codes go to the user, as plain text."""
-    _console.print(escape(message))
+    _console().print(escape(message))
 
 
 def _report_validity(profile_name: str, valid: bool, strategy: AuthStrategy) -> None:
