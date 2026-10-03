@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `sq skills install`, `uninstall` and `list` take `--ide codex` and `--local`, so skill packs install for Codex too. `sq doctor` shows each pack's Codex status.
 - README documents skill packs and the layout a pack uses to ship Codex skills.
+- `sq install-commands --ide codex` adds the Codex sandbox rules that `sq review`, `sq run` and `sq pr` need, so a first review from Codex no longer fails with a misleading "provider connection failed".
+- README reorganized around the main features (reviews, pipelines, handoffs, providers), with a section on connecting accounts and writing your own pipelines.
 
 ### Fixed
 - The review skills pointed at `sq model list`, which does not exist; they now say `sq models list`.
