@@ -10,22 +10,24 @@ from rich import print as rprint
 from rich.console import Console
 from rich.table import Table
 
+from squadron.cli.commands.install import parse_ide_option
 from squadron.skills.installer import install_pack
 from squadron.skills.manifest import (
     PROJECT_MANIFEST_NAME,
+    SkillsManifest,
     load,
     load_effective,
     user_manifest_path,
 )
-from squadron.skills.models import SkillSourceError, SurfaceType
-from squadron.skills.receipts import default_receipts_dir, read_receipt
-
-
-def _default_commands_dir() -> Path:
-    return Path.home() / ".claude" / "commands"
-
+from squadron.skills.models import SkillSourceError
+from squadron.skills.pack_layouts import PACK_LAYOUTS
+from squadron.skills.receipts import default_receipts_dir, read_receipt, remove_receipt_files
+from squadron.skills.targets import DELIVERIES, CommandTarget, receipt_name
 
 skills_app = typer.Typer(name="skills", help="Manage skill packs.", no_args_is_help=True)
+
+_IDE_HELP = "Which runtime the pack is for: claude, agents (aliases: codex, openai)"
+_LOCAL_HELP = "Use this project's directory rather than the machine-wide one"
 
 
 def _require_manifest() -> NoReturn:
@@ -37,13 +39,42 @@ def _require_manifest() -> NoReturn:
     raise typer.Exit(code=1)
 
 
+def _load_manifest() -> SkillsManifest:
+    """The effective manifest, or exit 1 with the reason."""
+    try:
+        manifest = load_effective(cwd=Path.cwd())
+    except ValueError as exc:
+        rprint(f"[red]Error loading skills.toml: {exc}[/red]")
+        raise typer.Exit(code=1) from None
+    if manifest is None:
+        _require_manifest()
+    return manifest
+
+
+def _resolve_root(
+    target: CommandTarget, commands_dir: Path | None, *, local: bool
+) -> tuple[Path, bool]:
+    """The pack root for ``target``, and whether ``--local`` was honored.
+
+    ``--commands-dir`` wins over ``--local`` and the override is reported, never
+    silent — the same rule ``install-commands`` applies to ``--target`` (D1).
+    """
+    if commands_dir is not None:
+        if local:
+            rprint(f"[yellow]--local ignored: --commands-dir {commands_dir} takes precedence.[/yellow]")
+        return commands_dir, False
+    return DELIVERIES[target].resolve_root(local=local), local
+
+
 @skills_app.command()
 def install(
     pack_name: str = typer.Argument(..., help="Name of the pack to install"),
+    ide: str = typer.Option(CommandTarget.CLAUDE.value, "--ide", help=_IDE_HELP),
+    local: bool = typer.Option(False, "--local", help=_LOCAL_HELP),
     commands_dir: Path | None = typer.Option(
         None,
         "--commands-dir",
-        help="Destination directory for installed commands (default: ~/.claude/commands)",
+        help="Destination directory, overriding --ide's root and --local",
     ),
     receipts_dir: Path | None = typer.Option(
         None,
@@ -52,23 +83,19 @@ def install(
     ),
 ) -> None:
     """Install a skill pack from the active manifest."""
-    commands_dir = commands_dir or _default_commands_dir()
-    try:
-        manifest = load_effective(cwd=Path.cwd())
-    except ValueError as exc:
-        rprint(f"[red]Error loading skills.toml: {exc}[/red]")
-        raise typer.Exit(code=1) from None
-    if manifest is None:
-        _require_manifest()
-
+    target = parse_ide_option(ide)
+    manifest = _load_manifest()
     if pack_name not in manifest.packs:
         available = ", ".join(sorted(manifest.packs)) or "(none)"
         rprint(f"[red]Pack '{pack_name}' not found in skills.toml. Available: {available}[/red]")
         raise typer.Exit(code=1)
 
+    root, local_honored = _resolve_root(target, commands_dir, local=local)
     entry = manifest.packs[pack_name]
     try:
-        result = install_pack(pack_name, entry, commands_dir, receipts_dir=receipts_dir)
+        result = install_pack(
+            pack_name, entry, root, receipts_dir=receipts_dir, target=target, local=local_honored
+        )
     except SkillSourceError as exc:
         rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(code=1) from None
@@ -80,10 +107,12 @@ def install(
 @skills_app.command()
 def uninstall(
     pack_name: str = typer.Argument(..., help="Name of the pack to uninstall"),
+    ide: str = typer.Option(CommandTarget.CLAUDE.value, "--ide", help=_IDE_HELP),
+    local: bool = typer.Option(False, "--local", help=_LOCAL_HELP),
     commands_dir: Path | None = typer.Option(
         None,
         "--commands-dir",
-        help="Directory the pack was installed into (default: ~/.claude/commands)",
+        help="Directory the pack was installed into; must match the receipt",
     ),
     receipts_dir: Path | None = typer.Option(
         None,
@@ -92,10 +121,12 @@ def uninstall(
     ),
 ) -> None:
     """Remove a skill pack's installed files using its install receipt."""
-    commands_dir = commands_dir or _default_commands_dir()
+    target = parse_ide_option(ide)
     receipts_dir = receipts_dir or default_receipts_dir()
+    _, local_honored = _resolve_root(target, commands_dir, local=local)
+    receipt_key = receipt_name(pack_name, target, local=local_honored)
     try:
-        receipt = read_receipt(pack_name, receipts_dir)
+        receipt = read_receipt(receipt_key, receipts_dir)
     except ValueError as exc:
         rprint(f"[red]Error reading receipt for '{pack_name}': {exc}[/red]")
         raise typer.Exit(code=1) from None
@@ -107,21 +138,27 @@ def uninstall(
         )
         raise typer.Exit(code=1)
 
-    destination = Path(receipt.destination)
-    removed = 0
-    for filename in receipt.files_written:
-        target = destination / filename
-        if target.exists():
-            target.unlink()
-            removed += 1
+    # The receipt is the authority for where the files are (925 D6). A given
+    # --commands-dir only checks it: the recorded destination must lie within it.
+    destination = receipt.destination
+    if commands_dir is not None:
+        requested = commands_dir.expanduser().resolve()
+        resolved = destination.resolve()
+        if requested != resolved and requested not in resolved.parents:
+            rprint(
+                f"[red]--commands-dir {requested} does not match the recorded install "
+                f"destination {destination}. Nothing was removed.[/red]"
+            )
+            raise typer.Exit(code=1)
 
-    # For prefix packs, drop the now-empty prefix directory; leave it if the user
-    # has unrelated files there (success criterion 1).
-    if receipt.surface == SurfaceType.PREFIX and destination.is_dir():
-        if not any(destination.iterdir()):
-            destination.rmdir()
+    removed = remove_receipt_files(receipt)
+    # A Claude prefix directory is the pack's own; drop it once empty, but leave it if
+    # the user has unrelated files there. Shared roots are never removed (F001).
+    owned = receipt.surface in PACK_LAYOUTS[target].owned_destination_surfaces
+    if owned and destination.is_dir() and not any(destination.iterdir()):
+        destination.rmdir()
 
-    (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
+    (receipts_dir / f"{receipt_key}.toml").unlink(missing_ok=True)
 
     rprint(
         f"[green]Uninstalled pack '{pack_name}': {removed} file(s) removed from {destination}[/green]"
@@ -130,21 +167,19 @@ def uninstall(
 
 @skills_app.command(name="list")
 def list_packs(
+    ide: str = typer.Option(CommandTarget.CLAUDE.value, "--ide", help=_IDE_HELP),
+    local: bool = typer.Option(False, "--local", help=_LOCAL_HELP),
     commands_dir: Path | None = typer.Option(
         None,
         "--commands-dir",
-        help="Commands directory to check for installed packs (default: ~/.claude/commands)",
+        help="Directory to check for installed packs, overriding --ide's root and --local",
     ),
 ) -> None:
     """List skill packs from the active manifest with install status."""
-    commands_dir = commands_dir or _default_commands_dir()
-    try:
-        manifest = load_effective(cwd=Path.cwd())
-    except ValueError as exc:
-        rprint(f"[red]Error loading skills.toml: {exc}[/red]")
-        raise typer.Exit(code=1) from None
-    if manifest is None:
-        _require_manifest()
+    target = parse_ide_option(ide)
+    manifest = _load_manifest()
+    root, _ = _resolve_root(target, commands_dir, local=local)
+    layout = PACK_LAYOUTS[target]
 
     table = Table(title="Skill Packs")
     table.add_column("Pack", style="bold")
@@ -156,12 +191,10 @@ def list_packs(
     for name, entry in sorted(manifest.packs.items()):
         if entry.prefix is not None:
             surface = f"prefix: {entry.prefix}"
-            dest = commands_dir / entry.prefix
         else:
             surface = f"dispatch_file: {entry.dispatch_file}"
-            dest = commands_dir / "sq" / f"{entry.dispatch_file}.md"
 
-        installed = dest.exists() and (dest.is_dir() and any(dest.iterdir()) or dest.is_file())
+        installed = layout.installed_path(entry, root) is not None
         status = "[green]Installed[/green]" if installed else "[dim]Not installed[/dim]"
 
         origin = manifest.origin if manifest.origin != "merged" else _detect_origin(name)

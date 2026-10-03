@@ -20,7 +20,7 @@ from typing import cast
 import yaml
 
 from squadron.documents.frontmatter import split_document
-from squadron.skills.models import InstallResult, PackEntry, SkillSourceError
+from squadron.skills.models import InstallResult, PackEntry, SkillSourceError, SurfaceType
 from squadron.skills.targets import CommandTarget, write_skill_dirs
 
 #: Directory in a pack's source that holds its agents (Codex) skills (D2).
@@ -36,11 +36,14 @@ class PackLayout:
 
     ``install(pack_name, entry, source, root)`` copies from a resolved source
     directory into ``root``; ``installed_path(entry, root)`` returns the path that
-    proves an install, or ``None``.
+    proves an install, or ``None``. ``owned_destination_surfaces`` names the
+    surfaces whose receipt destination belongs to the pack alone, so uninstall may
+    remove it once empty; every other destination is shared and is never removed.
     """
 
     install: Callable[[str, PackEntry, Path, Path], InstallResult]
     installed_path: Callable[[PackEntry, Path], Path | None]
+    owned_destination_surfaces: frozenset[SurfaceType]
 
 
 # ---------------------------------------------------------------------------
@@ -209,8 +212,18 @@ def _agents_installed_path(entry: PackEntry, root: Path) -> Path | None:
 
 
 PACK_LAYOUTS: dict[CommandTarget, PackLayout] = {
-    CommandTarget.CLAUDE: PackLayout(install=_claude_install, installed_path=_claude_installed_path),
-    CommandTarget.AGENTS: PackLayout(install=_agents_install, installed_path=_agents_installed_path),
+    CommandTarget.CLAUDE: PackLayout(
+        install=_claude_install,
+        installed_path=_claude_installed_path,
+        # `<root>/<prefix>/` is the pack's own directory; `<root>/sq/` is shared.
+        owned_destination_surfaces=frozenset({SurfaceType.PREFIX}),
+    ),
+    CommandTarget.AGENTS: PackLayout(
+        install=_agents_install,
+        installed_path=_agents_installed_path,
+        # Skills land at the shared root itself; only the skill directories are the pack's.
+        owned_destination_surfaces=frozenset(),
+    ),
 }
 
 # A new target without a layout is a missing install path, not a default.

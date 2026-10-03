@@ -55,7 +55,7 @@ def get_commands_source() -> Path:
     raise typer.Exit(code=1)
 
 
-def _parse_target(ide: str) -> CommandTarget:
+def parse_ide_option(ide: str) -> CommandTarget:
     """Resolve the ``--ide`` value, or exit 2 naming the accepted spellings."""
     try:
         return normalize_target(ide)
@@ -106,7 +106,7 @@ def install_commands(
     """Install squadron's commands for Claude Code or an agent-skills runtime."""
     install_for_target(
         target=target,
-        command_target=_parse_target(ide),
+        command_target=parse_ide_option(ide),
         local=local,
         receipts_dir=receipts_dir,
     )
@@ -229,7 +229,7 @@ def uninstall_commands(
 ) -> None:
     """Remove squadron's commands from Claude Code or an agent-skills runtime."""
     receipts_dir = receipts_dir or default_receipts_dir()
-    command_target = _parse_target(ide)
+    command_target = parse_ide_option(ide)
 
     # `--target` overrides `--local` on install, and the receipt is named for the
     # scope that was *honored*. Uninstall has to resolve the name the same way or

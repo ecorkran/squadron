@@ -224,3 +224,157 @@ class TestListWithStatus:
         # Rich strips markup in test runner; check plain text presence
         assert "Installed" in result.output
         assert "Not installed" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Slice 928: --ide and --local
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A disposable HOME and cwd, with only the shipped manifest (bundled analysis pack)."""
+    home_dir = tmp_path / "home"
+    home_dir.mkdir()
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.setenv("HOME", str(home_dir))
+    monkeypatch.chdir(project)
+    monkeypatch.setattr(_USER_MANIFEST_ATTR, lambda: home_dir / "no-such.toml")
+    return home_dir
+
+
+def _receipts(home_dir: Path) -> set[str]:
+    receipts_dir = home_dir / ".config" / "squadron" / "receipts"
+    return {p.name for p in receipts_dir.glob("*.toml")} if receipts_dir.is_dir() else set()
+
+
+def _skills(root: Path) -> set[str]:
+    return {p.name for p in root.iterdir()} if root.is_dir() else set()
+
+
+ANALYSIS_SKILLS = {"analysis-understand", "analysis-tech-debt-audit"}
+
+
+def test_codex_install_writes_agents_skills_and_receipt(home: Path) -> None:
+    result = runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex"])
+
+    assert result.exit_code == 0, result.output
+    assert _skills(home / ".agents" / "skills") == ANALYSIS_SKILLS
+    assert _receipts(home) == {"analysis-agents.toml"}
+
+
+def test_codex_local_install_writes_under_the_project(home: Path) -> None:
+    result = runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex", "--local"])
+
+    assert result.exit_code == 0, result.output
+    assert _skills(Path.cwd() / ".agents" / "skills") == ANALYSIS_SKILLS
+    assert not (home / ".agents").exists()
+    assert _receipts(home) == {"analysis-agents-local.toml"}
+
+
+def test_claude_install_is_unchanged_beside_a_codex_install(home: Path) -> None:
+    runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex"])
+    result = runner.invoke(app, ["skills", "install", "analysis"])
+
+    assert result.exit_code == 0, result.output
+    assert _skills(home / ".claude" / "commands" / "analysis") == {
+        "tech-debt-audit.md",
+        "understand.md",
+    }
+    assert _receipts(home) == {"analysis.toml", "analysis-agents.toml"}
+
+
+def test_local_with_commands_dir_is_reported_not_silent(home: Path, tmp_path: Path) -> None:
+    target = tmp_path / "explicit"
+    result = runner.invoke(
+        app,
+        ["skills", "install", "analysis", "--ide", "codex", "--local", "--commands-dir", str(target)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "--local ignored" in result.output
+    assert _skills(target) == ANALYSIS_SKILLS
+    assert _receipts(home) == {"analysis-agents.toml"}
+
+
+def test_unknown_ide_is_rejected(home: Path) -> None:
+    result = runner.invoke(app, ["skills", "install", "analysis", "--ide", "copilot"])
+    assert result.exit_code == 2
+
+
+def test_list_reports_status_per_target(home: Path) -> None:
+    runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex"])
+
+    codex = runner.invoke(app, ["skills", "list", "--ide", "codex"])
+    claude = runner.invoke(app, ["skills", "list"])
+
+    assert codex.exit_code == 0, codex.output
+    assert "Installed" in codex.output and "Not installed" not in codex.output
+    assert "Not installed" in claude.output
+
+
+def test_codex_uninstall_removes_only_receipt_files(home: Path) -> None:
+    skills_root = home / ".agents" / "skills"
+    runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex"])
+    (skills_root / "mine.txt").write_text("keep")
+
+    result = runner.invoke(app, ["skills", "uninstall", "analysis", "--ide", "codex"])
+
+    assert result.exit_code == 0, result.output
+    assert _skills(skills_root) == {"mine.txt"}
+    assert _receipts(home) == set()
+
+
+def test_codex_uninstall_never_removes_the_shared_root(home: Path) -> None:
+    runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex"])
+    runner.invoke(app, ["skills", "uninstall", "analysis", "--ide", "codex"])
+    assert (home / ".agents" / "skills").is_dir()
+
+
+def test_uninstall_rejects_a_mismatched_commands_dir(home: Path, tmp_path: Path) -> None:
+    runner.invoke(app, ["skills", "install", "analysis", "--ide", "codex"])
+
+    result = runner.invoke(
+        app,
+        [
+            "skills",
+            "uninstall",
+            "analysis",
+            "--ide",
+            "codex",
+            "--commands-dir",
+            str(tmp_path / "elsewhere"),
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert "Nothing was removed" in result.output
+    assert _skills(home / ".agents" / "skills") == ANALYSIS_SKILLS
+
+
+def test_pre_928_claude_receipt_still_uninstalls(home: Path) -> None:
+    """A receipt written before 928 is named for the pack alone — exactly D5's Claude name."""
+    import tomli_w
+
+    dest = home / ".claude" / "commands" / "analysis"
+    dest.mkdir(parents=True)
+    (dest / "understand.md").write_text("x")
+    receipts_dir = home / ".config" / "squadron" / "receipts"
+    receipts_dir.mkdir(parents=True)
+    with open(receipts_dir / "analysis.toml", "wb") as fh:
+        tomli_w.dump(
+            {
+                "pack_name": "analysis",
+                "surface": "prefix",
+                "destination": str(dest),
+                "files_written": ["understand.md"],
+            },
+            fh,
+        )
+
+    result = runner.invoke(app, ["skills", "uninstall", "analysis"])
+
+    assert result.exit_code == 0, result.output
+    assert not dest.exists()
+    assert _receipts(home) == set()
