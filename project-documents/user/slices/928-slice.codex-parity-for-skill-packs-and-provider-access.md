@@ -7,7 +7,7 @@ dependencies: [925]
 interfaces: []
 dateCreated: 20260927
 dateUpdated: 20261003
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Codex Parity for Skill Packs and Provider Access
@@ -316,21 +316,30 @@ rm -rf $P/agents && sq doctor -v       # demo (codex): ! pack ships no Codex con
 Caveat on step 7: the `analysis` rows read OK, not WARN, because steps 2 and 6 left the
 pack installed for both targets. Without the Codex CLI on PATH, the `(codex)` rows are absent.
 
-Codex rule, on a real machine:
+Codex rule, on a real machine (verified 20261003, Codex CLI 0.146.1, Codex in VS Code):
 
 ```bash
-# 8. Before the rule: sandboxed provider call fails
-codex sandbox -- sq pr show 1          # HostUnreachableError
+# 8. Before the rule: sandboxed calls fail (run from a real terminal, not inside Codex)
+codex sandbox -- sq pr show 1          # HostUnreachableError: ... error connecting to api.github.com
+codex sandbox -- sq run P4 928 --prompt-only   # PermissionError: ... ~/.config/squadron/runs/run-....tmp
 
-# 9. Add the rule exactly as README shows, into ~/.codex/rules/squadron.rules, then:
+# 9. Install writes the rule file (use the branch's sq until released)
+sq install-commands --ide codex        # ... Wrote Codex sandbox rules to ~/.codex/rules/squadron.rules
 codex execpolicy check --rules ~/.codex/rules/squadron.rules sq review code 928   # "decision":"allow"
-codex execpolicy check --rules ~/.codex/rules/squadron.rules sq models list       # no matchedRules
+codex execpolicy check --rules ~/.codex/rules/squadron.rules sq models list       # {"matchedRules":[]}
 
-# 10. In a Codex session: $sq-review code 928 --model <alias>
-#     runs without an approval prompt and writes the review file.
-# 11. Remove the rule, repeat 10: Codex blocks it, and the skill's reply names
-#     Codex's sandbox and the README section rather than the provider.
+# 10. New Codex session: $sq-pr show 119
+#     Runs with no approval prompt and shows the PR. (Codex loads squadron.rules alongside
+#     default.rules — no edit to default.rules needed.) Use a PR number that exists: #1 returns
+#     HostRequestRejectedError from GitHub, which still proves the network call got out.
+# 11. mv ~/.codex/rules/squadron.rules /tmp/; new Codex session; $sq-pr show 119
+#     Blocked — here at `git fetch` (cannot open .git/FETCH_HEAD: Operation not permitted), not
+#     the network. The skill reply: "This is Codex's sandbox blocking Git, not the model provider
+#     or Squadron configuration. Run ... sq install-commands --ide codex". Move the file back.
 ```
+
+Caveat: an earlier interim build appended `sq` rules to `default.rules`. Remove any such lines
+before step 11, or they mask the result.
 
 ## Implementation Notes
 

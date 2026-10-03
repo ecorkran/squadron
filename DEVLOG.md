@@ -12,6 +12,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261003
 
+### Slice 928: Codex Parity for Skill Packs and Provider Access — Complete
+
+- **Skill packs:** `sq skills install|uninstall|list` take `--ide {claude|agents|codex|openai}` and `--local`. New `skills/pack_layouts.py` (`PACK_LAYOUTS`) is the one place that knows where a pack lands per target; install, `skills list` and doctor all read it. A Codex install requires the pack to ship `agents/<prefix>-<name>/SKILL.md` (or `sq-<dispatch_file>/`), validated before anything is written (all problems listed). Receipts are `<pack>[-agents][-local].toml`; pre-928 receipts still read. `remove_receipt_files` is shared with `uninstall-commands`. The bundled analysis pack's agents skills moved to `commands/analysis/agents/`. Doctor shows `<pack> (codex)` rows where Codex is on PATH, with "pack ships no Codex content" (no fix hint) when the source has no `agents/`; github sources never clone in doctor.
+- **Codex sandbox rule:** design said document it for the user to add; reversed in implementation (PM: users should never write rule files). `sq install-commands --ide codex` writes `~/.codex/rules/squadron.rules` whole on every install; machine-scope uninstall deletes it; `default.rules` is never touched. An interim version on this branch (sq-pipelines agent) appended to `default.rules`; replaced because ownership of appended lines was unknowable. Rule allows `sq review|run|pr|metrology|auth|skills`.
+- **Probe (`codex sandbox`, real terminal):** `--version`, `models list`, `auth status` ran. `pr show` → `HostUnreachableError`. `review` → blocked writing `~/.codex` state. `run --prompt-only` → `PermissionError` on `~/.config/squadron/runs` (filesystem, not network). `metrology audit run` → failed, no audit written. `auth login` → blocked writing `~/.codex`. `skills install` (github) not re-probed; included because it clones. Agent-management commands (experimental) excluded.
+- **Live check:** `codex execpolicy check` allows each listed subcommand, none for `models list`. In a Codex session `$sq-pr show 119` ran with no prompt; with the rule file moved away it was blocked (at `git fetch` writing `.git/FETCH_HEAD`) and the skill's D12 hint named Codex's sandbox and the install command.
+- **Also:** `sq model list` → `sq models list` (6 sites); README gained a skill-packs section (since folded into the README restructure); 340-arch amended.
+- **Tests:** 5303 passed / 4 skipped; ruff + pyright clean. Three metrology tests sleep through a 120s default cooldown each (~6 of the suite's ~9.5 min) — pre-existing, not addressed.
+
 ### Release 0.18.2
 
 - **Contents:** model alias update — `astra`/`sol`/`luna` on `openai-oauth` (API-equivalent pricing kept for comparison), `luna-r` and `ling-flash` on OpenRouter; `codex-agent`, `codex-spark`, `gpt54-nano` removed with tests and docs updated. `sq auth` reference added to docs/COMMANDS.md.

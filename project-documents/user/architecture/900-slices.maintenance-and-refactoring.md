@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20260928
+dateUpdated: 20261003
 status: in_progress
 ---
 
@@ -450,7 +450,7 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 
 **Slice tasks:** `user/tasks/927-tasks.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`. Setup, then parts M, A, B, C, and W.
 
-26. [ ] **(928) Codex Parity for Skill Packs and Provider Access** — Fixes [issue #125](https://github.com/ecorkran/squadron/issues/125) and [issue #127](https://github.com/ecorkran/squadron/issues/127). Both are what slice 925 left behind for Codex users: `sq skills install` still writes to `~/.claude/commands` ([skills.py:23](src/squadron/cli/commands/skills.py#L23)), where Codex never reads, with no error; and a first `$sq-review` under Codex fails on Codex's own sandbox approval, with an error that points at the provider config instead.
+26. [x] **(928) Codex Parity for Skill Packs and Provider Access** — Fixes [issue #125](https://github.com/ecorkran/squadron/issues/125) and [issue #127](https://github.com/ecorkran/squadron/issues/127). Both are what slice 925 left behind for Codex users: `sq skills install` still writes to `~/.claude/commands` ([skills.py:23](src/squadron/cli/commands/skills.py#L23)), where Codex never reads, with no error; and a first `$sq-review` under Codex fails on Codex's own sandbox approval, with an error that points at the provider config instead.
 **Part A — `sq skills install/uninstall --ide`.** Thread `CommandTarget` / `normalize_target` / `DELIVERIES` / `receipt_name` from `squadron.skills.targets` through `skills install` and `skills uninstall`, the same way `install.py` does. The open question is not the plumbing: squadron's own commands were authored twice because Codex does no argument substitution (925 D3), but an external pack has one source. Design decides between refusing an `agents` install of a pack that uses `$ARGUMENTS` (loud), and a pack-format declaration of per-target content. Installing it unconverted, where `$ARGUMENTS` silently does nothing, is not an option.
 **Part B — document the Codex approval rule.** Add the `prefix_rule` for `~/.codex/rules/default.rules` to the Codex sections of `README.md` and `docs/QUICKSTART.md`, stating what it authorizes. Enumerate every `sq` command that reaches a provider or the network (at least `sq review`, `sq run`, `sq pr`) rather than documenting only `sq review`. Whether `sq doctor` should detect a Codex install missing the rule is a design question; answer it and record why.
 **Not in scope:** #126 follow-ups (Codex polling long commands), `copilot`/`cursor` targets. Dependencies: 925 (complete). Risk: Low. Effort: 2/5
