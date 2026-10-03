@@ -13,7 +13,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
-from squadron.skills.codex_rules import RULES_RELATIVE_PATH, codex_home, ensure_sq_rules
+from squadron.skills.codex_rules import codex_home, remove_sq_rules, write_sq_rules
 from squadron.skills.models import InstallReceipt
 from squadron.skills.receipts import (
     default_receipts_dir,
@@ -210,21 +210,16 @@ def install_for_target(
 
 
 def _ensure_codex_rules() -> None:
-    """Allow the network-reaching sq commands in Codex's sandbox (issue #127)."""
+    """Write squadron's own Codex sandbox rules file (issue #127, 928 D9)."""
     home = codex_home()
     if not home.is_dir():
         rprint(
-            f"[yellow]No Codex home at {home}; skipped the sandbox rules sq review, "
-            f"sq run and sq pr need. Re-run after installing Codex.[/yellow]"
+            f"[yellow]No Codex home at {home}; skipped the sandbox rules squadron's "
+            f"skills need. Re-run after installing Codex.[/yellow]"
         )
         return
-    added = ensure_sq_rules(home)
-    if added:
-        rprint(
-            f"[green]Added {len(added)} Codex sandbox rule(s) to {home / RULES_RELATIVE_PATH}:[/green]"
-        )
-        for line in added:
-            rprint(f"  {line}")
+    rules_path = write_sq_rules(home)
+    rprint(f"[green]Wrote Codex sandbox rules to {rules_path}[/green]")
 
 
 def uninstall_commands(
@@ -304,3 +299,10 @@ def uninstall_commands(
     (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
 
     rprint(f"[green]Removed {removed} command(s) from {destination}.[/green]")
+
+    # The rules file is machine-wide; a project-local uninstall leaves it for any
+    # machine install that still needs it.
+    if command_target is CommandTarget.AGENTS and not local_honored:
+        rules_path = remove_sq_rules(codex_home())
+        if rules_path is not None:
+            rprint(f"[green]Removed Codex sandbox rules {rules_path}.[/green]")

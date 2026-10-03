@@ -1,32 +1,40 @@
-"""Codex sandbox approval rules for the sq commands that reach the network.
+"""Codex sandbox approval rules for the sq commands that need the network or home dir.
 
-Codex's sandbox refuses a network-enabled command unless a rule in
-``<codex home>/rules/default.rules`` allows it, and the refusal reads like a
-provider failure (issue #127). Installing squadron's Codex skills writes the
-rules those skills need, so a first ``$sq-review`` works instead of failing
-with a misleading "provider connection failed".
+Codex's sandbox refuses network access and writes outside the workspace unless a
+rule allows the command, and the refusal reads like a provider failure (issue
+#127). Installing squadron's Codex skills writes one squadron-owned rules file so
+a first ``$sq-review`` works without the user ever editing Codex's config.
+
+The file is squadron's alone: Codex loads every ``*.rules`` file under
+``<codex home>/rules/``, so the whole file is rewritten on each install and
+deleted on uninstall. The user's ``default.rules`` — which Codex appends its own
+"always allow" approvals to — is never read or written (928 D9).
 """
 
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 
 #: Codex reads this variable for its home directory; ``~/.codex`` when unset.
 CODEX_HOME_ENV = "CODEX_HOME"
 
-#: The rules file Codex loads, relative to its home.
-RULES_RELATIVE_PATH = Path("rules") / "default.rules"
+#: The squadron-owned rules file, relative to Codex's home.
+RULES_RELATIVE_PATH = Path("rules") / "squadron.rules"
 
-#: Commands whose skills reach a model provider or GitHub.
-NETWORK_COMMAND_PREFIXES: tuple[tuple[str, ...], ...] = (
-    ("sq", "review"),
-    ("sq", "run"),
-    ("sq", "pr"),
-)
-
-_WHITESPACE = re.compile(r"\s+")
+#: ``sq`` subcommands the sandbox blocks, with one example invocation each. Chosen
+#: by probing each command under ``codex sandbox`` (928 D10): ``pr`` and
+#: ``review`` need the network, ``run`` writes run state under
+#: ``~/.config/squadron``, ``auth login`` writes ``~/.codex``, ``metrology``
+#: reaches a provider, and ``skills install`` clones github sources.
+SQ_RULE_EXAMPLES: dict[str, str] = {
+    "review": "sq review code 100",
+    "run": "sq run P4 100",
+    "pr": "sq pr show 1",
+    "metrology": "sq metrology audit run .",
+    "auth": "sq auth login",
+    "skills": "sq skills install analysis",
+}
 
 
 def codex_home() -> Path:
@@ -35,40 +43,43 @@ def codex_home() -> Path:
     return Path(configured).expanduser() if configured else Path.home() / ".codex"
 
 
-def _pattern_text(prefix: tuple[str, ...]) -> str:
-    return "[" + ", ".join(f'"{token}"' for token in prefix) + "]"
+def render_sq_rules() -> str:
+    """The full contents of the squadron rules file.
 
-
-def _rule_line(prefix: tuple[str, ...]) -> str:
-    return f'prefix_rule(pattern={_pattern_text(prefix)}, decision="allow")'
-
-
-def _covered(prefix: tuple[str, ...], compact_rules: str) -> bool:
-    """Whether an allow rule for *prefix*, or any shorter prefix of it, exists.
-
-    Compared with all whitespace removed, so the multi-line form a user may
-    have pasted by hand matches the single-line form Codex itself writes.
+    One ``prefix_rule`` with the subcommands as alternatives. ``match`` lists an
+    example per subcommand; Codex validates those when it loads the file, so a
+    rule that stopped matching fails loudly instead of silently allowing nothing.
     """
-    for length in range(1, len(prefix) + 1):
-        pattern = _WHITESPACE.sub("", f"pattern={_pattern_text(prefix[:length])}")
-        if pattern in compact_rules:
-            return True
-    return False
+    alternatives = ", ".join(f'"{name}"' for name in SQ_RULE_EXAMPLES)
+    examples = "\n".join(f'        "{example}",' for example in SQ_RULE_EXAMPLES.values())
+    return (
+        "# Written by squadron (sq install-commands --ide codex); rewritten on every\n"
+        "# install and removed by sq uninstall-commands --ide codex. Do not edit —\n"
+        "# put your own rules in default.rules or another file in this directory.\n"
+        "prefix_rule(\n"
+        f'    pattern = ["sq", [{alternatives}]],\n'
+        '    decision = "allow",\n'
+        '    justification = "squadron commands that call a model provider or GitHub, '
+        'or write squadron/Codex state",\n'
+        "    match = [\n"
+        f"{examples}\n"
+        "    ],\n"
+        ")\n"
+    )
 
 
-def ensure_sq_rules(home: Path) -> list[str]:
-    """Append an allow rule for each network command not already covered.
-
-    Returns the rule lines added; empty when every command was already allowed.
-    Existing content is never rewritten — only appended to.
-    """
+def write_sq_rules(home: Path) -> Path:
+    """Write the squadron rules file under ``home`` and return its path."""
     rules_path = home / RULES_RELATIVE_PATH
-    existing = rules_path.read_text(encoding="utf-8") if rules_path.exists() else ""
-    compact = _WHITESPACE.sub("", existing)
-    added = [_rule_line(p) for p in NETWORK_COMMAND_PREFIXES if not _covered(p, compact)]
-    if not added:
-        return []
     rules_path.parent.mkdir(parents=True, exist_ok=True)
-    separator = "" if not existing or existing.endswith("\n") else "\n"
-    rules_path.write_text(existing + separator + "\n".join(added) + "\n", encoding="utf-8")
-    return added
+    rules_path.write_text(render_sq_rules(), encoding="utf-8")
+    return rules_path
+
+
+def remove_sq_rules(home: Path) -> Path | None:
+    """Delete the squadron rules file; return its path, or ``None`` if it was absent."""
+    rules_path = home / RULES_RELATIVE_PATH
+    if not rules_path.exists():
+        return None
+    rules_path.unlink()
+    return rules_path
