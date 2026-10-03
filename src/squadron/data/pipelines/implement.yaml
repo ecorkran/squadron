@@ -8,6 +8,7 @@ params:
 steps:
   - implement:
       phase: 6
+      model: "{model}"
       review:
         template: code
       checkpoint: on-fail

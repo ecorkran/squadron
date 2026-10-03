@@ -37,6 +37,21 @@ if TYPE_CHECKING:
 # composite step types are covered.
 _MODEL_DISPATCHING_ACTION_TYPES = frozenset({"dispatch", "review", "summary", "compact"})
 
+# Action types that may omit a model: with none set they reuse the live
+# session's model (CompactAction rotates with ``current_model``), so there is
+# no new model call to classify.
+_SESSION_MODEL_ACTION_TYPES = frozenset({"compact"})
+
+
+def _calls_no_new_model(action_type: str, resolved_cfg: dict[str, object]) -> bool:
+    """True when the action makes no model call of its own to classify.
+
+    A summary in restore mode seeds the session from a prior summary's
+    output (``SummaryAction._execute_restore``) and never calls a model.
+    """
+    return action_type == "summary" and resolved_cfg.get("restore") is True
+
+
 # Action types whose classification contributes to ``needs_persistent_session``.
 # Reviews route through the one-shot ClaudeSDKAgent, not the persistent session.
 PERSISTENT_SESSION_STEP_TYPES = frozenset({"dispatch", "summary", "compact"})
@@ -322,6 +337,8 @@ def _classify_container_inner(
         if action_type not in _MODEL_DISPATCHING_ACTION_TYPES:
             continue
         resolved_cfg = resolve_placeholders(action_cfg, classify_params)
+        if _calls_no_new_model(action_type, resolved_cfg):
+            continue
         action_model_raw = resolved_cfg.get("model")
         action_model = action_model_raw if isinstance(action_model_raw, str) else None
 
@@ -329,6 +346,8 @@ def _classify_container_inner(
         candidate = next((c for c in candidates if c is not None), None)
         if candidate is None:
             candidate = _review_template_model_fallback(action_type, resolved_cfg)
+        if candidate is None and action_type in _SESSION_MODEL_ACTION_TYPES:
+            continue
 
         if candidate is None:
             raise ClassificationError(
@@ -485,6 +504,8 @@ def classify_pipeline(
             # pipeline-default params so the cascade sees the actual alias
             # (e.g. ``sonnet``) rather than the literal template string.
             resolved_cfg = resolve_placeholders(action_cfg, classify_params)
+            if _calls_no_new_model(action_type, resolved_cfg):
+                continue
             action_model_raw = resolved_cfg.get("model")
             action_model = action_model_raw if isinstance(action_model_raw, str) else None
 
@@ -495,6 +516,8 @@ def classify_pipeline(
             candidate = next((c for c in candidates if c is not None), None)
             if candidate is None:
                 candidate = _review_template_model_fallback(action_type, resolved_cfg)
+            if candidate is None and action_type in _SESSION_MODEL_ACTION_TYPES:
+                continue
 
             if candidate is None:
                 raise ClassificationError(

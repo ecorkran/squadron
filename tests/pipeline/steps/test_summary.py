@@ -130,3 +130,10 @@ def test_expand_without_checkpoint_no_extra_action() -> None:
 def test_expand_empty_config() -> None:
     actions = _make_step().expand(_make_config({}))
     assert actions == [("summary", {})]
+
+
+def test_expand_passes_restore_through() -> None:
+    # SummaryAction branches on params["restore"]; dropping it here turned
+    # every `summary: restore: true` step into a fresh summary generation.
+    actions = _make_step().expand(_make_config({"restore": True}))
+    assert actions == [("summary", {"restore": True})]

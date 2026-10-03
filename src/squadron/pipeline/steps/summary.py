@@ -84,6 +84,8 @@ class SummaryStepType:
             summary_config["emit"] = cfg["emit"]
         if "allowed_tools" in cfg:
             summary_config["allowed_tools"] = cfg["allowed_tools"]
+        if "restore" in cfg:
+            summary_config["restore"] = cfg["restore"]
 
         actions: list[tuple[str, dict[str, object]]] = [("summary", summary_config)]
 
