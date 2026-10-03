@@ -44,8 +44,8 @@ If Codex rejects or blocks the `sq` command for sandbox or approval reasons — 
 request that cannot be granted, a sandbox denial, or a network error such as "host
 unreachable" from a command that needs a provider or GitHub — tell the user plainly that
 this is **Codex's sandbox**, not the model provider and not squadron's configuration. Tell
-them to run `sq install-commands --ide codex` from a terminal: it adds the Codex rules that
-let `sq review`, `sq run` and `sq pr` reach the network.
+them to run `sq install-commands --ide codex` from a terminal: it writes the Codex rules file
+(`~/.codex/rules/squadron.rules`) that lets these `sq` commands run.
 The "Codex sandbox approval rule" section of squadron's README has the details. Do not
 suggest changing provider settings, API keys, or squadron config for this failure.
 

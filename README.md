@@ -272,7 +272,9 @@ Long commands like `sq review` and `sq run` are fine to run from inside Codex. T
 
 ### Codex sandbox approval rule
 
-Codex's sandbox blocks network access unless a rule allows it. When it blocks `sq review`, the error looks like a provider failure ("provider connection failed"), but it isn't one. `sq install-commands --ide codex` adds the rules for `sq review`, `sq run`, and `sq pr` to `~/.codex/rules/default.rules` (or `$CODEX_HOME/rules/`). It only appends missing rules and never rewrites your existing ones. If you installed the Codex skills before this existed, run the install again.
+Codex's sandbox blocks network access and writes outside the project unless a rule allows the command. When it blocks `sq review`, the error looks like a provider failure ("provider connection failed"), but it isn't one. You don't need to write any rules: `sq install-commands --ide codex` writes squadron's own file, `~/.codex/rules/squadron.rules` (under `$CODEX_HOME` if set). It allows `sq review`, `run`, `pr`, `metrology`, `auth` and `skills`, and Codex picks it up alongside your other rules. Each install rewrites the file, `sq uninstall-commands --ide codex` removes it, and your `default.rules` is never touched. If you installed the Codex skills before this existed, run the install again.
+
+What it allows: those commands run **outside Codex's sandbox without a prompt**, with full network and filesystem access, not just network. Commands that don't need it, like `sq models list` and `sq auth status`, aren't affected. Commands written with a redirect (`>`) or a `VAR=value` prefix never match a rule, so Codex still asks about those.
 
 ## Pull requests
 

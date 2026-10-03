@@ -45,9 +45,10 @@ Skills land in `~/.agents/skills` (add `--local` for `.agents/skills` in the cur
 one directory per skill. Invoke them by name in a Codex session: `$sq-review`, `$sq-run`,
 `$sq-auth`. `sq doctor` reports a `codex skills` row wherever the Codex CLI is present.
 
-The Codex install also adds sandbox rules to `~/.codex/rules/default.rules` that let `sq review`,
-`sq run`, and `sq pr` reach the network. Without them, Codex blocks a review with an error that
-looks like a provider failure. See README's
+The Codex install also writes squadron's sandbox rules to `~/.codex/rules/squadron.rules`, so
+`sq review`, `run`, `pr`, `metrology`, `auth` and `skills` can run from a Codex session. Without
+it, Codex blocks a review with an error that looks like a provider failure. You never edit the
+file; reinstalling rewrites it. See README's
 [Codex sandbox approval rule](../README.md#codex-sandbox-approval-rule).
 
 ## Verify your install

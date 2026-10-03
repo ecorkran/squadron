@@ -636,6 +636,11 @@ def test_network_skills_carry_the_sandbox_hint() -> None:
     assert _SANDBOX_HINT_HEADING not in (_agents_skill("sq-task") / "SKILL.md").read_text()
 
 
+def test_readme_has_the_section_the_sandbox_hint_names() -> None:
+    readme = Path(__file__).resolve().parents[2] / "README.md"
+    assert f"### {_SANDBOX_README_SECTION}" in readme.read_text()
+
+
 def test_drift_guard_fails_on_a_command_with_no_twin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
