@@ -59,13 +59,13 @@ GREP_PARAMETERS: dict[str, object] = {
 }
 
 
-def _globbed(target: Path, glob: str | None) -> Iterator[Path]:
+def _globbed(target: Path, glob: str | None, excluded: tuple[Path, ...]) -> Iterator[Path]:
     """Yield entries under *target*, pruned, honoring *glob* when one is given.
 
     ``walk_tree`` does the pruning; the glob is applied to the yielded names rather than
     handed to ``rglob``, because ``rglob`` cannot prune as it descends.
     """
-    for entry in walk_tree(target, recursive=True):
+    for entry in walk_tree(target, recursive=True, excluded=excluded):
         if glob is None or entry.match(glob):
             yield entry
 
@@ -88,7 +88,7 @@ def _grep_candidates(spec: JailSpec, target: Path, glob: str | None) -> Iterator
         if contained_in_jail(spec, target, tool=GREP_NAME):
             yield target
         return
-    for entry in _globbed(target, glob):
+    for entry in _globbed(target, glob, spec.excluded):
         # Containment is checked before is_file(): on Python 3.13+ rglob yields a symlinked
         # directory without descending into it, and is_file() is False for that entry — so
         # testing is_file() first would skip the escape silently instead of logging it.

@@ -159,6 +159,28 @@ def test_grep_refuses_the_excluded_directory_as_an_explicit_path(
     assert STALE_PHRASE not in result.content
 
 
+@pytest.mark.parametrize(
+    ("tool", "args"),
+    [
+        (GREP_NAME, {"pattern": STALE_PHRASE}),
+        (LIST_FILES_NAME, {"pattern": "*", "recursive": True}),
+    ],
+)
+def test_a_tree_walk_logs_the_excluded_directory_once_not_per_file(
+    arch_tools: dict[str, object],
+    caplog: pytest.LogCaptureFixture,
+    tool: str,
+    args: dict[str, object],
+) -> None:
+    """The walk stops at the excluded directory, so -vv shows one refusal line, not one
+    per review artifact beneath it (the fixture holds three entries below it)."""
+    with caplog.at_level(logging.DEBUG):
+        _call(arch_tools[tool], args)
+
+    refusals = [r for r in caplog.records if "refusing excluded path" in r.getMessage()]
+    assert len(refusals) == 1
+
+
 # -- The refusal is invisible to the model --------------------------------------------
 
 

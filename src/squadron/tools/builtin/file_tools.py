@@ -305,7 +305,7 @@ def _list_files_factory(spec: JailSpec) -> ToolExecutor:
 
                 # walk_tree prunes dependency/VCS directories as it descends (issue #79);
                 # the pattern is applied to the names it yields, since rglob cannot prune.
-                walked = walk_tree(target, recursive=recursive)
+                walked = walk_tree(target, recursive=recursive, excluded=spec.excluded)
                 matches = (entry for entry in walked if entry.match(pattern))
                 # Consumption stops at the cap, so a wide tree costs a bounded walk rather
                 # than a full materialization. sorted() below would otherwise drain the

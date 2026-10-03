@@ -36,8 +36,10 @@ class _CountingWalk:
     def install(self, monkeypatch: pytest.MonkeyPatch) -> None:
         real = file_tools.walk_tree
 
-        def _wrapper(root: Path, *, recursive: bool = True) -> Iterator[Path]:
-            for entry in real(root, recursive=recursive):
+        def _wrapper(
+            root: Path, *, recursive: bool = True, excluded: tuple[Path, ...] = ()
+        ) -> Iterator[Path]:
+            for entry in real(root, recursive=recursive, excluded=excluded):
                 self.consumed += 1
                 yield entry
 

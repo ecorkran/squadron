@@ -102,7 +102,7 @@ def contained_in_jail(spec: JailSpec, entry: Path, *, tool: str) -> bool:
     return True
 
 
-def walk_tree(root: Path, *, recursive: bool = True) -> Iterator[Path]:
+def walk_tree(root: Path, *, recursive: bool = True, excluded: tuple[Path, ...] = ()) -> Iterator[Path]:
     """Yield entries under *root*, pruning ``limits.SKIP_DIRECTORIES`` as it descends.
 
     ``Path.rglob`` cannot prune: it yields every entry, so a caller filtering afterwards has
@@ -118,6 +118,10 @@ def walk_tree(root: Path, *, recursive: bool = True) -> Iterator[Path]:
     stopping early is bounded by the widest single directory rather than by the tree.
     Descent into a child happens only when the caller pulls past it, which is what lets
     the budget and entry caps upstream stop the walk.
+
+    *excluded* directories (``JailSpec.excluded``) are yielded but never descended into:
+    the caller's containment check refuses the directory once, instead of once per file
+    beneath it.
     """
     skip = limits.SKIP_DIRECTORIES
     try:
@@ -136,8 +140,10 @@ def walk_tree(root: Path, *, recursive: bool = True) -> Iterator[Path]:
         # is_dir() follows symlinks; descending through one is how a walk leaves the jail,
         # so links are yielded above (the caller's containment check sees them) but never
         # descended into.
+        if entry in excluded:
+            continue
         if entry.is_dir() and not entry.is_symlink():
-            yield from walk_tree(entry, recursive=True)
+            yield from walk_tree(entry, recursive=True, excluded=excluded)
 
 
 def reject_special_file(tool: str, target: Path) -> ToolResult | None:
