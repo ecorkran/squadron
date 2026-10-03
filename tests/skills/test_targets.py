@@ -217,3 +217,21 @@ def test_bundled_skill_names_reads_the_agents_tree(tmp_path: Path) -> None:
 def test_bundled_skill_names_is_empty_without_an_agents_tree(tmp_path: Path) -> None:
     (tmp_path / "commands" / "sq").mkdir(parents=True)
     assert bundled_skill_names(tmp_path / "commands") == set()
+
+
+def test_bundled_skill_names_reads_every_agents_bundle_subdir(tmp_path: Path) -> None:
+    # D4: the analysis pack ships its agents skills under its own source.
+    bundle = tmp_path / "commands"
+    for sub, name in (("agents", "sq-review"), ("analysis/agents", "analysis-understand")):
+        (bundle / sub / name).mkdir(parents=True)
+        (bundle / sub / name / "SKILL.md").write_text("body")
+
+    assert bundled_skill_names(bundle) == {"sq-review", "analysis-understand"}
+
+
+def test_real_bundle_ships_analysis_skills_under_the_pack() -> None:
+    from squadron.cli.commands.install import get_commands_source
+
+    source = get_commands_source()
+    assert {"analysis-understand", "analysis-tech-debt-audit"} <= bundled_skill_names(source)
+    assert not (source / "agents" / "analysis-understand").exists()

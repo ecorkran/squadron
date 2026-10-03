@@ -475,10 +475,29 @@ def test_agents_tree_is_not_installed_for_claude(
 SKILL_NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
 
-def _agents_root() -> Path:
-    # Resolved through the module rather than the name imported at the top of this
-    # file, so the teeth test below can point the tree elsewhere with monkeypatch.
-    return install_module.get_commands_source() / "agents"  # type: ignore[attr-defined]
+def _agents_roots() -> list[Path]:
+    """Every bundle subdirectory holding agents skills (D4: a pack keeps its own).
+
+    Resolved through the module rather than the name imported at the top of this
+    file, so the teeth test below can point the tree elsewhere with monkeypatch.
+    """
+    source = install_module.get_commands_source()  # type: ignore[attr-defined]
+    return [source / sub for sub in DELIVERIES[CommandTarget.AGENTS].bundle_subdirs]
+
+
+def _agents_skill_dirs() -> list[Path]:
+    return sorted(
+        (d for root in _agents_roots() if root.is_dir() for d in root.iterdir() if d.is_dir()),
+        key=lambda d: d.name,
+    )
+
+
+def _agents_skill(skill_name: str) -> Path:
+    """The skill's directory in whichever bundle subdirectory ships it."""
+    for root in _agents_roots():
+        if (root / skill_name).is_dir():
+            return root / skill_name
+    return _agents_roots()[0] / skill_name
 
 
 def _skill_frontmatter(skill_md: Path) -> dict[str, object]:
@@ -511,7 +530,7 @@ def _claude_twins() -> list[tuple[str, Path]]:
 
 def test_every_claude_command_has_an_agents_twin() -> None:
     for skill_name, claude_file in _claude_twins():
-        expected = _agents_root() / skill_name / "SKILL.md"
+        expected = _agents_skill(skill_name) / "SKILL.md"
         assert expected.is_file(), (
             f"{claude_file} has no agents twin — expected {expected}. "
             f"Every command in the Claude tree must be authored for the agents tree too."
@@ -520,9 +539,7 @@ def test_every_claude_command_has_an_agents_twin() -> None:
 
 def test_every_agents_skill_has_a_claude_twin() -> None:
     required = {name for name, _ in _claude_twins()}
-    for skill_dir in sorted(_agents_root().iterdir()):
-        if not skill_dir.is_dir():
-            continue
+    for skill_dir in _agents_skill_dirs():
         assert skill_dir.name in required, (
             f"{skill_dir} has no Claude twin. Either add the Claude command or remove "
             f"this skill — the two trees are a bijection."
@@ -530,9 +547,7 @@ def test_every_agents_skill_has_a_claude_twin() -> None:
 
 
 def test_agents_skill_name_matches_its_directory() -> None:
-    for skill_dir in sorted(_agents_root().iterdir()):
-        if not skill_dir.is_dir():
-            continue
+    for skill_dir in _agents_skill_dirs():
         frontmatter = _skill_frontmatter(skill_dir / "SKILL.md")
         name = frontmatter.get("name")
         # Codex requires only non-empty and <=64 chars, but the agentskills.io spec
@@ -545,9 +560,7 @@ def test_agents_skill_name_matches_its_directory() -> None:
 
 
 def test_agents_skill_has_a_nonempty_description() -> None:
-    for skill_dir in sorted(_agents_root().iterdir()):
-        if not skill_dir.is_dir():
-            continue
+    for skill_dir in _agents_skill_dirs():
         frontmatter = _skill_frontmatter(skill_dir / "SKILL.md")
         description = frontmatter.get("description")
         # Codex selects skills on the description, so an empty one is unreachable.
@@ -565,7 +578,7 @@ def test_openai_yaml_mirrors_disable_model_invocation() -> None:
     """
     for skill_name, claude_file in _claude_twins():
         twin_disables = "disable-model-invocation: true" in claude_file.read_text()
-        policy_file = _agents_root() / skill_name / "agents" / "openai.yaml"
+        policy_file = _agents_skill(skill_name) / "agents" / "openai.yaml"
         assert policy_file.is_file() == twin_disables, (
             f"{claude_file} disable-model-invocation={twin_disables} but "
             f"{policy_file} exists={policy_file.is_file()}"
@@ -577,7 +590,7 @@ def test_openai_yaml_mirrors_disable_model_invocation() -> None:
 
 def test_no_agents_skill_uses_claude_argument_substitution() -> None:
     """Codex performs no argument substitution, so these tokens never resolve (D3)."""
-    for skill_md in sorted(_agents_root().rglob("SKILL.md")):
+    for skill_md in sorted(p for root in _agents_roots() for p in root.rglob("SKILL.md")):
         text = skill_md.read_text()
         for token in ("$ARGUMENTS", "$1", "$2"):
             assert token not in text, (
@@ -592,7 +605,7 @@ _WAITING_HEADING = "## Waiting on the command"
 
 
 def _waiting_section(skill_name: str) -> str:
-    text = (_agents_root() / skill_name / "SKILL.md").read_text()
+    text = (_agents_skill(skill_name) / "SKILL.md").read_text()
     assert _WAITING_HEADING in text, f"{skill_name} has no '{_WAITING_HEADING}' section (#126)"
     section = text.split(_WAITING_HEADING, 1)[1]
     return section.split("\n---\n", 1)[0].strip()
@@ -641,7 +654,7 @@ def _install_with(runner_: CliRunner, target: Path, *flags: str) -> object:
 
 
 def _agents_skill_names() -> set[str]:
-    return {d.name for d in _agents_root().iterdir() if d.is_dir()}
+    return {d.name for d in _agents_skill_dirs()}
 
 
 def test_agents_install_writes_every_skill_directory(tmp_path: Path) -> None:
@@ -672,7 +685,9 @@ def test_agents_aliases_produce_identical_results(spelling: str, tmp_path: Path)
     assert result.exit_code == 0  # type: ignore[attr-defined]
 
     written = {str(p.relative_to(target)) for p in target.rglob("*") if p.is_file()}
-    expected = {str(p.relative_to(_agents_root())) for p in _agents_root().rglob("*") if p.is_file()}
+    expected = {
+        str(p.relative_to(root)) for root in _agents_roots() for p in root.rglob("*") if p.is_file()
+    }
     assert written == expected
 
 

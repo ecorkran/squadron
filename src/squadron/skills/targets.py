@@ -144,16 +144,20 @@ class TargetDelivery:
 
 
 def bundled_skill_names(source: Path) -> set[str]:
-    """The skill directory names squadron itself ships under `source/agents`.
+    """The skill directory names squadron itself ships for the agents target.
 
     The agents root is shared with every other agent-skill source, so "is
     squadron installed" cannot be answered by counting what is there. It is
-    answered by counting how many of *our* skills are there.
+    answered by counting how many of *our* skills are there. Reads every agents
+    bundle subdirectory, since a pack's agents skills live under its own source
+    (D4).
     """
-    agents_bundle = source / "agents"
-    if not agents_bundle.is_dir():
-        return set()
-    return {child.name for child in agents_bundle.iterdir() if (child / "SKILL.md").is_file()}
+    names: set[str] = set()
+    for sub_name in DELIVERIES[CommandTarget.AGENTS].bundle_subdirs:
+        bundle = source / sub_name
+        if bundle.is_dir():
+            names.update(child.name for child in bundle.iterdir() if (child / "SKILL.md").is_file())
+    return names
 
 
 DELIVERIES: dict[CommandTarget, TargetDelivery] = {
@@ -174,7 +178,9 @@ DELIVERIES: dict[CommandTarget, TargetDelivery] = {
         # documented user root is `~/.agents/skills` (D2).
         machine_root=Path(".agents/skills"),
         local_root=Path(".agents/skills"),
-        bundle_subdirs=("agents",),
+        # The analysis pack ships its agents skills inside its own source, the
+        # layout every pack follows for Codex content (D2, D4).
+        bundle_subdirs=("agents", "analysis/agents"),
         check_name="codex skills",
         fix_hint="sq install-commands --ide codex",
         receipt_suffix="-agents",
