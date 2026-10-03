@@ -61,3 +61,7 @@ Start a loop via the `loop` skill with a 5 minute interval and this check:
 4. If it passed, confirm `curl -sf https://pypi.org/pypi/squadron-ai/X.Y.Z/json` returns. If yes, report "X.Y.Z live on PyPI" and stop the loop. If not yet, wait for the next tick.
 
 Always stop the loop yourself when it resolves either way.
+
+## 7. Summarize
+
+After the publish is confirmed live on PyPI, run `/sq:summary` (no arguments) via the Skill tool to save a context summary. Skip this if the release failed.
