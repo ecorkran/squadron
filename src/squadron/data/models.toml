@@ -82,8 +82,47 @@ cost_tier = "subscription"
 notes = "Max sub"
 
 # ---------------------------------------------------------------------------
-# OpenAI GPT-5.4 family
+# OpenAI ChatGPT Family
 # ---------------------------------------------------------------------------
+
+[aliases.astra]
+profile = "openai-oauth"
+model = "gpt-6-astra"
+cost_tier = "subscription"
+private = true
+notes = "Frontier"
+
+[aliases.astra.pricing]
+input = 10.00
+output = 50.00
+cache_read = 1.00
+cache_write = 25.00
+
+[aliases.sol]
+profile = "openai-oauth"
+model = "gpt-6-sol"
+cost_tier = "subscription"
+private = true
+
+[aliases.sol.pricing]
+input = 2.00
+output = 10.00
+cache_read = 0.10
+cache_write = 2.50
+
+[aliases.luna]
+profile = "openai-oauth"
+model = "gpt-6-luna"
+cost_tier = "subscription"
+private = true
+
+[aliases.luna.pricing]
+input = 0.10
+output = 0.50
+cache_read = 0.01
+cache_write = 0.125
+
+# OpenAI API
 
 [aliases.gpt54]
 profile = "openai"
@@ -111,21 +150,6 @@ output = 4.50
 cache_read = 0.075
 cache_write = 0.75
 
-[aliases.gpt54-nano]
-profile = "openai"
-model = "gpt-5.4-nano"
-private = true
-cost_tier = "cheap"
-notes = "Lightweight"
-
-[aliases.gpt54-nano.pricing]
-input = 0.20
-output = 1.25
-cache_read = 0.02
-cache_write = 1.25
-
-# OpenAI specialized
-
 [aliases.codex]
 profile = "openai"
 model = "gpt-5.3-codex"
@@ -139,32 +163,18 @@ output = 14.00
 cache_read = 0.0175
 cache_write = 1.75
 
-[aliases.codex-agent]
-profile = "openai-oauth"
-model = "gpt-5.3-codex"
-private = true
-cost_tier = "subscription"
-notes = "Agentic: sandbox, subscription auth"
-
-[aliases.codex-spark]
-profile = "openai-oauth"
-model = "gpt-5.3-codex-spark"
-private = true
-cost_tier = "subscription"
-notes = "Near-instant, Pro only"
-
 # OpenAI through OpenRouter
-[aliases.luna]
+[aliases.luna-r]
 profile = "openrouter"
 model = "openai/gpt-6-luna"
 private = true
 cost_tier = "cheap"
 
-[aliases.luna.pricing]
+[aliases.luna-r.pricing]
 input = 0.10
 output = 0.50
 cache_read = 0.01
-cache_write = 0.50
+cache_write = 0.125
 
 # ---------------------------------------------------------------------------
 # Google Gemini
@@ -193,8 +203,8 @@ notes = "Fast, cheap"
 [aliases.gemini-flash.pricing]
 input = 0.75
 output = 3.75
-cache_read = 0.75
-cache_write = 3.75
+cache_read = 0.075
+cache_write = 0.50
 
 [aliases.gemma4]
 profile = "openrouter"
@@ -240,6 +250,20 @@ input = 2.60
 output = 13.00
 cache_read = 0.30
 cache_write = 13.00
+
+[aliases.ling-flash]
+profile = "openrouter"
+model = "inclusionai/ling-3.1-flash"
+max_output_tokens = 131072
+private = true
+cost_tier = "free"
+notes = "262K Context"
+
+[aliases.ling-flash.pricing]
+input = 0.00
+output = 0.00
+cache_read = 0.00
+cache_write = 0.00
 
 [aliases.minimax]
 profile = "openrouter"

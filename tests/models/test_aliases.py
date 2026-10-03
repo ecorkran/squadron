@@ -29,10 +29,10 @@ def test_resolve_opus() -> None:
     assert profile == "sdk"
 
 
-def test_resolve_gpt54_nano() -> None:
-    """gpt54-nano resolves to gpt-5.4-nano on openai profile."""
-    model, profile = resolve_model_alias("gpt54-nano")
-    assert model == "gpt-5.4-nano"
+def test_resolve_gpt54_mini() -> None:
+    """gpt54-mini resolves to gpt-5.4-mini on openai profile."""
+    model, profile = resolve_model_alias("gpt54-mini")
+    assert model == "gpt-5.4-mini"
     assert profile == "openai"
 
 
@@ -57,17 +57,17 @@ def test_resolve_codex() -> None:
     assert profile == "openai"
 
 
-def test_resolve_codex_agent() -> None:
-    """codex-agent resolves to gpt-5.3-codex on openai-oauth profile."""
-    model, profile = resolve_model_alias("codex-agent")
-    assert model == "gpt-5.3-codex"
+def test_resolve_sol() -> None:
+    """sol resolves to gpt-6-sol on openai-oauth profile."""
+    model, profile = resolve_model_alias("sol")
+    assert model == "gpt-6-sol"
     assert profile == "openai-oauth"
 
 
-def test_resolve_codex_spark() -> None:
-    """codex-spark resolves to gpt-5.3-codex-spark on openai-oauth profile."""
-    model, profile = resolve_model_alias("codex-spark")
-    assert model == "gpt-5.3-codex-spark"
+def test_resolve_luna() -> None:
+    """luna resolves to gpt-6-luna on openai-oauth profile."""
+    model, profile = resolve_model_alias("luna")
+    assert model == "gpt-6-luna"
     assert profile == "openai-oauth"
 
 
@@ -157,7 +157,7 @@ def test_get_all_aliases_includes_builtins(tmp_path: Path) -> None:
         aliases = get_all_aliases()
         assert "opus" in aliases
         assert "sonnet" in aliases
-        assert "gpt54-nano" in aliases
+        assert "gpt54-mini" in aliases
         assert len(aliases) >= len(load_builtin_aliases())
 
 

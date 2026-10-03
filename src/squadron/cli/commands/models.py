@@ -68,8 +68,8 @@ def _show_aliases(*, verbose: bool = False, sort: ModelSort = ModelSort.PROFILE)
 
     Grouped by profile by default: with 30-odd aliases across five
     profiles, a flat alias sort scatters related models — the Gemini
-    variants land apart, and codex/codex-agent/codex-spark split because
-    their profiles differ. ``sort=ALIAS`` restores the flat ordering.
+    variants land apart, and the openai-oauth aliases interleave with
+    openrouter ones. ``sort=ALIAS`` restores the flat ordering.
     """
     all_aliases = get_all_aliases()
     if not all_aliases:

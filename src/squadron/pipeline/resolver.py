@@ -48,8 +48,7 @@ class ResolvedModel(NamedTuple):
     the alias's ``tool_use`` capability survives resolution (slice 266). It is
     the alias table's only reader on this path: once ``resolve_model_alias``
     collapses a name to an id, the capability is unrecoverable — several aliases
-    can share one model id and disagree on ``tool_use`` (``codex`` and
-    ``codex-agent`` both resolve to ``gpt-5.3-codex``), so there is no sound
+    can share one model id and disagree on ``tool_use``, so there is no sound
     reverse lookup.
 
     Returned by :meth:`ModelResolver.resolve_full`. :meth:`ModelResolver.resolve`
@@ -173,9 +172,8 @@ class ModelResolver:
 
         The capability can only be read while the alias name is still known:
         ``resolve_model_alias`` collapses a name to a model id, and several
-        aliases can share one id while disagreeing on ``tool_use`` (``codex``
-        and ``codex-agent`` both resolve to ``gpt-5.3-codex``), so there is no
-        sound reverse lookup. Call sites that hand tools to an agent must
+        aliases can share one id while disagreeing on ``tool_use``, so there is
+        no sound reverse lookup. Call sites that hand tools to an agent must
         resolve through here (slice 266).
         """
         for candidate in self.cascade_candidates(action_model, step_model):

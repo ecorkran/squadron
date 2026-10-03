@@ -143,7 +143,7 @@ _EXPLANATION: dict[str, str] = {
         "Only required if you plan to use the openai/codex provider."
     ),
     "codex provider": (
-        "The openai-oauth profile and the codex-agent alias run through the bundled "
+        "The openai-oauth profile and its aliases (astra, sol, luna) run through the bundled "
         "Codex runtime and need a ChatGPT sign-in. Optional."
     ),
     "git pre-commit hook": (

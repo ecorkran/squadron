@@ -28,7 +28,7 @@ def test_models_contains_builtins() -> None:
     assert result.exit_code == 0
     assert "opus" in result.output
     assert "sonnet" in result.output
-    assert "gpt54-nano" in result.output
+    assert "gpt54-mini" in result.output
 
 
 def test_models_list_is_alias_for_bare() -> None:
@@ -436,11 +436,11 @@ def test_default_groups_by_profile() -> None:
 
 
 def test_default_keeps_related_models_together() -> None:
-    """The motivating case: codex variants split across profiles under A-Z."""
+    """The motivating case: one profile's aliases interleave with others under A-Z."""
     result = runner.invoke(app, ["models", "list"])
-    order = _alias_order(result.output, ["codex", "codex-agent", "codex-spark", "deepseek4"])
-    # deepseek4 (openrouter) must not fall between the codex entries.
-    assert order.index("deepseek4") > order.index("codex-spark")
+    order = _alias_order(result.output, ["astra", "deepseek4", "luna", "sol"])
+    # deepseek4 (openrouter) must not fall between the openai-oauth entries.
+    assert order.index("deepseek4") > max(order.index(a) for a in ("astra", "luna", "sol"))
 
 
 def test_sort_alias_restores_flat_ordering() -> None:

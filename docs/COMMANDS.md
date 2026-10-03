@@ -294,7 +294,7 @@ sq pr create
 ## auth
 
 Log in, log out, and check credentials for provider profiles. Interactive login is supported
-by `openai-oauth` (ChatGPT sign-in for the `codex-agent` alias); credentials are saved to
+by `openai-oauth` (ChatGPT sign-in for the `astra`, `sol` and `luna` aliases); credentials are saved to
 `~/.codex/auth.json`. Other profiles authenticate from environment variables or files and
 only support validation.
 

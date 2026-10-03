@@ -124,7 +124,7 @@ Squadron ships six built-in provider profiles. Verified against `BUILT_IN_PROFIL
 | OpenRouter | `openrouter` | `OPENROUTER_API_KEY` | Multi-model gateway |
 | Google Gemini | `gemini` | `GEMINI_API_KEY` | Via OpenAI-compatible endpoint |
 | Local (Ollama / vLLM / LM Studio) | `local` | None | Points at `http://localhost:11434/v1` by default |
-| OpenAI Codex (agentic) | `openai-oauth` | `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; see README's [Using Codex](../README.md#using-codex-experimental) section |
+| OpenAI ChatGPT (agentic) | `openai-oauth` | `sq auth login openai-oauth` (saves to `~/.codex/auth.json`) | ChatGPT subscription; `astra`, `sol`, `luna` aliases; see README's [Using ChatGPT models](../README.md#using-chatgpt-models-subscription) section |
 
 To configure a profile, either set its env var:
 

@@ -221,7 +221,7 @@ Use `--model` with a built-in alias to run any review or pipeline step through a
 sq review slice 120 -v
 
 # OpenAI
-sq review code --diff main --model gpt54-nano -v
+sq review code --diff main --model sol -v
 
 # Google Gemini
 sq review slice 120 --model gemini-flash -v
@@ -239,17 +239,19 @@ $ sq models
 ┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━┓
 ┃ Alias           ┃ Profile      ┃ Model ID                           ┃ Source ┃
 ┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━┩
-│ fable           │ sdk          │ claude-fable-5                     │        │
+│ fable           │ sdk          │ claude-fable-5-1                   │        │
 │ haiku           │ sdk          │ claude-haiku-4-5-20251001          │        │
-│ opus            │ sdk          │ claude-opus-5                      │        │
-│ sonnet          │ sdk          │ claude-sonnet-5                    │        │
+│ opus            │ sdk          │ claude-opus-5-5                    │        │
+│ sonnet          │ sdk          │ claude-sonnet-5-5                  │        │
 │ codex           │ openai       │ gpt-5.3-codex                      │        │
 │ gpt54           │ openai       │ gpt-5.4                            │        │
-│ gpt54-nano      │ openai       │ gpt-5.4-nano                       │        │
-│ codex-agent     │ openai-oauth │ gpt-5.3-codex                      │        │
-│ gemini-flash    │ gemini       │ gemini-3.8-flash                   │        │
+│ gpt54-mini      │ openai       │ gpt-5.4-mini                       │        │
+│ astra           │ openai-oauth │ gpt-6-astra                        │        │
+│ luna            │ openai-oauth │ gpt-6-luna                         │        │
+│ sol             │ openai-oauth │ gpt-6-sol                          │        │
 │ gemini          │ gemini       │ gemini-3.1-pro-preview-customtools │        │
-│ deepseek4-flash │ openrouter   │ deepseek/deepseek-v4-flash-0731    │        │
+│ gemini-flash    │ gemini       │ gemini-3.8-flash                   │        │
+│ deepseek4-flash │ openrouter   │ deepseek/deepseek-v4.1-flash       │        │
 │ glm53           │ openrouter   │ z-ai/glm-5.3                       │        │
 │ kimi27          │ openrouter   │ moonshotai/kimi-k2.7-code          │        │
 │ minimax         │ openrouter   │ minimax/minimax-m3                 │        │
@@ -265,21 +267,24 @@ Add your own aliases in `~/.config/squadron/models.toml`. Only `profile` and `mo
 ```toml
 [aliases.deepseek4-flash]
 profile = "openrouter"
-model = "deepseek/deepseek-v4-flash-0731"
+model = "deepseek/deepseek-v4.1-flash"
+max_output_tokens = 384000
 private = true
 cost_tier = "cheap"
 
 [aliases.deepseek4-flash.pricing]
-input = 0.0765
-output = 0.153
+input = 0.12
+output = 0.48
+cache_read = 0.01
+cache_write = 0.48
 ```
 
-### Using Codex (experimental)
+### Using ChatGPT models (subscription)
 
-The `codex-agent` alias enables **OpenAI Codex** agentic mode for reviews and agent tasks. Codex provides sandbox file access, command execution, and subscription-based authentication:
+The `astra`, `sol` and `luna` aliases run OpenAI's GPT-6 models on the `openai-oauth` profile, billed to your ChatGPT subscription instead of per token. They run through the Codex agent, which gives the model sandboxed file access and command execution:
 
 ```bash
-sq review slice 120 --model codex-agent -v
+sq review slice 120 --model sol -v
 ```
 
 **Setup**: squadron ships the Codex SDK and its bundled runtime (no npm install needed), so just sign in with your ChatGPT account:
@@ -287,12 +292,11 @@ sq review slice 120 --model codex-agent -v
 ```bash
 sq auth login openai-oauth                 # opens a browser
 sq auth login openai-oauth --device-code   # SSH / headless: prints a URL and code
-sq review slice 120 --model codex-agent -v
 ```
 
-`sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row with the SDK version and login state. `OPENAI_API_KEY` is not used by this profile — for API-key access use the `openai` profile.
+`sq auth status` shows the signed-in account and plan; `sq auth logout openai-oauth` signs out. `sq doctor -v` reports a `codex provider` row with the SDK version and login state. `OPENAI_API_KEY` is not used by this profile. The `pricing` on these aliases is what the same call would cost on the API, shown for comparison.
 
-Codex is experimental and requires an active ChatGPT subscription. The standard `codex` alias (without `-agent` suffix) uses OpenAI's Chat Completions API and doesn't require this setup.
+The `openai` profile aliases (`gpt54`, `gpt54-mini`, `codex`) use the OpenAI API with `OPENAI_API_KEY` and per-token billing. `luna-r` runs `luna` through OpenRouter.
 
 ## Pipelines (`sq run`)
 

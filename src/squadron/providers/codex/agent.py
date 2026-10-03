@@ -104,8 +104,7 @@ class CodexAgent:
         """Send prompt via SDK and return the response text and the turn's usage."""
         if self._config.model is None:
             raise ProviderError(
-                "model is required for Codex agents. "
-                "Specify --model or use a model alias (e.g. codex-agent)."
+                "model is required for Codex agents. Specify --model or use a model alias (e.g. sol)."
             )
         if self._thread is None:
             await self._start_thread(self._config.model)

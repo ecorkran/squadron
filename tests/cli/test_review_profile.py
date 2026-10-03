@@ -204,7 +204,7 @@ class TestCLIProfileFlag:
             raw_output="raw",
             template_name="arch",
             input_files={"input": "f.md"},
-            model="gpt-5.4-nano",
+            model="gpt-5.4-mini",
         )
 
         monkeypatch.setattr(
@@ -247,7 +247,7 @@ class TestAliasWiring:
     def test_alias_resolves_model_and_profile(
         self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]
     ) -> None:
-        """gpt54-nano alias resolves to gpt-5.4-nano on openai."""
+        """gpt54-mini alias resolves to gpt-5.4-mini on openai."""
         from unittest.mock import AsyncMock, patch
 
         from squadron.cli.commands.review import _run_review_command
@@ -259,7 +259,7 @@ class TestAliasWiring:
             raw_output="raw",
             template_name="slice",
             input_files={"input": "f.md"},
-            model="gpt-5.4-nano",
+            model="gpt-5.4-mini",
         )
 
         monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
@@ -280,11 +280,11 @@ class TestAliasWiring:
                 "terminal",
                 None,
                 0,
-                model_flag="gpt54-nano",
+                model_flag="gpt54-mini",
             )
 
         call_args = mock_exec.call_args
-        assert call_args[0][3] == "gpt-5.4-nano"  # resolved model
+        assert call_args[0][3] == "gpt-5.4-mini"  # resolved model
         assert call_args[0][4] == "openai"  # resolved profile
 
     def test_unknown_model_with_no_profile_source_raises(
@@ -377,7 +377,7 @@ class TestAliasWiring:
             raw_output="raw",
             template_name="slice",
             input_files={"input": "f.md"},
-            model="gpt-5.4-nano",
+            model="gpt-5.4-mini",
         )
 
         monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
@@ -398,12 +398,12 @@ class TestAliasWiring:
                 "terminal",
                 None,
                 0,
-                model_flag="gpt54-nano",
+                model_flag="gpt54-mini",
                 profile_flag="local",
             )
 
         call_args = mock_exec.call_args
-        assert call_args[0][3] == "gpt-5.4-nano"  # alias-resolved model
+        assert call_args[0][3] == "gpt-5.4-mini"  # alias-resolved model
         assert call_args[0][4] == "local"  # explicit flag wins
 
 

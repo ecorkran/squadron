@@ -67,7 +67,7 @@ def _template() -> ReviewTemplate:
 
 
 async def _review(effort: Effort | None) -> ReviewResult:
-    """One review through CodexProvider, as the codex-agent alias (effort from the alias)."""
+    """One review through CodexProvider, as an openai-oauth alias (effort from the alias)."""
     with (
         patch(
             f"{_P}.get_profile",
