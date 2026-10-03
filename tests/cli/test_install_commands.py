@@ -621,6 +621,21 @@ def test_long_command_skills_carry_one_waiting_rule() -> None:
         assert _waiting_section(skill_name) == reference, f"{skill_name} waiting rule drifted"
 
 
+#: Skills whose commands reach a provider or GitHub and so hit Codex's sandbox (928 D12).
+_SANDBOX_HINT_SKILLS = ("sq-review", "sq-run", "sq-pr")
+_SANDBOX_HINT_HEADING = "## If Codex blocks the command"
+_SANDBOX_README_SECTION = "Codex sandbox approval rule"
+
+
+def test_network_skills_carry_the_sandbox_hint() -> None:
+    for skill_name in _SANDBOX_HINT_SKILLS:
+        text = (_agents_skill(skill_name) / "SKILL.md").read_text()
+        assert _SANDBOX_HINT_HEADING in text, f"{skill_name} has no sandbox hint (#127)"
+        assert _SANDBOX_README_SECTION in text, f"{skill_name} hint does not name the README section"
+    # D12 names exactly three skills; sq-task is out of scope.
+    assert _SANDBOX_HINT_HEADING not in (_agents_skill("sq-task") / "SKILL.md").read_text()
+
+
 def test_drift_guard_fails_on_a_command_with_no_twin(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
