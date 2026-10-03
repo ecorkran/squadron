@@ -7,7 +7,7 @@ dependencies: [review-transport-unification-provider-decoupling, tool-heavy-revi
 interfaces: []  # none: InteractiveLogin is provided but no planned slice consumes it
 dateCreated: 20261001
 dateUpdated: 20261002
-status: in_progress
+status: complete
 ---
 
 # Slice Design: Codex Provider on the Official SDK — Optional Extra, Discoverability, Subscription Login

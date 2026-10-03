@@ -571,9 +571,9 @@ File: `cli/commands/auth.py`.
       to `task-checker`
 - [x] Set slice design `status` and the slice-plan entry to complete — set by cf check to in_progress until the merge
 - [x] DEVLOG entry per `prompt.ai-project.system.md` Session State Summary
-- [ ] Merge the slice branch into the target (re-read `cf config get git.integration_branch`
+- [x] Merge the slice branch into the target (re-read `cf config get git.integration_branch`
       first); stop and ask the Project Manager if checkout or merge fails — held: slice code review (cf check gate) diffs the branch against main, so merge after the review
-- [ ] Commit: `docs: complete slice 129`
+- [x] Commit: `docs: complete slice 129`
 
 ## Manual verification (Project Manager, not a checklist item)
 
