@@ -516,6 +516,38 @@ class TestPipelineNameNormalisation:
         mock_load.assert_called_once_with("test-pipeline")
 
 
+class TestRunExitCode:
+    @pytest.mark.parametrize(
+        ("status", "expected"),
+        [
+            (ExecutionStatus.COMPLETED, 0),
+            (ExecutionStatus.PAUSED, 0),
+            (ExecutionStatus.FAILED, 1),
+        ],
+    )
+    def test_fresh_run_exit_code_follows_pipeline_status(
+        self, status: ExecutionStatus, expected: int
+    ) -> None:
+        """A failed pipeline exits non-zero so scripts and CI can see it."""
+        from typer.testing import CliRunner
+
+        from squadron.cli.app import app
+
+        result = PipelineResult(pipeline_name="test-pipeline", status=status, step_results=[])
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
+            patch("squadron.cli.commands.run.StateManager"),
+            patch("squadron.cli.commands.run.sys") as mock_sys,
+            patch("squadron.cli.commands.run.asyncio") as mock_asyncio,
+        ):
+            mock_sys.stdin.isatty.return_value = False
+            # Close the unawaited coroutine so it doesn't warn at GC.
+            mock_asyncio.run.side_effect = lambda coro: (coro.close(), result)[1]
+            outcome = CliRunner().invoke(app, ["run", "test-pipeline"])
+
+        assert outcome.exit_code == expected
+
+
 # ---------------------------------------------------------------------------
 # T12: _display_run_status shows execution_mode
 # ---------------------------------------------------------------------------

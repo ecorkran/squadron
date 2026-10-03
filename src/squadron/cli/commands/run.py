@@ -540,6 +540,15 @@ def _display_run_status(state: object) -> None:
     rprint(Panel("\n".join(lines), title="Run Status"))
 
 
+def _exit_code(result: PipelineResult) -> int:
+    """Process exit code for a finished run: 1 when the pipeline failed.
+
+    A paused run (checkpoint) is not a failure; it exits 0 with resume
+    instructions already printed.
+    """
+    return 1 if result.status == ExecutionStatus.FAILED else 0
+
+
 def _display_result(result: PipelineResult) -> None:
     """Print a brief final summary of a completed pipeline run."""
     color = _STATUS_COLORS.get(result.status.value, "dim")
@@ -1167,7 +1176,7 @@ def run(
             raise typer.Exit(1) from None
 
         _display_result(result)
-        raise typer.Exit(0)
+        raise typer.Exit(_exit_code(result))
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
@@ -1223,7 +1232,7 @@ def run(
                         raise typer.Exit(1) from None
 
                     _display_result(result)
-                    raise typer.Exit(0)
+                    raise typer.Exit(_exit_code(result))
 
     # Fresh run
     try:
@@ -1248,3 +1257,4 @@ def run(
         raise typer.Exit(1) from None
 
     _display_result(result)
+    raise typer.Exit(_exit_code(result))
