@@ -47,7 +47,7 @@ Found while probing (fixed here, one line each): `commands/sq/review.md` and `co
 
 - Automatic conversion of Claude-authored packs to skill directories (D2).
 - A doctor check for the Codex rule (D11).
-- Writing the rule file for the user (`sq setup` prints and guides; it does not edit another tool's config).
+- ~~Writing the rule file for the user.~~ *Amendment (20261003):* reversed — see D9. Users should never write rule files by hand.
 - #126 (Codex polling long commands), `copilot`/`cursor` targets, `sq setup` installing skill packs (it does not today).
 - Pack-name collisions with squadron's own receipt names or skill names — pre-existing on the Claude path and unchanged here.
 
@@ -152,6 +152,8 @@ prefix_rule(
 
 The docs state plainly what it authorizes: matching commands run **outside Codex's sandbox with no prompt** — network and unrestricted filesystem, not just network. They name `decision = "prompt"` as the ask-every-time alternative, `<project>/.codex/rules/` for a per-project rule, and that a command with a redirect or `VAR=` prefix never matches a rule. README's existing `default.rules` snippet is replaced, not duplicated.
 
+*Amendment (20261003, implementation):* the user should not have to write or care about rule files, so `sq install-commands --ide codex` **writes** `~/.codex/rules/squadron.rules` (under `$CODEX_HOME` if set; skipped with a message when that directory does not exist). The file is squadron's alone: every install rewrites it whole from `SQ_RULE_EXAMPLES` in `skills/codex_rules.py`, and a machine-scope `sq uninstall-commands --ide codex` deletes it (a `--local` uninstall leaves it, since it is machine-wide). `default.rules` is never read or written. An interim version on this branch appended rules to `default.rules` with string-matching duplicate detection; it was replaced because squadron could not tell its lines from the user's (no clean uninstall, no way to drop a command later) and the matching missed equivalent rule spellings. The docs still state what the rule authorizes in the same paragraph. Verified: `codex execpolicy check --rules ~/.codex/rules/squadron.rules` returns `allow` for each listed subcommand and no match for `sq models list` / `sq --version`; Codex accepted the `match` examples.
+
 **D10 — The subcommand list comes from a sandbox probe, not from reading code.** Each top-level `sq` command is run under `codex sandbox -- sq <cmd> …` from a terminal and classified by whether it fails on network or filesystem denial. Evidence gathered during design:
 
 | Command | Sandboxed result | Rule |
@@ -163,11 +165,28 @@ The docs state plainly what it authorizes: matching commands run **outside Codex
 | `sq spawn`, `task`, `message`, `list`, `history`, `shutdown` | talk to the daemon over a Unix socket; `sq list` reported "Daemon is not running" | probe with `sq serve` running in a terminal |
 | `sq auth login` | unprobed | probe |
 
-The probe results table goes into the DEVLOG entry for the implementation; the rule's alternatives are exactly the "yes" rows. If the daemon-client commands need the rule, README's "`$sq-spawn` … fine to invoke directly" sentence is corrected in the same edit.
+The probe results table goes into the DEVLOG entry for the implementation; the rule's alternatives are exactly the "yes" rows.
+
+*Amendment (20261003) — probe results* (`codex sandbox` 0.146.1, real terminal):
+
+| Command | Sandboxed result | Rule |
+|---|---|---|
+| `sq --version`, `sq models list`, `sq auth status` | ran | no |
+| `sq pr show 1` | `HostUnreachableError` (api.github.com) | yes |
+| `sq review code 928 --model luna` | blocked writing Codex state under `~/.codex`; review file save denied | yes |
+| `sq run P4 928 --prompt-only` | `PermissionError` writing `~/.config/squadron/runs/…` (filesystem, not network) | yes |
+| `sq metrology audit run .` | audit failed, no audit file written | yes (reaches a provider) |
+| `sq auth login openai-oauth` | blocked writing `~/.codex` state | yes |
+| `sq skills install <github pack>` | not re-probed (first attempt was a probe bug); runs `git clone` | yes (by construction) |
+| `sq spawn`, `task`, `message`, `list`, `history`, `shutdown` | not probed — experimental agent-management commands, excluded per PM | no |
+
+Rule alternatives: `review`, `run`, `pr`, `metrology`, `auth`, `skills`. `auth` and `skills` as prefixes also allow their read-only subcommands, which is harmless. README's "`$sq-spawn` … fine to invoke directly" sentence no longer exists after the README restructure. If the daemon-client commands need the rule, README's "`$sq-spawn` … fine to invoke directly" sentence is corrected in the same edit.
 
 **D11 — No `sq doctor` check for the rule.** A missing squadron rule is not a broken environment: the user may approve per call, run Codex with approvals off or full access, put the rule in a project `.codex/rules/`, or have it in a system or managed-requirements layer doctor cannot see. A check reading `~/.codex/rules` would WARN on correct setups. Evaluating the rule properly means parsing Starlark or shelling out to `codex execpolicy check`, which Codex marks preview ("may have breaking changes"). The cost is coupling to another tool's config; the benefit is covered better by D12.
 
 **D12 — Put the hint where the failure happens.** The misleading message is the Codex model's paraphrase of a sandbox rejection. `commands/agents/sq-review`, `sq-run`, and `sq-pr` each gain a short section: if Codex rejects or blocks the `sq` command for sandbox or approval reasons, say that it is Codex's sandbox, not the provider or squadron config, and point at the README section by heading. Agents tree only — the Claude files never see this failure.
+
+*Amendment (20261003):* with D9's rules writer, the hint's remedy is "run `sq install-commands --ide codex` from a terminal", with the README section as the reference.
 
 ### Patterns and Conventions
 
