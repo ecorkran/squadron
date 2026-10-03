@@ -477,7 +477,12 @@ class OpenAICompatibleAgent:
             )
 
         if result.is_error:
-            _log.info("Tool %r returned an error result: %s", tool_name, result.content)
+            _log.info(
+                "Tool %r returned an error result (args=%r): %s",
+                tool_name,
+                arguments,
+                result.content,
+            )
         else:
             _log.debug(
                 "Tool %r succeeded (args=%r, result=%.200r)",
