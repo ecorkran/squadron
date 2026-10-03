@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.0] - 20261003
+
 ### Added
 - The Codex provider (`openai-oauth`, `--model codex-agent`) works out of the box: squadron now ships OpenAI's official Codex SDK with its bundled runtime, so `npm i -g @openai/codex` and the GitHub SDK install are no longer needed.
 - `sq auth login openai-oauth` signs in with your ChatGPT account in the browser, or with `--device-code` on SSH and headless machines. `--timeout` sets how long to wait. `sq auth logout openai-oauth` signs out, and `sq auth status` shows the signed-in email and plan.
@@ -27,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Hints and errors containing square brackets print intact in `sq doctor`, `sq setup`, `sq auth` and review errors.
 - A split `sq review tasks` exits 2 when any part fails, even if another part's verdict could not be read. It used to report UNKNOWN and exit 0. A pipeline `review:` step over split task files now reports FAIL in that case too (#176).
+- Code blocks inside review findings are saved intact instead of blank.
+- Reviewers that read files themselves are told that cf document paths resolve under `project-documents/`, so they stop missing `user/...` paths.
+- A review that fails on a network error names the error type instead of printing an empty message.
+- `-vv` review output shows an excluded directory once instead of one line per file in it, and tool errors show the arguments the model sent.
 
 ## [0.17.0] - 20260930
 

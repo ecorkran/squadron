@@ -2,13 +2,19 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261002
+dateUpdated: 20261003
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261003
+
+### Release 0.18.0
+
+- **Contents:** slice 129 (Codex provider on the official `openai-codex` SDK as a core dependency; `sq auth login`/`logout` for `openai-oauth` with browser and device-code flows; Codex rows in `sq doctor` and `sq setup`; Codex effort and token usage, #171), split-review verdict fold fix (#176), and review fixes: Rich markup in finding text, fenced code in finding bodies, `project-documents/` docs-root note, named textless transport errors, excluded-directory walk pruning, tool-error argument logging.
 
 ## 20261002
 
