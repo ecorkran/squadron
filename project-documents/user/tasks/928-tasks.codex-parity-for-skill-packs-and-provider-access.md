@@ -11,7 +11,7 @@ projectState: >
   to ~/.claude/commands; the Codex sandbox rule is undocumented for most `sq` commands.
 dateCreated: 20260927
 dateUpdated: 20261003
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -261,51 +261,51 @@ Not code — evidence-gathering. Requires the Codex CLI on the verification mach
 stated slice prerequisite) and a terminal outside any Codex session, per the design's
 Special Considerations (a probe run from inside Codex measures the outer sandbox).
 
-- [ ] Carry forward the design's already-confirmed rows unchanged: `sq --version`,
+- [x] Carry forward the design's already-confirmed rows unchanged: `sq --version`,
       `sq models list`, `sq auth status` (ran, no rule needed); `sq pr show 1`
       (`HostUnreachableError`, needs the rule)
-- [ ] Probe and record a concrete result for every row the design marks "confirm by
+- [x] Probe and record a concrete result for every row the design marks "confirm by
       probe" or "unprobed":
-  - [ ] `sq review …`, `sq run …`, `sq metrology …` under `codex sandbox --`
-  - [ ] `sq skills install <pack-with-github-source>` under `codex sandbox --`
-  - [ ] With `sq serve` running in a separate terminal: `sq spawn`, `sq task`,
+  - [x] `sq review …`, `sq run …`, `sq metrology …` under `codex sandbox --`
+  - [x] `sq skills install <pack-with-github-source>` under `codex sandbox --`
+  - [x] With `sq serve` running in a separate terminal: `sq spawn`, `sq task`,
         `sq message`, `sq list`, `sq history`, `sq shutdown` under `codex sandbox --`
-  - [ ] `sq auth login` under `codex sandbox --`
-- [ ] Success: every row in D10's table has an observed result (ran / blocked with the
+  - [x] `sq auth login` under `codex sandbox --`
+- [x] Success: every row in D10's table has an observed result (ran / blocked with the
       specific error), not a "probe" placeholder; the final subcommand list for D9's rule
       is written down for Task 8
-- [ ] If any daemon-client command (`sq spawn`/`task`/`message`/`list`/`history`/`shutdown`)
+- [x] If any daemon-client command (`sq spawn`/`task`/`message`/`list`/`history`/`shutdown`)
       needs the rule, note it for Task 8's README correction (the "fine to invoke
       directly" sentence) and for Task 9's scope note on `sq-task`
-- [ ] Record the full probe table for the DEVLOG entry (Task 13)
+- [x] Record the full probe table for the DEVLOG entry (Task 13)
 
 ---
 
 ## Task 8 — Codex approval rule in README and QUICKSTART (D9)
 
-- [ ] Replace README's existing `default.rules` snippet (currently a single
+- [x] Replace README's existing `default.rules` snippet (currently a single
       `prefix_rule(pattern = ["sq", "review"], decision = "allow")` block) with the
       `~/.codex/rules/squadron.rules` rule from D9, using Task 7's confirmed subcommand
       list as `pattern`'s alternatives and one `match` example per subcommand
-  - [ ] State in the same paragraph as the snippet — not a footnote — that a matching
+  - [x] State in the same paragraph as the snippet — not a footnote — that a matching
         rule runs the command outside Codex's sandbox with no prompt: network **and**
         unrestricted filesystem
-  - [ ] Name the `decision = "prompt"` alternative and `<project>/.codex/rules/` for a
+  - [x] Name the `decision = "prompt"` alternative and `<project>/.codex/rules/` for a
         per-project rule
-  - [ ] Name that a command using redirection, an env-var prefix, or a glob never
+  - [x] Name that a command using redirection, an env-var prefix, or a glob never
         matches a rule
-  - [ ] If Task 7 found a daemon-client command needs the rule, correct the "fine to
+  - [x] If Task 7 found a daemon-client command needs the rule, correct the "fine to
         invoke directly" sentence about those commands in the same edit
-- [ ] Add the equivalent section to `docs/QUICKSTART.md`'s Codex section
-- [ ] Success: both docs describe one rule file, its exact contents, and what it
+- [x] Add the equivalent section to `docs/QUICKSTART.md`'s Codex section
+- [x] Success: both docs describe one rule file, its exact contents, and what it
       authorizes, with no leftover reference to editing `default.rules`
 
-- [ ] **Verify** (live, requires Codex CLI)
-  - [ ] `codex execpolicy check --rules ~/.codex/rules/squadron.rules sq <cmd> …` returns
+- [x] **Verify** (live, requires Codex CLI)
+  - [x] `codex execpolicy check --rules ~/.codex/rules/squadron.rules sq <cmd> …` returns
         `"decision":"allow"` for every subcommand in the pattern (walkthrough step 9)
-  - [ ] The same check for `sq models list` returns no matched rule
-  - [ ] Success: both checks match; record the exact commands run in the DEVLOG entry
-  - [ ] Commit: `docs: document the Codex sandbox approval rule`
+  - [x] The same check for `sq models list` returns no matched rule
+  - [x] Success: both checks match; record the exact commands run in the DEVLOG entry
+  - [x] Commit: `docs: document the Codex sandbox approval rule`
 
 ---
 
@@ -375,7 +375,7 @@ Special Considerations (a probe run from inside Codex measures the outer sandbox
 - [x] Add a `CHANGELOG` `[Unreleased]` → `### Added` bullet: user-facing, one line, no
       technical detail (e.g. "`sq skills install/uninstall/list` now support `--ide
       codex` for Codex/agent-skill installs")
-- [ ] A second bullet for the documented Codex approval rule, if user-facing enough to
+- [x] A second bullet for the documented Codex approval rule, if user-facing enough to
       warrant one
 - [x] `ruff format`, `ruff check`, `pyright` — zero errors is the merge gate
 - [x] Full `pytest` run (not just touched files)
@@ -392,24 +392,24 @@ Special Considerations (a probe run from inside Codex measures the outer sandbox
         every WARN-level row, and the walkthrough's expected four skill-pack rows are
         all WARN at that point (nothing installed for the walkthrough's own packs)
   - [x] Success: each step's stated output matches, with the `-v` correction applied
-- [ ] Run walkthrough steps 8–11 live, in a real terminal with the Codex CLI, using the
+- [x] Run walkthrough steps 8–11 live, in a real terminal with the Codex CLI, using the
       rule file from Task 8
-  - [ ] Before the rule: a sandboxed provider call fails (`HostUnreachableError` or
+  - [x] Before the rule: a sandboxed provider call fails (`HostUnreachableError` or
         equivalent)
-  - [ ] After adding the rule: `codex execpolicy check` returns `allow` for the listed
+  - [x] After adding the rule: `codex execpolicy check` returns `allow` for the listed
         subcommands (already verified in Task 8) and the same command runs without a
         prompt from a live Codex session
-  - [ ] Remove the rule and repeat: Codex blocks the command, and the model's reply
+  - [x] Remove the rule and repeat: Codex blocks the command, and the model's reply
         (via Task 9's hint) names Codex's sandbox and the README section, not the
         provider
-  - [ ] Success: each step's outcome is recorded, including any divergence from the
+  - [x] Success: each step's outcome is recorded, including any divergence from the
         design's stated expectations
-- [ ] Write the DEVLOG Session State Summary entry: commits made, Task 7's full probe
+- [x] Write the DEVLOG Session State Summary entry: commits made, Task 7's full probe
       table, any follow-up issues filed (per Task 7/Task 9's daemon-command note),
       divergences observed during live verification
-- [ ] Mark the slice complete: `status: complete` in
+- [x] Mark the slice complete: `status: complete` in
       `user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md`
       frontmatter, and check off entry 26 in
       `user/architecture/900-slices.maintenance-and-refactoring.md:453`
-- [ ] Success: DEVLOG entry written, both status markers updated
-- [ ] Commit: `docs: record slice 928 verification results and close the slice`
+- [x] Success: DEVLOG entry written, both status markers updated
+- [x] Commit: `docs: record slice 928 verification results and close the slice`
