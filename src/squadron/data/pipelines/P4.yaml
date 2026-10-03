@@ -6,7 +6,7 @@ params:
   summary-model: sonnet
   model: sonnet
   review-model: deepseek4-flash
-  max-revisions: "3"
+  max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better
 

@@ -201,7 +201,7 @@ params:
   slice: required
   model: sonnet
   review-model: deepseek4-flash
-  max-revisions: "3"
+  max-revisions: "2"
 
 steps:
   - design:

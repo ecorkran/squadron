@@ -715,7 +715,7 @@ The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the prima
 ```bash
 sq run slices-plan 900                     # design + review every undesigned slice in plan 900
 sq run tasks-plan 900                      # break down every designed slice whose design review is acceptable
-sq run slices-plan 900 -p max-revisions=2 -p review-model=minimax
+sq run slices-plan 900 -p max-revisions=1 -p review-model=minimax
 ```
 
 Per slice, `slices-plan`:
