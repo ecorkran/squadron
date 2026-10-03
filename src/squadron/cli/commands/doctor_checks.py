@@ -7,6 +7,7 @@ import logging
 import os
 import shutil
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -20,6 +21,9 @@ from squadron.providers.base import ProfileName
 from squadron.providers.codex.auth import LOGIN_COMMAND as CODEX_LOGIN_COMMAND
 from squadron.providers.profiles import get_all_profiles, get_profile, providers_toml_path
 from squadron.skills.manifest import load_effective
+from squadron.skills.models import PackEntry, SkillSourceError
+from squadron.skills.pack_layouts import PACK_LAYOUTS
+from squadron.skills.resolver import resolve_source
 from squadron.skills.targets import DELIVERIES, CommandTarget, bundled_skill_names
 
 logger = logging.getLogger(__name__)
@@ -29,12 +33,6 @@ SECTION_PROVIDERS = "Providers and Auth"
 SECTION_INTEGRATIONS = "Integrations"
 SECTION_SKILLS = "Skill Packs"
 SECTION_CONFIG = "Configuration"
-
-
-# Default install location for skill packs. Defined locally (rather than imported
-# from cli.commands.skills) to keep the pure check layer free of CLI coupling.
-def _default_commands_dir() -> Path:
-    return Path.home() / ".claude" / "commands"
 
 
 #: The npm package providing the ``cf`` binary. Defined once and referenced
@@ -465,17 +463,87 @@ def check_claude_code_cli() -> CheckResult:
     )
 
 
+@dataclass(frozen=True)
+class _SkillPackRowLabel:
+    """How one target's skill-pack rows are named in doctor output (D8)."""
+
+    name_suffix: str
+    install_flags: str
+    runtime: str
+
+
+_SKILL_PACK_ROW_LABELS: dict[CommandTarget, _SkillPackRowLabel] = {
+    # Unchanged from before 928, so a Claude-only machine sees the same rows.
+    CommandTarget.CLAUDE: _SkillPackRowLabel(name_suffix="", install_flags="", runtime="Claude"),
+    CommandTarget.AGENTS: _SkillPackRowLabel(
+        name_suffix=" (codex)", install_flags=" --ide codex", runtime="Codex"
+    ),
+}
+assert set(_SKILL_PACK_ROW_LABELS) == set(CommandTarget), "every CommandTarget needs row labels"
+
+
+def _pack_ships_content(entry: PackEntry, name: str, target: CommandTarget) -> bool:
+    """False only when the pack's source is readable here and ships nothing for ``target``.
+
+    ``resolve_source`` refuses ``github:`` sources rather than cloning them, and this
+    check must stay free of subprocesses and network, so those — and any source that
+    cannot be read — count as shipping content and get the ordinary row (F002).
+    """
+    try:
+        source = resolve_source(entry, name)
+    except SkillSourceError:
+        return True
+    return PACK_LAYOUTS[target].source_has_content(source)
+
+
+def _skill_pack_row(name: str, entry: PackEntry, target: CommandTarget, root: Path) -> CheckResult:
+    label = _SKILL_PACK_ROW_LABELS[target]
+    row_name = f"{name}{label.name_suffix}"
+    installed = PACK_LAYOUTS[target].installed_path(entry, root)
+    if installed is not None:
+        return CheckResult(
+            name=row_name,
+            status=CheckStatus.OK,
+            detail=f"installed at {installed}",
+            section=SECTION_SKILLS,
+            required=False,
+        )
+    if not _pack_ships_content(entry, name, target):
+        # No install hint: installing would fail with the same news (D8).
+        return CheckResult(
+            name=row_name,
+            status=CheckStatus.WARN,
+            detail=f"pack ships no {label.runtime} content",
+            section=SECTION_SKILLS,
+            required=False,
+        )
+    return CheckResult(
+        name=row_name,
+        status=CheckStatus.WARN,
+        detail="not installed",
+        fix_hint=f"sq skills install {name}{label.install_flags}",
+        section=SECTION_SKILLS,
+        required=False,
+    )
+
+
 def check_skill_packs(
-    commands_dir: Path | None = None,
+    roots: Mapping[CommandTarget, Path] | None = None,
     cwd: Path | None = None,
 ) -> list[CheckResult]:
-    """Report install status for every pack in the effective manifest.
+    """Report install status for every pack in the effective manifest, per target.
 
-    Pure: reads the manifest and the filesystem only. An uninstalled pack is a
-    WARN (informational + actionable), not a MISSING — no pack is required.
+    ``roots`` maps each target to report on to its pack root; by default every
+    target doctor reports commands for (Claude, plus agents where Codex is on
+    PATH), at machine scope. Pure: reads the manifest and the filesystem only. An
+    uninstalled pack is a WARN (informational + actionable), not a MISSING — no
+    pack is required.
     """
-    if commands_dir is None:
-        commands_dir = _default_commands_dir()
+    if roots is None:
+        roots = {
+            target: DELIVERIES[target].resolve_root(local=False)
+            for target in _command_targets_to_check(None)
+        }
 
     manifest = load_effective(cwd=cwd or Path.cwd())
     if manifest is None:
@@ -489,39 +557,11 @@ def check_skill_packs(
             )
         ]
 
-    results: list[CheckResult] = []
-    for name, entry in manifest.packs.items():
-        if entry.prefix is not None:
-            dest = commands_dir / entry.prefix
-            installed = dest.is_dir() and any(dest.iterdir())
-        else:
-            dest = commands_dir / "sq" / f"{entry.dispatch_file}.md"
-            installed = dest.is_file()
-
-        if installed:
-            results.append(
-                CheckResult(
-                    name=name,
-                    status=CheckStatus.OK,
-                    detail=f"installed at {dest}",
-                    section=SECTION_SKILLS,
-                    required=False,
-                )
-            )
-        else:
-            results.append(
-                CheckResult(
-                    name=name,
-                    status=CheckStatus.WARN,
-                    detail="not installed",
-                    fix_hint=f"sq skills install {name}",
-                    section=SECTION_SKILLS,
-                    required=False,
-                )
-            )
-
-    results.sort(key=lambda r: r.name)
-    return results
+    return [
+        _skill_pack_row(name, entry, target, root)
+        for name, entry in manifest.packs.items()
+        for target, root in roots.items()
+    ]
 
 
 def check_providers_toml() -> CheckResult:

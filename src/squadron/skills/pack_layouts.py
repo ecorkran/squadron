@@ -39,11 +39,14 @@ class PackLayout:
     proves an install, or ``None``. ``owned_destination_surfaces`` names the
     surfaces whose receipt destination belongs to the pack alone, so uninstall may
     remove it once empty; every other destination is shared and is never removed.
+    ``source_has_content(source)`` says whether a resolved source ships anything
+    for this target at all (D2), so doctor can tell "not installed" from "cannot be".
     """
 
     install: Callable[[str, PackEntry, Path, Path], InstallResult]
     installed_path: Callable[[PackEntry, Path], Path | None]
     owned_destination_surfaces: frozenset[SurfaceType]
+    source_has_content: Callable[[Path], bool]
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +111,10 @@ def _claude_installed_path(entry: PackEntry, root: Path) -> Path | None:
 def dispatch_skill_name(dispatch_file: str) -> str:
     """The agents counterpart of ``/sq:<dispatch_file>``."""
     return f"sq-{dispatch_file}"
+
+
+def _agents_source_has_content(source: Path) -> bool:
+    return (source / AGENTS_SOURCE_DIR).is_dir()
 
 
 def _skill_frontmatter(skill_md: Path) -> dict[str, object] | None:
@@ -175,7 +182,7 @@ def _naming_problems(entry: PackEntry, skill_dirs: list[Path]) -> list[str]:
 def validate_agents_source(pack_name: str, entry: PackEntry, source: Path) -> Path:
     """Check a pack's ``agents/`` tree against D2/D3; return it, or raise listing every problem."""
     agents_dir = source / AGENTS_SOURCE_DIR
-    if not agents_dir.is_dir():
+    if not _agents_source_has_content(source):
         raise SkillSourceError(
             f"Pack '{pack_name}' has no {AGENTS_SOURCE_DIR}/ directory at {source}; it ships "
             "no Codex content. Install it for Claude with --ide claude."
@@ -217,12 +224,15 @@ PACK_LAYOUTS: dict[CommandTarget, PackLayout] = {
         installed_path=_claude_installed_path,
         # `<root>/<prefix>/` is the pack's own directory; `<root>/sq/` is shared.
         owned_destination_surfaces=frozenset({SurfaceType.PREFIX}),
+        # Every pack source is Claude content: that is what a pack has always been.
+        source_has_content=lambda _source: True,
     ),
     CommandTarget.AGENTS: PackLayout(
         install=_agents_install,
         installed_path=_agents_installed_path,
         # Skills land at the shared root itself; only the skill directories are the pack's.
         owned_destination_surfaces=frozenset(),
+        source_has_content=_agents_source_has_content,
     ),
 }
 

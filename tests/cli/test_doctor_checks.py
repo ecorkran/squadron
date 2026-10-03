@@ -41,6 +41,8 @@ from squadron.cli.commands.doctor_checks import (
     run_all_checks,
 )
 from squadron.codehost.github_config import read_gh_hosts
+from squadron.skills.manifest import SkillsManifest
+from squadron.skills.models import PackEntry
 from squadron.skills.targets import CommandTarget
 
 # --- T3: data model ---
@@ -411,7 +413,7 @@ def test_check_skill_packs_installed(tmp_path: Path) -> None:
     analysis_dir.mkdir()
     (analysis_dir / "tech-debt-audit.md").write_text("# audit")
 
-    results = check_skill_packs(commands_dir=tmp_path, cwd=tmp_path)
+    results = check_skill_packs(roots={CommandTarget.CLAUDE: tmp_path}, cwd=tmp_path)
 
     analysis = next(r for r in results if r.name == "analysis")
     assert analysis.status == CheckStatus.OK
@@ -421,7 +423,7 @@ def test_check_skill_packs_installed(tmp_path: Path) -> None:
 
 def test_check_skill_packs_not_installed(tmp_path: Path) -> None:
     # Empty commands_dir → analysis is not installed.
-    results = check_skill_packs(commands_dir=tmp_path / "empty", cwd=tmp_path)
+    results = check_skill_packs(roots={CommandTarget.CLAUDE: tmp_path / "empty"}, cwd=tmp_path)
 
     analysis = next(r for r in results if r.name == "analysis")
     assert analysis.status == CheckStatus.WARN
@@ -432,13 +434,108 @@ def test_check_skill_packs_not_installed(tmp_path: Path) -> None:
 def test_check_skill_packs_no_manifest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(doctor_checks, "load_effective", lambda cwd=None: None)
 
-    results = check_skill_packs(commands_dir=tmp_path, cwd=tmp_path)
+    results = check_skill_packs(roots={CommandTarget.CLAUDE: tmp_path}, cwd=tmp_path)
 
     assert len(results) == 1
     assert results[0].name == "skills.toml"
     assert results[0].status == CheckStatus.OK
     assert results[0].section == SECTION_SKILLS
     assert "no manifest" in results[0].detail
+
+
+def _manifest_with(monkeypatch: pytest.MonkeyPatch, entry: PackEntry, name: str = "demo") -> None:
+    manifest = SkillsManifest(packs={name: entry}, origin="user")
+    monkeypatch.setattr(doctor_checks, "load_effective", lambda cwd=None: manifest)
+
+
+def _pack_source(tmp_path: Path, *, agents: bool) -> Path:
+    source = tmp_path / "pack-src"
+    source.mkdir()
+    (source / "hello.md").write_text("x")
+    if agents:
+        (source / "agents" / "demo-hello").mkdir(parents=True)
+        (source / "agents" / "demo-hello" / "SKILL.md").write_text(
+            "---\nname: demo-hello\ndescription: d\n---\n"
+        )
+    return source
+
+
+def _rows(tmp_path: Path) -> dict[str, CheckResult]:
+    roots = {CommandTarget.CLAUDE: tmp_path / "claude", CommandTarget.AGENTS: tmp_path / "agents"}
+    return {r.name: r for r in check_skill_packs(roots=roots, cwd=tmp_path)}
+
+
+@pytest.mark.parametrize("agents", [True, False])
+def test_skill_pack_agents_row_local_source_not_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agents: bool
+) -> None:
+    source = _pack_source(tmp_path, agents=agents)
+    _manifest_with(monkeypatch, PackEntry(source=str(source), prefix="demo"))
+
+    rows = _rows(tmp_path)
+
+    codex = rows["demo (codex)"]
+    assert codex.status == CheckStatus.WARN
+    if agents:
+        assert codex.detail == "not installed"
+        assert codex.fix_hint == "sq skills install demo --ide codex"
+    else:
+        assert codex.detail == "pack ships no Codex content"
+        assert codex.fix_hint is None
+    # The Claude row is unaffected by what the pack ships for Codex.
+    assert rows["demo"].detail == "not installed"
+    assert rows["demo"].fix_hint == "sq skills install demo"
+
+
+def test_skill_pack_agents_row_installed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = _pack_source(tmp_path, agents=True)
+    _manifest_with(monkeypatch, PackEntry(source=str(source), prefix="demo"))
+    (tmp_path / "agents" / "demo-hello").mkdir(parents=True)
+    (tmp_path / "agents" / "demo-hello" / "SKILL.md").write_text("x")
+
+    codex = _rows(tmp_path)["demo (codex)"]
+
+    assert codex.status == CheckStatus.OK
+    assert "installed at" in codex.detail
+
+
+@pytest.mark.parametrize("agents", [True, False])
+def test_skill_pack_agents_row_bundled_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, agents: bool
+) -> None:
+    bundle = _pack_source(tmp_path, agents=agents)
+    monkeypatch.setattr("squadron.skills.resolver._resolve_bundled", lambda _name: bundle)
+    _manifest_with(monkeypatch, PackEntry(source="bundled", prefix="demo"))
+
+    codex = _rows(tmp_path)["demo (codex)"]
+
+    expected = "not installed" if agents else "pack ships no Codex content"
+    assert codex.detail == expected
+
+
+def test_skill_pack_github_source_never_clones(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _no_clone(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("doctor must not clone")
+
+    monkeypatch.setattr("squadron.skills.resolver.clone_github", _no_clone)
+    _manifest_with(monkeypatch, PackEntry(source="github:owner/repo", prefix="demo"))
+
+    rows = _rows(tmp_path)
+
+    assert rows["demo (codex)"].detail == "not installed"
+    assert rows["demo (codex)"].fix_hint == "sq skills install demo --ide codex"
+    assert rows["demo"].fix_hint == "sq skills install demo"
+
+
+def test_skill_pack_rows_follow_codex_presence(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    _manifest_with(monkeypatch, PackEntry(source="bundled", prefix="analysis"), name="analysis")
+
+    monkeypatch.setattr(doctor_checks.shutil, "which", lambda _name: None)
+    assert [r.name for r in check_skill_packs(cwd=tmp_path)] == ["analysis"]
+
+    monkeypatch.setattr(doctor_checks.shutil, "which", lambda name: f"/bin/{name}")
+    assert [r.name for r in check_skill_packs(cwd=tmp_path)] == ["analysis", "analysis (codex)"]
 
 
 # --- T19: check_git_hooks ---
