@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261003
 
+### Release 0.18.3
+
+- **Contents:** slice 928 (Codex parity for skill packs and provider access; fixes #125, #127): `sq skills install|uninstall|list --ide codex [--local]`, per-target doctor rows, auto-written `~/.codex/rules/squadron.rules` for `sq review|run|pr|metrology|auth|skills`, sandbox-rejection hint in the sq-review/sq-run/sq-pr Codex skills, `sq models list` doc fix, README restructure. Patch per PM (improves existing commands).
+
 ### Slice 928: Codex Parity for Skill Packs and Provider Access — Complete
 
 - **Skill packs:** `sq skills install|uninstall|list` take `--ide {claude|agents|codex|openai}` and `--local`. New `skills/pack_layouts.py` (`PACK_LAYOUTS`) is the one place that knows where a pack lands per target; install, `skills list` and doctor all read it. A Codex install requires the pack to ship `agents/<prefix>-<name>/SKILL.md` (or `sq-<dispatch_file>/`), validated before anything is written (all problems listed). Receipts are `<pack>[-agents][-local].toml`; pre-928 receipts still read. `remove_receipt_files` is shared with `uninstall-commands`. The bundled analysis pack's agents skills moved to `commands/analysis/agents/`. Doctor shows `<pack> (codex)` rows where Codex is on PATH, with "pack ships no Codex content" (no fix hint) when the source has no `agents/`; github sources never clone in doctor.

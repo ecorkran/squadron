@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.3] - 20261003
+
 ### Added
 - `sq skills install`, `uninstall` and `list` take `--ide codex` and `--local`, so skill packs install for Codex too. `sq doctor` shows each pack's Codex status.
 - README documents skill packs and the layout a pack uses to ship Codex skills.
