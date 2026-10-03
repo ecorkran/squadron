@@ -13,6 +13,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 
+from squadron.skills.codex_rules import RULES_RELATIVE_PATH, codex_home, ensure_sq_rules
 from squadron.skills.models import InstallReceipt
 from squadron.skills.receipts import (
     default_receipts_dir,
@@ -203,6 +204,27 @@ def install_for_target(
         rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
         for name in removed:
             rprint(f"  {name}")
+
+    if command_target is CommandTarget.AGENTS:
+        _ensure_codex_rules()
+
+
+def _ensure_codex_rules() -> None:
+    """Allow the network-reaching sq commands in Codex's sandbox (issue #127)."""
+    home = codex_home()
+    if not home.is_dir():
+        rprint(
+            f"[yellow]No Codex home at {home}; skipped the sandbox rules sq review, "
+            f"sq run and sq pr need. Re-run after installing Codex.[/yellow]"
+        )
+        return
+    added = ensure_sq_rules(home)
+    if added:
+        rprint(
+            f"[green]Added {len(added)} Codex sandbox rule(s) to {home / RULES_RELATIVE_PATH}:[/green]"
+        )
+        for line in added:
+            rprint(f"  {line}")
 
 
 def uninstall_commands(

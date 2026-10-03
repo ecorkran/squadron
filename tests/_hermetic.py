@@ -21,7 +21,7 @@ PINNED_GIT_USER_EMAIL = "tests@squadron.invalid"
 #: Env var prefixes owned by squadron: ``ORCH_`` is the ``Settings`` prefix.
 SCRUBBED_ENV_PREFIXES = ("ORCH_", "SQUADRON_")
 #: Single env vars that change squadron's behavior when inherited from the host.
-SCRUBBED_ENV_VARS = ("CLAUDECODE", "GH_CONFIG_DIR", "FORCE_COLOR", "NO_COLOR")
+SCRUBBED_ENV_VARS = ("CLAUDECODE", "GH_CONFIG_DIR", "FORCE_COLOR", "NO_COLOR", "CODEX_HOME")
 #: The auth fallback in ``providers/auth.py`` — not a profile's ``api_key_env``.
 _AUTH_FALLBACK_ENV_VAR = "OPENAI_API_KEY"
 
