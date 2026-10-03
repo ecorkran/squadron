@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261003
 
+### Release 0.18.1
+
+- **Contents:** everything in 0.18.0, plus `fix(auth)`: `sq auth` built its Rich console at import, so it captured the hostile-env job's `FORCE_COLOR=1` before the suite scrubbed it, and three `tests/cli/test_auth.py` assertions saw ANSI codes. The v0.18.0 tag run failed in `hermetic`, so 0.18.0 never published. The console is now built per call, like every other command; `scripts/test-hostile-env` passes locally.
+
 ### Release 0.18.0
 
 - **Contents:** slice 129 (Codex provider on the official `openai-codex` SDK as a core dependency; `sq auth login`/`logout` for `openai-oauth` with browser and device-code flows; Codex rows in `sq doctor` and `sq setup`; Codex effort and token usage, #171), split-review verdict fold fix (#176), and review fixes: Rich markup in finding text, fenced code in finding bodies, `project-documents/` docs-root note, named textless transport errors, excluded-directory walk pruning, tool-error argument logging.
