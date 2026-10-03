@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [925]
 interfaces: []
 dateCreated: 20260927
-dateUpdated: 20260927
-status: not_started
+dateUpdated: 20261003
+status: in_progress
 ---
 
 # Slice Design: Codex Parity for Skill Packs and Provider Access
@@ -236,48 +236,66 @@ Pack source layout (documented in the skills section of README):
 
 ### Verification Walkthrough
 
-Run from the squadron repo root with a disposable home so nothing real is touched:
+Run from the squadron repo root with a disposable home so nothing real is touched.
+Verified 20261003 on macOS (zsh) against the slice branch. Use the branch's own `sq`
+(`.venv/bin/sq` after `uv sync`), not a globally installed release. Paths below are
+abbreviated; the CLI prints the full disposable path.
 
 ```bash
-export HOME=$(mktemp -d); cd /path/to/squadron
+export HOME=$(mktemp -d) P=$(mktemp -d)/p928; cd /path/to/squadron
 
 # 1. Codex install of the bundled pack
 sq skills install analysis --ide codex
+#   Installed pack 'analysis': 4 file(s) → $HOME/.agents/skills
 ls ~/.agents/skills                    # analysis-tech-debt-audit  analysis-understand
 ls ~/.config/squadron/receipts         # analysis-agents.toml
-sq skills list --ide codex             # analysis … Installed
+sq skills list --ide codex             # │ analysis │ bundled │ prefix: analysis │ Installed │ default │
 
 # 2. Claude path unchanged
-sq skills install analysis
+sq skills install analysis             # Installed pack 'analysis': 2 file(s) → $HOME/.claude/commands/analysis
 ls ~/.claude/commands/analysis         # tech-debt-audit.md  understand.md
-ls ~/.config/squadron/receipts         # analysis.toml  analysis-agents.toml
+ls ~/.config/squadron/receipts         # analysis-agents.toml  analysis.toml
 
 # 3. A pack with no Codex content refuses loudly
-mkdir -p /tmp/p928 && printf -- '---\ndescription: x\n---\nuse $ARGUMENTS\n' > /tmp/p928/hello.md
-mkdir -p ~/.config/squadron && printf '[packs.demo]\nsource = "/tmp/p928"\nprefix = "demo"\n' > ~/.config/squadron/skills.toml
-sq skills install demo --ide codex     # exit 1: "Pack 'demo' has no agents/ directory at /tmp/p928 …"
+mkdir -p $P && printf -- '---\ndescription: x\n---\nuse $ARGUMENTS\n' > $P/hello.md
+printf "[packs.demo]\nsource = \"$P\"\nprefix = \"demo\"\n" > ~/.config/squadron/skills.toml
+sq skills install demo --ide codex     # exit 1:
+#   Error: Pack 'demo' has no agents/ directory at $P; it ships no Codex content.
+#   Install it for Claude with --ide claude.
 ls ~/.agents/skills | grep demo        # nothing
 
 # 4. Misnamed skill is rejected, all problems listed
-mkdir -p /tmp/p928/agents/hello && printf -- '---\nname: hello\ndescription: x\n---\n' > /tmp/p928/agents/hello/SKILL.md
-sq skills install demo --ide codex     # exit 1: "agents/hello must be named demo-<name>"
-mv /tmp/p928/agents/hello /tmp/p928/agents/demo-hello
-sed -i '' 's/name: hello/name: demo-hello/' /tmp/p928/agents/demo-hello/SKILL.md
-sq skills install demo --ide codex     # installs ~/.agents/skills/demo-hello/SKILL.md
+mkdir -p $P/agents/hello && printf -- '---\nname: hello\ndescription: x\n---\n' > $P/agents/hello/SKILL.md
+sq skills install demo --ide codex     # exit 1:
+#   Error: Pack 'demo' has invalid Codex content at $P/agents:
+#     - agents/hello must be named demo-<name> (lowercase a-z, 0-9 and hyphens)
+mv $P/agents/hello $P/agents/demo-hello
+sed -i '' 's/name: hello/name: demo-hello/' $P/agents/demo-hello/SKILL.md
+sq skills install demo --ide codex     # Installed pack 'demo': 1 file(s) → $HOME/.agents/skills
 
 # 5. Uninstall removes only what was written
 touch ~/.agents/skills/mine.txt
-sq skills uninstall demo --ide codex
-sq skills uninstall analysis --ide codex
-ls ~/.agents/skills                    # mine.txt only
+sq skills uninstall demo --ide codex   # Uninstalled pack 'demo': 1 file(s) removed from $HOME/.agents/skills
+sq skills uninstall analysis --ide codex   # ... 4 file(s) removed ...
+ls ~/.agents/skills                    # mine.txt   (the shared root itself is never removed)
 
 # 6. install-commands unaffected by the move
-sq install-commands --ide codex && ls ~/.agents/skills | grep analysis   # both analysis-* present
+sq install-commands --ide codex >/dev/null && ls ~/.agents/skills | grep analysis
+#   analysis-tech-debt-audit  analysis-understand  sq-analysis   (sq-analysis also matches the grep)
 
-# 7. Doctor rows (Codex CLI on PATH)
-sq doctor                              # Skill Packs: analysis, analysis (codex), demo, demo (codex) — all four rows present
-rm -rf /tmp/p928/agents && sq doctor   # demo (codex): WARN "pack ships no Codex content", no install hint
+# 7. Doctor rows (Codex CLI on PATH). -v is required: bare `sq doctor` hides WARN rows (F003).
+sq skills install demo >/dev/null
+sq doctor -v                           # Skill Packs:
+#   ✓ analysis           installed at $HOME/.claude/commands/analysis
+#   ✓ analysis (codex)   installed at $HOME/.agents/skills/analysis-tech-debt-audit/SKILL.md
+#   ✓ demo               installed at $HOME/.claude/commands/demo
+#   ! demo (codex)       not installed
+#     fix: sq skills install demo --ide codex
+rm -rf $P/agents && sq doctor -v       # demo (codex): ! pack ships no Codex content — no fix line
 ```
+
+Caveat on step 7: the `analysis` rows read OK, not WARN, because steps 2 and 6 left the
+pack installed for both targets. Without the Codex CLI on PATH, the `(codex)` rows are absent.
 
 Codex rule, on a real machine:
 
