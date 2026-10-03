@@ -79,7 +79,7 @@ Optional flags:
 - `--rules PATH`: path to additional rules file
 - `--rules-dir DIR`: rules directory override
 - `--no-rules`: suppress all rule injection
-- `--model MODEL`: model override — accepts aliases (e.g., `opus`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq model list` for available aliases.
+- `--model MODEL`: model override — accepts aliases (e.g., `opus`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq models list` for available aliases.
 - `--profile PROFILE`: provider profile (e.g., `openrouter`, `openai`, `local`, `sdk`). Resolved from model alias when omitted, defaults to `sdk`.
 
 For non-SDK providers, file contents and git diffs are automatically injected into the prompt so models can review actual content.
@@ -131,7 +131,7 @@ Required arguments:
 
 Optional: `--cwd DIR`, `--model MODEL`, `--profile PROFILE`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
 
-The `--model` flag accepts aliases (e.g., `opus`, `sonnet`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq model list` to see available aliases. Users can add custom aliases in `~/.config/squadron/models.toml`.
+The `--model` flag accepts aliases (e.g., `opus`, `sonnet`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq models list` to see available aliases. Users can add custom aliases in `~/.config/squadron/models.toml`.
 
 The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is resolved from the model alias or defaults to `sdk`.
 
@@ -177,7 +177,7 @@ Required arguments:
 
 Optional: `--cwd DIR`, `--model MODEL`, `--profile PROFILE`, `-v`/`-vv` for verbosity, `--json`, `--no-save`.
 
-The `--model` flag accepts aliases (e.g., `opus`, `sonnet`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq model list` to see available aliases. Users can add custom aliases in `~/.config/squadron/models.toml`.
+The `--model` flag accepts aliases (e.g., `opus`, `sonnet`, `gpt4o`) or full model IDs. Aliases automatically set the correct profile. Run `sq models list` to see available aliases. Users can add custom aliases in `~/.config/squadron/models.toml`.
 
 The `--profile` flag routes the review through a specific provider (e.g., `openrouter`, `openai`, `local`, `sdk`). When omitted, the profile is resolved from the model alias or defaults to `sdk`.
 
