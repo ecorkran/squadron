@@ -55,12 +55,16 @@ def test_deliveries_entries_are_distinct() -> None:
     assert claude.machine_root != agents.machine_root
     assert claude.local_root != agents.local_root
     assert claude.check_name != agents.check_name
-    assert claude.receipt_base != agents.receipt_base
+    assert claude.receipt_suffix != agents.receipt_suffix
     assert claude.layout is not agents.layout
 
 
 def test_receipt_names_are_the_four_expected() -> None:
-    names = {receipt_name(target, local=local) for target in CommandTarget for local in (False, True)}
+    names = {
+        receipt_name("squadron-commands", target, local=local)
+        for target in CommandTarget
+        for local in (False, True)
+    }
     assert names == {
         "squadron-commands",
         "squadron-commands-local",
@@ -71,7 +75,21 @@ def test_receipt_names_are_the_four_expected() -> None:
 
 def test_claude_machine_receipt_name_is_unchanged() -> None:
     # Every receipt written since #65 carries this name; changing it orphans them.
-    assert receipt_name(CommandTarget.CLAUDE, local=False) == "squadron-commands"
+    assert receipt_name("squadron-commands", CommandTarget.CLAUDE, local=False) == "squadron-commands"
+
+
+@pytest.mark.parametrize(
+    ("target", "local", "expected"),
+    [
+        (CommandTarget.CLAUDE, False, "analysis"),
+        (CommandTarget.CLAUDE, True, "analysis-local"),
+        (CommandTarget.AGENTS, False, "analysis-agents"),
+        (CommandTarget.AGENTS, True, "analysis-agents-local"),
+    ],
+)
+def test_receipt_name_for_a_pack_base(target: CommandTarget, local: bool, expected: str) -> None:
+    # A Claude machine install keeps the bare pack name every pre-928 receipt carries.
+    assert receipt_name("analysis", target, local=local) == expected
 
 
 @pytest.mark.parametrize("target", list(CommandTarget))

@@ -10,6 +10,7 @@ import tomllib
 from pathlib import Path
 
 import tomli_w
+from rich import print as rprint
 
 from squadron.skills.models import InstallReceipt
 
@@ -57,3 +58,45 @@ def read_receipt(pack_name: str, receipts_dir: Path) -> InstallReceipt | None:
         return InstallReceipt.model_validate(data)
     except (tomllib.TOMLDecodeError, ValueError) as exc:
         raise ValueError(f"Malformed install receipt at {path}: {exc}") from exc
+
+
+def remove_receipt_files(receipt: InstallReceipt) -> int:
+    """Delete exactly the files ``receipt`` records and prune directories left empty.
+
+    Entries resolving outside ``receipt.destination`` are skipped with a warning — a
+    corrupted or hand-edited receipt must not delete anything squadron did not write.
+    Directories are shared with the user's own files, so this never removes a tree:
+    a directory goes only once it holds nothing, deepest first, so a skill's nested
+    ``agents/`` is gone before its parent is tested. ``receipt.destination`` itself is
+    never removed; a caller that owns it (a Claude prefix pack) removes it separately.
+
+    Returns the number of files removed. A recorded file that is already gone is not
+    an error — the desired end state, absent, already holds.
+    """
+    destination = receipt.destination
+    resolved_destination = destination.resolve()
+    removed = 0
+    touched_dirs: set[Path] = set()
+    for relative in receipt.files_written:
+        path = destination / relative
+        resolved_path = path.resolve()
+        if resolved_path != resolved_destination and resolved_destination not in resolved_path.parents:
+            rprint(
+                f"[yellow]Skipping receipt entry outside the install destination: {relative!r}[/yellow]"
+            )
+            continue
+        touched_dirs.add(path.parent)
+        if path.exists():
+            path.unlink()
+            removed += 1
+
+    for directory in sorted(touched_dirs, key=lambda p: len(p.parts), reverse=True):
+        while (
+            directory.is_dir()
+            and directory != destination
+            and destination in directory.parents
+            and not any(directory.iterdir())
+        ):
+            directory.rmdir()
+            directory = directory.parent
+    return removed

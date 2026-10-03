@@ -118,7 +118,8 @@ class TargetDelivery:
     bundle_subdirs: tuple[str, ...]
     check_name: str
     fix_hint: str
-    receipt_base: str
+    #: Appended to a receipt's base name so each target keeps its own record (D5).
+    receipt_suffix: str
     layout: Callable[[Path, Path], list[str]]
     #: Where the doctor check counts, relative to the install root. Claude's
     #: check has always pointed at the pack subdirectory rather than the commands
@@ -162,9 +163,9 @@ DELIVERIES: dict[CommandTarget, TargetDelivery] = {
         bundle_subdirs=("sq", "analysis"),
         check_name="slash commands",
         fix_hint="sq install-commands",
-        # The name every receipt written since #65 carries. Changing it would
-        # orphan those receipts and with them the stale-removal they govern (D5).
-        receipt_base="squadron-commands",
+        # Empty: every receipt written since #65 is named for its base alone.
+        # Changing it would orphan those receipts and the stale-removal they govern (D5).
+        receipt_suffix="",
         layout=write_flat_markdown,
         check_subdir="sq",
     ),
@@ -176,7 +177,7 @@ DELIVERIES: dict[CommandTarget, TargetDelivery] = {
         bundle_subdirs=("agents",),
         check_name="codex skills",
         fix_hint="sq install-commands --ide codex",
-        receipt_base="squadron-commands-agents",
+        receipt_suffix="-agents",
         layout=write_skill_dirs,
         check_subdir=None,
     ),
@@ -186,11 +187,13 @@ DELIVERIES: dict[CommandTarget, TargetDelivery] = {
 assert set(DELIVERIES) == set(CommandTarget), "every CommandTarget needs a TargetDelivery"
 
 
-def receipt_name(target: CommandTarget, *, local: bool) -> str:
-    """The receipt key for a target/scope pair.
+def receipt_name(base: str, target: CommandTarget, *, local: bool) -> str:
+    """The receipt key for one install of ``base`` at a target/scope pair.
 
-    Four distinct names, so a machine install and a local one never overwrite
-    each other's record of what to remove (D5).
+    ``base`` is ``"squadron-commands"`` for the bundled set or a skill pack's name.
+    Each target and scope gets a distinct name, so a machine install and a local one,
+    or a Claude install and an agents one, never overwrite each other's record of
+    what to remove (D5).
     """
-    base = DELIVERIES[target].receipt_base
-    return f"{base}-local" if local else base
+    suffix = DELIVERIES[target].receipt_suffix
+    return f"{base}{suffix}-local" if local else f"{base}{suffix}"

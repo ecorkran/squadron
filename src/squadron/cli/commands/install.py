@@ -14,7 +14,12 @@ import typer
 from rich import print as rprint
 
 from squadron.skills.models import InstallReceipt
-from squadron.skills.receipts import default_receipts_dir, read_receipt, write_receipt
+from squadron.skills.receipts import (
+    default_receipts_dir,
+    read_receipt,
+    remove_receipt_files,
+    write_receipt,
+)
 from squadron.skills.targets import (
     DELIVERIES,
     CommandTarget,
@@ -22,6 +27,9 @@ from squadron.skills.targets import (
     normalize_target,
     receipt_name,
 )
+
+#: Receipt base name for the bundled command set (D5).
+BUNDLED_RECEIPT_BASE = "squadron-commands"
 
 
 def get_commands_source() -> Path:
@@ -125,7 +133,7 @@ def install_for_target(
     target_dir, local_honored = _resolve_destination(delivery, target, local=local)
     if local and not local_honored:
         rprint(f"[yellow]--local ignored: --target {target_dir} takes precedence.[/yellow]")
-    pack_name = receipt_name(command_target, local=local_honored)
+    pack_name = receipt_name(BUNDLED_RECEIPT_BASE, command_target, local=local_honored)
 
     # What the *previous* install wrote, or None on a first install (or one predating
     # receipts). This is the only authority for what squadron owns: the target
@@ -230,7 +238,7 @@ def uninstall_commands(
     local_honored = local and target is None
     if local and not local_honored:
         rprint("[yellow]--local ignored: --target takes precedence, as it did on install.[/yellow]")
-    pack_name = receipt_name(command_target, local=local_honored)
+    pack_name = receipt_name(BUNDLED_RECEIPT_BASE, command_target, local=local_honored)
 
     try:
         receipt = read_receipt(pack_name, receipts_dir)
@@ -269,34 +277,7 @@ def uninstall_commands(
 
     # Every subdirectory the install touched, not just sq/ (issue #65 finding 1: the old
     # rmtree of sq/ left analysis/ and any other subdirectory behind).
-    removed = 0
-    touched_dirs: set[Path] = set()
-    resolved_destination = destination.resolve()
-    for relative in receipt.files_written:
-        path = destination / relative
-        resolved_path = path.resolve()
-        if resolved_path != resolved_destination and resolved_destination not in resolved_path.parents:
-            rprint(
-                f"[yellow]Skipping receipt entry outside the install destination: {relative!r}[/yellow]"
-            )
-            continue
-        touched_dirs.add(path.parent)
-        if path.exists():
-            path.unlink()
-            removed += 1
-
-    # Never rmtree: these directories are shared with the user's own commands. Remove one
-    # only once it holds nothing. Deepest first, so a skill's agents/ subdirectory is
-    # gone before its parent is tested for emptiness.
-    for directory in sorted(touched_dirs, key=lambda p: len(p.parts), reverse=True):
-        while (
-            directory.is_dir()
-            and directory != destination
-            and destination in directory.parents
-            and not any(directory.iterdir())
-        ):
-            directory.rmdir()
-            directory = directory.parent
+    removed = remove_receipt_files(receipt)
 
     (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
 

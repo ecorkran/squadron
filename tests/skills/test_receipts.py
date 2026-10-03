@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from squadron.skills.models import InstallReceipt, SurfaceType
-from squadron.skills.receipts import read_receipt, write_receipt
+from squadron.skills.receipts import read_receipt, remove_receipt_files, write_receipt
 
 
 def _sample_receipt(destination: Path) -> InstallReceipt:
@@ -76,3 +76,67 @@ def test_dispatch_surface_round_trip(tmp_path: Path) -> None:
     restored = read_receipt("core", receipts_dir)
     assert restored is not None
     assert restored.surface == SurfaceType.DISPATCH_FILE
+
+
+def _receipt_for(destination: Path, files: list[str]) -> InstallReceipt:
+    return InstallReceipt(pack_name="p", destination=destination, files_written=files)
+
+
+def _write_files(root: Path, files: list[str]) -> None:
+    for relative in files:
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x")
+
+
+def test_remove_receipt_files_prunes_nested_dirs_deepest_first(tmp_path: Path) -> None:
+    dest = tmp_path / "skills"
+    files = ["demo-a/SKILL.md", "demo-a/agents/openai.yaml", "demo-b/SKILL.md"]
+    _write_files(dest, files)
+
+    removed = remove_receipt_files(_receipt_for(dest, files))
+
+    assert removed == 3
+    assert not (dest / "demo-a").exists()
+    assert not (dest / "demo-b").exists()
+
+
+def test_remove_receipt_files_never_removes_destination(tmp_path: Path) -> None:
+    dest = tmp_path / "skills"
+    _write_files(dest, ["a.md"])
+
+    remove_receipt_files(_receipt_for(dest, ["a.md"]))
+
+    assert dest.is_dir()
+    assert not any(dest.iterdir())
+
+
+def test_remove_receipt_files_keeps_dir_with_unrelated_file(tmp_path: Path) -> None:
+    dest = tmp_path / "skills"
+    _write_files(dest, ["demo-a/SKILL.md", "demo-a/mine.txt"])
+
+    removed = remove_receipt_files(_receipt_for(dest, ["demo-a/SKILL.md"]))
+
+    assert removed == 1
+    assert (dest / "demo-a" / "mine.txt").exists()
+
+
+def test_remove_receipt_files_skips_entries_outside_destination(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    outside = tmp_path / "victim.md"
+    outside.write_text("keep")
+
+    removed = remove_receipt_files(_receipt_for(dest, ["../victim.md"]))
+
+    assert removed == 0
+    assert outside.exists()
+    assert "Skipping receipt entry outside the install destination" in capsys.readouterr().out
+
+
+def test_remove_receipt_files_tolerates_already_missing_file(tmp_path: Path) -> None:
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    assert remove_receipt_files(_receipt_for(dest, ["gone.md"])) == 0
