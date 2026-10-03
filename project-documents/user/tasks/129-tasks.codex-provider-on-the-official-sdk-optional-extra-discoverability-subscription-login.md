@@ -54,7 +54,7 @@ Procedure for whoever runs it: in a throwaway venv install `openai-codex`; with 
 set, run one real turn via the SDK.
 
 - [x] Create the slice branch (see Context Summary)
-- [ ] Read the Outcome below. If it is still blank, stop and ask the Project Manager for it
+- [x] Read the Outcome below. If it is still blank, stop and ask the Project Manager for it
 - [x] Outcome (filled in by the Project Manager, with evidence — response text or the runtime's
       error text verbatim): **fails** (20261001, `openai-codex` 0.159.x, empty `CODEX_HOME`,
       `OPENAI_API_KEY` set, model `gpt-5.3-codex`). The turn raised
