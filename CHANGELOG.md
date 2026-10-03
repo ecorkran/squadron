@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.2] - 20261003
+
 ### Added
 - `astra`, `sol` and `luna` aliases: OpenAI GPT-6 models on your ChatGPT subscription (`openai-oauth`). Their pricing shows the equivalent API cost.
 - `luna-r` (GPT-6 luna through OpenRouter) and `ling-flash` (free on OpenRouter) aliases.

@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261003
 
+### Release 0.18.2
+
+- **Contents:** model alias update — `astra`/`sol`/`luna` on `openai-oauth` (API-equivalent pricing kept for comparison), `luna-r` and `ling-flash` on OpenRouter; `codex-agent`, `codex-spark`, `gpt54-nano` removed with tests and docs updated. `sq auth` reference added to docs/COMMANDS.md.
+
 ### Release 0.18.1
 
 - **Contents:** everything in 0.18.0, plus `fix(auth)`: `sq auth` built its Rich console at import, so it captured the hostile-env job's `FORCE_COLOR=1` before the suite scrubbed it, and three `tests/cli/test_auth.py` assertions saw ANSI codes. The v0.18.0 tag run failed in `hermetic`, so 0.18.0 never published. The console is now built per call, like every other command; `scripts/test-hostile-env` passes locally.
