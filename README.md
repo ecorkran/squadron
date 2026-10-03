@@ -465,6 +465,43 @@ A pull-request review is saved like any other: under the project's reviews direc
 Claude Code session: the default profile runs correctly with no `--profile` override needed —
 pass `--profile` only to use a different provider (e.g. `openrouter`).
 
+## Skill packs (`sq skills`)
+
+A skill pack is a set of commands installed from a source you name in `skills.toml`
+(`~/.config/squadron/skills.toml`, or `skills.toml` in a project). Squadron ships one, `analysis`.
+
+```toml
+[packs.mypack]
+source = "github:owner/repo"   # or "bundled", "./relative/path", "/absolute/path"
+prefix = "mypack"              # commands become /mypack:<name>; or dispatch_file = "name"
+```
+
+```bash
+sq skills list                        # every pack, with install status
+sq skills install mypack              # Claude Code: ~/.claude/commands/mypack/
+sq skills install mypack --ide codex  # Codex: ~/.agents/skills/mypack-*/
+sq skills uninstall mypack --ide codex
+```
+
+`--ide` takes the same values as `install-commands` (`claude`, `agents`, `codex`, `openai`),
+and `--local` installs into the current project instead of the whole machine. Uninstall removes
+exactly the files the install recorded.
+
+A pack's source holds Claude commands at its top level and, optionally, Codex skills under
+`agents/`:
+
+```
+<pack source>/
+  *.md                          Claude commands (prefix packs), or <dispatch_file>.md
+  agents/                       required for --ide codex
+    <prefix>-<name>/SKILL.md      prefix packs: one directory per skill
+    sq-<dispatch_file>/SKILL.md   dispatch_file packs: exactly this one
+```
+
+Each `SKILL.md` needs frontmatter with `name` equal to its directory and a non-empty
+`description`. A Codex install checks all of this first and writes nothing if anything is wrong.
+Claude commands are never converted: a pack with no `agents/` directory installs for Claude only.
+
 ## Configuration
 
 Avoid repeating flags with persistent config. Two levels with clear precedence:

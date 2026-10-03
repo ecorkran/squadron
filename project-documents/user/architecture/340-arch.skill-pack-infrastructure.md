@@ -30,6 +30,7 @@ Squadron's first-party slash commands are bundled in the wheel and installed via
 ## Architectural Principles
 
 - **File copy is the delivery primitive** — `sq skills install` writes markdown files to `~/.claude/commands/<prefix>/`. No runtime indirection; no loader; no daemon involvement. The installed file IS the capability.
+  *Amendment (20261003, slice 928):* `sq skills install --ide codex` (aliases `agents`, `openai`) also copies skill directories to `~/.agents/skills/` (`--local`: `./.agents/skills/`), alongside the unchanged Claude copy. Only packs whose source ships an `agents/` tree can install there — one `<prefix>-<name>/SKILL.md` per skill, or `sq-<dispatch_file>/SKILL.md` — validated before anything is written; Claude content is never converted. The pack-source layout is documented in the README's skill-packs section.
 - **Manifest is declarative, not executable** — `skills.toml` names packs and their sources. It does not describe installation logic. Squadron resolves and copies; the manifest does not run.
 - **Prefix per pack, not per skill** — each pack owns a command prefix (e.g. `analysis`), installing skills as `/analysis:tech-debt`, `/analysis:understand`. This keeps `/sq:*` first-party only and makes pack membership visible at the command surface without a routing layer.
 - **Dispatch model adopted** — spike (slice 340) confirmed that `/sq:analysis <skill>` dispatch via a single router file is reliable: arguments pass through intact, routing is correct, and UX is equivalent to direct invocation. The manifest format (slice 341) will support a `dispatch_file` option alongside `prefix`, allowing packs to choose either surface.
@@ -39,6 +40,7 @@ Squadron's first-party slash commands are bundled in the wheel and installed via
 
 - `sq install-commands` copies `commands/sq/*.md` from the wheel into `~/.claude/commands/sq/`. This is the only install path.
   *Amendment (20260922, slice 925):* no longer the only path — `--ide agents` (alias `codex`) installs a sibling `commands/agents/` tree of skill directories to `~/.agents/skills/`. The Claude path and `commands/analysis/` resolution are unchanged.
+  *Amendment (20261003, slice 928):* the analysis pack's agents skills moved to `commands/analysis/agents/`, so the agents install reads both `commands/agents/` and `commands/analysis/agents/`; installed paths are unchanged.
 - No manifest format exists for external skill sources.
 - No `sq skills` subcommand exists.
 - The forked `tech-debt-audit` skill is used manually, outside squadron's install lifecycle.
