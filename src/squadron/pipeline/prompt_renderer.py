@@ -15,6 +15,12 @@ from typing import TYPE_CHECKING, cast
 
 from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.commit_plan import (
+    PLAN_PARAM,
+    REVIEW_TEMPLATE_PARAM,
+    SLICE_PARAM,
+    SUBJECT_PARAM,
+)
 from squadron.pipeline.compaction_templates import (
     load_compaction_template,
     render_instructions,
@@ -26,15 +32,21 @@ from squadron.pipeline.executor import (
     resolve_placeholders,
 )
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
+from squadron.pipeline.loop_commit import round_commit_params
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.steps import get_step_type
 from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from squadron.pipeline.models import StepConfig
     from squadron.pipeline.resolver import ModelResolver
 
 _logger = logging.getLogger(__name__)
+
+# Config key a loop-round commit instruction carries its round number under.
+_ROUND_KEY = "round"
 
 # ---------------------------------------------------------------------------
 # Data models
@@ -295,15 +307,47 @@ def _render_commit(
     config: dict[str, object],
     params: dict[str, object],
 ) -> ActionInstruction:
-    """Build instruction for a commit action."""
-    prefix = str(config.get("message_prefix", ""))
-    message = f"{prefix}: pipeline step" if prefix else "chore: pipeline step"
+    """Build instruction for a commit action: ``sq _commit …``, the same logic the SDK runs.
+
+    The target comes from the action config, with the pipeline's own ``slice`` or
+    ``plan`` param as the fallback, exactly as ``CommitAction`` reads its merged
+    params. ``round`` is set only for a loop-round commit.
+    """
+    subject = config.get(SUBJECT_PARAM)
+    if subject is None:
+        raise ValueError(f"commit action has no {SUBJECT_PARAM!r}; cannot render a scoped commit")
+
+    args = ["sq", "_commit", "--subject", str(subject)]
+    for flag, key in (("--slice", SLICE_PARAM), ("--plan", PLAN_PARAM)):
+        value = config.get(key) or params.get(key)
+        if isinstance(value, str | int) and value != "":
+            args += [flag, str(value)]
+    template = config.get(REVIEW_TEMPLATE_PARAM)
+    if template:
+        args += ["--template", str(template)]
+    round_number = config.get(_ROUND_KEY)
+    if round_number:
+        args += ["--round", str(round_number)]
 
     return ActionInstruction(
         action_type=ActionType.COMMIT,
-        instruction="Commit the artifacts",
-        command=f"git add -A && git commit -m '{message}'",
+        instruction="Commit the files this step produced",
+        command=shlex.join(args),
     )
+
+
+def render_loop_round_commit(
+    inner_steps: Sequence[StepConfig], params: dict[str, object], round_number: int
+) -> ActionInstruction:
+    """The commit instruction for loop round ``round_number``.
+
+    Built from the same ``round_commit_params`` the executor uses, so a round commits
+    the same thing in either mode. Raises ``CommitScopeUnknownError`` (with the
+    executor's message) when the round has no review. ``--prompt-only`` does not
+    render loops yet (#145); the loop renderer calls this per round.
+    """
+    commit_params = round_commit_params(inner_steps, params, round_number)
+    return _render_commit({**commit_params, _ROUND_KEY: round_number}, params)
 
 
 def _render_summary(

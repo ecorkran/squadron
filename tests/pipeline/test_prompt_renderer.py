@@ -10,6 +10,7 @@ import pytest
 
 from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.loop_commit import CommitScopeUnknownError
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.prompt_renderer import (
     ActionInstruction,
@@ -22,6 +23,7 @@ from squadron.pipeline.prompt_renderer import (
     _render_dispatch,
     _render_review,
     _render_summary,
+    render_loop_round_commit,
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ResolvedModel
@@ -263,15 +265,63 @@ class TestRenderCheckpoint:
 
 
 class TestRenderCommit:
-    def test_with_message_prefix(self) -> None:
-        result = _render_commit({"message_prefix": "phase-4"}, {})
+    def test_renders_sq_commit_with_the_step_target(self) -> None:
+        result = _render_commit(
+            {"commit_subject": "design", "slice": "105", "review_template": "slice"}, {}
+        )
         assert result.action_type == ActionType.COMMIT
-        assert "phase-4" in result.command
-        assert "git add -A" in result.command
+        assert result.command == "sq _commit --subject design --slice 105 --template slice"
 
-    def test_without_prefix(self) -> None:
-        result = _render_commit({}, {})
-        assert "chore" in result.command
+    def test_never_renders_git_add_all(self) -> None:
+        result = _render_commit({"commit_subject": "code", "slice": "105"}, {})
+        assert "git add" not in result.command
+
+    def test_devlog_takes_the_slice_from_pipeline_params(self) -> None:
+        result = _render_commit({"commit_subject": "devlog"}, {"slice": "105"})
+        assert result.command == "sq _commit --subject devlog --slice 105"
+
+    def test_devlog_has_no_template_or_round(self) -> None:
+        result = _render_commit({"commit_subject": "devlog"}, {"slice": "105"})
+        assert "--template" not in result.command
+        assert "--round" not in result.command
+
+    def test_initiative_scoped_commit_renders_the_plan(self) -> None:
+        result = _render_commit(
+            {"commit_subject": "architecture", "plan": "180", "review_template": "arch"}, {}
+        )
+        assert result.command == "sq _commit --subject architecture --plan 180 --template arch"
+
+    def test_a_record_valued_slice_param_is_not_rendered(self) -> None:
+        """Inside an each the pipeline's slice param is a record; it is not an index."""
+        result = _render_commit({"commit_subject": "devlog"}, {"slice": {"index": 105}})
+        assert "--slice" not in result.command
+
+    def test_missing_subject_raises(self) -> None:
+        with pytest.raises(ValueError, match="commit_subject"):
+            _render_commit({}, {})
+
+
+class TestRenderLoopRoundCommit:
+    """The loop-round hook for #145; same params the executor uses."""
+
+    def _p4_loop_body(self) -> list[StepConfig]:
+        return [
+            StepConfig(step_type="dispatch", name="revise", config={"model": "{model}"}),
+            StepConfig(
+                step_type="review",
+                name="review-1",
+                config={"template": "slice", "model": "m", "slice": "{slice}"},
+            ),
+        ]
+
+    def test_p4_round_fills_subject_template_and_round(self) -> None:
+        result = render_loop_round_commit(self._p4_loop_body(), {"slice": "105"}, 2)
+        assert result.command == "sq _commit --subject design --slice 105 --template slice --round 2"
+
+    def test_round_without_a_review_fails_with_the_executors_message(self) -> None:
+        body = [StepConfig(step_type="dispatch", name="revise", config={})]
+        with pytest.raises(CommitScopeUnknownError, match="no review in round 3"):
+            render_loop_round_commit(body, {"slice": "105"}, 3)
 
 
 class TestRenderDevlog:
@@ -592,6 +642,7 @@ class TestRenderStepInstructions:
         )
 
         assert [a.action_type for a in result.actions] == ["devlog", "commit"]
+        assert result.actions[1].command == "sq _commit --subject devlog --slice 152"
         assert "auto" in result.actions[0].instruction
 
     def test_step_without_review(self) -> None:

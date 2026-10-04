@@ -19,7 +19,7 @@ from squadron.pipeline.commit_plan import (
     subject_for_template,
 )
 from squadron.pipeline.models import StepConfig
-from squadron.pipeline.steps import get_step_type
+from squadron.pipeline.steps import bootstrap_step_types, get_step_type
 
 
 class CommitScopeUnknownError(ValueError):
@@ -59,6 +59,7 @@ def round_commit_params(
 
 def _last_review_config(inner_steps: Sequence[StepConfig]) -> dict[str, object] | None:
     """The config of the last review action the round's steps expand to."""
+    bootstrap_step_types()  # idempotent; the renderer can reach here before the executor ran
     last: dict[str, object] | None = None
     for inner in inner_steps:
         for action_type, action_config in get_step_type(inner.step_type).expand(inner):

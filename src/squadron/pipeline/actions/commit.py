@@ -11,6 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import cast
 
+from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.commit_plan import (
     PLAN_PARAM,
@@ -81,7 +82,13 @@ class CommitAction:
         refusal = _check_placement(target, str(cwd), context.cf_client)
         if refusal is not None:
             return refusal
-        plan = build_commit_plan(target, cwd, context.cf_client)
+        try:
+            plan = build_commit_plan(target, cwd, context.cf_client)
+        except (ValueError, FileNotFoundError, ContextForgeError) as exc:
+            # cf could not resolve the slice or plan, or a document is missing: an item
+            # failure the batch can flag, unlike a git environment fault.
+            _logger.warning("commit: step %s cannot plan its commit: %s", context.step_name, exc)
+            return str(exc)
         explicit_message = context.params.get("message")
         if explicit_message:
             # A caller-supplied message is a contract, not a template: used verbatim.
