@@ -533,7 +533,45 @@ class TestUnknownAliasGuard:
         out = capsys.readouterr().out
         assert "unknown model alias" in out
         assert "definitely-not-a-real-alias" in out
-        assert "--profile" in out
+        assert "set a profile" in out
+
+    def test_message_matches_the_pipeline_pre_run_check(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        doc_inputs: dict[str, str],
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        """Interface parity (#175): ``sq review`` and ``sq run`` reject with one message."""
+        import typer
+
+        from squadron.cli.commands.review import _run_review_command
+        from squadron.pipeline.classification import ClassificationError, classify_pipeline
+        from squadron.pipeline.models import PipelineDefinition, StepConfig
+        from squadron.pipeline.resolver import ModelResolver
+
+        bad_alias = "glm-flash-low."
+        monkeypatch.setattr("squadron.cli.commands.review.load_all_templates", lambda: None)
+        monkeypatch.setattr(
+            "squadron.cli.commands.review.get_template",
+            lambda name: _make_template(),
+        )
+        monkeypatch.setattr("squadron.cli.commands.review.get_config", lambda k: None)
+
+        with pytest.raises(typer.Exit):
+            _run_review_command("slice", doc_inputs, "terminal", None, 0, model_flag=bad_alias)
+        review_out = capsys.readouterr().out
+
+        definition = PipelineDefinition(
+            name="p",
+            description="parity",
+            params={},
+            steps=[StepConfig(step_type="dispatch", name="d", config={})],
+        )
+        with pytest.raises(ClassificationError) as excinfo:
+            classify_pipeline(definition, ModelResolver(cli_override=bad_alias))
+
+        # Rich wraps long lines, so compare with whitespace collapsed.
+        assert str(excinfo.value) in " ".join(review_out.split())
 
     def test_no_model_supplied_does_not_reject(
         self, monkeypatch: pytest.MonkeyPatch, doc_inputs: dict[str, str]

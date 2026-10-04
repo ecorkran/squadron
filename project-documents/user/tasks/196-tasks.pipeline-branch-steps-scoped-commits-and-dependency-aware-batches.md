@@ -77,17 +77,18 @@ status: in_progress
 
 ## Task 5 — Classifier takes merged params and collects alias errors
 
-- [ ] `classify_pipeline` (`pipeline/classification.py`) gains a `params` argument (merged defaults plus `--param` overrides, the mapping the executor uses)
-- [ ] For each non-pool model candidate, call `require_known_model`; collect every error and raise one error listing them all before step 1
-- [ ] Update both call sites in `cli/commands/run.py` (the two sites cited in D13) to pass merged params
-- [ ] Add tests
-  - [ ] Unknown alias via `--model` is rejected pre-run
-  - [ ] Unknown alias via `--param review-model=…` is rejected pre-run (this slipped through before)
-  - [ ] Two bad aliases appear in one error
-  - [ ] Pool candidates are not alias-checked here
-  - [ ] Run-level test with a pre-existing review artifact: the rejected run writes no review file and archives nothing (design criterion 11)
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: reject unknown model aliases in pre-run classification`
+- [x] `classify_pipeline` (`pipeline/classification.py`) gains a `params` argument (merged defaults plus `--param` overrides, the mapping the executor uses)
+  - `params` is optional on `classify_pipeline` (None = pipeline defaults only); `--explain` builds its merged params from defaults plus `--param` overrides via the extracted `_apply_param_overrides`.
+- [x] For each non-pool model candidate, call `require_known_model`; collect every error and raise one error listing them all before step 1
+- [x] Update both call sites in `cli/commands/run.py` (the two sites cited in D13) to pass merged params
+- [x] Add tests
+  - [x] Unknown alias via `--model` is rejected pre-run
+  - [x] Unknown alias via `--param review-model=…` is rejected pre-run (this slipped through before)
+  - [x] Two bad aliases appear in one error
+  - [x] Pool candidates are not alias-checked here
+  - [x] Run-level test with a pre-existing review artifact: the rejected run writes no review file and archives nothing (design criterion 11)
+  - [x] Success: tests pass
+- [x] Commit: `fix: reject unknown model aliases in pre-run classification`
 
 ## Task 6 — `sq review` delegates to the shared check
 

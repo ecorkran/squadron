@@ -29,10 +29,11 @@ from squadron.integrations.context_forge import (
     cf_project_name,
 )
 from squadron.models.aliases import (
-    get_all_aliases,
+    UnknownModelAliasError,
     model_allows_tools,
     model_effort,
     model_max_output_tokens,
+    require_known_model,
     resolve_model_alias,
 )
 from squadron.providers.errors import ProviderError
@@ -564,19 +565,17 @@ def _reject_unknown_alias(
     Mirrors ``_resolve_profile``'s cascade *without* its ``"sdk"`` fallback —
     the fallback is what silently rescued typos before.
     """
-    if profile_flag is not None:
-        return
-    if template is not None and template.profile is not None:
-        return
-    if isinstance(get_config("default_review_profile"), str):
-        return
-
-    known = sorted(get_all_aliases().keys())
-    rprint(
-        f"[red]Error: unknown model alias '{name}'; known: {known}. "
-        f"If this is a literal model ID, pass --profile to dispatch it directly.[/red]"
+    profile_source = (
+        profile_flag is not None
+        or (template is not None and template.profile is not None)
+        or isinstance(get_config("default_review_profile"), str)
     )
-    raise typer.Exit(code=1)
+    try:
+        require_known_model(name, profile_source=profile_source)
+    except UnknownModelAliasError as exc:
+        # Same message and close matches as the pipeline pre-run check (#175).
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from None
 
 
 def _resolve_model_and_profile(
