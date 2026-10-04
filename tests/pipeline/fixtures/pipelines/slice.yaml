@@ -32,6 +32,8 @@ steps:
   - summary:
       restore: true
 
+  - branch: { op: enter }
+
   - implement:
       phase: 6
       model: sonnet
@@ -51,3 +53,4 @@ steps:
       restore: true
 
   - devlog: auto
+  - branch: { op: merge }

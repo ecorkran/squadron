@@ -39,6 +39,7 @@ def _success_registry() -> dict[str, object]:
     action = _mock_action_fn(success=True)
     return {
         "cf-op": action,
+        "branch": action,
         "dispatch": action,
         "review": _mock_action_fn(success=True, verdict="PASS"),
         "checkpoint": _mock_action_fn(success=True),
@@ -59,6 +60,7 @@ def _artifact_writing_success_registry(cwd: Path, slice_index: int) -> dict[str,
     action = _mock_action_fn(success=True)
     return {
         "cf-op": action,
+        "branch": action,
         "dispatch": artifact_writing_action(cwd, slice_index),
         "review": _mock_action_fn(success=True, verdict="PASS"),
         "checkpoint": _mock_action_fn(success=True),
@@ -95,7 +97,7 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 10
+        assert len(result.step_results) == 12
         assert all(sr.status == ExecutionStatus.COMPLETED for sr in result.step_results)
 
     @pytest.mark.asyncio
@@ -121,10 +123,11 @@ class TestSliceLifecycleIntegration:
             _action_registry=registry,
         )
 
-        assert len(received) == 10
+        assert len(received) == 12
         step_names = [sr.step_name for sr in received]
         assert step_names[0].startswith("design")
-        assert step_names[-1].startswith("devlog")
+        assert step_names[-1].startswith("branch")
+        assert step_names[-2].startswith("devlog")
 
     @pytest.mark.asyncio
     async def test_start_from_compact_skips_earlier_steps(self) -> None:
@@ -142,9 +145,9 @@ class TestSliceLifecycleIntegration:
         )
 
         assert result.status == ExecutionStatus.COMPLETED
-        # Should have 7 steps: compact-3, summary-4, implement-5, summary-6,
-        # compact-7, summary-8, devlog-9
-        assert len(result.step_results) == 7
+        # Should have 9 steps: compact-3, summary-4, branch-5, implement-6, summary-7,
+        # compact-8, summary-9, devlog-10, branch-11
+        assert len(result.step_results) == 9
         assert result.step_results[0].step_name == "compact-3"
 
     @pytest.mark.asyncio
@@ -253,6 +256,7 @@ class TestDesignPlanIntegration:
         ok = _mock_action_fn(success=True)
         registry: dict[str, object] = {
             "cf-op": ok,
+            "branch": ok,
             "dispatch": dispatch,
             "review": review,
             "summary": summary,

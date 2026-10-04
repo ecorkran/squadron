@@ -38,6 +38,7 @@ def _success_registry(dispatch_action: MagicMock | None = None) -> dict[str, obj
     action = _mock_action(success=True)
     return {
         "cf-op": action,
+        "branch": action,
         "dispatch": dispatch_action or action,
         "review": _mock_action(success=True, verdict="PASS"),
         "checkpoint": _mock_action(success=True),
@@ -80,6 +81,7 @@ def _paused_checkpoint_registry(
 
     return {
         "cf-op": normal_action,
+        "branch": normal_action,
         "dispatch": dispatch_action or normal_action,
         "review": review_action,
         "checkpoint": checkpoint_mock,
@@ -114,7 +116,7 @@ class TestStateIntegration:
 
         state = mgr.load(run_id)
         assert state.status == "completed"
-        assert len(state.completed_steps) == 10
+        assert len(state.completed_steps) == 12
         step_names = [s.step_name for s in state.completed_steps]
         assert any("design" in n for n in step_names)
         assert any("devlog" in n for n in step_names)
@@ -174,5 +176,5 @@ class TestStateIntegration:
         # once as PAUSED, once as COMPLETED on resume (slice 915 Part A —
         # first_unfinished_step now returns to the paused step and it
         # re-executes, rather than being skipped as already-done).
-        assert len(final.completed_steps) == 11
+        assert len(final.completed_steps) == 13
         _ = prior_outputs  # consumed by executor internally

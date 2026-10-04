@@ -56,6 +56,8 @@ steps:
   - summary:
       restore: true
 
+  - branch: { op: enter }
+
   - implement:
       phase: 6
       model: "{model}"
@@ -73,3 +75,4 @@ steps:
       restore: true
 
   - devlog: auto
+  - branch: { op: merge }

@@ -53,11 +53,13 @@ class TestBuiltInPipelineStructure:
             "summary",
             "compact",
             "summary",
+            "branch",
             "implement",
             "summary",
             "compact",
             "summary",
             "devlog",
+            "branch",
         ]
 
     def test_review_only_steps(self) -> None:

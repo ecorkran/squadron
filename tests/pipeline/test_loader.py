@@ -36,7 +36,7 @@ class TestLoadPipelineBuiltIn:
         )
         assert isinstance(defn, PipelineDefinition)
         assert defn.name == "p456"
-        assert len(defn.steps) == 12
+        assert len(defn.steps) == 14
 
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(FileNotFoundError, match="no-such-pipeline"):

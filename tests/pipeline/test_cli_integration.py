@@ -45,6 +45,7 @@ def _success_registry(dispatch_action: MagicMock | None = None) -> dict[str, obj
     action = _mock_action(success=True)
     return {
         "cf-op": action,
+        "branch": action,
         "dispatch": dispatch_action or action,
         "review": _mock_action(success=True, verdict="PASS"),
         "checkpoint": _mock_action(success=True),
@@ -87,6 +88,7 @@ def _paused_checkpoint_registry(
     checkpoint_mock.execute = checkpoint_execute
 
     return {
+        "branch": normal_action,
         "cf-op": normal_action,
         "dispatch": dispatch_action or normal_action,
         "review": review_action,
@@ -131,14 +133,14 @@ class TestCliIntegration:
             )
 
         assert result.status == ExecutionStatus.COMPLETED
-        assert len(result.step_results) == 10
+        assert len(result.step_results) == 12
 
         # State file should be loadable
         mgr = StateManager(runs_dir=tmp_path)
         runs = mgr.list_runs()
         assert len(runs) == 1
         assert runs[0].status == "completed"
-        assert len(runs[0].completed_steps) == 10
+        assert len(runs[0].completed_steps) == 12
 
     @pytest.mark.asyncio
     async def test_state_file_loadable_after_run(
@@ -221,11 +223,11 @@ class TestCliIntegration:
 
         final = mgr.load(run_id)
         assert final.status == "completed"
-        # 10 top-level steps, but the paused step ("tasks") is recorded twice:
+        # 12 top-level steps, but the paused step ("tasks") is recorded twice:
         # once as PAUSED, once as COMPLETED on resume (slice 915 Part A —
         # first_unfinished_step now returns to the paused step and it
         # re-executes, rather than being skipped as already-done).
-        assert len(final.completed_steps) == 11
+        assert len(final.completed_steps) == 13
 
     # -------------------------------------------------------------------
     # T18: --from mid-process adoption
@@ -233,13 +235,13 @@ class TestCliIntegration:
 
     @pytest.mark.asyncio
     async def test_from_step_skips_earlier_steps(self, tmp_path: Path) -> None:
-        """Starting from 'implement-5' skips design/tasks/summary/compact/summary."""
+        """Starting from 'implement-6' skips design/tasks/summary/compact/summary."""
         with patch("squadron.cli.commands.run._check_cf"):
             result = await _run_pipeline(
                 "slice",
                 {"slice": "191"},
                 runs_dir=tmp_path,
-                from_step="implement-5",
+                from_step="implement-6",
                 _action_registry=_success_registry(),
             )
 
@@ -247,7 +249,7 @@ class TestCliIntegration:
         completed_names = [sr.step_name for sr in result.step_results]
         assert "design-0" not in completed_names
         assert "tasks-1" not in completed_names
-        assert "implement-5" in completed_names
+        assert "implement-6" in completed_names
 
     # -------------------------------------------------------------------
     # T19: Dry-run produces no state file

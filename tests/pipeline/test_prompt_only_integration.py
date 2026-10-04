@@ -63,7 +63,7 @@ class TestPromptOnlyFullCycle:
             )
 
         # ---- Verify all steps were visited ----
-        assert len(step_names) == 10
+        assert len(step_names) == 12
 
         # ---- Verify next step returns None (all done) ----
         next_step = state_mgr.first_unfinished_step(run_id, definition)
@@ -71,7 +71,7 @@ class TestPromptOnlyFullCycle:
 
         # ---- Verify state file ----
         state = state_mgr.load(run_id)
-        assert len(state.completed_steps) == 10
+        assert len(state.completed_steps) == 12
 
         # Verify step types are in expected order
         step_types = [s.step_type for s in state.completed_steps]
@@ -81,11 +81,13 @@ class TestPromptOnlyFullCycle:
             "summary",
             "compact",
             "summary",
+            "branch",
             "implement",
             "summary",
             "compact",
             "summary",
             "devlog",
+            "branch",
         ]
 
     def test_first_step_structure(self, tmp_path: Path) -> None:

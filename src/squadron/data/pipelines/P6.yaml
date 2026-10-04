@@ -8,6 +8,7 @@ params:
   review-model: minimax
 
 steps:
+  - branch: { op: enter }
   - implement:
       phase: 6
       model: "{model}"
@@ -16,8 +17,10 @@ steps:
         model: "{review-model}"
       checkpoint: on-fail
 
+  - devlog: auto
+  - branch: { op: merge }
+
   - summary:
       template: minimal-sdk
       model: "{summary-model}"
       emit: [stdout, clipboard, file]
-  - devlog: auto
