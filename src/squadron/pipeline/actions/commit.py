@@ -136,11 +136,21 @@ def _target_from_params(context: ActionContext) -> CommitTarget | None:
     raw_template = context.params.get(REVIEW_TEMPLATE_PARAM)
     return CommitTarget(
         subject=subject,
-        slice_index=int(str(raw_slice)) if raw_slice not in (None, "") else None,
+        slice_index=_slice_index(raw_slice),
         plan=str(raw_plan) if raw_plan not in (None, "") else None,
         review_template=str(raw_template) if raw_template else None,
         round=context.iteration,
     )
+
+
+def _slice_index(raw: object) -> int | None:
+    """The slice index a commit names, ``None`` when it names no slice."""
+    if raw in (None, ""):
+        return None
+    try:
+        return int(str(raw))
+    except ValueError:
+        raise ValueError(f"commit needs a slice index, got {raw!r}") from None
 
 
 def _explicit_paths(params: dict[str, object]) -> list[str]:

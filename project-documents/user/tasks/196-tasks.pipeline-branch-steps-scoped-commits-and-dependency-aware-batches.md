@@ -213,12 +213,13 @@ status: in_progress
 
 ## Task 16 — Phase step and loop-round callers
 
-- [ ] `steps/phase.py`: commit config carries the artifact kind and target subject (D1)
-- [ ] `executor.py`: a loop round's commit passes round results; subject comes from the round's last review action template via the Task 13 lookup; a round with no review fails with `commit scope unknown: no review in round {n}`
-- [ ] Update the existing exact-equality `expand()` tests for the phase step's commit config
-- [ ] Add a loop test: round 2 of a P4-style loop yields `docs: revise slice N design, round 2 (review: …)`; a review-only round yields the `review: re-review …` form
-  - [ ] Success: tests pass; no `chore: phase-` or `loop-` messages remain in any test expectation
-- [ ] Commit: `feat: build phase and loop-round commits from the commit plan`
+- [x] `steps/phase.py`: commit config carries the artifact kind and target subject (D1)
+- [x] `executor.py`: a loop round's commit passes round results; subject comes from the round's last review action template via the Task 13 lookup; a round with no review fails with `commit scope unknown: no review in round {n}`
+  - The round's review is found by expanding the loop's inner steps and taking the last `review` action (`pipeline/loop_commit.py`, `round_commit_params`), so the executor and the prompt renderer (Task 18) share it. A round with no review, or a review naming no slice/plan, yields a failed commit ActionResult with the `commit scope unknown` text and never calls the commit action. Loop-round message tests live in tests/pipeline/test_loop_round_commits.py; the findings-addressed e2e now runs a code-review loop on a `305-slice.*` branch.
+- [x] Update the existing exact-equality `expand()` tests for the phase step's commit config
+- [x] Add a loop test: round 2 of a P4-style loop yields `docs: revise slice N design, round 2 (review: …)`; a review-only round yields the `review: re-review …` form
+  - [x] Success: tests pass; no `chore: phase-` or `loop-` messages remain in any test expectation
+- [x] Commit: `feat: build phase and loop-round commits from the commit plan`
 
 ## Task 17 — `devlog` step commits its entry
 

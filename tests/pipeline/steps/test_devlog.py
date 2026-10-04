@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from squadron.pipeline.commit_plan import CommitSubject
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.steps.devlog import DevlogStepType
 
@@ -52,17 +53,33 @@ def test_validate_invalid_mode() -> None:
 
 def test_expand_mode_auto() -> None:
     actions = DevlogStepType().expand(_make_config({"mode": "auto"}))
-    assert len(actions) == 1
-    assert actions[0] == ("devlog", {"mode": "auto"})
+    assert actions == [
+        ("devlog", {"mode": "auto"}),
+        ("commit", {"commit_subject": CommitSubject.DEVLOG}),
+    ]
 
 
 def test_expand_mode_explicit_with_content() -> None:
     actions = DevlogStepType().expand(_make_config({"mode": "explicit", "content": "Done"}))
-    assert len(actions) == 1
+    assert len(actions) == 2
     assert actions[0] == ("devlog", {"mode": "explicit", "content": "Done"})
 
 
 def test_expand_no_mode_defaults_to_auto() -> None:
     actions = DevlogStepType().expand(_make_config({}))
-    assert len(actions) == 1
+    assert len(actions) == 2
     assert actions[0] == ("devlog", {"mode": "auto"})
+
+
+def test_commit_takes_an_explicit_slice_from_the_step() -> None:
+    """Inside an ``each`` the slice is a record, so the step names ``{slice.index}``."""
+    actions = DevlogStepType().expand(_make_config({"mode": "auto", "slice": "{slice.index}"}))
+    assert actions[1] == (
+        "commit",
+        {"commit_subject": CommitSubject.DEVLOG, "slice": "{slice.index}"},
+    )
+
+
+def test_commit_leaves_the_slice_to_the_pipeline_params_by_default() -> None:
+    _, commit_config = DevlogStepType().expand(_make_config({"mode": "auto"}))[1]
+    assert "slice" not in commit_config

@@ -827,7 +827,7 @@ class TestPromptOnly:
         parsed = _extract_json(result.output)
         assert parsed["run_id"] == "run-test-123"
         assert parsed["step_name"] == "devlog-0"
-        assert len(parsed["actions"]) == 1
+        assert [a["action_type"] for a in parsed["actions"]] == ["devlog", "commit"]
 
     @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")

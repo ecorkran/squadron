@@ -591,8 +591,7 @@ class TestRenderStepInstructions:
             run_id="run-test",
         )
 
-        assert len(result.actions) == 1
-        assert result.actions[0].action_type == "devlog"
+        assert [a.action_type for a in result.actions] == ["devlog", "commit"]
         assert "auto" in result.actions[0].instruction
 
     def test_step_without_review(self) -> None:
@@ -642,7 +641,7 @@ class TestRenderStepInstructions:
         raw = result.to_json()
         parsed = json.loads(raw)
         assert parsed["step_name"] == "devlog-0"
-        assert len(parsed["actions"]) == 1
+        assert [a["action_type"] for a in parsed["actions"]] == ["devlog", "commit"]
 
 
 class TestRenderSummaryEffort:

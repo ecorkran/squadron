@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from squadron.pipeline.commit_plan import SLICE_PARAM, SUBJECT_PARAM, CommitSubject
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
@@ -9,7 +10,7 @@ _VALID_MODES = ("auto", "explicit")
 
 
 class DevlogStepType:
-    """Step type that expands to a single devlog action."""
+    """Step type that expands to a devlog action and a commit of its entry."""
 
     @property
     def step_type(self) -> str:
@@ -50,7 +51,13 @@ class DevlogStepType:
         if "content" in cfg:
             action_config["content"] = cfg["content"]
 
-        return [("devlog", action_config)]
+        # The entry is committed on its own, staging only DEVLOG.md (D7). The slice comes
+        # from the pipeline's own ``slice`` param unless this step names one (for example
+        # ``{slice.index}`` inside an ``each``).
+        commit_config: dict[str, object] = {SUBJECT_PARAM: CommitSubject.DEVLOG}
+        if SLICE_PARAM in cfg:
+            commit_config[SLICE_PARAM] = cfg[SLICE_PARAM]
+        return [("devlog", action_config), ("commit", commit_config)]
 
 
 register_step_type(StepTypeName.DEVLOG, DevlogStepType())

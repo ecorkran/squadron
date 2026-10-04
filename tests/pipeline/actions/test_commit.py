@@ -305,12 +305,15 @@ async def test_devlog_on_its_own_slice_branch_succeeds(
 ) -> None:
     run_test_git(temp_git_repo, "checkout", "-q", "-b", SLICE_BRANCH)
     _write(temp_git_repo, "DEVLOG.md")
+    _write(temp_git_repo, "src/in_progress.py")
 
     result = await action.execute(
         _context(temp_git_repo, params={"commit_subject": "devlog", "slice": str(SLICE)})
     )
 
     assert result.outputs["message"] == "docs: add DEVLOG entry for slice 105"
+    # Only the entry is committed; the slice's code in progress stays in the tree.
+    assert _porcelain(temp_git_repo) == "?? src/in_progress.py\n"
 
 
 @pytest.mark.asyncio
