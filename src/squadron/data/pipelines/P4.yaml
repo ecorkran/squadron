@@ -4,7 +4,7 @@ description: Design a slice (phase 4), then revise until the review passes; chec
 params:
   slice: required
   summary-model: sonnet
-  model: sonnet
+  model: opus
   review-model: deepseek4-flash
   max-revisions: "2"
   pass-threshold: review.pass
