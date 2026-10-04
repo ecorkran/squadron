@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 import subprocess
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
@@ -30,6 +31,26 @@ _logger = logging.getLogger(__name__)
 
 # git's wording when a branch is held by another worktree (it changed across versions).
 _CHECKED_OUT_ELSEWHERE = ("already checked out", "already used by worktree")
+
+
+class MergeOutcome(StrEnum):
+    """How ``branch merge`` ended."""
+
+    MERGED = "merged"
+    ALREADY = "already"  # the slice branch was already in the target
+
+
+class MergeFailedError(ValueError):
+    """The merge could not complete, but the target is clean and the branch intact (an item failure)."""
+
+
+@dataclass(frozen=True)
+class MergeResult:
+    """Where ``branch merge`` left the checkout."""
+
+    branch: str
+    target: str
+    outcome: MergeOutcome
 
 
 @dataclass(frozen=True)
@@ -53,7 +74,7 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
     """
     target = read_integration_target(cf_client)
     _require_registered_worktree(cwd, cf_client)
-    branch = _slice_branch(slice_index, cf_client)
+    branch, _ = _slice_facts(slice_index, cf_client)
 
     start = current_branch(cwd)
     if start not in (target, branch):
@@ -62,13 +83,14 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
     return _switch_to(branch, target, cwd)
 
 
-def _slice_branch(slice_index: int, cf_client: CfClientProtocol) -> str:
+def _slice_facts(slice_index: int, cf_client: CfClientProtocol) -> tuple[str, str]:
+    """The slice's branch name and its display name, from cf."""
     try:
         info = resolve_slice_info(cf_client, slice_index)
     except (ContextForgeError, ContextForgeNotAvailable) as exc:
         _logger.exception("cannot resolve slice %d through cf", slice_index)
         raise GitEnvironmentError(f"cannot resolve slice {slice_index} through cf: {exc}") from exc
-    return slice_branch_name(slice_index, info["design_file"])
+    return slice_branch_name(slice_index, info["design_file"]), info["name"]
 
 
 def _require_registered_worktree(cwd: str, cf_client: CfClientProtocol) -> None:
@@ -111,15 +133,19 @@ def _leave_other_slice_branch(start: str, target: str, branch: str, cwd: str) ->
     _logger.warning("left unmerged slice branch %s for %s", start, target)
 
 
-def _require_clean_tree(cwd: str, slice_index: int) -> None:
+def _dirty_paths(cwd: str) -> str:
+    """The changed and untracked paths, comma separated; empty when the tree is clean."""
     status = _git_stdout(["status", "--porcelain", "-uall"], cwd)
-    if not status.strip():
-        return
-    paths = ", ".join(line[3:] for line in status.splitlines() if line.strip())
-    raise GitEnvironmentError(
-        f"working tree not clean: {paths}. Commit or remove them, then rerun phase 6 for "
-        f"slice {slice_index}; design and tasks commits from this run are kept."
-    )
+    return ", ".join(line[3:] for line in status.splitlines() if line.strip())
+
+
+def _require_clean_tree(cwd: str, slice_index: int) -> None:
+    paths = _dirty_paths(cwd)
+    if paths:
+        raise GitEnvironmentError(
+            f"working tree not clean: {paths}. Commit or remove them, then rerun phase 6 for "
+            f"slice {slice_index}; design and tasks commits from this run are kept."
+        )
 
 
 def _switch_to(branch: str, target: str, cwd: str) -> EnterResult:
@@ -157,6 +183,82 @@ def _write_or_unknown(args: list[str], cwd: str, expected_branch: str, label: st
     stderr = result.stderr.strip() if result is not None else "git timed out"
     verify_git_state(expected_branch, cwd=cwd)
     raise GitEnvironmentError(f"{label} failed: {stderr}")
+
+
+def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) -> MergeResult:
+    """Merge slice ``slice_index``'s branch into the target with a merge commit (D6).
+
+    A merge that fails is aborted, so the target is never left mid-merge and the slice
+    branch stays unmerged for the PM. Nothing is deleted or pushed.
+
+    Raises:
+        GitEnvironmentError: the checkout is on the wrong branch, the tree is dirty, or
+            the target is held by another worktree.
+        GitStateUnknownError: a git step failed and the state cannot be verified.
+        MergeFailedError: the merge failed but the target is clean (an item failure).
+        NoDesignFileError: the slice has no design file (an item failure).
+    """
+    target = read_integration_target(cf_client)  # re-read; never taken from the enter step
+    branch, name = _slice_facts(slice_index, cf_client)
+    current = current_branch(cwd)
+
+    if current == target and _is_ancestor(branch, target, cwd):
+        return MergeResult(branch, target, MergeOutcome.ALREADY)
+    if current != branch:
+        raise GitEnvironmentError(f"on {current}, expected {branch} to merge it into {target}")
+    paths = _dirty_paths(cwd)
+    if paths:
+        raise GitEnvironmentError(
+            f"working tree not clean before merging {branch}: {paths}. Commit or remove "
+            f"them, then rerun the merge for slice {slice_index}."
+        )
+
+    _checkout(["checkout", target], cwd, branch)
+    merged = run_git(
+        ["merge", "--no-ff", "-m", f"merge: slice {slice_index} — {name}", branch], cwd=cwd
+    )
+    if merged is None or merged.returncode != 0:
+        _abandon_merge(branch, target, cwd, merged)
+    return MergeResult(branch, target, MergeOutcome.MERGED)
+
+
+def _is_ancestor(branch: str, target: str, cwd: str) -> bool:
+    result = run_git(["merge-base", "--is-ancestor", branch, target], cwd=cwd)
+    return result is not None and result.returncode == 0
+
+
+def _abandon_merge(
+    branch: str, target: str, cwd: str, merged: subprocess.CompletedProcess[str] | None
+) -> None:
+    """Abort a failed merge back to a clean target, then report it as an item failure.
+
+    Raises ``GitStateUnknownError`` instead when the abort fails or the state check
+    does not pass, because nothing may build on a target in an unknown state.
+    """
+    reason = merged.stderr.strip() if merged is not None else "git timed out"
+    conflicted = run_git(["diff", "--name-only", "--diff-filter=U"], cwd=cwd)
+    conflicted_paths = (
+        ", ".join(conflicted.stdout.split())
+        if conflicted is not None and conflicted.returncode == 0
+        else ""
+    )
+    merge_head = run_git(["rev-parse", "-q", "--verify", "MERGE_HEAD"], cwd=cwd)
+    if merge_head is not None and merge_head.returncode == 0:
+        aborted = run_git(["merge", "--abort"], cwd=cwd)
+        if aborted is None or aborted.returncode != 0:
+            detail = aborted.stderr.strip() if aborted is not None else "git timed out"
+            message = (
+                f"target state unknown after merge of {branch}: MERGE_HEAD present, "
+                f"abort failed: {detail}"
+            )
+            _logger.error(message)
+            raise GitStateUnknownError(message)
+    verify_git_state(target, cwd=cwd)
+    suffix = f" (conflicted: {conflicted_paths})" if conflicted_paths else ""
+    raise MergeFailedError(
+        f"merge failed: {reason or 'git refused the merge'}{suffix}; "
+        f"slice branch {branch} left unmerged"
+    )
 
 
 def _git_stdout(args: list[str], cwd: str) -> str:
