@@ -1410,6 +1410,32 @@ async def _write_each_report(report: BatchReport, runs_dir: Path | None) -> None
     _logger.info("%s; report: %s", report.summary_line(), report_path)
 
 
+async def _finish_each_report(
+    report: BatchReport,
+    runs_dir: Path | None,
+    step_name: str,
+    in_flight: tuple[int, dict[str, object]] | None,
+) -> None:
+    """Record a halted item, then write the report.
+
+    ``in_flight`` is set only while an exception is ending the run. On that path a
+    failed write is logged rather than raised, so the halting fault is the one that
+    propagates.
+    """
+    if in_flight is None:
+        await _write_each_report(report, runs_dir)
+        return
+    position, item = in_flight
+    reason = "run halted before this item finished"
+    _warn_item_flagged(step_name, item, reason)
+    report.records.append(BatchItemRecord.from_item(item, position, [], reason))
+    try:
+        await _write_each_report(report, runs_dir)
+    except OSError:
+        # Raising here would replace the exception already ending the run.
+        _logger.exception("cannot write the batch report for halted step %s", step_name)
+
+
 async def _execute_each_step(
     *,
     step: Any,
@@ -1485,12 +1511,7 @@ async def _execute_each_step(
             if status is not ExecutionStatus.COMPLETED:
                 break
     finally:
-        if in_flight is not None:
-            position, item = in_flight
-            reason = "run halted before this item finished"
-            _warn_item_flagged(step.name, item, reason)
-            report.records.append(BatchItemRecord.from_item(item, position, [], reason))
-        await _write_each_report(report, runs_dir)
+        await _finish_each_report(report, runs_dir, step.name, in_flight)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,

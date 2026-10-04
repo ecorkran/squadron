@@ -16,6 +16,8 @@ from typing import TYPE_CHECKING, cast
 from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.commit_plan import (
+    MESSAGE_PARAM,
+    PATHS_PARAM,
     PLAN_PARAM,
     REVIEW_TEMPLATE_PARAM,
     SLICE_PARAM,
@@ -311,13 +313,21 @@ def _render_commit(
 
     The target comes from the action config, with the pipeline's own ``slice`` or
     ``plan`` param as the fallback, exactly as ``CommitAction`` reads its merged
-    params. ``round`` is set only for a loop-round commit.
+    params. ``round`` is set only for a loop-round commit. A commit with no subject
+    renders its explicit paths and message; ``sq _commit`` accepts or refuses it
+    exactly as the action does.
     """
+    args = ["sq", "_commit"]
     subject = config.get(SUBJECT_PARAM)
-    if subject is None:
-        raise ValueError(f"commit action has no {SUBJECT_PARAM!r}; cannot render a scoped commit")
-
-    args = ["sq", "_commit", "--subject", str(subject)]
+    if subject is not None:
+        args += ["--subject", str(subject)]
+    raw_paths = config.get(PATHS_PARAM)
+    if isinstance(raw_paths, list):
+        for path in cast(list[object], raw_paths):
+            args += ["--path", str(path)]
+    message = config.get(MESSAGE_PARAM)
+    if message:
+        args += ["--message", str(message)]
     for flag, key in (("--slice", SLICE_PARAM), ("--plan", PLAN_PARAM)):
         value = config.get(key) or params.get(key)
         if isinstance(value, str | int) and value != "":

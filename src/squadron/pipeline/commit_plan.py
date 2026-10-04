@@ -26,6 +26,7 @@ from squadron.review.persistence import (
     slice_review_stem,
 )
 from squadron.review.save_target import ArchTarget
+from squadron.review.templates import BuiltinReviewTemplate
 
 _logger = logging.getLogger(__name__)
 
@@ -39,6 +40,9 @@ SUBJECT_PARAM = "commit_subject"
 SLICE_PARAM = "slice"
 PLAN_PARAM = "plan"
 REVIEW_TEMPLATE_PARAM = "review_template"
+# A user pipeline's own commit: explicit paths, and a message used verbatim.
+PATHS_PARAM = "paths"
+MESSAGE_PARAM = "message"
 
 
 class CommitSubject(StrEnum):
@@ -58,10 +62,10 @@ class UnmappedTemplateError(ValueError):
 # The one template -> subject definition. A loop round takes its subject from its
 # last review action's template; the executor and the prompt renderer both use it.
 _SUBJECT_BY_TEMPLATE: dict[str, CommitSubject] = {
-    "slice": CommitSubject.DESIGN,
-    "tasks": CommitSubject.TASKS,
-    "code": CommitSubject.CODE,
-    "arch": CommitSubject.ARCHITECTURE,
+    BuiltinReviewTemplate.SLICE: CommitSubject.DESIGN,
+    BuiltinReviewTemplate.TASKS: CommitSubject.TASKS,
+    BuiltinReviewTemplate.CODE: CommitSubject.CODE,
+    BuiltinReviewTemplate.ARCH: CommitSubject.ARCHITECTURE,
 }
 
 
@@ -188,6 +192,10 @@ def _archived_reviews(
 
 def read_review_verdict(review_file: Path) -> str | None:
     """The ``verdict`` frontmatter value as written, or ``None`` when unreadable (logged)."""
+    if not review_file.is_file():
+        # A deleted review is still a change to commit; it just has no verdict.
+        _logger.warning("commit: review %s is not on disk; message omits its verdict", review_file)
+        return None
     frontmatter = read_frontmatter(review_file)
     verdict = frontmatter.get("verdict") if frontmatter is not None else None
     if not isinstance(verdict, str) or not verdict:

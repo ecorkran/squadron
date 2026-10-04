@@ -13,7 +13,7 @@ import pytest
 
 from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
 from squadron.pipeline.actions.branch import BranchAction
-from squadron.pipeline.batch_report import ItemOutcome
+from squadron.pipeline.batch_report import BatchReport, ItemOutcome
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
@@ -185,3 +185,33 @@ async def test_a_halting_fault_ends_the_run_but_still_writes_the_report(
     text = reports[0].read_text()
     assert "105" in text and "106" in text
     assert "run halted before this item finished" in text
+
+
+@pytest.mark.asyncio
+async def test_a_failed_report_write_does_not_hide_the_halting_fault(
+    temp_git_repo: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir()
+    (temp_git_repo / "unrelated.txt").write_text("x\n")  # the first enter halts the run
+
+    def failing_write(self: BatchReport, runs_root: Path) -> Path:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(BatchReport, "write", failing_write)
+
+    with (
+        caplog.at_level(logging.ERROR, logger="squadron.pipeline.executor"),
+        pytest.raises(GitEnvironmentError, match="working tree not clean"),
+    ):
+        await _run_batch(
+            monkeypatch,
+            temp_git_repo,
+            runs_dir,
+            implement={105: (True, True), 106: (True, True)},
+        )
+
+    assert "cannot write the batch report for halted step" in caplog.text

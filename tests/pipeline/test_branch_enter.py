@@ -235,6 +235,52 @@ async def test_action_outputs_branch_target_and_created(temp_git_repo: Path) -> 
     assert result.outputs == {"branch": BRANCH, "target": "main", "created": True}
 
 
+def _action_context(repo: Path, cf: MagicMock) -> ActionContext:
+    return ActionContext(
+        pipeline_name="p",
+        run_id="r",
+        params={"op": "enter", "slice": str(SLICE)},
+        step_name="s",
+        step_index=0,
+        prior_outputs={},
+        resolver=MagicMock(),
+        cf_client=cf,
+        cwd=str(repo),
+    )
+
+
+@pytest.mark.asyncio
+async def test_action_flags_a_slice_missing_from_the_plan(temp_git_repo: Path) -> None:
+    cf = _cf()
+    cf.list_slices.return_value = []
+
+    result = await BranchAction().execute(_action_context(temp_git_repo, cf))
+
+    assert result.success is False
+    assert "No slice with index 105" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_action_lets_an_unrelated_value_error_end_the_run(temp_git_repo: Path) -> None:
+    """Only the named item failures become a failed result; an internal fault propagates."""
+    with (
+        patch(
+            "squadron.pipeline.actions.branch.enter_slice_branch",
+            side_effect=ValueError("internal fault"),
+        ),
+        pytest.raises(ValueError, match="internal fault"),
+    ):
+        await BranchAction().execute(_action_context(temp_git_repo, _cf()))
+
+
+def test_unexpected_git_dir_output_is_an_environment_error(temp_git_repo: Path) -> None:
+    with (
+        patch("squadron.pipeline.branch_ops._git_stdout", return_value="only-one-line\n"),
+        pytest.raises(GitEnvironmentError, match="unexpected git rev-parse output"),
+    ):
+        _enter(temp_git_repo)
+
+
 # ---------------------------------------------------------------------------
 # Worktrees
 # ---------------------------------------------------------------------------

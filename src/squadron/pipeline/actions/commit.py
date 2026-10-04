@@ -6,6 +6,7 @@ the hidden ``sq _commit`` command calls, so SDK and prompt-only runs agree.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import subprocess
 from pathlib import Path
@@ -14,6 +15,8 @@ from typing import cast
 from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.commit_plan import (
+    MESSAGE_PARAM,
+    PATHS_PARAM,
     PLAN_PARAM,
     REVIEW_TEMPLATE_PARAM,
     SLICE_PARAM,
@@ -50,6 +53,10 @@ class CommitAction:
         return []
 
     async def execute(self, context: ActionContext) -> ActionResult:
+        # git and cf run as subprocesses; keep them off the event loop.
+        return await asyncio.to_thread(self._commit, context)
+
+    def _commit(self, context: ActionContext) -> ActionResult:
         cwd = Path(context.cwd)
         try:
             target = _target_from_params(context)
@@ -90,7 +97,7 @@ class CommitAction:
             # failure the batch can flag, unlike a git environment fault.
             _logger.warning("commit: step %s cannot plan its commit: %s", context.step_name, exc)
             return str(exc)
-        explicit_message = context.params.get("message")
+        explicit_message = context.params.get(MESSAGE_PARAM)
         if explicit_message:
             # A caller-supplied message is a contract, not a template: used verbatim.
             return CommitPlan(plan.paths, plan.stage_all, str(explicit_message), plan.left_out)
@@ -113,7 +120,11 @@ class CommitAction:
             return self._failure(committed.stderr or "git commit failed")
 
         sha_result = run_git(["rev-parse", "HEAD"], cwd=cwd_text)
-        sha = sha_result.stdout.strip() if sha_result else "unknown"
+        if sha_result is None or sha_result.returncode != 0:
+            _logger.warning("commit: committed, but cannot read the new HEAD sha")
+            sha = "unknown"
+        else:
+            sha = sha_result.stdout.strip()
         return ActionResult(
             success=True,
             action_type=self.action_type,
@@ -162,7 +173,7 @@ def _slice_index(raw: object) -> int | None:
 
 
 def _explicit_paths(params: dict[str, object]) -> list[str]:
-    raw = params.get("paths")
+    raw = params.get(PATHS_PARAM)
     if not raw or not isinstance(raw, list):
         return []
     return [str(p) for p in cast(list[object], raw)]
@@ -170,7 +181,7 @@ def _explicit_paths(params: dict[str, object]) -> list[str]:
 
 def _explicit_plan(context: ActionContext, paths: list[str]) -> CommitPlan | str:
     """A plan for a caller that named its own paths and message (user pipelines)."""
-    message = context.params.get("message")
+    message = context.params.get(MESSAGE_PARAM)
     if not message:
         return "commit with explicit 'paths' needs a 'message'"
     status = run_git(["status", "--porcelain", "--", *paths], cwd=context.cwd)
@@ -195,6 +206,8 @@ def _check_placement(target: CommitTarget, cwd: str, cf_client: ConfigReader) ->
     branch = current_branch(cwd)
     on_slice = parse_slice_branch(branch)
     if target.subject is CommitSubject.CODE:
+        if target.slice_index is None:
+            return "a code commit needs a slice index"
         if on_slice == target.slice_index:
             return None
         return f"refusing to stage all changes off the slice branch (on {branch})"

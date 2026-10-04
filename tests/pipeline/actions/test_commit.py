@@ -358,3 +358,56 @@ async def test_a_git_timeout_raises_state_unknown_and_logs_error(
             await action.execute(_context(temp_git_repo, params=_design_params()))
 
     assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_code_without_a_slice_is_refused_by_the_placement_guard(
+    action: CommitAction, temp_git_repo: Path
+) -> None:
+    _write(temp_git_repo, "src/feature.py")
+
+    result = await action.execute(_context(temp_git_repo, params={"commit_subject": "code"}))
+
+    assert result.success is False
+    assert result.error == "a code commit needs a slice index"
+    assert "src/feature.py" in _porcelain(temp_git_repo)
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_sha_after_a_commit_is_logged(
+    action: CommitAction, temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    from squadron.review.git_utils import run_git as real_run_git
+
+    def fake_run_git(args: list[str], *, cwd: str):  # type: ignore[no-untyped-def]
+        if args[0] == "rev-parse" and args[-1] == "HEAD":
+            return None
+        return real_run_git(args, cwd=cwd)
+
+    _write(temp_git_repo, DESIGN_FILE)
+    with (
+        patch("squadron.pipeline.actions.commit.run_git", side_effect=fake_run_git),
+        caplog.at_level(logging.WARNING, logger="squadron.pipeline.actions.commit"),
+    ):
+        result = await action.execute(_context(temp_git_repo, params=_design_params()))
+
+    assert result.outputs["committed"] is True
+    assert result.outputs["sha"] == "unknown"
+    assert "cannot read the new HEAD sha" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_review_is_committed_without_a_verdict(
+    action: CommitAction, temp_git_repo: Path
+) -> None:
+    _write(temp_git_repo, DESIGN_FILE)
+    _write(temp_git_repo, DESIGN_REVIEW, "---\nverdict: PASS\n---\n")
+    run_test_git(temp_git_repo, "add", "-A")
+    run_test_git(temp_git_repo, "commit", "-q", "-m", "seed")
+    (temp_git_repo / DESIGN_REVIEW).unlink()
+
+    result = await action.execute(_context(temp_git_repo, params=_design_params()))
+
+    assert result.success is True, result.error
+    assert result.outputs["committed"] is True
+    assert _porcelain(temp_git_repo) == ""

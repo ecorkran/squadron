@@ -6,11 +6,14 @@ A thin wrapper: the git logic lives in ``pipeline/branch_ops.py``, which the hid
 
 from __future__ import annotations
 
+import asyncio
+
 from squadron.pipeline.actions import ActionType, register_action
-from squadron.pipeline.branch_ops import enter_slice_branch, merge_slice_branch
-from squadron.pipeline.git_ops import parse_slice_index
+from squadron.pipeline.branch_ops import MergeFailedError, enter_slice_branch, merge_slice_branch
+from squadron.pipeline.commit_plan import SLICE_PARAM
+from squadron.pipeline.git_ops import NoDesignFileError, SliceNotInPlanError, parse_slice_index
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.steps.branch import BranchOp
+from squadron.pipeline.steps.branch import OP_PARAM, BranchOp
 
 
 class BranchAction:
@@ -26,36 +29,32 @@ class BranchAction:
 
     async def execute(self, context: ActionContext) -> ActionResult:
         try:
-            op = BranchOp(str(context.params.get("op")))
-            slice_index = parse_slice_index(context.params.get("slice"))
+            op = BranchOp(str(context.params.get(OP_PARAM)))
+            slice_index = parse_slice_index(context.params.get(SLICE_PARAM))
         except ValueError as exc:
             return self._failure(str(exc))
 
         try:
-            match op:
-                case BranchOp.ENTER:
-                    entered = enter_slice_branch(slice_index, context.cwd, context.cf_client)
-                    outputs: dict[str, object] = {
-                        "branch": entered.branch,
-                        "target": entered.target,
-                        "created": entered.created,
-                    }
-                case BranchOp.MERGE:
-                    result = merge_slice_branch(slice_index, context.cwd, context.cf_client)
-                    outputs = {
-                        "branch": result.branch,
-                        "target": result.target,
-                        "merged": result.outcome,
-                    }
-        except ValueError as exc:
-            # No design file, the slice is not in the plan, or a merge that was aborted back
-            # to a clean target: this item failed, but the next one may succeed. Environment
-            # faults raise past here and end the run.
+            # git and cf run as subprocesses; keep them off the event loop.
+            outputs = await asyncio.to_thread(_run_op, op, slice_index, context)
+        except (NoDesignFileError, SliceNotInPlanError, MergeFailedError) as exc:
+            # This item failed, but the next one may succeed. Environment faults raise
+            # past here and end the run.
             return self._failure(str(exc))
         return ActionResult(success=True, action_type=self.action_type, outputs=outputs)
 
     def _failure(self, error: str) -> ActionResult:
         return ActionResult(success=False, action_type=self.action_type, outputs={}, error=error)
+
+
+def _run_op(op: BranchOp, slice_index: int, context: ActionContext) -> dict[str, object]:
+    match op:
+        case BranchOp.ENTER:
+            entered = enter_slice_branch(slice_index, context.cwd, context.cf_client)
+            return {"branch": entered.branch, "target": entered.target, "created": entered.created}
+        case BranchOp.MERGE:
+            result = merge_slice_branch(slice_index, context.cwd, context.cf_client)
+            return {"branch": result.branch, "target": result.target, "merged": result.outcome}
 
 
 register_action(ActionType.BRANCH, BranchAction())

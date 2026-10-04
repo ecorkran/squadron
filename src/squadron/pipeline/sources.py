@@ -18,6 +18,7 @@ from squadron.documents.frontmatter import read_frontmatter
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.review.models import Verdict
 from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_review_stem
+from squadron.review.templates import BuiltinReviewTemplate
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
@@ -87,7 +88,17 @@ def _design_dependencies(entry: SliceEntry) -> list[int]:
             entry.design_file,
         )
         return []
-    frontmatter = read_frontmatter(path)
+    try:
+        frontmatter = read_frontmatter(path)
+    except (OSError, UnicodeDecodeError) as exc:
+        # One unreadable design must not abort source evaluation for the whole batch.
+        _logger.warning(
+            "slice %d: cannot read design %s (%s); its dependencies were not read",
+            entry.index,
+            entry.design_file,
+            exc,
+        )
+        return []
     raw = frontmatter.get("dependencies") if frontmatter is not None else None
     if raw is None:
         return []
@@ -145,9 +156,9 @@ def _accept_arg(args: list[str]) -> LoopCondition:
 
 
 # The design review's template is ``slice``; reason strings call it a design review.
-_DESIGN_REVIEW_TEMPLATE = "slice"
-_TASKS_REVIEW_TEMPLATE = "tasks"
-_REVIEW_LABELS = {_DESIGN_REVIEW_TEMPLATE: "design"}
+_DESIGN_REVIEW_TEMPLATE = BuiltinReviewTemplate.SLICE
+_TASKS_REVIEW_TEMPLATE = BuiltinReviewTemplate.TASKS
+_REVIEW_LABELS: dict[str, str] = {_DESIGN_REVIEW_TEMPLATE: "design"}
 
 
 def _review_flag(entry: SliceEntry, template: str, accept: LoopCondition) -> str | None:

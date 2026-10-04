@@ -91,6 +91,25 @@ def test_code_off_its_slice_branch_exits_one(in_repo: Path) -> None:
     assert "refusing to stage all changes off the slice branch (on main)" in result.output
 
 
+def test_explicit_paths_commit_only_those_paths_verbatim(in_repo: Path) -> None:
+    _write(in_repo, "notes/a.md")
+    _write(in_repo, "notes/stray.md")
+
+    result = runner.invoke(app, ["_commit", "--path", "notes/a.md", "--message", "docs: add a"])
+
+    assert result.exit_code == 0, result.output
+    assert run_test_git(in_repo, "log", "-1", "--format=%s").strip() == "docs: add a"
+    committed = run_test_git(in_repo, "show", "--name-only", "--format=", "HEAD").split()
+    assert committed == ["notes/a.md"]
+
+
+def test_no_subject_and_no_paths_exits_one_with_the_actions_refusal(in_repo: Path) -> None:
+    result = runner.invoke(app, ["_commit"])
+
+    assert result.exit_code == 1
+    assert "refusing to stage everything" in result.output
+
+
 def test_cli_and_action_give_identical_message_and_effect(
     temp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

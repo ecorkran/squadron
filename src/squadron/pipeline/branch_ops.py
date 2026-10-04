@@ -18,6 +18,7 @@ from squadron.integrations.context_forge import ContextForgeError, ContextForgeN
 from squadron.pipeline.git_ops import (
     GitEnvironmentError,
     GitStateUnknownError,
+    SliceNotInPlanError,
     current_branch,
     read_integration_target,
     slice_branch_name,
@@ -70,7 +71,7 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
             is on a foreign branch, the tree is dirty, or the branch is held elsewhere.
         GitStateUnknownError: a git write failed and the state cannot be verified.
         NoDesignFileError: the slice has no design file (an item failure).
-        ValueError: the slice is not in the current plan (an item failure).
+        SliceNotInPlanError: the slice is not in the current plan (an item failure).
     """
     target = read_integration_target(cf_client)
     _require_registered_worktree(cwd, cf_client)
@@ -90,13 +91,18 @@ def _slice_facts(slice_index: int, cf_client: CfClientProtocol) -> tuple[str, st
     except (ContextForgeError, ContextForgeNotAvailable) as exc:
         _logger.exception("cannot resolve slice %d through cf", slice_index)
         raise GitEnvironmentError(f"cannot resolve slice {slice_index} through cf: {exc}") from exc
+    except ValueError as exc:
+        raise SliceNotInPlanError(str(exc)) from exc
     return slice_branch_name(slice_index, info["design_file"]), info["name"]
 
 
 def _require_registered_worktree(cwd: str, cf_client: CfClientProtocol) -> None:
     """A linked worktree must be registered with cf, or its target is the primary checkout's."""
     dirs = _git_stdout(["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], cwd)
-    git_dir, common_dir = dirs.splitlines()
+    lines = dirs.splitlines()
+    if len(lines) != 2:
+        raise GitEnvironmentError(f"unexpected git rev-parse output for the git dirs: {dirs!r}")
+    git_dir, common_dir = lines
     if Path(git_dir).resolve() == Path(common_dir).resolve():
         return  # the primary checkout
     root = Path(_git_stdout(["rev-parse", "--show-toplevel"], cwd).strip()).resolve()
@@ -197,6 +203,7 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
         GitStateUnknownError: a git step failed and the state cannot be verified.
         MergeFailedError: the merge failed but the target is clean (an item failure).
         NoDesignFileError: the slice has no design file (an item failure).
+        SliceNotInPlanError: the slice is not in the current plan (an item failure).
     """
     target = read_integration_target(cf_client)  # re-read; never taken from the enter step
     branch, name = _slice_facts(slice_index, cf_client)

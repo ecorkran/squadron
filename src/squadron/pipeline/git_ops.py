@@ -42,6 +42,10 @@ class NoDesignFileError(ValueError):
     """A slice has no design file, so its branch cannot be named (an item failure)."""
 
 
+class SliceNotInPlanError(ValueError):
+    """cf's current slice plan has no slice with this index (an item failure)."""
+
+
 def parse_slice_index(raw: object) -> int:
     """A slice index from a param, which arrives as an int or its string form.
 

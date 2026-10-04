@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+from squadron.pipeline.commit_plan import SLICE_PARAM
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
@@ -18,7 +19,9 @@ class BranchOp(StrEnum):
     MERGE = "merge"
 
 
-_ALLOWED_KEYS = frozenset({"op", "slice"})
+# The action param naming the op; the slice uses the shared ``SLICE_PARAM``.
+OP_PARAM = "op"
+_ALLOWED_KEYS = frozenset({OP_PARAM, SLICE_PARAM})
 
 
 class BranchStepType:
@@ -32,15 +35,17 @@ class BranchStepType:
         errors: list[ValidationError] = []
         cfg = config.config
 
-        op = cfg.get("op")
+        op = cfg.get(OP_PARAM)
         valid_ops = [o.value for o in BranchOp]
         if op is None:
-            errors.append(self._error("op", f"'op' is required; one of {valid_ops}"))
+            errors.append(self._error(OP_PARAM, f"'{OP_PARAM}' is required; one of {valid_ops}"))
         elif op not in valid_ops:
-            errors.append(self._error("op", f"'{op}' is not a valid branch op; one of {valid_ops}"))
+            errors.append(self._error(OP_PARAM, f"'{op}' is not a valid branch op; one of {valid_ops}"))
 
         for key in sorted(set(cfg) - _ALLOWED_KEYS):
-            errors.append(self._error(key, f"unknown key '{key}'; branch accepts 'op' and 'slice'"))
+            errors.append(
+                self._error(key, f"unknown key '{key}'; branch accepts {sorted(_ALLOWED_KEYS)}")
+            )
         return errors
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
@@ -48,7 +53,10 @@ class BranchStepType:
         return [
             (
                 "branch",
-                {"op": BranchOp(str(cfg["op"])), "slice": cfg.get("slice", DEFAULT_SLICE_REF)},
+                {
+                    OP_PARAM: BranchOp(str(cfg[OP_PARAM])),
+                    SLICE_PARAM: cfg.get(SLICE_PARAM, DEFAULT_SLICE_REF),
+                },
             )
         ]
 

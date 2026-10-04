@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import cast
 
@@ -12,6 +13,15 @@ import yaml
 
 from squadron.providers.sdk.settings import REVIEW_SETTING_SOURCES
 from squadron.review.models import TemplateValidationError
+
+
+class BuiltinReviewTemplate(StrEnum):
+    """Names of the review templates squadron ships that code refers to by name."""
+
+    SLICE = "slice"  # the design review
+    TASKS = "tasks"
+    CODE = "code"
+    ARCH = "arch"
 
 
 @dataclass

@@ -297,9 +297,13 @@ class TestRenderCommit:
         result = _render_commit({"commit_subject": "devlog"}, {"slice": {"index": 105}})
         assert "--slice" not in result.command
 
-    def test_missing_subject_raises(self) -> None:
-        with pytest.raises(ValueError, match="commit_subject"):
-            _render_commit({}, {})
+    def test_explicit_paths_and_message_render_for_a_user_commit(self) -> None:
+        result = _render_commit({"paths": ["a.md", "b c.md"], "message": "docs: x"}, {})
+        assert result.command == "sq _commit --path a.md --path 'b c.md' --message 'docs: x'"
+
+    def test_no_subject_and_no_paths_renders_bare_for_the_command_to_refuse(self) -> None:
+        """``sq _commit`` refuses it with the action's own text, as the SDK run does."""
+        assert _render_commit({}, {}).command == "sq _commit"
 
 
 class TestRenderBranch:

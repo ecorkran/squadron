@@ -16,10 +16,11 @@ import typer
 
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions.branch import BranchAction
+from squadron.pipeline.commit_plan import SLICE_PARAM
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolver
-from squadron.pipeline.steps.branch import BranchOp
+from squadron.pipeline.steps.branch import OP_PARAM, BranchOp
 
 _logger = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ def branch_run(
     context = ActionContext(
         pipeline_name="_branch",
         run_id="",
-        params={"op": op.value, "slice": str(slice_index)},
+        params={OP_PARAM: op.value, SLICE_PARAM: str(slice_index)},
         step_name="_branch",
         step_index=0,
         prior_outputs={},

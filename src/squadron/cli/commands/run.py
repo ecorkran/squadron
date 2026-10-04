@@ -37,6 +37,7 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
     StepClass,
     classify_pipeline,
+    has_profile_param,
 )
 from squadron.pipeline.executor import (
     ExecutionStatus,
@@ -237,7 +238,7 @@ async def _run_pipeline(
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         on_pool_selection=lambda sel: state_mgr.log_pool_selection(_run_id, sel),
-        profile_source="profile" in params,
+        profile_source=has_profile_param(params),
     )
 
     try:
@@ -325,7 +326,7 @@ async def _run_pipeline_sdk(
         cli_override=model_override,
         pipeline_model=definition.model,
         pool_backend=pool_backend,
-        profile_source="profile" in params,
+        profile_source=has_profile_param(params),
     )
 
     try:
@@ -519,7 +520,7 @@ def _handle_explain(
         cli_override=cli_override,
         pipeline_model=definition.model,
         pool_backend=pool_backend,
-        profile_source="profile" in explain_params,
+        profile_source=has_profile_param(explain_params),
     )
 
     try:
@@ -684,7 +685,7 @@ def _handle_prompt_only_init(
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
-        profile_source="profile" in params,
+        profile_source=has_profile_param(params),
     )
 
     # Render first step
@@ -777,7 +778,7 @@ def _handle_prompt_only_next(
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
-        profile_source="profile" in state.params,
+        profile_source=has_profile_param(state.params),
     )
     params = dict(state.params)
 

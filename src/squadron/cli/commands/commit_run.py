@@ -18,6 +18,8 @@ import typer
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions.commit import CommitAction
 from squadron.pipeline.commit_plan import (
+    MESSAGE_PARAM,
+    PATHS_PARAM,
     PLAN_PARAM,
     REVIEW_TEMPLATE_PARAM,
     SLICE_PARAM,
@@ -32,7 +34,9 @@ _logger = logging.getLogger(__name__)
 
 
 def commit_run(
-    subject: CommitSubject = typer.Option(..., "--subject", help="What the commit is about."),
+    subject: CommitSubject | None = typer.Option(
+        None, "--subject", help="What the commit is about (a scoped commit)."
+    ),
     slice_index: int | None = typer.Option(None, "--slice", help="Slice index."),
     plan: str | None = typer.Option(None, "--plan", help="Initiative (plan) index."),
     template: str | None = typer.Option(
@@ -41,9 +45,19 @@ def commit_run(
     round_number: int = typer.Option(
         0, "--round", help="Loop round number; 0 for a step's own commit."
     ),
+    paths: list[str] | None = typer.Option(
+        None, "--path", help="Explicit path to commit (repeatable); used without --subject."
+    ),
+    message: str | None = typer.Option(None, "--message", help="Commit message, used verbatim."),
 ) -> None:
     """[hidden] Stage and commit the files a pipeline step produced."""
-    params: dict[str, object] = {SUBJECT_PARAM: subject.value}
+    params: dict[str, object] = {}
+    if subject is not None:
+        params[SUBJECT_PARAM] = subject.value
+    if paths:
+        params[PATHS_PARAM] = list(paths)
+    if message is not None:
+        params[MESSAGE_PARAM] = message
     if slice_index is not None:
         params[SLICE_PARAM] = str(slice_index)
     if plan is not None:

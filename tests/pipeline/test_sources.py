@@ -415,6 +415,18 @@ class TestSliceDependencies:
         assert result == [195]
         assert any("slice 196" in r.message and "foundation" in r.message for r in caplog.records)
 
+    def test_an_undecodable_design_warns_and_reads_none(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        design = tmp_path / "196-slice.example.md"
+        design.write_bytes(b"---\ndependencies: [195]\n---\n\xff\xfe\n")
+
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.sources"):
+            result = _design_dependencies(self._entry(str(design)))
+
+        assert result == []
+        assert "cannot read design" in caplog.text
+
     def test_no_design_file_means_no_dependencies(self) -> None:
         assert _design_dependencies(self._entry(None)) == []
         assert _design_dependencies(self._entry("")) == []

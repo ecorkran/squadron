@@ -18,6 +18,7 @@ caught by ``test_classification_is_idempotent_and_side_effect_free``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, cast
@@ -39,6 +40,15 @@ if TYPE_CHECKING:
 # action types via ``StepType.expand()`` — the classifier walks the expansion
 # rather than matching step-type names directly so that phase steps and other
 # composite step types are covered.
+# The pipeline param that names a profile; its presence lets a literal model id through.
+PROFILE_PARAM = "profile"
+
+
+def has_profile_param(params: Mapping[str, object]) -> bool:
+    """Whether a pipeline's params name a profile (the alias check's profile source)."""
+    return PROFILE_PARAM in params
+
+
 _MODEL_DISPATCHING_ACTION_TYPES = frozenset({"dispatch", "review", "summary", "compact"})
 
 # Action types that may omit a model: with none set they reuse the live
@@ -319,7 +329,7 @@ def _collect_unknown_alias(
     Collected rather than raised so one pre-run error can list every bad alias.
     """
     try:
-        require_known_model(candidate, profile_source="profile" in classify_params)
+        require_known_model(candidate, profile_source=has_profile_param(classify_params))
     except UnknownModelAliasError as exc:
         alias_errors.append(exc)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from enum import StrEnum
 from pathlib import Path
@@ -221,6 +222,7 @@ SKIPPED_ARTIFACT_EXISTS = "artifact exists"
 def _kept_artifact_paths(context: ActionContext) -> list[str]:
     """The step's existing artifact files when it says ``existing: keep``; else empty."""
     from squadron.events.builtin.artifact_paths import expected_artifact_paths
+    from squadron.pipeline.commit_plan import SLICE_PARAM
     from squadron.pipeline.git_ops import parse_slice_index
     from squadron.pipeline.steps.phase import (
         ARTIFACT_KIND_PARAM,
@@ -232,7 +234,7 @@ def _kept_artifact_paths(context: ActionContext) -> list[str]:
     if context.params.get(EXISTING_PARAM) != ExistingArtifactPolicy.KEEP:
         return []
     kind = ArtifactKind(str(context.params[ARTIFACT_KIND_PARAM]))
-    slice_index = parse_slice_index(context.params.get("slice"))
+    slice_index = parse_slice_index(context.params.get(SLICE_PARAM))
     expected = expected_artifact_paths(kind, slice_index, context.cf_client)
     return [path for path in expected if (Path(context.cwd) / path).is_file()]
 
@@ -306,7 +308,8 @@ class DispatchAction:
         A step with ``existing: keep`` whose artifact is already on disk skips the model
         call entirely (slice 196 D11).
         """
-        if kept := _kept_artifact_paths(context):
+        # cf runs as a subprocess; keep it off the event loop.
+        if kept := await asyncio.to_thread(_kept_artifact_paths, context):
             _logger.info("dispatch: step %s keeps existing artifact %s", context.step_name, kept)
             return ActionResult(
                 success=True,
