@@ -27,6 +27,9 @@ steps:
             model: "{model}"
             review: { template: tasks, model: "{review-model}" }
             checkpoint: never
+            # A slice that already has tasks is re-reviewed, not regenerated; the revise
+            # loop below fixes it if the review finds problems.
+            existing: keep
         - loop:
             max: "{max-revisions}"
             until: "{pass-threshold}"
