@@ -12,6 +12,19 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261004
 
+### Slice 196: design complete (Phase 4)
+
+- **Design:** `196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md`.
+  - Scoped commits come from one `build_commit_plan()` that both the SDK executor and prompt-only (`sq _commit`) call. Messages are derived from the staged set (`docs:` / `review:` / `feat:`).
+  - New `branch: {op: enter|merge}` step type. It reads the integration target strictly, refuses a dirty tree or a foreign branch, aborts a conflicting merge back to a clean target, and accepts an already-merged branch. P6, implement, P456 and P56 gain the steps.
+  - `each` flags dependents of flagged items, with dependencies read from design frontmatter.
+  - `tasks-plan` re-selects slices whose tasks review is missing or below threshold (source renamed `cf.slices_needing_tasks`, phase step `existing: keep`).
+  - #152: a budget-truncated PASS is imposed to CONCERNS.
+  - #175: unknown aliases fail in the pre-run classifier, with close matches, and in the resolver as a backstop.
+  - #179: the `-v` label comes from the classifier's cascade candidate.
+- **Effort:** raised to 4/5. #152 is closed on GitHub without a fix; 196 delivers it.
+- **Next:** Phase 5 task breakdown for 196.
+
 ### Release 0.18.4
 
 - **Contents:** pipeline fixes found running every built-in pipeline live against a scratch project. Classification no longer demands a model for model-less `compact` or `summary: restore` steps, and `SummaryStepType.expand` keeps `restore`. `implement.yaml` wires its `model` param. `sq run` exits 1 on FAILED. Judge reviews take their verdict only from their score (`score_decides_verdict`). judge-cycle and findings-addressed-cycle review before revising, and their loop max is the `max-revisions` param. Built-in `max-revisions` defaults to 2. P2 is initiative-scoped (`plan`, `resolve_arch_file`, arch post-condition). P0 removed. Only final summaries copy to the clipboard; interim ones in P456 and P56 write to a file only. New `tests/pipeline/test_builtin_pipelines.py` loads, validates and classifies every built-in pipeline without `--model`. Code-implementing pipelines still fail at the code review with no slice branch, which slice 196(b) fixes. Filed #179 (in 196 scope) and #180 (slow metrology tests).
