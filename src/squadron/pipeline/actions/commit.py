@@ -28,6 +28,7 @@ from squadron.pipeline.git_ops import (
     GitEnvironmentError,
     GitStateUnknownError,
     current_branch,
+    parse_slice_index,
     read_integration_target,
 )
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -155,7 +156,7 @@ def _slice_index(raw: object) -> int | None:
     if raw in (None, ""):
         return None
     try:
-        return int(str(raw))
+        return parse_slice_index(raw)
     except ValueError:
         raise ValueError(f"commit needs a slice index, got {raw!r}") from None
 

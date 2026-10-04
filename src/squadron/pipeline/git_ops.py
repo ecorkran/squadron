@@ -42,6 +42,17 @@ class NoDesignFileError(ValueError):
     """A slice has no design file, so its branch cannot be named (an item failure)."""
 
 
+def parse_slice_index(raw: object) -> int:
+    """A slice index from a param, which arrives as an int or its string form.
+
+    Raises ``ValueError`` when it is anything else (for example a whole ``each`` record).
+    """
+    try:
+        return int(str(raw))
+    except ValueError:
+        raise ValueError(f"expected a slice index, got {raw!r}") from None
+
+
 def read_integration_target(cf_client: ConfigReader) -> str:
     """The branch that slice branches fork from and merge into.
 

@@ -424,6 +424,7 @@ async def execute_pipeline(
         Internal override for testing; uses the global action registry by default.
     """
     # Import modules to trigger registration
+    import squadron.pipeline.actions.branch as _a_branch  # noqa: F401
     import squadron.pipeline.actions.cf_op as _a_cf_op  # noqa: F401
     import squadron.pipeline.actions.checkpoint as _a_ckpt  # noqa: F401
     import squadron.pipeline.actions.commit as _a_commit  # noqa: F401
@@ -435,6 +436,7 @@ async def execute_pipeline(
     import squadron.pipeline.intelligence.fan_in.reducers as _fan_in_reducers  # noqa: F401
 
     _ = (
+        _a_branch,
         _a_cf_op,
         _a_ckpt,
         _a_commit,
