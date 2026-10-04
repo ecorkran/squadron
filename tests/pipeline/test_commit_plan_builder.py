@@ -284,3 +284,50 @@ def test_only_supporting_files_changed(repo: Path) -> None:
 
     assert plan.paths == (PLAN_FILE,)
     assert plan.message == "docs: update slice 105 design files"
+
+
+# ---------------------------------------------------------------------------
+# Archived prior reviews travel with their review
+# ---------------------------------------------------------------------------
+
+ARCHIVE_DIR = "project-documents/user/reviews/archive"
+
+
+def test_archived_copies_of_the_reviews_stem_are_staged_with_it(repo: Path) -> None:
+    _write(repo, DESIGN_FILE)
+    _write(repo, DESIGN_REVIEW, _review("PASS"))
+    _write(repo, f"{ARCHIVE_DIR}/105-review.slice.batch-foo.md")
+    _write(repo, f"{ARCHIVE_DIR}/105-review.slice.batch-foo.20261004T183103.md")
+
+    plan = _plan(repo, _target(CommitSubject.DESIGN, template="slice"))
+
+    assert f"{ARCHIVE_DIR}/105-review.slice.batch-foo.md" in plan.paths
+    assert f"{ARCHIVE_DIR}/105-review.slice.batch-foo.20261004T183103.md" in plan.paths
+    assert plan.left_out == ()
+    assert plan.message == "docs: add slice 105 design (review: PASS)"
+
+
+def test_another_reviews_archive_is_not_swept_in(repo: Path) -> None:
+    _write(repo, DESIGN_REVIEW, _review("PASS"))
+    _write(repo, f"{ARCHIVE_DIR}/105-review.tasks.batch-foo.md")
+    _write(repo, f"{ARCHIVE_DIR}/105-review.slice.batch-foo-longer.md")
+
+    plan = _plan(repo, _target(CommitSubject.DESIGN, template="slice"))
+
+    assert set(plan.left_out) == {
+        f"{ARCHIVE_DIR}/105-review.tasks.batch-foo.md",
+        f"{ARCHIVE_DIR}/105-review.slice.batch-foo-longer.md",
+    }
+
+
+def test_a_modified_tracked_archive_copy_is_staged(repo: Path) -> None:
+    archived = f"{ARCHIVE_DIR}/105-review.slice.batch-foo.md"
+    _write(repo, archived, "old\n")
+    run_test_git(repo, "add", "-A")
+    run_test_git(repo, "commit", "-q", "-m", "archived")
+    _write(repo, archived, "newer\n")
+    _write(repo, DESIGN_REVIEW, _review("CONCERNS"))
+
+    plan = _plan(repo, _target(CommitSubject.DESIGN, template="slice", round=1))
+
+    assert archived in plan.paths

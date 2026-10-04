@@ -32,7 +32,7 @@ REVIEWS_DIR = Path("project-documents/user/reviews")
 #: Where a review's prior content is preserved before an overwrite, relative
 #: to the reviews directory. Defined once — the guard, its tests, and anything
 #: that later reads archived reviews all reference this.
-_ARCHIVE_SUBDIR = "archive"
+ARCHIVE_SUBDIR = "archive"
 
 #: Directory prefix for task-breakdown files, relative to project root.
 #: SliceInfo["task_files"] entries are bare filenames — join with this to
@@ -746,7 +746,7 @@ def archive_existing_review(path: Path) -> bool:
     if not path.exists():
         return True
 
-    archived = path.parent / _ARCHIVE_SUBDIR / path.name
+    archived = path.parent / ARCHIVE_SUBDIR / path.name
     try:
         original = path.read_bytes()
         archived.parent.mkdir(parents=True, exist_ok=True)
@@ -921,7 +921,7 @@ def save_review_result(
     if not archive_existing_review(path):
         raise OSError(
             f"refusing to overwrite {path}: its prior content could not be archived to "
-            f"{path.parent / _ARCHIVE_SUBDIR / path.name}"
+            f"{path.parent / ARCHIVE_SUBDIR / path.name}"
         )
     path.write_text(content)
 

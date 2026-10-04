@@ -18,6 +18,7 @@ from squadron.integrations.context_forge import ARCHITECTURE_DIR
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.review.git_utils import run_git
 from squadron.review.persistence import (
+    ARCHIVE_SUBDIR,
     REVIEWS_DIR,
     CfClientProtocol,
     resolve_arch_file,
@@ -131,6 +132,7 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
     dirty = _read_dirty_paths(cwd)
     candidates = _candidates(target, cwd, root, cf_client)
     present = [c for c in candidates if c.repo_path in dirty]
+    present += _archived_reviews(candidates, dirty, cwd, root)
 
     if target.subject is CommitSubject.CODE:
         # Code can touch any file (D3): everything dirty belongs to the slice.
@@ -159,6 +161,29 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
         message=compose_message(target, facts),
         left_out=left_out,
     )
+
+
+def _archived_reviews(
+    candidates: list[_Candidate], dirty: dict[str, _Dirty], cwd: Path, root: Path
+) -> list[_Candidate]:
+    """Dirty archive copies of the reviews this commit covers.
+
+    Saving a review archives the one it replaces under ``archive/``, with a timestamp in
+    the name for older generations, so the exact names cannot be computed. They are
+    matched by prefix against what git reports as changed, and travel with their review.
+    """
+    found: list[_Candidate] = []
+    for review in (c for c in candidates if c.is_review):
+        directory, _, filename = review.repo_path.rpartition("/")
+        stem = filename.removesuffix(".md")
+        archive_prefix = f"{directory}/{ARCHIVE_SUBDIR}/{stem}"
+        for repo_path in sorted(dirty):
+            if repo_path == f"{archive_prefix}.md" or (
+                repo_path.startswith(f"{archive_prefix}.") and repo_path.endswith(".md")
+            ):
+                relative = Path(os.path.relpath(root / repo_path, cwd)).as_posix()
+                found.append(_Candidate(path=relative, repo_path=repo_path))
+    return found
 
 
 def read_review_verdict(review_file: Path) -> str | None:
