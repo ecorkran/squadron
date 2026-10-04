@@ -140,22 +140,24 @@ status: in_progress
 
 ## Task 11 — `pipeline/git_ops.py`
 
-- [ ] Create `pipeline/git_ops.py` (D5, D6, Patterns)
-  - [ ] `GitEnvironmentError`; `GitStateUnknownError(GitEnvironmentError)`
-  - [ ] `read_integration_target(cf_client)`: strict; unset means `DEFAULT_DIFF_BASE` imported from `review/git_utils.py`; a cf failure raises `GitEnvironmentError` and never degrades to `main`
-  - [ ] `slice_branch_name(index, design_file)`: `{index}-slice.{stem-without-prefix}`; raises the D5.3 message with no design file
-  - [ ] `verify_git_state(expected_branch)`: the three-read check from D6; any failed or timed-out read, or a mismatch, raises `GitStateUnknownError` naming what was observed, logged at ERROR
-  - [ ] All git calls go through `run_git` (stays in `review/git_utils.py`; do not move it)
-- [ ] Add a shared temp-repo test fixture (conftest or helper module) that creates a throwaway repo with an initial commit on `main`
-  - [ ] Success: fixture usable by later tasks; never touches the project checkout
+- [x] Create `pipeline/git_ops.py` (D5, D6, Patterns)
+  - [x] `GitEnvironmentError`; `GitStateUnknownError(GitEnvironmentError)`
+  - [x] `read_integration_target(cf_client)`: strict; unset means `DEFAULT_DIFF_BASE` imported from `review/git_utils.py`; a cf failure raises `GitEnvironmentError` and never degrades to `main`
+  - [x] `slice_branch_name(index, design_file)`: `{index}-slice.{stem-without-prefix}`; raises the D5.3 message with no design file
+  - [x] `verify_git_state(expected_branch)`: the three-read check from D6; any failed or timed-out read, or a mismatch, raises `GitStateUnknownError` naming what was observed, logged at ERROR
+    - Signature is `verify_git_state(expected_branch, *, cwd)` because `run_git` needs a cwd; `read_integration_target` takes a `ConfigReader` protocol; `NoDesignFileError` (a ValueError) carries the D5.3 message.
+  - [x] All git calls go through `run_git` (stays in `review/git_utils.py`; do not move it)
+- [x] Add a shared temp-repo test fixture (conftest or helper module) that creates a throwaway repo with an initial commit on `main`
+  - Fixture is `temp_git_repo` plus helper `run_test_git` in tests/conftest.py (identity and default branch come from the hermetic git config).
+  - [x] Success: fixture usable by later tasks; never touches the project checkout
 
 ## Task 12 — Tests: `git_ops`
 
-- [ ] `read_integration_target`: unset → `main`; set value returned; cf failure raises
-- [ ] `slice_branch_name`: normal stem; no design file raises
-- [ ] `verify_git_state`: passes clean on expected branch; each of MERGE_HEAD present, wrong branch, tracked changes, a `run_git` returning `None` raises `GitStateUnknownError` and logs at ERROR
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add git_ops with strict target reader and state check`
+- [x] `read_integration_target`: unset → `main`; set value returned; cf failure raises
+- [x] `slice_branch_name`: normal stem; no design file raises
+- [x] `verify_git_state`: passes clean on expected branch; each of MERGE_HEAD present, wrong branch, tracked changes, a `run_git` returning `None` raises `GitStateUnknownError` and logs at ERROR
+  - [x] Success: tests pass
+- [x] Commit: `feat: add git_ops with strict target reader and state check`
 
 ## Task 13 — `commit_plan.py`: types and subject mapping
 
