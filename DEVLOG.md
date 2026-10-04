@@ -12,6 +12,19 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261004
 
+### Slice 197: design complete (Phase 4)
+
+- **Design:** `197-slice.implementation-batch-pipeline-implement-plan.md`.
+  - `implement-plan.yaml`: per slice, in dependency order, branch enter → implement (`existing: keep`) → `revise-code` loop (195 thresholds, `on_exhaust: fail`) → devlog → merge.
+  - New source `cf.slices_ready_to_implement(plan, accept)`. It returns open, designed slices. Not-ready ones are pre-flagged: no tasks, an unsettled design or tasks review, all tasks checked but still open, or a dependency that isn't designed. Items are topologically ordered, and a cycle fails the run.
+  - `existing: keep` on implement skips the dispatch when the slice branch is ahead of the target. That is what makes reruns resume rather than reimplement.
+  - `branch enter` merges the target into an existing branch (closes #183). `branch: { plan: }` aligns cf before entering.
+  - Structured flags: `FlagKind` StrEnum, `failedStep` and `branch` on records, and `report.json` beside `report.md`.
+  - Item resume: `sq run --resume <run_id> --item N --decision retry|accept [--instructions TEXT]`. Instructions ride the existing `override_instructions` plumbing. `accept` is only valid for `review_unresolved`.
+  - P6, `implement`, P56 and P456 share the batch body (with `on_exhaust: checkpoint`), and a drift test keeps them identical.
+- **Amoeba:** it has no contract for flagged items. Its Runner (120) and Judge (140) aren't started, and its only squadron hook is `sq run --resume <run_id>` for paused runs. The design records squadron's half of the handoff: run ID plus item, a closed `flagKind`, and the CLI decision. Amoeba adopts it when 120 is designed.
+- **Next:** Phase 5 task breakdown for 197.
+
 ### Slice 196: implementation complete (Phase 6)
 
 - **Delivered:** scoped commits (`pipeline/commit_plan.py`, `commit_message.py`, `loop_commit.py`, `sq _commit`), `branch: {op: enter|merge}` (`pipeline/branch_ops.py`, `git_ops.py`, `steps/branch.py`, `actions/branch.py`, `sq _branch`), the `implement`-needs-enter load rule (`branch_rules.py`), built-in code pipelines reordered to `branch enter → implement → devlog → branch merge`, dependency flags in `each`, `cf.slices_needing_tasks` plus `existing: keep`, and the review-trust fixes #152 (`impose_output_coverage`), #175 (`require_known_model`, classifier takes merged params, resolver backstop) and #179 (`-v` label from the resolver's candidate).
