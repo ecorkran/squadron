@@ -19,4 +19,4 @@ steps:
   - summary:
       template: minimal-sdk
       model: "{summary-model}"
-      emit: [stdout, clipboard, file]
+      emit: [stdout, file]
