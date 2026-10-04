@@ -10,7 +10,7 @@ projectState: >
   is released; main is the integration target (`git.integration_branch` unset).
 dateCreated: 20261004
 dateUpdated: 20261004
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -36,9 +36,9 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and `git status` is clean
-- [ ] `git checkout -b 196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches main`
-  - [ ] Success: `git branch --show-current` prints the new branch name
+- [x] Confirm `cf config get git.integration_branch` is empty (target = `main`) and `git status` is clean
+- [x] `git checkout -b 196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches main`
+  - [x] Success: `git branch --show-current` prints the new branch name
 
 ---
 
@@ -46,33 +46,34 @@ status: not_started
 
 ## Task 2 — `UnknownModelAliasError` and `require_known_model`
 
-- [ ] In `models/aliases.py` add `UnknownModelAliasError(name, close_matches)` (D13)
-  - [ ] Message text exactly as D13: `unknown model alias '…'; did you mean: …? If this is a literal model ID, set a profile.`
-  - [ ] Omit the "did you mean" clause when there are no close matches
-- [ ] Add `require_known_model(name, *, profile_source: bool)`
-  - [ ] Passes when `name` is an alias, when it is a model id some alias resolves to, or when `profile_source` is true
-  - [ ] Otherwise raises with `difflib.get_close_matches(name, aliases, n=3)`
-  - [ ] Success: function and error importable; pyright clean
+- [x] In `models/aliases.py` add `UnknownModelAliasError(name, close_matches)` (D13)
+  - [x] Message text exactly as D13: `unknown model alias '…'; did you mean: …? If this is a literal model ID, set a profile.`
+  - [x] Omit the "did you mean" clause when there are no close matches
+- [x] Add `require_known_model(name, *, profile_source: bool)`
+  - [x] Passes when `name` is an alias, when it is a model id some alias resolves to, or when `profile_source` is true
+  - [x] Otherwise raises with `difflib.get_close_matches(name, aliases, n=3)`
+  - [x] Success: function and error importable; pyright clean
 
 ## Task 3 — Tests: `require_known_model`
 
-- [ ] Add tests beside the existing aliases tests
-  - [ ] Alias passes; literal model id passes; unknown name with a profile source passes
-  - [ ] Unknown name without a profile source raises, naming the alias and listing close matches
-  - [ ] `glm-flash-low.` suggests `glm-flash-low`; a name with no close match gives no suggestion clause
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add require_known_model with close-match suggestions`
+- [x] Add tests beside the existing aliases tests
+  - [x] Alias passes; literal model id passes; unknown name with a profile source passes
+  - [x] Unknown name without a profile source raises, naming the alias and listing close matches
+  - [x] `glm-flash-low.` suggests `glm-flash-low`; a name with no close match gives no suggestion clause
+  - [x] Success: tests pass
+- [x] Commit: `feat: add require_known_model with close-match suggestions`
 
 ## Task 4 — Resolver backstop
 
-- [ ] `ModelResolver._resolved` (`pipeline/resolver.py`) calls `require_known_model` (D13 backstop)
-  - [ ] Pass the profile-source flag the resolver already knows about; do not add a new source of truth
-- [ ] Add resolver tests
-  - [ ] A model that appears only at run time raises `UnknownModelAliasError` before any request
-  - [ ] A valid alias and a profile-sourced name still resolve
-  - [ ] With a review artifact already in the slot, the backstop firing leaves that artifact unchanged and creates no archive copy (the #175 bug was a fabricated review written over the existing artifact)
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: fail unknown model aliases in the resolver before any request`
+- [x] `ModelResolver._resolved` (`pipeline/resolver.py`) calls `require_known_model` (D13 backstop)
+  - [x] Pass the profile-source flag the resolver already knows about; do not add a new source of truth
+  - Deviation: the resolver had no profile knowledge (the `profile` param is read in the review action), so `ModelResolver` gained a `profile_source` constructor flag, set from `"profile" in params` at the run.py construction sites; the prompt renderer's display-only review model also tolerates UnknownModelAliasError.
+- [x] Add resolver tests
+  - [x] A model that appears only at run time raises `UnknownModelAliasError` before any request
+  - [x] A valid alias and a profile-sourced name still resolve
+  - [x] With a review artifact already in the slot, the backstop firing leaves that artifact unchanged and creates no archive copy (the #175 bug was a fabricated review written over the existing artifact)
+  - [x] Success: tests pass
+- [x] Commit: `fix: fail unknown model aliases in the resolver before any request`
 
 ## Task 5 — Classifier takes merged params and collects alias errors
 
