@@ -383,9 +383,11 @@ Phase 4/5 steps and their loops don't branch (git rules: planning work commits t
 **Hidden CLI (prompt-only parity)**
 
 ```
-sq _commit --subject design|tasks|architecture|code (--slice N | --plan N) [--template T] [--round N]
+sq _commit --subject design|tasks|architecture|code|devlog (--slice N | --plan N) [--template T] [--round N]
 sq _branch enter|merge --slice N
 ```
+
+At render time the prompt renderer fills `--template` and `--round` for a loop-round commit the same way the executor does: the template of the round's last review action, and the round number. A devlog commit takes no template or round.
 
 Both print what they did on stdout (`committed <sha> <message>` / `on 105-slice.foo (created from main)`). They exit 1 with the same error text the actions produce.
 

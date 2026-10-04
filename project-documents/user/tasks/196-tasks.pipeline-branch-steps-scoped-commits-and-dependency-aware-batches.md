@@ -6,8 +6,8 @@ lld: user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-a
 dependencies: [195]
 projectState: >
   Slice design complete (20261004) and through two review rounds (both CONCERNS, all findings
-  addressed). No code written. Squadron 0.18.4 is released; main is the integration target
-  (`git.integration_branch` unset).
+  addressed). Task breakdown revised after its first review. No code written. Squadron 0.18.4
+  is released; main is the integration target (`git.integration_branch` unset).
 dateCreated: 20261004
 dateUpdated: 20261004
 status: not_started
@@ -25,8 +25,9 @@ status: not_started
   `pipeline/git_ops.py` is built at the start of (a) rather than (b), because the commit action
   needs its error classes and strict target reader (D6 commit timeout, D8 target guard).
 - Every git test runs in a temporary repo the test creates, never the project checkout.
-- Every task that changes code ends with `ruff format`, `ruff check`, `pyright` (zero errors) and
-  its tests before its commit. Locate existing tests with `grep` before adding new files.
+- Every task that changes code ends with `ruff format`, `ruff check`, `pyright` (zero errors),
+  its tests, and a commit on the slice branch. Locate existing tests with `grep` before adding
+  new files. Commit messages use the repo's semantic prefixes.
 - Out of scope: `implement-plan`, reordering items, pushing or deleting branches, merging into
   `main` or a wider integration branch, a cf-side `dependencies` field.
 - Effort: 4/5. Next planned slice: 197.
@@ -60,13 +61,18 @@ status: not_started
   - [ ] Unknown name without a profile source raises, naming the alias and listing close matches
   - [ ] `glm-flash-low.` suggests `glm-flash-low`; a name with no close match gives no suggestion clause
   - [ ] Success: tests pass
+- [ ] Commit: `feat: add require_known_model with close-match suggestions`
 
 ## Task 4 — Resolver backstop
 
 - [ ] `ModelResolver._resolved` (`pipeline/resolver.py`) calls `require_known_model` (D13 backstop)
   - [ ] Pass the profile-source flag the resolver already knows about; do not add a new source of truth
-- [ ] Add resolver tests: a model that appears only at run time raises `UnknownModelAliasError` before any request; a valid alias and a profile-sourced name still resolve
+- [ ] Add resolver tests
+  - [ ] A model that appears only at run time raises `UnknownModelAliasError` before any request
+  - [ ] A valid alias and a profile-sourced name still resolve
+  - [ ] With a review artifact already in the slot, the backstop firing leaves that artifact unchanged and creates no archive copy (the #175 bug was a fabricated review written over the existing artifact)
   - [ ] Success: tests pass
+- [ ] Commit: `fix: fail unknown model aliases in the resolver before any request`
 
 ## Task 5 — Classifier takes merged params and collects alias errors
 
@@ -78,13 +84,16 @@ status: not_started
   - [ ] Unknown alias via `--param review-model=…` is rejected pre-run (this slipped through before)
   - [ ] Two bad aliases appear in one error
   - [ ] Pool candidates are not alias-checked here
-  - [ ] Success: tests pass; rejected run writes no review file (assert in a run-level test)
+  - [ ] Run-level test with a pre-existing review artifact: the rejected run writes no review file and archives nothing (design criterion 11)
+  - [ ] Success: tests pass
+- [ ] Commit: `fix: reject unknown model aliases in pre-run classification`
 
 ## Task 6 — `sq review` delegates to the shared check
 
 - [ ] `cli/commands/review.py` `_reject_unknown_alias` calls `require_known_model` and prints its message (interface parity, D13)
 - [ ] Add a test that `sq review slice N --model <bad>` prints the same message `sq run` gives for the same alias
   - [ ] Success: tests pass; no duplicate difflib logic remains in `review.py`
+- [ ] Commit: `refactor: route sq review alias check through require_known_model`
 
 ## Task 7 — Shared model-candidate helper and `-v` label (#179)
 
@@ -94,12 +103,14 @@ status: not_started
   - [ ] The bare `default` and `None` labels are gone
 - [ ] Update existing label tests; add tests for alias, pool and session labels, and one asserting label and classifier agree
   - [ ] Success: criterion 12 of the design holds in a unit-level form (`--model haiku` labels `model=haiku`)
+- [ ] Commit: `fix: label pipeline actions with the model the resolver picks`
 
-## Task 8 — Commit Part A
+---
 
-- [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full touched-area tests
-- [ ] Commit: `feat: reject unknown model aliases before run and label actions with resolved model`
-  - [ ] Success: commit on the slice branch; tree clean
+## Task 8 — Part A checkpoint
+
+- [ ] Run the full pipeline and review test directories; `ruff format`, `ruff check`, `pyright`
+  - [ ] Success: all green; tree clean (no extra commit unless fixes were needed)
 
 ---
 
@@ -117,12 +128,7 @@ status: not_started
   - [ ] Saved artifact frontmatter shows `verdict: CONCERNS` and `verdictSource: imposed` through the real review save path
   - [ ] `sq review` and a pipeline review action produce the same result for the same input (shared call site)
   - [ ] Success: tests pass
-
-## Task 10 — Commit Part B
-
-- [ ] `ruff format`, `ruff check`, `pyright`, tests
 - [ ] Commit: `fix: impose CONCERNS on a PASS cut off by the output budget`
-  - [ ] Success: commit made; tree clean
 
 ---
 
@@ -145,66 +151,92 @@ status: not_started
 - [ ] `slice_branch_name`: normal stem; no design file raises
 - [ ] `verify_git_state`: passes clean on expected branch; each of MERGE_HEAD present, wrong branch, tracked changes, a `run_git` returning `None` raises `GitStateUnknownError` and logs at ERROR
   - [ ] Success: tests pass
+- [ ] Commit: `feat: add git_ops with strict target reader and state check`
 
 ## Task 13 — `commit_plan.py`: types and subject mapping
 
 - [ ] Create `pipeline/commit_plan.py` with `CommitSubject`, `CommitTarget`, `CommitPlan` (D1)
-- [ ] Define the template→subject map once (`slice`→DESIGN, `tasks`→TASKS, `code`→CODE, `arch`→ARCHITECTURE) with a lookup function that raises on an unmapped template
+- [ ] Define the template→subject map once (`slice`→DESIGN, `tasks`→TASKS, `code`→CODE, `arch`→ARCHITECTURE) with a lookup function that raises on an unmapped template; the executor and the prompt renderer both use it
   - [ ] Success: no string literals compared elsewhere; pyright clean
+- [ ] Commit: `feat: add commit plan types and template-to-subject map`
 
-## Task 14 — `build_commit_plan`
+## Task 14a — `build_commit_plan`: candidates and staging
 
-- [ ] Implement `build_commit_plan(target, cwd, cf_client)` (D1, D2)
+- [ ] Implement `build_commit_plan(target, cwd, cf_client)` paths and verdict (D1)
   - [ ] Candidates per subject: DESIGN/TASKS = artifact via `expected_artifact_paths`, review file via `slice_review_stem`/`slice_name_for`, slice plan file via `cf list slices --json` `slicePlan`, `DEVLOG.md`; ARCHITECTURE = `resolve_arch_file`, its review file, `DEVLOG.md`; DEVLOG = `DEVLOG.md`; CODE = `stage_all=True`
   - [ ] Staged = candidates ∩ `git status --porcelain` (modified, added, untracked); paths computed, never globbed
   - [ ] Verdict read from the review file frontmatter with `read_frontmatter`, never from memory
-  - [ ] Message per the D2 table; add vs revise from porcelain status; review clause omitted when no review staged; no internal step names
-  - [ ] `left_out` lists every other dirty path
-  - [ ] Nothing staged → empty `paths`
-- [ ] Add tests, one per D2 row, plus: nothing staged, left-out paths, review-only round 0 and round n, initiative-scoped, DEVLOG, unmapped template error
-  - [ ] Success: tests pass in a temp repo with a fake cf client
+  - [ ] `left_out` lists every other dirty path; nothing staged → empty `paths`
+- [ ] Add tests (temp repo, fake cf client): candidate sets for DESIGN, TASKS, ARCHITECTURE, DEVLOG, CODE; staged∩dirty only; left-out paths; nothing staged; verdict read from disk; unmapped template error
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: compute commit plan paths from produced artifacts`
 
-## Task 15 — `CommitAction` uses the plan
+## Task 14b — `build_commit_plan`: messages
 
-- [ ] Rework `pipeline/actions/commit.py` (D2, D3, D6, D8)
-  - [ ] Stage `CommitPlan.paths`; message from the plan; explicit `params["message"]` still honored verbatim
+- [ ] Add message generation (D2)
+  - [ ] One message per D2 table row; add vs revise from porcelain status (untracked/added = add, modified = revise)
+  - [ ] Review clause omitted when no review file is staged; verdict as written in frontmatter; no internal step names
+- [ ] Add tests, one per D2 row, plus review-only round 0, review-only round n, initiative-scoped, DEVLOG with and without a slice
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: derive commit messages from the staged set`
+
+## Task 15a — `CommitAction`: plan staging and messages
+
+- [ ] Rework `pipeline/actions/commit.py` to stage `CommitPlan.paths` and use the plan's message (D2)
+  - [ ] Explicit `params["message"]` still honored verbatim
   - [ ] Remove `message_prefix` and the `(iteration n)` suffix
   - [ ] Nothing staged → `committed: False` and WARNING `commit: step {name} produced no changes to commit`; left-out paths named in a WARNING
-  - [ ] `stage_all` honored only on `{index}-slice.*` for the plan's slice (`parse_slice_branch`); else fail with `refusing to stage all changes off the slice branch (on {branch})`
-  - [ ] Non-CODE commit off the target raises `GitEnvironmentError` (`planning commit for slice {n} on {branch}; expected {target}`), except a DEVLOG commit on its own slice branch
-  - [ ] `git add`/`git commit` nonzero exit with stderr → ordinary action failure carrying stderr; `run_git` returning `None` → `GitStateUnknownError`
   - [ ] `git add -A` is never a default
-- [ ] Add tests (temp repo): each bullet above, including stray file stays modified and is named in the WARNING, hook rejection as failure, timeout as `GitStateUnknownError`
-  - [ ] Success: tests pass; design criteria 1, 3, 7b hold
+  - [ ] `git add`/`git commit` nonzero exit with stderr → ordinary action failure carrying stderr
+- [ ] Add tests (temp repo): stray file stays modified and is named in the WARNING; nothing staged; explicit message honored; hook rejection as failure
+  - [ ] Success: tests pass; design criteria 1 and 3 hold
+- [ ] Commit: `feat: stage only planned paths in the commit action`
+
+## Task 15b — `CommitAction`: branch guards and timeout
+
+- [ ] Add the guards (D3, D6 commit paragraph, D8)
+  - [ ] `stage_all` honored only on `{index}-slice.*` for the plan's slice (`parse_slice_branch`); else fail with `refusing to stage all changes off the slice branch (on {branch})`
+  - [ ] Non-CODE commit off the target raises `GitEnvironmentError` (`planning commit for slice {n} on {branch}; expected {target}`), except a DEVLOG commit on its own slice branch; target read with `read_integration_target`
+  - [ ] `run_git` returning `None` during add or commit → `GitStateUnknownError`, logged at ERROR
+- [ ] Add tests: CODE on its slice branch stages all; CODE off the branch refused; design/tasks/architecture commit off the target raises; DEVLOG on its own slice branch succeeds; DEVLOG on another slice's branch raises; timeout raises `GitStateUnknownError` with the ERROR log
+  - [ ] Success: tests pass; design criterion 7b holds
+- [ ] Commit: `feat: guard commit placement and classify git timeouts`
 
 ## Task 16 — Phase step and loop-round callers
 
 - [ ] `steps/phase.py`: commit config carries the artifact kind and target subject (D1)
-- [ ] `executor.py`: a loop round's commit passes round results; subject comes from the round's last review action template; a round with no review fails with `commit scope unknown: no review in round {n}`
+- [ ] `executor.py`: a loop round's commit passes round results; subject comes from the round's last review action template via the Task 13 lookup; a round with no review fails with `commit scope unknown: no review in round {n}`
 - [ ] Update the existing exact-equality `expand()` tests for the phase step's commit config
-- [ ] Add a loop test: round 2 of a P4-style loop yields `docs: revise slice N design, round 2 (review: …)`; review-only round yields the `review: re-review …` form
+- [ ] Add a loop test: round 2 of a P4-style loop yields `docs: revise slice N design, round 2 (review: …)`; a review-only round yields the `review: re-review …` form
   - [ ] Success: tests pass; no `chore: phase-` or `loop-` messages remain in any test expectation
+- [ ] Commit: `feat: build phase and loop-round commits from the commit plan`
 
 ## Task 17 — `devlog` step commits its entry
 
 - [ ] `steps/devlog.py` `expand()` appends a commit action with `CommitSubject.DEVLOG` (D7); message `docs: add DEVLOG entry for slice {n}` (no slice: `docs: add DEVLOG entry`)
 - [ ] Update existing devlog `expand()` tests; add a test that only `DEVLOG.md` is staged
   - [ ] Success: tests pass
+- [ ] Commit: `feat: commit the devlog entry from the devlog step`
 
 ## Task 18 — Hidden `sq _commit` and prompt-only rendering
 
 - [ ] Create `cli/commands/commit_run.py` (sibling of `summary_run.py`), register in `cli/app.py`
-  - [ ] Flags: `--subject`, `--slice` or `--plan`, `--template`, `--round`; calls `build_commit_plan` and the same commit logic as the action
-  - [ ] Prints `committed <sha> <message>`; exits 1 with the action's error text
+  - [ ] Flags: `--subject design|tasks|architecture|code|devlog`, `--slice` or `--plan`, `--template`, `--round` (design API contract, amended)
+  - [ ] Calls `build_commit_plan` and the same commit logic as the action; prints `committed <sha> <message>`; exits 1 with the action's error text
 - [ ] `prompt_renderer.py` renders the commit action as `sq _commit …`
-- [ ] Add tests: CLI and action give identical paths and message for the same input; renderer output contains the command
+  - [ ] For a loop-round commit, fill `--template` and `--round` as the executor does: the template of the round's last review action (Task 13 lookup) and the round number; a round with no review fails at render time with the same message as Task 16
+  - [ ] A devlog commit renders `--subject devlog` with no template or round
+- [ ] Add tests
+  - [ ] CLI and action give identical paths and message for the same input
+  - [ ] Renderer output for a P4 loop round contains the expected `--subject`, `--template`, `--round`
+  - [ ] Renderer output for the devlog step contains `--subject devlog`
   - [ ] Success: tests pass
+- [ ] Commit: `feat: add sq _commit and render scoped commits for prompt-only runs`
 
-## Task 19 — Commit Part C
+## Task 19 — Part C checkpoint
 
-- [ ] `ruff format`, `ruff check`, `pyright`, full pipeline test suite
-- [ ] Commit: `feat: scope pipeline commits to produced artifacts with descriptive messages`
-  - [ ] Success: commit made; tree clean
+- [ ] Run the full pipeline test suite; `ruff format`, `ruff check`, `pyright`
+  - [ ] Success: all green; tree clean
 
 ---
 
@@ -216,6 +248,7 @@ status: not_started
   - [ ] A cf failure raises; no degrade
 - [ ] Add a test with a faked cf runner
   - [ ] Success: test passes
+- [ ] Commit: `feat: add cf worktree list reader`
 
 ## Task 21 — `BranchOp` and `BranchStepType`
 
@@ -225,36 +258,60 @@ status: not_started
 - [ ] `steps/__init__.py`: add `StepTypeName.BRANCH` and the bootstrap import
 - [ ] Add tests: valid enter and merge, missing `op`, unknown key, bad op value
   - [ ] Success: tests pass
+- [ ] Commit: `feat: add branch step type`
 
-## Task 22 — `BranchAction`: enter
+## Task 22a — `BranchAction` enter: guards
 
-- [ ] Create `actions/branch.py` with enter logic in a function the CLI also calls (D4); implement D5 steps 1–6 in order
-  - [ ] Environment failures raise `GitEnvironmentError`, logged at ERROR; item failure (no design file) returns `ActionResult(success=False)`
-  - [ ] Another slice's branch: commit leftovers as `chore: preserve uncommitted work on flagged slice {m}` (stage_all allowed there), checkout target, WARNING `left unmerged slice branch …`
-  - [ ] Dirty-tree message lists paths and the recovery text from D5.5
-  - [ ] Branch checked out in another worktree raises with git's message, no force
-  - [ ] Other switch failures or timeout go to `verify_git_state` with the starting branch
-  - [ ] Outputs `{"branch", "target", "created"}`; no `--force`, `reset` or delete anywhere
-- [ ] Add temp-repo tests, one per guard: cf failure, unregistered linked worktree, foreign branch, dirty tree, no design file, branch checked out elsewhere, existing branch (checkout), new branch (create from target), on another slice's branch with leftovers, `run_git` timeout
-  - [ ] Failing guards leave git state untouched (assert branch and status unchanged)
+- [ ] Create `actions/branch.py` with enter logic in a function the CLI also calls (D4); implement D5 steps 1–5
+  - [ ] Environment failures raise `GitEnvironmentError`, logged at ERROR: cf failure, unregistered linked worktree, foreign branch, dirty tree (message lists paths and the D5.5 recovery text)
+  - [ ] Item failure (no design file) returns `ActionResult(success=False)`
+  - [ ] Guards run in D5 order and leave git state untouched when they fail
+- [ ] Add temp-repo tests, one per guard; each failing guard asserts branch and `git status` unchanged
   - [ ] Success: tests pass; design criterion 5 holds
+- [ ] Commit: `feat: add branch enter guards`
 
-## Task 23 — `BranchAction`: merge
+## Task 22b — `BranchAction` enter: switch and leftover preservation
 
-- [ ] Implement D6 steps 1–6 in the same module
+- [ ] Add D5 steps 4 (another slice's branch) and 6 (switch) to the enter function
+  - [ ] On another slice's branch: commit leftovers as `chore: preserve uncommitted work on flagged slice {m}` (`stage_all` allowed there), checkout target, WARNING `left unmerged slice branch …`
+  - [ ] Existing slice branch → checkout; otherwise `git checkout -b {branch} {target}`
+  - [ ] Branch checked out in another worktree raises `GitEnvironmentError` with git's message, no force
+  - [ ] Other switch failures or a `run_git` timeout go to `verify_git_state` with the starting branch
+  - [ ] Outputs `{"branch", "target", "created"}`; no `--force`, `reset` or delete anywhere
+- [ ] Add temp-repo tests: new branch created from target; existing branch checked out; on another slice's branch with leftovers (committed, then target checked out, WARNING asserted); on another slice's branch clean; branch checked out elsewhere; `run_git` timeout
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: add branch enter switch and leftover preservation`
+
+## Task 23a — `BranchAction` merge: happy path and already merged
+
+- [ ] Implement D6 steps 1–5 in the same module
   - [ ] Re-read the target; already-merged (on target, `merge-base --is-ancestor`) succeeds with `merged: "already"`
-  - [ ] Otherwise require slice branch and clean tree; `checkout target`; `merge --no-ff -m "merge: slice {index} — {name}"`
-  - [ ] Any merge failure: capture conflicted paths (`diff --name-only --diff-filter=U`), `merge --abort` if `MERGE_HEAD` exists, then `verify_git_state(target)`; passing check → item failure `merge failed: …; slice branch {branch} left unmerged`; failing check → `GitStateUnknownError`
+  - [ ] Otherwise require the slice branch and a clean tree; `checkout target`; `merge --no-ff -m "merge: slice {index} — {name}"`
   - [ ] Target checked out in another worktree raises `GitEnvironmentError`
-- [ ] Add temp-repo tests: clean merge with the expected message; already merged; conflict (target clean, no `MERGE_HEAD`, branch unmerged, conflicted paths listed); non-conflict refusal (untracked file overwritten); `merge --abort` failing; `run_git` `None` during checkout and during merge; each asserts the ERROR log plus `GitStateUnknownError` or an item failure as D6 says
-  - [ ] Success: tests pass; design criterion 6 holds
+- [ ] Add temp-repo tests: clean merge with the expected message and checkout ending on target; already merged; wrong branch; dirty tree; target checked out elsewhere
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: add branch merge`
 
-## Task 24 — Halting run and the `each` report
+## Task 23b — `BranchAction` merge: failure and abort path
+
+- [ ] Implement D6 step 6 and the state check wiring
+  - [ ] On any merge failure capture conflicted paths (`diff --name-only --diff-filter=U`), `merge --abort` if `MERGE_HEAD` exists, then `verify_git_state(target)`
+  - [ ] Passing check → item failure `merge failed: …; slice branch {branch} left unmerged`; failing check → `GitStateUnknownError` (ERROR log)
+  - [ ] A `run_git` timeout during checkout or merge goes to the same state check
+- [ ] Add temp-repo tests: conflict (target clean, no `MERGE_HEAD`, branch unmerged, conflicted paths listed); non-conflict refusal (untracked file overwritten); `merge --abort` failing; `run_git` `None` during checkout and during merge; each asserts the ERROR log plus `GitStateUnknownError`, or an item failure when the state check passes
+  - [ ] Success: tests pass; design criterion 6 holds
+- [ ] Commit: `feat: abort failed merges back to a clean target`
+
+## Task 24 — Halting run, `each` report, and batch composition
 
 - [ ] `_execute_each_step` writes its batch report in a `finally` so a `GitEnvironmentError` still produces it (D6 last paragraph)
 - [ ] Confirm `GitEnvironmentError` propagates out of `execute_pipeline` the way `LazySessionConnectError` does, and `sq run` exits 1 with the message
-- [ ] Add tests: a halted `each` run writes its report with items recorded so far; `sq run` exit code 1 and message
+- [ ] Add tests
+  - [ ] A halted `each` run writes its report with items recorded so far
+  - [ ] `sq run` exits 1 and prints the message
+  - [ ] Design criterion 7a: a two-item `each → enter → implement → merge` composition (fake dispatch) where item 1's implement fails: item 1 FLAGGED on its slice branch with leftovers committed; item 2's enter returns to the target with a WARNING; item 2 runs and merges
   - [ ] Success: tests pass
+- [ ] Commit: `feat: write the batch report on a halted run`
 
 ## Task 25 — Loader rule: `implement` needs a preceding enter
 
@@ -262,6 +319,7 @@ status: not_started
   - [ ] An enter counts if earlier in the implement's own list, or earlier in any enclosing list than the `loop:`/`each:` containing it; an enter in a sibling container does not count
 - [ ] Add tests: flat valid and invalid; enter before a containing `each`/`loop` valid; enter inside the container before the implement valid; enter only in a sibling container invalid; error text names the fix
   - [ ] Success: tests pass; design criterion 7 holds
+- [ ] Commit: `feat: require branch enter before implement steps`
 
 ## Task 26 — Hidden `sq _branch` and prompt-only rendering
 
@@ -270,20 +328,23 @@ status: not_started
 - [ ] `prompt_renderer.py` renders branch steps as `sq _branch enter --slice N` / `sq _branch merge --slice N`
 - [ ] Add tests: CLI and action produce the same branch and outcome in a temp repo; renderer output contains the commands
   - [ ] Success: tests pass
+- [ ] Commit: `feat: add sq _branch and render branch steps for prompt-only runs`
 
 ## Task 27 — Built-in pipelines gain branch steps
 
 - [ ] Reorder `data/pipelines/P6.yaml`, `implement.yaml`, `P456.yaml`, `P56.yaml` to `branch enter → implement → devlog → branch merge → summary` (D7)
   - [ ] Keep `checkpoint: on-fail` in P6 and `implement`; planning steps in P456 and P56 stay on the target (D8)
-- [ ] Add tests: all four load and validate; step order as specified; a repo-wide test that every built-in pipeline with an `implement` step passes the new loader rule
-- [ ] Add an integration test of the batch composition `each → enter → implement → merge` with a two-item list where item 1's implement fails (design criterion 7a): item 1 FLAGGED on its slice branch with leftovers committed; item 2's enter returns to the target with a WARNING and item 2 merges
+- [ ] Add tests
+  - [ ] All four load and validate; step order as specified
+  - [ ] A repo-wide test that every built-in pipeline with an `implement` step passes the Task 25 rule
+  - [ ] Design criterion 4: a P6 run with fake dispatch and review in a temp repo asserts `_find_slice_branch` (`review/git_utils.py`) resolves the slice branch while on the entered branch, the code review's diff range resolves, and the run ends on the target with `merge: slice N — <name>`
   - [ ] Success: tests pass
+- [ ] Commit: `feat: wire branch enter and merge into code pipelines`
 
-## Task 28 — Commit Part D
+## Task 28 — Part D checkpoint
 
-- [ ] `ruff format`, `ruff check`, `pyright`, full test suite
-- [ ] Commit: `feat: add branch enter and merge pipeline steps and wire code pipelines`
-  - [ ] Success: commit made; tree clean
+- [ ] Run the full test suite; `ruff format`, `ruff check`, `pyright`
+  - [ ] Success: all green; tree clean
 
 ---
 
@@ -295,6 +356,7 @@ status: not_started
   - [ ] Each element is parsed as its leading integer (`195`, `"195"`, `"195-slice.foo"` → 195); an element with no leading integer is dropped with a WARNING naming the slice and value
 - [ ] Add tests: int, string, prefixed string, bad element (WARNING asserted), no design file, no `dependencies` key
   - [ ] Success: tests pass
+- [ ] Commit: `feat: read slice dependencies from design frontmatter`
 
 ## Task 30 — Flagged-index set in `each`
 
@@ -303,12 +365,7 @@ status: not_started
   - [ ] Applies under both failure policies, same as `flag_reason`; items without `dependencies` unaffected; order unchanged
 - [ ] Add tests: direct, transitive, independent item runs, dependency outside the run, dependency that comes later in the run does not flag, both failure policies, body not executed for a flagged dependent
   - [ ] Success: tests pass; design criterion 8 holds
-
-## Task 31 — Commit Part E
-
-- [ ] `ruff format`, `ruff check`, `pyright`, tests
 - [ ] Commit: `feat: flag batch items whose dependencies were flagged`
-  - [ ] Success: commit made; tree clean
 
 ---
 
@@ -321,6 +378,7 @@ status: not_started
 - [ ] Update every caller and YAML reference to the old name (grep the whole repo, docs included)
 - [ ] Add tests: untasked selected; tasked + missing review selected; tasked + unreadable review selected; tasked + below threshold selected; tasked + passing review not selected; design-review flag precedence
   - [ ] Success: tests pass; `grep -r untasked_slices` finds nothing outside the CHANGELOG
+- [ ] Commit: `feat: select tasked slices with unsettled task reviews`
 
 ## Task 33 — `existing: keep`
 
@@ -334,18 +392,14 @@ status: not_started
   - [ ] `CREATE` (default) unchanged
   - [ ] Step validation rejects an unknown `existing:` value
   - [ ] Success: tests pass
+- [ ] Commit: `feat: add existing keep policy to phase steps`
 
 ## Task 34 — `tasks-plan.yaml`
 
 - [ ] Switch `data/pipelines/tasks-plan.yaml` to `slices_needing_tasks` and set `existing: keep` on its `tasks:` step (D11)
 - [ ] Add a pipeline-level test (fake cf, fake dispatch/review): a slice with tasks and no tasks review is selected, dispatch skipped, review runs, and the revise loop runs as needed (design criterion 9)
   - [ ] Success: tests pass
-
-## Task 35 — Commit Part F
-
-- [ ] `ruff format`, `ruff check`, `pyright`, tests
-- [ ] Commit: `feat: re-review tasked slices with missing or failing task reviews in tasks-plan`
-  - [ ] Success: commit made; tree clean
+- [ ] Commit: `feat: re-review tasked slices in tasks-plan`
 
 ---
 
@@ -357,12 +411,13 @@ status: not_started
 - [ ] `CHANGELOG.md`: short user-facing bullets (scoped commits and messages, branch steps and the `implement` requirement, dependency flags, tasks re-review, #152, #175, #179); technical detail stays in DEVLOG
 - [ ] `docs/COMMANDS.md`: only if hidden `_commit`/`_branch` commands are listed alongside other hidden commands; otherwise leave unchanged
   - [ ] Success: docs match behavior; no stale `message_prefix` or `untasked_slices` references
+- [ ] Commit: `docs: document branch steps, scoped commits, and tasks-plan re-review`
 
 ## Task 37 — Full validation
 
 - [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite from a clean checkout state
 - [ ] Re-read design Success Criteria 1–12 and Technical Requirements; each maps to at least one passing test or a walkthrough step
-  - [ ] Success: all green; any criterion without coverage gets a test before proceeding
+  - [ ] Success: all green; any criterion without coverage gets a test (and a commit) before proceeding
 
 ## Task 38 — Live walkthrough in the scratch project
 
@@ -378,3 +433,4 @@ status: not_started
 ## Notes
 
 - No merge task is listed: Phase 7 merges the slice branch into `main` after the code review.
+- Task numbers keep their original values; letter suffixes mark splits made after the first tasks review. Tasks 10, 31 and 35 no longer exist (their commits folded into the preceding tasks), so the sequence has gaps.
