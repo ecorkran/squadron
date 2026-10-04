@@ -235,7 +235,7 @@ def _abandon_merge(
     Raises ``GitStateUnknownError`` instead when the abort fails or the state check
     does not pass, because nothing may build on a target in an unknown state.
     """
-    reason = merged.stderr.strip() if merged is not None else "git timed out"
+    reason = _merge_reason(merged)
     conflicted = run_git(["diff", "--name-only", "--diff-filter=U"], cwd=cwd)
     conflicted_paths = (
         ", ".join(conflicted.stdout.split())
@@ -259,6 +259,16 @@ def _abandon_merge(
         f"merge failed: {reason or 'git refused the merge'}{suffix}; "
         f"slice branch {branch} left unmerged"
     )
+
+
+def _merge_reason(merged: subprocess.CompletedProcess[str] | None) -> str:
+    """Why git refused the merge: its stderr, else the ``CONFLICT`` lines it prints on stdout."""
+    if merged is None:
+        return "git timed out"
+    if merged.stderr.strip():
+        return merged.stderr.strip()
+    conflict_lines = [line for line in merged.stdout.splitlines() if "CONFLICT" in line]
+    return "; ".join(conflict_lines) or merged.stdout.strip()
 
 
 def _git_stdout(args: list[str], cwd: str) -> str:

@@ -173,6 +173,8 @@ def test_conflict_is_aborted_back_to_a_clean_target(conflicting_repo: Path) -> N
 
     message = str(excinfo.value)
     assert message.startswith("merge failed: ")
+    # git prints conflict details on stdout; the reason carries them, not a generic line.
+    assert "CONFLICT (content): Merge conflict in README.md" in message
     assert "README.md" in message
     assert f"slice branch {BRANCH} left unmerged" in message
     assert _branch(conflicting_repo) == "main"
