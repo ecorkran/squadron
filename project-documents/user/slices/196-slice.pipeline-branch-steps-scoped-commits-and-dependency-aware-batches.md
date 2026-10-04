@@ -89,12 +89,13 @@ pipeline/
   executor.py              CHANGED loop-round commit passes round results; each dependency flags;
                                    _summarize_action_config uses the shared candidate (a, c, #179)
   sources.py               CHANGED item dependencies; tasks re-review selection; shared review-threshold helper (c, d)
-  classification.py        CHANGED unknown-alias errors collected before run (#175)
+  classification.py        CHANGED takes merged params; unknown-alias errors collected before run (#175)
   loader.py                CHANGED implement step requires a preceding branch enter (b)
   resolver.py              CHANGED _resolved raises UnknownModelAliasError (#175 backstop)
   prompt_renderer.py       CHANGED commit renders `sq _commit …`; branch renders `sq _branch …` (a, b)
+  git_ops.py               NEW   write-side git: read_integration_target() (strict), verify_git_state(),
+                                 slice_branch_name(), GitEnvironmentError/GitStateUnknownError (a, b)
 review/
-  git_utils.py             CHANGED read_integration_target() (strict), verify_git_state(), GitEnvironmentError/GitStateUnknownError (b)
   coverage.py              CHANGED impose_output_coverage()                       (#152)
   review_client.py         CHANGED call impose_output_coverage beside impose_diff_coverage (#152)
 models/aliases.py          CHANGED UnknownModelAliasError, require_known_model() with close matches (#175)
@@ -232,7 +233,10 @@ Code changes can touch any file, so a CODE plan has `stage_all=True`. `CommitAct
 - `BranchOp` StrEnum: `ENTER`, `MERGE`.
 - The step expands to one `branch` action. Validation requires `op`, accepts an optional `slice`, and rejects every other key.
 - Prompt-only renders `sq _branch enter --slice N` / `sq _branch merge --slice N`, so both modes run the same code (`BranchAction` logic lives in a function the CLI also calls).
-- **Validation rule:** an `implement` step must be preceded, in the same step list, by a `branch: { op: enter }` step. Otherwise `validate_pipeline` reports `"implement step {name} needs a preceding branch: {op: enter}"`. This fails at load time rather than after an implement dispatch has run.
+- **Validation rule:** an `implement` step must come after a `branch: { op: enter }` step. Otherwise `validate_pipeline` reports `"implement step {name} needs a preceding branch: {op: enter}"`. This fails at load time rather than after an implement dispatch has run.
+  - **Nesting:** an enter counts if it appears earlier in the implement's own step list, or earlier in any enclosing list than the `loop:` or `each:` that contains the implement. An enter inside a sibling container doesn't count.
+  - **Inventory:** the only built-in pipelines with `implement` steps are P6, P456, P56 and `implement`. All four are updated in this slice (D7).
+  - **User pipelines** with an `implement` step fail validation until they add the enter. This is a deliberate break. Without the enter, the implement commit would refuse to stage anyway (D3), but only after the dispatch had run. The error message names the fix, and the CHANGELOG and `docs/PIPELINES.md` call out the change. There's no compatibility flag, since one would reopen the "implement on whatever is checked out" path this slice closes.
 - **Rejected: an implicit enter inside the `implement` phase step.** Merge has to come after the review loop, which is a separate step, so the pair would be half implicit and half explicit. Explicit steps also compose for 197.
 
 ### D5: `branch enter`
@@ -243,10 +247,16 @@ Code changes can touch any file, so a CODE plan has `stage_all=True`. `CommitAct
 
 Steps, in order, each with a message that names the fact:
 
-1. **Target:** `read_integration_target(cf_client)`, a new strict reader in `git_utils.py`. Unset (`""`) means `main`. A cf failure raises. `resolve_diff_base`'s degrade-to-main behavior is wrong for a write operation and is not reused.
+1. **Target:** `read_integration_target(cf_client)`, a new strict reader in `pipeline/git_ops.py`. Unset (`""`) means `DEFAULT_DIFF_BASE` (`"main"`, `review/git_utils.py:16`). That's the one definition of the default branch, imported rather than respelled. A cf failure raises. `resolve_diff_base`'s degrade-to-main behavior is wrong for a write operation and is not reused.
 2. **Unregistered worktree:** when `git rev-parse --git-dir` differs from `--git-common-dir` (a linked worktree) and no `cf worktree list --json` entry has `worktreePath` equal to the git root: `"unregistered worktree {root}: integration target belongs to the primary checkout"`.
 3. **Branch name:** `{index}-slice.{name}`, where `name` is the design file's stem without its `{index}-slice.` prefix. This is the same name the git rules and the existing branches use (`195-slice.plan-batch-…`). With no design file: `"slice {n} has no design file; cannot name its branch"`.
-4. **Current branch** must be the target or that slice branch: `"on {branch}, expected {target} or {slice_branch}"`.
+4. **Current branch:**
+   - **The target, or this slice's branch:** proceed to step 5.
+   - **Another slice's branch** (`parse_slice_branch` matches a different index): an earlier item ended there unmerged, because its implement, review, devlog or merge failed or paused. Enter restores the target:
+     - If the tree is dirty, commit the leftovers on that branch: `stage_all`, which D3 allows on a slice branch, with the message `chore: preserve uncommitted work on flagged slice {m}`. The tree was clean when that branch was entered (step 5), so everything dirty is that slice's work.
+     - Then `git checkout {target}`, and log a WARNING: `"left unmerged slice branch {m}-slice.… for {target}"`.
+     - Any failure here goes to the D6 state check.
+   - **Any other branch:** `GitEnvironmentError`: `"on {branch}, expected {target} or {slice_branch}"`.
 5. **Clean tree:** `git status --porcelain` must be empty. Phase 4/5 commits are now scoped (D1), so unrelated edits stay in the tree and stop Phase 6 here. That is deliberate, because implement stages everything (D3).
    - The message lists the paths and the recovery: `"working tree not clean: {paths}. Commit or remove them, then rerun phase 6 for slice {n}; design and tasks commits from this run are kept."`
    - Every path an earlier scoped commit in the run left out was already named in that commit's WARNING (D2), so the operator can connect the two.
@@ -270,7 +280,7 @@ Outputs: `{"branch", "target", "created": bool}`.
    - If the check passes, it's an item failure: `"merge failed: {git stderr, or 'git timed out'}; slice branch {branch} left unmerged"`. A conflict lists the conflicted paths, taken from `git diff --name-only --diff-filter=U` before the abort.
    - Aborting keeps the target clean, so the next item (in 197) can branch from it.
 
-**State check** (`verify_git_state(expected_branch)` in `git_utils.py`), shared by enter, merge, and the commit action:
+**State check** (`verify_git_state(expected_branch)` in `pipeline/git_ops.py`), shared by enter, merge, and the commit action:
 - It passes only when all three reads succeed:
   - `git rev-parse -q --verify MERGE_HEAD` finds nothing.
   - The current branch is the expected branch.
@@ -299,6 +309,8 @@ branch enter → implement → devlog → branch merge → summary
 ### D8: Planning commits stay on the target
 
 Phase 4/5 steps and their loops don't branch (git rules: planning work commits to the target). In P456 and P56 the design and tasks commits land on the target, then `branch enter` forks the slice branch from that state. That matches the manual workflow.
+
+**Enforced in the commit action.** A commit whose subject isn't CODE must be on the target, with one exception: a DEVLOG commit may be on its own slice's branch, because in code pipelines the DEVLOG entry is written there (D7). Any other placement raises `GitEnvironmentError`: `"planning commit for slice {n} on {branch}; expected {target}"`. The target is read the same strict way as D5.1. This is the same guard D3 applies to code.
 
 ### D9: Dependencies come from design frontmatter
 
@@ -339,7 +351,7 @@ Phase 4/5 steps and their loops don't branch (git rules: planning work commits t
   - `UnknownModelAliasError(name, close_matches)`.
   - `require_known_model(name, *, profile_source: bool)`. It passes when `name` is an alias, when `name` is a model id some alias resolves to (so a literal `claude-haiku-4-5-20251001` keeps working), or when a profile source exists. Otherwise it raises with `difflib.get_close_matches(name, aliases, n=3)`.
   - Message: `unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low? If this is a literal model ID, set a profile.`
-- **Pre-run:** `classify_pipeline` already resolves every model-dispatching action against the params, with the resolver cascade (CLI override included), before execution (`run.py:325, 504`). It now calls `require_known_model` for each non-pool candidate. It collects every error and raises one error listing them all, before step 1. The classifier must resolve placeholders against the merged params (defaults plus `--param` overrides). The task breakdown confirms this at `run.py` and fixes it if it doesn't.
+- **Pre-run:** `classify_pipeline` already resolves every model-dispatching action against the params, with the resolver cascade (CLI override included), before execution (`run.py:325, 504`). It now calls `require_known_model` for each non-pool candidate. It collects every error and raises one error listing them all, before step 1. Today it resolves placeholders against `definition.params` only, the YAML defaults (`run.py:325`, `run.py:504`), so a mistyped `--param review-model=…` would slip past. `classify_pipeline` gains a `params` argument, and both call sites pass the merged params (defaults plus `--param` overrides, the same mapping the executor uses).
 - **Backstop:** `ModelResolver._resolved` calls `require_known_model`. A model that only appears at run time (for example, one placed by a source item) fails its action before any request, so the review action never saves an artifact.
 - **Pool members:** pools are already validated as alias references at load time (slice 180).
 - `sq review`'s `_reject_unknown_alias` delegates to `require_known_model`, so both paths give the same message and the same close matches (interface parity).
@@ -383,7 +395,7 @@ Both print what they did on stdout (`committed <sha> <message>` / `on 105-slice.
 
 ### Provides to Other Slices
 
-- **197:** `branch: {op: enter|merge}` with the clean-target-on-failure guarantee, dependency flags in `each`, scoped commits for code (`stage_all` on the slice branch), and `existing: keep`. A flagged item's reason (`merge conflict…`, `dependency 196 flagged`) goes into the batch report for the Amoeba handoff.
+- **197:** `branch: {op: enter|merge}`. A flagged item's failure leaves the checkout either on the clean target (a merge failure, D6) or on its own unmerged slice branch, which the next item's enter preserves and leaves (D5.4). Either way, independent items continue. This comes with dependency flags in `each`, scoped commits for code (`stage_all` on the slice branch), and `existing: keep`. A flagged item's reason (`merge conflict…`, `dependency 196 flagged`) goes into the batch report for the Amoeba handoff.
 - **183 and later convergence slices:** commit messages now carry slice, subject, round and verdict, so `git log` lines up with ledger rounds.
 - **198:** the ARCHITECTURE commit subject already handles initiative-scoped commits. 198's `ArtifactKind.ARCH` can replace the `resolve_arch_file` call inside `build_commit_plan`.
 
@@ -403,11 +415,13 @@ Both print what they did on stdout (`committed <sha> <message>` / `on 105-slice.
 4. `sq run P6 N` from the target creates `N-slice.<name>`, implements and reviews on it (the code review resolves its diff range), and merges back with `merge: slice N — <name>`. The checkout ends on the target.
 5. `branch enter` fails, without touching git state, for each of: a dirty tree, being on an unrelated branch, an unregistered worktree, a slice with no design file, and a cf config read failure.
 6. A merge conflict leaves the target clean (no `MERGE_HEAD`), the slice branch unmerged, and the action FAILED with the conflicted paths. An already-merged slice branch makes `merge` succeed with `merged: already`.
-7. A pipeline whose `implement` step has no preceding `branch: {op: enter}` fails `sq run --validate`.
+7. A pipeline whose `implement` step has no preceding `branch: {op: enter}` fails `sq run --validate`, including when the implement is nested in a `loop:` or `each:` with no enter before the container.
+7a. In a two-item batch composed as `each` → enter → implement → merge, where item 1's implement fails, item 1 is FLAGGED and left on `{1}-slice.…` with its leftovers committed. Item 2's enter returns to the target with a WARNING, and item 2 runs and merges.
+7b. A design, tasks or architecture commit attempted on a branch other than the target raises `GitEnvironmentError`. A DEVLOG commit on its own slice branch succeeds.
 8. In an `each` run where item 196 is flagged, item 197 (`dependencies: [196]`) is flagged `dependency 196 flagged` without running, and 197's dependents are flagged in turn. Independent items run.
 9. `tasks-plan` selects a slice with tasks and a missing or below-threshold tasks review, skips its tasks dispatch (`existing: keep`), re-reviews it, and runs the revise loop as needed.
 10. A review with a stated PASS and an exhausted output budget saves with `verdict: CONCERNS`, `verdictSource: imposed`, and the coverage finding, in both `sq review` and pipeline runs.
-11. `sq run review 931 --model glm-flash-low.` exits 1 before any step, naming the alias and suggesting `glm-flash-low`. No review file is written or archived. `sq review slice 931 --model glm-flash-low.` prints the same message.
+11. `sq run review 931 --model glm-flash-low.`, and equally `--param review-model=glm-flash-low.` on P4, exits 1 before any step, naming the alias and suggesting `glm-flash-low`. No review file is written or archived. `sq review slice 931 --model glm-flash-low.` prints the same message.
 12. `sq run P456 102 --model haiku -v` labels every dispatch and review action `model=haiku`.
 
 ### Technical Requirements
@@ -483,7 +497,7 @@ Use the scratch project (`…/scratchpad/sq-scratch`, toy "tally" CLI, plan 100,
 1. **#175 and #179** (`require_known_model`, the classifier check, the resolver backstop, the shared candidate helper). They are small and independent, and they protect every later live test from a mistyped alias.
 2. **#152** (`impose_output_coverage`).
 3. **(a)** `commit_plan.py`, `CommitAction`, the phase-step and loop-round callers, and `sq _commit`.
-4. **(b)** `git_utils` strict target reader, `BranchAction`, `BranchStepType`, the implement validation rule, `sq _branch`, and the pipeline YAML. This depends on (a) for D3.
+4. **(b)** `pipeline/git_ops.py` (strict target reader, state check, errors), `BranchAction`, `BranchStepType`, the implement validation rule, `sq _branch`, and the pipeline YAML. This depends on (a) for D3.
 5. **(c)** item dependencies and the `each` flag set.
 6. **(d)** `_review_flag`, the source rename, and `existing: keep`.
 7. Update `docs/PIPELINES.md` and run the live walkthrough in the scratch project.

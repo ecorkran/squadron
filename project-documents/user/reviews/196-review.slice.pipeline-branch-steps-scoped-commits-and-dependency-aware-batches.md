@@ -9,136 +9,134 @@ project: squadron
 verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md
-aiModel: claude-opus-5-5
+aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261004
 dateUpdated: 20261004
-reviewedSha: 5046f56203b602307f2f844b7993e7a762bc5caa
+reviewedSha: a88eb56b152e8571d21cb16f6b6f63370f1e1b69
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 9
-durationSeconds: 61.8
+toolCallsMade: 2
+durationSeconds: 45.2
 squadronVersion: 0.18.4
 findings:
   - id: F001
-    severity: concern
+    severity: pass
     category: architecture-alignment
-    summary: "The architecture's out-of-scope rule doesn't cover the grammar this slice adds"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:219-230"
+    summary: "Git-mutating steps follow the architecture's rules"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#D5-branch-enter"
   - id: F002
-    severity: concern
-    category: integration
-    summary: "DEVLOG left uncommitted after merge makes the next `branch enter` fail"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:256-259"
+    severity: pass
+    category: error-handling
+    summary: "Failure modes are enumerated with observable handling"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#D6-branch-merge"
   - id: F003
     severity: concern
-    category: error-handling
-    summary: "Merge path doesn't cover timeouts, a failed abort, or a non-conflict merge failure"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:245-252"
+    category: integration
+    summary: "Item failure at merge or implement leaves the checkout off-target, so the \"clean-target-on-failure\" guarantee to 197 doesn't hold"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#Provides-to-Other-Slices"
   - id: F004
     severity: concern
-    category: integration
-    summary: "Pipeline-step order around `branch enter` doesn't address all dirty-tree sources"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:240"
-  - id: F005
-    severity: note
-    category: nfr
-    summary: "The architecture states no NFRs for these paths"
-    location: "project-documents/user/architecture/180-arch.pipeline-intelligence.md"
-  - id: F006
-    severity: pass
-    category: architecture-alignment
-    summary: "#175 and #179 match the architecture's resolver and pool model"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:298-314"
-  - id: F007
-    severity: pass
-    category: architecture-alignment
-    summary: "#152 reuses the existing imposition pattern instead of adding a second signal"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:291-296"
-  - id: F008
-    severity: pass
-    category: dependencies
-    summary: "Dependencies point the right way and integration points match 195, 197 and 198"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:344-356"
-  - id: F009
-    severity: pass
     category: scope
-    summary: "Scope is held to the slice-plan entry"
-    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md:48-55"
+    summary: "Scope extends past the architecture's description of slice 196"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#Technical-Scope"
+  - id: F005
+    severity: concern
+    category: integration
+    summary: "New load-time rule for `implement` may break other pipelines, and its scope is under-specified"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#D4-branch-step-type"
+  - id: F006
+    severity: concern
+    category: architecture-alignment
+    summary: "Planning commits aren't verified to be on the target"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#D8-planning-commits-stay-on-the-target"
+  - id: F007
+    severity: note
+    category: dependency-direction
+    summary: "Git state helpers placed in the `review` package"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#Component-Structure"
+  - id: F008
+    severity: note
+    category: under-specification
+    summary: "Default target value and deferred verification are underspecified"
+    location: "project-documents/user/slices/196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md#D13-175-unknown-aliases-fail-before-the-run"
 ---
 
 # Review: slice — slice 196
 
 **Verdict:** CONCERNS
-**Model:** claude-opus-5-5
+**Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [CONCERN] The architecture's out-of-scope rule doesn't cover the grammar this slice adds
+### [PASS] Git-mutating steps follow the architecture's rules
 
-Under Out of Scope, 180-arch says changes to 140's pipeline grammar are allowed only as "the general batch-pipeline pieces added by 194 and 195". It also names 194/195 as the one exception to "register through 140's registries" (Relationship to 140 section). This slice adds a new top-level step type (`branch:`), a new phase-step key (`existing: keep`), a new load-time validation rule (an implement step needs a preceding enter), two hidden CLI commands, and pipeline steps that write to git. None of this is a convergence, pool, escalation, or persistence registration.
+The architecture requires a strict target read, planning commits on the target, and code on `{index}-slice.{name}` merged with `--no-ff`. It also requires scoped staging except for code on its slice branch, no force, reset, delete or push, abort on a failed merge, and a halt when state can't be verified. D3, D5, D6, D8 and the "Patterns and Conventions" section implement each of these. `resolve_diff_base`'s degrade-to-main behavior is explicitly not reused for write paths. That honors the "failed read never becomes `main`" rule.
 
-The slice plan approves the scope (item 16), so the work itself is fine. The architecture document just hasn't caught up. By the architecture's own triage model this is an architecture-scope finding, so the arch doc should be updated rather than the slice:
-- Extend the exception to "194–197".
-- Add a short section on git-mutating steps: the target rules, never force or delete, and abort to a clean target.
+### [PASS] Failure modes are enumerated with observable handling
 
-Otherwise later reviews of 196 and 197 will keep flagging this as a boundary violation.
+Every git I/O path has an explicit outcome:
+- **Environment failures** raise `GitEnvironmentError` and end the run.
+- **Item failures** are distinguished from environment failures.
+- **`run_git` timeouts** go to `verify_git_state` and raise `GitStateUnknownError` when the state can't be verified.
+- **`merge --abort` failures** are handled.
+- **Commit timeouts** are treated as unknown state.
+- **Batch report on halted runs:** it is written in a `finally`.
 
-### [CONCERN] DEVLOG left uncommitted after merge makes the next `branch enter` fail
+The Technical Requirements ask for tests that assert the ERROR log for these paths. No NFR is defined in the parent architecture for these paths, so there is nothing to restate.
 
-D7 leaves `devlog` output "uncommitted on the target, as it is today." D5.5 requires `git status --porcelain` to be empty before entering. So after any P6, P456, P56 or `implement` run finishes, the next code pipeline (or the next item in a 197 batch, if 197 keeps a per-item devlog) fails with `working tree not clean: DEVLOG.md`.
+### [CONCERN] Item failure at merge or implement leaves the checkout off-target, so the "clean-target-on-failure" guarantee to 197 doesn't hold
 
-The Verification Walkthrough misses this because it dirties the tree on purpose between runs, and step 9 (`--prompt-only P6 106` after step 2) would hit it. D1 already treats `DEVLOG.md` as a candidate path for scoped commits. Pick one and state it in the doc:
-- Commit DEVLOG after merge with a scoped plan, or
-- Have the enter guard ignore DEVLOG.md explicitly (a single constant), or
-- Leave it as is, but tell 197 so it doesn't run devlog per item.
+"Provides to Other Slices" promises 197 a clean target on failure, and the Integration Requirements say 197 can compose `each` → enter → implement → review loop → merge "with no engine changes". The design doesn't deliver this.
+- An implement or review failure, a checkpoint pause, or a failed devlog commit skips `branch merge`, so the item is FLAGGED with the checkout still on the slice branch.
+- A dirty-tree or wrong-branch failure at D6 step 3 is an item failure that also leaves the checkout on the slice branch.
+- The next independent item's `branch enter` then finds the current branch is neither the target nor its own slice branch (D5.4) and raises `GitEnvironmentError`. That halts the whole batch.
 
-The Integration Requirements claim that "197 can compose … with no engine changes" depends on this.
+This contradicts D10's "independent items run" and the architecture's intent that a flagged slice stops only its dependents. Only the merge-conflict path returns to the target (D6.6).
 
-### [CONCERN] Merge path doesn't cover timeouts, a failed abort, or a non-conflict merge failure
+The slice should either:
+- return to the target on item failure (a cleanup in `each`, or an `on-fail` branch step), or
+- state that enter must accept an unmerged slice branch, or
+- state plainly that 197 owns this.
 
-D6 handles a conflict (`merge --abort`) and a checkout failure. It doesn't cover these:
-- **`run_git` returns `None` (timeout or git unavailable) during `merge` or `checkout`.** The repository state is then unknown and `MERGE_HEAD` may be present. Line 319 promises "git stderr included", but there is no stderr in this case.
-- **`git merge --abort` itself fails.** The target is left mid-merge, which is exactly the risk named at line 432.
-- **Non-conflict merge failures,** for example untracked files that would be overwritten.
+Add a success criterion for a flagged item followed by an independent item in a branch-composed batch.
 
-Every later item in 197 inherits whatever state is left. For each case, state the handling: re-check `MERGE_HEAD` and the current branch after any failure, fail with an explicit "target state unknown" error that stops the whole batch (not just the item), and log at ERROR. The same gap applies to `checkout -b` in D5.6 and to the commit action's `git add`/`commit` timing out. Add tests for the `None` and abort-failure cases next to the conflict test in the Technical Requirements.
+### [CONCERN] Scope extends past the architecture's description of slice 196
 
-### [CONCERN] Pipeline-step order around `branch enter` doesn't address all dirty-tree sources
+The architecture lists 196 as `branch:`, scoped commits, dependency flags in `each`, and `existing: keep`. This slice adds:
+- the `tasks-plan` re-review source rename (D11),
+- #152 truncation imposition in `review/coverage.py`,
+- #175 alias validation across `models/aliases.py`, `classification.py`, the resolver and `cli/commands/review.py`,
+- #179 `-v` labels.
 
-D5.5 says this is deliberate: unrelated edits left out by scoped Phase 4/5 commits stop Phase 6. In P456 and P56, that includes anything the design or tasks agent touched outside the candidate set. Examples are slice-plan prose fixes in files other than `slicePlan`, architecture-doc edits, and files written by `summary emit: file` if those land in the repo.
+The latter three are review and model-resolution integrity fixes touching modules outside the batch-pipeline engine. The slice itself calls the work "six independent fixes" and raises the effort to 4/5. They are individually small and justified. But the architecture's scope boundary allows 194–197 only "general batch-pipeline pieces". Either update the architecture's 196 bullet and Out of Scope exception to cover these, or split them into a separate slice. Otherwise the documents drift.
 
-The result is that a P456 run which used to finish now stops halfway through, after the design and tasks commits, with no recovery path documented. State one of the following:
-- the enter failure in P456/P56 is a checkpoint (resume after a human cleans up) rather than a plain FAILED, or
-- the WARNING from the scoped commit's `left_out` is repeated in the enter error so the operator can connect the two.
+### [CONCERN] New load-time rule for `implement` may break other pipelines, and its scope is under-specified
 
-### [NOTE] The architecture states no NFRs for these paths
+D4 makes any `implement` step without a preceding `branch: {op: enter}` in the same step list fail `validate_pipeline`. Only P6, P456, P56 and `implement.yaml` are updated. The slice doesn't enumerate:
+- other built-in pipelines that contain `implement` steps,
+- user pipelines,
+- `implement` steps nested in `loop:` or `each:` bodies, where "same step list" is ambiguous.
 
-180-arch states no latency or throughput targets for commit, branch, or source-selection paths, so the slice has nothing to restate. The relevant architectural principle is observability ("prioritize observability… detailed logging"). The slice follows it: WARNING on left-out paths, imposed verdict with a coverage finding, and `-v` labels that match the resolver.
+This is a breaking grammar change that the slice doesn't inventory. Add an audit of built-in and user pipelines, define how nesting is treated, and state migration or compatibility handling.
 
-### [PASS] #175 and #179 match the architecture's resolver and pool model
+### [CONCERN] Planning commits aren't verified to be on the target
 
-`require_known_model` sits beside the alias registry. Pool members are still validated at load time, matching the arch rule that pools are always one level deep. The `-v` label reuses `cascade_candidates`. Together these address the arch risk "why did this step use model X?" without adding indirection. There is one validator for `sq review` and pipelines, with no duplicated logic.
+The architecture says planning commits land on the target. D3 verifies the branch only for CODE `stage_all`. A P4/P5 or P456 planning commit runs on whatever branch is checked out. If the checkout is left on a slice branch (see the first CONCERN), a design or tasks commit would silently land there. This is the same class of hazard the guard in D3 prevents for code. Add a branch check, even if only a WARNING or a refusal, to the DESIGN, TASKS and ARCHITECTURE commit paths.
 
-### [PASS] #152 reuses the existing imposition pattern instead of adding a second signal
+### [NOTE] Git state helpers placed in the `review` package
 
-Imposing CONCERNS with `verdictSource: imposed` and a `review-coverage` finding keeps every gate reading one field. It leaves `ReviewFinding` unchanged, which honors the arch's "no changes to review core models." The rejected frontmatter flag is reasoned out correctly.
+`read_integration_target`, `verify_git_state` and `GitEnvironmentError` are added to `review/git_utils.py`, but they serve write operations in pipeline actions and the new CLI commands. The dependency direction (pipeline → review) is acceptable. Still, write-side git state doesn't belong to the review domain, and `GitEnvironmentError` propagating out of `execute_pipeline` makes it an engine-level contract. Consider a neutral location such as `pipeline/git/` or a shared git module.
 
-### [PASS] Dependencies point the right way and integration points match 195, 197 and 198
+### [NOTE] Default target value and deferred verification are underspecified
 
-- It consumes 195's `each`, `flag_reason` and sources, and 927's coverage pattern, and doesn't change their contracts beyond the documented source rename.
-- It provides 197 with exactly what slice-plan item 17 expects: 196b branch steps and 196c dependency flags.
-- The 198 seam (`ArtifactKind.ARCH` replacing `resolve_arch_file`) is named rather than built ahead of time.
-- cf failures fail the action rather than falling back to `main`. This follows the project's no-silent-fallback rule, and `resolve_diff_base` is kept separate on purpose.
-
-### [PASS] Scope is held to the slice-plan entry
-
-The Excluded list leaves out 197's work (the batch pipeline, reordering, resume), PM-only git actions, and the cross-repo cf field. D9 picks design frontmatter over a context-forge change, which is the simpler option. Each of (a)–(e) and #179 maps one-to-one to item 16 in the slice plan.
+- **Default target:** the `main` default for an unset `git.integration_branch` is architecture-sanctioned. It should be defined once as a constant, per the project's no-scattered-values rule.
+- **Deferred params check:** D13 defers confirming that the classifier resolves placeholders against merged params to "the task breakdown". Success criterion 11 depends on it, so the check should be settled in the design or marked as a known risk.
 
 ### Run Digest
 
-- Response length: 8441 chars
+- Response length: 7618 chars
 - Response is newline-free: no
-- Tool calls made: 9
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -148,31 +146,35 @@ The Excluded list leaves out 197's work (the batch pipeline, reordering, resume)
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 61.8 s
+- Duration: 45.2 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
 
 ## Response
 
-- **F001: fixed in the architecture doc.**
-  - The 180-arch exception now covers 194–197, listing what each slice adds to the grammar.
-  - The Out of Scope line says 194–197.
-  - A new "Git-Mutating Steps" section covers the strict target read, where planning and code land, scoped staging, never force/reset/delete/push, abort to a clean target, and stopping the run when state can't be verified.
-- **F002: fixed (D7).** The `devlog` step commits its own entry (`CommitSubject.DEVLOG`, `DEVLOG.md` only). Code pipelines run `branch enter → implement → devlog → branch merge → summary`, so the entry merges with the slice and the tree is clean for merge and for the next enter. Summary file emits go to `~/.config/squadron/runs/summaries`, outside the repo.
-- **F003: fixed (D5, D6).**
-  - A shared `verify_git_state(expected_branch)` checks three things: no `MERGE_HEAD`, the expected branch, and no tracked changes.
-  - Every merge or checkout failure, timeout, or refusal aborts if `MERGE_HEAD` exists, then runs the check.
-  - If the check passes, it's an item failure. If it fails, or the abort fails, the action raises `GitStateUnknownError`, logged at ERROR, and the run ends.
-  - A commit timeout raises the same error.
-  - `each` writes its report in a `finally`, so a halted batch still reports.
-  - Tests are added for `None`, abort failure, and a non-conflict refusal.
-- **F004: fixed (D5).**
-  - Environment failures (dirty tree, wrong branch, unregistered worktree, cf read failure, target checked out elsewhere) raise `GitEnvironmentError` and end the run, because every later item would hit them too.
-  - The dirty-tree error lists the paths and the recovery: commit or remove them, then rerun phase 6 for the slice; the planning commits are kept.
-  - Paths left out by earlier scoped commits were already named in those commits' WARNING.
-  - Not a checkpoint: `--resume` applies to paused runs, and a dirty tree isn't a review decision.
-- **F005:** no change. Agreed, no NFRs apply.
+Origin key: **revision** means it was introduced by the round-1 fix (`a88eb56b`). **original** means it was already in the first design (`5046f562`), and this round's reviewer found it where round 1 didn't.
+
+- **F003, off-target after an item failure. Origin: original, made worse by the revision.**
+  - The gap existed in `5046f562`: a failed implement left the checkout on the slice branch, and the next enter rejected it. Back then, every later item would have been flagged.
+  - Round 1 made a wrong-branch enter halt the run, so the same gap now stopped the whole batch.
+  - Fixed in D5.4. If enter finds another slice's branch, it commits that branch's leftovers as `chore: preserve uncommitted work on flagged slice {m}` (`stage_all` is allowed there, per D3), returns to the target with a WARNING, and continues. Any other branch still halts.
+  - "Provides to Other Slices" now states what 197 actually gets, and success criterion 7a covers a flagged item followed by an independent one.
+- **F004, scope beyond the architecture. Origin: revision.**
+  - The 196 bullet I added to 180-arch in round 1 listed only the grammar pieces.
+  - Fixed by extending that bullet. It now covers the tasks re-review selection and the #152, #175 and #179 review-trust fixes, and notes they add no grammar and change no review model.
+  - Not split into another slice: the slice plan has scoped them to 196 since 20261003.
+- **F005, the implement validation rule. Origin: original.**
+  - Fixed in D4. The rule now covers nesting (an enter counts if it's earlier in the implement's list, or in any enclosing list before its container).
+  - The only built-in pipelines with `implement` steps are P6, P456, P56 and `implement`, and all four are updated. That's checked against `src/squadron/data/pipelines/`.
+  - User pipelines break on purpose, with a message that names the fix, plus CHANGELOG and PIPELINES.md notes. There's no compatibility flag.
+- **F006, planning commits not verified on the target. Origin: original.**
+  - Fixed in D8. Commits other than code must be on the target, or (for DEVLOG only) on their own slice branch. Anything else raises `GitEnvironmentError`. Success criterion 7b covers it.
+- **F007, git helpers in `review/`. Origin: revision** for `verify_git_state` and the errors, which round 1 added; **original** for `read_integration_target`.
+  - Fixed: they move to a new `pipeline/git_ops.py`. `run_git` stays where it is.
+- **F008, the default constant and the deferred params check. Origin: original.**
+  - The default branch is now `DEFAULT_DIFF_BASE`, imported and not respelled.
+  - The params question is settled. `classify_pipeline` resolved placeholders against YAML defaults only (`run.py:325`, `run.py:504`), so a mistyped `--param review-model=…` would have slipped through. It now takes the merged params. Success criterion 11 includes the `--param` case.

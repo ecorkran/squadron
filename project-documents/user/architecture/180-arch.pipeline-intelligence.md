@@ -39,7 +39,9 @@ Every capability in this initiative plugs into extension points defined in 140:
 
 180 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes. The exception is the batch-pipeline slices (194–197). They extend 140's engine and grammar directly, so that each batch phase is a YAML file rather than an engine change:
 - 194 and 195 add the `loop:` step, per-item `each` isolation, loop thresholds, and review feedback on dispatch.
-- 196 adds the `branch:` step, scoped commits, dependency flags in `each`, and `existing: keep` on phase steps.
+- 196 adds the `branch:` step, scoped commits, dependency flags in `each`, and `existing: keep` on phase steps. It also re-selects tasked slices whose tasks review fails the accept threshold.
+  - It also carries the review-trust fixes an unattended gate depends on: a budget-truncated PASS imposed to CONCERNS (#152), unknown model aliases rejected before the run (#175), and `-v` labels from the resolver cascade (#179).
+  - These fixes touch `review/coverage.py`, `models/aliases.py`, the resolver and the classifier, but add no grammar and change no review model.
 - 197 composes these into the Phase 6 batch.
 
 ### Git-Mutating Steps
