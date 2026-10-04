@@ -1399,6 +1399,17 @@ async def evaluate_each_source(
     return args, items
 
 
+async def _write_each_report(report: BatchReport, runs_dir: Path | None) -> None:
+    """Write the batch report on every exit: an all-flagged, stopped or halted batch (D9)."""
+    from squadron.pipeline.state import StateManager
+
+    # Off-thread: mkdir, YAML dump and file write are blocking I/O.
+    report_path = await asyncio.to_thread(
+        lambda: report.write(StateManager(runs_dir=runs_dir).runs_dir)
+    )
+    _logger.info("%s; report: %s", report.summary_line(), report_path)
+
+
 async def _execute_each_step(
     *,
     step: Any,
@@ -1429,45 +1440,49 @@ async def _execute_each_step(
     report = BatchReport(pipeline_name, run_id, step.name, plan=args[0] if args else None)
     status = ExecutionStatus.COMPLETED
 
-    for position, item in enumerate(items):
-        item_results: list[StepResult] = []
-        # A pre-flagged item is a failed precondition, not an execution
-        # failure: flagged under both policies, body never run (D5).
-        reason = str(item["flag_reason"]) if item.get("flag_reason") else None
-        if reason is None:
-            item_results = await _run_each_item(
-                inner_steps=inner_steps,
-                item_params={**merged_params, as_name: item},
-                step_index=step_index,
-                prior_outputs=prior_outputs,
-                step_outputs=step_outputs,
-                pipeline_name=pipeline_name,
-                run_id=run_id,
-                cwd=cwd,
-                resolver=resolver,
-                cf_client=cf_client,
-                sdk_session=sdk_session,
-                get_step_type_fn=get_step_type_fn,
-                get_action_fn=get_action_fn,
-                runs_dir=runs_dir,
-            )
-            for inner_result in item_results:
-                all_action_results.extend(inner_result.action_results)
-            reason, status = _item_outcome(item_results, policy)
-        if reason is not None:
+    # The item running when an exception ends the whole run (a halting git fault, a lost
+    # session). The report is written in the ``finally``, so such a run still leaves one.
+    in_flight: tuple[int, dict[str, object]] | None = None
+    try:
+        for position, item in enumerate(items):
+            in_flight = (position, item)
+            item_results: list[StepResult] = []
+            # A pre-flagged item is a failed precondition, not an execution
+            # failure: flagged under both policies, body never run (D5).
+            reason = str(item["flag_reason"]) if item.get("flag_reason") else None
+            if reason is None:
+                item_results = await _run_each_item(
+                    inner_steps=inner_steps,
+                    item_params={**merged_params, as_name: item},
+                    step_index=step_index,
+                    prior_outputs=prior_outputs,
+                    step_outputs=step_outputs,
+                    pipeline_name=pipeline_name,
+                    run_id=run_id,
+                    cwd=cwd,
+                    resolver=resolver,
+                    cf_client=cf_client,
+                    sdk_session=sdk_session,
+                    get_step_type_fn=get_step_type_fn,
+                    get_action_fn=get_action_fn,
+                    runs_dir=runs_dir,
+                )
+                for inner_result in item_results:
+                    all_action_results.extend(inner_result.action_results)
+                reason, status = _item_outcome(item_results, policy)
+            if reason is not None:
+                _warn_item_flagged(step.name, item, reason)
+            report.records.append(BatchItemRecord.from_item(item, position, item_results, reason))
+            in_flight = None
+            if status is not ExecutionStatus.COMPLETED:
+                break
+    finally:
+        if in_flight is not None:
+            position, item = in_flight
+            reason = "run halted before this item finished"
             _warn_item_flagged(step.name, item, reason)
-        report.records.append(BatchItemRecord.from_item(item, position, item_results, reason))
-        if status is not ExecutionStatus.COMPLETED:
-            break
-
-    from squadron.pipeline.state import StateManager
-
-    # Written on every exit, including an all-flagged or stopped batch (D9).
-    # Off-thread: mkdir, YAML dump and file write are blocking I/O.
-    report_path = await asyncio.to_thread(
-        lambda: report.write(StateManager(runs_dir=runs_dir).runs_dir)
-    )
-    _logger.info("%s; report: %s", report.summary_line(), report_path)
+            report.records.append(BatchItemRecord.from_item(item, position, [], reason))
+        await _write_each_report(report, runs_dir)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,

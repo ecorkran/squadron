@@ -45,6 +45,7 @@ from squadron.pipeline.executor import (
     execute_pipeline,
     resolve_placeholders,
 )
+from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loader import (
@@ -380,6 +381,12 @@ async def _run_pipeline_sdk(
             f" at step '{exc.step_name}'.[/red]\n"
             f"Run state saved. Resume with: sq run --resume {_run_id}"
         )
+        raise typer.Exit(1) from exc
+    except GitEnvironmentError as exc:
+        # A git fault that every later item would hit too (wrong branch, dirty tree,
+        # unknown state) ends the run. State is saved; the operator fixes the checkout.
+        _logger.error("pipeline '%s' halted by a git environment fault: %s", pipeline_name, exc)
+        rprint(f"[red]Error: {exc}[/red]")
         raise typer.Exit(1) from exc
     finally:
         if session is not None:

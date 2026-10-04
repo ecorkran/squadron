@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -203,11 +204,13 @@ async def test_action_turns_a_failed_merge_into_an_item_failure(conflicting_repo
     assert "merge failed" in (result.error or "")
 
 
-def _fake_git(**overrides):  # type: ignore[no-untyped-def]
+def _fake_git(
+    **overrides: subprocess.CompletedProcess[str] | None,
+) -> Callable[..., subprocess.CompletedProcess[str] | None]:
     """A ``run_git`` that answers like git except for the commands named in ``overrides``."""
     from squadron.review.git_utils import run_git as real_run_git
 
-    def fake(args: list[str], *, cwd: str):  # type: ignore[no-untyped-def]
+    def fake(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
         key = args[0] if args[0] != "merge" else " ".join(args[:2])
         if key in overrides:
             return overrides[key]

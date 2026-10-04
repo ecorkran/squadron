@@ -256,63 +256,66 @@ status: in_progress
 
 ## Task 20 — cf worktree reader
 
-- [ ] Check `integrations/context_forge.py` for an existing `cf worktree list --json` reader; if absent add `list_worktrees()` returning entries with `worktreePath`
-  - [ ] A cf failure raises; no degrade
-- [ ] Add a test with a faked cf runner
-  - [ ] Success: test passes
-- [ ] Commit: `feat: add cf worktree list reader`
+- [x] Check `integrations/context_forge.py` for an existing `cf worktree list --json` reader; if absent add `list_worktrees()` returning entries with `worktreePath`
+  - [x] A cf failure raises; no degrade
+  - `ContextForgeClient.list_worktrees()` did not exist; added with `WorktreeEntry`, and `list_worktrees` added to `CfClientProtocol`.
+- [x] Add a test with a faked cf runner
+  - [x] Success: test passes
+- [x] Commit: `feat: add cf worktree list reader`
 
 ## Task 21 — `BranchOp` and `BranchStepType`
 
-- [ ] Create `steps/branch.py`: `BranchOp` StrEnum (`ENTER`, `MERGE`) and `BranchStepType` (D4)
-  - [ ] Validation requires `op`, accepts optional `slice` (default `{slice}`), rejects every other key
-  - [ ] Expands to one `branch` action
-- [ ] `steps/__init__.py`: add `StepTypeName.BRANCH` and the bootstrap import
-- [ ] Add tests: valid enter and merge, missing `op`, unknown key, bad op value
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add branch step type`
+- [x] Create `steps/branch.py`: `BranchOp` StrEnum (`ENTER`, `MERGE`) and `BranchStepType` (D4)
+  - [x] Validation requires `op`, accepts optional `slice` (default `{slice}`), rejects every other key
+  - [x] Expands to one `branch` action
+- [x] `steps/__init__.py`: add `StepTypeName.BRANCH` and the bootstrap import
+- [x] Add tests: valid enter and merge, missing `op`, unknown key, bad op value
+  - [x] Success: tests pass
+- [x] Commit: `feat: add branch step type`
 
 ## Task 22a — `BranchAction` enter: guards
 
-- [ ] Create `actions/branch.py` with enter logic in a function the CLI also calls (D4); implement D5 steps 1–5
-  - [ ] Environment failures raise `GitEnvironmentError`, logged at ERROR: cf failure, unregistered linked worktree, foreign branch, dirty tree (message lists paths and the D5.5 recovery text)
-  - [ ] Item failure (no design file) returns `ActionResult(success=False)`
-  - [ ] Guards run in D5 order and leave git state untouched when they fail
-- [ ] Add temp-repo tests, one per guard; each failing guard asserts branch and `git status` unchanged
-  - [ ] Success: tests pass; design criterion 5 holds
-- [ ] Commit: `feat: add branch enter guards`
+- [x] Create `actions/branch.py` with enter logic in a function the CLI also calls (D4); implement D5 steps 1–5
+  - [x] Environment failures raise `GitEnvironmentError`, logged at ERROR: cf failure, unregistered linked worktree, foreign branch, dirty tree (message lists paths and the D5.5 recovery text)
+  - [x] Item failure (no design file) returns `ActionResult(success=False)`
+  - [x] Guards run in D5 order and leave git state untouched when they fail
+  - Deviation: the git logic lives in `pipeline/branch_ops.py` (`enter_slice_branch`, `merge_slice_branch`) so the action and the future `sq _branch` share it; `actions/branch.py` is a thin wrapper. 22a and 22b landed in one commit (`feat: add branch enter with guards, switch and leftover preservation`); 23a and 23b in another (`feat: add branch merge that aborts failed merges back to a clean target`). After the state check passes on a failed checkout, enter raises `GitEnvironmentError` (D5 names only the missing design file as an item failure); a merge refusal or timeout with a settled target is `MergeFailedError` (item failure).
+- [x] Add temp-repo tests, one per guard; each failing guard asserts branch and `git status` unchanged
+  - [x] Success: tests pass; design criterion 5 holds
+- [x] Commit: `feat: add branch enter with guards, switch and leftover preservation`
 
 ## Task 22b — `BranchAction` enter: switch and leftover preservation
 
-- [ ] Add D5 steps 4 (another slice's branch) and 6 (switch) to the enter function
-  - [ ] On another slice's branch: commit leftovers as `chore: preserve uncommitted work on flagged slice {m}` (`stage_all` allowed there), checkout target, WARNING `left unmerged slice branch …`
-  - [ ] Existing slice branch → checkout; otherwise `git checkout -b {branch} {target}`
-  - [ ] Branch checked out in another worktree raises `GitEnvironmentError` with git's message, no force
-  - [ ] Other switch failures or a `run_git` timeout go to `verify_git_state` with the starting branch
-  - [ ] Outputs `{"branch", "target", "created"}`; no `--force`, `reset` or delete anywhere
-- [ ] Add temp-repo tests: new branch created from target; existing branch checked out; on another slice's branch with leftovers (committed, then target checked out, WARNING asserted); on another slice's branch clean; branch checked out elsewhere; `run_git` timeout
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add branch enter switch and leftover preservation`
+- [x] Add D5 steps 4 (another slice's branch) and 6 (switch) to the enter function
+  - [x] On another slice's branch: commit leftovers as `chore: preserve uncommitted work on flagged slice {m}` (`stage_all` allowed there), checkout target, WARNING `left unmerged slice branch …`
+  - [x] Existing slice branch → checkout; otherwise `git checkout -b {branch} {target}`
+  - [x] Branch checked out in another worktree raises `GitEnvironmentError` with git's message, no force
+  - [x] Other switch failures or a `run_git` timeout go to `verify_git_state` with the starting branch
+  - [x] Outputs `{"branch", "target", "created"}`; no `--force`, `reset` or delete anywhere
+- [x] Add temp-repo tests: new branch created from target; existing branch checked out; on another slice's branch with leftovers (committed, then target checked out, WARNING asserted); on another slice's branch clean; branch checked out elsewhere; `run_git` timeout
+  - [x] Success: tests pass
+- [x] Commit: `feat: add branch enter with guards, switch and leftover preservation`
 
 ## Task 23a — `BranchAction` merge: happy path and already merged
 
-- [ ] Implement D6 steps 1–5 in the same module
-  - [ ] Re-read the target; already-merged (on target, `merge-base --is-ancestor`) succeeds with `merged: "already"`
-  - [ ] Otherwise require the slice branch and a clean tree; `checkout target`; `merge --no-ff -m "merge: slice {index} — {name}"`
-  - [ ] Target checked out in another worktree raises `GitEnvironmentError`
-- [ ] Add temp-repo tests: clean merge with the expected message and checkout ending on target; already merged; wrong branch; dirty tree; target checked out elsewhere
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add branch merge`
+- [x] Implement D6 steps 1–5 in the same module
+  - [x] Re-read the target; already-merged (on target, `merge-base --is-ancestor`) succeeds with `merged: "already"`
+  - [x] Otherwise require the slice branch and a clean tree; `checkout target`; `merge --no-ff -m "merge: slice {index} — {name}"`
+  - [x] Target checked out in another worktree raises `GitEnvironmentError`
+- [x] Add temp-repo tests: clean merge with the expected message and checkout ending on target; already merged; wrong branch; dirty tree; target checked out elsewhere
+  - [x] Success: tests pass
+- [x] Commit: `feat: add branch merge that aborts failed merges back to a clean target`
 
 ## Task 23b — `BranchAction` merge: failure and abort path
 
-- [ ] Implement D6 step 6 and the state check wiring
-  - [ ] On any merge failure capture conflicted paths (`diff --name-only --diff-filter=U`), `merge --abort` if `MERGE_HEAD` exists, then `verify_git_state(target)`
-  - [ ] Passing check → item failure `merge failed: …; slice branch {branch} left unmerged`; failing check → `GitStateUnknownError` (ERROR log)
-  - [ ] A `run_git` timeout during checkout or merge goes to the same state check
-- [ ] Add temp-repo tests: conflict (target clean, no `MERGE_HEAD`, branch unmerged, conflicted paths listed); non-conflict refusal (untracked file overwritten); `merge --abort` failing; `run_git` `None` during checkout and during merge; each asserts the ERROR log plus `GitStateUnknownError`, or an item failure when the state check passes
-  - [ ] Success: tests pass; design criterion 6 holds
-- [ ] Commit: `feat: abort failed merges back to a clean target`
+- [x] Implement D6 step 6 and the state check wiring
+  - [x] On any merge failure capture conflicted paths (`diff --name-only --diff-filter=U`), `merge --abort` if `MERGE_HEAD` exists, then `verify_git_state(target)`
+  - [x] Passing check → item failure `merge failed: …; slice branch {branch} left unmerged`; failing check → `GitStateUnknownError` (ERROR log)
+  - [x] A `run_git` timeout during checkout or merge goes to the same state check
+  - Merge commit message uses the cf slice name: `merge: slice N — {name}`.
+- [x] Add temp-repo tests: conflict (target clean, no `MERGE_HEAD`, branch unmerged, conflicted paths listed); non-conflict refusal (untracked file overwritten); `merge --abort` failing; `run_git` `None` during checkout and during merge; each asserts the ERROR log plus `GitStateUnknownError`, or an item failure when the state check passes
+  - [x] Success: tests pass; design criterion 6 holds
+- [x] Commit: `feat: add branch merge that aborts failed merges back to a clean target`
 
 ## Task 24 — Halting run, `each` report, and batch composition
 
