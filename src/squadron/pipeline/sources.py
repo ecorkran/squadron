@@ -7,10 +7,12 @@ iterates over. Each item is a dict bound to the step's ``as:`` name.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.pipeline.loop_config import LoopCondition
@@ -20,6 +22,8 @@ from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_revie
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
 
+_logger = logging.getLogger(__name__)
+
 SourceFn = Callable[
     [list[str], "ContextForgeClient", dict[str, object]],
     Awaitable[list[dict[str, object]]],
@@ -28,6 +32,7 @@ SourceFn = Callable[
 SOURCE_REGISTRY: dict[tuple[str, str], SourceFn] = {}
 
 _SOURCE_RE = re.compile(r"(\w+)\.(\w+)\(([^)]*)\)")
+_LEADING_INT_RE = re.compile(r"\s*(\d+)")
 
 
 class CfSliceStatus(StrEnum):
@@ -60,7 +65,45 @@ def _slice_item(entry: SliceEntry) -> dict[str, object]:
         "name": entry.name,
         "status": entry.status,
         "design_file": entry.design_file or "",
+        "dependencies": _design_dependencies(entry),
     }
+
+
+def _design_dependencies(entry: SliceEntry) -> list[int]:
+    """The slice indices *entry*'s design lists under ``dependencies:`` (slice 196 D9).
+
+    Parsing is lenient: each element is taken as its leading integer, so ``195``,
+    ``"195"`` and ``"195-slice.foo"`` all give 195. An element with no leading integer
+    is dropped with a WARNING naming the slice and the value, never silently. A slice
+    with no design has no dependencies.
+    """
+    if not entry.design_file:
+        return []
+    path = Path(entry.design_file)
+    if not path.is_file():
+        _logger.warning(
+            "slice %d: design file %s not found; its dependencies were not read",
+            entry.index,
+            entry.design_file,
+        )
+        return []
+    frontmatter = read_frontmatter(path)
+    raw = frontmatter.get("dependencies") if frontmatter is not None else None
+    if raw is None:
+        return []
+    elements = cast(list[object], raw) if isinstance(raw, list) else [raw]
+    dependencies: list[int] = []
+    for element in elements:
+        match = _LEADING_INT_RE.match(str(element))
+        if match is None:
+            _logger.warning(
+                "slice %d: dependency %r has no leading slice index; dropped",
+                entry.index,
+                element,
+            )
+            continue
+        dependencies.append(int(match.group(1)))
+    return dependencies
 
 
 async def _cf_unfinished_slices(

@@ -8,11 +8,16 @@ the subprocess boundary is stubbed.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 import pytest
 
-from squadron.integrations.context_forge import ContextForgeClient
+from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
+from squadron.pipeline.sources import (  # pyright: ignore[reportPrivateUsage]
+    _design_dependencies,
+    _slice_item,
+)
 
 _SLICES_DIR = "project-documents/user/slices/"
 
@@ -156,6 +161,7 @@ class TestUndesignedSlices:
             "name": "Test Suite Machine-State Isolation",
             "status": "not_started",
             "design_file": "",
+            "dependencies": [],
         }
 
     def test_registered(self) -> None:
@@ -301,3 +307,71 @@ class TestUntaskedSlices:
 
         with pytest.raises(ValueError, match=match):
             await _cf_untasked_slices(args, StubCfClient(), {})
+
+
+class TestSliceDependencies:
+    """Slice 196 D9: dependencies come from the design's frontmatter, leniently parsed."""
+
+    def _entry(self, design_file: str | None, index: int = 196) -> SliceEntry:
+        return SliceEntry(index=index, name="Slice", design_file=design_file, status="not_started")
+
+    def _design(self, tmp_path: Path, frontmatter_line: str | None) -> str:
+        lines = ["---", "docType: slice-design"]
+        if frontmatter_line is not None:
+            lines.append(frontmatter_line)
+        design = tmp_path / "196-slice.example.md"
+        design.write_text("\n".join([*lines, "---", "", "body", ""]), encoding="utf-8")
+        return str(design)
+
+    def test_integer_elements(self, tmp_path: Path) -> None:
+        design = self._design(tmp_path, "dependencies: [195, 181]")
+        assert _design_dependencies(self._entry(design)) == [195, 181]
+
+    def test_string_and_prefixed_string_elements(self, tmp_path: Path) -> None:
+        design = self._design(tmp_path, 'dependencies: ["195", "181-slice.pool-resolver", 149]')
+        assert _design_dependencies(self._entry(design)) == [195, 181, 149]
+
+    def test_element_without_a_leading_integer_is_dropped_with_a_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        design = self._design(tmp_path, "dependencies: [195, foundation]")
+
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.sources"):
+            result = _design_dependencies(self._entry(design))
+
+        assert result == [195]
+        assert any("slice 196" in r.message and "foundation" in r.message for r in caplog.records)
+
+    def test_no_design_file_means_no_dependencies(self) -> None:
+        assert _design_dependencies(self._entry(None)) == []
+        assert _design_dependencies(self._entry("")) == []
+
+    def test_no_dependencies_key(self, tmp_path: Path) -> None:
+        design = self._design(tmp_path, None)
+        assert _design_dependencies(self._entry(design)) == []
+
+    def test_empty_list(self, tmp_path: Path) -> None:
+        design = self._design(tmp_path, "dependencies: []")
+        assert _design_dependencies(self._entry(design)) == []
+
+    def test_a_scalar_value_is_read_as_one_element(self, tmp_path: Path) -> None:
+        design = self._design(tmp_path, "dependencies: 195")
+        assert _design_dependencies(self._entry(design)) == [195]
+
+    def test_missing_design_file_warns_and_reads_none(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.sources"):
+            result = _design_dependencies(self._entry(str(tmp_path / "gone.md")))
+
+        assert result == []
+        assert any("not found" in r.message for r in caplog.records)
+
+    def test_the_real_195_design_parses(self) -> None:
+        """The format the parser meets in production, not a hand-built fixture."""
+        design = next(Path("project-documents/user/slices").glob("195-slice.*.md"))
+        assert _design_dependencies(self._entry(str(design), index=195)) == [194, 181, 909, 927]
+
+    def test_slice_item_carries_the_dependencies(self, tmp_path: Path) -> None:
+        design = self._design(tmp_path, "dependencies: [195]")
+        assert _slice_item(self._entry(design))["dependencies"] == [195]

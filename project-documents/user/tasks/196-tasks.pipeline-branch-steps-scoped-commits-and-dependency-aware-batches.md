@@ -319,42 +319,45 @@ status: in_progress
 
 ## Task 24 — Halting run, `each` report, and batch composition
 
-- [ ] `_execute_each_step` writes its batch report in a `finally` so a `GitEnvironmentError` still produces it (D6 last paragraph)
-- [ ] Confirm `GitEnvironmentError` propagates out of `execute_pipeline` the way `LazySessionConnectError` does, and `sq run` exits 1 with the message
-- [ ] Add tests
-  - [ ] A halted `each` run writes its report with items recorded so far
-  - [ ] `sq run` exits 1 and prints the message
-  - [ ] Design criterion 7a: a two-item `each → enter → implement → merge` composition (fake dispatch) where item 1's implement fails: item 1 FLAGGED on its slice branch with leftovers committed; item 2's enter returns to the target with a WARNING; item 2 runs and merges
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: write the batch report on a halted run`
+- [x] `_execute_each_step` writes its batch report in a `finally` so a `GitEnvironmentError` still produces it (D6 last paragraph)
+    - A halted `each` records the in-flight item as FLAGGED with 'run halted before this item finished'; the report write is `_write_each_report`, called from a `finally`. `sq run` handles `GitEnvironmentError` in `_run_pipeline_sdk` (logs ERROR, prints the message, exit 1).
+- [x] Confirm `GitEnvironmentError` propagates out of `execute_pipeline` the way `LazySessionConnectError` does, and `sq run` exits 1 with the message
+- [x] Add tests
+  - [x] A halted `each` run writes its report with items recorded so far
+  - [x] `sq run` exits 1 and prints the message
+  - [x] Design criterion 7a: a two-item `each → enter → implement → merge` composition (fake dispatch) where item 1's implement fails: item 1 FLAGGED on its slice branch with leftovers committed; item 2's enter returns to the target with a WARNING; item 2 runs and merges
+  - [x] Success: tests pass
+- [x] Commit: `feat: write the batch report on a halted run`
 
 ## Task 25 — Loader rule: `implement` needs a preceding enter
 
-- [ ] `pipeline/loader.py` `validate_pipeline` reports `implement step {name} needs a preceding branch: {op: enter}` (D4)
-  - [ ] An enter counts if earlier in the implement's own list, or earlier in any enclosing list than the `loop:`/`each:` containing it; an enter in a sibling container does not count
-- [ ] Add tests: flat valid and invalid; enter before a containing `each`/`loop` valid; enter inside the container before the implement valid; enter only in a sibling container invalid; error text names the fix
-  - [ ] Success: tests pass; design criterion 7 holds
-- [ ] Commit: `feat: require branch enter before implement steps`
+- [x] `pipeline/loader.py` `validate_pipeline` reports `implement step {name} needs a preceding branch: {op: enter}` (D4)
+    - Rule lives in `pipeline/branch_rules.py` (`implement_branch_errors`) and is called from `validate_pipeline`.
+  - [x] An enter counts if earlier in the implement's own list, or earlier in any enclosing list than the `loop:`/`each:` containing it; an enter in a sibling container does not count
+- [x] Add tests: flat valid and invalid; enter before a containing `each`/`loop` valid; enter inside the container before the implement valid; enter only in a sibling container invalid; error text names the fix
+  - [x] Success: tests pass; design criterion 7 holds
+- [x] Commit: `feat: require branch enter before implement steps`
 
 ## Task 26 — Hidden `sq _branch` and prompt-only rendering
 
-- [ ] Create `cli/commands/branch_run.py`, register in `cli/app.py`: `sq _branch enter|merge --slice N`
-  - [ ] Calls the same functions as `BranchAction`; prints `on <branch> (created from <target>)` or the merge result; exits 1 with the action's error text
-- [ ] `prompt_renderer.py` renders branch steps as `sq _branch enter --slice N` / `sq _branch merge --slice N`
-- [ ] Add tests: CLI and action produce the same branch and outcome in a temp repo; renderer output contains the commands
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add sq _branch and render branch steps for prompt-only runs`
+- [x] Create `cli/commands/branch_run.py`, register in `cli/app.py`: `sq _branch enter|merge --slice N`
+  - [x] Calls the same functions as `BranchAction`; prints `on <branch> (created from <target>)` or the merge result; exits 1 with the action's error text
+- [x] `prompt_renderer.py` renders branch steps as `sq _branch enter --slice N` / `sq _branch merge --slice N`
+- [x] Add tests: CLI and action produce the same branch and outcome in a temp repo; renderer output contains the commands
+  - [x] Success: tests pass
+- [x] Commit: `feat: add sq _branch and render branch steps for prompt-only runs`
 
 ## Task 27 — Built-in pipelines gain branch steps
 
-- [ ] Reorder `data/pipelines/P6.yaml`, `implement.yaml`, `P456.yaml`, `P56.yaml` to `branch enter → implement → devlog → branch merge → summary` (D7)
-  - [ ] Keep `checkpoint: on-fail` in P6 and `implement`; planning steps in P456 and P56 stay on the target (D8)
-- [ ] Add tests
-  - [ ] All four load and validate; step order as specified
-  - [ ] A repo-wide test that every built-in pipeline with an `implement` step passes the Task 25 rule
-  - [ ] Design criterion 4: a P6 run with fake dispatch and review in a temp repo asserts `_find_slice_branch` (`review/git_utils.py`) resolves the slice branch while on the entered branch, the code review's diff range resolves, and the run ends on the target with `merge: slice N — <name>`
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: wire branch enter and merge into code pipelines`
+- [x] Reorder `data/pipelines/P6.yaml`, `implement.yaml`, `P456.yaml`, `P56.yaml` to `branch enter → implement → devlog → branch merge → summary` (D7)
+    - Test-only fixture `tests/pipeline/fixtures/pipelines/slice.yaml` and the tests that count its steps were updated for the new enter/merge steps (12 steps, was 10).
+  - [x] Keep `checkpoint: on-fail` in P6 and `implement`; planning steps in P456 and P56 stay on the target (D8)
+- [x] Add tests
+  - [x] All four load and validate; step order as specified
+  - [x] A repo-wide test that every built-in pipeline with an `implement` step passes the Task 25 rule
+  - [x] Design criterion 4: a P6 run with fake dispatch and review in a temp repo asserts `_find_slice_branch` (`review/git_utils.py`) resolves the slice branch while on the entered branch, the code review's diff range resolves, and the run ends on the target with `merge: slice N — <name>`
+  - [x] Success: tests pass
+- [x] Commit: `feat: wire branch enter and merge into code pipelines`
 
 ## Task 28 — Part D checkpoint
 
