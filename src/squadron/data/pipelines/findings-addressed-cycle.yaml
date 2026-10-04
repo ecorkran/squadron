@@ -8,6 +8,11 @@ params:
   judge-model: sonnet
 
 steps:
+  # Review first: the revise step needs findings to work from.
+  - review:
+      template: slice
+      model: "{review-model}"
+      slice: "{slice}"
   - loop:
       max: 3
       until: review.pass
@@ -17,8 +22,8 @@ steps:
       steps:
         - dispatch:
             name: revise
-            prompt: "Address the findings from the prior review."
             model: "{model}"
+            feedback: review
 
         # Assessor — structurally blind to prior rounds.
         - review:

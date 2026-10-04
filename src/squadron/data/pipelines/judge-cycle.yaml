@@ -7,13 +7,22 @@ params:
   review-model: minimax
 
 steps:
+  # Judge first: the fix step needs findings to work from.
+  - review:
+      template: judge.slice-vs-arch
+      model: "{review-model}"
+      slice: "{slice}"
   - loop:
       max: 3
       until: review.pass
+      skip_if_met: true
       on_exhaust: checkpoint
       steps:
         - dispatch:
+            name: revise
             model: "{model}"
+            feedback: review
         - review:
             template: judge.slice-vs-arch
             model: "{review-model}"
+            slice: "{slice}"

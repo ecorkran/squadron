@@ -63,13 +63,15 @@ async def _run_judge_cycle(
     issue-#18 missing-input hard-fail; `resolve_slice_info` is mocked only to
     point at them, not to fabricate the judge verdict path. `judge_override`,
     when given, is injected into the loop body's review step config — the
-    exact step-level `judge:` override a user would write.
+    exact step-level `judge:` override a user would write, on both the
+    opening review and the loop body's review.
     """
     bootstrap_step_types()
 
     definition = load_pipeline("judge-cycle", project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
     if judge_override is not None:
-        loop_config = definition.steps[0].config
+        definition.steps[0].config["judge"] = judge_override
+        loop_config = definition.steps[1].config
         loop_config["steps"][1]["review"]["judge"] = judge_override
 
     design_file = tmp_path / "303-slice.md"
@@ -110,10 +112,11 @@ class TestJudgeCycleAutoAdvance:
         # 90 clears judge.slice-vs-arch's default pass_floor (82).
         result = await _run_judge_cycle(dispatch_mock, tmp_path, score=90.0)
 
+        # The opening review passes, so the fix loop is skipped outright.
         assert result.status == ExecutionStatus.COMPLETED
-        loop_result = result.step_results[0]
-        assert loop_result.iteration == 1
-        assert dispatch_mock.execute.await_count == 1
+        loop_result = result.step_results[1]
+        assert loop_result.iteration == 0
+        assert dispatch_mock.execute.await_count == 0
 
 
 class TestJudgeCycleEscalates:
@@ -125,7 +128,7 @@ class TestJudgeCycleEscalates:
         result = await _run_judge_cycle(dispatch_mock, tmp_path, score=40.0)
 
         assert result.status == ExecutionStatus.PAUSED
-        loop_result = result.step_results[0]
+        loop_result = result.step_results[1]
         assert loop_result.status == ExecutionStatus.PAUSED
         assert dispatch_mock.execute.await_count == 3
 
@@ -149,6 +152,6 @@ class TestJudgeCycleAdvisoryAlwaysEscalates:
         )
 
         assert result.status == ExecutionStatus.PAUSED
-        loop_result = result.step_results[0]
+        loop_result = result.step_results[1]
         assert loop_result.status == ExecutionStatus.PAUSED
         assert dispatch_mock.execute.await_count == 3

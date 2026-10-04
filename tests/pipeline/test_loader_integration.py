@@ -97,8 +97,11 @@ class TestBuiltInPipelineStructure:
             project_dir=_NONEXISTENT,
             user_dir=_NONEXISTENT,
         )
-        assert len(defn.steps) == 1
-        loop_step = defn.steps[0]
+        # The judge runs first so the fix step has findings to work from.
+        assert len(defn.steps) == 2
+        assert defn.steps[0].step_type == "review"
+        assert defn.steps[0].config["template"] == "judge.slice-vs-arch"
+        loop_step = defn.steps[1]
         assert loop_step.step_type == "loop"
         assert loop_step.config["max"] >= 1
         assert loop_step.config["until"] == "review.pass"
@@ -107,5 +110,6 @@ class TestBuiltInPipelineStructure:
         body = loop_step.config["steps"]
         assert len(body) == 2
         assert next(iter(body[0])) == "dispatch"
+        assert body[0]["dispatch"]["feedback"] == "review"
         assert next(iter(body[1])) == "review"
         assert body[1]["review"]["template"] == "judge.slice-vs-arch"
