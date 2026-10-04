@@ -5,7 +5,7 @@ project: squadron
 archIndex: 180
 component: pipeline-intelligence
 dateCreated: 20260327
-dateUpdated: 20260926
+dateUpdated: 20261004
 status: in_progress
 ---
 
@@ -37,7 +37,20 @@ Every capability in this initiative plugs into extension points defined in 140:
 | Conversation persistence | `persistence` field on steps |
 | Finding matching | Structured findings JSON from review action |
 
-180 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes. The exception is the batch-pipeline slices (194, 195). They extend 140's engine and grammar directly with the `loop:` step, per-item `each` isolation, loop thresholds, and review feedback on dispatch, so that each batch phase is a YAML file rather than an engine change.
+180 registers new strategies, new resolver backends, and new action behaviors through the registries 140 establishes. The exception is the batch-pipeline slices (194–197). They extend 140's engine and grammar directly, so that each batch phase is a YAML file rather than an engine change:
+- 194 and 195 add the `loop:` step, per-item `each` isolation, loop thresholds, and review feedback on dispatch.
+- 196 adds the `branch:` step, scoped commits, dependency flags in `each`, and `existing: keep` on phase steps.
+- 197 composes these into the Phase 6 batch.
+
+### Git-Mutating Steps
+
+Steps that write to git (`commit`, `branch enter`, `branch merge`) follow the project's git rules:
+- The target is `git.integration_branch`, else `main`, read strictly. A failed read never becomes `main`.
+- Planning commits land on the target. Code lands on `{index}-slice.{name}` and merges back with `--no-ff`.
+- Commits stage only what the step produced, except code on its own slice branch.
+- These steps never force, reset, delete a branch, push, or merge beyond one level.
+- A failed merge is aborted back to a clean target.
+- When the repository state can't be verified, the run stops rather than letting later work build on it.
 
 ---
 
@@ -699,7 +712,7 @@ Everything. Specifically:
 
 ### Out of Scope
 
-- Changes to 140's pipeline grammar beyond the general batch-pipeline pieces added by 194 and 195 (otherwise only registration of new strategies/behaviors)
+- Changes to 140's pipeline grammar beyond the general batch-pipeline pieces added by 194–197 (otherwise only registration of new strategies/behaviors)
 - Changes to the review system's core models (builds on existing `ReviewFinding`)
 - Multi-agent communication topology (that's initiative 200)
 - GUI for convergence visualization (useful but separate)

@@ -52,7 +52,6 @@ This slice fixes all five as general engine pieces, and adds branch steps to the
 - Merging a worktree's branch into a wider integration branch or into `main`. The rules reserve that for the PM.
 - A cf-side `dependencies` field on `cf list slices --json`. See D9.
 - Re-review selection for `slices-plan`. Its flagged slices already resurface through `tasks-plan`'s design-review flag (195 D1).
-- The DEVLOG step's uncommitted output. `devlog` doesn't commit today, and this slice doesn't change that.
 
 ## Dependencies
 
@@ -84,6 +83,7 @@ pipeline/
   steps/branch.py          NEW   BranchStepType, BranchOp StrEnum                 (b)
   steps/__init__.py        CHANGED StepTypeName.BRANCH; bootstrap import
   steps/phase.py           CHANGED commit config carries artifact kind + target; existing: keep  (a, d)
+  steps/devlog.py          CHANGED expand appends a DEVLOG-scoped commit (a)
   actions/dispatch.py      CHANGED existing: keep → skip when artifact exists     (d)
   events/builtin/dispatch_artifact.py  CHANGED skipped dispatch passes the post-condition (d)
   executor.py              CHANGED loop-round commit passes round results; each dependency flags;
@@ -94,7 +94,7 @@ pipeline/
   resolver.py              CHANGED _resolved raises UnknownModelAliasError (#175 backstop)
   prompt_renderer.py       CHANGED commit renders `sq _commit …`; branch renders `sq _branch …` (a, b)
 review/
-  git_utils.py             CHANGED read_integration_target() (strict), slice branch helpers (b)
+  git_utils.py             CHANGED read_integration_target() (strict), verify_git_state(), GitEnvironmentError/GitStateUnknownError (b)
   coverage.py              CHANGED impose_output_coverage()                       (#152)
   review_client.py         CHANGED call impose_output_coverage beside impose_diff_coverage (#152)
 models/aliases.py          CHANGED UnknownModelAliasError, require_known_model() with close matches (#175)
@@ -112,21 +112,25 @@ data/pipelines/
 
 ```
 branch op=enter slice=105
-  target = cf config git.integration_branch or "main"   (cf failure → FAILED, never "main")
-  guard: unregistered linked worktree → FAILED
-  guard: current branch ∉ {target, 105-slice.<name>} → FAILED
-  guard: dirty tree → FAILED (lists paths)
+  target = cf config git.integration_branch or "main"   (cf failure → halt run, never "main")
+  guard: unregistered linked worktree → halt run
+  guard: current branch ∉ {target, 105-slice.<name>} → halt run
+  guard: dirty tree → halt run (lists paths + recovery)
+  guard: no design file → item FAILED
   105-slice.<name> exists? checkout : checkout -b 105-slice.<name> <target>
 implement (phase 6)
   cf-ops → dispatch → review(code)   ← diff range now resolves via _find_slice_branch
   checkpoint on-fail
   commit  CommitPlan(STAGE_ALL, on 105-slice.<name>) → "feat: implement slice 105 (review: PASS)"
+devlog → commit DEVLOG.md on 105-slice.<name> → "docs: add DEVLOG entry for slice 105"
 branch op=merge slice=105
   re-read target; guard: on slice branch or already merged
-  guard: target checked out in another worktree → FAILED
+  guard: target checked out in another worktree → halt run
   checkout <target>; merge --no-ff -m "merge: slice 105 — <name>"
-  conflict → merge --abort, stay on <target> (clean), FAILED naming the conflicted paths
-summary → devlog
+  any failure → abort if MERGE_HEAD → state check
+    check passes → item FAILED (slice branch left unmerged, target clean)
+    check fails  → GitStateUnknownError, ERROR, halt run
+summary  (file emit goes outside the repo)
 ```
 
 **Design commit in a P4 loop round 2:**
@@ -168,6 +172,7 @@ class CommitSubject(StrEnum):      # what the commit is about
     TASKS = "tasks"
     ARCHITECTURE = "architecture"
     CODE = "code"
+    DEVLOG = "devlog"
 
 @dataclass(frozen=True)
 class CommitTarget:
@@ -187,7 +192,7 @@ class CommitPlan:
 def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtocol) -> CommitPlan: ...
 ```
 
-- **Candidate paths** for DESIGN or TASKS: `expected_artifact_paths(kind, slice, cf)`, plus the review file `REVIEWS_DIR / slice_review_stem(index, template, slice_name_for(...))`, the slice plan file (`cf list slices --json` → `slicePlan`), and `DEVLOG.md`. For ARCHITECTURE: `resolve_arch_file(plan)`, its review file, and `DEVLOG.md`.
+- **Candidate paths** for DESIGN or TASKS: `expected_artifact_paths(kind, slice, cf)`, plus the review file `REVIEWS_DIR / slice_review_stem(index, template, slice_name_for(...))`, the slice plan file (`cf list slices --json` → `slicePlan`), and `DEVLOG.md`. For ARCHITECTURE: `resolve_arch_file(plan)`, its review file, and `DEVLOG.md`. For DEVLOG: `DEVLOG.md` only.
 - **Staged = candidates ∩ `git status --porcelain`** (modified, added, or untracked). Paths are computed, never searched. This is the same rule `_design_review_flag` follows.
 - **The verdict** is read from the review file's frontmatter (`read_frontmatter`, the reader `sources.py` uses). It is never taken from the in-memory result. The SDK executor and prompt-only mode then read the same value.
 - **One builder, two callers.** `CommitAction` calls it with the target derived from its config and context. The hidden `sq _commit --subject design --slice 105 --template slice --round 2` CLI calls it for prompt-only, which can't compute paths at render time because the design file doesn't exist yet. Keeping the logic in one function keeps CLI and SDK results identical.
@@ -204,6 +209,7 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
 | review only, round n | `review: re-review slice 105 tasks, round 2 (CONCERNS)` |
 | CODE | `feat: implement slice 105 (review: PASS)` |
 | initiative-scoped | `docs: revise initiative 180 architecture (review: PASS)` |
+| DEVLOG (devlog step) | `docs: add DEVLOG entry for slice 105` |
 
 - "add" versus "revise" comes from the artifact's porcelain status: untracked or added means "add", modified means "revise".
 - The review clause is omitted when no review file is staged.
@@ -231,14 +237,23 @@ Code changes can touch any file, so a CODE plan has `stage_all=True`. `CommitAct
 
 ### D5: `branch enter`
 
-Steps, in order, each failing the action with a message that names the fact:
+**Two failure classes.**
+- **Environment failures** raise `GitEnvironmentError`. These are a cf read failure, an unregistered worktree, being on the wrong branch, a dirty tree, and a branch checked out elsewhere. Each one would hit every later item in a batch too, so it ends the run instead of flagging one item. It is logged at ERROR and propagates out of `execute_pipeline`, the same path `LazySessionConnectError` takes, so `sq run` exits 1 with the message.
+- **Item failures** return `ActionResult(success=False)`, so `each` flags the item and continues. The only one at enter is a slice with no design file.
+
+Steps, in order, each with a message that names the fact:
 
 1. **Target:** `read_integration_target(cf_client)`, a new strict reader in `git_utils.py`. Unset (`""`) means `main`. A cf failure raises. `resolve_diff_base`'s degrade-to-main behavior is wrong for a write operation and is not reused.
 2. **Unregistered worktree:** when `git rev-parse --git-dir` differs from `--git-common-dir` (a linked worktree) and no `cf worktree list --json` entry has `worktreePath` equal to the git root: `"unregistered worktree {root}: integration target belongs to the primary checkout"`.
 3. **Branch name:** `{index}-slice.{name}`, where `name` is the design file's stem without its `{index}-slice.` prefix. This is the same name the git rules and the existing branches use (`195-slice.plan-batch-…`). With no design file: `"slice {n} has no design file; cannot name its branch"`.
 4. **Current branch** must be the target or that slice branch: `"on {branch}, expected {target} or {slice_branch}"`.
-5. **Clean tree:** `git status --porcelain` must be empty: `"working tree not clean: {paths}"`. Phase 4/5 commits are now scoped (D1), so unrelated edits stay in the tree and stop Phase 6 here. That is deliberate: implement stages everything (D3).
-6. **Switch:** if the slice branch exists, `git checkout {branch}`. Otherwise `git checkout -b {branch} {target}`. If git reports the branch is checked out in another worktree, the action fails with git's message and does not force.
+5. **Clean tree:** `git status --porcelain` must be empty. Phase 4/5 commits are now scoped (D1), so unrelated edits stay in the tree and stop Phase 6 here. That is deliberate, because implement stages everything (D3).
+   - The message lists the paths and the recovery: `"working tree not clean: {paths}. Commit or remove them, then rerun phase 6 for slice {n}; design and tasks commits from this run are kept."`
+   - Every path an earlier scoped commit in the run left out was already named in that commit's WARNING (D2), so the operator can connect the two.
+   - In P456 and P56 this ends the run after the planning commits. The rerun is the phase-6 pipeline on the same slice. `--resume` applies only to paused runs, and a dirty tree isn't a checkpoint decision.
+6. **Switch:** if the slice branch exists, `git checkout {branch}`. Otherwise `git checkout -b {branch} {target}`.
+   - If git reports the branch is checked out in another worktree, the action raises `GitEnvironmentError` with git's message and does not force.
+   - Any other failure, or a timeout (`run_git` returns `None`), goes to the D6 state check with the expected branch set to the starting branch.
 
 Outputs: `{"branch", "target", "created": bool}`.
 
@@ -247,15 +262,38 @@ Outputs: `{"branch", "target", "created": bool}`.
 1. Re-read the target (D5.1). It is never taken from the enter step's output.
 2. **Already merged** (the implement agent follows the same git rules and may merge on its own): if the current branch is the target and `git merge-base --is-ancestor {slice_branch} {target}`, the action succeeds with `merged: "already"`.
 3. Otherwise the current branch must be the slice branch, and the tree must be clean.
-4. `git checkout {target}`. If that fails (for example because the target is checked out in another worktree), the action fails with git's message.
+4. `git checkout {target}`. If the target is checked out in another worktree, raise `GitEnvironmentError`. Any other failure or a timeout goes to the state check, with the slice branch as the expected branch.
 5. `git merge --no-ff -m "merge: slice {index} — {name}" {slice_branch}`. This matches the repo's existing merge commits (`merge: slice 920 — …`).
-6. **Conflict:** `git merge --abort`, stay on the clean target, and fail with `"merge conflict in {paths}; slice branch {branch} left unmerged"`. Aborting keeps the target clean, so the next item (in 197) can branch from it.
+6. **Any merge failure** (a conflict, a refusal such as untracked files that would be overwritten, or a timeout):
+   - If `MERGE_HEAD` exists, run `git merge --abort`.
+   - Then run the state check with the target as the expected branch.
+   - If the check passes, it's an item failure: `"merge failed: {git stderr, or 'git timed out'}; slice branch {branch} left unmerged"`. A conflict lists the conflicted paths, taken from `git diff --name-only --diff-filter=U` before the abort.
+   - Aborting keeps the target clean, so the next item (in 197) can branch from it.
+
+**State check** (`verify_git_state(expected_branch)` in `git_utils.py`), shared by enter, merge, and the commit action:
+- It passes only when all three reads succeed:
+  - `git rev-parse -q --verify MERGE_HEAD` finds nothing.
+  - The current branch is the expected branch.
+  - `git status --porcelain --untracked-files=no` is empty.
+- Any failed or timed-out read, a failed `merge --abort`, or a mismatch raises `GitStateUnknownError` (a `GitEnvironmentError`).
+  - The error names what was observed, for example `"target state unknown after merge of 105-slice.foo: MERGE_HEAD present, abort failed: …"`.
+  - It is logged at ERROR and ends the run (D5). No later item builds on a target in an unknown state.
+
+**Commit action:** a `git add` or `git commit` that exits non-zero with stderr (for example, a hook rejection) stays an ordinary action failure carrying that stderr. A timeout (`run_git` returns `None`) means nobody knows whether the commit landed, or whether `index.lock` is still held. It raises `GitStateUnknownError`.
+
+**Batch report on a halted run:** `_execute_each_step` writes its report in a `finally`, so a `GitEnvironmentError` still produces the report, with the items recorded so far. Today the report is written after the loop, which an exception skips.
 
 ### D7: Pipelines gain branch steps
 
-P6, `implement`, P456 and P56 add `branch: { op: enter }` immediately before `implement`, and `branch: { op: merge }` immediately after it, before `summary` and `devlog`.
+P6, `implement`, P456 and P56 are reordered to:
 
-- The `devlog` output stays uncommitted on the target, as it is today. Putting `devlog` before merge would dirty the tree and fail D6.3.
+```
+branch enter → implement → devlog → branch merge → summary
+```
+
+- **`devlog` commits its own entry.** `DevlogStepType.expand()` appends a commit action with `CommitSubject.DEVLOG`. Its plan stages only `DEVLOG.md`, with the message `docs: add DEVLOG entry for slice {n}` (`docs: add DEVLOG entry` with no slice). This holds in every pipeline.
+  - In code pipelines the entry lands on the slice branch and merges with the slice. The merge then sees a clean tree (D6.3), and so does the next run's enter (D5.5).
+- **`summary` runs last.** Its `file` emit writes under `~/.config/squadron/runs/summaries`, outside the repo, so it never dirties the tree.
 - P6 and `implement` keep `checkpoint: on-fail`. A FAIL code review pauses before the merge. A CONCERNS review merges. That is the pipeline's existing accept rule, now applied to the merge.
 
 ### D8: Planning commits stay on the target
@@ -316,7 +354,7 @@ Phase 4/5 steps and their loops don't branch (git rules: planning work commits t
 ### Patterns and Conventions
 
 - New enums (`BranchOp`, `CommitSubject`, `ExistingArtifactPolicy`) are StrEnums, defined once and referenced everywhere. No string literals are compared.
-- Git calls go through `run_git`. Every failure path returns `ActionResult(success=False, error=…)` with the git stderr included, and logs at WARNING. None of them swallow the failure.
+- Git calls go through `run_git`. Item failures return `ActionResult(success=False, error=…)` with git's stderr (or "git timed out"), logged at WARNING. Environment and unknown-state failures raise `GitEnvironmentError` / `GitStateUnknownError`, logged at ERROR. Nothing is swallowed.
 - Paths are computed from cf and persistence helpers, never globbed.
 
 ## Implementation Details
@@ -378,6 +416,7 @@ Both print what they did on stdout (`committed <sha> <message>` / `on 105-slice.
 - Tests also cover dependency flagging (direct, transitive, a dependency outside the run, a bad element), `existing: keep` (skip and post-condition pass), `impose_output_coverage`, `require_known_model` (alias, model id, profile source, close matches), and the `-v` label.
 - Update the existing exact-equality `expand()` tests for the phase step's commit config.
 - Every git test runs in a temporary repo created by the test, never the project checkout.
+- Failure-path tests: `run_git` returning `None` during merge, checkout and commit; `merge --abort` failing; a non-conflict merge refusal; each path asserts the ERROR log and `GitStateUnknownError`, or an item failure when the state check passes. An `each` run halted by `GitEnvironmentError` still writes its report.
 - `docs/PIPELINES.md` documents `branch:`, `existing: keep`, the source rename, and the commit message rules.
 - ruff format, ruff check, and pyright are all clean.
 
