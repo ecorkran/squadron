@@ -68,6 +68,14 @@ def slice_branch_name(index: int, design_file: str | None) -> str:
     return stem if stem.startswith(prefix) else f"{prefix}{stem}"
 
 
+def current_branch(cwd: str) -> str:
+    """The checked-out branch, or ``(detached HEAD)``; raises when git cannot say."""
+    result = run_git(["branch", "--show-current"], cwd=cwd)
+    if result is None or result.returncode != 0:
+        raise GitEnvironmentError(f"cannot read the current branch: {_failure_text(result)}")
+    return result.stdout.strip() or _DETACHED_HEAD
+
+
 def verify_git_state(expected_branch: str, *, cwd: str) -> None:
     """Raise ``GitStateUnknownError`` unless the repository is demonstrably settled.
 

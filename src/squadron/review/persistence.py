@@ -53,11 +53,12 @@ class SliceInfo(TypedDict):
 
 
 class CfClientProtocol(Protocol):
-    """Minimal duck-type protocol for CF client used by resolve_slice_info."""
+    """Minimal duck-type protocol for the CF client (slice resolution and config reads)."""
 
     def list_slices(self) -> list[Any]: ...
     def list_tasks(self) -> list[Any]: ...
     def get_project(self) -> Any: ...
+    def get_config(self, key: str) -> str: ...
 
 
 @runtime_checkable

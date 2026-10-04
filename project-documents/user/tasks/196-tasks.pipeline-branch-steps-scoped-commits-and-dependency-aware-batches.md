@@ -161,30 +161,32 @@ status: in_progress
 
 ## Task 13 — `commit_plan.py`: types and subject mapping
 
-- [ ] Create `pipeline/commit_plan.py` with `CommitSubject`, `CommitTarget`, `CommitPlan` (D1)
-- [ ] Define the template→subject map once (`slice`→DESIGN, `tasks`→TASKS, `code`→CODE, `arch`→ARCHITECTURE) with a lookup function that raises on an unmapped template; the executor and the prompt renderer both use it
-  - [ ] Success: no string literals compared elsewhere; pyright clean
-- [ ] Commit: `feat: add commit plan types and template-to-subject map`
+- [x] Create `pipeline/commit_plan.py` with `CommitSubject`, `CommitTarget`, `CommitPlan` (D1)
+- [x] Define the template→subject map once (`slice`→DESIGN, `tasks`→TASKS, `code`→CODE, `arch`→ARCHITECTURE) with a lookup function that raises on an unmapped template; the executor and the prompt renderer both use it
+  - [x] Success: no string literals compared elsewhere; pyright clean
+- [x] Commit: `feat: add commit plan types and template-to-subject map`
 
 ## Task 14a — `build_commit_plan`: candidates and staging
 
-- [ ] Implement `build_commit_plan(target, cwd, cf_client)` paths and verdict (D1)
-  - [ ] Candidates per subject: DESIGN/TASKS = artifact via `expected_artifact_paths`, review file via `slice_review_stem`/`slice_name_for`, slice plan file via `cf list slices --json` `slicePlan`, `DEVLOG.md`; ARCHITECTURE = `resolve_arch_file`, its review file, `DEVLOG.md`; DEVLOG = `DEVLOG.md`; CODE = `stage_all=True`
-  - [ ] Staged = candidates ∩ `git status --porcelain` (modified, added, untracked); paths computed, never globbed
-  - [ ] Verdict read from the review file frontmatter with `read_frontmatter`, never from memory
-  - [ ] `left_out` lists every other dirty path; nothing staged → empty `paths`
-- [ ] Add tests (temp repo, fake cf client): candidate sets for DESIGN, TASKS, ARCHITECTURE, DEVLOG, CODE; staged∩dirty only; left-out paths; nothing staged; verdict read from disk; unmapped template error
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: compute commit plan paths from produced artifacts`
+- [x] Implement `build_commit_plan(target, cwd, cf_client)` paths and verdict (D1)
+  - [x] Candidates per subject: DESIGN/TASKS = artifact via `expected_artifact_paths`, review file via `slice_review_stem`/`slice_name_for`, slice plan file via `cf list slices --json` `slicePlan`, `DEVLOG.md`; ARCHITECTURE = `resolve_arch_file`, its review file, `DEVLOG.md`; DEVLOG = `DEVLOG.md`; CODE = `stage_all=True`
+  - [x] Staged = candidates ∩ `git status --porcelain` (modified, added, untracked); paths computed, never globbed
+  - [x] Verdict read from the review file frontmatter with `read_frontmatter`, never from memory
+  - [x] `left_out` lists every other dirty path; nothing staged → empty `paths`
+  - Deviations: the slice plan file comes from `cf_client.get_project().slice_plan` (same stem `cf list slices --json` reports as `slicePlan`; a bare stem, `.md` appended if missing). 14a and 14b landed in one commit (`feat: compute commit plan paths and messages from the staged set`). `build_commit_plan` lives in `pipeline/commit_plan.py`; messages in `pipeline/commit_message.py` (`compose_message`); `artifact_paths(kind, info)` was extracted in `events/builtin/artifact_paths.py` to avoid repeat cf calls.
+- [x] Add tests (temp repo, fake cf client): candidate sets for DESIGN, TASKS, ARCHITECTURE, DEVLOG, CODE; staged∩dirty only; left-out paths; nothing staged; verdict read from disk; unmapped template error
+  - [x] Success: tests pass
+- [x] Commit: `feat: compute commit plan paths and messages from the staged set`
 
 ## Task 14b — `build_commit_plan`: messages
 
-- [ ] Add message generation (D2)
-  - [ ] One message per D2 table row; add vs revise from porcelain status (untracked/added = add, modified = revise)
-  - [ ] Review clause omitted when no review file is staged; verdict as written in frontmatter; no internal step names
-- [ ] Add tests, one per D2 row, plus review-only round 0, review-only round n, initiative-scoped, DEVLOG with and without a slice
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: derive commit messages from the staged set`
+- [x] Add message generation (D2)
+  - [x] One message per D2 table row; add vs revise from porcelain status (untracked/added = add, modified = revise)
+  - [x] Review clause omitted when no review file is staged; verdict as written in frontmatter; no internal step names
+  - A commit that stages only supporting files (slice plan, DEVLOG) reads `docs: update slice N {noun} files` (D2 does not cover this case).
+- [x] Add tests, one per D2 row, plus review-only round 0, review-only round n, initiative-scoped, DEVLOG with and without a slice
+  - [x] Success: tests pass
+- [x] Commit: `feat: compute commit plan paths and messages from the staged set`
 
 ## Task 15a — `CommitAction`: plan staging and messages
 
