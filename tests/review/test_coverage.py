@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from squadron.review.coverage import COVERAGE_CATEGORY, impose_diff_coverage
+from squadron.review.coverage import (
+    COVERAGE_CATEGORY,
+    impose_diff_coverage,
+    impose_output_coverage,
+)
 from squadron.review.models import (
     DiffInjection,
     ReviewFinding,
@@ -13,7 +19,7 @@ from squadron.review.models import (
     Verdict,
     VerdictSource,
 )
-from squadron.review.persistence import format_review_markdown
+from squadron.review.persistence import SliceInfo, format_review_markdown, save_review_result
 
 
 def _result(
@@ -132,3 +138,82 @@ def test_impose_diff_coverage_does_not_hide_derived_findings() -> None:
     assert COVERAGE_CATEGORY in markdown or "Diff truncated" in markdown
     assert "Looks fine" in markdown
     assert "Findings Not Parsed" not in markdown
+
+
+# ---------------------------------------------------------------------------
+# impose_output_coverage (slice 196 D12, #152)
+# ---------------------------------------------------------------------------
+
+
+def _budget_result(verdict: Verdict, *, exhausted: bool, **overrides: object) -> ReviewResult:
+    return _result(
+        verdict=verdict,
+        diff_injection=None,
+        tool_calls_made=overrides.pop("tool_calls_made", None),  # type: ignore[arg-type]
+        failed_tool_calls=None,
+        findings=[ReviewFinding(severity=Severity.NOTE, title="Existing", description="d")],
+        output_budget_exhausted=exhausted,
+        **overrides,
+    )
+
+
+def test_exhausted_pass_is_imposed_to_concerns_with_finding_first() -> None:
+    result = _budget_result(Verdict.PASS, exhausted=True)
+
+    impose_output_coverage(result)
+
+    assert result.verdict is Verdict.CONCERNS
+    assert result.verdict_source is VerdictSource.IMPOSED
+    assert result.findings[0].category == COVERAGE_CATEGORY
+    assert result.findings[0].severity is Severity.CONCERN
+    assert "findings after the cutoff are lost" in result.findings[0].description
+    assert result.findings[1].title == "Existing"
+
+
+@pytest.mark.parametrize(
+    ("verdict", "exhausted"),
+    [
+        (Verdict.PASS, False),
+        (Verdict.CONCERNS, True),
+        (Verdict.FAIL, True),
+        (Verdict.UNKNOWN, True),
+    ],
+)
+def test_other_cases_are_unchanged(verdict: Verdict, exhausted: bool) -> None:
+    result = _budget_result(verdict, exhausted=exhausted)
+
+    impose_output_coverage(result)
+
+    assert result.verdict is verdict
+    assert result.verdict_source is None
+    assert [f.title for f in result.findings] == ["Existing"]
+
+
+@pytest.mark.parametrize("tool_calls_made", [None, 0, 12])
+def test_tool_call_count_is_ignored(tool_calls_made: int | None) -> None:
+    """Truncation loses findings however much the model read."""
+    result = _budget_result(Verdict.PASS, exhausted=True, tool_calls_made=tool_calls_made)
+
+    impose_output_coverage(result)
+
+    assert result.verdict is Verdict.CONCERNS
+
+
+def test_saved_artifact_frontmatter_records_the_imposed_verdict(tmp_path: Path) -> None:
+    result = _budget_result(Verdict.PASS, exhausted=True)
+    impose_output_coverage(result)
+
+    slice_info = SliceInfo(
+        index=196,
+        name="coverage",
+        slice_name="coverage",
+        design_file=None,
+        task_files=[],
+        arch_file="",
+        project="squadron",
+    )
+    saved = save_review_result(result, "code", slice_info=slice_info, reviews_dir=tmp_path)
+
+    frontmatter = saved.read_text().split("---")[1]
+    assert "verdict: CONCERNS" in frontmatter
+    assert "verdictSource: imposed" in frontmatter

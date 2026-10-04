@@ -32,7 +32,7 @@ from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, profile_credentials
 from squadron.providers.registry import get_provider
-from squadron.review.coverage import impose_diff_coverage
+from squadron.review.coverage import impose_diff_coverage, impose_output_coverage
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import DiffInjection, ReviewResult
 from squadron.review.parsers import parse_review_output
@@ -326,6 +326,8 @@ async def run_review_with_profile(
     # Part B (slice 927 D4): a truncated diff with no successful tool call turns a
     # stated PASS into CONCERNS. Must run after tool_calls_made/failed_tool_calls above.
     impose_diff_coverage(result)
+    # Slice 196 D12 (#152): a PASS cut off at the output budget lost findings after the cutoff.
+    impose_output_coverage(result)
 
     # Part C (slice 927 D8, D10-D12): the model that actually answered, not the one
     # squadron asked for. result.model keeps the parser's requested id (D11) when no

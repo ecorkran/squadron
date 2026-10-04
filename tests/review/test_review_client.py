@@ -14,7 +14,7 @@ from squadron.core.models import AgentConfig, AgentState, Effort, Message, Messa
 from squadron.providers.base import ProviderCapabilities
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.git_utils import EmptyDiffError
-from squadron.review.models import ReviewResult
+from squadron.review.models import ReviewResult, Verdict, VerdictSource
 from squadron.review.review_client import InjectedPrompt, _write_prompt_log, run_review_with_profile
 from squadron.review.templates import ReviewTemplate
 
@@ -1599,3 +1599,31 @@ class TestDocsRootNote:
 
         assert result.system_prompt is not None
         assert (f"relative to `{DOCS_ROOT}/`" in result.system_prompt) is expect_note
+
+
+class TestOutputBudgetCoverage:
+    """#152: the one call site every review path shares imposes CONCERNS on a cut-off PASS.
+
+    ``sq review`` and the pipeline review action both call ``run_review_with_profile``,
+    so asserting here covers both with one input.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("stop_reason", ["length", "max_tokens"])
+    async def test_budget_cut_pass_becomes_imposed_concerns(self, stop_reason: str) -> None:
+        result = await TestReviewResultToolTelemetry()._run(  # pyright: ignore[reportPrivateUsage]
+            {"stop_reason": stop_reason}
+        )
+
+        assert result.verdict is Verdict.CONCERNS
+        assert result.verdict_source is VerdictSource.IMPOSED
+        assert result.findings[0].category == "review-coverage"
+
+    @pytest.mark.asyncio
+    async def test_normal_stop_keeps_the_stated_pass(self) -> None:
+        result = await TestReviewResultToolTelemetry()._run(  # pyright: ignore[reportPrivateUsage]
+            {"stop_reason": "stop"}
+        )
+
+        assert result.verdict is Verdict.PASS
+        assert result.verdict_source is not VerdictSource.IMPOSED

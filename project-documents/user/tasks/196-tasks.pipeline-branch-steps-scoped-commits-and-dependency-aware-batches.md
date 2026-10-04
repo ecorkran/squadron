@@ -99,20 +99,21 @@ status: in_progress
 
 ## Task 7 — Shared model-candidate helper and `-v` label (#179)
 
-- [ ] Extract `action_model_candidate(resolver, action_type, action_config, step_model)` from the classifier (D14), built on `ModelResolver.cascade_candidates`
-- [ ] Classifier uses the helper (no behavior change); `_summarize_action_config` in `executor.py` uses it too
-  - [ ] Dispatch and review show `model=<alias>` or `model=pool:<name>`; no candidate shows `model=session` for actions that may reuse the live session
-  - [ ] The bare `default` and `None` labels are gone
-- [ ] Update existing label tests; add tests for alias, pool and session labels, and one asserting label and classifier agree
-  - [ ] Success: criterion 12 of the design holds in a unit-level form (`--model haiku` labels `model=haiku`)
-- [ ] Commit: `fix: label pipeline actions with the model the resolver picks`
+- [x] Extract `action_model_candidate(resolver, action_type, action_config, step_model)` from the classifier (D14), built on `ModelResolver.cascade_candidates`
+  - Helper and label live in `pipeline/classification.py` (`action_model_candidate`, `action_model_label`); `_summarize_action_config` takes the resolver and step_model.
+- [x] Classifier uses the helper (no behavior change); `_summarize_action_config` in `executor.py` uses it too
+  - [x] Dispatch and review show `model=<alias>` or `model=pool:<name>`; no candidate shows `model=session` for actions that may reuse the live session
+  - [x] The bare `default` and `None` labels are gone
+- [x] Update existing label tests; add tests for alias, pool and session labels, and one asserting label and classifier agree
+  - [x] Success: criterion 12 of the design holds in a unit-level form (`--model haiku` labels `model=haiku`)
+- [x] Commit: `fix: label pipeline actions with the model the resolver picks`
 
 ---
 
 ## Task 8 — Part A checkpoint
 
-- [ ] Run the full pipeline and review test directories; `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all green; tree clean (no extra commit unless fixes were needed)
+- [x] Run the full pipeline and review test directories; `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all green; tree clean (no extra commit unless fixes were needed)
 
 ---
 

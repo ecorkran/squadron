@@ -45,7 +45,7 @@ class VerdictSource(StrEnum):
     IMPOSED (slice 927 D5) means squadron overrode a stated verdict from a
     measured fact about the run — not the model's opinion, and not derived
     from parsed findings. The parser never produces it; only
-    review.coverage.impose_diff_coverage sets it.
+    review.coverage.impose_diff_coverage and impose_output_coverage set it.
     """
 
     STATED = "stated"
