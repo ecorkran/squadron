@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.18.4] - 20261004
+
+### Fixed
+- `P456`, `P56`, `implement` and `example` failed at once with "has no model at any cascade level" unless you passed `--model`. They run with their defaults again.
+- A `summary: restore: true` step generated a new summary instead of restoring the saved one.
+- `sq run` exits 1 when a pipeline fails.
+- `P2` runs: `sq run P2 <initiative>` writes and reviews the architecture document for a new initiative.
+- `judge-cycle` and `findings-addressed-cycle` review first and then revise, instead of opening with a revise that had nothing to work from.
+- A judge review's verdict now comes only from its score. It no longer gets a verdict derived from its findings.
+
+### Changed
+- Built-in revise loops default to 2 rounds (was 3). `judge-cycle` and `findings-addressed-cycle` take `-p max-revisions=N` like the others.
+
+### Removed
+- `P0` pipeline. The concept phase is not automatable.
+
 ## [0.18.3] - 20261003
 
 ### Added

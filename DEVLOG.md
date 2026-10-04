@@ -2,13 +2,19 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261003
+dateUpdated: 20261004
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261004
+
+### Release 0.18.4
+
+- **Contents:** pipeline fixes found running every built-in pipeline live against a scratch project. Classification no longer demands a model for model-less `compact` or `summary: restore` steps, and `SummaryStepType.expand` keeps `restore`. `implement.yaml` wires its `model` param. `sq run` exits 1 on FAILED. Judge reviews take their verdict only from their score (`score_decides_verdict`). judge-cycle and findings-addressed-cycle review before revising, and their loop max is the `max-revisions` param. Built-in `max-revisions` defaults to 2. P2 is initiative-scoped (`plan`, `resolve_arch_file`, arch post-condition). P0 removed. Only final summaries copy to the clipboard; interim ones in P456 and P56 write to a file only. New `tests/pipeline/test_builtin_pipelines.py` loads, validates and classifies every built-in pipeline without `--model`. Code-implementing pipelines still fail at the code review with no slice branch, which slice 196(b) fixes. Filed #179 (in 196 scope) and #180 (slow metrology tests).
 
 ## 20261003
 
