@@ -9,235 +9,151 @@ project: squadron
 verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md
-aiModel: claude-opus-5-5
+aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261004
 dateUpdated: 20261004
-reviewedSha: 777935accef16718eb68ce2eaf0d54fe6e570aa8
+reviewedSha: 6ed3b49d27b64531233cb1607551484d56d9a4fc
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 92.7
+durationSeconds: 51.4
 squadronVersion: 0.18.4
 findings:
   - id: F001
-    severity: fail
-    category: correctness
-    summary: "Catch-up merge commit makes `existing: keep` see work that isn't there"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:218-225"
+    severity: pass
+    category: alignment
+    summary: "Git-mutating step rules match the architecture"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md#Technical Decisions (D4, D5, D8)"
   - id: F002
-    severity: concern
-    category: scope
-    summary: "Slice scope is much larger than the architecture's description of 197"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:37-44"
+    severity: pass
+    category: dependencies
+    summary: "Dependency direction and the 140 extension model are respected"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md#Architecture"
   - id: F003
     severity: concern
-    category: architecture-boundary
-    summary: "Merging the target into a slice branch is a new git mutation the architecture's rules don't cover"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:223-230"
+    category: scope-creep
+    summary: "Run lock, single-slice pipeline rewrite and control params aren't in the architecture's 197 scope"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:35-43, 352-394"
   - id: F004
     severity: concern
-    category: error-handling
-    summary: "Item resume has no stated git or checkout precondition before reading cf"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:290-299"
+    category: concurrency
+    summary: "The run lock doesn't cover the other mutating batch pipelines"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:389-391"
   - id: F005
     severity: concern
     category: error-handling
-    summary: "Concurrent or interrupted item resumes are unhandled"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:133"
+    summary: "Report durability and unrun items after a halt or kill are unspecified"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:140, 281, 462"
   - id: F006
     severity: concern
-    category: integration
-    summary: "Flag kind is classified by step type, not by the failure cause"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:256"
+    category: failure-modes
+    summary: "No failure-mode enumeration for the new I/O paths, and no observable-signal tests"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:480-492"
   - id: F007
     severity: concern
-    category: integration
-    summary: "Exit code 1 means both \"flagged again\" and \"invalid request\""
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:390"
+    category: design
+    summary: "Control signals are carried in the user param namespace"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:339, 345"
   - id: F008
-    severity: concern
-    category: dependencies
-    summary: "`ItemDecision` placement creates a circular module dependency"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:252"
+    severity: note
+    category: nfr
+    summary: "The architecture states no NFR for these paths"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md"
   - id: F009
     severity: note
-    category: integration
-    summary: "`report.json` is an external contract with no schema version"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:261-279"
+    category: interface
+    summary: "The lock-busy exit code differs between commands"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:391"
   - id: F010
     severity: note
-    category: naming
-    summary: "\"Escalation\" means two different things in squadron"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:386"
-  - id: F011
-    severity: note
-    category: design
-    summary: "Control flags are passed through the user params namespace"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:306"
-  - id: F012
-    severity: pass
-    category: architecture-boundary
-    summary: "Strict target read and the no-force / no-reset / no-delete rules are kept"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:349"
-  - id: F013
-    severity: pass
-    category: complexity
-    summary: "Reuses existing machinery instead of adding abstractions"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:313-344"
-  - id: F014
-    severity: pass
-    category: error-handling
-    summary: "Failure modes for source evaluation and ordering"
-    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:208-213"
-  - id: F015
-    severity: pass
-    category: nfr
-    summary: "NFR restatement"
-    location: "unverified"
+    category: integration
+    summary: "The Amoeba contract lives in squadron's docs before Amoeba has a document for it"
+    location: "project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md:436-444"
 ---
 
 # Review: slice — slice 197
 
 **Verdict:** CONCERNS
-**Model:** claude-opus-5-5
+**Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [FAIL] Catch-up merge commit makes `existing: keep` see work that isn't there
+### [PASS] Git-mutating step rules match the architecture
 
-D4 counts a branch as having work when `git rev-list --count {target}..{slice_branch}` is greater than 0. D5 then catch-up merges with `--no-ff`, which always creates a merge commit on the slice branch. That merge commit is reachable from the slice branch and not from the target, so it counts as "ahead".
+- **Catch-up:** D5 follows the architecture's catch-up rules. It fast-forwards when the branch has no commits of its own and otherwise merges with `--no-ff`. A conflict is aborted back to a clean slice branch, and the item is flagged. No rebase or reset is used.
+- **Item failure:** a failed item leaves the checkout on its slice branch. The next enter or item resume commits the leftovers and returns to the target (D8 precondition).
+- **Target and git state:** the target is read strictly, an unknown state raises `GitStateUnknownError`, and nothing is pushed or deleted.
 
-This breaks a scenario the doc itself describes at lines 491 and 486: an implement dispatch ends with no commits (#163), and the item is flagged `step_failed` on `EmptyDiffError`. If the target then advances (for example, an independent slice merges) and the item is retried:
-1. Enter creates the merge commit.
-2. The branch now counts as 1 ahead, so the implement dispatch is skipped.
-3. The code review finds an empty slice diff, so the item is flagged `step_failed` again.
+### [PASS] Dependency direction and the 140 extension model are respected
 
-Every later retry does the same thing. That contradicts D4's promise that "the only way to start over is for the PM to delete or rename the branch". Here the PM has to delete the branch even though there is nothing on it to keep. Retry is the main path in the Amoeba escalation contract, so this needs fixing before implementation.
+- **Import direction:** `ItemDecision` and `FlagKind` live in `batch_report.py`, and the doc says why, so imports run `item_resume` → `batch_report`.
+- **Shared constants:** `control_params.py` is imported by the executor and by dispatch.
+- **Batch grammar:** the batch itself is a YAML file composed from 194–196 primitives, as the architecture intends.
+- **Term clash:** the flag handoff is explicitly separated from the architecture's "escalation behaviors".
 
-Possible fixes:
-- Measure "work" as `rev-list --count --no-merges {target}..{branch}`, or as a non-empty diff against the merge base.
-- Let a branch with no commits of its own fast-forward to the target instead of taking a `--no-ff` merge.
+### [CONCERN] Run lock, single-slice pipeline rewrite and control params aren't in the architecture's 197 scope
 
-Add a temp-repo test for this case: a branch with no commits, behind the target, then retried.
+The architecture's 197 paragraph names five things:
+- the ordered source
+- `existing: keep` on implement
+- `branch: { plan: }`
+- `FlagKind` and `report.json`
+- `--item` resume
 
-### [CONCERN] Slice scope is much larger than the architecture's description of 197
+The slice also adds these, and the architecture never mentions them:
+- **D11:** a per-project `flock` run lock.
+- **D10:** a rewrite of P6, `implement`, P56 and P456 that gives them a new revise loop and new params. This changes the behavior of four existing human-facing pipelines.
+- **`StepResult.exhausted`** and the reserved-key mechanism in `control_params.py`.
 
-The architecture (`180-arch.pipeline-intelligence.md:45`) says "197 composes these into the Phase 6 batch". Its Out of Scope section (line 717) allows grammar changes only for "the general batch-pipeline pieces added by 194–197".
+The architecture says engine changes beyond 194–197's batch pieces are out of scope. The slice should either update the architecture's 197 paragraph or justify each addition against it. D10 carries the most regression risk, because it changes human-operated pipelines.
 
-The slice composes the batch, but it also adds several capabilities the architecture never names:
-- a new CLI mode, `sq run --resume --item --decision --instructions`
-- a persisted, externally consumed report format (`report.json`) with a closed `FlagKind`
-- an executor path that reruns a single item of a completed run
-- loop `accept_decision` override semantics
-- new grammar: `branch: { plan: }` and `existing: keep` on implement
-- an inter-system contract with Amoeba
+### [CONCERN] The run lock doesn't cover the other mutating batch pipelines
 
-Each piece is justified on its own terms. Taken together, though, the escalation and item-resume work is a major part of the design, and the architecture doesn't record it. Update arch line 45 (and the Scope Boundaries section) to list item resume, structured flags and the Amoeba handoff as 197's deliverables. Otherwise, consider splitting D7–D9 into a follow-on slice.
+- **Lock coverage:** the lock is taken only by item resume and by pipelines containing a `branch:` step.
+- **Planning pipelines:** `slices-plan` and `tasks-plan` have no `branch:` step. They still commit to the target and move cf's arch, slice and phase, per the slice's own State Management section.
+- **The gap:** a planning batch can run alongside an `implement-plan` run or an item resume without taking the lock, which defeats the interleaving protection D11 exists for.
+- **Item resume on planning runs:** the Integration Requirements say item resume works on `slices-plan` and `tasks-plan` runs, so these runs do interact with the lock.
+- **Fix:** key the lock on "mutates git or cf state" (any git-mutating step), not on the presence of `branch:`.
 
-### [CONCERN] Merging the target into a slice branch is a new git mutation the architecture's rules don't cover
+### [CONCERN] Report durability and unrun items after a halt or kill are unspecified
 
-The architecture's Git-Mutating Steps section (lines 47–55) lists only `commit`, `branch enter` and `branch merge`. It describes code as landing on the slice branch and merging back. It also says "A failed merge is aborted back to a clean target."
+- **Report timing:** `report.json` is written once, in the batch's `finally`.
+- **Killed batch:** a SIGKILL, OOM or machine loss leaves no report. Merged slices and flagged branches then exist with no record, and item resume has nothing to load.
+- **Halt on `GitEnvironmentError`:** criterion 6 says a report is written, but it doesn't say how items that never started are represented. They can't be resumed (the resume validation requires a FLAGGED record), and the contract gives Amoeba no signal for them.
+- **Resume interrupted after the merge:** a resume killed after `branch merge` but before the report rewrite leaves the report saying FLAGGED for a slice that is now merged. The next resume then fails source re-evaluation with "no longer returned". The doc covers the kill-before-merge case but not this one.
 
-D5 adds a merge in the opposite direction, from the target into the slice branch. On conflict, it aborts back to the slice branch, not to the target. The project's git rules also only describe merging a slice branch into its target.
+Decide whether to write the report incrementally per item, and add an explicit `not_run` outcome or an equivalent for items cut short by a halt. Define the reconcile path for the post-merge kill case.
 
-Walkthrough step 5 (line 475) leaves the result undecided: "The checkout returns to `main` on the next enter, or stays on the branch for the PM to resolve." For a single-item resume there is no next enter, so the run ends checked out on the slice branch. That breaks the batch invariant at line 134, "a batch ends on the target".
+### [CONCERN] No failure-mode enumeration for the new I/O paths, and no observable-signal tests
 
-Pick one post-conflict checkout state and write it down: either check out the target after the abort, or explicitly document ending on the slice branch. Also amend the architecture's git section to allow and constrain the catch-up merge.
+Several failure modes are handled well: the `rev-list` timeout, the catch-up conflict, a held lock and a version mismatch. Other new or newly-exercised paths have no stated hang, timeout or mid-operation-disconnect handling:
+- **Implement dispatch:** it can hang, time out or lose its peer mid-send. Only #163 is mentioned, and it's deferred. The mitigation row covers an empty diff, not a hung or crashed dispatch with a partial worktree.
+- **D5 catch-up commands:** the `rev-list` count and the `merge` have no timeout or failure handling stated. D4 covers only its own `rev-list`.
+- **Report temp-write and rename:** the doc doesn't say what happens on ENOSPC or a rename failure.
+- **Lock acquisition:** the doc doesn't cover an unreadable git-dir path or a failing `rev-parse --git-dir`.
+- **Observability and tests:** the review rules require each failure mode to be observable (WARNING or above, or a metric) and at least one test to assert that signal. The test list asserts outcomes and exit codes, but not logged or observable signals, apart from the lock's ERROR log.
 
-### [CONCERN] Item resume has no stated git or checkout precondition before reading cf
+Add a short failure-mode table covering each new path with its handling, its observable signal and its test.
 
-Several steps read slice and task status from cf, which reads the working tree:
-- D8 step 1 re-evaluates the source.
-- D8 step 2 checks dependencies "on the target".
-- D2's "all tasks checked but slice not marked complete" row depends on that status.
+### [CONCERN] Control signals are carried in the user param namespace
 
-Because of the previous finding, a run can end on a flagged slice branch. A resume started from there would read that branch's checkmarks:
-- The flagged item could be misflagged by the all-tasks-checked row.
-- A dependency could appear complete when it isn't on the target.
+`accept_decision` and `override_instructions` travel in the item params, next to user `-p` values. Rejecting them as `-p` keys protects the CLI entry point. Anything else that builds params, such as a pipeline YAML default or run-state-loaded params, can still set them. D8 also says run-state params are reloaded on resume. Say whether reserved keys are also validated when params come from run state or from a pipeline `params:` block. If they aren't, the accept path depends on a CLI-only guard.
 
-The validation list (lines 290–294) checks the run, the report, the record and the decision, but not the git state. Add a precondition to it: a clean tree, checked out on the target from `read_integration_target`, confirmed with `verify_git_state` before the source is evaluated. On failure, exit with a message.
+### [NOTE] The architecture states no NFR for these paths
 
-### [CONCERN] Concurrent or interrupted item resumes are unhandled
+180 has no latency or throughput targets for the batch, resume or report paths, so there is nothing to restate here. The slice's implicit reliability targets are in the success criteria: unattended runs, no partial report reads, and atomic report writes.
 
-Item resume is a read-modify-write of `report.json` (line 300). It also moves shared git and cf state (checkout, `set_arch`). The only guard is a convention, "don't run other cf-consuming commands" (line 135). Amoeba is an unattended caller and could issue decisions for several flagged items in parallel. #146 is excluded only for items inside a batch.
+### [NOTE] The lock-busy exit code differs between commands
 
-The doc doesn't say what happens:
-- if two `--resume --item` processes run against the same run or project, which risks lost report updates and interleaved checkouts
-- if a resume is killed partway through the body, leaving the report un-rewritten and the checkout possibly on the slice branch
+A busy lock exits 2 for item resume and 1 for `sq run`. For `sq run`, 1 may already mean a flagged or failed batch. A caller can't tell "busy, try later" from "ran and flagged" by exit code alone. The slice should confirm this is intentional, or give `sq run` its own code.
 
-Specify:
-- an exclusive per-project lock, or a refusal when another run or resume is active, with a logged error
-- atomic report writes (write to a temp file, then rename)
-- the record and checkout state an interrupted resume leaves behind
+### [NOTE] The Amoeba contract lives in squadron's docs before Amoeba has a document for it
 
-Also add the "one resume at a time" rule to the escalation contract.
-
-### [CONCERN] Flag kind is classified by step type, not by the failure cause
-
-"A branch step is BRANCH_CONFLICT" labels every branch-step failure as a conflict. That includes:
-- a dirty tree on enter
-- `resolve_slice_info` failing
-- the `set_arch` cf-op added by D6 failing
-- a merge precondition failing
-
-This contradicts line 257 ("Every kind is set where the flag is raised"). Amoeba routes on `flagKind` because the reason text isn't meant to be parsed, so a misleading kind sends it the wrong way. Have the branch action report its failure class in its outputs, and map to BRANCH_CONFLICT only for actual merge conflicts, with STEP_FAILED for everything else. Add a test for each.
-
-### [CONCERN] Exit code 1 means both "flagged again" and "invalid request"
-
-The escalation contract says "exit 1 means flagged again". D8 validation failures (lines 290–294) also exit 1, as does accept on the wrong kind (line 412). The doc doesn't say what exit code `GitStateUnknownError` produces.
-
-An automated caller can't tell "the decision was applied and the item failed again" from "the decision was rejected and nothing ran". Treating one as the other leads to wrong retry loops. Use distinct exit codes, for example 0 resolved, 1 flagged again, 2 rejected, plus a code for a halted run. Document them in the contract and in `docs/PIPELINES.md`.
-
-### [CONCERN] `ItemDecision` placement creates a circular module dependency
-
-`BatchItemRecord`, in `batch_report.py`, gains a `decision: ItemDecision` field. But `ItemDecision` is defined in `item_resume.py` (line 289), and `item_resume.py` itself imports `BatchReport` and its records. That makes `batch_report` and `item_resume` depend on each other.
-
-Define `ItemDecision` in `batch_report.py`, next to `FlagKind`, so the dependency runs one way: `item_resume` → `batch_report`.
-
-### [NOTE] `report.json` is an external contract with no schema version
-
-Amoeba, a separate system, will parse this file, and `BatchReport.load` reads back files written by earlier versions. Add a `schemaVersion` field now. That way, later changes to the closed `FlagKind` set or the record shape can be detected instead of misread.
-
-### [NOTE] "Escalation" means two different things in squadron
-
-In the architecture, "Escalation Behaviors" (lines 342–412) means retrying with a stronger model. This slice uses "escalation" for a flag being handed to a human or to Amoeba. Consider calling this one "flag handoff" or "decision contract" in the docs and in `PIPELINES.md`, so the two aren't confused.
-
-### [NOTE] Control flags are passed through the user params namespace
-
-`accept_decision` and `override_instructions` travel in the item params, the same dict that `-p` writes to. Define both keys as constants in one place. Also reject them as user `-p` keys, so a user can't trigger accept by accident.
-
-### [PASS] Strict target read and the no-force / no-reset / no-delete rules are kept
-
-These match the architecture's Git-Mutating Steps section (lines 47–55):
-- D4 uses `read_integration_target` and refuses to treat a failed or timed-out `rev-list` as 0.
-- D5 merges and never rebases or resets.
-- The conventions (line 349) rule out `--force`, reset, rebase, branch deletion and push.
-- Unknown git state raises `GitStateUnknownError`, which is logged at ERROR.
-
-### [PASS] Reuses existing machinery instead of adding abstractions
-
-The design avoids adding new machinery where existing pieces work:
-- D10 rejects a sub-pipeline or include step and uses a drift test instead.
-- D8 reuses `_run_each_item` and the existing `override_instructions` plumbing rather than adding a second carrier.
-- D9 rejects a merge-only shortcut.
-
-This fits the architecture's preference that batch phases be expressed as YAML rather than engine changes.
-
-### [PASS] Failure modes for source evaluation and ordering
-
-These failures are explicit and visible:
-- A dependency cycle fails the run before any item runs, naming the cycle at ERROR.
-- A cf failure fails source evaluation and doesn't degrade to a guess (line 399).
-- Out-of-plan dependencies are logged at WARNING.
-- Not-ready slices are reported, not dropped.
-
-### [PASS] NFR restatement
-
-The parent architecture states no latency or throughput NFRs for the batch or git paths, so the slice doesn't need to restate any.
+The handoff contract is concrete and versioned: a closed `FlagKind`, `schemaVersion`, and exit codes 0, 1, 2 and 3. That reduces drift risk. Squadron doesn't depend on Amoeba, so the dependency direction is correct. Keep the PIPELINES.md copy in sync with amoeba#1.
 
 ### Run Digest
 
-- Response length: 12758 chars
+- Response length: 8494 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -249,26 +165,27 @@ The parent architecture states no latency or throughput NFRs for the batch or gi
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 92.7 s
+- Duration: 51.4 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 15
+- Finding-shaped matches — whole response: 10
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 15
-- Finding-shaped matches — surviving validation: 15
+- Finding-shaped matches — in findings section: 10
+- Finding-shaped matches — surviving validation: 10
 
 ## Response
 
-All findings accepted and addressed in the design (and the architecture where cited):
-
-- **F001:** `existing: keep` counts `--no-merges` commits (D4). A branch with no work of its own fast-forwards on catch-up instead of taking a merge commit (D5). Covered by a temp-repo test and success criterion 10.
-- **F002:** `180-arch` line 45 now lists 197's deliverables: the batch pipeline, structured flags and versioned `report.json`, item resume, and the flag handoff.
-- **F003:** the catch-up merge is added to the architecture's Git-Mutating Steps section, along with the rule for where a checkout is left after a failure. After a conflict, the checkout stays on the clean slice branch, the same as any item failure. The next enter or item resume returns to the target. The design's State Management no longer claims a batch always ends on the target.
-- **F004:** item resume gains a git precondition before the source is read (D8): restore the target from a flagged slice branch, then require a clean target that passes `verify_git_state`.
-- **F005:** D11 adds a per-checkout, non-blocking `flock` run lock, taken by item resume and by code pipelines. Report writes are atomic (temp file plus rename). State Management describes what an interrupted resume leaves behind.
-- **F006:** branch actions report a `BranchFailure` class. Only `conflict` maps to `branch_conflict`; everything else is `step_failed` (D7).
-- **F007:** `ResumeExit` codes: 0 resolved, 1 flagged again, 2 rejected (nothing ran), 3 halted (D8, and in the contract).
-- **F008:** `ItemDecision` moves to `batch_report.py`.
-- **F009:** `report.json` gets `schemaVersion: 1`, and loading any other version is rejected.
-- **F010:** the design uses "flag handoff" throughout and notes that it is distinct from the architecture's escalation behaviors.
-- **F011:** the reserved keys are defined once in `pipeline/control_params.py` and rejected as `-p` keys.
+- **Scope vs architecture (CONCERN): partly valid.**
+  - The run lock and the single-slice refresh are now listed in `180-arch` 197's paragraph.
+  - False positive in part: D10 is in the slice plan entry itself ("refreshes the single-slice `slice.yaml` onto the 195/196 machinery … so the one-slice and whole-plan paths share steps").
+  - `StepResult.exhausted` and `control_params.py` are implementation details, not architecture scope.
+- **Run lock coverage (CONCERN): valid.** The lock is now taken by any pipeline that commits or moves cf: phase steps, `devlog`, `branch`, or a loop with `commit_each_iteration`. That includes `slices-plan` and `tasks-plan` (D11).
+- **Report durability (CONCERN): valid.**
+  - The report is rewritten atomically after every item.
+  - A halt records the in-flight item as FLAGGED and every unreached item as the new `not_run` outcome. `not_run` can be resumed with `retry`.
+  - A resume killed after the merge reconciles to PASSED when the slice is complete on the target and its branch is merged (D7, D8).
+  - A batch killed outright loses only the in-flight item's record, and a rerun reselects that item from repository state.
+- **Failure-mode enumeration (CONCERN): valid.** New D12 table: each new path gets its handling and log signal, and each row gets a test asserting the log record. A hung implement dispatch is honestly marked as not bounded by this slice (#165, #163).
+- **Control params outside the CLI (CONCERN): valid.** Reserved keys are now also rejected in a pipeline `params:` block. Item resume strips them, with a WARNING, from params loaded out of run state, so an earlier checkpoint's instructions can't carry into a new decision.
+- **Lock-busy exit code (NOTE): valid.** A busy lock now exits 2 for both item resume and `sq run`.
+- **NFR (NOTE), contract location (NOTE):** no change. The PIPELINES.md copy is tracked against amoeba#1.

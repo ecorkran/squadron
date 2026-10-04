@@ -299,6 +299,8 @@ class ItemDecision(StrEnum):               # defined here, not in item_resume.py
 }
 ```
 
+- **Written after every item, not only at the end.** Each finished item's record triggers an atomic rewrite of both files. A batch killed outright (SIGKILL, OOM, machine loss) leaves a report covering every item it finished. The item that was running has no record, and its branch, if any, is on disk. A batch rerun reselects it from repository state (D2 and D4), so nothing is lost. It just isn't reachable by `--item`.
+- **`ItemOutcome.NOT_RUN`** (new): when a `GitEnvironmentError` or `GitStateUnknownError` halts the batch, the `finally` records the in-flight item as FLAGGED (`step_failed`, the error as reason). It records every item the batch never reached as `not_run`, with the halt's error as reason. Item resume accepts `not_run` records with `--decision retry`, the same as FLAGGED, so Amoeba gets one signal for every item still owed. The JSON `counts` gain `not_run`.
 - `schemaVersion` starts at 1 and goes up whenever the record shape or the `FlagKind` set changes. `BatchReport.load(path)` reads it back for item resume and rejects any other version with a message naming both versions. It never guesses. Keys use camelCase, matching review frontmatter, the format Amoeba already parses.
 - The Markdown flagged line gains the kind and branch: `- 196 … — review_unresolved at revise-code; loop exhausted …; branch 196-slice.…; review: …`.
 - `sq run` prints the JSON report's path next to the Markdown path on its batch summary line.
@@ -322,7 +324,7 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
   Code 2 lines up with Typer's usage-error code, which is also "nothing ran".
 - **Validation** (each failure exits 2 before any git or model work, with a message naming the fact):
   - The run exists, and its pipeline has exactly one `each` step. With more than one, `--item` needs a step name, which no built-in pipeline needs. That's rejected for now with a message.
-  - `report.json` exists for that step, and it has a record for `<index>` whose outcome is FLAGGED. Resuming a PASSED or ACCEPTED item is an error.
+  - `report.json` exists for that step, and it has a record for `<index>` whose outcome is FLAGGED or NOT_RUN. Resuming a PASSED or ACCEPTED item is an error. `--decision accept` on a NOT_RUN item is rejected, because it has no review to accept.
   - `--decision accept` requires `flagKind: review_unresolved`. Accepting a conflict or a failed implement means nothing.
   - `--instructions` without `--item` is rejected.
 - **Git precondition** (after the run lock, before the source is evaluated, because cf reads slice and task status from the working tree):
@@ -331,12 +333,17 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
   3. On any other branch, or a dirty tree on the target, exit 2 with the 196 messages (`on {branch}, expected {target}…`, `working tree not clean: …`).
   - Without this, a resume started on a flagged branch would read that branch's checkmarks. A dependency could look complete, or the item could trip D2's "all tasks checked" row.
 - **Execution:** the run's pipeline and params come from run state, so the same models and thresholds apply. `--model` and `-p` overrides apply on top, as with any resume. Then:
-  1. The source is re-evaluated, and the item with `<index>` is taken from it, with a fresh `flag_reason` and dependencies. If the source no longer returns it (now complete, deferred, or undesigned), that's an error naming why.
+  1. The source is re-evaluated, and the item with `<index>` is taken from it, with a fresh `flag_reason` and dependencies. If the source no longer returns it:
+     - **Reconcile:** if the slice is `complete` on the target and its slice branch is an ancestor of the target (`git merge-base --is-ancestor`), the item was merged by an earlier resume that died before rewriting the report. The record is rewritten as PASSED with `reason: "reconciled: merged before the report was updated"`, a WARNING is logged, and the exit is 0. Nothing runs.
+     - **Otherwise** (deferred, undesigned, or complete without a merged branch), exit 2 naming the status.
   2. **Dependency check for a single item:** any dependency that is in the plan and not complete on the target flags the item `dependency {d} not complete` (DEPENDENCY), and the body isn't run. In a batch, this is covered by order and propagation. Alone, the target's status is the only evidence.
   3. The `each` body runs once for that item through the executor's existing per-item path (`_run_each_item`), with item isolation unchanged.
   4. `--instructions` sets `override_instructions` in the item's params, so every dispatch in the body (implement, if not kept, and each revise round) starts with the "Instructions from checkpoint resolution" block. That's the existing checkpoint plumbing, not a second carrier.
   5. The record is replaced with the new outcome (plus `decision` and `resumedAt`), and the report is rewritten in both formats, atomically.
-- **Reserved param keys.** `override_instructions` and `accept_decision` are defined once, in `pipeline/control_params.py`. The executor's checkpoint path and `_apply_override` import them from there. `_assemble_params` rejects either as a `-p` key (`'accept_decision' is reserved; use --decision accept`), so a user can't trigger accept by accident.
+- **Reserved param keys.** `override_instructions` and `accept_decision` are defined once, in `pipeline/control_params.py`. The executor's checkpoint path and `_apply_override` import them from there. They are guarded at every place params enter a run:
+  - `_assemble_params` rejects either as a `-p` key (`'accept_decision' is reserved; use --decision accept`).
+  - `validate_pipeline` rejects either in a pipeline's `params:` block.
+  - Item resume strips both keys from the params it loads from run state, and logs a WARNING if any were present (a checkpoint resolution may have stored `override_instructions`). It then sets them from `--decision` and `--instructions` only. An earlier run's instructions never carry into a new decision.
 - **Output:** the new record as one line, plus the report path. The exit code is from the table above.
 - **Rejected: resuming by rerunning a single-slice pipeline** (`sq run P6 196`). Amoeba keys a squadron block by run ID (its arch 100: "resolution means the Runner issues `sq run --resume <run_id>`"), and a fresh run would lose the batch's params and its report. P6 still works for a human, and it gives the same result because the steps are shared (D10).
 
@@ -387,11 +394,30 @@ P6, `implement`, P56 and P456 replace their implement section with the batch bod
 Amoeba is an unattended caller and could send decisions for several flagged items at once. Two processes checking out branches and moving cf's slice in one project would interleave. They would also race on `report.json`.
 
 - `pipeline/run_lock.py` provides `project_run_lock(cwd)`. It takes an exclusive, non-blocking `flock` on `{git dir}/squadron-run.flock` (`git rev-parse --git-dir`, which is per worktree). Each registered worktree has its own checkout, cf state and target, so separate worktrees can still run in parallel. Two runs in one checkout can't.
-- **Taken by** item resume, and by any `sq run` whose pipeline contains a `branch:` step (found by walking the definition, nested steps included). That covers `implement-plan` and the single-slice code pipelines.
-- **Held:** the run doesn't start. It exits 2 (item resume) or 1 (`sq run`) with `another squadron run holds the project lock ({path}); one mutating run per project at a time`, logged at ERROR. It doesn't wait, so a caller decides when to retry.
+- **Taken by** item resume, and by any `sq run` whose pipeline mutates git or cf state. That's any step that commits or moves cf: a phase step (`design`, `tasks`, `implement`, which run `set_arch`/`set_slice`/`set_phase` and commit), `devlog`, `branch`, or a `loop` with `commit_each_iteration`. The executor finds them by walking the definition, nested steps included. That covers `slices-plan`, `tasks-plan`, `implement-plan` and every P-pipeline. `review` alone and `summary` pipelines don't take the lock.
+- **Held:** the run doesn't start. Both item resume and `sq run` exit 2, meaning "nothing ran" (D8's table; for `sq run`, 1 already means a failed run), with `another squadron run holds the project lock ({path}); one mutating run per project at a time`, logged at ERROR. It doesn't wait, so a caller decides when to retry.
 - **A killed process** releases its `flock` when the OS closes the file, so no stale lock is left behind.
 - POSIX only, imported inside the function, the same as `codehost/metadata_lock.py`. On Windows, taking the lock raises a clear error. It's a separate lock from the worktree metadata lock, which serializes short git calls with a wait, not whole runs.
 - The flag handoff contract states the rule: one item resume per project at a time, and a REJECTED exit for a busy lock means try again later.
+
+### D12: Failure modes of the new paths
+
+Every git call goes through `run_git`, which returns `None` on a timeout (196). Every row below has a test that asserts both the outcome and the log record (level and message).
+
+| Path | Failure | Handling | Signal |
+|---|---|---|---|
+| D4 keep check `rev-list` | non-zero exit or timeout | `GitStateUnknownError`; the run halts (item resume exits 3) | ERROR `cannot count work on {branch}: …` |
+| D5 behind check `rev-list` | non-zero exit or timeout | `GitStateUnknownError` | ERROR `cannot compare {branch} with {target}: …` |
+| D5 catch-up `merge` / `merge --ff-only` | conflict | abort, state check, item failure `conflict` | WARNING `item N flagged: catch-up merge … conflicted: …` |
+| D5 catch-up `merge` | refusal or timeout | abort if `MERGE_HEAD`, state check; passes → item failure `other`, fails → `GitStateUnknownError` | WARNING / ERROR |
+| `restore_target()` (D8 precondition) | commit or checkout fails or times out | `GitStateUnknownError`; exit 3 | ERROR, as 196 D5.4 |
+| Report temp write or rename | `OSError` (for example ENOSPC) | `logger.exception`, then re-raised; the previous report stays intact because the rename never happened; the run fails (item resume exits 3) | ERROR with the path |
+| `report.json` load | missing, unparseable, or wrong `schemaVersion` | exit 2 | ERROR naming the path and the problem |
+| Run lock: `rev-parse --git-dir` | non-zero exit or timeout | `GitEnvironmentError`; exit 2, nothing ran | ERROR |
+| Run lock: open or `flock` | held | exit 2 | ERROR `another squadron run holds the project lock …` |
+| Run lock: open or `flock` | other `OSError` | exit 2 | ERROR with the path |
+| Implement dispatch | hangs, or the session drops mid-turn | **not bounded by this slice.** A stalled turn is #165, and work lost to background tasks is #163. A dropped session raises today's dispatch error, so the item is `step_failed`. A hang holds the run lock until the operator kills the run. The kill releases the lock, and the per-item report already covers every finished item. | existing dispatch logging |
+| Implement dispatch | ends with no commits | the code review raises `EmptyDiffError`; the item is `step_failed`; a retry runs implement again (D4 counts no work) | WARNING `item N flagged: …` |
 
 ### Patterns and Conventions
 
@@ -434,7 +460,7 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
 ### Provides to Other Slices
 
 - **Flag handoff contract (Amoeba, tracked in amoeba#1).** This is squadron's half, recorded here because Amoeba has no document for it yet. Its Runner (initiative 120) and Judge (140) aren't started.
-  - **Event:** a batch run completes, and its `report.json` has items with `outcome: flagged`. Amoeba already matches runs through `runs/*.json` (its `sq_runs` observer). The report sits beside that file as `{run_id}.{step}.report.json`.
+  - **Event:** a batch run completes, and its `report.json` has items with `outcome: flagged` or `not_run` (a halted batch). Amoeba already matches runs through `runs/*.json` (its `sq_runs` observer). The report sits beside that file as `{run_id}.{step}.report.json`.
   - **Routing input:** `flagKind` (closed set, D7), `failedStep`, `reason` (human text), `finalVerdict`, `reviewFile` (Amoeba's slice 105 parser reads it), and `branch`.
   - **Decision back:** `sq run --resume <run_id> --item <index> --decision retry|accept [--instructions TEXT]`, invoked with non-TTY stdin (Amoeba's rule). A free-text `Resolution.detail` maps to `--instructions`.
   - **Result:** exit 0 means resolved (merged), and 1 means flagged again; the rewritten `report.json` record says why. Exit 2 means rejected and nothing ran (bad request, git precondition, or project lock busy). Exit 3 means halted on the environment or an unknown git state, which needs a human.
@@ -459,7 +485,7 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
 3. A slice whose code review stays below `accept-threshold` after `max-revisions` is FLAGGED `review_unresolved` at `revise-code`. Its branch stays unmerged with all work committed, and the next item starts from a clean target.
 4. Dependents of a flagged slice are FLAGGED `dependency`. A dependency on an undesigned slice in the plan flags the dependent `dependency N not designed`. Independent slices run and merge.
 5. Items run in dependency order even when the plan lists a dependent first. A dependency cycle fails the run before any item, naming the cycle.
-6. `report.json` is written beside `report.md`, including when a `GitEnvironmentError` halts the run. Every flagged record has `flagKind`, `failedStep` (null for pre-flags), `reason` and `branch` (when a branch was entered).
+6. `report.json` is written beside `report.md`, after every item and when a `GitEnvironmentError` halts the run. On a halt, the in-flight item is FLAGGED and every unreached item is `not_run`, and `--item N --decision retry` works on a `not_run` item. Every flagged record has `flagKind`, `failedStep` (null for pre-flags), `reason` and `branch` (when a branch was entered).
 7. `sq run --resume <id> --item N --decision retry --instructions "…"` on a `review_unresolved` item keeps the branch's implementation (no implement dispatch), re-reviews it, runs revise rounds whose prompts begin with the instructions, and merges on an acceptable verdict. The record is replaced, with `decision: retry`.
 8. `--decision accept` on a `review_unresolved` item merges it after one code review and records it ACCEPTED with `decision: accept`. On any other flag kind, it exits 2 before doing anything.
 9. Resuming an item whose dependency is still open on the target flags it `dependency N not complete` without running. Resuming a non-flagged item, an unknown index, or a run without `report.json` exits 2 with a message.
@@ -473,7 +499,7 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
 14. An item resume started on a flagged slice branch first commits that branch's leftovers and returns to the target, then evaluates the source. Started on an unrelated branch or a dirty target, it exits 2 with nothing changed.
 15. Item resume exits 0, 1, 2 or 3 as D8's table defines. A second item resume, or a code-pipeline `sq run`, started while one holds the project lock is refused with the lock message and changes nothing.
 16. `-p accept_decision=true` and `-p override_instructions=…` are rejected as reserved keys.
-17. `report.json` carries `schemaVersion: 1`. Loading a report with any other version fails with a message naming both versions.
+17. `report.json` carries `schemaVersion: 1`. Loading a report with any other version fails with a message naming both versions. A resume whose slice was merged before the report was rewritten reconciles the record to PASSED and exits 0. `slices-plan` and `tasks-plan` runs take the run lock. Reserved keys are rejected in a pipeline `params:` block and stripped from loaded run state with a WARNING.
 
 ### Technical Requirements
 
@@ -484,7 +510,8 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
   - the catch-up merge, against a temp repo: behind with work, behind with no work (fast-forward, then implement runs on retry), conflict, abort, and a failed state check
   - `branch: { plan: }` expansion
   - `FlagKind` assignment for each kind, including each `BranchFailure` class
-  - the `report.json` round trip, atomic write, and a version mismatch
+  - the `report.json` round trip, atomic write, and a version mismatch, per-item rewrite, `not_run` on halt, and the post-merge reconcile
+  - each D12 row: the outcome plus the asserted log record
   - item resume: validation errors, the git precondition (flagged branch restored, unrelated branch refused), each exit code, retry, accept, the single-item dependency check, and `override_instructions` reaching the dispatch
   - `project_run_lock`: a second holder refused, release on process exit
   - reserved `-p` keys rejected

@@ -46,6 +46,8 @@ Every capability in this initiative plugs into extension points defined in 140:
   - It adds a dependency-ordered selection source, `existing: keep` on implement, and `branch: { plan: }`.
   - Every flag gets a structured record with a closed `FlagKind`, and the report is also written as versioned `report.json`.
   - `sq run --resume <run_id> --item N --decision retry|accept` reruns one flagged item of a finished batch. This is the interface Amoeba, or a human, uses to apply a decision. Squadron reports flags and applies decisions; it never makes them.
+  - A per-checkout run lock allows one git- or cf-mutating run at a time.
+  - The single-slice code pipelines (P6, `implement`, P56, P456) move onto the batch's implement → code-review loop → merge steps, so one slice and a whole plan are implemented the same way.
 
 ### Git-Mutating Steps
 
