@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -1655,3 +1656,38 @@ class TestProviderFailureArtifact:
         body = written.read_text()
         assert "## Provider Failure" in body
         assert "slice 0" not in body
+
+
+class TestUnknownAliasBackstop:
+    """#175: a model that only appears at run time must not overwrite an existing review."""
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result")
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_unknown_alias_leaves_existing_review_untouched(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        existing = tmp_path / "100-review.slice.foo.md"
+        existing.write_text("original review\n")
+
+        ctx = _make_context(
+            params={"template": "code", "model": "glm-flash-low."},
+            resolver=ModelResolver(),
+            cwd=str(tmp_path),
+        )
+        result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        assert "unknown model alias 'glm-flash-low.'" in (result.error or "")
+        mock_run_review.assert_not_called()
+        mock_save.assert_not_called()
+        assert existing.read_text() == "original review\n"
+        assert sorted(os.listdir(tmp_path)) == [existing.name]

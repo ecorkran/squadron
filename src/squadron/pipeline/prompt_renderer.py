@@ -13,6 +13,7 @@ import shlex
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, cast
 
+from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.compaction_templates import (
     load_compaction_template,
@@ -217,7 +218,12 @@ def _render_review(
         alias_str = str(review_model_alias)
         try:
             review_model_id, _ = resolver.resolve(alias_str)
-        except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError):
+        except (
+            ModelResolutionError,
+            ModelPoolNotImplemented,
+            PoolNotFoundError,
+            UnknownModelAliasError,
+        ):
             # Unlike dispatch, the actual reviewer command below uses alias_str
             # directly via --model — sq review resolves it independently. This
             # field is display-only, so falling back to the raw alias doesn't

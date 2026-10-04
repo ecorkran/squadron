@@ -232,6 +232,7 @@ async def _run_pipeline(
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         on_pool_selection=lambda sel: state_mgr.log_pool_selection(_run_id, sel),
+        profile_source="profile" in params,
     )
 
     try:
@@ -660,6 +661,7 @@ def _handle_prompt_only_init(
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
+        profile_source="profile" in params,
     )
 
     # Render first step
@@ -752,6 +754,7 @@ def _handle_prompt_only_next(
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         on_pool_selection=lambda sel: state_mgr.log_pool_selection(run_id, sel),
+        profile_source="profile" in state.params,
     )
     params = dict(state.params)
 

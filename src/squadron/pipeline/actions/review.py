@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_thresholds
 from squadron.pipeline.actions.review_fold import fold_review_parts
@@ -150,6 +151,7 @@ class ReviewAction:
         except (
             ModelResolutionError,
             ModelPoolNotImplemented,
+            UnknownModelAliasError,
             KeyError,
             DiffRangeUnresolvedError,
             DiffSpecError,

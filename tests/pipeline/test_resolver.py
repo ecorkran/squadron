@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 import pytest
 
+from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.resolver import (
     ModelPoolNotImplemented,
     ModelResolutionError,
@@ -75,7 +76,7 @@ def test_resolves_known_alias() -> None:
 
 
 def test_resolves_unknown_alias_as_literal() -> None:
-    resolver = ModelResolver(pipeline_model="my-custom-model")
+    resolver = ModelResolver(pipeline_model="my-custom-model", profile_source=True)
     model_id, profile = resolver.resolve()
     assert model_id == "my-custom-model"
     assert profile is None
@@ -107,3 +108,33 @@ def test_resolve_full_carries_the_alias_effort(tmp_path: Path) -> None:
     with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
         assert ModelResolver(cli_override="glm-low").resolve_full().effort is Effort.low
         assert ModelResolver(cli_override="opus").resolve_full().effort is None
+
+
+# ---------------------------------------------------------------------------
+# #175 backstop: unknown aliases fail in the resolver
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_model_raises_before_any_request() -> None:
+    resolver = ModelResolver(pipeline_model="glm-flash-low.")
+    with pytest.raises(UnknownModelAliasError, match="unknown model alias 'glm-flash-low.'"):
+        resolver.resolve()
+
+
+def test_unknown_model_from_the_action_level_raises() -> None:
+    resolver = ModelResolver(pipeline_model="sonnet")
+    with pytest.raises(UnknownModelAliasError):
+        resolver.resolve(action_model="not-an-alias-at-all")
+
+
+def test_profile_source_lets_a_literal_model_through() -> None:
+    resolver = ModelResolver(pipeline_model="my-custom-model", profile_source=True)
+    model_id, profile = resolver.resolve()
+    assert model_id == "my-custom-model"
+    assert profile is None
+
+
+def test_valid_alias_still_resolves_without_profile_source() -> None:
+    resolver = ModelResolver(pipeline_model="sonnet")
+    model_id, _ = resolver.resolve()
+    assert model_id == "claude-sonnet-5-5"

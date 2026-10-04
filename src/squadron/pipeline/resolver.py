@@ -29,6 +29,7 @@ from squadron.models.aliases import (
     model_allows_tools,
     model_effort,
     model_max_output_tokens,
+    require_known_model,
     resolve_model_alias,
 )
 
@@ -66,12 +67,14 @@ class ResolvedModel(NamedTuple):
     effort: Effort | None = None
 
 
-def _resolved(alias: str) -> ResolvedModel:
+def _resolved(alias: str, *, profile_source: bool = False) -> ResolvedModel:
     """Resolve an alias to a :class:`ResolvedModel`, capability included.
 
     The capability is read here, while the alias name is still known — this is
-    the last point at which it can be.
+    the last point at which it can be. A name that is no alias, no known model id
+    and has no profile source raises ``UnknownModelAliasError`` (#175 backstop).
     """
+    require_known_model(alias, profile_source=profile_source)
     model_id, profile = resolve_model_alias(alias)
     return ResolvedModel(
         model_id,
@@ -102,7 +105,11 @@ class ModelResolver:
         config_default: str | None = None,
         pool_backend: PoolBackend | None = None,
         on_pool_selection: Callable[[PoolSelection], None] | None = None,
+        profile_source: bool = False,
     ) -> None:
+        # True when the run supplies a profile (``--param profile=…``), which
+        # justifies a literal model id that is not an alias (#175).
+        self._profile_source = profile_source
         self._cli_override = cli_override
         self._pipeline_model = pipeline_model
         self._config_default = config_default
@@ -182,7 +189,7 @@ class ModelResolver:
             if candidate.startswith(_POOL_PREFIX):
                 pool_name = candidate.removeprefix(_POOL_PREFIX)
                 return self._resolve_pool(pool_name, action_model, step_model)
-            return _resolved(candidate)
+            return _resolved(candidate, profile_source=self._profile_source)
 
         raise ModelResolutionError(
             "No model could be resolved: all cascade levels are None. "
@@ -220,7 +227,7 @@ class ModelResolver:
             action_type=action_model or step_model or "",
         )
         alias = self._pool_backend.select(pool_name, context)
-        result = _resolved(alias)
+        result = _resolved(alias, profile_source=self._profile_source)
 
         if self._on_pool_selection is not None:
             from squadron.pipeline.intelligence.pools.models import PoolSelection
