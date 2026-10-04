@@ -9,6 +9,7 @@ from pathlib import Path
 from squadron.documents.frontmatter import FrontmatterError, update_frontmatter
 from squadron.documents.schema import DEVLOG_DOC_TYPE
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.commit_plan import DEVLOG_FILE
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 
 _DATE_HEADER_RE = re.compile(r"^## \d{8}$")
@@ -41,7 +42,7 @@ class DevlogAction:
     async def execute(self, context: ActionContext) -> ActionResult:
         # Determine file path
         path_param = context.params.get("path")
-        devlog_path = Path(str(path_param)) if path_param else Path(context.cwd) / "DEVLOG.md"
+        devlog_path = Path(str(path_param)) if path_param else Path(context.cwd) / DEVLOG_FILE
 
         # Build entry content
         content = context.params.get("content")
