@@ -42,16 +42,24 @@ Every capability in this initiative plugs into extension points defined in 140:
 - 196 adds the `branch:` step, scoped commits, dependency flags in `each`, and `existing: keep` on phase steps. It also re-selects tasked slices whose tasks review fails the accept threshold.
   - It also carries the review-trust fixes an unattended gate depends on: a budget-truncated PASS imposed to CONCERNS (#152), unknown model aliases rejected before the run (#175), and `-v` labels from the resolver cascade (#179).
   - These fixes touch `review/coverage.py`, `models/aliases.py`, the resolver and the classifier, but add no grammar and change no review model.
-- 197 composes these into the Phase 6 batch.
+- 197 composes these into the Phase 6 batch (`implement-plan`) and adds the flag handoff:
+  - It adds a dependency-ordered selection source, `existing: keep` on implement, and `branch: { plan: }`.
+  - Every flag gets a structured record with a closed `FlagKind`, and the report is also written as versioned `report.json`.
+  - `sq run --resume <run_id> --item N --decision retry|accept` reruns one flagged item of a finished batch. This is the interface Amoeba, or a human, uses to apply a decision. Squadron reports flags and applies decisions; it never makes them.
 
 ### Git-Mutating Steps
 
 Steps that write to git (`commit`, `branch enter`, `branch merge`) follow the project's git rules:
 - The target is `git.integration_branch`, else `main`, read strictly. A failed read never becomes `main`.
 - Planning commits land on the target. Code lands on `{index}-slice.{name}` and merges back with `--no-ff`.
+- `branch enter` on an existing slice branch that is behind the target catches it up:
+  - If the branch has no commits of its own, it fast-forwards to the target. Otherwise the target is merged into the branch with `--no-ff`.
+  - A conflicting catch-up is aborted back to a clean slice branch, and the item is flagged.
+  - This is the only merge from the target into a slice branch.
 - Commits stage only what the step produced, except code on its own slice branch.
 - These steps never force, reset, delete a branch, push, or merge beyond one level.
 - A failed merge is aborted back to a clean target.
+- If an item fails after `branch enter`, the checkout is left on that item's slice branch. The next `branch enter`, or the start of an item resume, commits any leftovers on that branch and returns to the target.
 - When the repository state can't be verified, the run stops rather than letting later work build on it.
 
 ---
