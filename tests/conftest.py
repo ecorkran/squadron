@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import logging
 import os
+import subprocess
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -139,3 +140,25 @@ def restore_agent_logger_state() -> Iterator[None]:
         for logger, level, handlers in saved:
             logger.setLevel(level)
             logger.handlers[:] = handlers
+
+
+def run_test_git(repo: Path, *args: str) -> str:
+    """Run git in a test repo, failing the test on a non-zero exit; returns stdout."""
+    completed = subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True)
+    return completed.stdout
+
+
+@pytest.fixture
+def temp_git_repo(tmp_path: Path) -> Path:
+    """A throwaway repo on ``main`` with one commit (slice 196).
+
+    Branch and commit tests run against this, never the project checkout. Identity and
+    the default branch come from the hermetic git config.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    run_test_git(repo, "init", "-q", "-b", "main")
+    (repo / "README.md").write_text("init\n")
+    run_test_git(repo, "add", "README.md")
+    run_test_git(repo, "commit", "-q", "-m", "init")
+    return repo

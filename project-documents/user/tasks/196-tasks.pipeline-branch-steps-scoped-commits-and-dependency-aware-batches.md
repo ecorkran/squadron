@@ -121,17 +121,18 @@ status: in_progress
 
 ## Task 9 — `impose_output_coverage`
 
-- [ ] In `review/coverage.py` add `impose_output_coverage(result)` (D12)
-  - [ ] If `result.output_budget_exhausted` and verdict is PASS: set CONCERNS, `verdict_source = VerdictSource.IMPOSED`, prepend a CONCERN finding with category `review-coverage` and the D12 text
-  - [ ] No change for non-PASS verdicts or when the budget was not exhausted; tool-call count is ignored
-- [ ] Call it beside `impose_diff_coverage` in `review/review_client.py`
-- [ ] Add tests
-  - [ ] PASS + exhausted → CONCERNS, IMPOSED, finding present and first
-  - [ ] PASS not exhausted, CONCERNS exhausted, FAIL exhausted → unchanged
-  - [ ] Saved artifact frontmatter shows `verdict: CONCERNS` and `verdictSource: imposed` through the real review save path
-  - [ ] `sq review` and a pipeline review action produce the same result for the same input (shared call site)
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: impose CONCERNS on a PASS cut off by the output budget`
+- [x] In `review/coverage.py` add `impose_output_coverage(result)` (D12)
+  - [x] If `result.output_budget_exhausted` and verdict is PASS: set CONCERNS, `verdict_source = VerdictSource.IMPOSED`, prepend a CONCERN finding with category `review-coverage` and the D12 text
+  - [x] No change for non-PASS verdicts or when the budget was not exhausted; tool-call count is ignored
+- [x] Call it beside `impose_diff_coverage` in `review/review_client.py`
+- [x] Add tests
+  - [x] PASS + exhausted → CONCERNS, IMPOSED, finding present and first
+  - [x] PASS not exhausted, CONCERNS exhausted, FAIL exhausted → unchanged
+  - [x] Saved artifact frontmatter shows `verdict: CONCERNS` and `verdictSource: imposed` through the real review save path
+  - [x] `sq review` and a pipeline review action produce the same result for the same input (shared call site)
+      Shared call site asserted in tests/review/test_review_client.py (`TestOutputBudgetCoverage`): `sq review` and the pipeline review action both go through `run_review_with_profile`.
+  - [x] Success: tests pass
+- [x] Commit: `fix: impose CONCERNS on a PASS cut off by the output budget`
 
 ---
 

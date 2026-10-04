@@ -1,0 +1,117 @@
+"""Git facts the branch and commit actions share (slice 196 D5, D6, D8).
+
+Reads here are strict: a write operation never degrades to a guess. Every git
+call goes through ``review.git_utils.run_git``, which is bounded by a timeout and
+returns ``None`` when git could not answer.
+"""
+
+from __future__ import annotations
+
+import logging
+import subprocess
+from pathlib import Path
+from typing import Protocol
+
+from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
+from squadron.review.git_utils import DEFAULT_DIFF_BASE, INTEGRATION_BRANCH_KEY, run_git
+
+_logger = logging.getLogger(__name__)
+
+# Output of ``git branch --show-current`` is empty when HEAD is detached.
+_DETACHED_HEAD = "(detached HEAD)"
+
+
+class ConfigReader(Protocol):
+    """The one cf capability the target reader needs (``ContextForgeClient`` satisfies it)."""
+
+    def get_config(self, key: str) -> str: ...
+
+
+class GitEnvironmentError(Exception):
+    """The git environment cannot support the operation, for this item and every later one.
+
+    Ends the run (it propagates out of ``execute_pipeline``) rather than flagging one item.
+    """
+
+
+class GitStateUnknownError(GitEnvironmentError):
+    """Git may have left the repository mid-operation; nothing can safely build on it."""
+
+
+class NoDesignFileError(ValueError):
+    """A slice has no design file, so its branch cannot be named (an item failure)."""
+
+
+def read_integration_target(cf_client: ConfigReader) -> str:
+    """The branch that slice branches fork from and merge into.
+
+    Unset means ``DEFAULT_DIFF_BASE``. Unlike ``resolve_diff_base``, a cf failure
+    raises: degrading to ``main`` is wrong for an operation that writes history.
+    """
+    try:
+        value = str(cf_client.get_config(INTEGRATION_BRANCH_KEY)).strip()
+    except (ContextForgeNotAvailable, ContextForgeError) as exc:
+        _logger.exception("cannot read %s from cf", INTEGRATION_BRANCH_KEY)
+        raise GitEnvironmentError(
+            f"cannot read {INTEGRATION_BRANCH_KEY} from cf: {exc}. "
+            "Refusing to guess the integration target."
+        ) from exc
+    return value or DEFAULT_DIFF_BASE
+
+
+def slice_branch_name(index: int, design_file: str | None) -> str:
+    """``{index}-slice.{name}``, where name is the design file's stem without its prefix."""
+    if not design_file:
+        raise NoDesignFileError(f"slice {index} has no design file; cannot name its branch")
+    stem = Path(design_file).stem
+    prefix = f"{index}-slice."
+    return stem if stem.startswith(prefix) else f"{prefix}{stem}"
+
+
+def verify_git_state(expected_branch: str, *, cwd: str) -> None:
+    """Raise ``GitStateUnknownError`` unless the repository is demonstrably settled.
+
+    Passes only when all three reads succeed: no ``MERGE_HEAD``, the current branch
+    is ``expected_branch``, and no tracked changes. A failed or timed-out read counts
+    as a failure, because an unreadable state is an unknown state.
+    """
+    problems: list[str] = []
+
+    merge_head = run_git(["rev-parse", "-q", "--verify", "MERGE_HEAD"], cwd=cwd)
+    if merge_head is None:
+        problems.append("MERGE_HEAD read failed: git timed out or could not run")
+    elif merge_head.returncode == 0:
+        problems.append("MERGE_HEAD present")
+    elif merge_head.returncode != 1:  # -q --verify exits 1 when the ref is simply absent
+        problems.append(f"MERGE_HEAD read failed: {merge_head.stderr.strip()}")
+
+    branch = run_git(["branch", "--show-current"], cwd=cwd)
+    if branch is None or branch.returncode != 0:
+        problems.append(f"current branch read failed: {_failure_text(branch)}")
+    else:
+        current = branch.stdout.strip() or _DETACHED_HEAD
+        if current != expected_branch:
+            problems.append(f"on {current}, expected {expected_branch}")
+
+    status = run_git(["status", "--porcelain", "--untracked-files=no"], cwd=cwd)
+    if status is None or status.returncode != 0:
+        problems.append(f"status read failed: {_failure_text(status)}")
+    elif status.stdout.strip():
+        problems.append(f"tracked changes: {_changed_paths(status.stdout)}")
+
+    if problems:
+        message = f"git state unverified (expected {expected_branch}): " + "; ".join(problems)
+        _logger.error(message)
+        raise GitStateUnknownError(message)
+
+
+def _failure_text(result: subprocess.CompletedProcess[str] | None) -> str:
+    """git's stderr for a refused command, or the timeout text when git never answered."""
+    if result is not None and result.stderr.strip():
+        return result.stderr.strip()
+    return "git timed out or could not run"
+
+
+def _changed_paths(porcelain: str) -> str:
+    """The paths from ``git status --porcelain`` output, comma separated."""
+    return ", ".join(line[3:] for line in porcelain.splitlines() if line.strip())
