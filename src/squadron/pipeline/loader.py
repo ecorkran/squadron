@@ -16,6 +16,7 @@ from pydantic import ValidationError as PydanticValidationError
 
 from squadron.data import data_dir
 from squadron.pipeline.actions.gate import policy_contract
+from squadron.pipeline.branch_rules import implement_branch_errors
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
 from squadron.pipeline.schema import PipelineSchema
 
@@ -245,6 +246,7 @@ def validate_pipeline(
 
         prior_step_names.add(step.name)
 
+    errors.extend(implement_branch_errors(definition.steps))
     return errors
 
 
