@@ -223,30 +223,32 @@ status: in_progress
 
 ## Task 17 — `devlog` step commits its entry
 
-- [ ] `steps/devlog.py` `expand()` appends a commit action with `CommitSubject.DEVLOG` (D7); message `docs: add DEVLOG entry for slice {n}` (no slice: `docs: add DEVLOG entry`)
-- [ ] Update existing devlog `expand()` tests; add a test that only `DEVLOG.md` is staged
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: commit the devlog entry from the devlog step`
+- [x] `steps/devlog.py` `expand()` appends a commit action with `CommitSubject.DEVLOG` (D7); message `docs: add DEVLOG entry for slice {n}` (no slice: `docs: add DEVLOG entry`)
+    - Note: The commit takes its slice from the pipeline's `slice` param unless the step config names one (e.g. `{slice.index}` in an each); a non-index slice fails the commit with 'commit needs a slice index'.
+- [x] Update existing devlog `expand()` tests; add a test that only `DEVLOG.md` is staged
+  - [x] Success: tests pass
+- [x] Commit: `feat: commit the devlog entry from the devlog step`
 
 ## Task 18 — Hidden `sq _commit` and prompt-only rendering
 
-- [ ] Create `cli/commands/commit_run.py` (sibling of `summary_run.py`), register in `cli/app.py`
-  - [ ] Flags: `--subject design|tasks|architecture|code|devlog`, `--slice` or `--plan`, `--template`, `--round` (design API contract, amended)
-  - [ ] Calls `build_commit_plan` and the same commit logic as the action; prints `committed <sha> <message>`; exits 1 with the action's error text
-- [ ] `prompt_renderer.py` renders the commit action as `sq _commit …`
-  - [ ] For a loop-round commit, fill `--template` and `--round` as the executor does: the template of the round's last review action (Task 13 lookup) and the round number; a round with no review fails at render time with the same message as Task 16
-  - [ ] A devlog commit renders `--subject devlog` with no template or round
-- [ ] Add tests
-  - [ ] CLI and action give identical paths and message for the same input
-  - [ ] Renderer output for a P4 loop round contains the expected `--subject`, `--template`, `--round`
-  - [ ] Renderer output for the devlog step contains `--subject devlog`
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add sq _commit and render scoped commits for prompt-only runs`
+- [x] Create `cli/commands/commit_run.py` (sibling of `summary_run.py`), register in `cli/app.py`
+  - [x] Flags: `--subject design|tasks|architecture|code|devlog`, `--slice` or `--plan`, `--template`, `--round` (design API contract, amended)
+  - [x] Calls `build_commit_plan` and the same commit logic as the action; prints `committed <sha> <message>`; exits 1 with the action's error text
+- [x] `prompt_renderer.py` renders the commit action as `sq _commit …`
+  - [x] For a loop-round commit, fill `--template` and `--round` as the executor does: the template of the round's last review action (Task 13 lookup) and the round number; a round with no review fails at render time with the same message as Task 16
+      - Note: `--prompt-only` does not render `loop:` steps yet (#145), so the loop-round render path is `render_loop_round_commit(inner_steps, params, round)`, which uses the same `round_commit_params` as the executor; the future loop renderer calls it per round. `CommitAction` also converts cf/slice-resolution failures into an item failure.
+  - [x] A devlog commit renders `--subject devlog` with no template or round
+- [x] Add tests
+  - [x] CLI and action give identical paths and message for the same input
+  - [x] Renderer output for a P4 loop round contains the expected `--subject`, `--template`, `--round`
+  - [x] Renderer output for the devlog step contains `--subject devlog`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add sq _commit and render scoped commits for prompt-only runs`
 
 ## Task 19 — Part C checkpoint
 
-- [ ] Run the full pipeline test suite; `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all green; tree clean
+- [x] Run the full pipeline test suite; `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all green; tree clean
 
 ---
 

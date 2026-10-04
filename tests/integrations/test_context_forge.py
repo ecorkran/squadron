@@ -302,3 +302,35 @@ class TestGetConfig:
         ):
             info = ContextForgeClient().get_project()
             assert info.name == "unknown"
+
+
+class TestListWorktrees:
+    _WORKTREES_JSON = {
+        "worktrees": [
+            {"name": "default", "worktreePath": "/work/squadron", "indexRange": [100, 959]},
+            {"name": "pr", "worktreePath": "/work/squadron-pr"},
+        ]
+    }
+
+    def test_parses_entries_and_asks_cf_for_json(self) -> None:
+        with patch(
+            "subprocess.run", return_value=_mock_completed(json.dumps(self._WORKTREES_JSON))
+        ) as run:
+            entries = ContextForgeClient().list_worktrees()
+
+        assert run.call_args.args[0] == ["cf", "worktree", "list", "--json"]
+        assert [(e.name, e.worktree_path) for e in entries] == [
+            ("default", "/work/squadron"),
+            ("pr", "/work/squadron-pr"),
+        ]
+
+    def test_cf_failure_raises_and_does_not_degrade_to_empty(self) -> None:
+        exc = subprocess.CalledProcessError(1, "cf", stderr="boom")
+        with patch("subprocess.run", side_effect=exc):
+            with pytest.raises(ContextForgeError, match="boom"):
+                ContextForgeClient().list_worktrees()
+
+    def test_output_without_a_worktrees_list_raises(self) -> None:
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps({"other": 1}))):
+            with pytest.raises(ContextForgeError, match="no 'worktrees' list"):
+                ContextForgeClient().list_worktrees()

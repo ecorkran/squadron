@@ -11,7 +11,7 @@ import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from squadron.core.subprocess_text import TEXT_DECODING
 
@@ -55,6 +55,14 @@ class TaskEntry:
 
     index: int
     files: list[str] = field(default_factory=lambda: [])
+
+
+@dataclass
+class WorktreeEntry:
+    """A registered worktree from ``cf worktree list --json``."""
+
+    name: str
+    worktree_path: str
 
 
 @dataclass
@@ -209,6 +217,23 @@ class ContextForgeClient:
             slice=slice_index,
             name=str(data.get("name") or "unknown"),
         )
+
+    def list_worktrees(self) -> list[WorktreeEntry]:
+        """Return the worktrees registered with cf, from ``cf worktree list --json``.
+
+        Raises:
+            ContextForgeNotAvailable: if ``cf`` is not on PATH.
+            ContextForgeError: if the command fails or the output has no ``worktrees`` list.
+        """
+        data: dict[str, Any] = self._run_json(["worktree", "list", "--json"])
+        raw_entries = data.get("worktrees")
+        if not isinstance(raw_entries, list):
+            raise ContextForgeError("cf worktree list --json: output has no 'worktrees' list")
+        entries = cast("list[dict[str, Any]]", raw_entries)
+        return [
+            WorktreeEntry(name=str(e.get("name", "")), worktree_path=str(e["worktreePath"]))
+            for e in entries
+        ]
 
     def get_config(self, key: str) -> str:
         """Return a CF config value from ``cf config get <key> --json``.
