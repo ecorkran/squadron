@@ -378,3 +378,139 @@ class TestFinalTextInBatchFlags:
         assert f'agent\'s final text: "{response}"' in reason
         assert "item 204 FLAGGED:" in caplog.text
         assert "agent's final text:" in caplog.text
+
+
+def _dep_items(*specs: tuple[str, list[int]], **flags: str) -> list[dict[str, object]]:
+    """Items with ``dependencies``, in run order; ``f{index}=reason`` pre-flags an item."""
+    return [
+        {
+            "index": index,
+            "name": f"slice-{index}",
+            "dependencies": deps,
+            **({"flag_reason": flags[f"f{index}"]} if f"f{index}" in flags else {}),
+        }
+        for index, deps in specs
+    ]
+
+
+def _records(result: PipelineResult) -> list[tuple[str, str, str | None]]:
+    report = result.step_results[0].batch_report
+    assert report is not None
+    return [(r.index, r.outcome.value, r.reason) for r in report.records]
+
+
+class TestDependencyFlags:
+    """Slice 196 D10: a dependent of a flagged item is flagged without running."""
+
+    @pytest.mark.asyncio
+    async def test_direct_dependent_is_flagged_and_its_body_never_runs(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result, ran = await _run(
+            monkeypatch,
+            _dep_items(("1", []), ("2", [1])),
+            lambda i: _fail("boom") if i == "1" else _OK,
+            policy="continue",
+        )
+
+        assert ran == ["1"]
+        assert _records(result) == [
+            ("1", "flagged", "boom"),
+            ("2", "flagged", "dependency 1 flagged"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_flags_propagate_transitively_in_run_order(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result, ran = await _run(
+            monkeypatch,
+            _dep_items(("1", []), ("2", [1]), ("3", [2])),
+            lambda i: _fail("boom") if i == "1" else _OK,
+            policy="continue",
+        )
+
+        assert ran == ["1"]
+        assert _records(result)[2] == ("3", "flagged", "dependency 2 flagged")
+
+    @pytest.mark.asyncio
+    async def test_an_independent_item_still_runs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        result, ran = await _run(
+            monkeypatch,
+            _dep_items(("1", []), ("2", [1]), ("3", [])),
+            lambda i: _fail("boom") if i == "1" else _OK,
+            policy="continue",
+        )
+
+        assert ran == ["1", "3"]
+        assert [r[1] for r in _records(result)] == ["flagged", "flagged", "passed"]
+
+    @pytest.mark.asyncio
+    async def test_a_dependency_outside_the_run_flags_nothing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, ran = await _run(monkeypatch, _dep_items(("2", [99])), lambda i: _OK, policy="continue")
+
+        assert ran == ["2"]
+
+    @pytest.mark.asyncio
+    async def test_a_dependency_that_comes_later_does_not_flag_its_dependent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result, ran = await _run(
+            monkeypatch,
+            _dep_items(("1", [2]), ("2", [])),
+            lambda i: _fail("boom") if i == "2" else _OK,
+            policy="continue",
+        )
+
+        assert ran == ["1", "2"]
+        assert [r[1] for r in _records(result)] == ["passed", "flagged"]
+
+    @pytest.mark.asyncio
+    async def test_several_flagged_dependencies_are_joined(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result, _ = await _run(
+            monkeypatch,
+            _dep_items(("1", []), ("2", []), ("3", [1, 2])),
+            lambda i: _fail("boom") if i in {"1", "2"} else _OK,
+            policy="continue",
+        )
+
+        assert _records(result)[2] == (
+            "3",
+            "flagged",
+            "dependency 1 flagged; dependency 2 flagged",
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("policy", ["continue", "stop"])
+    async def test_a_pre_flagged_item_flags_its_dependents_under_both_policies(
+        self, monkeypatch: pytest.MonkeyPatch, policy: str
+    ) -> None:
+        result, ran = await _run(
+            monkeypatch,
+            _dep_items(("1", []), ("2", [1]), ("3", []), f1="design review below threshold"),
+            lambda i: _OK,
+            policy=policy,
+        )
+
+        assert ran == ["3"]
+        assert _records(result)[:2] == [
+            ("1", "flagged", "design review below threshold"),
+            ("2", "flagged", "dependency 1 flagged"),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_items_without_dependencies_are_unaffected(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _, ran = await _run(
+            monkeypatch,
+            _items("1", "2"),
+            lambda i: _fail("boom") if i == "1" else _OK,
+            policy="continue",
+        )
+
+        assert ran == ["1", "2"]

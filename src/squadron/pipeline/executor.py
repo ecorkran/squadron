@@ -1443,6 +1443,10 @@ async def _execute_each_step(
     # The item running when an exception ends the whole run (a halting git fault, a lost
     # session). The report is written in the ``finally``, so such a run still leaves one.
     in_flight: tuple[int, dict[str, object]] | None = None
+    # Indices of every item flagged so far this run, whatever flagged it (D10): a later
+    # item that depends on one of them is flagged without running, so a failure
+    # propagates down the plan in run order.
+    flagged: set[int] = set()
     try:
         for position, item in enumerate(items):
             in_flight = (position, item)
@@ -1450,6 +1454,8 @@ async def _execute_each_step(
             # A pre-flagged item is a failed precondition, not an execution
             # failure: flagged under both policies, body never run (D5).
             reason = str(item["flag_reason"]) if item.get("flag_reason") else None
+            if reason is None:
+                reason = _dependency_flag_reason(item, flagged)
             if reason is None:
                 item_results = await _run_each_item(
                     inner_steps=inner_steps,
@@ -1472,6 +1478,8 @@ async def _execute_each_step(
                 reason, status = _item_outcome(item_results, policy)
             if reason is not None:
                 _warn_item_flagged(step.name, item, reason)
+                if str(item.get("index", "")).isdigit():
+                    flagged.add(int(str(item["index"])))
             report.records.append(BatchItemRecord.from_item(item, position, item_results, reason))
             in_flight = None
             if status is not ExecutionStatus.COMPLETED:
@@ -1490,6 +1498,21 @@ async def _execute_each_step(
         action_results=all_action_results,
         batch_report=report,
     )
+
+
+def _dependency_flag_reason(item: dict[str, object], flagged: set[int]) -> str | None:
+    """Why an item must not run because items it depends on were flagged (D10).
+
+    Only dependencies flagged earlier in this run count. A dependency outside the run, a
+    completed one, or one that comes later in the run flags nothing.
+    """
+    raw = item.get("dependencies")
+    if not isinstance(raw, list):
+        return None
+    flagged_dependencies = [d for d in cast(list[object], raw) if isinstance(d, int) and d in flagged]
+    if not flagged_dependencies:
+        return None
+    return "; ".join(f"dependency {d} flagged" for d in flagged_dependencies)
 
 
 def _item_outcome(
