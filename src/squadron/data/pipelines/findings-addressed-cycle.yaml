@@ -4,6 +4,7 @@ description: Fix-review cycle that exits only when fresh eyes pass AND the prior
 params:
   slice: required
   model: sonnet
+  max-revisions: "2"
   review-model: minimax
   judge-model: sonnet
 
@@ -14,7 +15,7 @@ steps:
       model: "{review-model}"
       slice: "{slice}"
   - loop:
-      max: 3
+      max: "{max-revisions}"
       until: review.pass
       # The policy's evidence source: without a per-round commit there is no
       # prior round to compare against, and loop validation rejects the shape.

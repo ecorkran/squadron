@@ -696,9 +696,9 @@ sq run --list    # shows all available pipelines with descriptions
 | `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
-| `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice` |
+| `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice`, `model`, `review-model`, `max-revisions` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
-| `findings-addressed-cycle` | Fix-review cycle that exits only when fresh eyes pass *and* the prior round's findings were accounted for — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed) | `slice`, `model`, `review-model`, `judge-model` |
+| `findings-addressed-cycle` | Fix-review cycle that exits only when fresh eyes pass *and* the prior round's findings were accounted for — see [Requiring that findings were addressed](#requiring-that-findings-were-addressed) | `slice`, `model`, `review-model`, `judge-model`, `max-revisions` |
 | `example` | Annotated reference — all available options | `slice` |
 
 The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the primary authoring reference. It includes inline comments explaining every field and option. Read it before writing a custom pipeline.
@@ -735,7 +735,7 @@ A design step that writes no design, a provider failure, or any other step failu
 | `plan` | required | Architecture index of the slice plan |
 | `model` | `sonnet` | Design / tasks and revise model |
 | `review-model` | `minimax` | Review model |
-| `max-revisions` | `3` | Revise rounds **after** the first design, so a slice gets at most `max-revisions + 1` reviews |
+| `max-revisions` | `2` | Revise rounds **after** the first design, so a slice gets at most `max-revisions + 1` reviews |
 | `pass-threshold` | `review.pass` | Stops revising |
 | `accept-threshold` | `review.concerns_or_better` | Accepts a slice whose rounds ran out (and gates `tasks-plan` selection) |
 

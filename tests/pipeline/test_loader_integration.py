@@ -103,7 +103,8 @@ class TestBuiltInPipelineStructure:
         assert defn.steps[0].config["template"] == "judge.slice-vs-arch"
         loop_step = defn.steps[1]
         assert loop_step.step_type == "loop"
-        assert loop_step.config["max"] >= 1
+        assert loop_step.config["max"] == "{max-revisions}"
+        assert defn.params["max-revisions"] == "2"
         assert loop_step.config["until"] == "review.pass"
         assert loop_step.config["on_exhaust"] == "checkpoint"
 

@@ -4,6 +4,7 @@ description: Judge-gated review-fix-review cycle — bounded loop that auto-adva
 params:
   slice: required
   model: sonnet
+  max-revisions: "2"
   review-model: minimax
 
 steps:
@@ -13,7 +14,7 @@ steps:
       model: "{review-model}"
       slice: "{slice}"
   - loop:
-      max: 3
+      max: "{max-revisions}"
       until: review.pass
       skip_if_met: true
       on_exhaust: checkpoint

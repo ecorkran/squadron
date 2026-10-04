@@ -130,7 +130,7 @@ class TestJudgeCycleEscalates:
         assert result.status == ExecutionStatus.PAUSED
         loop_result = result.step_results[1]
         assert loop_result.status == ExecutionStatus.PAUSED
-        assert dispatch_mock.execute.await_count == 3
+        assert dispatch_mock.execute.await_count == 2
 
         last_review = loop_result.action_results[-1]
         assert last_review.action_type == "review"
@@ -154,4 +154,4 @@ class TestJudgeCycleAdvisoryAlwaysEscalates:
         assert result.status == ExecutionStatus.PAUSED
         loop_result = result.step_results[1]
         assert loop_result.status == ExecutionStatus.PAUSED
-        assert dispatch_mock.execute.await_count == 3
+        assert dispatch_mock.execute.await_count == 2
