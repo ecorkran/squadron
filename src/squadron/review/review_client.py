@@ -273,6 +273,7 @@ async def run_review_with_profile(
             model=resolved_model,
             diff_files=diff_files,
             cwd=cwd_for_checks,
+            score_decides_verdict=template.is_judge,
         )
 
     # Create agent, send prompt, collect response, shut down

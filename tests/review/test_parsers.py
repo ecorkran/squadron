@@ -974,6 +974,16 @@ class TestVerdictDerivedFromFindings:
         result = parse_review_output("Unstructured prose with no findings.", "slice", {})
         assert result.verdict == Verdict.UNKNOWN
 
+    def test_judge_template_does_not_derive(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A judge's verdict comes from its score; findings must not set one."""
+        text = "score: 84\n\n### [CONCERN] Something\nDetail.\n"
+        with caplog.at_level(logging.WARNING):
+            result = parse_review_output(text, "judge.slice-vs-arch", {}, score_decides_verdict=True)
+        assert result.verdict == Verdict.UNKNOWN
+        assert result.verdict_source is None
+        assert result.score == 84.0
+        assert "deriving" not in caplog.text
+
     def test_derivation_is_logged(self, caplog: pytest.LogCaptureFixture) -> None:
         text = "### [CONCERN] Something actionable\nDetail.\n"
         with caplog.at_level(logging.WARNING):

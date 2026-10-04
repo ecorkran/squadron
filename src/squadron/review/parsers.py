@@ -910,6 +910,7 @@ def parse_review_output(
     *,
     diff_files: set[str] | None = None,
     cwd: Path | None = None,
+    score_decides_verdict: bool = False,
 ) -> ReviewResult:
     """Parse agent markdown output into a structured ReviewResult.
 
@@ -929,6 +930,10 @@ def parse_review_output(
     whose ``location`` cites a path is checked for existence on disk; misses
     log a WARNING. Findings with ``location == UNVERIFIED_LOCATION`` are
     skipped by both checks.
+
+    When *score_decides_verdict* is True (judge templates), a missing verdict
+    is expected: the caller sets it from the score (``enforce_judge``), so the
+    parser neither derives one from findings nor warns about its absence.
     """
     # Newline-free responses break seven line-structure-dependent constructs
     # in this parser (#96, design D1). Scoped narrowly to that exact trigger
@@ -975,7 +980,10 @@ def parse_review_output(
     # writes a self-contradictory document — UNKNOWN alongside a [CONCERN].
     # Deriving from the findings applies the project's lenient-parsing rule
     # (parse the semantic content, not the formatting) to the same output.
-    if verdict is Verdict.UNKNOWN and findings:
+    if score_decides_verdict and verdict is Verdict.UNKNOWN:
+        # No provenance to record: the verdict is the caller's, not the parser's.
+        verdict_source = None
+    elif verdict is Verdict.UNKNOWN and findings:
         derived = _verdict_from_findings(findings)
         logger.warning(
             "%s review (model=%s) parsed %d finding(s) but no usable "
