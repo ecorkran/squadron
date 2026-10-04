@@ -9,11 +9,13 @@ import pytest
 
 from squadron.core.models import Effort
 from squadron.models.aliases import (
+    UnknownModelAliasError,
     get_all_aliases,
     load_builtin_aliases,
     load_user_aliases,
     model_effort,
     model_max_output_tokens,
+    require_known_model,
     resolve_model_alias,
 )
 
@@ -287,3 +289,56 @@ def test_effort_is_none_when_unset_or_unknown(tmp_path: Path) -> None:
 
 def test_no_builtin_alias_sets_effort() -> None:
     assert all("effort" not in alias for alias in load_builtin_aliases().values())
+
+
+# ---------------------------------------------------------------------------
+# require_known_model (#175)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def glm_alias(tmp_path: Path):
+    """A user models.toml that defines the glm-flash-low alias."""
+    toml_file = tmp_path / "models.toml"
+    toml_file.write_text(
+        '[aliases]\nglm-flash-low = { profile = "openrouter", model = "z-ai/glm-flash" }\n'
+    )
+    with patch("squadron.models.aliases.models_toml_path", return_value=toml_file):
+        yield
+
+
+def test_require_known_model_passes_alias(glm_alias: None) -> None:
+    require_known_model("glm-flash-low", profile_source=False)
+
+
+def test_require_known_model_passes_literal_model_id(glm_alias: None) -> None:
+    require_known_model("z-ai/glm-flash", profile_source=False)
+
+
+def test_require_known_model_passes_with_profile_source(glm_alias: None) -> None:
+    require_known_model("some-unlisted-model", profile_source=True)
+
+
+def test_require_known_model_rejects_unknown_without_profile(glm_alias: None) -> None:
+    with pytest.raises(UnknownModelAliasError) as excinfo:
+        require_known_model("some-unlisted-model", profile_source=False)
+    assert excinfo.value.name == "some-unlisted-model"
+    assert "unknown model alias 'some-unlisted-model'" in str(excinfo.value)
+
+
+def test_require_known_model_suggests_close_match(glm_alias: None) -> None:
+    with pytest.raises(UnknownModelAliasError) as excinfo:
+        require_known_model("glm-flash-low.", profile_source=False)
+    assert "glm-flash-low" in excinfo.value.close_matches
+    assert str(excinfo.value) == (
+        "unknown model alias 'glm-flash-low.'; did you mean: "
+        f"{', '.join(excinfo.value.close_matches)}? "
+        "If this is a literal model ID, set a profile."
+    )
+
+
+def test_require_known_model_omits_suggestion_without_close_match(glm_alias: None) -> None:
+    with pytest.raises(UnknownModelAliasError) as excinfo:
+        require_known_model("zzzzzzzzzzzzzzzz", profile_source=False)
+    assert excinfo.value.close_matches == []
+    assert "did you mean" not in str(excinfo.value)

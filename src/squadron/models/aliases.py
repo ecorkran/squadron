@@ -6,6 +6,7 @@ Users can add or override aliases via ~/.config/squadron/models.toml.
 
 from __future__ import annotations
 
+import difflib
 import logging
 import tomllib
 from pathlib import Path
@@ -234,6 +235,32 @@ def resolve_model_alias(name: str) -> tuple[str, str | None]:
     if alias is not None:
         return alias["model"], alias["profile"]
     return name, None
+
+
+class UnknownModelAliasError(ValueError):
+    """A model name is neither an alias, a known model id, nor profile-backed (#175)."""
+
+    def __init__(self, name: str, close_matches: list[str]) -> None:
+        self.name = name
+        self.close_matches = close_matches
+        suggestion = f"; did you mean: {', '.join(close_matches)}?" if close_matches else ""
+        super().__init__(
+            f"unknown model alias '{name}'{suggestion} If this is a literal model ID, set a profile."
+        )
+
+
+def require_known_model(name: str, *, profile_source: bool) -> None:
+    """Raise ``UnknownModelAliasError`` unless ``name`` can be resolved (#175).
+
+    Passes when ``name`` is an alias, when it is a model id some alias resolves
+    to (so a literal id keeps working), or when a profile source exists.
+    """
+    if profile_source:
+        return
+    aliases = get_all_aliases()
+    if name in aliases or any(alias["model"] == name for alias in aliases.values()):
+        return
+    raise UnknownModelAliasError(name, difflib.get_close_matches(name, list(aliases), n=3))
 
 
 def model_allows_tools(name: str | None) -> bool:
