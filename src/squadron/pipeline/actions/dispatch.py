@@ -212,6 +212,31 @@ class DispatchFeedback(StrEnum):
     REVIEW = "review"
 
 
+# Outputs a dispatch that kept its existing artifact carries. The artifact post-condition
+# and the revision stamp read them: the artifact exists by construction, so neither applies.
+SKIPPED_KEY = "skipped"
+SKIPPED_ARTIFACT_EXISTS = "artifact exists"
+
+
+def _kept_artifact_paths(context: ActionContext) -> list[str]:
+    """The step's existing artifact files when it says ``existing: keep``; else empty."""
+    from squadron.events.builtin.artifact_paths import expected_artifact_paths
+    from squadron.pipeline.git_ops import parse_slice_index
+    from squadron.pipeline.steps.phase import (
+        ARTIFACT_KIND_PARAM,
+        EXISTING_PARAM,
+        ArtifactKind,
+        ExistingArtifactPolicy,
+    )
+
+    if context.params.get(EXISTING_PARAM) != ExistingArtifactPolicy.KEEP:
+        return []
+    kind = ArtifactKind(str(context.params[ARTIFACT_KIND_PARAM]))
+    slice_index = parse_slice_index(context.params.get("slice"))
+    expected = expected_artifact_paths(kind, slice_index, context.cf_client)
+    return [path for path in expected if (Path(context.cwd) / path).is_file()]
+
+
 class DispatchFeedbackError(ValueError):
     """A ``feedback:`` dispatch has nothing in scope to revise against."""
 
@@ -277,7 +302,17 @@ class DispatchAction:
         alias_profile case (no profile specified in the alias) routes safely
         through the one-shot agent; only an explicit 'sdk' profile requires a
         persistent session and is therefore blocked without one.
+
+        A step with ``existing: keep`` whose artifact is already on disk skips the model
+        call entirely (slice 196 D11).
         """
+        if kept := _kept_artifact_paths(context):
+            _logger.info("dispatch: step %s keeps existing artifact %s", context.step_name, kept)
+            return ActionResult(
+                success=True,
+                action_type=self.action_type,
+                outputs={SKIPPED_KEY: SKIPPED_ARTIFACT_EXISTS, "paths": kept},
+            )
         if context.sdk_session is None:
             _, alias_profile = self._resolve_model(context)
             # Guard: pool selected an explicitly SDK-profiled alias at runtime,

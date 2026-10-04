@@ -17,6 +17,7 @@ from squadron.documents.frontmatter import FrontmatterError, read_frontmatter, u
 from squadron.events import EventType, register_event_action
 from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
+from squadron.pipeline.actions.dispatch import SKIPPED_KEY
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.review.persistence import CfClientProtocol
@@ -101,6 +102,8 @@ class RevisionStampAction:
             and context.result.success
             and kind is not None
             and context.iteration >= 1
+            # A kept artifact was not rewritten, so there is nothing to stamp.
+            and not context.result.outputs.get(SKIPPED_KEY)
         )
         if eligible and kind is not None:
             _stamp_revision_number(

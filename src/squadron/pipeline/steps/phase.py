@@ -19,6 +19,17 @@ class ArtifactKind(StrEnum):
     TASKS = "tasks"
 
 
+class ExistingArtifactPolicy(StrEnum):
+    """What a design or tasks step does when its artifact already exists (slice 196 D11)."""
+
+    CREATE = "create"  # dispatch always writes the artifact (the default)
+    KEEP = "keep"  # skip the model call; the step's review still runs
+
+
+# Dispatch config keys that carry the policy and the artifact kind to the dispatch action.
+EXISTING_PARAM = "existing"
+ARTIFACT_KIND_PARAM = "artifact_kind"
+
 _EXPECTED_ARTIFACT_KIND: dict[str, ArtifactKind | None] = {
     StepTypeName.DESIGN: ArtifactKind.DESIGN,
     StepTypeName.TASKS: ArtifactKind.TASKS,
@@ -148,9 +159,34 @@ class PhaseStepType:
                 )
             )
 
+        errors.extend(self._validate_existing(config))
         errors.extend(validate_allowed_tools(config, self._phase_name))
 
         return errors
+
+    def _validate_existing(self, config: StepConfig) -> list[ValidationError]:
+        """``existing:`` must name a policy, and ``keep`` needs a slice's design or tasks."""
+        cfg = config.config
+        raw = cfg.get(EXISTING_PARAM)
+        if raw is None:
+            return []
+        valid = [p.value for p in ExistingArtifactPolicy]
+        if raw not in valid:
+            return [self._existing_error(f"'{raw}' is not a valid 'existing' policy; one of {valid}")]
+        initiative_scoped = "plan" in cfg and "slice" not in cfg
+        if raw == ExistingArtifactPolicy.KEEP and (
+            self.expected_artifact_kind is None or initiative_scoped
+        ):
+            return [
+                self._existing_error(
+                    "'existing: keep' applies to a slice's design or tasks step, which has "
+                    "an artifact to keep"
+                )
+            ]
+        return []
+
+    def _existing_error(self, message: str) -> ValidationError:
+        return ValidationError(field=EXISTING_PARAM, message=message, action_type=self._phase_name)
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
@@ -174,6 +210,10 @@ class PhaseStepType:
         # existing exact-equality expand() tests assert.
         if "pre_emption_fragment" in cfg:
             dispatch_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
+        # Only a ``keep`` policy travels to dispatch, so the default shape is unchanged.
+        if cfg.get(EXISTING_PARAM) == ExistingArtifactPolicy.KEEP and self.expected_artifact_kind:
+            dispatch_config[EXISTING_PARAM] = ExistingArtifactPolicy.KEEP
+            dispatch_config[ARTIFACT_KIND_PARAM] = self.expected_artifact_kind
         # Tools go only to the dispatch action; the review path is slice 265.
         if "allowed_tools" in cfg:
             dispatch_config["allowed_tools"] = cfg["allowed_tools"]

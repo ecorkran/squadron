@@ -16,6 +16,7 @@ from pathlib import Path
 from squadron.events import EventType, register_event_action
 from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
+from squadron.pipeline.actions.dispatch import SKIPPED_KEY
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.pipeline.text_tail import tail_text
@@ -164,6 +165,8 @@ class DispatchArtifactAction:
             context.action_type != "dispatch"
             or not context.result.success
             or context.expected_artifact_kind is None
+            # A step that kept its existing artifact wrote nothing this run, by design.
+            or context.result.outputs.get(SKIPPED_KEY)
         ):
             return ActionResult(success=True, action_type=self.name, outputs={})
 
