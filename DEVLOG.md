@@ -12,6 +12,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261004
 
+### Slice 196: task breakdown complete (Phase 5)
+
+- **Tasks:** `196-tasks.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md`, 38 tasks (380 lines, one file), test-with ordering, a commit after each part.
+  - Order: #175/#179 → #152 → scoped commits → branch steps → dependency flags → tasks re-review → docs and live walkthrough.
+  - `pipeline/git_ops.py` is built at the start of the scoped-commit part, not the branch part: the commit action needs its error classes and strict target reader (D6 timeout, D8 target guard).
+  - No merge task; Phase 7 merges.
+- **Next:** Phase 6 implementation on branch `196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches` from `main`.
+
 ### Slice 196: design complete (Phase 4)
 
 - **Design:** `196-slice.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md`.
