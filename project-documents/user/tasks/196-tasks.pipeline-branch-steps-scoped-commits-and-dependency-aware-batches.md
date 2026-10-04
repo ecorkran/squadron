@@ -361,8 +361,8 @@ status: in_progress
 
 ## Task 28 — Part D checkpoint
 
-- [ ] Run the full test suite; `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all green; tree clean
+- [x] Run the full test suite; `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all green; tree clean
 
 ---
 
@@ -370,20 +370,20 @@ status: in_progress
 
 ## Task 29 — Item dependencies from design frontmatter
 
-- [ ] `sources.py` `_slice_item` gains `dependencies: list[int]` from the design's `dependencies:` frontmatter when `design_file` is set, else `[]` (D9)
-  - [ ] Each element is parsed as its leading integer (`195`, `"195"`, `"195-slice.foo"` → 195); an element with no leading integer is dropped with a WARNING naming the slice and value
-- [ ] Add tests: int, string, prefixed string, bad element (WARNING asserted), no design file, no `dependencies` key
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: read slice dependencies from design frontmatter`
+- [x] `sources.py` `_slice_item` gains `dependencies: list[int]` from the design's `dependencies:` frontmatter when `design_file` is set, else `[]` (D9)
+  - [x] Each element is parsed as its leading integer (`195`, `"195"`, `"195-slice.foo"` → 195); an element with no leading integer is dropped with a WARNING naming the slice and value
+- [x] Add tests: int, string, prefixed string, bad element (WARNING asserted), no design file, no `dependencies` key
+  - [x] Success: tests pass
+- [x] Commit: `feat: read slice dependencies from design frontmatter`
 
 ## Task 30 — Flagged-index set in `each`
 
-- [ ] `_execute_each_step` keeps `flagged: set[int]` and flags dependents before the body runs (D10)
-  - [ ] Reason `dependency {d} flagged`, several joined with `; `; every FLAGGED item with an integer `index` joins the set (transitive in run order)
-  - [ ] Applies under both failure policies, same as `flag_reason`; items without `dependencies` unaffected; order unchanged
-- [ ] Add tests: direct, transitive, independent item runs, dependency outside the run, dependency that comes later in the run does not flag, both failure policies, body not executed for a flagged dependent
-  - [ ] Success: tests pass; design criterion 8 holds
-- [ ] Commit: `feat: flag batch items whose dependencies were flagged`
+- [x] `_execute_each_step` keeps `flagged: set[int]` and flags dependents before the body runs (D10)
+  - [x] Reason `dependency {d} flagged`, several joined with `; `; every FLAGGED item with an integer `index` joins the set (transitive in run order)
+  - [x] Applies under both failure policies, same as `flag_reason`; items without `dependencies` unaffected; order unchanged
+- [x] Add tests: direct, transitive, independent item runs, dependency outside the run, dependency that comes later in the run does not flag, both failure policies, body not executed for a flagged dependent
+  - [x] Success: tests pass; design criterion 8 holds
+- [x] Commit: `feat: flag batch items whose dependencies were flagged`
 
 ---
 
@@ -391,33 +391,35 @@ status: in_progress
 
 ## Task 32 — `_review_flag` and `slices_needing_tasks`
 
-- [ ] Generalize `_design_review_flag` to `_review_flag(entry, template, accept) -> str | None` using `slice_review_stem(index, template, …)` (D11); reason strings name the review (`no tasks review found`, `tasks review below threshold (CONCERNS < PASS)`)
-- [ ] Rename `cf.untasked_slices` to `cf.slices_needing_tasks(plan, accept)`; it selects open, designed slices that are untasked, or tasked with a tasks review missing, unreadable or below `accept`; the design-review `flag_reason` still applies first
-- [ ] Update every caller and YAML reference to the old name (grep the whole repo, docs included)
-- [ ] Add tests: untasked selected; tasked + missing review selected; tasked + unreadable review selected; tasked + below threshold selected; tasked + passing review not selected; design-review flag precedence
-  - [ ] Success: tests pass; `grep -r untasked_slices` finds nothing outside the CHANGELOG
-- [ ] Commit: `feat: select tasked slices with unsettled task reviews`
+- [x] Generalize `_design_review_flag` to `_review_flag(entry, template, accept) -> str | None` using `slice_review_stem(index, template, …)` (D11); reason strings name the review (`no tasks review found`, `tasks review below threshold (CONCERNS < PASS)`)
+  - Note: `docs/PIPELINES.md` source table and mentions were renamed in this commit (Task 36 documents the behavior in full); `grep untasked_slices` over src, tests and docs is empty.
+- [x] Rename `cf.untasked_slices` to `cf.slices_needing_tasks(plan, accept)`; it selects open, designed slices that are untasked, or tasked with a tasks review missing, unreadable or below `accept`; the design-review `flag_reason` still applies first
+- [x] Update every caller and YAML reference to the old name (grep the whole repo, docs included)
+- [x] Add tests: untasked selected; tasked + missing review selected; tasked + unreadable review selected; tasked + below threshold selected; tasked + passing review not selected; design-review flag precedence
+  - [x] Success: tests pass; `grep -r untasked_slices` finds nothing outside the CHANGELOG
+- [x] Commit: `feat: select tasked slices with unsettled task reviews`
 
 ## Task 33 — `existing: keep`
 
-- [ ] Add `ExistingArtifactPolicy` StrEnum (`CREATE` default, `KEEP`) (D11)
-- [ ] `steps/phase.py` accepts `existing:` and passes it with the artifact kind into the dispatch config
-- [ ] `actions/dispatch.py`: under `KEEP`, when `expected_artifact_paths` has an existing file, skip the model call and return success with `outputs={"skipped": "artifact exists", "paths": [...]}`
-- [ ] `events/builtin/dispatch_artifact.py` and the revision stamp treat `skipped` as satisfied and do not stamp
-- [ ] Add tests
-  - [ ] `KEEP` with an existing artifact: no model call, success, post-condition passes, no stamp
-  - [ ] `KEEP` with no artifact: dispatches normally
-  - [ ] `CREATE` (default) unchanged
-  - [ ] Step validation rejects an unknown `existing:` value
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add existing keep policy to phase steps`
+- [x] Add `ExistingArtifactPolicy` StrEnum (`CREATE` default, `KEEP`) (D11)
+  - Note: `ExistingArtifactPolicy`, `EXISTING_PARAM` and `ARTIFACT_KIND_PARAM` live in `steps/phase.py`; dispatch's skip reads `SKIPPED_KEY`/`SKIPPED_ARTIFACT_EXISTS` from `actions/dispatch.py`; validation also rejects `existing: keep` on implement and on initiative-scoped steps.
+- [x] `steps/phase.py` accepts `existing:` and passes it with the artifact kind into the dispatch config
+- [x] `actions/dispatch.py`: under `KEEP`, when `expected_artifact_paths` has an existing file, skip the model call and return success with `outputs={"skipped": "artifact exists", "paths": [...]}`
+- [x] `events/builtin/dispatch_artifact.py` and the revision stamp treat `skipped` as satisfied and do not stamp
+- [x] Add tests
+  - [x] `KEEP` with an existing artifact: no model call, success, post-condition passes, no stamp
+  - [x] `KEEP` with no artifact: dispatches normally
+  - [x] `CREATE` (default) unchanged
+  - [x] Step validation rejects an unknown `existing:` value
+  - [x] Success: tests pass
+- [x] Commit: `feat: add existing keep policy to phase steps`
 
 ## Task 34 — `tasks-plan.yaml`
 
-- [ ] Switch `data/pipelines/tasks-plan.yaml` to `slices_needing_tasks` and set `existing: keep` on its `tasks:` step (D11)
-- [ ] Add a pipeline-level test (fake cf, fake dispatch/review): a slice with tasks and no tasks review is selected, dispatch skipped, review runs, and the revise loop runs as needed (design criterion 9)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: re-review tasked slices in tasks-plan`
+- [x] Switch `data/pipelines/tasks-plan.yaml` to `slices_needing_tasks` and set `existing: keep` on its `tasks:` step (D11)
+- [x] Add a pipeline-level test (fake cf, fake dispatch/review): a slice with tasks and no tasks review is selected, dispatch skipped, review runs, and the revise loop runs as needed (design criterion 9)
+  - [x] Success: tests pass
+- [x] Commit: `feat: re-review tasked slices in tasks-plan`
 
 ---
 

@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Pipelines can enter and merge a slice branch: `- branch: { op: enter }` and `- branch: { op: merge }`. The code pipelines (`P6`, `implement`, `P456`, `P56`) now do their implement work on `{index}-slice.{name}` and merge it back, and a failed merge is aborted so your target branch is never left half-merged.
+- `tasks-plan` re-reviews slices that already have tasks but no passing tasks review, instead of skipping them. A step can say `existing: keep` to review what's there rather than regenerate it.
+- In batch runs over slices, a slice whose dependency was flagged is flagged too and doesn't run. Dependencies come from the `dependencies:` list in the slice design.
+
+### Changed
+- Pipeline commits stage only the files the step produced and leave your other changes alone. Messages now say what changed, e.g. `docs: revise slice 105 design, round 2 (review: PASS)`; the `devlog` step commits its own entry.
+- **Breaking for custom pipelines:** an `implement` step must come after a `branch: { op: enter }` step, or the pipeline won't load. The error says what to add.
+- `cf.untasked_slices` is now `cf.slices_needing_tasks`.
+- `-v` shows the model a step will actually use instead of `default`.
+
+### Fixed
+- A review that was cut off by its output limit and said PASS is now reported as CONCERNS, with a finding saying why.
+- A mistyped model alias (including one passed with `--param`) is rejected before the run starts, with close matches, instead of writing a bogus review.
+
 ## [0.18.4] - 20261004
 
 ### Fixed

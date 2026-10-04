@@ -93,6 +93,8 @@ steps:
 **Expansion sequence:**
 [`cf-op(set_arch)`] → `cf-op(set_slice)` → `cf-op(set_phase)` → `cf-op(build_context)` → `dispatch` → [`review` → `checkpoint`] → `commit`
 
+The `commit` stages only the files the step produced — see [Commits](#commits).
+
 The cf calls follow Context Forge's switching rule: arch (which switches the initiative and sets its slice plan), then slice (which must be in that plan), then phase, then build. `set_arch` runs only when the step has a `plan:` key.
 
 **Fields:**
@@ -104,6 +106,7 @@ The cf calls follow Context Forge's switching rule: arch (which switches the ini
 | `model` | string | no | Model alias for the dispatch action |
 | `review` | string or dict | no | Review template name, or `{template, model}` dict |
 | `checkpoint` | string | no | When to pause: `always`, `on-concerns`, `on-fail`, `never` (default: `never`) |
+| `existing` | string | no | `create` (default) — the dispatch always writes the artifact. `keep` — when the slice's design or tasks file already exists, skip the model call and go straight to the review (and any revise loop). Only valid on a slice's `design` or `tasks` step. `tasks-plan` uses it to re-review slices that already have tasks |
 
 **Example:**
 
@@ -344,7 +347,7 @@ Give each model role its own named `params` entry (as above) rather than leaving
 
 ### `devlog`
 
-**Purpose:** Write a DEVLOG entry capturing pipeline state.
+**Purpose:** Write a DEVLOG entry capturing pipeline state, then commit it. The commit stages only `DEVLOG.md`, as `docs: add DEVLOG entry for slice N`.
 
 **Fields:**
 
@@ -357,6 +360,62 @@ Prefer scalar shorthand:
 ```yaml
 - devlog: auto
 ```
+
+---
+
+### `branch`
+
+**Purpose:** Move the checkout onto a slice's branch, or merge that branch back. Code pipelines wrap `implement` in the pair.
+
+```yaml
+- branch: { op: enter }                       # slice defaults to "{slice}"
+- branch: { op: merge, slice: "{slice.index}" }
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `op` | string | yes | `enter` or `merge` |
+| `slice` | string | no | Slice index (default `{slice}`; use `{slice.index}` inside an `each`) |
+
+Any other key is rejected.
+
+**`enter`** puts the checkout on `{index}-slice.{name}`, creating it from the integration target (`git.integration_branch`, else `main`) or checking out the existing branch. It stops the run, naming the problem, when:
+
+- the checkout is on a branch that is neither the target nor a slice branch;
+- the working tree is not clean (it lists the paths; commit or remove them, then rerun phase 6 — the design and tasks commits from the run are kept);
+- cf cannot be read, the checkout is an unregistered `cf worktree`, or the branch is checked out in another worktree.
+
+If an earlier item ended on its own unmerged slice branch, `enter` commits that branch's leftovers (`chore: preserve uncommitted work on flagged slice N`), returns to the target with a WARNING, and carries on. A slice with no design file fails only that item.
+
+**`merge`** merges the slice branch into the target with a merge commit (`merge: slice N — name`). If the branch is already merged (an agent merged it itself), it succeeds without doing anything. A merge that fails — a conflict, or git refusing — is aborted so the target is never left mid-merge; the item is flagged and the branch stays unmerged for you. Branches are never deleted or pushed.
+
+**Validation:** an `implement` step must come after a `branch: {op: enter}` step — earlier in its own step list, or earlier in an enclosing list than the `loop:` or `each:` that contains it. Otherwise loading fails with `implement step … needs a preceding branch: {op: enter}`. **This is a deliberate break for custom pipelines with an `implement` step:** add the enter before it, and a merge after its review. There is no compatibility flag; without the enter, `implement` would run on whatever is checked out and its commit would refuse to stage.
+
+Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter → implement → devlog → branch merge`. A FAIL code review pauses at `checkpoint: on-fail` before the merge; a CONCERNS review merges.
+
+---
+
+### Commits
+
+Phase steps, `devlog`, and loops with `commit_each_iteration` commit through one plan: only the files that step produced are staged, and the message says what they are.
+
+**What is staged.** For a design, tasks or architecture step: the artifact, its review file, the slice plan file and `DEVLOG.md` — but only those that git shows as changed. Anything else dirty in the tree is left alone and named in a WARNING (`commit: step … left N dirty path(s) out of the commit`). The `devlog` step stages only `DEVLOG.md`. An `implement` commit stages everything, and refuses to unless the checkout is on that slice's `{index}-slice.*` branch.
+
+**Where it commits.** Design, tasks, architecture and loop-round commits must be on the integration target; a `devlog` commit may also be on its own slice branch. Anywhere else the run stops: `planning commit for slice N on {branch}; expected {target}`.
+
+**Messages.**
+
+| Staged | Message |
+|---|---|
+| new design or tasks file (+ review) | `docs: add slice 105 design (review: CONCERNS)` |
+| changed file, loop round n | `docs: revise slice 105 design, round 2 (review: PASS)` |
+| review only, step's own commit | `review: add slice 105 tasks review (CONCERNS)` |
+| review only, loop round n | `review: re-review slice 105 tasks, round 2 (CONCERNS)` |
+| `implement` | `feat: implement slice 105 (review: PASS)` |
+| architecture | `docs: revise initiative 180 architecture (review: PASS)` |
+| `devlog` | `docs: add DEVLOG entry for slice 105` |
+
+The verdict is read from the review file's frontmatter. The review clause is left out when no review file is committed. Nothing staged means no commit and a WARNING.
 
 ---
 
@@ -387,6 +446,7 @@ Item fields are accessed as dotted references: `{slice.index}`, `{slice.name}`, 
 
 - **Isolation.** Each item runs in its own scope: it sees the outputs of steps before the `each` plus its own inner steps, and nothing from other items. Item 2's revise dispatch never reads item 1's review.
 - **Pre-flagged items.** An item carrying `flag_reason` (e.g. `no design review found`) is recorded as FLAGGED with that reason and its body never runs, under either policy.
+- **Dependency flags.** Slice items carry `dependencies`, read from the `dependencies:` list in the slice's design frontmatter (each element's leading number, so `195` and `"195-slice.foo"` both mean slice 195; an element with no number is dropped with a WARNING). An item whose dependency was flagged earlier in the same run is flagged too (`dependency 195 flagged`) and its body never runs, under either policy — so one failure doesn't build a broken slice on top of it. This is transitive in run order. A dependency outside the run, already complete, or later in the run flags nothing, and the order is never changed.
 - **Pauses.** A checkpoint pause inside an item stops the run under either policy, so `sq run --resume` can pick it up. Batch pipelines use `checkpoint: never`.
 - Every flagged item is logged at WARNING with its reason.
 
@@ -453,9 +513,9 @@ The recommended body is **fix-first** — `[dispatch, review]`, no pre-loop judg
 - **Phase-shaped body** (`design`, `tasks`, `implement`): the phase step already commits once per iteration automatically, as the last action in its expansion. Do not also set `commit_each_iteration: true` on such a loop — validation rejects it, naming the offending step, because it would attempt to commit twice per round.
 - **Non-phase body** (e.g. `[dispatch, review]`, the judge-gated-cycle convention): commits nothing by default. Set `commit_each_iteration: true` to have squadron commit once after each iteration's body completes, before the `until:` check — this gives a dispatch-bodied loop the same per-round git history a phase-bodied loop already has.
 
-Each loop-appended commit's message is `chore: loop-{step name} (iteration N)`, so consecutive rounds are distinguishable in `git log` rather than emitting byte-identical subject lines. A round that changes nothing still no-ops at the git level (nothing to commit), but squadron logs a WARNING naming the pipeline, step, and iteration — a byte-identical round is now observable in the run log, not silent. `--dry-run` shows `commit_each_iteration` on the loop's summary line when set.
+Each loop-appended commit follows the [Commits](#commits) rules, so consecutive rounds read differently in `git log` (`docs: revise slice 105 design, round 2 (review: PASS)`). What a round commits is decided by the last `review` in the loop body: its template picks the subject (`slice` → design, `tasks` → tasks, `code` → implement, `arch` → architecture) and its `slice` or `plan` picks the target. A loop with `commit_each_iteration` and no `review` in its body fails that round's commit with `commit scope unknown: no review in round N`. A round that changes nothing still no-ops at the git level (nothing to commit), with a WARNING naming the step. `--dry-run` shows `commit_each_iteration` on the loop's summary line when set.
 
-Staging is unscoped (`git add -A`) — the same behavior a phase-emitted commit already has. Pipeline runs assume a clean working tree; an unrelated in-progress change in the working tree gets swept into the round's commit.
+Staging is scoped: only the files the round produced are committed. Unrelated changes in the working tree stay where they are.
 
 ### `revision_number:` — per-round artifact provenance
 
@@ -611,10 +671,11 @@ Actions are the internal execution units that step types expand into. Pipeline a
 | `review` | phase steps, standalone review step | Runs `sq review <template>` and captures verdict and findings |
 | `gate` | `gate` step | Reduces a named judge result and review result to one verdict (most-severe-wins) |
 | `checkpoint` | phase steps (when `checkpoint:` is set), `gate` step (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
-| `commit` | phase steps | Runs `git add -A && git commit` |
+| `commit` | phase steps, `devlog`, loops with `commit_each_iteration` | Stages only the files the step produced and commits them — see [Commits](#commits) |
+| `branch` | `branch` step | Enters or merges a slice's branch |
 | `compact` | compact step | Reduces context (session-rotate in true CLI; `/compact` dispatch in prompt-only) |
 | `summary` | summary step | Generates summary text and routes to emit destinations |
-| `devlog` | devlog step | Writes a DEVLOG entry |
+| `devlog` | devlog step | Writes a DEVLOG entry (the step then commits it) |
 
 ---
 
@@ -689,12 +750,12 @@ sq run --list    # shows all available pipelines with descriptions
 | `P2` | Phase 2 (architecture) for an initiative, with arch review | `plan`, `model`, `review-model`, `summary-model` |
 | `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
-| `P6` | Phase 6 (implement) with code review | `slice`, `model`, `review-model`, `summary-model` |
-| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → implement → compact → devlog | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
-| `P56` | Tasks (revised like `P5`) → compact → implement → compact → devlog | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P6` | Phase 6: `branch enter` → implement with code review → devlog → `branch merge` → summary | `slice`, `model`, `review-model`, `summary-model` |
+| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → `branch enter` → implement → compact → devlog → `branch merge` | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P56` | Tasks (revised like `P5`) → compact → `branch enter` → implement → compact → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `slices-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
-| `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
-| `implement` | Implementation only (design and tasks already exist) | `slice`, `model` |
+| `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable, and a re-review of slices whose tasks review is missing or below the threshold — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
+| `implement` | Implementation only (design and tasks already exist): `branch enter` → implement → devlog → `branch merge` | `slice`, `model` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice`, `model`, `review-model`, `max-revisions` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
@@ -728,7 +789,7 @@ Per slice, `slices-plan`:
 
 A design step that writes no design, a provider failure, or any other step failure also flags the slice and moves on.
 
-`tasks-plan` is the same shape over `cf.slices_needing_tasks`, with the `tasks` phase (5) and `tasks` review template. A slice whose design review is missing or below `accept-threshold` is flagged without running.
+`tasks-plan` is the same shape over `cf.slices_needing_tasks`, with the `tasks` phase (5) and `tasks` review template. It selects slices with no tasks file, and also slices that have tasks but whose tasks review is missing, unreadable or below `accept-threshold`. For a slice that already has tasks the step is `existing: keep`: no model call, just a review, and the revise loop only if the review finds problems — a slice whose tasks pass costs one review. A slice whose design review is missing or below `accept-threshold` is flagged without running.
 
 | Param | Default | Meaning |
 |---|---|---|
@@ -742,7 +803,7 @@ A design step that writes no design, a provider failure, or any other step failu
 **Things to know before running one:**
 
 - **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan, the last slice, and the batch's phase. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
-- **Commits land on the current branch.** Planning artifacts belong on the integration target; run the batch there.
+- **Commits land on the integration target.** Planning commits (design, tasks, loop rounds, devlog) are refused anywhere else, so start the batch from the target branch (`main`, or `git.integration_branch`). A batch started on another branch stops at its first commit.
 - **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `slices-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
 - **Run from a terminal.** `sq run` refuses inside a Claude Code session (#144), and these pipelines dispatch through an SDK session.
 - **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.
@@ -790,6 +851,8 @@ sq run --step-done <run-id>                            # mark current step compl
 ```
 
 The `/sq:run` slash command (installed via `sq install-commands`) wraps this loop automatically — you don't need to manage run IDs manually.
+
+Branch and commit steps render as the hidden `sq _branch enter|merge --slice N` and `sq _commit --subject … --slice N` commands, which run the same code the in-process executor does.
 
 `--step-done` also runs every bound `post-action` event action (the same
 ones the in-process executor fires after each action) before marking the

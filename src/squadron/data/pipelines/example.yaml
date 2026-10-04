@@ -165,6 +165,23 @@ steps:
   # -------------------------------------------------------------------------
 
   # - devlog: auto
+  #
+  # The devlog step commits its own entry (DEVLOG.md only).
+
+  # -------------------------------------------------------------------------
+  # branch — enter or merge a slice's branch
+  # -------------------------------------------------------------------------
+  # Options:
+  #   op:     enter | merge   (required)
+  #   slice:  slice index (default "{slice}"; "{slice.index}" inside an each)
+  #
+  # An implement step must come after a `branch: {op: enter}` step; add a merge
+  # after its review. Built-in code pipelines run:
+  #   branch enter -> implement -> devlog -> branch merge
+  # -------------------------------------------------------------------------
+
+  # - branch: { op: enter }
+  # - branch: { op: merge }
 
   # -------------------------------------------------------------------------
   # each — iterate over a collection, running inner steps per item

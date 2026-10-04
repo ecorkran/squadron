@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -43,12 +44,11 @@ def _ok(action_type: str) -> MagicMock:
 
 def test_tasks_plan_keeps_existing_tasks_and_validates() -> None:
     definition = load_pipeline("tasks-plan")
-    tasks_step = next(
-        s
-        for s in next(s for s in definition.steps if s.step_type == "each").config["steps"]  # type: ignore[union-attr]
-        if "tasks" in s
-    )
-    assert tasks_step["tasks"]["existing"] == "keep"  # type: ignore[index]
+    each = next(s for s in definition.steps if s.step_type == "each")
+    body = cast(list[dict[str, dict[str, object]]], each.config["steps"])
+    tasks_step = next(s["tasks"] for s in body if "tasks" in s)
+
+    assert tasks_step["existing"] == "keep"
     assert validate_pipeline(definition) == []
 
 
