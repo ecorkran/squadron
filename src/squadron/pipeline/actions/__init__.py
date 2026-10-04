@@ -30,6 +30,7 @@ class ActionType(StrEnum):
     COMMIT = "commit"
     DEVLOG = "devlog"
     GATE = "gate"
+    BRANCH = "branch"
 
 
 # Module-level registry: action type name -> Action instance
