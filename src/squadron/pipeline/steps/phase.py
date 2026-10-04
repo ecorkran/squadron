@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import cast
 
 from squadron.pipeline.actions.checkpoint import CheckpointTrigger
+from squadron.pipeline.commit_plan import REVIEW_TEMPLATE_PARAM, SUBJECT_PARAM, CommitSubject
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 from squadron.pipeline.steps.utils import validate_allowed_tools
@@ -22,6 +23,15 @@ _EXPECTED_ARTIFACT_KIND: dict[str, ArtifactKind | None] = {
     StepTypeName.DESIGN: ArtifactKind.DESIGN,
     StepTypeName.TASKS: ArtifactKind.TASKS,
     StepTypeName.IMPLEMENT: None,
+}
+
+
+# What each phase's own commit is about. An initiative-scoped step (a plan and no
+# slice) edits the architecture document whatever its phase name is.
+_COMMIT_SUBJECT: dict[str, CommitSubject] = {
+    StepTypeName.DESIGN: CommitSubject.DESIGN,
+    StepTypeName.TASKS: CommitSubject.TASKS,
+    StepTypeName.IMPLEMENT: CommitSubject.CODE,
 }
 
 
@@ -200,9 +210,25 @@ class PhaseStepType:
             checkpoint = cfg.get("checkpoint", CheckpointTrigger.NEVER)
             actions.append(("checkpoint", {"trigger": checkpoint}))
 
-        actions.append(("commit", {"message_prefix": f"phase-{phase}", **target}))
+        subject = CommitSubject.ARCHITECTURE if initiative_scoped else _COMMIT_SUBJECT[self._phase_name]
+        commit_config: dict[str, object] = {SUBJECT_PARAM: subject, **target}
+        # The step's own review (if any) is what its commit reports a verdict for.
+        review_template = _review_template(cfg.get("review"))
+        if review_template is not None:
+            commit_config[REVIEW_TEMPLATE_PARAM] = review_template
+        actions.append(("commit", commit_config))
 
         return actions
+
+
+def _review_template(review: object) -> str | None:
+    """The template named by a phase step's ``review:`` (a string, or a dict with ``template``)."""
+    if isinstance(review, str):
+        return review
+    if isinstance(review, dict):
+        template = cast(dict[str, object], review).get("template")
+        return str(template) if template is not None else None
+    return None
 
 
 register_step_type(StepTypeName.DESIGN, PhaseStepType("design"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from squadron.pipeline.commit_plan import CommitSubject
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
 
@@ -146,7 +147,10 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
         {"template": "slice", "model": None, "slice": "{slice}"},
     )
     assert actions[5] == ("checkpoint", {"trigger": "on-concerns"})
-    assert actions[6] == ("commit", {"message_prefix": "phase-4", "slice": "{slice}"})
+    assert actions[6] == (
+        "commit",
+        {"commit_subject": CommitSubject.DESIGN, "slice": "{slice}", "review_template": "slice"},
+    )
 
 
 def test_expand_with_plan_sets_arch_first(design_step: PhaseStepType) -> None:
@@ -237,10 +241,38 @@ def test_expand_dispatch_model_none(design_step: PhaseStepType) -> None:
     assert dispatch == ("dispatch", {"model": None, "slice": "{slice}"})
 
 
-def test_expand_commit_prefix_includes_phase(design_step: PhaseStepType) -> None:
+def test_expand_commit_names_its_subject_not_the_step(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 7}))
     commit = actions[-1]
-    assert commit == ("commit", {"message_prefix": "phase-7", "slice": "{slice}"})
+    assert commit == ("commit", {"commit_subject": CommitSubject.DESIGN, "slice": "{slice}"})
+
+
+@pytest.mark.parametrize(
+    ("phase_name", "subject"),
+    [
+        ("design", CommitSubject.DESIGN),
+        ("tasks", CommitSubject.TASKS),
+        ("implement", CommitSubject.CODE),
+    ],
+)
+def test_commit_subject_follows_the_phase(phase_name: str, subject: CommitSubject) -> None:
+    actions = PhaseStepType(phase_name).expand(_make_config({"phase": 4}))
+    assert actions[-1][1]["commit_subject"] == subject
+
+
+def test_initiative_scoped_step_commits_the_architecture() -> None:
+    actions = PhaseStepType("design").expand(_make_config({"phase": 2, "plan": "{plan}"}))
+    assert actions[-1] == (
+        "commit",
+        {"commit_subject": CommitSubject.ARCHITECTURE, "plan": "{plan}"},
+    )
+
+
+def test_commit_carries_the_review_template_from_a_dict_review(design_step: PhaseStepType) -> None:
+    actions = design_step.expand(
+        _make_config({"phase": 4, "review": {"template": "tasks", "model": "opus"}})
+    )
+    assert actions[-1][1]["review_template"] == "tasks"
 
 
 def test_expand_uses_step_config_slice_when_present(design_step: PhaseStepType) -> None:

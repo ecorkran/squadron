@@ -31,6 +31,8 @@ from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
 )
+from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
+from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
     ExhaustBehavior,
     LoopCondition,
@@ -109,7 +111,7 @@ def _summarize_action_config(
         case "compact":
             return f"template={config.get('template', '?')}"
         case "commit":
-            return f"prefix={config.get('message_prefix', '?')}"
+            return f"subject={config.get(SUBJECT_PARAM, '?')}"
         case _:
             return str(config) if config else ""
 
@@ -1325,21 +1327,31 @@ async def _execute_loop_body(
         # history. Validation (LoopStepType) already rejects this option
         # when the body itself commits, so no double-commit is possible here.
         if loop_config.commit_each_iteration:
-            commit_ctx = ActionContext(
-                pipeline_name=pipeline_name,
-                run_id=run_id,
-                params={"message_prefix": step.name},
-                step_name=step.name,
-                step_index=step_index,
-                prior_outputs=running_prior,
-                resolver=resolver,
-                cf_client=cf_client,
-                cwd=cwd,
-                sdk_session=sdk_session,
-                step_outputs=visible_step_outputs,
-                iteration=iteration,
-            )
-            commit_result = await get_action_fn("commit").execute(commit_ctx)
+            try:
+                round_commit = round_commit_params(inner_steps, merged_params, iteration)
+            except (CommitScopeUnknownError, UnmappedTemplateError) as exc:
+                # A round whose scope is unknown commits nothing: guessing would stage
+                # the wrong files. The failure is visible in the round's results.
+                _logger.warning("loop %s round %d commit failed: %s", step.name, iteration, exc)
+                commit_result = ActionResult(
+                    success=False, action_type="commit", outputs={}, error=str(exc)
+                )
+            else:
+                commit_ctx = ActionContext(
+                    pipeline_name=pipeline_name,
+                    run_id=run_id,
+                    params=round_commit,
+                    step_name=step.name,
+                    step_index=step_index,
+                    prior_outputs=running_prior,
+                    resolver=resolver,
+                    cf_client=cf_client,
+                    cwd=cwd,
+                    sdk_session=sdk_session,
+                    step_outputs=visible_step_outputs,
+                    iteration=iteration,
+                )
+                commit_result = await get_action_fn("commit").execute(commit_ctx)
             iteration_action_results.append(commit_result)
             # Same key scheme as the inner-step loop above; len(inner_steps)
             # is one past the last real inner_step_index, so it can't collide.

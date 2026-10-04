@@ -190,25 +190,26 @@ status: in_progress
 
 ## Task 15a — `CommitAction`: plan staging and messages
 
-- [ ] Rework `pipeline/actions/commit.py` to stage `CommitPlan.paths` and use the plan's message (D2)
-  - [ ] Explicit `params["message"]` still honored verbatim
-  - [ ] Remove `message_prefix` and the `(iteration n)` suffix
-  - [ ] Nothing staged → `committed: False` and WARNING `commit: step {name} produced no changes to commit`; left-out paths named in a WARNING
-  - [ ] `git add -A` is never a default
-  - [ ] `git add`/`git commit` nonzero exit with stderr → ordinary action failure carrying stderr
-- [ ] Add tests (temp repo): stray file stays modified and is named in the WARNING; nothing staged; explicit message honored; hook rejection as failure
-  - [ ] Success: tests pass; design criteria 1 and 3 hold
-- [ ] Commit: `feat: stage only planned paths in the commit action`
+- [x] Rework `pipeline/actions/commit.py` to stage `CommitPlan.paths` and use the plan's message (D2)
+  - [x] Explicit `params["message"]` still honored verbatim
+  - [x] Remove `message_prefix` and the `(iteration n)` suffix
+  - [x] Nothing staged → `committed: False` and WARNING `commit: step {name} produced no changes to commit`; left-out paths named in a WARNING
+  - [x] `git add -A` is never a default
+  - [x] `git add`/`git commit` nonzero exit with stderr → ordinary action failure carrying stderr
+  - **Contract:** `CommitAction` reads params `commit_subject`, `slice`, `plan`, `review_template` (round = `context.iteration`); with no subject it accepts explicit `paths` plus `message` (user pipelines) and otherwise fails with 'refusing to stage everything'. Commits use `git commit -- <paths>` so anything pre-staged by the operator stays out. `current_branch` was added to `pipeline/git_ops.py`; `get_config` was added to `CfClientProtocol`. NOTE: the findings-addressed e2e test stays red until Task 16 rewires the executor/phase callers.
+- [x] Add tests (temp repo): stray file stays modified and is named in the WARNING; nothing staged; explicit message honored; hook rejection as failure
+  - [x] Success: tests pass; design criteria 1 and 3 hold
+- [x] Commit: `feat: stage only planned paths in the commit action`
 
 ## Task 15b — `CommitAction`: branch guards and timeout
 
-- [ ] Add the guards (D3, D6 commit paragraph, D8)
-  - [ ] `stage_all` honored only on `{index}-slice.*` for the plan's slice (`parse_slice_branch`); else fail with `refusing to stage all changes off the slice branch (on {branch})`
-  - [ ] Non-CODE commit off the target raises `GitEnvironmentError` (`planning commit for slice {n} on {branch}; expected {target}`), except a DEVLOG commit on its own slice branch; target read with `read_integration_target`
-  - [ ] `run_git` returning `None` during add or commit → `GitStateUnknownError`, logged at ERROR
-- [ ] Add tests: CODE on its slice branch stages all; CODE off the branch refused; design/tasks/architecture commit off the target raises; DEVLOG on its own slice branch succeeds; DEVLOG on another slice's branch raises; timeout raises `GitStateUnknownError` with the ERROR log
-  - [ ] Success: tests pass; design criterion 7b holds
-- [ ] Commit: `feat: guard commit placement and classify git timeouts`
+- [x] Add the guards (D3, D6 commit paragraph, D8)
+  - [x] `stage_all` honored only on `{index}-slice.*` for the plan's slice (`parse_slice_branch`); else fail with `refusing to stage all changes off the slice branch (on {branch})`
+  - [x] Non-CODE commit off the target raises `GitEnvironmentError` (`planning commit for slice {n} on {branch}; expected {target}`), except a DEVLOG commit on its own slice branch; target read with `read_integration_target`
+  - [x] `run_git` returning `None` during add or commit → `GitStateUnknownError`, logged at ERROR
+- [x] Add tests: CODE on its slice branch stages all; CODE off the branch refused; design/tasks/architecture commit off the target raises; DEVLOG on its own slice branch succeeds; DEVLOG on another slice's branch raises; timeout raises `GitStateUnknownError` with the ERROR log
+  - [x] Success: tests pass; design criterion 7b holds
+- [x] Commit: `feat: guard commit placement and classify git timeouts`
 
 ## Task 16 — Phase step and loop-round callers
 

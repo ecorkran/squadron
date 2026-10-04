@@ -708,7 +708,7 @@ async def test_commit_each_iteration_invokes_commit_per_round() -> None:
     commit_action = MagicMock()
     commit_action.execute = AsyncMock(side_effect=_commit_side_effect)
 
-    inner_st = _mock_step_type([("review", {})])
+    inner_st = _mock_step_type([("review", {"template": "slice", "slice": "105"})])
     register_step_type("_lb_commit_each_t15", inner_st)
 
     pipeline = _pipeline(
@@ -737,6 +737,12 @@ async def test_commit_each_iteration_invokes_commit_per_round() -> None:
     assert result.step_results[0].iteration == 3
     assert commit_action.execute.call_count == 3
     assert [ctx.iteration for ctx in captured_contexts] == [1, 2, 3]
+    # The round's commit is scoped from its review: design subject, slice 105 (D1).
+    assert captured_contexts[0].params == {
+        "commit_subject": "design",
+        "review_template": "slice",
+        "slice": "105",
+    }
     # The final iteration's commit result is present in action_results.
     assert any(ar.action_type == "commit" for ar in result.step_results[0].action_results)
 
@@ -1849,3 +1855,41 @@ def test_max_non_numeric_string_fails_naming_max() -> None:
 
     with pytest.raises(ValueError, match="loop.max"):
         parse_loop_config({"max": "three"})
+
+
+@pytest.mark.asyncio
+async def test_round_without_a_review_fails_its_commit_and_commits_nothing() -> None:
+    """A round whose scope is unknown must not guess at what to stage."""
+    commit_action = MagicMock()
+    commit_action.execute = AsyncMock()
+    register_step_type("_lb_no_review_t16", _mock_step_type([("dispatch", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "no-review-loop",
+                {
+                    "max": 1,
+                    "commit_each_iteration": True,
+                    "steps": [{"_lb_no_review_t16": {}}],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={
+            "dispatch": _mock_action([_action_result(True, "dispatch")]),
+            "commit": commit_action,
+        },
+    )
+
+    commit_results = [r for r in result.step_results[0].action_results if r.action_type == "commit"]
+    assert len(commit_results) == 1
+    assert commit_results[0].success is False
+    assert commit_results[0].error == "commit scope unknown: no review in round 1"
+    commit_action.execute.assert_not_called()

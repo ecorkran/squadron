@@ -23,9 +23,11 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.steps import register_step_type
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
+from tests.pipeline.conftest import phase_artifact_cf_client
 
 _JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
 _TARGET_FILE = "src/x.py"
+_SLICE = 305
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -43,6 +45,8 @@ def repo(tmp_path: Path) -> Path:
     target.write_text("round 0\n")
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-m", "initial")
+    # A code-review loop commits with stage_all, which is allowed only on the slice's branch.
+    _git(tmp_path, "checkout", "-b", f"{_SLICE}-slice.settled")
     return tmp_path
 
 
@@ -138,7 +142,10 @@ async def _run(
     suffix: str,
 ) -> Any:
     register_step_type(f"_fa_dispatch_{suffix}", _mock_step_type([("dispatch", {})]))
-    register_step_type(f"_fa_review_{suffix}", _mock_step_type([("review", {})]))
+    register_step_type(
+        f"_fa_review_{suffix}",
+        _mock_step_type([("review", {"template": "code", "slice": str(_SLICE)})]),
+    )
 
     review_action = MagicMock()
     review_action.execute = AsyncMock(side_effect=reviews)
@@ -147,7 +154,9 @@ async def _run(
         _pipeline(checkpoint=checkpoint, suffix=suffix),
         {"slice": 305},
         resolver=MagicMock(**{"resolve.return_value": ("claude-sonnet-5", "sdk")}),
-        cf_client=MagicMock(),
+        cf_client=phase_artifact_cf_client(
+            _SLICE, f"project-documents/user/slices/{_SLICE}-slice.settled.md", "settled.md"
+        ),
         cwd=str(repo),
         _action_registry={
             "dispatch": dispatch,

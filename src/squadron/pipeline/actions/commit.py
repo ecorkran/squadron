@@ -12,7 +12,16 @@ from pathlib import Path
 from typing import cast
 
 from squadron.pipeline.actions import ActionType, register_action
-from squadron.pipeline.commit_plan import CommitPlan, CommitSubject, CommitTarget, build_commit_plan
+from squadron.pipeline.commit_plan import (
+    PLAN_PARAM,
+    REVIEW_TEMPLATE_PARAM,
+    SLICE_PARAM,
+    SUBJECT_PARAM,
+    CommitPlan,
+    CommitSubject,
+    CommitTarget,
+    build_commit_plan,
+)
 from squadron.pipeline.git_ops import (
     ConfigReader,
     GitEnvironmentError,
@@ -25,12 +34,6 @@ from squadron.pr.branch import parse_slice_branch
 from squadron.review.git_utils import run_git
 
 _logger = logging.getLogger(__name__)
-
-# Param keys a scoped commit reads; the step that builds the action sets them.
-SUBJECT_PARAM = "commit_subject"
-SLICE_PARAM = "slice"
-PLAN_PARAM = "plan"
-REVIEW_TEMPLATE_PARAM = "review_template"
 
 
 class CommitAction:

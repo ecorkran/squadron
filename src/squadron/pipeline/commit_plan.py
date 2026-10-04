@@ -32,6 +32,13 @@ _logger = logging.getLogger(__name__)
 # planning commit, since a step may write an entry as it works.
 DEVLOG_FILE = "DEVLOG.md"
 
+# Action param keys a scoped commit reads. The step or loop that builds the commit
+# action sets them; ``CommitAction`` and the hidden ``sq _commit`` read them.
+SUBJECT_PARAM = "commit_subject"
+SLICE_PARAM = "slice"
+PLAN_PARAM = "plan"
+REVIEW_TEMPLATE_PARAM = "review_template"
+
 
 class CommitSubject(StrEnum):
     """What a commit is about; it decides the candidate paths and the message."""
