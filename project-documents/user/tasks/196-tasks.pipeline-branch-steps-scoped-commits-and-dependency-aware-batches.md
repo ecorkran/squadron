@@ -92,10 +92,10 @@ status: in_progress
 
 ## Task 6 — `sq review` delegates to the shared check
 
-- [ ] `cli/commands/review.py` `_reject_unknown_alias` calls `require_known_model` and prints its message (interface parity, D13)
-- [ ] Add a test that `sq review slice N --model <bad>` prints the same message `sq run` gives for the same alias
-  - [ ] Success: tests pass; no duplicate difflib logic remains in `review.py`
-- [ ] Commit: `refactor: route sq review alias check through require_known_model`
+- [x] `cli/commands/review.py` `_reject_unknown_alias` calls `require_known_model` and prints its message (interface parity, D13)
+- [x] Add a test that `sq review slice N --model <bad>` prints the same message `sq run` gives for the same alias
+  - [x] Success: tests pass; no duplicate difflib logic remains in `review.py`
+- [x] Commit: `refactor: route sq review alias check through require_known_model`
 
 ## Task 7 — Shared model-candidate helper and `-v` label (#179)
 

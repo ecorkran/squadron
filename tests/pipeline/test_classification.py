@@ -862,3 +862,84 @@ def test_pool_candidates_are_not_alias_checked() -> None:
     steps = [make_step("dispatch", "pool-step", {"model": "pool:sdk-pool"})]
     result = classify_pipeline(make_pipeline(steps), make_resolver(pool_backend=spy), pool_backend=spy)
     assert result.steps[0].pool_name == "sdk-pool"
+
+
+# ---------------------------------------------------------------------------
+# #179 — the -v action label names the candidate the resolver picks
+# ---------------------------------------------------------------------------
+
+
+def test_label_shows_the_cli_override_alias() -> None:
+    """``--model haiku`` labels the action ``model=haiku``, not the YAML default."""
+    from squadron.pipeline.executor import (
+        _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    resolver = make_resolver(cli_override="haiku", pipeline_model="sonnet")
+    label = _summarize_action_config("dispatch", {"model": "sonnet"}, resolver, None)
+    assert label == "model=haiku"
+
+
+def test_label_shows_pool_reference() -> None:
+    from squadron.pipeline.executor import (
+        _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    resolver = make_resolver(pipeline_model="pool:review")
+    assert _summarize_action_config("dispatch", {}, resolver, None) == "model=pool:review"
+
+
+def test_review_label_keeps_template_and_shows_model() -> None:
+    from squadron.pipeline.executor import (
+        _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    resolver = make_resolver(config_default="opus")
+    label = _summarize_action_config("review", {"template": "slice", "model": "haiku"}, resolver, None)
+    assert label == "template=slice, model=haiku"
+
+
+def test_label_shows_step_model_when_nothing_above_it_is_set() -> None:
+    from squadron.pipeline.executor import (
+        _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    resolver = make_resolver(pipeline_model="sonnet")
+    assert _summarize_action_config("dispatch", {}, resolver, "opus") == "model=opus"
+
+
+def test_no_candidate_labels_session_for_session_reusing_actions() -> None:
+    from squadron.pipeline.classification import action_model_label
+
+    assert action_model_label(make_resolver(), "compact", {}, None) == "model=session"
+
+
+def test_no_candidate_never_labels_default_or_none() -> None:
+    from squadron.pipeline.classification import action_model_label
+
+    label = action_model_label(make_resolver(), "dispatch", {}, None)
+    assert label == "model=unresolved"
+
+
+@pytest.mark.parametrize(
+    ("cli_override", "pipeline_model", "action_model"),
+    [("haiku", "sonnet", None), (None, "sonnet", "opus"), (None, "pool:review", None)],
+)
+def test_label_and_classifier_agree(
+    cli_override: str | None, pipeline_model: str | None, action_model: str | None
+) -> None:
+    from squadron.pipeline.classification import action_model_label
+
+    spy = SpyPoolBackend(
+        {"review": ModelPool(name="review", description="", models=["sonnet"], strategy="round-robin")}
+    )
+    resolver = make_resolver(cli_override=cli_override, pipeline_model=pipeline_model, pool_backend=spy)
+    config: dict[str, object] = {"model": action_model} if action_model else {}
+    result = classify_pipeline(
+        make_pipeline([make_step("dispatch", "d", config)], model=pipeline_model),
+        resolver,
+        pool_backend=spy,
+    )
+    row = result.steps[0]
+    expected = row.resolved_alias or f"pool:{row.pool_name}"
+    assert action_model_label(resolver, "dispatch", config, None) == f"model={expected}"

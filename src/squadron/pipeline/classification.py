@@ -268,6 +268,47 @@ def _classify_pool_step(
     )
 
 
+def action_model_candidate(
+    resolver: ModelResolver,
+    action_type: str,
+    action_config: dict[str, object],
+    step_model: str | None,
+) -> str | None:
+    """The first model candidate an action would resolve, or ``None`` when it has none.
+
+    ``action_config`` has its placeholders already resolved. This is the one place
+    the classifier and the ``-v`` action label read the cascade (#179), so they
+    cannot disagree: the resolver's cascade, then a review template's own default.
+    """
+    action_model_raw = action_config.get("model")
+    action_model = action_model_raw if isinstance(action_model_raw, str) else None
+    candidates = resolver.cascade_candidates(action_model=action_model, step_model=step_model)
+    candidate = next((c for c in candidates if c is not None), None)
+    if candidate is None:
+        candidate = _review_template_model_fallback(action_type, action_config)
+    return candidate
+
+
+def action_model_label(
+    resolver: ModelResolver,
+    action_type: str,
+    action_config: dict[str, object],
+    step_model: str | None,
+) -> str:
+    """The ``model=…`` label for verbose logs: the candidate the resolver picks (#179).
+
+    An alias (``haiku``) or a pool reference (``pool:review``). An action that may
+    reuse the live session shows ``session``; any other action with no candidate
+    shows ``unresolved`` (classification rejects that pipeline before it runs).
+    """
+    candidate = action_model_candidate(resolver, action_type, action_config, step_model)
+    if candidate is not None:
+        return f"model={candidate}"
+    if action_type in _SESSION_MODEL_ACTION_TYPES:
+        return "model=session"
+    return "model=unresolved"
+
+
 def _collect_unknown_alias(
     candidate: str,
     classify_params: dict[str, object],
@@ -359,13 +400,8 @@ def _classify_container_inner(
         resolved_cfg = resolve_placeholders(action_cfg, classify_params)
         if _calls_no_new_model(action_type, resolved_cfg):
             continue
-        action_model_raw = resolved_cfg.get("model")
-        action_model = action_model_raw if isinstance(action_model_raw, str) else None
 
-        candidates = resolver.cascade_candidates(action_model=action_model, step_model=None)
-        candidate = next((c for c in candidates if c is not None), None)
-        if candidate is None:
-            candidate = _review_template_model_fallback(action_type, resolved_cfg)
+        candidate = action_model_candidate(resolver, action_type, resolved_cfg, None)
         if candidate is None and action_type in _SESSION_MODEL_ACTION_TYPES:
             continue
 
@@ -540,16 +576,7 @@ def classify_pipeline(
             resolved_cfg = resolve_placeholders(action_cfg, classify_params)
             if _calls_no_new_model(action_type, resolved_cfg):
                 continue
-            action_model_raw = resolved_cfg.get("model")
-            action_model = action_model_raw if isinstance(action_model_raw, str) else None
-
-            candidates = resolver.cascade_candidates(
-                action_model=action_model,
-                step_model=step_model,
-            )
-            candidate = next((c for c in candidates if c is not None), None)
-            if candidate is None:
-                candidate = _review_template_model_fallback(action_type, resolved_cfg)
+            candidate = action_model_candidate(resolver, action_type, resolved_cfg, step_model)
             if candidate is None and action_type in _SESSION_MODEL_ACTION_TYPES:
                 continue
 

@@ -77,8 +77,18 @@ __all__ = [
 # ---------------------------------------------------------------------------
 
 
-def _summarize_action_config(action_type: str, config: dict[str, object]) -> str:
-    """One-line summary of action config for verbose logging."""
+def _summarize_action_config(
+    action_type: str,
+    config: dict[str, object],
+    resolver: ModelResolver,
+    step_model: str | None,
+) -> str:
+    """One-line summary of action config for verbose logging.
+
+    The model shown is the candidate the resolver picks, not the raw config key (#179).
+    """
+    from squadron.pipeline.classification import action_model_label
+
     match action_type:
         case "cf-op":
             op = config.get("operation", "?")
@@ -90,12 +100,10 @@ def _summarize_action_config(action_type: str, config: dict[str, object]) -> str
                 return f"set_arch({config.get('plan', '?')})"
             return str(op)
         case "dispatch":
-            model = config.get("model", "default")
-            return f"model={model}"
+            return action_model_label(resolver, action_type, config, step_model)
         case "review":
             tmpl = config.get("template", "?")
-            model = config.get("model", "default")
-            return f"template={tmpl}, model={model}"
+            return f"template={tmpl}, {action_model_label(resolver, action_type, config, step_model)}"
         case "checkpoint":
             return f"trigger={config.get('trigger', '?')}"
         case "compact":
@@ -809,12 +817,21 @@ async def _execute_step_once(
         resolved_action_config = resolve_placeholders(action_config, merged_params)
         merged_action_params = {**merged_params, **resolved_action_config}
 
+        # Same read the actions make, so the label matches what they resolve.
+        step_model = (
+            str(merged_action_params["step_model"]) if "step_model" in merged_action_params else None
+        )
         _logger.info(
             "  action %d/%d: %s %s",
             action_index + 1,
             len(actions),
             action_type,
-            _summarize_action_config(action_type, resolved_action_config),
+            _summarize_action_config(
+                action_type,
+                resolved_action_config,
+                resolver,
+                step_model,
+            ),
         )
 
         ctx = ActionContext(
