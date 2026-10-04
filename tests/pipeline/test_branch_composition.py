@@ -46,7 +46,7 @@ async def _run_batch(
     monkeypatch: pytest.MonkeyPatch,
     repo: Path,
     runs_dir: Path,
-    implement: dict[str, tuple[bool, bool]],
+    implement: dict[int, tuple[bool, bool]],
 ):
     """Run the composition. ``implement`` maps slice index -> (writes a file, succeeds).
 

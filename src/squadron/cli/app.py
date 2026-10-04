@@ -9,6 +9,7 @@ import typer
 from dotenv import load_dotenv
 
 from squadron.cli.commands.auth import auth_app
+from squadron.cli.commands.branch_run import branch_run
 from squadron.cli.commands.commit_run import commit_run
 from squadron.cli.commands.config import config_app
 from squadron.cli.commands.dispatch_run import dispatch_run
@@ -70,6 +71,7 @@ app.command("_summary-instructions", hidden=True)(summary_instructions)
 app.command("_summary-run", hidden=True)(summary_run)
 app.command("_dispatch-run", hidden=True)(dispatch_run)
 app.command("_commit", hidden=True)(commit_run)
+app.command("_branch", hidden=True)(branch_run)
 
 
 def _load_env_file() -> None:

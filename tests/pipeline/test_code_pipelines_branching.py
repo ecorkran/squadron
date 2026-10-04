@@ -13,8 +13,8 @@ from squadron.pipeline.actions.commit import CommitAction
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline, validate_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
-from squadron.review.git_utils import (  # pyright: ignore[reportPrivateUsage]
-    _find_slice_branch,
+from squadron.review.git_utils import (
+    _find_slice_branch,  # pyright: ignore[reportPrivateUsage]
     resolve_slice_diff_range,
 )
 from tests.conftest import run_test_git

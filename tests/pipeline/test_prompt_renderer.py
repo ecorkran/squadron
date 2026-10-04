@@ -16,6 +16,7 @@ from squadron.pipeline.prompt_renderer import (
     ActionInstruction,
     CompletionResult,
     StepInstructions,
+    _render_branch,
     _render_cf_op,
     _render_checkpoint,
     _render_commit,
@@ -299,6 +300,38 @@ class TestRenderCommit:
     def test_missing_subject_raises(self) -> None:
         with pytest.raises(ValueError, match="commit_subject"):
             _render_commit({}, {})
+
+
+class TestRenderBranch:
+    def test_enter_and_merge_render_sq_branch(self) -> None:
+        enter = _render_branch({"op": "enter", "slice": "105"}, {})
+        merge = _render_branch({"op": "merge", "slice": "105"}, {})
+
+        assert enter.action_type == ActionType.BRANCH
+        assert enter.command == "sq _branch enter --slice 105"
+        assert merge.command == "sq _branch merge --slice 105"
+
+    def test_slice_falls_back_to_the_pipeline_param(self) -> None:
+        result = _render_branch({"op": "enter"}, {"slice": "152"})
+        assert result.command == "sq _branch enter --slice 152"
+
+    def test_missing_slice_raises(self) -> None:
+        with pytest.raises(ValueError, match="needs a slice index"):
+            _render_branch({"op": "enter"}, {})
+
+    def test_branch_step_renders_through_the_step_pipeline(self) -> None:
+        step = StepConfig(step_type="branch", name="branch-0", config={"op": "merge"})
+
+        result = render_step_instructions(
+            step,
+            step_index=0,
+            total_steps=1,
+            params={"slice": "152"},
+            resolver=_make_resolver(),
+            run_id="run-test",
+        )
+
+        assert [a.command for a in result.actions] == ["sq _branch merge --slice 152"]
 
 
 class TestRenderLoopRoundCommit:

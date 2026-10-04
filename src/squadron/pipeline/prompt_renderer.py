@@ -336,6 +336,24 @@ def _render_commit(
     )
 
 
+def _render_branch(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a branch action: ``sq _branch enter|merge --slice N``."""
+    op = config.get("op")
+    if op is None:
+        raise ValueError("branch action has no 'op'; cannot render it")
+    slice_ref = config.get(SLICE_PARAM) or params.get(SLICE_PARAM)
+    if not isinstance(slice_ref, str | int) or slice_ref == "":
+        raise ValueError(f"branch {op} needs a slice index, got {slice_ref!r}")
+    return ActionInstruction(
+        action_type=ActionType.BRANCH,
+        instruction=f"{str(op).capitalize()} the slice branch",
+        command=shlex.join(["sq", "_branch", str(op), "--slice", str(slice_ref)]),
+    )
+
+
 def render_loop_round_commit(
     inner_steps: Sequence[StepConfig], params: dict[str, object], round_number: int
 ) -> ActionInstruction:
@@ -453,6 +471,7 @@ _BUILDERS: dict[str, object] = {
     ActionType.REVIEW: _render_review,
     ActionType.CHECKPOINT: _render_checkpoint,
     ActionType.COMMIT: _render_commit,
+    ActionType.BRANCH: _render_branch,
     ActionType.COMPACT: _render_compact,
     ActionType.SUMMARY: _render_summary,
     ActionType.DEVLOG: _render_devlog,
