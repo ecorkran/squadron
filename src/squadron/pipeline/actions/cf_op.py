@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import logging
 from enum import StrEnum
-from pathlib import Path
 from typing import cast
 
-from squadron.documents.frontmatter import read_frontmatter
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
@@ -26,24 +24,6 @@ class CfOperation(StrEnum):
     SET_SLICE = "set_slice"
     BUILD_CONTEXT = "build_context"
     SUMMARIZE = "summarize"
-
-
-def _plan_parent_arch(cf_client: ContextForgeClient, plan: str, cwd: str) -> str:
-    """The arch document stem that owns slice plan *plan* (slice 195 D2).
-
-    ``cf set arch`` switches the initiative and sets its plan, which relies on
-    each arch owning exactly one slice plan. ``cf set plan`` is never used.
-
-    Raises:
-        ContextForgeError: if the plan file has no ``parent:`` frontmatter —
-            naming the file, since that is what the operator has to fix.
-    """
-    plan_path = cf_client.slice_plan_path(plan)
-    frontmatter = read_frontmatter(Path(cwd) / plan_path)
-    parent = frontmatter.get("parent") if frontmatter is not None else None
-    if not isinstance(parent, str) or not parent:
-        raise ContextForgeError(f"set_arch: slice plan {plan_path} has no 'parent:' frontmatter")
-    return Path(parent).stem
 
 
 class CfOpAction:
@@ -122,8 +102,10 @@ class CfOpAction:
         try:
             match operation:
                 case CfOperation.SET_ARCH:
-                    arch = _plan_parent_arch(cf_client, str(context.params["plan"]), context.cwd)
-                    stdout = cf_client._run(["set", "arch", arch])  # pyright: ignore[reportPrivateUsage]
+                    # cf resolves the index (arch doc, else initiative-plan entry)
+                    # and switches the initiative and its slice plan together.
+                    plan = str(context.params["plan"])
+                    stdout = cf_client._run(["set", "arch", plan])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.SET_PHASE:
                     phase = context.params["phase"]
                     stdout = cf_client._run(["set", "phase", str(phase)])  # pyright: ignore[reportPrivateUsage]

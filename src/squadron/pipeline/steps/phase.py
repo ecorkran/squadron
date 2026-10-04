@@ -151,9 +151,14 @@ class PhaseStepType:
         # record rather than a scalar index). Prefer it over the bare
         # "{slice}" default so per-action placeholder resolution reaches the
         # loop item's .index field instead of stringifying the whole record.
-        slice_ref = cfg.get("slice", "{slice}")
+        # A step with a plan and no slice is initiative-scoped (e.g. phase 2,
+        # architecture): there is no slice to set, and its review covers the
+        # initiative's architecture document.
+        initiative_scoped = "plan" in cfg and "slice" not in cfg
+        slice_ref = None if initiative_scoped else cfg.get("slice", "{slice}")
+        target: dict[str, object] = {"plan": cfg["plan"]} if initiative_scoped else {"slice": slice_ref}
 
-        dispatch_config: dict[str, object] = {"model": model, "slice": slice_ref}
+        dispatch_config: dict[str, object] = {"model": model, **target}
         # Conditional, not unconditional: an absent key must leave the
         # expanded dict byte-identical to its pre-324 shape, which the
         # existing exact-equality expand() tests assert.
@@ -166,18 +171,19 @@ class PhaseStepType:
         # cf's switching rule (slice 195 D2): arch (switches initiative and
         # plan) → slice (must be in that plan) → phase → build.
         actions: list[tuple[str, dict[str, object]]] = [
-            ("cf-op", {"operation": "set_slice", "slice": slice_ref}),
             ("cf-op", {"operation": "set_phase", "phase": phase}),
             ("cf-op", {"operation": "build_context"}),
             ("dispatch", dispatch_config),
         ]
+        if not initiative_scoped:
+            actions.insert(0, ("cf-op", {"operation": "set_slice", "slice": slice_ref}))
         if "plan" in cfg:
             actions.insert(0, ("cf-op", {"operation": "set_arch", "plan": cfg["plan"]}))
 
         review = cfg.get("review")
         if review is not None:
             if isinstance(review, str):
-                actions.append(("review", {"template": review, "model": None, "slice": slice_ref}))
+                actions.append(("review", {"template": review, "model": None, **target}))
             elif isinstance(review, dict):
                 review_dict = cast(dict[str, object], review)
                 actions.append(
@@ -186,7 +192,7 @@ class PhaseStepType:
                         {
                             "template": review_dict["template"],
                             "model": review_dict.get("model"),
-                            "slice": slice_ref,
+                            **target,
                         },
                     )
                 )
@@ -194,7 +200,7 @@ class PhaseStepType:
             checkpoint = cfg.get("checkpoint", CheckpointTrigger.NEVER)
             actions.append(("checkpoint", {"trigger": checkpoint}))
 
-        actions.append(("commit", {"message_prefix": f"phase-{phase}", "slice": slice_ref}))
+        actions.append(("commit", {"message_prefix": f"phase-{phase}", **target}))
 
         return actions
 

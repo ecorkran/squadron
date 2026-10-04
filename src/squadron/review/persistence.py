@@ -15,6 +15,7 @@ from typing import Any, Protocol, TypedDict, cast, runtime_checkable
 from squadron import __version__
 from squadron.core.models import Effort, SystemPromptMode
 from squadron.documents.schema import DocType, DocumentStatus
+from squadron.integrations.context_forge import ARCHITECTURE_DIR
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
@@ -98,6 +99,25 @@ def slice_review_stem(index: int, review_type: str, slice_name: str) -> str:
     """A slice review artifact's filename without extension — the one
     definition both the save path and readers of saved reviews use."""
     return f"{index}-review.{review_type}.{slice_name}"
+
+
+def resolve_arch_file(index: int, cwd: str | Path = ".") -> str:
+    """Resolve an initiative index to its architecture document path.
+
+    Matches ``{index}-arch.*.md`` under the architecture directory; the first
+    match wins and more than one logs a WARNING.
+
+    Raises:
+        FileNotFoundError: when no architecture document matches.
+    """
+    arch_dir = Path(ARCHITECTURE_DIR)
+    pattern = f"{index}-arch.*.md"
+    matches = sorted((Path(cwd) / arch_dir).glob(pattern))
+    if not matches:
+        raise FileNotFoundError(f"No architecture document matching '{pattern}' in {arch_dir}/")
+    if len(matches) > 1:
+        _logger.warning("Multiple arch docs for index %d, using %s", index, matches[0].name)
+    return str(arch_dir / matches[0].name)
 
 
 def resolve_slice_info(cf_client: CfClientProtocol, index: int) -> SliceInfo:

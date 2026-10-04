@@ -161,6 +161,20 @@ def test_expand_with_plan_sets_arch_first(design_step: PhaseStepType) -> None:
     ]
 
 
+def test_expand_plan_without_slice_is_initiative_scoped(design_step: PhaseStepType) -> None:
+    """Phase 2 has no slice: no set_slice, and every action targets the plan."""
+    actions = design_step.expand(
+        _make_config({"phase": 2, "plan": "{plan}", "review": {"template": "arch"}})
+    )
+
+    operations = [cfg.get("operation") for kind, cfg in actions if kind == "cf-op"]
+    assert operations == ["set_arch", "set_phase", "build_context"]
+    for kind, cfg in actions:
+        assert "slice" not in cfg, kind
+        if kind in ("dispatch", "review", "commit"):
+            assert cfg["plan"] == "{plan}", kind
+
+
 def test_expand_without_plan_has_no_set_arch(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4}))
 

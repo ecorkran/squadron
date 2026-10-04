@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -192,57 +191,24 @@ def test_validate_set_arch_without_plan(action: CfOpAction) -> None:
     assert errors[0].field == "plan"
 
 
-def _set_arch_context(tmp_path: Path, plan_frontmatter: str) -> ActionContext:
-    arch_dir = tmp_path / "project-documents" / "user" / "architecture"
-    arch_dir.mkdir(parents=True)
-    (arch_dir / "900-slices.maintenance-and-refactoring.md").write_text(
-        f"---\n{plan_frontmatter}---\n\n# Slice Plan\n", encoding="utf-8"
-    )
+@pytest.mark.asyncio
+async def test_execute_set_arch_passes_the_index_to_cf(action: CfOpAction) -> None:
+    """A new initiative has no slice plan yet; cf resolves the index itself."""
     cf_client = MagicMock()
-    cf_client.slice_plan_path.return_value = (
-        "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md"
-    )
     cf_client._run.return_value = "ok"
-    return ActionContext(
+    ctx = ActionContext(
         pipeline_name="test-pipeline",
         run_id="run-001",
-        params={"operation": CfOperation.SET_ARCH, "plan": "900"},
+        params={"operation": CfOperation.SET_ARCH, "plan": "200"},
         step_name="design",
         step_index=0,
         prior_outputs={},
         resolver=MagicMock(),
         cf_client=cf_client,
-        cwd=str(tmp_path),
-    )
-
-
-@pytest.mark.asyncio
-async def test_execute_set_arch_sets_the_plans_parent(action: CfOpAction, tmp_path: Path) -> None:
-    # Frontmatter as in the real 900 plan file.
-    ctx = _set_arch_context(
-        tmp_path,
-        "docType: slice-plan\nparent: 900-arch.maintenance-and-refactoring.md\nproject: squadron\n",
+        cwd=".",
     )
 
     result = await action.execute(ctx)
 
     assert result.success is True
-    ctx.cf_client.slice_plan_path.assert_called_once_with("900")  # type: ignore[attr-defined]
-    ctx.cf_client._run.assert_called_once_with(  # type: ignore[attr-defined]
-        ["set", "arch", "900-arch.maintenance-and-refactoring"]
-    )
-
-
-@pytest.mark.asyncio
-async def test_execute_set_arch_without_parent_fails_naming_file(
-    action: CfOpAction, tmp_path: Path
-) -> None:
-    ctx = _set_arch_context(tmp_path, "docType: slice-plan\nproject: squadron\n")
-
-    result = await action.execute(ctx)
-
-    assert result.success is False
-    assert result.error is not None
-    assert "900-slices.maintenance-and-refactoring.md" in result.error
-    assert "parent" in result.error
-    ctx.cf_client._run.assert_not_called()  # type: ignore[attr-defined]
+    cf_client._run.assert_called_once_with(["set", "arch", "200"])

@@ -9,6 +9,7 @@ tests and must survive.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,36 +19,40 @@ from squadron.events.contexts import EventContext, PostActionContext
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.pipeline.text_tail import tail_text
-from squadron.review.persistence import CfClientProtocol
+from squadron.review.persistence import CfClientProtocol, resolve_arch_file
 
 _logger = logging.getLogger(__name__)
+
+
+def _resolve_paths(kind: ArtifactKind, scope: str, resolve: Callable[[], list[str]]) -> list[str] | str:
+    """Run *resolve*; the paths, or a failure message (logged at WARNING)."""
+    try:
+        paths = resolve()
+    except (ValueError, TypeError, FileNotFoundError) as exc:
+        msg = f"could not resolve expected {kind.value} artifact path for {scope}: {exc}"
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+    if not paths:
+        msg = f"no {kind.value} artifact path registered for {scope}"
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+    return paths
 
 
 def _check_dispatch_artifact_written(
     *,
     kind: ArtifactKind,
-    slice_index: int,
-    cf_client: CfClientProtocol,
+    scope: str,
+    paths: list[str],
     cwd: str,
     run_started_at: datetime,
 ) -> str | None:
-    """Verify a phase-step dispatch wrote its expected artifact this run.
+    """Verify one of *paths* was written this run.
 
     Returns None if the post-condition is satisfied, else an error message
     naming the failure mode. Every failure mode fails closed (returns a
     message) and is logged at WARNING — never a silent pass.
     """
-    try:
-        paths = expected_artifact_paths(kind, slice_index, cf_client)
-    except (ValueError, TypeError) as exc:
-        msg = f"could not resolve expected {kind.value} artifact path for slice {slice_index}: {exc}"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-
-    if not paths:
-        msg = f"no {kind.value} artifact path registered for slice {slice_index}"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
 
     base_dir = Path(cwd) if cwd else Path(".")
     for rel_path in paths:
@@ -65,7 +70,7 @@ def _check_dispatch_artifact_written(
 
     msg = (
         f"phase dispatch completed but no {kind.value} artifact was written "
-        f"for slice {slice_index} (expected one of: {', '.join(paths)})"
+        f"for {scope} (expected one of: {', '.join(paths)})"
     )
     _logger.warning("dispatch post-condition: %s", msg)
     return msg
@@ -75,6 +80,7 @@ def _dispatch_artifact_post_condition_error(
     *,
     kind: ArtifactKind,
     slice_param: object,
+    plan_param: object,
     cf_client: CfClientProtocol,
     cwd: str,
     run_started_at: datetime | None,
@@ -93,6 +99,11 @@ def _dispatch_artifact_post_condition_error(
         msg = "run start time unavailable"
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
+    if slice_param is None and plan_param is not None:
+        # Initiative-scoped (phase 2): the artifact is the architecture doc.
+        return _check_initiative_artifact(
+            kind=kind, plan_param=plan_param, cwd=cwd, run_started_at=run_started_at
+        )
     if slice_param is None:
         msg = f"could not resolve expected {kind.value} artifact path: no 'slice' param in scope"
         _logger.warning("dispatch post-condition: %s", msg)
@@ -106,12 +117,34 @@ def _dispatch_artifact_post_condition_error(
         )
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
+    scope = f"slice {slice_index}"
+    paths = _resolve_paths(kind, scope, lambda: expected_artifact_paths(kind, slice_index, cf_client))
+    if isinstance(paths, str):
+        return paths
     return _check_dispatch_artifact_written(
-        kind=kind,
-        slice_index=slice_index,
-        cf_client=cf_client,
-        cwd=cwd,
-        run_started_at=run_started_at,
+        kind=kind, scope=scope, paths=paths, cwd=cwd, run_started_at=run_started_at
+    )
+
+
+def _check_initiative_artifact(
+    *, kind: ArtifactKind, plan_param: object, cwd: str, run_started_at: datetime
+) -> str | None:
+    """The architecture doc for initiative *plan_param* was written this run."""
+    try:
+        index = int(str(plan_param))
+    except ValueError:
+        msg = (
+            f"could not resolve expected {kind.value} artifact path: "
+            f"'plan' param {plan_param!r} is not a numeric index"
+        )
+        _logger.warning("dispatch post-condition: %s", msg)
+        return msg
+    scope = f"initiative {index}"
+    paths = _resolve_paths(kind, scope, lambda: [resolve_arch_file(index, cwd or ".")])
+    if isinstance(paths, str):
+        return paths
+    return _check_dispatch_artifact_written(
+        kind=kind, scope=scope, paths=paths, cwd=cwd, run_started_at=run_started_at
     )
 
 
@@ -137,6 +170,7 @@ class DispatchArtifactAction:
         error = _dispatch_artifact_post_condition_error(
             kind=context.expected_artifact_kind,
             slice_param=context.params.get("slice"),
+            plan_param=context.params.get("plan"),
             cf_client=context.cf_client,
             cwd=context.cwd,
             run_started_at=context.run_started_at,

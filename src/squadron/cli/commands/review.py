@@ -51,6 +51,7 @@ from squadron.review.persistence import (
     TASKS_DIR,
     SaveTargetProtocol,
     SliceInfo,
+    resolve_arch_file,
     resolve_reviewed_sha,
     resolve_slice_info,
     save_provider_failure,
@@ -498,15 +499,11 @@ def _resolve_arch_file(num: str) -> str:
     Searches ``project-documents/user/architecture/`` for files matching
     ``{num}-arch.*.md``.
     """
-    arch_dir = Path("project-documents/user/architecture")
-    pattern = f"{num}-arch.*.md"
-    matches = sorted(arch_dir.glob(pattern))
-    if not matches:
-        rprint(f"[red]Error: No architecture document matching '{pattern}' in {arch_dir}/[/red]")
-        raise typer.Exit(code=1)
-    if len(matches) > 1:
-        rprint(f"[yellow]Warning: Multiple arch docs for index {num}, using {matches[0].name}[/yellow]")
-    return str(matches[0])
+    try:
+        return resolve_arch_file(int(num))
+    except FileNotFoundError as exc:
+        rprint(f"[red]Error: {exc}[/red]")
+        raise typer.Exit(code=1) from None
 
 
 def _resolve_slice_number(num: str) -> SliceInfo:

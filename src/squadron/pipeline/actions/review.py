@@ -33,7 +33,9 @@ from squadron.review.parts import review_parts
 from squadron.review.persistence import (
     REVIEWS_DIR,
     CfClientProtocol,
+    SaveTargetProtocol,
     SliceInfo,
+    resolve_arch_file,
     resolve_reviewed_sha,
     resolve_slice_info,
     save_provider_failure,
@@ -46,7 +48,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
-from squadron.review.save_target import StepTarget
+from squadron.review.save_target import ArchTarget, StepTarget
 from squadron.review.template_inputs import (
     missing_input_files,
     resolve_template_input_parts,
@@ -113,6 +115,8 @@ class _PartSettings:
     rules_source: RulesSource
     allowed_tools: list[str] | None
     slice_info: SliceInfo | None
+    # Initiative index of an architecture review (``plan`` param, no slice).
+    arch_index: int | None
 
 
 class ReviewAction:
@@ -205,10 +209,17 @@ class ReviewAction:
         slice_param = context.params.get("slice")
         slice_info: SliceInfo | None = None
         part_inputs = [inputs]
+        # An initiative-scoped review (``plan``, no slice) reviews that
+        # initiative's architecture document, as `sq review arch <n>` does.
+        plan_param = context.params.get("plan")
+        arch_index: int | None = None
         if slice_param is not None and "input" not in inputs:
             slice_info, part_inputs = self._resolve_slice_inputs(
                 template_name, int(str(slice_param)), context.cf_client, inputs
             )
+        elif plan_param is not None and "input" not in inputs:
+            arch_index = int(str(plan_param))
+            inputs["input"] = resolve_arch_file(arch_index, context.cwd)
 
         # Every part is validated before the first model call, so a missing
         # part-3 file fails the step without paying for parts 1 and 2.
@@ -231,6 +242,7 @@ class ReviewAction:
             rules_source=rules_source,
             allowed_tools=allowed_tools,
             slice_info=slice_info,
+            arch_index=arch_index,
         )
         # One part keeps its unsuffixed name; two or more are always keyed by
         # "input" (the fan-out key), and review_parts names them part-1..N.
@@ -530,12 +542,7 @@ class ReviewAction:
                     name_suffix=name_suffix,
                     verdict_override=verdict_override,
                     revision_number=revision_number,
-                    target=StepTarget(
-                        context.step_name,
-                        context.step_index,
-                        cwd=cwd,
-                        rules_source=settings.rules_source,
-                    ),
+                    target=self._save_target(settings, context, inputs),
                 )
             )
         except Exception:  # noqa: BLE001
@@ -557,6 +564,25 @@ class ReviewAction:
                     context.step_name,
                 )
             return None
+
+    @staticmethod
+    def _save_target(
+        settings: _PartSettings, context: ActionContext, inputs: dict[str, str]
+    ) -> SaveTargetProtocol:
+        """Where a review with no slice_info saves: its arch doc, else its step."""
+        if settings.arch_index is not None:
+            return ArchTarget(
+                settings.arch_index,
+                inputs["input"],
+                cwd=context.cwd,
+                rules_source=settings.rules_source,
+            )
+        return StepTarget(
+            context.step_name,
+            context.step_index,
+            cwd=context.cwd,
+            rules_source=settings.rules_source,
+        )
 
     def _part_result(
         self,

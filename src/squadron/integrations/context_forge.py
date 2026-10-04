@@ -163,19 +163,6 @@ class ContextForgeClient:
             for e in raw_entries
         ]
 
-    def slice_plan_path(self, plan: str) -> str:
-        """The slice plan file for arch index *plan*, from the top-level
-        ``slicePlan`` field of ``cf list slices {plan} --json``.
-
-        Raises:
-            ContextForgeError: if cf reports no ``slicePlan`` for *plan*.
-        """
-        data: dict[str, Any] = self._run_json(self._list_args("slices", plan))
-        stem = data.get("slicePlan")
-        if not stem:
-            raise ContextForgeError(f"cf list slices {plan}: no slicePlan in output")
-        return f"{ARCHITECTURE_DIR}/{stem}.md"
-
     def list_tasks(self, plan: str | None = None) -> list[TaskEntry]:
         """Return all task groups from ``cf list tasks [plan] --json``."""
         raw_entries: list[dict[str, Any]] = self._run_json(self._list_args("tasks", plan))

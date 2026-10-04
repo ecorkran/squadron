@@ -1,17 +1,20 @@
 name: P2
-description: Design an architectural initiative (phase 2) with review and human checkpoint
+description: Design an architectural initiative (phase 2) with arch review
 
 params:
-  slice: required
+  plan: required
+  model: opus
+  review-model: glm52
   summary-model: sonnet
 
 steps:
   - design:
       phase: 2
-      model: opus
+      plan: "{plan}"
+      model: "{model}"
       review:
-        template: arch 
-        model: glm52
+        template: arch
+        model: "{review-model}"
 
   - summary:
       template: minimal-sdk
