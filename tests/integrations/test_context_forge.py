@@ -334,3 +334,10 @@ class TestListWorktrees:
         with patch("subprocess.run", return_value=_mock_completed(json.dumps({"other": 1}))):
             with pytest.raises(ContextForgeError, match="no 'worktrees' list"):
                 ContextForgeClient().list_worktrees()
+
+    @pytest.mark.parametrize("entry", [{"name": "pr"}, "not-a-dict"])
+    def test_a_malformed_entry_raises_a_cf_error(self, entry: object) -> None:
+        data = {"worktrees": [entry]}
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(data))):
+            with pytest.raises(ContextForgeError, match="no 'worktreePath'"):
+                ContextForgeClient().list_worktrees()

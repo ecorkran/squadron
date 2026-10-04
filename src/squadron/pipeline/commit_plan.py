@@ -15,12 +15,13 @@ from pathlib import Path
 
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.integrations.context_forge import ARCHITECTURE_DIR
-from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.git_ops import GitEnvironmentError, SliceNotInPlanError
 from squadron.review.git_utils import run_git
 from squadron.review.persistence import (
     ARCHIVE_SUBDIR,
     REVIEWS_DIR,
     CfClientProtocol,
+    SliceInfo,
     resolve_arch_file,
     resolve_slice_info,
     slice_review_stem,
@@ -53,6 +54,10 @@ class CommitSubject(StrEnum):
     ARCHITECTURE = "architecture"
     CODE = "code"
     DEVLOG = "devlog"
+
+
+class CommitTargetError(ValueError):
+    """A commit target lacks the slice or plan its subject needs (an item failure)."""
 
 
 class UnmappedTemplateError(ValueError):
@@ -230,8 +235,7 @@ def _slice_candidates(
     from squadron.events.builtin.artifact_paths import artifact_paths
     from squadron.pipeline.steps.phase import ArtifactKind
 
-    index = _require_slice(target)
-    info = resolve_slice_info(cf_client, index)
+    info = _slice_info(target, cf_client)
     kind = ArtifactKind.DESIGN if target.subject is CommitSubject.DESIGN else ArtifactKind.TASKS
     found = [_candidate(p, cwd, root, is_artifact=True) for p in artifact_paths(kind, info)]
     found += _review_candidates(target, info["slice_name"], cwd, root)
@@ -246,8 +250,13 @@ def _slice_candidates(
 def _architecture_candidates(target: CommitTarget, cwd: Path, root: Path) -> list[_Candidate]:
     """The initiative's architecture document and its review."""
     if target.plan is None:
-        raise ValueError("an architecture commit needs a plan index")
-    index = int(target.plan)
+        raise CommitTargetError("an architecture commit needs a plan index")
+    try:
+        index = int(target.plan)
+    except ValueError:
+        raise CommitTargetError(
+            f"an architecture commit needs a plan index, got {target.plan!r}"
+        ) from None
     arch_file = resolve_arch_file(index, cwd)
     found = [_candidate(arch_file, cwd, root, is_artifact=True)]
     if target.review_template is not None:
@@ -267,12 +276,22 @@ def _review_candidates(
 
 
 def _slice_name(target: CommitTarget, cf_client: CfClientProtocol) -> str:
-    return resolve_slice_info(cf_client, _require_slice(target))["slice_name"]
+    return _slice_info(target, cf_client)["slice_name"]
+
+
+def _slice_info(target: CommitTarget, cf_client: CfClientProtocol) -> SliceInfo:
+    """cf's facts for the target's slice; a slice missing from the plan is an item failure."""
+    try:
+        return resolve_slice_info(cf_client, _require_slice(target))
+    except CommitTargetError:
+        raise
+    except ValueError as exc:
+        raise SliceNotInPlanError(str(exc)) from exc
 
 
 def _require_slice(target: CommitTarget) -> int:
     if target.slice_index is None:
-        raise ValueError(f"a {target.subject} commit needs a slice index")
+        raise CommitTargetError(f"a {target.subject} commit needs a slice index")
     return target.slice_index
 
 

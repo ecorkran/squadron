@@ -229,11 +229,17 @@ class ContextForgeClient:
         raw_entries = data.get("worktrees")
         if not isinstance(raw_entries, list):
             raise ContextForgeError("cf worktree list --json: output has no 'worktrees' list")
-        entries = cast("list[dict[str, Any]]", raw_entries)
-        return [
-            WorktreeEntry(name=str(e.get("name", "")), worktree_path=str(e["worktreePath"]))
-            for e in entries
-        ]
+        entries: list[WorktreeEntry] = []
+        for raw in cast("list[object]", raw_entries):
+            if not isinstance(raw, dict) or "worktreePath" not in raw:
+                raise ContextForgeError(
+                    f"cf worktree list --json: entry has no 'worktreePath': {raw!r}"
+                )
+            entry = cast("dict[str, Any]", raw)
+            entries.append(
+                WorktreeEntry(name=str(entry.get("name", "")), worktree_path=str(entry["worktreePath"]))
+            )
+        return entries
 
     def get_config(self, key: str) -> str:
         """Return a CF config value from ``cf config get <key> --json``.

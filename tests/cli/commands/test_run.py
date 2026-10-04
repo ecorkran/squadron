@@ -1776,14 +1776,21 @@ class TestGitEnvironmentFaultHaltsTheRun:
     """Slice 196 D5: a fault every later item would hit ends the run with exit 1."""
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "message",
+        [
+            "on scratch, expected main or 105-slice.foo",
+            # git text with brackets must print literally, not as Rich markup.
+            "merge failed: CONFLICT in [bold]notes[/bold].md",
+        ],
+    )
     async def test_sq_run_exits_one_and_prints_the_message(
-        self, capsys: pytest.CaptureFixture[str]
+        self, capsys: pytest.CaptureFixture[str], message: str
     ) -> None:
         from squadron.cli.commands.run import _run_pipeline_sdk
         from squadron.pipeline.git_ops import GitEnvironmentError
 
         defn = _make_definition(steps=[])
-        message = "on scratch, expected main or 105-slice.foo"
         with (
             patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),

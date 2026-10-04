@@ -387,7 +387,7 @@ async def _run_pipeline_sdk(
         # A git fault that every later item would hit too (wrong branch, dirty tree,
         # unknown state) ends the run. State is saved; the operator fixes the checkout.
         _logger.error("pipeline '%s' halted by a git environment fault: %s", pipeline_name, exc)
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(1) from exc
     finally:
         if session is not None:

@@ -574,7 +574,7 @@ def _reject_unknown_alias(
         require_known_model(name, profile_source=profile_source)
     except UnknownModelAliasError as exc:
         # Same message and close matches as the pipeline pre-run check (#175).
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
 
 

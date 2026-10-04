@@ -24,12 +24,14 @@ from squadron.pipeline.commit_plan import (
     CommitPlan,
     CommitSubject,
     CommitTarget,
+    CommitTargetError,
     build_commit_plan,
 )
 from squadron.pipeline.git_ops import (
     ConfigReader,
     GitEnvironmentError,
     GitStateUnknownError,
+    SliceNotInPlanError,
     current_branch,
     parse_slice_index,
     read_integration_target,
@@ -92,9 +94,9 @@ class CommitAction:
             return refusal
         try:
             plan = build_commit_plan(target, cwd, context.cf_client)
-        except (ValueError, FileNotFoundError, ContextForgeError) as exc:
+        except (CommitTargetError, SliceNotInPlanError, FileNotFoundError, ContextForgeError) as exc:
             # cf could not resolve the slice or plan, or a document is missing: an item
-            # failure the batch can flag, unlike a git environment fault.
+            # failure the batch can flag. Any other error is a fault and propagates.
             _logger.warning("commit: step %s cannot plan its commit: %s", context.step_name, exc)
             return str(exc)
         explicit_message = context.params.get(MESSAGE_PARAM)

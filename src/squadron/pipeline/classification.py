@@ -35,11 +35,6 @@ if TYPE_CHECKING:
     from squadron.pipeline.models import PipelineDefinition, StepConfig
     from squadron.pipeline.resolver import ModelResolver
 
-# Action types that dispatch to a model and must be classified. Step types
-# (e.g. ``design``/``tasks``/``implement``) expand into one or more of these
-# action types via ``StepType.expand()`` — the classifier walks the expansion
-# rather than matching step-type names directly so that phase steps and other
-# composite step types are covered.
 # The pipeline param that names a profile; its presence lets a literal model id through.
 PROFILE_PARAM = "profile"
 
@@ -49,6 +44,11 @@ def has_profile_param(params: Mapping[str, object]) -> bool:
     return PROFILE_PARAM in params
 
 
+# Action types that dispatch to a model and must be classified. Step types
+# (e.g. ``design``/``tasks``/``implement``) expand into one or more of these
+# action types via ``StepType.expand()`` — the classifier walks the expansion
+# rather than matching step-type names directly so that phase steps and other
+# composite step types are covered.
 _MODEL_DISPATCHING_ACTION_TYPES = frozenset({"dispatch", "review", "summary", "compact"})
 
 # Action types that may omit a model: with none set they reuse the live

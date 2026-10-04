@@ -411,3 +411,41 @@ async def test_a_deleted_review_is_committed_without_a_verdict(
     assert result.success is True, result.error
     assert result.outputs["committed"] is True
     assert _porcelain(temp_git_repo) == ""
+
+
+@pytest.mark.asyncio
+async def test_a_slice_missing_from_the_plan_is_an_item_failure(
+    action: CommitAction, temp_git_repo: Path
+) -> None:
+    cf = _cf()
+    cf.list_slices.return_value = []
+    _write(temp_git_repo, DESIGN_FILE)
+
+    result = await action.execute(_context(temp_git_repo, cf, params=_design_params()))
+
+    assert result.success is False
+    assert "No slice with index 105" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_non_numeric_plan_is_an_item_failure(action: CommitAction, temp_git_repo: Path) -> None:
+    params = {"commit_subject": "architecture", "plan": "abc", "review_template": "arch"}
+
+    result = await action.execute(_context(temp_git_repo, params=params))
+
+    assert result.success is False
+    assert "needs a plan index, got 'abc'" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_an_unrelated_value_error_while_planning_propagates(
+    action: CommitAction, temp_git_repo: Path
+) -> None:
+    with (
+        patch(
+            "squadron.pipeline.actions.commit.build_commit_plan",
+            side_effect=ValueError("internal fault"),
+        ),
+        pytest.raises(ValueError, match="internal fault"),
+    ):
+        await action.execute(_context(temp_git_repo, params=_design_params()))
