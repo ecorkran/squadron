@@ -12,7 +12,7 @@ params:
 steps:
   - each:
       name: slices
-      source: cf.untasked_slices("{plan}", "{accept-threshold}")
+      source: cf.slices_needing_tasks("{plan}", "{accept-threshold}")
       as: slice
       on_item_failure: continue
       steps:

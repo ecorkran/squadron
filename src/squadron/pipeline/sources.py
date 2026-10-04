@@ -133,7 +133,7 @@ async def _cf_undesigned_slices(
 def _accept_arg(args: list[str]) -> LoopCondition:
     """The ``accept`` threshold: a verdict-bearing LoopCondition value."""
     if len(args) < 2:
-        raise ValueError("untasked_slices requires (plan, accept) arguments")
+        raise ValueError("slices_needing_tasks requires (plan, accept) arguments")
     try:
         accept = LoopCondition(args[1])
     except ValueError:
@@ -144,35 +144,45 @@ def _accept_arg(args: list[str]) -> LoopCondition:
     return accept
 
 
-def _design_review_flag(entry: SliceEntry, accept: LoopCondition) -> str | None:
-    """Why *entry*'s design review blocks task breakdown, or None if it doesn't.
+# The design review's template is ``slice``; reason strings call it a design review.
+_DESIGN_REVIEW_TEMPLATE = "slice"
+_TASKS_REVIEW_TEMPLATE = "tasks"
+_REVIEW_LABELS = {_DESIGN_REVIEW_TEMPLATE: "design"}
+
+
+def _review_flag(entry: SliceEntry, template: str, accept: LoopCondition) -> str | None:
+    """Why *entry*'s review of *template* is not settled at *accept*, or None if it is.
 
     The path is computed exactly as the save path names it — never searched —
-    so an archived predecessor is never read (D1).
+    so an archived predecessor is never read (195 D1). The reason names the review,
+    for example ``tasks review below threshold (CONCERNS < PASS)``.
     """
+    label = _REVIEW_LABELS.get(template, template)
     slice_name = slice_name_for(entry.design_file, entry.name)
-    path = REVIEWS_DIR / f"{slice_review_stem(entry.index, 'slice', slice_name)}.md"
+    path = REVIEWS_DIR / f"{slice_review_stem(entry.index, template, slice_name)}.md"
     if not path.is_file():
-        return "no design review found"
+        return f"no {label} review found"
     frontmatter = read_frontmatter(path)
     raw_verdict = frontmatter.get("verdict") if frontmatter is not None else None
     if raw_verdict not in {v.value for v in Verdict}:
-        return "design review verdict unreadable"
+        return f"{label} review verdict unreadable"
     verdict = Verdict(raw_verdict)
     if not accept.met_by_verdict(verdict):
-        return f"design review below threshold ({verdict} < {accept.minimum_verdict})"
+        return f"{label} review below threshold ({verdict} < {accept.minimum_verdict})"
     return None
 
 
-async def _cf_untasked_slices(
+async def _cf_slices_needing_tasks(
     args: list[str],
     cf_client: ContextForgeClient,
     params: dict[str, object],
 ) -> list[dict[str, object]]:
-    """Return open, designed slices of the plan with no task file.
+    """Return open, designed slices of the plan whose tasks still need work.
 
-    A slice whose design review is missing, unreadable, or below *accept*
-    carries ``flag_reason``; ``each`` records it FLAGGED without running it.
+    A slice needs tasks when it has no task file, or has one whose tasks review is
+    missing, unreadable, or below *accept* (slice 196 D11). A slice whose design
+    review is missing, unreadable, or below *accept* carries ``flag_reason``, which
+    applies first; ``each`` records it FLAGGED without running it.
     """
     plan = _plan_arg(args)
     accept = _accept_arg(args)
@@ -181,10 +191,11 @@ async def _cf_untasked_slices(
     for entry in cf_client.list_slices(plan):
         if entry.status in _EXCLUDED_STATUSES or not entry.design_file:
             continue
-        if entry.index in tasked:
+        # For selection a non-None tasks result means "selected", not "flagged".
+        if entry.index in tasked and _review_flag(entry, _TASKS_REVIEW_TEMPLATE, accept) is None:
             continue
         item = _slice_item(entry)
-        flag_reason = _design_review_flag(entry, accept)
+        flag_reason = _review_flag(entry, _DESIGN_REVIEW_TEMPLATE, accept)
         if flag_reason is not None:
             item["flag_reason"] = flag_reason
         items.append(item)
@@ -193,7 +204,7 @@ async def _cf_untasked_slices(
 
 SOURCE_REGISTRY[("cf", "unfinished_slices")] = _cf_unfinished_slices
 SOURCE_REGISTRY[("cf", "undesigned_slices")] = _cf_undesigned_slices
-SOURCE_REGISTRY[("cf", "untasked_slices")] = _cf_untasked_slices
+SOURCE_REGISTRY[("cf", "slices_needing_tasks")] = _cf_slices_needing_tasks
 
 
 def parse_source(

@@ -1,7 +1,7 @@
 """Loop grammar — exit conditions, exhaust behavior, and parsed loop config.
 
 Shared by the executor, the ``loop:`` step type's validation, and the
-``cf.untasked_slices`` source, which gates on the same thresholds (slice 195
+``cf.slices_needing_tasks`` source, which gates on the same thresholds (slice 195
 D7). ``squadron.pipeline.executor`` re-exports these names.
 """
 

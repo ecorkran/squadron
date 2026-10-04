@@ -379,7 +379,7 @@ Prefer scalar shorthand:
 |---|---|
 | `cf.unfinished_slices("{plan}")` | Slices in the plan whose status is not `complete` |
 | `cf.undesigned_slices("{plan}")` | Slices that are not `complete` or `deferred` and have no design file |
-| `cf.untasked_slices("{plan}", "<threshold>")` | Slices that are not `complete` or `deferred`, have a design file, and have no task file. `<threshold>` is `review.pass` or `review.concerns_or_better`. A slice whose design review (`{index}-review.slice.{name}.md`) is missing, has no readable verdict, or falls below the threshold is returned *pre-flagged* |
+| `cf.slices_needing_tasks("{plan}", "<threshold>")` | Slices that are not `complete` or `deferred`, have a design file, and either have no task file or have one whose tasks review (`{index}-review.tasks.{name}.md`) is missing, has no readable verdict, or falls below the threshold. `<threshold>` is `review.pass` or `review.concerns_or_better`. A slice whose design review (`{index}-review.slice.{name}.md`) is missing, has no readable verdict, or falls below the threshold is returned *pre-flagged* |
 
 Item fields are accessed as dotted references: `{slice.index}`, `{slice.name}`, `{slice.status}`, `{slice.design_file}`.
 
@@ -478,7 +478,7 @@ Each loop iteration regenerates the artifact from the phase prompt. `revision_nu
 
 ### `each` fan-out caveat
 
-If you fan a judge-gated cycle out over multiple slices with `each`, the registered sources are `cf.unfinished_slices`, `cf.undesigned_slices` and `cf.untasked_slices` (see [`each`](#each)) — do not assume other collection sources exist. `slices-plan` and `tasks-plan` are worked examples of a loop inside `each`.
+If you fan a judge-gated cycle out over multiple slices with `each`, the registered sources are `cf.unfinished_slices`, `cf.undesigned_slices` and `cf.slices_needing_tasks` (see [`each`](#each)) — do not assume other collection sources exist. `slices-plan` and `tasks-plan` are worked examples of a loop inside `each`.
 
 ### Alternative: `on_exhaust: fail`
 
@@ -728,7 +728,7 @@ Per slice, `slices-plan`:
 
 A design step that writes no design, a provider failure, or any other step failure also flags the slice and moves on.
 
-`tasks-plan` is the same shape over `cf.untasked_slices`, with the `tasks` phase (5) and `tasks` review template. A slice whose design review is missing or below `accept-threshold` is flagged without running.
+`tasks-plan` is the same shape over `cf.slices_needing_tasks`, with the `tasks` phase (5) and `tasks` review template. A slice whose design review is missing or below `accept-threshold` is flagged without running.
 
 | Param | Default | Meaning |
 |---|---|---|

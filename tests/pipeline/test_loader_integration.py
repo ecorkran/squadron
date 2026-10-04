@@ -75,7 +75,7 @@ class TestBuiltInPipelineStructure:
         ("name", "source", "phase_step"),
         [
             ("slices-plan", 'cf.undesigned_slices("{plan}")', "design"),
-            ("tasks-plan", 'cf.untasked_slices("{plan}", "{accept-threshold}")', "tasks"),
+            ("tasks-plan", 'cf.slices_needing_tasks("{plan}", "{accept-threshold}")', "tasks"),
         ],
     )
     def test_plan_batch_shape(self, name: str, source: str, phase_step: str) -> None:

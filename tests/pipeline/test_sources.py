@@ -203,7 +203,7 @@ findings:
 _REVIEW_914 = "914-review.slice.strict-type-checking-over-the-test-suite.md"
 
 
-class TestUntaskedSlices:
+class TestSlicesNeedingTasks:
     @pytest.fixture(autouse=True)
     def _in_tmp_project(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         # Review paths are relative to the process cwd, as the save path's are.
@@ -216,9 +216,9 @@ class TestUntaskedSlices:
         (Path("project-documents/user/reviews") / _REVIEW_914).write_text(text, encoding="utf-8")
 
     async def _run(self, accept: str = "review.concerns_or_better") -> list[dict[str, object]]:
-        from squadron.pipeline.sources import _cf_untasked_slices
+        from squadron.pipeline.sources import _cf_slices_needing_tasks
 
-        return await _cf_untasked_slices(["900", accept], StubCfClient(), {})
+        return await _cf_slices_needing_tasks(["900", accept], StubCfClient(), {})
 
     @pytest.mark.asyncio
     async def test_900_plan_selects_only_914_flagged_missing_review(self) -> None:
@@ -274,21 +274,94 @@ class TestUntaskedSlices:
 
         assert items[0]["flag_reason"] == "design review verdict unreadable"
 
+    # --- slice 196 D11: a tasked slice with an unsettled tasks review is selected too ---
+
+    _TASKED = [*_TASKS_900, {"index": 914, "files": ["914-tasks.strict.md"]}]
+
+    def _write_tasks_review(self, text: str) -> None:
+        name = _REVIEW_914.replace("review.slice.", "review.tasks.")
+        (Path("project-documents/user/reviews") / name).write_text(text, encoding="utf-8")
+
+    async def _run_tasked(self, accept: str = "review.pass") -> list[dict[str, object]]:
+        from squadron.pipeline.sources import _cf_slices_needing_tasks
+
+        client = StubCfClient(tasks=self._TASKED)
+        return await _cf_slices_needing_tasks(["900", accept], client, {})
+
     @pytest.mark.asyncio
-    async def test_slice_with_task_file_is_not_selected(self) -> None:
-        from squadron.pipeline.sources import _cf_untasked_slices
+    async def test_tasked_slice_with_no_tasks_review_is_selected(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
 
-        tasks = [*_TASKS_900, {"index": 914, "files": ["914-tasks.strict.md"]}]
-        items = await _cf_untasked_slices(["900", "review.pass"], StubCfClient(tasks=tasks), {})
+        items = await self._run_tasked()
 
-        assert items == []
+        assert _indices(items) == ["914"]
+        assert "flag_reason" not in items[0]
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "text",
+        [
+            _REVIEW_TEMPLATE.format(verdict="MAYBE"),
+            "no frontmatter at all\n",
+        ],
+    )
+    async def test_tasked_slice_with_an_unreadable_tasks_review_is_selected(self, text: str) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_tasks_review(text)
+
+        assert _indices(await self._run_tasked()) == ["914"]
+
+    @pytest.mark.asyncio
+    async def test_tasked_slice_with_a_tasks_review_below_threshold_is_selected(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_tasks_review(_REVIEW_TEMPLATE.format(verdict="CONCERNS"))
+
+        assert _indices(await self._run_tasked("review.pass")) == ["914"]
+
+    @pytest.mark.asyncio
+    async def test_tasked_slice_with_a_passing_tasks_review_is_not_selected(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_tasks_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+
+        assert await self._run_tasked() == []
+
+    @pytest.mark.asyncio
+    async def test_concerns_tasks_review_settles_under_concerns_or_better(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_tasks_review(_REVIEW_TEMPLATE.format(verdict="CONCERNS"))
+
+        assert await self._run_tasked("review.concerns_or_better") == []
+
+    @pytest.mark.asyncio
+    async def test_design_review_flag_applies_first_to_a_tasked_slice(self) -> None:
+        """No design review: the slice is selected (no tasks review) but flagged for the design."""
+        items = await self._run_tasked()
+
+        assert _indices(items) == ["914"]
+        assert items[0]["flag_reason"] == "no design review found"
+
+    def test_tasks_review_reasons_name_the_review(self) -> None:
+        from squadron.pipeline.loop_config import LoopCondition
+        from squadron.pipeline.sources import _review_flag  # pyright: ignore[reportPrivateUsage]
+
+        entry = SliceEntry(
+            index=914,
+            name="Strict Type Checking Over The Test Suite",
+            design_file=f"{_SLICES_DIR}914-slice.strict-type-checking-over-the-test-suite.md",
+            status="not_started",
+        )
+        self._write_tasks_review(_REVIEW_TEMPLATE.format(verdict="CONCERNS"))
+
+        assert _review_flag(entry, "tasks", LoopCondition.REVIEW_PASS) == (
+            "tasks review below threshold (CONCERNS < PASS)"
+        )
 
     @pytest.mark.asyncio
     async def test_reads_the_requested_plan(self) -> None:
-        from squadron.pipeline.sources import _cf_untasked_slices
+        from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         client = StubCfClient()
-        await _cf_untasked_slices(["900", "review.pass"], client, {})
+        await _cf_slices_needing_tasks(["900", "review.pass"], client, {})
 
         assert ["list", "tasks", "900", "--json"] in client.calls
         assert ["list", "slices", "900", "--json"] in client.calls
@@ -303,10 +376,10 @@ class TestUntaskedSlices:
         ],
     )
     async def test_bad_accept_raises(self, args: list[str], match: str) -> None:
-        from squadron.pipeline.sources import _cf_untasked_slices
+        from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         with pytest.raises(ValueError, match=match):
-            await _cf_untasked_slices(args, StubCfClient(), {})
+            await _cf_slices_needing_tasks(args, StubCfClient(), {})
 
 
 class TestSliceDependencies:
