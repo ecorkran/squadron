@@ -805,3 +805,60 @@ def test_loop_container_review_inner_falls_back_to_template_model() -> None:
 
     assert len(result.steps) == 1
     assert result.steps[0].classification == StepClass.NON_SDK
+
+
+# ---------------------------------------------------------------------------
+# #175 — unknown model aliases are rejected before any step runs
+# ---------------------------------------------------------------------------
+
+
+def test_unknown_alias_via_cli_override_is_rejected() -> None:
+    pipeline = make_pipeline([make_step("dispatch", "step-a")])
+    resolver = make_resolver(cli_override="glm-flash-low.")
+    with pytest.raises(ClassificationError, match="unknown model alias 'glm-flash-low.'"):
+        classify_pipeline(pipeline, resolver)
+
+
+def test_unknown_alias_via_param_override_is_rejected() -> None:
+    """A mistyped ``--param review-model=…`` slipped past the defaults-only classifier."""
+    steps = [make_step("dispatch", "step-a", {"model": "{review-model}"})]
+    pipeline = make_pipeline(steps)
+    pipeline.params["review-model"] = "sonnet"
+    resolver = make_resolver()
+
+    # The YAML default is a good alias, so classifying with defaults passes.
+    classify_pipeline(pipeline, resolver)
+    with pytest.raises(ClassificationError, match="unknown model alias 'sonet'"):
+        classify_pipeline(pipeline, resolver, params={"review-model": "sonet"})
+
+
+def test_two_bad_aliases_appear_in_one_error() -> None:
+    steps = [
+        make_step("dispatch", "step-a", {"model": "bad-one"}),
+        make_step("dispatch", "step-b", {"model": "bad-two"}),
+    ]
+    pipeline = make_pipeline(steps)
+    with pytest.raises(ClassificationError) as excinfo:
+        classify_pipeline(pipeline, make_resolver())
+    assert "'bad-one'" in str(excinfo.value)
+    assert "'bad-two'" in str(excinfo.value)
+
+
+def test_same_bad_alias_is_listed_once() -> None:
+    steps = [make_step("dispatch", "step-a"), make_step("dispatch", "step-b")]
+    with pytest.raises(ClassificationError) as excinfo:
+        classify_pipeline(make_pipeline(steps), make_resolver(cli_override="bad-one"))
+    assert str(excinfo.value).count("unknown model alias 'bad-one'") == 1
+
+
+def test_profile_param_justifies_a_literal_model_id() -> None:
+    steps = [make_step("dispatch", "step-a", {"model": "my-literal-model"})]
+    result = classify_pipeline(make_pipeline(steps), make_resolver(), params={"profile": "openrouter"})
+    assert result.steps[0].resolved_alias == "my-literal-model"
+
+
+def test_pool_candidates_are_not_alias_checked() -> None:
+    spy = SpyPoolBackend({"sdk-pool": _SDK_POOL})
+    steps = [make_step("dispatch", "pool-step", {"model": "pool:sdk-pool"})]
+    result = classify_pipeline(make_pipeline(steps), make_resolver(pool_backend=spy), pool_backend=spy)
+    assert result.steps[0].pool_name == "sdk-pool"

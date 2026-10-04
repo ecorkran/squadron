@@ -99,6 +99,15 @@ def _resolve_target(
     return None
 
 
+def _apply_param_overrides(params: dict[str, object], param_list: list[str] | None) -> None:
+    """Apply ``--param key=value`` entries to *params* in place (they override defaults)."""
+    for entry in param_list or []:
+        key, _, value = entry.partition("=")
+        if not key:
+            raise typer.BadParameter(f"Invalid --param format: '{entry}'")
+        params[key] = value
+
+
 def _assemble_params(
     definition: PipelineDefinition,
     target: str | None,
@@ -121,12 +130,7 @@ def _assemble_params(
     if binding is not None:
         params[binding[0]] = binding[1]
 
-    if param_list:
-        for entry in param_list:
-            key, _, value = entry.partition("=")
-            if not key:
-                raise typer.BadParameter(f"Invalid --param format: '{entry}'")
-            params[key] = value
+    _apply_param_overrides(params, param_list)
 
     if model is not None:
         params["model"] = model
@@ -320,10 +324,13 @@ async def _run_pipeline_sdk(
         cli_override=model_override,
         pipeline_model=definition.model,
         pool_backend=pool_backend,
+        profile_source="profile" in params,
     )
 
     try:
-        classification = classify_pipeline(definition, _classify_resolver, pool_backend, policy=policy)
+        classification = classify_pipeline(
+            definition, _classify_resolver, pool_backend, policy=policy, params=params
+        )
     except ClassificationError as exc:
         rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
         raise typer.Exit(1) from None
@@ -494,15 +501,24 @@ def _handle_explain(
     if strict:
         policy = PoolClassificationPolicy.STRICT
 
+    # Explain has no target, so the merged params are defaults plus overrides.
+    explain_params: dict[str, object] = {
+        key: value for key, value in definition.params.items() if value != "required"
+    }
+    _apply_param_overrides(explain_params, param)
+
     pool_backend = DefaultPoolBackend()
     resolver = ModelResolver(
         cli_override=cli_override,
         pipeline_model=definition.model,
         pool_backend=pool_backend,
+        profile_source="profile" in explain_params,
     )
 
     try:
-        classification = classify_pipeline(definition, resolver, pool_backend, policy=policy)
+        classification = classify_pipeline(
+            definition, resolver, pool_backend, policy=policy, params=explain_params
+        )
     except ClassificationError as exc:
         rprint(f"[red]Error: Classification failed — {exc}[/red]")
         raise typer.Exit(1) from None

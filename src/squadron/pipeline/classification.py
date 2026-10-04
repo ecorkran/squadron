@@ -22,7 +22,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, cast
 
-from squadron.models.aliases import resolve_model_alias
+from squadron.models.aliases import (
+    UnknownModelAliasError,
+    require_known_model,
+    resolve_model_alias,
+)
 from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
@@ -264,6 +268,21 @@ def _classify_pool_step(
     )
 
 
+def _collect_unknown_alias(
+    candidate: str,
+    classify_params: dict[str, object],
+    alias_errors: list[UnknownModelAliasError],
+) -> None:
+    """Record ``candidate`` when it is an unknown alias with no profile source (#175).
+
+    Collected rather than raised so one pre-run error can list every bad alias.
+    """
+    try:
+        require_known_model(candidate, profile_source="profile" in classify_params)
+    except UnknownModelAliasError as exc:
+        alias_errors.append(exc)
+
+
 def _classify_container_inner(
     inner: StepConfig,
     parent_step: StepConfig,
@@ -271,6 +290,7 @@ def _classify_container_inner(
     resolver: ModelResolver,
     pool_backend: PoolBackend | None,
     classify_params: dict[str, object],
+    alias_errors: list[UnknownModelAliasError],
 ) -> list[StepClassification]:
     """Classify a single inner step returned by a container step's inner_steps().
 
@@ -379,6 +399,7 @@ def _classify_container_inner(
             )
             continue
 
+        _collect_unknown_alias(candidate, classify_params, alias_errors)
         model_id, profile = resolve_model_alias(candidate)
         classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
         rationale = (
@@ -408,6 +429,7 @@ def classify_pipeline(
     resolver: ModelResolver,
     pool_backend: PoolBackend | None = None,
     policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
+    params: dict[str, object] | None = None,
 ) -> PipelineClassification:
     """Classify each model-dispatching action in *definition*.
 
@@ -440,10 +462,14 @@ def classify_pipeline(
                 ``needs_persistent_session``.  Defaults to ``LAZY`` (no
                 upfront session for uncertain steps).  Pass ``STRICT`` to
                 use the pre-245 conservative behaviour.
+        params: The merged runtime params (pipeline defaults plus ``--param``
+                overrides), the mapping the executor uses.  ``None`` means the
+                pipeline's own defaults only.
 
     Raises:
-        ClassificationError: If a step's entire cascade is None, or if a
-            pool candidate is encountered but ``pool_backend`` is None.
+        ClassificationError: If a step's entire cascade is None, if a pool
+            candidate is encountered but ``pool_backend`` is None, or if any
+            non-pool candidate is an unknown model alias (#175; all are listed).
         PoolNotFoundError: Propagated from ``pool_backend.get_pool()``.
     """
     # Local imports to avoid circular imports at module load: the steps
@@ -454,12 +480,14 @@ def classify_pipeline(
 
     bootstrap_step_types()
 
-    # Pipeline-default params (e.g. ``model: sonnet``) used to resolve template
-    # placeholders like ``{model}`` in expanded action configs. ``required`` markers
-    # are excluded since they have no concrete value.
-    classify_params: dict[str, object] = {k: v for k, v in definition.params.items() if v != "required"}
+    # Merged params (e.g. ``model: sonnet`` plus ``--param`` overrides) used to
+    # resolve template placeholders like ``{model}`` in expanded action configs.
+    # ``required`` markers are excluded since they have no concrete value.
+    source_params = definition.params if params is None else params
+    classify_params: dict[str, object] = {k: v for k, v in source_params.items() if v != "required"}
 
     results: list[StepClassification] = []
+    alias_errors: list[UnknownModelAliasError] = []
 
     for step_index, step in enumerate(definition.steps):
         try:
@@ -485,7 +513,13 @@ def classify_pipeline(
             for inner in container_inners:
                 results.extend(
                     _classify_container_inner(
-                        inner, step, step_index, resolver, pool_backend, classify_params
+                        inner,
+                        step,
+                        step_index,
+                        resolver,
+                        pool_backend,
+                        classify_params,
+                        alias_errors,
                     )
                 )
             continue
@@ -539,6 +573,7 @@ def classify_pipeline(
                 )
                 continue
 
+            _collect_unknown_alias(candidate, classify_params, alias_errors)
             model_id, profile = resolve_model_alias(candidate)
             classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
             rationale = (
@@ -558,6 +593,11 @@ def classify_pipeline(
                     rationale=rationale,
                 )
             )
+
+    if alias_errors:
+        # dict.fromkeys drops repeats when one bad alias feeds several steps.
+        messages = dict.fromkeys(str(exc) for exc in alias_errors)
+        raise ClassificationError("; ".join(messages))
 
     return PipelineClassification(
         pipeline_name=definition.name,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -1734,3 +1735,38 @@ def test_display_result_summarizes_batch_report(
     assert "slices-plan slices: 2 items — 1 passed, 0 accepted, 1 flagged" in out
     assert "FLAGGED 929 Serialize — step design failed" in out
     assert str(report_path) in out.replace("\n", "")
+
+
+class TestUnknownAliasRejectedPreRun:
+    """#175 / design criterion 11: a mistyped alias fails before any step writes anything."""
+
+    @pytest.mark.asyncio
+    async def test_bad_param_alias_writes_nothing_over_an_existing_review(self, tmp_path: Path) -> None:
+        from squadron.cli.commands.run import _run_pipeline_sdk
+
+        reviews_dir = tmp_path / "pipeline-reviews"
+        reviews_dir.mkdir()
+        existing_review = reviews_dir / "100-review.slice.foo.md"
+        existing_review.write_text("original review\n")
+        defn = _make_definition(
+            params={"review-model": "sonnet"},
+            steps=[
+                StepConfig(
+                    step_type="review",
+                    name="review-0",
+                    config={"template": "slice", "model": "{review-model}"},
+                )
+            ],
+        )
+        with (
+            patch("squadron.cli.commands.run.load_pipeline", return_value=defn),
+            patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
+            patch("squadron.cli.commands.run._run_pipeline", new_callable=AsyncMock) as run_mock,
+        ):
+            with pytest.raises(typer.Exit) as excinfo:
+                await _run_pipeline_sdk("p", {"review-model": "sonet"})
+
+        assert excinfo.value.exit_code == 1
+        run_mock.assert_not_called()
+        assert existing_review.read_text() == "original review\n"
+        assert os.listdir(reviews_dir) == [existing_review.name]
