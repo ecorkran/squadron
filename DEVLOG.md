@@ -12,6 +12,30 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261004
 
+### Slice 196: implementation complete (Phase 6)
+
+- **Delivered:** scoped commits (`pipeline/commit_plan.py`, `commit_message.py`, `loop_commit.py`, `sq _commit`), `branch: {op: enter|merge}` (`pipeline/branch_ops.py`, `git_ops.py`, `steps/branch.py`, `actions/branch.py`, `sq _branch`), the `implement`-needs-enter load rule (`branch_rules.py`), built-in code pipelines reordered to `branch enter → implement → devlog → branch merge`, dependency flags in `each`, `cf.slices_needing_tasks` plus `existing: keep`, and the review-trust fixes #152 (`impose_output_coverage`), #175 (`require_known_model`, classifier takes merged params, resolver backstop) and #179 (`-v` label from the resolver's candidate).
+- **Deviations from the design:**
+  - `ModelResolver` gained a `profile_source` flag, set from `"profile" in params`; the resolver had no profile knowledge to reuse.
+  - The git logic lives in `branch_ops.py`, with `actions/branch.py` and `sq _branch` as thin callers.
+  - The slice plan file comes from `get_project().slice_plan`, the same stem `cf list slices` reports.
+  - A commit with only supporting files staged reads `docs: update slice N {noun} files` (D2 was silent).
+  - `--prompt-only` still doesn't render `loop:` steps (#145), so the loop-round commit render path is `render_loop_round_commit`, ready for the loop renderer.
+- **Found by the live walkthrough and fixed:** a re-review archives the previous review under `reviews/archive/` with a timestamped name, and the commit plan left those files out, so the next `branch enter` would have halted on a dirty tree. The plan now matches dirty archive copies of the commit's review stem. Also: a refused merge reported "git refused the merge" because git prints `CONFLICT` on stdout; the reason now carries those lines.
+- **Filed:** #183, `branch enter` on an existing slice branch doesn't bring it up to date with the target.
+- **Tests:** 5570 passed / 4 skipped; ruff and pyright (src) clean.
+- **Live walkthrough** (scratch project, `--model haiku`, dev build via `uv run --project`):
+  1. Scoped commit: `P4 103` with a stray `README.md` → `docs: add slice 103 design (review: PASS)`; log line `commit: step design-0 left 3 dirty path(s) out of the commit: README.md, …`. (103 already had a design, so its first run correctly failed the dispatch post-condition; the design was removed and committed first.)
+  2. Branch, implement, merge: `P6 107` → `branch enter` on `107-slice.top-words`, `model=haiku` on dispatch and review, code review diff range resolved, `merge: slice 107 — Top Words`, ended on `main`, branch kept. The first attempt on 103 failed with `EmptyDiffError` (already implemented); the devlog step failed once on a frontmatter-less `DEVLOG.md` from my own earlier hand test, and `--from devlog-2` finished the run.
+  3. Guards: dirty tree → `working tree not clean: README.md. Commit or remove them, then rerun phase 6 for slice 104; …`; on `scratch-other` → `on scratch-other, expected main or 104-slice.multiple-files-and-totals`. No branch created, tree untouched.
+  4. Merge conflict: `P6 106` paused at the FAIL code review (`checkpoint: on-fail` before any merge, as designed), so the conflict came from `sq _branch merge --slice 106` after committing a conflicting `cli.py` edit: `merge failed: …(conflicted: src/tally/cli.py); slice branch 106-slice.json-output left unmerged`; `main` clean, no `MERGE_HEAD`, branch not an ancestor of `main`.
+  5. Dependency flags: `tasks-plan 100` with 105 depending on 104 and 104's design review deleted → `item 104 FLAGGED: no design review found`, `item 105 FLAGGED: dependency 104 flagged`; 106 ran.
+  6. Re-review gap: 107 (tasks file, no tasks review) was selected; `dispatch: step tasks-1 keeps existing artifact […107-tasks.top-words.md]`; committed `review: add slice 107 tasks review (CONCERNS)`; tree clean after the run.
+  7. Unknown alias: `run review 103 --model haiku.`, `run P4 103 -p review-model=haiku.` and `review slice 103 --model haiku.` all exit 1 with `unknown model alias 'haiku.'; did you mean: haiku? If this is a literal model ID, set a profile.`; no review file changed.
+  8. Truncated PASS: not run live (needs a global `models.toml` alias); the unit tests are the gate.
+  9. Prompt-only: `P6 106` renders `sq _branch enter --slice 106`, `sq _commit --subject code --slice 106 --template code`, `sq _commit --subject devlog --slice 106`, `sq _branch merge --slice 106`. Running them by hand gave `on 106-slice.json-output (created from main)`, `feat: implement slice 106`, `docs: add DEVLOG entry for slice 106` (stray file untouched), and `merged … into main`; a second merge reported `already`.
+- **Next:** code review of the slice (Phase 6 gate), then Phase 7 merge to `main`; then slice 197.
+
 ### Slice 196: task breakdown complete (Phase 5)
 
 - **Tasks:** `196-tasks.pipeline-branch-steps-scoped-commits-and-dependency-aware-batches.md`, 38 tasks (380 lines, one file), test-with ordering, a commit after each part.

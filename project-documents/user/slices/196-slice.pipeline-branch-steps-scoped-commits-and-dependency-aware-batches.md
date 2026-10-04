@@ -7,7 +7,7 @@ dependencies: [195]
 interfaces: [197]
 dateCreated: 20261004
 dateUpdated: 20261004
-status: not_started
+status: complete
 ---
 
 # Slice Design: pipeline-branch-steps-scoped-commits-and-dependency-aware-batches
@@ -443,7 +443,12 @@ Both print what they did on stdout (`committed <sha> <message>` / `on 105-slice.
 
 ### Verification Walkthrough
 
-Use the scratch project (`…/scratchpad/sq-scratch`, toy "tally" CLI, plan 100, slices 101–107), with `CLAUDECODE` unset and `uv run --project <squadron>`.
+Use the scratch project (`…/scratchpad/sq-scratch`, toy "tally" CLI, plan 100, slices 101–107), with `CLAUDECODE` unset and `uv run --project <squadron>`, for example `env -u CLAUDECODE uv run --project <squadron> sq run …`. Always pass `--model` (here `haiku`).
+
+**Scratch state caveats** (found when this was run on 20261004):
+- cf's active plan must be 100 (`cf set arch 100`). If it is another plan, `branch enter` fails with `No slice with index N in the current slice plan`.
+- Slices 101–105 are already implemented. A P6 run on one of them produces a docs-only diff, and the code review refuses it (`EmptyDiffError`). Use 106 or 107 for P6 runs.
+- `DEVLOG.md` needs its YAML frontmatter, or the devlog step fails with `No YAML frontmatter block found`.
 
 1. **Scoped commit.**
    ```bash
@@ -452,33 +457,40 @@ Use the scratch project (`…/scratchpad/sq-scratch`, toy "tally" CLI, plan 100,
    git log --oneline -3      # docs: add slice 103 design (review: …), then revise/re-review lines
    git status --short        # README.md still modified, not committed
    ```
-   The run log has `commit left unstaged: README.md`.
+   The run log has `commit: step design-0 left N dirty path(s) out of the commit: README.md, …`.
+
+   *Observed:* `docs: add slice 103 design (review: PASS)`, with `README.md` still untracked. Slice 103 already has a design, so the dispatch writes nothing and the dispatch post-condition fails the step. Remove and commit the design first: `git rm project-documents/user/slices/103-slice.count-characters.md && git commit -m "chore: remove design"`.
 
 2. **Branch, implement, merge.**
    ```bash
    git checkout -- README.md
-   sq run P6 103 --model haiku -v
+   sq run P6 107 --model haiku -v
    ```
-   The `-v` log shows `branch enter` (`on 103-slice.<name> (created from main)`), `model=haiku` on the dispatch and review lines, a code review with a resolved diff range, and `branch merge`. Afterwards:
+   (Use 107, not 103; see the caveats above.) The `-v` log shows `branch enter` (`on 103-slice.<name> (created from main)`), `model=haiku` on the dispatch and review lines, a code review with a resolved diff range, and `branch merge`. Afterwards:
    ```bash
    git branch --show-current          # main
-   git log --oneline --first-parent -2  # merge: slice 103 — <name>
-   git branch --list '103-slice.*'    # still present
+   git log --oneline --first-parent -2  # merge: slice 107 — <name>
+   git branch --list '107-slice.*'    # still present
    ```
+   *Observed:* `branch enter` created `107-slice.top-words`, dispatch and review lines show `model=haiku`, the code review ran on the resolved diff range, and the log ends `merge: slice 107 — Top Words` on `main`. A FAIL code review instead pauses at `checkpoint: on-fail` before any merge (seen on 106).
 
-3. **Guards.** Make the tree dirty and run `sq run P6 104 --model haiku`. It fails with `working tree not clean: README.md`, and no branch is created. Then `git checkout -b scratch-other` and rerun on a clean tree. It fails with `on scratch-other, expected main or 104-slice.<name>`.
+3. **Guards.** Make the tree dirty and run `sq run P6 104 --model haiku`. It fails with `working tree not clean: README.md. Commit or remove them, then rerun phase 6 for slice 104; design and tasks commits from this run are kept.`, and no branch is created. Then `git checkout -b scratch-other` and rerun on a clean tree. It fails with `on scratch-other, expected main or 104-slice.<name>`.
 
-4. **Merge conflict.** On `main`, commit an edit to a file that slice 104's implementation will also change, then run P6 104. The merge fails with `merge conflict in …; slice branch 104-slice.<name> left unmerged`. `git status` is clean on `main`, and `git rev-parse -q --verify MERGE_HEAD` prints nothing.
+4. **Merge conflict.** A live run is not a reliable way to get a conflict (a weak model may implement nothing, and a FAIL review pauses before the merge), so make it deterministic: on slice 106's branch (`sq _branch enter --slice 106`), commit an edit to a line that `main` also changed (here, the line after `parser.add_argument("files", …)` in `src/tally/cli.py`), then run `sq _branch merge --slice 106`, the same code the pipeline's merge step runs. The merge fails with `merge failed: CONFLICT (content): Merge conflict in …; slice branch 106-slice.<name> left unmerged`. `git status` is clean on `main`, and `git rev-parse -q --verify MERGE_HEAD` prints nothing.
 
-5. **Dependency flags.** Give slice 105's design frontmatter `dependencies: [104]`, and make 104 fail its precondition by deleting its design review. Then run `sq run tasks-plan 100 --model haiku`. The report lists 104 as `no design review found` and 105 as `dependency 104 flagged`. Slices that don't depend on 104 run.
+5. **Dependency flags.** Give slice 105's design frontmatter `dependencies: [101, 104]`. Delete 104's design review and its tasks review (a tasked slice is only selected when its tasks review is unsettled, so 104 needs both gone to be selected and flagged), and 105's tasks review (so 105 is selected). Commit the setup. Then run `sq run tasks-plan 100 --model haiku -p max-revisions=1`. The report lists 104 as `no design review found` and 105 as `dependency 104 flagged`. Slices that don't depend on 104 run.
 
-6. **Re-review gap.** For a slice that has a task file, delete its tasks review and rerun `tasks-plan 100`. The slice is selected, its log shows `dispatch skipped (artifact exists)`, and a new tasks review is written and committed as `review: add slice N tasks review (…)`.
+6. **Re-review gap.** For a slice that has a task file, delete its tasks review (done for 107 in the same run as step 5) and run `tasks-plan 100`. The slice is selected, its log shows `dispatch skipped (artifact exists)`, and a new tasks review is written and committed as `review: add slice N tasks review (…)`.
+
+   *Observed (steps 5 and 6 together):* `item 104 FLAGGED: no design review found`, `item 105 FLAGGED: dependency 104 flagged`, 106 (untasked) ran, and for 107 `dispatch: step tasks-1 keeps existing artifact […107-tasks.top-words.md]`, then `review: add slice 107 tasks review (CONCERNS)` and `docs: revise slice 107 tasks, round 1 (review: CONCERNS)`. The tree was clean afterwards.
 
 7. **Unknown alias.** Run `sq run review 103 --model haiku.`. It exits 1 before any step with `unknown model alias 'haiku.'; did you mean: haiku?`, and `git status` shows no new review file. `sq review slice 103 --model haiku.` prints the same message.
 
-8. **Truncated PASS.** Use a user alias with `max_output_tokens = 256` (as in #152) and run `sq review slice 103 --model <tiny-alias>`. If the model states PASS and stops at the budget, the artifact shows `verdict: CONCERNS`, `verdictSource: imposed`, and the review-coverage finding. The live result depends on the model, so the unit test is the gate and this step is a spot check.
+8. **Truncated PASS.** Use a user alias with `max_output_tokens = 256` (as in #152) and run `sq review slice 103 --model <tiny-alias>`. If the model states PASS and stops at the budget, the artifact shows `verdict: CONCERNS`, `verdictSource: imposed`, and the review-coverage finding. The live result depends on the model, so the unit test is the gate and this step is a spot check. (Not run on 20261004: it needs a user alias in `~/.config/squadron/models.toml`.)
 
 9. **Prompt-only parity.** Run `sq run --prompt-only P6 106`. The rendered actions include `sq _branch enter --slice 106`, `sq _commit --subject code --slice 106 …`, and `sq _branch merge --slice 106`. Running them by hand gives the same result as step 2.
+
+   *Observed:* the four commands above rendered in that order, plus `sq _commit --subject devlog --slice 106`. By hand: `on 106-slice.json-output (created from main)`, `committed … feat: implement slice 106`, `committed … docs: add DEVLOG entry for slice 106` (an unrelated file stayed untouched), and `merged 106-slice.json-output into main`; running the merge again printed `already 106-slice.json-output into main`.
 
 ## Risk Assessment
 

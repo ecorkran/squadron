@@ -10,7 +10,7 @@ projectState: >
   is released; main is the integration target (`git.integration_branch` unset).
 dateCreated: 20261004
 dateUpdated: 20261004
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -427,26 +427,27 @@ status: in_progress
 
 ## Task 36 — Documentation
 
-- [ ] `docs/PIPELINES.md`: document `branch:` (ops, validation rule, the deliberate break for user pipelines), `existing: keep`, the `slices_needing_tasks` rename, and the commit message rules (D2 table)
-- [ ] `CHANGELOG.md`: short user-facing bullets (scoped commits and messages, branch steps and the `implement` requirement, dependency flags, tasks re-review, #152, #175, #179); technical detail stays in DEVLOG
-- [ ] `docs/COMMANDS.md`: only if hidden `_commit`/`_branch` commands are listed alongside other hidden commands; otherwise leave unchanged
-  - [ ] Success: docs match behavior; no stale `message_prefix` or `untasked_slices` references
-- [ ] Commit: `docs: document branch steps, scoped commits, and tasks-plan re-review`
+- [x] `docs/PIPELINES.md`: document `branch:` (ops, validation rule, the deliberate break for user pipelines), `existing: keep`, the `slices_needing_tasks` rename, and the commit message rules (D2 table)
+- [x] `CHANGELOG.md`: short user-facing bullets (scoped commits and messages, branch steps and the `implement` requirement, dependency flags, tasks re-review, #152, #175, #179); technical detail stays in DEVLOG
+- [x] `docs/COMMANDS.md`: only if hidden `_commit`/`_branch` commands are listed alongside other hidden commands; otherwise leave unchanged
+  - [x] Success: docs match behavior; no stale `message_prefix` or `untasked_slices` references
+- [x] Commit: `docs: document branch steps, scoped commits, and tasks-plan re-review`
 
 ## Task 37 — Full validation
 
-- [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite from a clean checkout state
-- [ ] Re-read design Success Criteria 1–12 and Technical Requirements; each maps to at least one passing test or a walkthrough step
-  - [ ] Success: all green; any criterion without coverage gets a test (and a commit) before proceeding
+- [x] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite from a clean checkout state
+- [x] Re-read design Success Criteria 1–12 and Technical Requirements; each maps to at least one passing test or a walkthrough step
+  - [x] Success: all green; any criterion without coverage gets a test (and a commit) before proceeding
 
 ## Task 38 — Live walkthrough in the scratch project
 
-- [ ] Run Verification Walkthrough steps 1–7 and 9 from the slice design in the scratch project (`…/scratchpad/sq-scratch`, toy tally CLI, plan 100) with `CLAUDECODE` unset and `uv run --project <squadron>`; always pass `--model`
-  - [ ] Step 8 (truncated PASS) is a spot check only; the unit test in Task 9 is the gate
-- [ ] Record the observed result of each step (command, key output line) in the DEVLOG entry
-  - [ ] Success: each step's expected output matches the design; any divergence is fixed or filed as a GitHub issue linked from the DEVLOG
-- [ ] Commit: `docs: add slice 196 implementation DEVLOG entry`
-  - [ ] Success: commit on the slice branch; tree clean
+- [x] Run Verification Walkthrough steps 1–7 and 9 from the slice design in the scratch project (`…/scratchpad/sq-scratch`, toy tally CLI, plan 100) with `CLAUDECODE` unset and `uv run --project <squadron>`; always pass `--model`
+  - Divergences recorded in the slice design's Verification Walkthrough (scratch caveats; 103 had to lose its design for step 1; P6 ran on 107; step 4 conflict made deterministic via `sq _branch merge`; steps 5 and 6 combined). Fixes found: archived prior reviews now travel with their review commit; refused merges report git's CONFLICT lines. Filed #183.
+  - [x] Step 8 (truncated PASS) is a spot check only; the unit test in Task 9 is the gate
+- [x] Record the observed result of each step (command, key output line) in the DEVLOG entry
+  - [x] Success: each step's expected output matches the design; any divergence is fixed or filed as a GitHub issue linked from the DEVLOG
+- [x] Commit: `docs: add slice 196 implementation DEVLOG entry`
+  - [x] Success: commit on the slice branch; tree clean
 
 ---
 
