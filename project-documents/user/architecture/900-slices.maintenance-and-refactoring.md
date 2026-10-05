@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20261003
+dateUpdated: 20261005
 status: in_progress
 ---
 
@@ -479,6 +479,8 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 **Fix:** (1) seed context reaches a new session without giving the model a turn with tools, on both the rotate and resume paths; design picks the mechanism (system-prompt append or a tool-less turn). (2) dispatch does not return while the session has pending background tasks; design picks between waiting for them and disallowing background agents in dispatched sessions. (3) a failed dispatch post-condition records the tail of the agent's final text in the flag and the batch report. (4) SDK dispatch always sends the preset with a step `system_prompt` appended; replacing the preset takes an explicit opt-in (#155). (5) verify what the CLI loads with no `--setting-sources` flag, set `setting_sources` explicitly on every SDK path under a written per-path policy (review templates consistent with each other), and record system-prompt mode and settings sources in review digests/JSON and dispatch/summary step metadata, always rather than only at `-vv` (#156).
 **Tests:** a seeded session makes no tool calls and no commits; a dispatch whose agent starts a background task returns only after that work finishes (or the task is refused); a flagged item's report line carries the agent's final text; SDK dispatch with a `system_prompt` yields preset + append; every SDK path's `AgentConfig` carries a non-`None` `setting_sources`; the digest records prompt mode and settings.
 **Not in scope:** commit messages and scoped staging (#164, #150 → 196); effort settings (#154 → 931). Dependencies: 909 (complete). Risk: Medium (changes how every SDK pipeline session starts, ends, and is configured). Effort: 3/5
+
+31. [ ] **(933) Deterministic Task-File Gate — No Merge Steps Before Review** — Task breakdowns keep shipping merge steps, and implementing agents keep executing them, so slices land on the target before code review. `guide.ai-project.005-task-breakdown` (line 150) already forbids a merge step in any task, and memories and prose instructions have not stopped it: trading-ui 124 ("Merge into the target per the project Git Rules", checked) and 125, trading-data-maintenance 908, 909 and 185, and trading-data 184 all carry one. A prose rule a model can ignore is not a gate. This slice adds a code check: a deterministic scanner over every task file (every split part) that fails when a checklist item or heading is a merge step. The check runs before any model call on every tasks-review path (`sq review tasks`, the slash command, MCP, and pipeline tasks reviews, per interface parity), and a failing file gets verdict FAIL with the offending line numbers, and no model review runs. It does not flag merge as ordinary vocabulary ("merge defaults", "merge blocker", `mergeFixResults`); the test fixtures are the real lines from the files listed above, plus real negatives. Dependencies: [930 (every split task file reviewed)]. Risk: Low. Effort: 2/5.
 
 ---
 
