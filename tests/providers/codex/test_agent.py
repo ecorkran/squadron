@@ -267,7 +267,7 @@ class TestSdkErrors:
         fake_sdk.client.close.side_effect = CodexError("close failed")
         with caplog.at_level("ERROR", logger="squadron.providers.codex.agent"):
             asyncio.run(agent.shutdown())
-        assert any("ignoring error during SDK teardown" in r.getMessage() for r in caplog.records)
+        assert any("ignoring error during cleanup" in r.getMessage() for r in caplog.records)
         assert agent.state == AgentState.terminated
 
 

@@ -29,6 +29,7 @@ from claude_agent_sdk._errors import (  # pyright: ignore[reportPrivateUsage]
 )
 
 from squadron.core.models import AgentState, Message
+from squadron.core.teardown import close_best_effort
 from squadron.logging import get_logger
 from squadron.providers.errors import (
     ProviderAPIError,
@@ -313,14 +314,6 @@ class ClaudeSDKAgent:
     async def shutdown(self) -> None:
         """Disconnect client if in multi-turn mode."""
         if self._client is not None:
-            try:
-                await self._client.disconnect()
-            except Exception:  # noqa: BLE001
-                # Teardown boundary: disconnect() closes the Claude Agent
-                # SDK's subprocess/transport, whose failure modes are
-                # internal to the SDK and not enumerable here. A cleanup
-                # failure at shutdown must not block finishing teardown —
-                # logged for diagnosability, never re-raised.
-                self._log.exception("SDKAgent.shutdown: ignoring error during client disconnect")
+            await close_best_effort(self._client.disconnect, self._log, "SDKAgent.shutdown")
             self._client = None
         self._state = AgentState.terminated

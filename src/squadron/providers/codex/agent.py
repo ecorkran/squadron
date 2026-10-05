@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from squadron.config.manager import get_typed_config
 from squadron.core.models import AgentConfig, AgentState, Message, MessageType
+from squadron.core.teardown import close_best_effort
 from squadron.core.usage import TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
@@ -88,15 +89,7 @@ class CodexAgent:
     async def _close_client(self) -> None:
         """Close the SDK client (if any) and forget it and its thread."""
         if self._codex is not None:
-            try:
-                await self._codex.close()
-            except Exception:  # noqa: BLE001
-                # Teardown boundary: __aexit__ closes the Codex SDK's
-                # subprocess/transport, whose failure modes are internal to
-                # the SDK and not enumerable here. A cleanup failure at
-                # shutdown must not block finishing teardown — logged for
-                # diagnosability, never re-raised.
-                _log.exception("CodexAgent: ignoring error during SDK teardown")
+            await close_best_effort(self._codex.close, _log, "CodexAgent")
         self._codex = None
         self._thread = None
 

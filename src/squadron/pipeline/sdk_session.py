@@ -30,6 +30,7 @@ from claude_agent_sdk import (
 from claude_agent_sdk.types import SystemPromptPreset
 
 from squadron.config.manager import get_typed_config
+from squadron.core.teardown import close_best_effort
 from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
 from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
@@ -159,15 +160,7 @@ class SDKExecutionSession:
 
     async def disconnect(self) -> None:
         """Disconnect the SDK client. Best-effort — ignores errors."""
-        try:
-            await self.client.disconnect()
-        except Exception:  # noqa: BLE001
-            # Teardown boundary: client.disconnect() closes the SDK's
-            # subprocess/transport, whose failure modes are internal to the
-            # SDK and not enumerable here. A cleanup failure at process exit
-            # must not mask the pipeline's actual result — logged for
-            # diagnosability, never re-raised.
-            _logger.exception("SDKExecutionSession.disconnect: ignoring error during cleanup")
+        await close_best_effort(self.client.disconnect, _logger, "SDKExecutionSession.disconnect")
 
     async def set_model(self, model_id: str) -> None:
         """Switch model if different from current.

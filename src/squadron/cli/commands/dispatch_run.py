@@ -57,18 +57,26 @@ def dispatch_run(
     model_id = model
 
     if resolved_profile is None:
-        from squadron.pipeline.resolver import ModelResolver
+        from squadron.models.aliases import UnknownModelAliasError
+        from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
+        from squadron.pipeline.resolver import (
+            ModelPoolNotImplemented,
+            ModelResolutionError,
+            ModelResolver,
+        )
 
         resolver = ModelResolver()
         try:
             model_id, resolved_profile_or_none = resolver.resolve(model)
             resolved_profile = resolved_profile_or_none or "sdk"
-        except Exception as exc:  # noqa: BLE001
-            # CLI process boundary: model is a required, non-empty --model
-            # value, so resolve() can only raise on a pool: prefix
-            # (ModelPoolNotImplemented / PoolNotFoundError) — both indicate a
-            # misconfigured pool reference, rendered here as a clean CLI exit
-            # rather than a traceback.
+        except (
+            UnknownModelAliasError,
+            ModelResolutionError,
+            ModelPoolNotImplemented,
+            PoolNotFoundError,
+        ) as exc:
+            # Every error resolve() raises for a bad --model value, rendered
+            # as a clean CLI exit rather than a traceback.
             _logger.exception("dispatch_run: model resolution failed")
             print(f"Error: model resolution failed — {exc}", file=sys.stderr)
             raise typer.Exit(code=1) from None
