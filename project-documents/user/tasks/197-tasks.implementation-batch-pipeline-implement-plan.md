@@ -73,8 +73,7 @@ status: not_started
   - [ ] Conflict → record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT … (conflicted: …); resolve on the branch and retry`); checkout stays on the clean slice branch
   - [ ] Refusal or timeout → abort if `MERGE_HEAD` exists, state check; passes → item failure `failure: other`; fails → `GitStateUnknownError` (D12 row 4)
 - [ ] No rebase, reset, or `--force` anywhere in the path
-  - [ ] Success: pyright clean
-- [ ] Commit: `feat: catch up existing slice branches to the target on enter`
+  - [ ] Success: pyright clean; existing branch tests pass. No commit yet: Task 5's tests go in the same commit
 
 ## Task 5 — Tests: catch-up merge
 
@@ -86,7 +85,7 @@ status: not_started
   - [ ] Refusal with passing state check → `other`; failing state check → `GitStateUnknownError` with ERROR record (D12 row 4)
   - [ ] Code review diff range after a catch-up still excludes target-only commits (merge-base based)
   - [ ] Success: tests pass
-- [ ] Commit: `test: cover catch-up merge on branch enter`
+- [ ] Commit Tasks 4 and 5 together: `feat: catch up existing slice branches to the target on enter`
 
 ## Task 6 — Extract `restore_target()`
 
@@ -143,8 +142,7 @@ status: not_started
 - [ ] Dependency rows: in-plan, open, not a returned item → `flag_reason: dependency {d} not designed`, `flag_kind: dependency`; out-of-plan dependency → WARNING `slice {n}: dependency {d} is outside plan {plan}; not checked`, no flag
 - [ ] Items pass through `order_by_dependencies`; a cycle fails source evaluation (ERROR via the existing source error path)
 - [ ] A failing cf call fails the source (no guessed result)
-  - [ ] Success: pyright clean
-- [ ] Commit: `feat: add slices_ready_to_implement source`
+  - [ ] Success: pyright clean; existing source tests pass. No commit yet: Task 12's tests go in the same commit
 
 ## Task 12 — Tests: `slices_ready_to_implement`
 
@@ -156,7 +154,7 @@ status: not_started
   - [ ] Dependency not designed → `dependency` kind; out-of-plan dependency → WARNING record, no flag
   - [ ] Ordering applied; cycle fails source evaluation with the cycle message
   - [ ] Success: tests pass
-- [ ] Commit: `test: cover slices_ready_to_implement selection and flags`
+- [ ] Commit Tasks 11 and 12 together: `feat: add slices_ready_to_implement source`
 
 ---
 
@@ -222,7 +220,10 @@ status: not_started
 
 - [ ] Add `data/pipelines/implement-plan.yaml` exactly as D1 (params, `each` body, `on_exhaust: fail`)
 - [ ] Tests in `test_builtin_pipelines.py`: loads and validates; params defaults as D1; listed by `sq run --list` (or the existing builtin listing test)
-- [ ] Pipeline-level test with fake cf, dispatch and review: two items where the dependent is listed first run in dependency order; a FAIL-at-exhaust item is `review_unresolved` at `revise-code` with branch recorded and its dependent `dependency`; an independent item merges
+- [ ] Pipeline-level test with fake cf, dispatch and review, and real branch ops against a temp git repo (the dispatch fake commits a file on the slice branch): two items where the dependent is listed first run in dependency order; a FAIL-at-exhaust item is `review_unresolved` at `revise-code` with branch recorded and its dependent `dependency`; an independent item merges
+  - [ ] The run ends on the target, with one `merge: slice N — …` commit per merged slice (criterion 1)
+  - [ ] A `not_ready` item (no task file) is flagged with no dispatch call for it (criterion 2)
+  - [ ] A dependency on an undesigned in-plan slice flags the dependent `dependency N not designed` through the pipeline (criterion 4)
   - [ ] The flagged item's branch has all its work committed and is unmerged; the next item's `branch enter` starts from a clean target (criterion 3)
   - [ ] An implement dispatch that leaves no commits: the code review's `EmptyDiffError` flags the item `step_failed` with WARNING `item N flagged: …` asserted (D12 last row)
   - [ ] Success: tests pass
@@ -234,12 +235,13 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 
 - [ ] `P6.yaml`: D10 body; add `max-revisions`, `pass-threshold`, `accept-threshold` params with P456's defaults
 - [ ] `implement.yaml`: D10 body; add the three params plus `review-model` (default `minimax`, matching P6)
+- [ ] Update the tests that cover P6 and `implement`; commit: `feat: add code review revise loop to P6 and implement`
 - [ ] `P56.yaml`: replace its implement section with the D10 body
 - [ ] `P456.yaml`: replace its implement section with the D10 body
 - [ ] Update existing tests that asserted the old step lists (`test_code_pipelines_branching.py`, `test_builtin_pipelines.py`)
 - [ ] Pipeline-level test (fake dispatch and review) for each of the four: a non-PASS review with `-p max-revisions=0 -p accept-threshold=review.pass` pauses the run at a checkpoint, with no merge (criterion 12)
   - [ ] Success: all four validate; updated and new tests pass
-- [ ] Commit: `feat: add code review revise loop to single-slice pipelines`
+- [ ] Commit: `feat: add code review revise loop to P56 and P456`
 
 ## Task 21 — Drift test
 
@@ -275,9 +277,9 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 ## Task 24 — `sq run` takes the lock for mutating pipelines
 
 - [ ] Add a definition walk (nested steps included) that reports whether a pipeline mutates: any phase step, `devlog`, `branch`, or `loop` with `commit_each_iteration`
-- [ ] `sq run` holds `project_run_lock` for the whole run when the pipeline mutates; held lock, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → exit 2, nothing runs
+- [ ] `sq run` holds `project_run_lock` for the whole run when the pipeline mutates, on both paths: a fresh run and a plain `--resume <run_id>` of a paused run (item resume takes it in Task 26); held lock, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → exit 2, nothing runs
 - [ ] Find existing CLI and pipeline tests that run mutating pipelines outside a git repo (`grep` for `sq run`/`run_pipeline` invocations of P-pipelines, `slices-plan`, `tasks-plan`); give them a temp git repo or a lock fixture so they don't start exiting 2
-- [ ] Tests: `implement-plan`, `slices-plan`, `tasks-plan`, P6 detected as mutating; a review-only and a summary pipeline not; `sq run` with the lock held, with `rev-parse` failing, and with an `OSError` on open each exit 2 and dispatch nothing (criterion 15, 17)
+- [ ] Tests: `implement-plan`, `slices-plan`, `tasks-plan`, P6 detected as mutating; a review-only and a summary pipeline not; `sq run` with the lock held, with `rev-parse` failing, and with an `OSError` on open each exit 2 and dispatch nothing; a plain `--resume` of a paused P6 run with the lock held exits 2 and dispatches nothing (criterion 15, 17)
   - [ ] Success: tests pass
 - [ ] Commit: `feat: hold the project run lock for mutating pipelines`
 
@@ -300,7 +302,7 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
   - [ ] `report.json` exists and loads (Task 16 errors → REJECTED, ERROR logged)
   - [ ] Record for the index exists with outcome FLAGGED or NOT_RUN
   - [ ] `accept` requires `flagKind: review_unresolved` (`accept requires flagKind review_unresolved; item {n} is {kind}`); `accept` on NOT_RUN rejected
-- [ ] Run lock (Task 23) taken first; held, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → REJECTED (D12: nothing ran). This lock-time `GitEnvironmentError` is REJECTED, not HALTED; only errors after the lock is held map to HALTED (Task 28)
+- [ ] Run lock (Task 23) taken first; held, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → REJECTED (D12: nothing ran). This lock-time `GitEnvironmentError` is REJECTED, not HALTED; only errors after the lock is held map to HALTED (Task 28c)
 - [ ] Tests: each validation failure returns REJECTED with its message and touches neither git nor dispatch; each of the three lock failures returns REJECTED
   - [ ] Success: tests pass
 - [ ] Commit: `feat: validate item resume requests`
@@ -314,33 +316,37 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
   - [ ] Success: tests pass
 - [ ] Commit: `feat: return to the target before an item resume`
 
-## Task 28 — Item execution and report rewrite
+## Task 28a — Item params
 
-- [ ] Load pipeline and params from run state; strip reserved keys with a WARNING if present; apply `--model`/`-p` overrides; set `OVERRIDE_INSTRUCTIONS` from `--instructions` and `ACCEPT_DECISION` from `--decision accept` only
+- [ ] In `resume_item`, load pipeline and params from run state; strip reserved keys with a WARNING if present; apply `--model`/`-p` overrides; set `OVERRIDE_INSTRUCTIONS` from `--instructions` and `ACCEPT_DECISION` from `--decision accept` only
+- [ ] Tests: run-state params and models carried over; `-p` override applied on top; stored `override_instructions` stripped with WARNING asserted and not used; `--instructions` and `--decision accept` set their keys; `retry` leaves `ACCEPT_DECISION` unset
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: build item resume params from run state and the decision`
+
+## Task 28b — Source re-evaluation, reconcile and dependency check
+
 - [ ] Re-evaluate the source; take the item by index. Not returned:
   - [ ] Reconcile: slice `complete` on target and slice branch ancestor of target (`git merge-base --is-ancestor`) → record PASSED with `reason: "reconciled: merged before the report was updated"`, WARNING, RESOLVED, nothing runs
   - [ ] Otherwise REJECTED naming the status
 - [ ] Single-item dependency check: any in-plan dependency not complete on the target → record FLAGGED `dependency` (`dependency {d} not complete`), body not run, FLAGGED exit
+- [ ] Tests (fake cf, temp repo): reconcile → PASSED, WARNING, RESOLVED, no dispatch (criterion 17); deferred and undesigned → REJECTED naming the status; complete without a merged branch → REJECTED; dependency open on target → `dependency N not complete`, no body (criterion 9)
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: reconcile and dependency-check resumed items`
+
+## Task 28c — Body run, record replace, exit mapping
+
 - [ ] Run the body once via `_run_each_item` (existing isolation and classification)
 - [ ] Replace the record (with `decision`, `resumed_at`), rewrite both report files atomically; exit RESOLVED for PASSED/ACCEPTED, FLAGGED otherwise; `GitEnvironmentError`/`GitStateUnknownError` raised after the lock is held → HALTED; report temp write or rename `OSError` → HALTED (logged by Task 16's `logger.exception`; prior report intact)
-  - [ ] Success: pyright clean
-- [ ] Commit: `feat: rerun one batch item on a decision`
-
-## Task 29 — Tests: item execution
-
-- [ ] Fake cf/dispatch/review over a temp repo:
+- [ ] Tests (fake cf/dispatch/review over a temp repo):
   - [ ] Retry on `review_unresolved` with branch work: implement dispatch skipped, review runs, revise prompts begin with the "Instructions from checkpoint resolution" block, merged, record `decision: retry`, RESOLVED (criterion 7)
   - [ ] Accept: one code review, no revise rounds, merged, ACCEPTED with `decision: accept` (criterion 8)
   - [ ] Retry flagged again → FLAGGED exit, record replaced
-  - [ ] Dependency open on target → `dependency N not complete`, no body (criterion 9)
   - [ ] Retry on a `not_run` record runs the body
-  - [ ] Reconcile path → PASSED, WARNING, RESOLVED (criterion 17)
-  - [ ] Stored `override_instructions` in run state stripped with WARNING and not used
   - [ ] Mid-item `GitStateUnknownError` → HALTED
   - [ ] Report rewrite `OSError` → HALTED, ERROR record asserted, previous `report.json` unchanged
   - [ ] Item resume on a `tasks-plan` run and on a `slices-plan` run (retry, and accept on `review_unresolved`) works with no pipeline-specific code
   - [ ] Success: tests pass
-- [ ] Commit: `test: cover item resume execution paths`
+- [ ] Commit: `feat: rerun one batch item on a decision`
 
 ## Task 30 — CLI flags
 
@@ -387,3 +393,4 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 ## Notes
 
 - No merge task is listed: Phase 7 merges the slice branch into `main` after the code review.
+- Task numbers keep their original values. Task 28 was split into 28a–28c after the second tasks review, each with its own tests; Task 29 (its old test task) no longer exists, so the sequence has a gap.
