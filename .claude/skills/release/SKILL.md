@@ -21,11 +21,11 @@ Working tree must be clean before continuing.
 
 Current version is `version` in `pyproject.toml`. Read `## [Unreleased]` in CHANGELOG.md:
 
-- Anything under `### Added` → minor bump.
-- Otherwise → patch bump.
-- Major bump only after the user confirms it explicitly.
+- **Patch** is the default: fixes, refinements, and new flags, options, parameters, config keys or checks. A non-empty changelog, or entries under `### Added`, does not make a release minor.
+- **Minor** only for a new user-facing feature or a significant new AI capability. Propose it in one line with the reason and wait for the user to confirm before changing any files.
+- **Major** only when the user explicitly asks for it.
 
-State the chosen version in one line and proceed (no confirmation for patch/minor).
+For a patch, state the chosen version in one line and proceed.
 
 ## 4. Bump and document
 
