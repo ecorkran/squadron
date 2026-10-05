@@ -49,7 +49,7 @@ status: not_started
 
 ## Task 2 — Work-count helper
 
-- [ ] Add one helper that returns `git rev-list --count --no-merges {target}..{branch}` as an int, via `run_git` (D4, D5). Both the D4 keep check and the D5 catch-up use it; do not duplicate the call
+- [ ] In `pipeline/git_ops.py` (next to `run_git`; both `branch_ops.py` and `actions/dispatch.py` import it from there), add one helper that returns `git rev-list --count --no-merges {target}..{branch}` as an int (D4, D5). Both the D4 keep check and the D5 catch-up use it; do not duplicate the call
   - [ ] Non-zero exit or timeout (`run_git` returns `None`) raises `GitStateUnknownError`, logged at ERROR `cannot count work on {branch}: …` (D12 row 1). Never returns 0 on failure
 - [ ] Add a second helper for the behind count, `git rev-list --count {branch}..{target}` (merges counted); failure raises `GitStateUnknownError`, ERROR `cannot compare {branch} with {target}: …` (D12 row 2)
 - [ ] Tests (temp repo): ahead by N; not ahead; only merge commits ahead → 0; behind by N; each helper's non-zero exit and timeout raise with the asserted ERROR record
@@ -59,9 +59,9 @@ status: not_started
 ## Task 3 — `BranchFailure` in branch action outputs
 
 - [ ] Add `BranchFailure` StrEnum (`CONFLICT`, `OTHER`) in `pipeline/branch_ops.py` (D7)
-- [ ] Every failing branch action result carries `outputs["failure"]`: `conflict` only when a merge or catch-up stopped on conflicted paths; `other` for every other failure (refused merge, missing design file, failed `set_arch` cf-op)
+- [ ] Every failing branch action result carries `outputs["failure"]`: `conflict` only when a merge or catch-up stopped on conflicted paths; `other` for every other branch action failure (refused merge, missing design file). A failed `set_arch` is a separate cf-op step, not a branch action, so it carries no `failure` key (Task 15 classifies it `step_failed`)
 - [ ] A successful enter's outputs include the slice branch name (D7 `branch` field reads it later)
-- [ ] Tests: existing merge-conflict path reports `conflict`; refused merge, missing design file and failed `set_arch` report `other`; enter success outputs carry the branch name
+- [ ] Tests: existing merge-conflict path reports `conflict`; refused merge and missing design file report `other`; enter success outputs carry the branch name
   - [ ] Success: tests pass; existing branch tests unchanged
 - [ ] Commit: `feat: classify branch action failures`
 
@@ -100,7 +100,7 @@ status: not_started
 
 - [ ] `BranchStepType` (`steps/branch.py`) accepts optional `plan:`; expansion emits `cf-op(set_arch, plan)` before the branch action, same order as phase steps
 - [ ] Validation accepts `plan:` on `enter`; leave `merge` unchanged (design: merge doesn't need it)
-- [ ] Tests: expansion with `plan:` yields cf-op then branch action; without `plan:` no cf-op; a failed `set_arch` flags the item with `failure: other`
+- [ ] Tests: expansion with `plan:` yields cf-op then branch action; without `plan:` no cf-op; a failed `set_arch` fails the item before the branch action runs (its flag kind, `step_failed`, is asserted in Task 15)
   - [ ] Success: tests pass
 - [ ] Commit: `feat: align cf plan before branch enter`
 
@@ -223,6 +223,8 @@ status: not_started
 - [ ] Add `data/pipelines/implement-plan.yaml` exactly as D1 (params, `each` body, `on_exhaust: fail`)
 - [ ] Tests in `test_builtin_pipelines.py`: loads and validates; params defaults as D1; listed by `sq run --list` (or the existing builtin listing test)
 - [ ] Pipeline-level test with fake cf, dispatch and review: two items where the dependent is listed first run in dependency order; a FAIL-at-exhaust item is `review_unresolved` at `revise-code` with branch recorded and its dependent `dependency`; an independent item merges
+  - [ ] The flagged item's branch has all its work committed and is unmerged; the next item's `branch enter` starts from a clean target (criterion 3)
+  - [ ] An implement dispatch that leaves no commits: the code review's `EmptyDiffError` flags the item `step_failed` with WARNING `item N flagged: …` asserted (D12 last row)
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add implement-plan pipeline`
 
@@ -235,7 +237,8 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 - [ ] `P56.yaml`: replace its implement section with the D10 body
 - [ ] `P456.yaml`: replace its implement section with the D10 body
 - [ ] Update existing tests that asserted the old step lists (`test_code_pipelines_branching.py`, `test_builtin_pipelines.py`)
-  - [ ] Success: all four validate; updated tests pass
+- [ ] Pipeline-level test (fake dispatch and review) for each of the four: a non-PASS review with `-p max-revisions=0 -p accept-threshold=review.pass` pauses the run at a checkpoint, with no merge (criterion 12)
+  - [ ] Success: all four validate; updated and new tests pass
 - [ ] Commit: `feat: add code review revise loop to single-slice pipelines`
 
 ## Task 21 — Drift test
@@ -272,8 +275,9 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 ## Task 24 — `sq run` takes the lock for mutating pipelines
 
 - [ ] Add a definition walk (nested steps included) that reports whether a pipeline mutates: any phase step, `devlog`, `branch`, or `loop` with `commit_each_iteration`
-- [ ] `sq run` holds `project_run_lock` for the whole run when the pipeline mutates; held lock → exit 2, nothing runs
-- [ ] Tests: `implement-plan`, `slices-plan`, `tasks-plan`, P6 detected as mutating; a review-only and a summary pipeline not; `sq run` with the lock held exits 2 and dispatches nothing (criterion 15, 17)
+- [ ] `sq run` holds `project_run_lock` for the whole run when the pipeline mutates; held lock, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → exit 2, nothing runs
+- [ ] Find existing CLI and pipeline tests that run mutating pipelines outside a git repo (`grep` for `sq run`/`run_pipeline` invocations of P-pipelines, `slices-plan`, `tasks-plan`); give them a temp git repo or a lock fixture so they don't start exiting 2
+- [ ] Tests: `implement-plan`, `slices-plan`, `tasks-plan`, P6 detected as mutating; a review-only and a summary pipeline not; `sq run` with the lock held, with `rev-parse` failing, and with an `OSError` on open each exit 2 and dispatch nothing (criterion 15, 17)
   - [ ] Success: tests pass
 - [ ] Commit: `feat: hold the project run lock for mutating pipelines`
 
@@ -296,8 +300,8 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
   - [ ] `report.json` exists and loads (Task 16 errors → REJECTED, ERROR logged)
   - [ ] Record for the index exists with outcome FLAGGED or NOT_RUN
   - [ ] `accept` requires `flagKind: review_unresolved` (`accept requires flagKind review_unresolved; item {n} is {kind}`); `accept` on NOT_RUN rejected
-- [ ] Run lock (Task 23) taken first; held → REJECTED
-- [ ] Tests: each validation failure returns REJECTED with its message and touches neither git nor dispatch
+- [ ] Run lock (Task 23) taken first; held, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → REJECTED (D12: nothing ran). This lock-time `GitEnvironmentError` is REJECTED, not HALTED; only errors after the lock is held map to HALTED (Task 28)
+- [ ] Tests: each validation failure returns REJECTED with its message and touches neither git nor dispatch; each of the three lock failures returns REJECTED
   - [ ] Success: tests pass
 - [ ] Commit: `feat: validate item resume requests`
 
@@ -318,7 +322,7 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
   - [ ] Otherwise REJECTED naming the status
 - [ ] Single-item dependency check: any in-plan dependency not complete on the target → record FLAGGED `dependency` (`dependency {d} not complete`), body not run, FLAGGED exit
 - [ ] Run the body once via `_run_each_item` (existing isolation and classification)
-- [ ] Replace the record (with `decision`, `resumed_at`), rewrite both report files atomically; exit RESOLVED for PASSED/ACCEPTED, FLAGGED otherwise; `GitEnvironmentError`/`GitStateUnknownError` → HALTED
+- [ ] Replace the record (with `decision`, `resumed_at`), rewrite both report files atomically; exit RESOLVED for PASSED/ACCEPTED, FLAGGED otherwise; `GitEnvironmentError`/`GitStateUnknownError` raised after the lock is held → HALTED; report temp write or rename `OSError` → HALTED (logged by Task 16's `logger.exception`; prior report intact)
   - [ ] Success: pyright clean
 - [ ] Commit: `feat: rerun one batch item on a decision`
 
@@ -333,7 +337,8 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
   - [ ] Reconcile path → PASSED, WARNING, RESOLVED (criterion 17)
   - [ ] Stored `override_instructions` in run state stripped with WARNING and not used
   - [ ] Mid-item `GitStateUnknownError` → HALTED
-  - [ ] Item resume on a `tasks-plan` run (retry, and accept on `review_unresolved`) works with no pipeline-specific code
+  - [ ] Report rewrite `OSError` → HALTED, ERROR record asserted, previous `report.json` unchanged
+  - [ ] Item resume on a `tasks-plan` run and on a `slices-plan` run (retry, and accept on `review_unresolved`) works with no pipeline-specific code
   - [ ] Success: tests pass
 - [ ] Commit: `test: cover item resume execution paths`
 
