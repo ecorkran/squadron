@@ -2,13 +2,24 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261004
+dateUpdated: 20261005
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261005
+
+### Slice 197: task breakdown complete (Phase 5)
+
+- **Tasks:** `197-tasks.implementation-batch-pipeline-implement-plan.md`, 34 tasks (384 lines, one file), test-with ordering, a commit per task, checkpoints after Parts A, D and G.
+  - Order follows the design's Development Approach: catch-up merge, `restore_target()` and `branch: { plan: }` → `existing: keep` on implement → source and ordering → `FlagKind` and `report.json` → `implement-plan` and the single-slice refresh with drift test → reserved params and run lock → item resume → docs and live walkthrough.
+  - One work-count helper (`rev-list --no-merges`) serves both the D4 keep check and the D5 catch-up.
+  - No merge task; Phase 7 merges.
+- **Design review fixes since the design entry below:** per-checkout run lock (D11), atomic per-item `report.json` rewrites, `not_run` records on a halt, `ResumeExit` codes 0–3, a git precondition that returns to the target before item resume, reserved control params (`control_params.py`), post-merge reconcile, and the D12 failure-mode table.
+- **Next:** Phase 6 implementation on branch `197-slice.implementation-batch-pipeline-implement-plan` from `main`.
 
 ## 20261004
 
