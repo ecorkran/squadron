@@ -1003,12 +1003,17 @@ def _loop_exhaust_result(
             status = ExecutionStatus.PAUSED
         case ExhaustBehavior.SKIP:
             status = ExecutionStatus.SKIPPED
+    final = last_with_verdict(action_results)
+    reason = f"loop exhausted at {final.verdict if final is not None else 'no verdict'}"
+    if loop_config.accept_if is not None:
+        reason += f" (accept: {loop_config.accept_if.value})"
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,
         status=status,
         action_results=action_results,
         iteration=max_iter,
+        error=reason,
         exhausted=True,
     )
 

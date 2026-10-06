@@ -1,0 +1,44 @@
+name: implement-plan
+description: Implement every slice in a plan whose tasks review is acceptable, in dependency order; flag failures, report at end
+
+params:
+  plan: required
+  model: sonnet
+  review-model: minimax
+  max-revisions: "2"
+  pass-threshold: review.pass
+  accept-threshold: review.concerns_or_better
+
+steps:
+  - each:
+      name: slices
+      source: cf.slices_ready_to_implement("{plan}", "{accept-threshold}")
+      as: slice
+      on_item_failure: continue
+      steps:
+        # Each slice starts in a fresh SDK session carrying nothing from the previous one.
+        - summary: { template: item-reset, model: "{model}", emit: [rotate] }
+        # From here on the body is shared with P6, implement, P56 and P456 (a test keeps
+        # them in step). A rerun keeps work already on the slice branch (existing: keep).
+        - branch: { op: enter, plan: "{plan}", slice: "{slice.index}" }
+        - implement:
+            phase: 6
+            plan: "{plan}"
+            slice: "{slice.index}"
+            model: "{model}"
+            review: { template: code, model: "{review-model}" }
+            checkpoint: never
+            existing: keep
+        - loop:
+            name: revise-code
+            max: "{max-revisions}"
+            until: "{pass-threshold}"
+            accept_if: "{accept-threshold}"
+            skip_if_met: true
+            commit_each_iteration: true
+            on_exhaust: fail
+            steps:
+              - dispatch: { name: revise, model: "{model}", feedback: review }
+              - review: { template: code, model: "{review-model}", slice: "{slice.index}" }
+        - devlog: auto
+        - branch: { op: merge, slice: "{slice.index}" }

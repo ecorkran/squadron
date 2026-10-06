@@ -114,13 +114,13 @@ status: in_progress
 
 ## Task 9 — Allow keep on implement and skip on branch work
 
-- [ ] `PhaseStepType._validate_existing` accepts `keep` on the implement phase (196 rejected it; update that rule)
-- [ ] `actions/dispatch.py`: under `KEEP` for CODE, read the target with `read_integration_target` and the work count (Task 2) for the slice branch; > 0 → skip the model call, return success with `outputs={"skipped": "branch has work", "ahead": n}`, log `implement: step {name} keeps existing work on {branch} ({n} commits ahead of {target})`
-  - [ ] Count failure propagates `GitStateUnknownError` (never treated as 0)
-  - [ ] Reuse the existing `SKIPPED_KEY` mechanics; post-condition and revision stamp treat the skip as satisfied, as for design/tasks
-- [ ] Tests (temp repo, extend `test_existing_keep.py`): ahead → no model call, outputs and log asserted; not ahead → dispatches; merge commits only → dispatches; `rev-list` timeout raises with ERROR record; validation now accepts keep on implement and still rejects unknown values
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: keep existing slice branch work on implement`
+- [x] `PhaseStepType._validate_existing` accepts `keep` on the implement phase (196 rejected it; update that rule)
+- [x] `actions/dispatch.py`: under `KEEP` for CODE, read the target with `read_integration_target` and the work count (Task 2) for the slice branch; > 0 → skip the model call, return success with `outputs={"skipped": "branch has work", "ahead": n}`, log `implement: step {name} keeps existing work on {branch} ({n} commits ahead of {target})`
+  - [x] Count failure propagates `GitStateUnknownError` (never treated as 0)
+  - [x] Reuse the existing `SKIPPED_KEY` mechanics; post-condition and revision stamp treat the skip as satisfied, as for design/tasks
+- [x] Tests (temp repo, extend `test_existing_keep.py`): ahead → no model call, outputs and log asserted; not ahead → dispatches; merge commits only → dispatches; `rev-list` timeout raises with ERROR record; validation now accepts keep on implement and still rejects unknown values
+  - [x] Success: tests pass
+- [x] Commit: `feat: keep existing slice branch work on implement`
 
 ---
 
@@ -128,33 +128,33 @@ status: in_progress
 
 ## Task 10 — `order_by_dependencies`
 
-- [ ] Add `order_by_dependencies(items) -> list[dict]` in `pipeline/sources.py`: stable topological sort over dependencies between returned items, ties by plan order (D3)
-  - [ ] Dependencies on non-returned indices are ignored by the sort
-  - [ ] Cycle raises `ValueError("dependency cycle in plan {plan}: a → b → a")` naming the cycle path
-- [ ] Tests: already-ordered input unchanged; dependent listed first moves after its dependency; independent items keep plan order; diamond; two-node and three-node cycles name the path
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: order batch items by dependencies`
+- [x] Add `order_by_dependencies(items) -> list[dict]` in `pipeline/sources.py`: stable topological sort over dependencies between returned items, ties by plan order (D3)
+  - [x] Dependencies on non-returned indices are ignored by the sort
+  - [x] Cycle raises `ValueError("dependency cycle in plan {plan}: a → b → a")` naming the cycle path
+- [x] Tests: already-ordered input unchanged; dependent listed first moves after its dependency; independent items keep plan order; diamond; two-node and three-node cycles name the path
+  - [x] Success: tests pass
+- [x] Commit: `feat: order batch items by dependencies`
 
 ## Task 11 — `cf.slices_ready_to_implement(plan, accept)`
 
-- [ ] Add and register the source (D2): open slices (not `complete`/`deferred`) with a design file; undesigned slices not returned
-- [ ] `flag_reason` checks in D2 table order, first hit wins: design review (existing `_review_flag` with design), no task file, tasks review (`_review_flag` with tasks), `all tasks checked but slice not marked complete` (`completed == total > 0`). These set `flag_kind: not_ready`
-- [ ] Dependency rows: in-plan, open, not a returned item → `flag_reason: dependency {d} not designed`, `flag_kind: dependency`; out-of-plan dependency → WARNING `slice {n}: dependency {d} is outside plan {plan}; not checked`, no flag
-- [ ] Items pass through `order_by_dependencies`; a cycle fails source evaluation (ERROR via the existing source error path)
-- [ ] A failing cf call fails the source (no guessed result)
-  - [ ] Success: pyright clean; existing source tests pass. No commit yet: Task 12's tests go in the same commit
+- [x] Add and register the source (D2): open slices (not `complete`/`deferred`) with a design file; undesigned slices not returned
+- [x] `flag_reason` checks in D2 table order, first hit wins: design review (existing `_review_flag` with design), no task file, tasks review (`_review_flag` with tasks), `all tasks checked but slice not marked complete` (`completed == total > 0`). These set `flag_kind: not_ready`
+- [x] Dependency rows: in-plan, open, not a returned item → `flag_reason: dependency {d} not designed`, `flag_kind: dependency`; out-of-plan dependency → WARNING `slice {n}: dependency {d} is outside plan {plan}; not checked`, no flag
+- [x] Items pass through `order_by_dependencies`; a cycle fails source evaluation (ERROR via the existing source error path)
+- [x] A failing cf call fails the source (no guessed result)
+  - [x] Success: pyright clean; existing source tests pass. No commit yet: Task 12's tests go in the same commit
 
 ## Task 12 — Tests: `slices_ready_to_implement`
 
-- [ ] Fake cf client tests in `tests/pipeline/test_sources.py`:
-  - [ ] Each D2 table row, one test each, asserting reason text and `flag_kind: not_ready`
-  - [ ] Precedence: design review flag wins over missing task file
-  - [ ] Complete, deferred, and undesigned slices not returned
-  - [ ] All tasks checked with open status flagged; partially checked not flagged
-  - [ ] Dependency not designed → `dependency` kind; out-of-plan dependency → WARNING record, no flag
-  - [ ] Ordering applied; cycle fails source evaluation with the cycle message
-  - [ ] Success: tests pass
-- [ ] Commit Tasks 11 and 12 together: `feat: add slices_ready_to_implement source`
+- [x] Fake cf client tests in `tests/pipeline/test_sources.py`:
+  - [x] Each D2 table row, one test each, asserting reason text and `flag_kind: not_ready`
+  - [x] Precedence: design review flag wins over missing task file
+  - [x] Complete, deferred, and undesigned slices not returned
+  - [x] All tasks checked with open status flagged; partially checked not flagged
+  - [x] Dependency not designed → `dependency` kind; out-of-plan dependency → WARNING record, no flag
+  - [x] Ordering applied; cycle fails source evaluation with the cycle message
+  - [x] Success: tests pass
+- [x] Commit Tasks 11 and 12 together: `feat: add slices_ready_to_implement source`
 
 ---
 
@@ -162,55 +162,55 @@ status: in_progress
 
 ## Task 13 — Enums and record fields
 
-- [ ] In `batch_report.py` add `FlagKind` and `ItemDecision` StrEnums exactly as D7; add `ItemOutcome.NOT_RUN`
-- [ ] `BatchItemRecord` gains `flag_kind`, `failed_step`, `branch`, `decision`, `resumed_at` (all optional)
-- [ ] Markdown flagged line gains kind, failed step and branch (D7 example line); `not_run` lines render with their reason; summary counts include `not_run`
-- [ ] Tests: render of a flagged line with all fields, a pre-flag (no failed step, no branch), and a `not_run` line; counts
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add flag kinds and decision fields to batch records`
+- [x] In `batch_report.py` add `FlagKind` and `ItemDecision` StrEnums exactly as D7; add `ItemOutcome.NOT_RUN`
+- [x] `BatchItemRecord` gains `flag_kind`, `failed_step`, `branch`, `decision`, `resumed_at` (all optional)
+- [x] Markdown flagged line gains kind, failed step and branch (D7 example line); `not_run` lines render with their reason; summary counts include `not_run`
+- [x] Tests: render of a flagged line with all fields, a pre-flag (no failed step, no branch), and a `not_run` line; counts
+  - [x] Success: tests pass
+- [x] Commit: `feat: add flag kinds and decision fields to batch records`
 
 ## Task 14 — `StepResult.exhausted`
 
-- [ ] `StepResult` gains `exhausted: bool = False`; `_execute_loop_step` sets it whenever rounds run out without `until` met, regardless of `on_exhaust` (accept, fail, pause, skip)
-- [ ] Tests in `test_executor_loop_body.py` (or the loop test file `grep` finds): exhausted+accepted, exhausted+fail, exhausted+checkpoint all set it; `until` met and `skip_if_met` do not
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: mark exhausted loops on step results`
+- [x] `StepResult` gains `exhausted: bool = False`; `_execute_loop_step` sets it whenever rounds run out without `until` met, regardless of `on_exhaust` (accept, fail, pause, skip)
+- [x] Tests in `test_executor_loop_body.py` (or the loop test file `grep` finds): exhausted+accepted, exhausted+fail, exhausted+checkpoint all set it; `until` met and `skip_if_met` do not
+  - [x] Success: tests pass
+- [x] Commit: `feat: mark exhausted loops on step results`
 
 ## Task 15 — Flag kind assignment in `each`
 
-- [ ] Where items are flagged in the executor, set the kind at the flag site (no `reason` parsing):
-  - [ ] Source `flag_reason` → the item's `flag_kind` (`not_ready` or `dependency`)
-  - [ ] `_dependency_flag_reason` → `DEPENDENCY`
-  - [ ] Failed loop with `exhausted` → `REVIEW_UNRESOLVED`
-  - [ ] Failed branch action with `outputs["failure"] == conflict` → `BRANCH_CONFLICT`; `other` → `STEP_FAILED`
-  - [ ] Any other failed step → `STEP_FAILED`; PAUSED status → `PAUSED`
-- [ ] Record `failed_step` (the failing step's name) and `branch` (from the enter action's outputs, when enter ran)
-- [ ] Tests in `test_executor_each.py`, one per kind, plus each `BranchFailure` class and a refused merge / missing design file / failed `set_arch` each landing `step_failed` (criterion 13)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: classify flagged batch items by kind`
+- [x] Where items are flagged in the executor, set the kind at the flag site (no `reason` parsing):
+  - [x] Source `flag_reason` → the item's `flag_kind` (`not_ready` or `dependency`)
+  - [x] `_dependency_flag_reason` → `DEPENDENCY`
+  - [x] Failed loop with `exhausted` → `REVIEW_UNRESOLVED`
+  - [x] Failed branch action with `outputs["failure"] == conflict` → `BRANCH_CONFLICT`; `other` → `STEP_FAILED`
+  - [x] Any other failed step → `STEP_FAILED`; PAUSED status → `PAUSED`
+- [x] Record `failed_step` (the failing step's name) and `branch` (from the enter action's outputs, when enter ran)
+- [x] Tests in `test_executor_each.py`, one per kind, plus each `BranchFailure` class and a refused merge / missing design file / failed `set_arch` each landing `step_failed` (criterion 13)
+  - [x] Success: tests pass
+- [x] Commit: `feat: classify flagged batch items by kind`
 
 ## Task 16 — `report.json` write and load
 
-- [ ] `BatchReport` writes `{run_id}.{step}.report.json` with the D7 shape (`docType`, `schemaVersion: 1`, `pipeline`, `runId`, `stepName`, `plan`, `counts` with a `not_run` key per D7, camelCase item keys)
-- [ ] Both `.md` and `.json` written atomically: temp file in the same directory, then rename. `OSError` → `logger.exception` with the path, re-raise; prior file stays intact (D12 report row)
-- [ ] `BatchReport.load(path)`: missing, unparseable or wrong `schemaVersion` raises a clear error naming the path and problem; version mismatch names both versions
-- [ ] Tests: round trip equality; atomic write leaves the previous file intact when rename/write fails (simulate `OSError`), ERROR asserted; version mismatch message; unparseable file message
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: write and load versioned batch report json`
+- [x] `BatchReport` writes `{run_id}.{step}.report.json` with the D7 shape (`docType`, `schemaVersion: 1`, `pipeline`, `runId`, `stepName`, `plan`, `counts` with a `not_run` key per D7, camelCase item keys)
+- [x] Both `.md` and `.json` written atomically: temp file in the same directory, then rename. `OSError` → `logger.exception` with the path, re-raise; prior file stays intact (D12 report row)
+- [x] `BatchReport.load(path)`: missing, unparseable or wrong `schemaVersion` raises a clear error naming the path and problem; version mismatch names both versions
+- [x] Tests: round trip equality; atomic write leaves the previous file intact when rename/write fails (simulate `OSError`), ERROR asserted; version mismatch message; unparseable file message
+  - [x] Success: tests pass
+- [x] Commit: `feat: write and load versioned batch report json`
 
 ## Task 17 — Per-item rewrite and `not_run` on halt
 
-- [ ] The executor rewrites both report files after every finished item, not only at the end
-- [ ] In the `each` `finally`, on `GitEnvironmentError` or `GitStateUnknownError`: in-flight item FLAGGED `step_failed` with the error as reason; every unreached item `not_run` with the halt's error as reason; then write
-- [ ] `sq run` batch summary line prints the JSON path next to the Markdown path
-- [ ] Tests: report present after item 1 when item 2 raises mid-body; halt marks in-flight + unreached correctly; summary line prints both paths
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: rewrite batch reports per item and record unreached items`
+- [x] The executor rewrites both report files after every finished item, not only at the end
+- [x] In the `each` `finally`, on `GitEnvironmentError` or `GitStateUnknownError`: in-flight item FLAGGED `step_failed` with the error as reason; every unreached item `not_run` with the halt's error as reason; then write
+- [x] `sq run` batch summary line prints the JSON path next to the Markdown path
+- [x] Tests: report present after item 1 when item 2 raises mid-body; halt marks in-flight + unreached correctly; summary line prints both paths
+  - [x] Success: tests pass
+- [x] Commit: `feat: rewrite batch reports per item and record unreached items`
 
 ## Task 18 — Part D checkpoint
 
-- [ ] Run `tests/pipeline`; `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all green; tree clean
+- [x] Run `tests/pipeline`; `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all green; tree clean
 
 ---
 
