@@ -39,22 +39,22 @@ steps:
       restore: true
 
   - branch: { op: enter }
-
   - implement:
       phase: 6
       model: "{model}"
       review: { template: code, model: "{review-model}" }
-      checkpoint: on-fail
-
-  - summary:
-      template: minimal-sdk
-      model: "{summary-model}"
-      emit: [file]
-
-  - compact:
-
-  - summary:
-      restore: true
-
+      checkpoint: never
+      existing: keep
+  - loop:
+      name: revise-code
+      max: "{max-revisions}"
+      until: "{pass-threshold}"
+      accept_if: "{accept-threshold}"
+      skip_if_met: true
+      commit_each_iteration: true
+      on_exhaust: checkpoint
+      steps:
+        - dispatch: { name: revise, model: "{model}", feedback: review }
+        - review: { template: code, model: "{review-model}", slice: "{slice}" }
   - devlog: auto
   - branch: { op: merge }

@@ -4,15 +4,29 @@ description: Implementation when design and tasks already exist
 params:
   slice: required
   model: sonnet
+  review-model: minimax
+  max-revisions: "2"
+  pass-threshold: review.pass
+  accept-threshold: review.concerns_or_better
 
 steps:
   - branch: { op: enter }
   - implement:
       phase: 6
       model: "{model}"
-      review:
-        template: code
-      checkpoint: on-fail
-
+      review: { template: code, model: "{review-model}" }
+      checkpoint: never
+      existing: keep
+  - loop:
+      name: revise-code
+      max: "{max-revisions}"
+      until: "{pass-threshold}"
+      accept_if: "{accept-threshold}"
+      skip_if_met: true
+      commit_each_iteration: true
+      on_exhaust: checkpoint
+      steps:
+        - dispatch: { name: revise, model: "{model}", feedback: review }
+        - review: { template: code, model: "{review-model}", slice: "{slice}" }
   - devlog: auto
   - branch: { op: merge }

@@ -58,9 +58,14 @@ def test_p6_summary_runs_after_the_merge() -> None:
 
 
 @pytest.mark.parametrize("name", _CODE_PIPELINES)
-def test_code_pipelines_keep_their_review_gate(name: str) -> None:
-    implement = next(s for s in load_pipeline(name).steps if s.step_type == "implement")
-    assert implement.config["checkpoint"] == "on-fail"
+def test_code_pipelines_gate_on_the_revise_loop(name: str) -> None:
+    """The code review gate is the revise-code loop, pausing on exhaust (slice 197 D10)."""
+    steps = load_pipeline(name).steps
+    implement = next(s for s in steps if s.step_type == "implement")
+    loop = next(s for s in steps if s.step_type == "loop" and s.name == "revise-code")
+    assert implement.config["checkpoint"] == "never"
+    assert implement.config["existing"] == "keep"
+    assert loop.config["on_exhaust"] == "checkpoint"
 
 
 @pytest.mark.parametrize("name", ["P456", "P56"])
@@ -166,3 +171,91 @@ async def test_p6_runs_on_the_slice_branch_and_ends_merged_on_the_target(
     assert "feat: implement slice 105 (review: PASS)" in subjects
     assert (repo / "feature.py").exists()
     assert run_test_git(repo, "status", "--porcelain") == ""
+
+
+# ---------------------------------------------------------------------------
+# The revise loop pauses on exhaust in every single-slice code pipeline (slice 197
+# criterion 12)
+# ---------------------------------------------------------------------------
+
+_ROOT_DESIGN = f"{_SLICE}-slice.stub.md"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", _CODE_PIPELINES)
+async def test_a_non_pass_code_review_pauses_without_merging(
+    name: str, temp_git_repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``loop.max`` must be positive, so one round that stays below the threshold
+    exhausts the loop (the design's ``max-revisions=0`` is rejected by the loader)."""
+    from squadron.pipeline.state import StateManager
+
+    repo = temp_git_repo
+    monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "1")
+    (repo / "DEVLOG.md").write_text("# devlog\n")
+    (repo / _ROOT_DESIGN).write_text("# stub design\n")
+    run_test_git(repo, "add", "-A")
+    run_test_git(repo, "commit", "-q", "-m", "devlog")
+
+    def _ok(action_type: str) -> MagicMock:
+        action = MagicMock()
+        action.execute = AsyncMock(
+            return_value=ActionResult(success=True, action_type=action_type, outputs={})
+        )
+        return action
+
+    async def dispatch(ctx: ActionContext) -> ActionResult:
+        # Design and tasks steps need their artifacts; implement commits code.
+        (repo / _ROOT_DESIGN).write_text("# stub design\n")
+        tasks = repo / f"project-documents/user/tasks/{_SLICE}-tasks.stub.md"
+        tasks.parent.mkdir(parents=True, exist_ok=True)
+        tasks.write_text("# stub tasks\n")
+        if run_test_git(repo, "branch", "--show-current").strip() == _BRANCH:
+            (repo / "feature.py").write_text(f"# {ctx.step_name}\n")
+            run_test_git(repo, "add", "-A")
+            run_test_git(repo, "commit", "-q", "-m", "feat: the agent's own commit")
+        return ActionResult(success=True, action_type="dispatch", outputs={})
+
+    async def review(ctx: ActionContext) -> ActionResult:
+        verdict = "CONCERNS" if ctx.params.get("template") == "code" else "PASS"
+        return ActionResult(success=True, action_type="review", outputs={}, verdict=verdict)
+
+    dispatch_action, review_action = MagicMock(), MagicMock()
+    dispatch_action.execute = AsyncMock(side_effect=dispatch)
+    review_action.execute = AsyncMock(side_effect=review)
+    definition = load_pipeline(name)
+    params: dict[str, object] = {k: v for k, v in definition.params.items() if v != "required"}
+    params.update({"slice": str(_SLICE), "max-revisions": "1", "accept-threshold": "review.pass"})
+    runs_dir = tmp_path / "runs"
+    run_id = StateManager(runs_dir=runs_dir).init_run(name, params)
+    cf_client = phase_artifact_cf_client(_SLICE, _ROOT_DESIGN, f"{_SLICE}-tasks.stub.md")
+    cf_client.get_config.return_value = ""
+    cf_client.list_worktrees.return_value = []
+    resolver = MagicMock()
+    resolver.resolve.return_value = ("claude-sonnet-5", "sdk")
+
+    result = await execute_pipeline(
+        definition,
+        params,
+        resolver=resolver,
+        cf_client=cf_client,
+        cwd=str(repo),
+        run_id=run_id,
+        runs_dir=runs_dir,
+        _action_registry={
+            "cf-op": _ok("cf-op"),
+            "dispatch": dispatch_action,
+            "review": review_action,
+            "checkpoint": _ok("checkpoint"),
+            "commit": CommitAction(),
+            "devlog": _ok("devlog"),
+            "summary": _ok("summary"),
+            "compact": _ok("compact"),
+            "branch": BranchAction(),
+        },
+    )
+
+    assert result.status == ExecutionStatus.PAUSED
+    assert result.paused_at == "revise-code"
+    assert run_test_git(repo, "branch", "--show-current").strip() == _BRANCH
+    assert "merge: slice" not in run_test_git(repo, "log", "main", "--format=%s")
