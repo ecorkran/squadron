@@ -12,7 +12,12 @@ import pytest
 
 from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
 from squadron.pipeline.actions.branch import BranchAction
-from squadron.pipeline.branch_ops import MergeFailedError, MergeOutcome, merge_slice_branch
+from squadron.pipeline.branch_ops import (
+    BranchFailure,
+    MergeFailedError,
+    MergeOutcome,
+    merge_slice_branch,
+)
 from squadron.pipeline.git_ops import GitEnvironmentError, GitStateUnknownError
 from squadron.pipeline.models import ActionContext
 from tests.conftest import run_test_git
@@ -171,6 +176,7 @@ def test_conflict_is_aborted_back_to_a_clean_target(conflicting_repo: Path) -> N
     with pytest.raises(MergeFailedError) as excinfo:
         _merge(conflicting_repo)
 
+    assert excinfo.value.failure is BranchFailure.CONFLICT
     message = str(excinfo.value)
     assert message.startswith("merge failed: ")
     # git prints conflict details on stdout; the reason carries them, not a generic line.
@@ -204,6 +210,7 @@ async def test_action_turns_a_failed_merge_into_an_item_failure(conflicting_repo
 
     assert result.success is False
     assert "merge failed" in (result.error or "")
+    assert result.outputs == {"failure": BranchFailure.CONFLICT}
 
 
 def _fake_git(
@@ -229,9 +236,10 @@ def test_a_refusal_without_a_conflict_is_an_item_failure_with_gits_text(slice_re
     with patch(
         "squadron.pipeline.branch_ops.run_git", side_effect=_fake_git(**{"merge --no-ff": refusal})
     ):
-        with pytest.raises(MergeFailedError, match="untracked working tree files"):
+        with pytest.raises(MergeFailedError, match="untracked working tree files") as excinfo:
             _merge(slice_repo)
 
+    assert excinfo.value.failure is BranchFailure.OTHER
     assert _branch(slice_repo) == "main"
 
 

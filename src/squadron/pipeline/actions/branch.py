@@ -9,7 +9,13 @@ from __future__ import annotations
 import asyncio
 
 from squadron.pipeline.actions import ActionType, register_action
-from squadron.pipeline.branch_ops import MergeFailedError, enter_slice_branch, merge_slice_branch
+from squadron.pipeline.branch_ops import (
+    FAILURE_OUTPUT,
+    BranchFailure,
+    MergeFailedError,
+    enter_slice_branch,
+    merge_slice_branch,
+)
 from squadron.pipeline.commit_plan import SLICE_PARAM
 from squadron.pipeline.git_ops import NoDesignFileError, SliceNotInPlanError, parse_slice_index
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -37,14 +43,22 @@ class BranchAction:
         try:
             # git and cf run as subprocesses; keep them off the event loop.
             outputs = await asyncio.to_thread(_run_op, op, slice_index, context)
-        except (NoDesignFileError, SliceNotInPlanError, MergeFailedError) as exc:
+        except MergeFailedError as exc:
+            return self._failure(str(exc), exc.failure)
+        except (NoDesignFileError, SliceNotInPlanError) as exc:
             # This item failed, but the next one may succeed. Environment faults raise
             # past here and end the run.
             return self._failure(str(exc))
         return ActionResult(success=True, action_type=self.action_type, outputs=outputs)
 
-    def _failure(self, error: str) -> ActionResult:
-        return ActionResult(success=False, action_type=self.action_type, outputs={}, error=error)
+    def _failure(self, error: str, failure: BranchFailure = BranchFailure.OTHER) -> ActionResult:
+        """An item failure, classified so the flag kind is set without reading ``error``."""
+        return ActionResult(
+            success=False,
+            action_type=self.action_type,
+            outputs={FAILURE_OUTPUT: failure},
+            error=error,
+        )
 
 
 def _run_op(op: BranchOp, slice_index: int, context: ActionContext) -> dict[str, object]:

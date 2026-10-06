@@ -213,6 +213,7 @@ async def test_action_turns_the_item_failure_into_a_failed_result(temp_git_repo:
 
     assert result.success is False
     assert "has no design file" in (result.error or "")
+    assert result.outputs == {"failure": "other"}
 
 
 @pytest.mark.asyncio

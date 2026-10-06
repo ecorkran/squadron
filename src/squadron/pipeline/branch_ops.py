@@ -41,8 +41,23 @@ class MergeOutcome(StrEnum):
     ALREADY = "already"  # the slice branch was already in the target
 
 
+class BranchFailure(StrEnum):
+    """Why a branch action failed an item, carried in its ``failure`` output (slice 197 D7)."""
+
+    CONFLICT = "conflict"  # a merge or catch-up stopped on conflicted paths
+    OTHER = "other"  # any other item failure (refused merge, missing design file, …)
+
+
+# The branch action output key holding a ``BranchFailure``.
+FAILURE_OUTPUT = "failure"
+
+
 class MergeFailedError(ValueError):
-    """The merge could not complete, but the target is clean and the branch intact (an item failure)."""
+    """A merge could not complete, but the checkout is clean and the branch intact (an item failure)."""
+
+    def __init__(self, message: str, failure: BranchFailure) -> None:
+        super().__init__(message)
+        self.failure = failure
 
 
 @dataclass(frozen=True)
@@ -264,7 +279,8 @@ def _abandon_merge(
     suffix = f" (conflicted: {conflicted_paths})" if conflicted_paths else ""
     raise MergeFailedError(
         f"merge failed: {reason or 'git refused the merge'}{suffix}; "
-        f"slice branch {branch} left unmerged"
+        f"slice branch {branch} left unmerged",
+        BranchFailure.CONFLICT if conflicted_paths else BranchFailure.OTHER,
     )
 
 
