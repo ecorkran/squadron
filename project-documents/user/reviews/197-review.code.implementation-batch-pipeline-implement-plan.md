@@ -137,7 +137,7 @@ The resume path replaces by index, preserving the order of other records. Tests 
 
 The first round's response is in `archive/`. Its fixes are 39dda24d.
 
-- **F001 — no change.** Item resume takes the lock itself in `resume_item`, and the module docstring says so. That path calls neither `_locked` nor `_run_pipeline_sdk`'s lock.
+- **F001 — no change.** Item resume takes the lock itself in `resume_item`, and the module docstring says so. Wrapping it in `_locked` as well would take the same lock twice in one process.
 - **F002 — no change, incorrect.** The expression parses as `(model or str(stored)) if stored else model`, so a stored model is used whenever `--model` is absent. It is hard to read, but it behaves correctly.
 - **F003 — no change.** The reviewer itself concludes the disk-full path is acceptable. The halt and the error are both logged.
 - **F004 — no change.** Item indexes come from cf slice indexes, which are unique within a plan.
