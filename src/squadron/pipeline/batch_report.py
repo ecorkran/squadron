@@ -351,3 +351,28 @@ def _write_atomic(target: Path, text: str) -> None:
     except OSError:
         _logger.exception("cannot write batch report %s", target)
         raise
+
+
+@dataclass
+class ItemRerun:
+    """One item of a finished ``each`` step, rerun on a decision (slice 197 D8).
+
+    The executor runs only ``item`` (the source is not evaluated again), then replaces
+    that index's record in ``report`` with the new outcome and writes the report. The
+    new record is left in ``record`` for the caller.
+    """
+
+    item: dict[str, object]
+    report: BatchReport
+    decision: ItemDecision
+    resumed_at: str
+    record: BatchItemRecord | None = None
+
+    def replace(self, record: BatchItemRecord) -> None:
+        """Put *record* in the place of the item's old record, with the decision on it."""
+        record.decision = self.decision
+        record.resumed_at = self.resumed_at
+        records = self.report.records
+        position = next(i for i, r in enumerate(records) if r.index == record.index)
+        records[position] = record
+        self.record = record

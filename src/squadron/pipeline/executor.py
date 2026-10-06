@@ -27,7 +27,7 @@ from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
 from squadron.pipeline.actions import ActionType
-from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, FlagKind
+from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, FlagKind, ItemRerun
 from squadron.pipeline.branch_ops import FAILURE_OUTPUT, BranchFailure
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
@@ -389,6 +389,7 @@ async def execute_pipeline(
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     on_step_complete: Callable[[StepResult], None] | None = None,
     runs_dir: Path | None = None,
+    item_rerun: ItemRerun | None = None,
     _action_registry: dict[str, object] | None = None,
 ) -> PipelineResult:
     """Execute *definition* with the given *params*.
@@ -431,6 +432,9 @@ async def execute_pipeline(
         post-condition). Defaults to ``StateManager``'s own default location
         when not provided — must match the ``runs_dir`` used to create
         *run_id*'s state file, or those lookups will not find it.
+    item_rerun:
+        Item resume (slice 197 D8): the ``each`` step runs only this item and updates
+        the loaded report in place of building a new one.
     _action_registry:
         Internal override for testing; uses the global action registry by default.
     """
@@ -564,6 +568,7 @@ async def execute_pipeline(
             start_iteration=_resume_start_iteration(
                 step=step, start_from=start_from, start_from_iteration=start_from_iteration
             ),
+            item_rerun=item_rerun,
         )
 
         step_results.append(step_result)
@@ -716,6 +721,7 @@ async def _execute_step(
     start_iteration: int = 1,
     iteration: int = 0,
     prior_iteration_step_outputs: dict[str, ActionResult] | None = None,
+    item_rerun: ItemRerun | None = None,
 ) -> StepResult:
     """Route *step* to the executor for its shape (D3, slice 195).
 
@@ -742,7 +748,9 @@ async def _execute_step(
         "runs_dir": runs_dir,
     }
     if step.step_type == StepTypeName.EACH:
-        return await _execute_each_step(resolved_config=resolved_config, **common)
+        return await _execute_each_step(
+            resolved_config=resolved_config, item_rerun=item_rerun, **common
+        )
     if step.step_type == StepTypeName.FAN_OUT:
         return await _execute_fan_out_step(resolved_config=resolved_config, **common)
     if step.step_type == StepTypeName.LOOP:
@@ -1462,6 +1470,7 @@ async def _finish_each_report(
     in_flight: tuple[int, dict[str, object]] | None,
     halt: GitEnvironmentError | None,
     items: list[dict[str, object]],
+    item_rerun: ItemRerun | None,
 ) -> None:
     """Record a halted item, then write the report.
 
@@ -1476,8 +1485,10 @@ async def _finish_each_report(
     position, item = in_flight
     reason = str(halt) if halt is not None else "run halted before this item finished"
     _warn_item_flagged(step_name, item, reason)
-    report.records.append(
-        BatchItemRecord.from_item(item, position, [], reason, flag_kind=FlagKind.STEP_FAILED)
+    _add_record(
+        report,
+        BatchItemRecord.from_item(item, position, [], reason, flag_kind=FlagKind.STEP_FAILED),
+        item_rerun,
     )
     if halt is not None:
         unreached = enumerate(items[position + 1 :], start=position + 1)
@@ -1487,6 +1498,14 @@ async def _finish_each_report(
     except OSError:
         # Raising here would replace the exception already ending the run.
         _logger.exception("cannot write the batch report for halted step %s", step_name)
+
+
+def _add_record(report: BatchReport, record: BatchItemRecord, item_rerun: ItemRerun | None) -> None:
+    """Append *record*, or on an item resume put it in place of the item's old one."""
+    if item_rerun is None:
+        report.records.append(record)
+    else:
+        item_rerun.replace(record)
 
 
 async def _execute_each_step(
@@ -1506,17 +1525,21 @@ async def _execute_each_step(
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
+    item_rerun: ItemRerun | None = None,
 ) -> StepResult:
-    """Execute an `each` collection step."""
+    """Execute an `each` collection step; on an item resume, only that item (197 D8)."""
     as_name = str(resolved_config.get("as", ""))
-    args, items = await evaluate_each_source(
-        str(resolved_config.get("source", "")), merged_params, cf_client
-    )
+    if item_rerun is not None:
+        items, report = [item_rerun.item], item_rerun.report
+    else:
+        args, items = await evaluate_each_source(
+            str(resolved_config.get("source", "")), merged_params, cf_client
+        )
+        report = BatchReport(pipeline_name, run_id, step.name, plan=args[0] if args else None)
 
     inner_steps = _unpack_body(resolved_config)
     policy = ItemFailurePolicy(resolved_config.get("on_item_failure", ItemFailurePolicy.STOP))
     all_action_results: list[ActionResult] = []
-    report = BatchReport(pipeline_name, run_id, step.name, plan=args[0] if args else None)
     status = ExecutionStatus.COMPLETED
 
     # The item running when an exception ends the whole run (a halting git fault, a lost
@@ -1561,10 +1584,12 @@ async def _execute_each_step(
                 _warn_item_flagged(step.name, item, reason)
                 if str(item.get("index", "")).isdigit():
                     flagged.add(int(str(item["index"])))
-            report.records.append(
+            _add_record(
+                report,
                 BatchItemRecord.from_item(
                     item, position, item_results, reason, flag_kind=kind, failed_step=failed_step
-                )
+                ),
+                item_rerun,
             )
             in_flight = None
             if status is not ExecutionStatus.COMPLETED:
@@ -1575,7 +1600,7 @@ async def _execute_each_step(
         halt = exc
         raise
     finally:
-        await _finish_each_report(report, runs_dir, step.name, in_flight, halt, items)
+        await _finish_each_report(report, runs_dir, step.name, in_flight, halt, items, item_rerun)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,

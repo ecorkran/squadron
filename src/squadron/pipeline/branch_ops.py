@@ -176,14 +176,14 @@ def restore_target(target: str, cwd: str) -> None:
     _logger.warning("left unmerged slice branch %s for %s", start, target)
 
 
-def _dirty_paths(cwd: str) -> str:
+def dirty_paths(cwd: str) -> str:
     """The changed and untracked paths, comma separated; empty when the tree is clean."""
     status = _git_stdout(["status", "--porcelain", "-uall"], cwd)
     return ", ".join(line[3:] for line in status.splitlines() if line.strip())
 
 
 def _require_clean_tree(cwd: str, slice_index: int) -> None:
-    paths = _dirty_paths(cwd)
+    paths = dirty_paths(cwd)
     if paths:
         raise GitEnvironmentError(
             f"working tree not clean: {paths}. Commit or remove them, then rerun phase 6 for "
@@ -275,7 +275,7 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
         return MergeResult(branch, target, MergeOutcome.ALREADY)
     if current != branch:
         raise GitEnvironmentError(f"on {current}, expected {branch} to merge it into {target}")
-    paths = _dirty_paths(cwd)
+    paths = dirty_paths(cwd)
     if paths:
         raise GitEnvironmentError(
             f"working tree not clean before merging {branch}: {paths}. Commit or remove "
