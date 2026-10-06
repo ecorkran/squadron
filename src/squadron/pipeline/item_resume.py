@@ -76,7 +76,7 @@ class ResumeRequest:
     decision: ItemDecision
     instructions: str | None = None
     model: str | None = None
-    param_overrides: dict[str, str] = field(default_factory=lambda: {})
+    param_overrides: dict[str, object] = field(default_factory=lambda: {})
 
 
 @dataclass(frozen=True)

@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
 
 from squadron.cli.commands.run_dry_run import render_steps
+from squadron.cli.commands.run_item import check_item_flags, handle_item_resume
 from squadron.events import EventType, bootstrap_event_actions
 from squadron.events.contexts import PostActionContext
 from squadron.events.discovery import PluginLoadError
@@ -31,7 +32,7 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
-from squadron.pipeline.batch_report import BatchReport
+from squadron.pipeline.batch_report import BatchReport, ItemDecision, ItemRerun
 from squadron.pipeline.classification import (
     ClassificationError,
     PipelineClassification,
@@ -209,6 +210,7 @@ async def _run_pipeline(
     _action_registry: dict[str, object] | None = None,
     pool_backend: PoolBackend | None = None,
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
+    item_rerun: ItemRerun | None = None,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
 
@@ -260,6 +262,7 @@ async def _run_pipeline(
             pool_policy=pool_policy,
             on_step_complete=state_mgr.make_step_callback(run_id),
             runs_dir=runs_dir,
+            item_rerun=item_rerun,
             _action_registry=_action_registry,
         )
     except BaseException:
@@ -286,6 +289,7 @@ async def _run_pipeline_sdk(
     from_iteration: int = 0,
     run_id: str | None = None,
     strict: bool = False,
+    item_rerun: ItemRerun | None = None,
 ) -> PipelineResult:
     """Create an SDK session if needed, run the pipeline, and disconnect on exit.
 
@@ -378,6 +382,7 @@ async def _run_pipeline_sdk(
             execution_mode=ExecutionMode.SDK,
             pool_backend=pool_backend,
             pool_policy=classification.policy,
+            item_rerun=item_rerun,
         )
     except LazySessionConnectError as exc:
         # State is already saved by _run_pipeline's BaseException handler.
@@ -390,6 +395,8 @@ async def _run_pipeline_sdk(
         )
         raise typer.Exit(1) from exc
     except GitEnvironmentError as exc:
+        if item_rerun is not None:
+            raise  # item resume reports it as HALTED (slice 197 D8)
         # A git fault that every later item would hit too (wrong branch, dirty tree,
         # unknown state) ends the run. State is saved; the operator fixes the checkout.
         _logger.error("pipeline '%s' halted by a git environment fault: %s", pipeline_name, exc)
@@ -1002,9 +1009,19 @@ def run(
         "--explain",
         help="Print pipeline classification and exit without executing.",
     ),
+    item: str | None = typer.Option(
+        None, "--item", help="With --resume: rerun one item of a batch run, by its index."
+    ),
+    decision: ItemDecision | None = typer.Option(
+        None, "--decision", help="With --item: retry the item, or accept its review."
+    ),
+    instructions: str | None = typer.Option(
+        None, "--instructions", help="With --item: instructions prepended to its dispatches."
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
+    check_item_flags(resume, item, decision, instructions)
     if resume is not None and from_step is not None:
         rprint("[red]Error: --resume and --from cannot be used together.[/red]")
         raise typer.Exit(1)
@@ -1178,6 +1195,11 @@ def run(
         rprint("\n[bold]Steps:[/bold]")
         render_steps(definition.steps, params, ContextForgeClient())
         raise typer.Exit(0)
+
+    # ---- --resume --item (slice 197 D8) ----
+    if resume is not None and item is not None:
+        assert decision is not None  # check_item_flags
+        handle_item_resume(resume, item, decision, instructions, model, param, strict)
 
     # ---- --resume ----
     if resume is not None:
