@@ -29,6 +29,7 @@
 
 ### Exception Handling
 - Every try/except must either: (a) re-raise after logging at ERROR level with logger.exception, (b) handle a specific exception with a comment explaining why swallowing is correct (e.g., ConnectionClosed: pass for normal teardown), or (c) be a top-level handler at a process boundary. Bare except: and except Exception: pass are bugs by definition.
+- Each language rules file names a required linter config that enforces this mechanically. Run the linter in the pre-commit hook and in CI; `setup-ide` reports a missing or weak config.
 
 ## Source Control and Builds
 - Keep commits semantic; build after all changes.
@@ -117,7 +118,8 @@ Before starting work:
 6. never start work from another unit's branch unless explicitly instructed
 7. if in doubt, STOP and ask the Project Manager
 
-When slice implementation is done, merge the slice branch into the target:
+**Merging (Phase 7 only, after code review passes):**
+Phase 6 ends with the work committed on the slice branch. Do not merge at the end of implementation, and never write a merge as a task, sub-item, or Success Criteria in a task file. Merge the slice branch into the target only during Phase 7 (Slice Integration), after the slice's code review has passed:
 1. re-read the target (step 1 above) — do not infer it from the current branch or from memory
 2. `git checkout {target}`, then `git merge {branch-name}`
 3. if either command fails, STOP and ask the Project Manager
@@ -128,6 +130,12 @@ Do not hold a branch open across units. Do not delete branches unless specifical
 GitHub has two independent mechanisms: classic branch protection and rulesets. A 404 from `repos/{owner}/{repo}/branches/{branch}/protection` means only that no *classic* rule exists.
 - Before stating that a branch is or is not protected, also check `gh api repos/{owner}/{repo}/rules/branches/{branch}` — it lists every active rule on the branch, including ones inherited from organization rulesets.
 - Report "unprotected" only when both come back empty. If either call fails for a reason other than "not found" (permissions, auth), say so instead of concluding anything.
+
+### Release Versioning
+Versions are MAJOR.MINOR.PATCH. What goes in the CHANGELOG does not decide the bump: a non-empty CHANGELOG, an `### Added` section, a new flag, option, parameter, config key, or check is never by itself a reason for a minor version.
+- **Patch** (the default): fixes, refinements to existing systems, new flags/options/parameters/config keys, new checks or warnings, guide and documentation changes.
+- **Minor**: only a new user-facing feature or a significant new AI capability. Propose it in one line with the reason; the Project Manager confirms before any files change.
+- **Major**: only when the Project Manager explicitly asks for it.
 
 ### Commit Messages
 Use semantic commit prefixes. The goal is a readable `git log --oneline`.
@@ -172,6 +180,8 @@ The rules above always apply. The following are scoped to specific
 languages and tools and are deliberately not inlined here — read the
 relevant file when working in that area:
 
+- `project-documents/ai-project-guide/project-guides/rules/csharp.md` — C# and .NET coding standards and conventions. Use when writing, modifying, or reviewing .cs files, .csproj files, or .NET build configuration.
+  Applies to: `**/*.cs,**/*.csproj,**/Directory.Build.props,**/.editorconfig`
 - `project-documents/ai-project-guide/project-guides/rules/dart.md` — Dart language coding standards and conventions. Use when writing, modifying, or reviewing .dart files or pubspec.yaml.
   Applies to: `**/*.dart,**/pubspec.yaml,**/analysis_options.yaml`
 - `project-documents/ai-project-guide/project-guides/rules/electron.md` — Electron desktop application rules including main/renderer process architecture, IPC patterns, preload scripts, and module loading. Use when working on Electron apps, desktop applications using Electron, or files involving IPC, BrowserWindow, or electron-vite.
@@ -182,6 +192,8 @@ relevant file when working in that area:
   Applies to: `**/*.py,**/pyproject.toml,**/requirements*.txt`
 - `project-documents/ai-project-guide/project-guides/rules/react.md` — React component patterns, hooks conventions, and JSX best practices. Use when working with React components. Assumes TypeScript rules also apply for .tsx files.
   Applies to: `**/*.tsx,**/*.jsx,src/components/**/*,app/**/*`
+- `project-documents/ai-project-guide/project-guides/rules/shell.md` — Shell script standards for bash and sh, including CI/CD and pipeline scripts. Use when writing, modifying, or reviewing .sh/.bash files, extensionless scripts with a bash or sh shebang, or shell in CI workflow run blocks.
+  Applies to: `**/*.sh,**/*.bash,**/.github/workflows/*.yml,**/.github/workflows/*.yaml,**/.gitlab-ci.yml`
 - `project-documents/ai-project-guide/project-guides/rules/sql.md` — SQL coding standards for PostgreSQL, pgvector, and TimescaleDB. Use when writing queries, migrations, schema definitions, database functions, or any code that connects to a database — including test fixtures and runners. Covers naming, indexing, query optimization, extension-specific patterns, and production-database protection.
   Applies to: `**/*.sql,**/*.psql,**/migrations/**,**/schema.sql,**/test/**/*.py,**/tests/**/*.py,**/conftest.py`
 - `project-documents/ai-project-guide/project-guides/rules/testing.md` — Testing standards and best practices. Use when writing, modifying, or reviewing tests. Covers test structure, naming, mocking patterns, assertion style, coverage expectations, and database safety in tests.
