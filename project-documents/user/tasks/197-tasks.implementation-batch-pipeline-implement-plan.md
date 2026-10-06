@@ -9,8 +9,8 @@ projectState: >
   addressed). No code written. 196 is complete on main; main is the integration target
   (`git.integration_branch` unset).
 dateCreated: 20261005
-dateUpdated: 20261005
-status: in_progress
+dateUpdated: 20261006
+status: complete
 ---
 
 ## Context Summary
@@ -377,16 +377,16 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 
 ## Task 33 — Live walkthrough in the scratch project
 
-- [ ] Run Verification Walkthrough setup and steps 1–7 from the slice design in the scratch project (`…/scratchpad/sq-scratch`, plan 100) with `CLAUDECODE` unset and `uv run --project <squadron>`; always pass `--model`; observe the 196 caveats (`cf set arch 100`, DEVLOG frontmatter)
-- [ ] Record each step's command and key output line in the DEVLOG entry
-  - [ ] Success: each step matches the design; any divergence is fixed (with a test) or filed as a GitHub issue linked from the DEVLOG
-- [ ] Commit: `docs: add slice 197 implementation DEVLOG entry`
+- [x] Run Verification Walkthrough setup and steps 1–7 from the slice design in the scratch project (`…/scratchpad/sq-scratch`, plan 100) with `CLAUDECODE` unset and `uv run --project <squadron>`; always pass `--model`; observe the 196 caveats (`cf set arch 100`, DEVLOG frontmatter)
+- [x] Record each step's command and key output line in the DEVLOG entry
+  - [x] Success: each step matches the design; any divergence is fixed (with a test) or filed as a GitHub issue linked from the DEVLOG
+- [x] Commit: `docs: add slice 197 implementation DEVLOG entry`
 
 ## Task 34 — Close out
 
-- [ ] Set this file's `status: complete`; slice design `status: complete`; check off 197 in `180-slices.pipeline-intelligence.md`
-- [ ] Commit: `docs: mark slice 197 complete`
-  - [ ] Success: commit on the slice branch; tree clean
+- [x] Set this file's `status: complete`; slice design `status: complete`; check off 197 in `180-slices.pipeline-intelligence.md`
+- [x] Commit: `docs: mark slice 197 complete`
+  - [x] Success: commit on the slice branch; tree clean
 
 ---
 
