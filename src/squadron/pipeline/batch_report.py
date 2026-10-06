@@ -7,10 +7,13 @@ leaves one document that says which items need a human.
 
 from __future__ import annotations
 
+import json
+import logging
+import tempfile
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import yaml
 
@@ -22,6 +25,32 @@ from squadron.pipeline.models import ActionResult
 
 if TYPE_CHECKING:
     from squadron.pipeline.executor import StepResult
+
+_logger = logging.getLogger(__name__)
+
+# Goes up whenever the record shape or the FlagKind set changes (slice 197 D7).
+REPORT_SCHEMA_VERSION = 1
+REPORT_DOC_TYPE = "batch-report"
+
+# BatchItemRecord attribute → report.json key (camelCase, as review frontmatter).
+_JSON_KEYS: dict[str, str] = {
+    "index": "index",
+    "name": "name",
+    "outcome": "outcome",
+    "flag_kind": "flagKind",
+    "failed_step": "failedStep",
+    "reason": "reason",
+    "final_verdict": "finalVerdict",
+    "review_file": "reviewFile",
+    "unsaved_parts": "unsavedParts",
+    "branch": "branch",
+    "decision": "decision",
+    "resumed_at": "resumedAt",
+}
+
+
+class BatchReportLoadError(ValueError):
+    """A ``report.json`` is missing, unparseable, or of another schema version."""
 
 
 class ItemOutcome(StrEnum):
@@ -116,6 +145,28 @@ class BatchItemRecord:
             branch=_slice_branch(actions),
         )
 
+    def to_json(self) -> dict[str, object]:
+        return {key: getattr(self, attr) for attr, key in _JSON_KEYS.items()}
+
+    @classmethod
+    def from_json(cls, data: dict[str, object]) -> BatchItemRecord:
+        values = {attr: data.get(key) for attr, key in _JSON_KEYS.items()}
+        flag_kind, decision = values["flag_kind"], values["decision"]
+        return cls(
+            index=str(values["index"]),
+            name=str(values["name"]),
+            outcome=ItemOutcome(str(values["outcome"])),
+            reason=_optional_str(values["reason"]),
+            final_verdict=_optional_str(values["final_verdict"]),
+            review_file=_optional_str(values["review_file"]),
+            unsaved_parts=[str(p) for p in cast(list[object], values["unsaved_parts"] or [])],
+            flag_kind=FlagKind(str(flag_kind)) if flag_kind is not None else None,
+            failed_step=_optional_str(values["failed_step"]),
+            branch=_optional_str(values["branch"]),
+            decision=ItemDecision(str(decision)) if decision is not None else None,
+            resumed_at=_optional_str(values["resumed_at"]),
+        )
+
     def render_line(self) -> str:
         label = f"{self.index} {self.name}".strip()
         details: list[str] = []
@@ -135,6 +186,10 @@ class BatchItemRecord:
         if self.unsaved_parts:
             details.append(f"unsaved: {', '.join(self.unsaved_parts)}")
         return f"- {label} — {'; '.join(details)}" if details else f"- {label}"
+
+
+def _optional_str(value: object) -> str | None:
+    return None if value is None else str(value)
 
 
 def _slice_branch(actions: list[ActionResult]) -> str | None:
@@ -213,12 +268,76 @@ class BatchReport:
             lines += [r.render_line() for r in section] or ["- none"]
         return "\n".join(lines) + "\n"
 
+    def to_json(self) -> dict[str, object]:
+        """The report as ``report.json`` content (slice 197 D7)."""
+        return {
+            "docType": REPORT_DOC_TYPE,
+            "schemaVersion": REPORT_SCHEMA_VERSION,
+            "pipeline": self.pipeline,
+            "runId": self.run_id,
+            "stepName": self.step_name,
+            "plan": self.plan,
+            "counts": {o.value: self.count(o) for o in ItemOutcome},
+            "items": [r.to_json() for r in self.records],
+        }
+
     def path(self, runs_dir: Path) -> Path:
         return runs_dir / f"{self.run_id}.{self.step_name}.report.md"
 
+    def json_path(self, runs_dir: Path) -> Path:
+        return runs_dir / f"{self.run_id}.{self.step_name}.report.json"
+
     def write(self, runs_dir: Path) -> Path:
-        """Write the report beside the run state file; return its path."""
+        """Write the Markdown and JSON reports beside the run state file; return the
+        Markdown path. Each file is replaced atomically, so a reader never sees a partial
+        one and a failed write leaves the previous report intact."""
         target = self.path(runs_dir)
-        target.write_text(self.render(), encoding="utf-8")
+        _write_atomic(target, self.render())
+        _write_atomic(self.json_path(runs_dir), json.dumps(self.to_json(), indent=2) + "\n")
         self.written_to = target
         return target
+
+    @classmethod
+    def load(cls, path: Path) -> BatchReport:
+        """Read a ``report.json`` back; any problem raises ``BatchReportLoadError``."""
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise BatchReportLoadError(f"batch report {path} not found") from None
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise BatchReportLoadError(f"batch report {path} is unreadable: {exc}") from exc
+        if not isinstance(data, dict):
+            raise BatchReportLoadError(f"batch report {path} is not a JSON object")
+        report = cast(dict[str, object], data)
+        version = report.get("schemaVersion")
+        if version != REPORT_SCHEMA_VERSION:
+            raise BatchReportLoadError(
+                f"batch report {path} has schemaVersion {version}; "
+                f"this squadron reads schemaVersion {REPORT_SCHEMA_VERSION}"
+            )
+        try:
+            items = cast(list[dict[str, object]], report["items"])
+            return cls(
+                pipeline=str(report["pipeline"]),
+                run_id=str(report["runId"]),
+                step_name=str(report["stepName"]),
+                plan=_optional_str(report.get("plan")),
+                records=[BatchItemRecord.from_json(item) for item in items],
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BatchReportLoadError(f"batch report {path} is malformed: {exc!r}") from exc
+
+
+def _write_atomic(target: Path, text: str) -> None:
+    """Write *text* to a temp file beside *target*, then rename it over *target*."""
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=target.parent, prefix=f".{target.name}.", delete=False
+        ) as handle:
+            handle.write(text)
+            temp = Path(handle.name)
+        temp.replace(target)
+    except OSError:
+        _logger.exception("cannot write batch report %s", target)
+        raise

@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.pipeline.batch_report import (
     BatchItemRecord,
     BatchReport,
+    BatchReportLoadError,
     FlagKind,
     ItemDecision,
     ItemOutcome,
@@ -214,3 +220,119 @@ class TestStructuredFlags:
         assert report.summary_line() == (
             "implement-plan slices: 2 items — 1 passed, 0 accepted, 0 flagged, 1 not_run"
         )
+
+
+# ---------------------------------------------------------------------------
+# report.json (slice 197 D7)
+# ---------------------------------------------------------------------------
+
+
+def _json_report() -> BatchReport:
+    report = BatchReport("implement-plan", "3f9c2a1b7d10", "slices", plan="180")
+    report.records = [
+        BatchItemRecord(
+            "196",
+            "Branching",
+            ItemOutcome.FLAGGED,
+            reason="loop exhausted at FAIL",
+            final_verdict="FAIL",
+            review_file=_REVIEW_FILE,
+            flag_kind=FlagKind.REVIEW_UNRESOLVED,
+            failed_step="revise-code",
+            branch="196-slice.branching",
+        ),
+        BatchItemRecord(
+            "197",
+            "Batch",
+            ItemOutcome.PASSED,
+            decision=ItemDecision.RETRY,
+            resumed_at="2026-10-05T12:00:00+00:00",
+        ),
+        BatchItemRecord("198", "Later", ItemOutcome.NOT_RUN, reason="run halted"),
+    ]
+    return report
+
+
+class TestReportJson:
+    def test_written_beside_the_markdown_with_the_d7_shape(self, tmp_path: Path) -> None:
+        _json_report().write(tmp_path)
+
+        data = json.loads((tmp_path / "3f9c2a1b7d10.slices.report.json").read_text())
+        assert data["docType"] == "batch-report"
+        assert data["schemaVersion"] == 1
+        assert (data["pipeline"], data["runId"], data["stepName"], data["plan"]) == (
+            "implement-plan",
+            "3f9c2a1b7d10",
+            "slices",
+            "180",
+        )
+        assert data["counts"] == {"passed": 1, "accepted": 0, "flagged": 1, "not_run": 1}
+        assert data["items"][0] == {
+            "index": "196",
+            "name": "Branching",
+            "outcome": "flagged",
+            "flagKind": "review_unresolved",
+            "failedStep": "revise-code",
+            "reason": "loop exhausted at FAIL",
+            "finalVerdict": "FAIL",
+            "reviewFile": _REVIEW_FILE,
+            "unsavedParts": [],
+            "branch": "196-slice.branching",
+            "decision": None,
+            "resumedAt": None,
+        }
+
+    def test_round_trip(self, tmp_path: Path) -> None:
+        report = _json_report()
+        report.write(tmp_path)
+
+        loaded = BatchReport.load(report.json_path(tmp_path))
+
+        assert loaded.records == report.records
+        assert (loaded.pipeline, loaded.run_id, loaded.step_name, loaded.plan) == (
+            report.pipeline,
+            report.run_id,
+            report.step_name,
+            report.plan,
+        )
+
+    def test_a_failed_write_keeps_the_previous_report_and_logs_error(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        report = _json_report()
+        report.write(tmp_path)
+        before = report.json_path(tmp_path).read_text()
+        report.records.append(BatchItemRecord("199", "New", ItemOutcome.PASSED))
+
+        with (
+            patch.object(Path, "replace", side_effect=OSError(28, "No space left on device")),
+            caplog.at_level(logging.ERROR, logger="squadron.pipeline.batch_report"),
+        ):
+            with pytest.raises(OSError, match="No space left"):
+                report.write(tmp_path)
+
+        assert report.json_path(tmp_path).read_text() == before
+        assert any(
+            r.levelno == logging.ERROR and str(report.path(tmp_path)) in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_a_version_mismatch_names_both_versions(self, tmp_path: Path) -> None:
+        path = tmp_path / "r.report.json"
+        path.write_text(json.dumps({"schemaVersion": 2, "items": []}))
+
+        with pytest.raises(BatchReportLoadError, match="schemaVersion 2; .* schemaVersion 1"):
+            BatchReport.load(path)
+
+    def test_an_unparseable_file_names_the_path(self, tmp_path: Path) -> None:
+        path = tmp_path / "r.report.json"
+        path.write_text("{not json")
+
+        with pytest.raises(BatchReportLoadError, match=f"batch report {path} is unreadable"):
+            BatchReport.load(path)
+
+    def test_a_missing_file_names_the_path(self, tmp_path: Path) -> None:
+        path = tmp_path / "absent.report.json"
+
+        with pytest.raises(BatchReportLoadError, match=f"batch report {path} not found"):
+            BatchReport.load(path)
