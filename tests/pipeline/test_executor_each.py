@@ -205,6 +205,7 @@ class TestBatchReportWiring:
             "passed": 1,
             "accepted": 0,
             "flagged": 2,
+            "not_run": 0,
         }
         assert [(r.index, r.outcome.value, r.reason) for r in report.records] == [
             ("1", "passed", None),
@@ -514,3 +515,108 @@ class TestDependencyFlags:
         )
 
         assert ran == ["1", "2"]
+
+
+# ---------------------------------------------------------------------------
+# Flag kinds (slice 197 D7)
+# ---------------------------------------------------------------------------
+
+
+def _branch_failure(failure: str) -> ActionResult:
+    return ActionResult(
+        success=False, action_type="branch", outputs={"failure": failure}, error="merge failed"
+    )
+
+
+def _record(result: PipelineResult, index: str):  # type: ignore[no-untyped-def]
+    report = result.step_results[0].batch_report
+    assert report is not None
+    return next(r for r in report.records if r.index == index)
+
+
+class TestFlagKinds:
+    @pytest.mark.asyncio
+    async def test_a_source_flag_without_a_kind_is_not_ready(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result, _ = await _run(monkeypatch, _items("1", f1="no task file"), lambda i: _OK, "continue")
+
+        record = _record(result, "1")
+        assert (record.flag_kind, record.failed_step, record.branch) == ("not_ready", None, None)
+
+    @pytest.mark.asyncio
+    async def test_a_source_flag_kind_is_carried(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        items = [{"index": "2", "flag_reason": "dependency 1 not designed", "flag_kind": "dependency"}]
+
+        result, _ = await _run(monkeypatch, items, lambda i: _OK, "continue")
+
+        assert _record(result, "2").flag_kind == "dependency"
+
+    @pytest.mark.asyncio
+    async def test_a_flagged_dependency_is_dependency(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        items = [{"index": "1"}, {"index": "2", "dependencies": [1]}]
+
+        result, ran = await _run(monkeypatch, items, lambda i: _fail("boom"), "continue")
+
+        assert ran == ["1"]
+        assert _record(result, "2").flag_kind == "dependency"
+
+    @pytest.mark.asyncio
+    async def test_a_failed_step_is_step_failed_with_its_name(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        result, _ = await _run(monkeypatch, _items("1"), lambda i: _fail("boom"), "continue")
+
+        record = _record(result, "1")
+        assert record.flag_kind == "step_failed"
+        assert record.failed_step is not None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("failure", "kind"), [("conflict", "branch_conflict"), ("other", "step_failed")]
+    )
+    async def test_each_branch_failure_class(
+        self, monkeypatch: pytest.MonkeyPatch, failure: str, kind: str
+    ) -> None:
+        result, _ = await _run(monkeypatch, _items("1"), lambda i: _branch_failure(failure), "continue")
+
+        assert _record(result, "1").flag_kind == kind
+
+    @pytest.mark.asyncio
+    async def test_a_pause_is_paused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "1")
+
+        result, _ = await _run(monkeypatch, _items("1"), lambda i: _PAUSE, "continue")
+
+        assert _record(result, "1").flag_kind == "paused"
+
+    @pytest.mark.asyncio
+    async def test_the_entered_branch_is_recorded(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        def outcome(_: str) -> ActionResult:
+            return ActionResult(success=True, action_type="branch", outputs={"branch": "1-slice.one"})
+
+        result, _ = await _run(monkeypatch, _items("1"), outcome, "continue")
+
+        assert _record(result, "1").branch == "1-slice.one"
+
+
+def _step(status: ExecutionStatus, actions: list[ActionResult], exhausted: bool = False) -> StepResult:
+    return StepResult(
+        step_name="s", step_type="t", status=status, action_results=actions, exhausted=exhausted
+    )
+
+
+@pytest.mark.parametrize(
+    ("final", "kind"),
+    [
+        (_step(ExecutionStatus.FAILED, [], exhausted=True), "review_unresolved"),
+        (_step(ExecutionStatus.PAUSED, [], exhausted=True), "paused"),
+        (_step(ExecutionStatus.FAILED, [_branch_failure("conflict")]), "branch_conflict"),
+        (_step(ExecutionStatus.FAILED, [_branch_failure("other")]), "step_failed"),
+        (_step(ExecutionStatus.FAILED, [_fail("no arch 999")]), "step_failed"),
+    ],
+)
+def test_flag_kind_classifies_the_final_step(final: StepResult, kind: str) -> None:
+    from squadron.pipeline.executor import _flag_kind  # pyright: ignore[reportPrivateUsage]
+
+    assert _flag_kind(final) == kind

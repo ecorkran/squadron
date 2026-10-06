@@ -1893,3 +1893,45 @@ async def test_round_without_a_review_fails_its_commit_and_commits_nothing() -> 
     assert commit_results[0].success is False
     assert commit_results[0].error == "commit scope unknown: no review in round 1"
     commit_action.execute.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Slice 197 D7 — StepResult.exhausted
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("extra", "loop_verdicts", "status", "accepted"),
+    [
+        ({"accept_if": "review.concerns_or_better"}, ["FAIL", "CONCERNS"], "completed", True),
+        ({"on_exhaust": "fail"}, ["FAIL", "FAIL"], "failed", False),
+        ({"on_exhaust": "checkpoint"}, ["FAIL", "FAIL"], "paused", False),
+        ({"on_exhaust": "skip"}, ["FAIL", "FAIL"], "skipped", False),
+    ],
+)
+async def test_running_out_of_rounds_marks_the_loop_exhausted(
+    extra: dict[str, object], loop_verdicts: list[str], status: str, accepted: bool
+) -> None:
+    steps, _ = await _run_after_prior_review(
+        "FAIL", {"max": 2, "until": "review.pass", **extra}, loop_verdicts
+    )
+    assert steps[1].status == ExecutionStatus(status)
+    assert steps[1].accepted is accepted
+    assert steps[1].exhausted is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("prior", "loop_cfg", "loop_verdicts"),
+    [
+        ("FAIL", {"max": 3, "until": "review.pass"}, ["CONCERNS", "PASS"]),
+        ("PASS", {"max": 3, "until": "review.pass", "skip_if_met": True}, []),
+    ],
+)
+async def test_until_met_or_skipped_is_not_exhausted(
+    prior: str, loop_cfg: dict[str, object], loop_verdicts: list[str]
+) -> None:
+    steps, _ = await _run_after_prior_review(prior, loop_cfg, loop_verdicts)
+    assert steps[1].status == ExecutionStatus.COMPLETED
+    assert steps[1].exhausted is False

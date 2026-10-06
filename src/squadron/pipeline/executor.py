@@ -26,7 +26,9 @@ from typing import TYPE_CHECKING, Any, cast
 from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
-from squadron.pipeline.batch_report import BatchItemRecord, BatchReport
+from squadron.pipeline.actions import ActionType
+from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, FlagKind
+from squadron.pipeline.branch_ops import FAILURE_OUTPUT, BranchFailure
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
     PoolClassificationPolicy,
@@ -42,7 +44,12 @@ from squadron.pipeline.loop_config import (
     parse_loop_config,
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
-from squadron.pipeline.sources import SOURCE_REGISTRY, parse_source
+from squadron.pipeline.sources import (
+    FLAG_KIND_KEY,
+    FLAG_REASON_KEY,
+    SOURCE_REGISTRY,
+    parse_source,
+)
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.phase import PhaseStepType
@@ -177,6 +184,8 @@ class StepResult:
     error: str | None = None
     # A loop that exhausted its rounds but met accept_if (slice 195 D6).
     accepted: bool = False
+    # A loop whose rounds ran out without ``until`` met, whatever it did next (slice 197 D7).
+    exhausted: bool = False
     # Per-item outcomes of an `each` step (slice 195 D9); None for other steps.
     batch_report: BatchReport | None = None
 
@@ -984,6 +993,7 @@ def _loop_exhaust_result(
             action_results=action_results,
             iteration=max_iter,
             accepted=True,
+            exhausted=True,
         )
     match loop_config.on_exhaust:
         case ExhaustBehavior.FAIL:
@@ -998,6 +1008,7 @@ def _loop_exhaust_result(
         status=status,
         action_results=action_results,
         iteration=max_iter,
+        exhausted=True,
     )
 
 
@@ -1477,11 +1488,10 @@ async def _execute_each_step(
         for position, item in enumerate(items):
             in_flight = (position, item)
             item_results: list[StepResult] = []
+            failed_step: str | None = None
             # A pre-flagged item is a failed precondition, not an execution
             # failure: flagged under both policies, body never run (D5).
-            reason = str(item["flag_reason"]) if item.get("flag_reason") else None
-            if reason is None:
-                reason = _dependency_flag_reason(item, flagged)
+            reason, kind = _pre_flag(item, flagged)
             if reason is None:
                 item_results = await _run_each_item(
                     inner_steps=inner_steps,
@@ -1502,11 +1512,17 @@ async def _execute_each_step(
                 for inner_result in item_results:
                     all_action_results.extend(inner_result.action_results)
                 reason, status = _item_outcome(item_results, policy)
+                if reason is not None:
+                    kind, failed_step = _flag_kind(item_results[-1]), item_results[-1].step_name
             if reason is not None:
                 _warn_item_flagged(step.name, item, reason)
                 if str(item.get("index", "")).isdigit():
                     flagged.add(int(str(item["index"])))
-            report.records.append(BatchItemRecord.from_item(item, position, item_results, reason))
+            report.records.append(
+                BatchItemRecord.from_item(
+                    item, position, item_results, reason, flag_kind=kind, failed_step=failed_step
+                )
+            )
             in_flight = None
             if status is not ExecutionStatus.COMPLETED:
                 break
@@ -1519,6 +1535,32 @@ async def _execute_each_step(
         action_results=all_action_results,
         batch_report=report,
     )
+
+
+def _pre_flag(item: dict[str, object], flagged: set[int]) -> tuple[str | None, FlagKind | None]:
+    """Why *item* must not run, and its flag kind: the source's flag, else a flagged
+    dependency (slice 197 D7). The kind is set here, never parsed from the reason."""
+    if item.get(FLAG_REASON_KEY):
+        kind = FlagKind(str(item.get(FLAG_KIND_KEY, FlagKind.NOT_READY)))
+        return str(item[FLAG_REASON_KEY]), kind
+    reason = _dependency_flag_reason(item, flagged)
+    return reason, FlagKind.DEPENDENCY if reason is not None else None
+
+
+def _flag_kind(final: StepResult) -> FlagKind:
+    """The flag kind of an item whose body ended on *final*, FAILED or PAUSED (197 D7)."""
+    if final.status is ExecutionStatus.PAUSED:
+        return FlagKind.PAUSED
+    if final.exhausted:
+        return FlagKind.REVIEW_UNRESOLVED
+    failed = next((r for r in final.action_results if not r.success), None)
+    if (
+        failed is not None
+        and failed.action_type == ActionType.BRANCH
+        and failed.outputs.get(FAILURE_OUTPUT) == BranchFailure.CONFLICT
+    ):
+        return FlagKind.BRANCH_CONFLICT
+    return FlagKind.STEP_FAILED
 
 
 def _dependency_flag_reason(item: dict[str, object], flagged: set[int]) -> str | None:

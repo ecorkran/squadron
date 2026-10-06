@@ -10,7 +10,7 @@ projectState: >
   (`git.integration_branch` unset).
 dateCreated: 20261005
 dateUpdated: 20261005
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -39,9 +39,9 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and `git status` is clean
-- [ ] `git checkout -b 197-slice.implementation-batch-pipeline-implement-plan main`
-  - [ ] Success: `git branch --show-current` prints the new branch name
+- [x] Confirm `cf config get git.integration_branch` is empty (target = `main`) and `git status` is clean
+- [x] `git checkout -b 197-slice.implementation-batch-pipeline-implement-plan main`
+  - [x] Success: `git branch --show-current` prints the new branch name
 
 ---
 
@@ -49,64 +49,64 @@ status: not_started
 
 ## Task 2 — Work-count helper
 
-- [ ] In `pipeline/git_ops.py` (next to `run_git`; both `branch_ops.py` and `actions/dispatch.py` import it from there), add one helper that returns `git rev-list --count --no-merges {target}..{branch}` as an int (D4, D5). Both the D4 keep check and the D5 catch-up use it; do not duplicate the call
-  - [ ] Non-zero exit or timeout (`run_git` returns `None`) raises `GitStateUnknownError`, logged at ERROR `cannot count work on {branch}: …` (D12 row 1). Never returns 0 on failure
-- [ ] Add a second helper for the behind count, `git rev-list --count {branch}..{target}` (merges counted); failure raises `GitStateUnknownError`, ERROR `cannot compare {branch} with {target}: …` (D12 row 2)
-- [ ] Tests (temp repo): ahead by N; not ahead; only merge commits ahead → 0; behind by N; each helper's non-zero exit and timeout raise with the asserted ERROR record
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add slice branch work and behind counts`
+- [x] In `pipeline/git_ops.py` (next to `run_git`; both `branch_ops.py` and `actions/dispatch.py` import it from there), add one helper that returns `git rev-list --count --no-merges {target}..{branch}` as an int (D4, D5). Both the D4 keep check and the D5 catch-up use it; do not duplicate the call
+  - [x] Non-zero exit or timeout (`run_git` returns `None`) raises `GitStateUnknownError`, logged at ERROR `cannot count work on {branch}: …` (D12 row 1). Never returns 0 on failure
+- [x] Add a second helper for the behind count, `git rev-list --count {branch}..{target}` (merges counted); failure raises `GitStateUnknownError`, ERROR `cannot compare {branch} with {target}: …` (D12 row 2)
+- [x] Tests (temp repo): ahead by N; not ahead; only merge commits ahead → 0; behind by N; each helper's non-zero exit and timeout raise with the asserted ERROR record
+  - [x] Success: tests pass
+- [x] Commit: `feat: add slice branch work and behind counts`
 
 ## Task 3 — `BranchFailure` in branch action outputs
 
-- [ ] Add `BranchFailure` StrEnum (`CONFLICT`, `OTHER`) in `pipeline/branch_ops.py` (D7)
-- [ ] Every failing branch action result carries `outputs["failure"]`: `conflict` only when a merge or catch-up stopped on conflicted paths; `other` for every other branch action failure (refused merge, missing design file). A failed `set_arch` is a separate cf-op step, not a branch action, so it carries no `failure` key (Task 15 classifies it `step_failed`)
-- [ ] A successful enter's outputs include the slice branch name (D7 `branch` field reads it later)
-- [ ] Tests: existing merge-conflict path reports `conflict`; refused merge and missing design file report `other`; enter success outputs carry the branch name
-  - [ ] Success: tests pass; existing branch tests unchanged
-- [ ] Commit: `feat: classify branch action failures`
+- [x] Add `BranchFailure` StrEnum (`CONFLICT`, `OTHER`) in `pipeline/branch_ops.py` (D7)
+- [x] Every failing branch action result carries `outputs["failure"]`: `conflict` only when a merge or catch-up stopped on conflicted paths; `other` for every other branch action failure (refused merge, missing design file). A failed `set_arch` is a separate cf-op step, not a branch action, so it carries no `failure` key (Task 15 classifies it `step_failed`)
+- [x] A successful enter's outputs include the slice branch name (D7 `branch` field reads it later)
+- [x] Tests: existing merge-conflict path reports `conflict`; refused merge and missing design file report `other`; enter success outputs carry the branch name
+  - [x] Success: tests pass; existing branch tests unchanged
+- [x] Commit: `feat: classify branch action failures`
 
 ## Task 4 — Catch-up on enter of an existing branch (D5, #183)
 
-- [ ] In `enter_slice_branch`, after checking out an existing slice branch, use the behind count (Task 2); when > 0:
-  - [ ] Work count 0 → `git merge --ff-only {target}` (no merge commit)
-  - [ ] Otherwise → `git merge --no-ff -m "merge: {target} into slice {n}" {target}`
-  - [ ] Conflict → record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT … (conflicted: …); resolve on the branch and retry`); checkout stays on the clean slice branch
-  - [ ] Refusal or timeout → abort if `MERGE_HEAD` exists, state check; passes → item failure `failure: other`; fails → `GitStateUnknownError` (D12 row 4)
-- [ ] No rebase, reset, or `--force` anywhere in the path
-  - [ ] Success: pyright clean; existing branch tests pass. No commit yet: Task 5's tests go in the same commit
+- [x] In `enter_slice_branch`, after checking out an existing slice branch, use the behind count (Task 2); when > 0:
+  - [x] Work count 0 → `git merge --ff-only {target}` (no merge commit)
+  - [x] Otherwise → `git merge --no-ff -m "merge: {target} into slice {n}" {target}`
+  - [x] Conflict → record conflicted paths, `git merge --abort`, `verify_git_state` expecting the slice branch; item failure with `failure: conflict` and the D5 message (`catch-up merge of {target} into {branch} failed: CONFLICT … (conflicted: …); resolve on the branch and retry`); checkout stays on the clean slice branch
+  - [x] Refusal or timeout → abort if `MERGE_HEAD` exists, state check; passes → item failure `failure: other`; fails → `GitStateUnknownError` (D12 row 4)
+- [x] No rebase, reset, or `--force` anywhere in the path
+  - [x] Success: pyright clean; existing branch tests pass. No commit yet: Task 5's tests go in the same commit
 
 ## Task 5 — Tests: catch-up merge
 
-- [ ] Temp-repo tests (add beside `tests/pipeline/test_branch_enter.py`):
-  - [ ] Behind with work: merge commit `merge: main into slice N` created; branch history preserved
-  - [ ] Behind with no work: fast-forward, no merge commit; the work count afterwards is 0
-  - [ ] Not behind: no merge attempted
-  - [ ] Conflict: item failure `conflict` listing the path; no `MERGE_HEAD`; checkout on the slice branch; WARNING record asserted (D12 row 3)
-  - [ ] Refusal with passing state check → `other`; failing state check → `GitStateUnknownError` with ERROR record (D12 row 4)
-  - [ ] Code review diff range after a catch-up still excludes target-only commits (merge-base based)
-  - [ ] Success: tests pass
-- [ ] Commit Tasks 4 and 5 together: `feat: catch up existing slice branches to the target on enter`
+- [x] Temp-repo tests (add beside `tests/pipeline/test_branch_enter.py`):
+  - [x] Behind with work: merge commit `merge: main into slice N` created; branch history preserved
+  - [x] Behind with no work: fast-forward, no merge commit; the work count afterwards is 0
+  - [x] Not behind: no merge attempted
+  - [x] Conflict: item failure `conflict` listing the path; no `MERGE_HEAD`; checkout on the slice branch; WARNING record asserted (D12 row 3)
+  - [x] Refusal with passing state check → `other`; failing state check → `GitStateUnknownError` with ERROR record (D12 row 4)
+  - [x] Code review diff range after a catch-up still excludes target-only commits (merge-base based)
+  - [x] Success: tests pass
+- [x] Commit Tasks 4 and 5 together: `feat: catch up existing slice branches to the target on enter`
 
 ## Task 6 — Extract `restore_target()`
 
-- [ ] Extract the leave-other-branch logic of `_leave_other_slice_branch` into public `restore_target(cwd)` in `branch_ops.py`: commit leftovers on the current slice branch, then check out the target (196 D5.4). Enter calls it; behavior unchanged
-  - [ ] Commit or checkout failure/timeout raises `GitStateUnknownError` with ERROR (D12 row 5)
-- [ ] Tests: existing enter tests pass unchanged; direct `restore_target` test from a dirty slice branch ends on target with leftovers committed on the branch; failure test asserts the error and ERROR record
-  - [ ] Success: tests pass
-- [ ] Commit: `refactor: extract restore_target from branch enter`
+- [x] Extract the leave-other-branch logic of `_leave_other_slice_branch` into public `restore_target(cwd)` in `branch_ops.py`: commit leftovers on the current slice branch, then check out the target (196 D5.4). Enter calls it; behavior unchanged
+  - [x] Commit or checkout failure/timeout raises `GitStateUnknownError` with ERROR (D12 row 5)
+- [x] Tests: existing enter tests pass unchanged; direct `restore_target` test from a dirty slice branch ends on target with leftovers committed on the branch; failure test asserts the error and ERROR record
+  - [x] Success: tests pass
+- [x] Commit: `refactor: extract restore_target from branch enter`
 
 ## Task 7 — `branch: { plan: }` (D6)
 
-- [ ] `BranchStepType` (`steps/branch.py`) accepts optional `plan:`; expansion emits `cf-op(set_arch, plan)` before the branch action, same order as phase steps
-- [ ] Validation accepts `plan:` on `enter`; leave `merge` unchanged (design: merge doesn't need it)
-- [ ] Tests: expansion with `plan:` yields cf-op then branch action; without `plan:` no cf-op; a failed `set_arch` fails the item before the branch action runs (its flag kind, `step_failed`, is asserted in Task 15)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: align cf plan before branch enter`
+- [x] `BranchStepType` (`steps/branch.py`) accepts optional `plan:`; expansion emits `cf-op(set_arch, plan)` before the branch action, same order as phase steps
+- [x] Validation accepts `plan:` on `enter`; leave `merge` unchanged (design: merge doesn't need it)
+- [x] Tests: expansion with `plan:` yields cf-op then branch action; without `plan:` no cf-op; a failed `set_arch` fails the item before the branch action runs (its flag kind, `step_failed`, is asserted in Task 15)
+  - [x] Success: tests pass
+- [x] Commit: `feat: align cf plan before branch enter`
 
 ## Task 8 — Part A checkpoint
 
-- [ ] Run `tests/pipeline`; `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all green; tree clean
+- [x] Run `tests/pipeline`; `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all green; tree clean
 
 ---
 

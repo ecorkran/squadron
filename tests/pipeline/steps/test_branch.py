@@ -132,4 +132,5 @@ async def test_a_failed_set_arch_fails_the_item_before_the_branch_action(
     assert report is not None
     assert report.records[0].outcome is ItemOutcome.FLAGGED
     assert "no arch 999" in (report.records[0].reason or "")
+    assert report.records[0].flag_kind == "step_failed"
     branch.execute.assert_not_called()
