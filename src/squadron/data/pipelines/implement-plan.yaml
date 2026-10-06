@@ -40,5 +40,5 @@ steps:
             steps:
               - dispatch: { name: revise, model: "{model}", feedback: review }
               - review: { template: code, model: "{review-model}", slice: "{slice.index}" }
-        - devlog: auto
+        - devlog: { mode: auto, slice: "{slice.index}" }
         - branch: { op: merge, slice: "{slice.index}" }

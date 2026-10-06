@@ -96,6 +96,23 @@ def _slice_on(cwd: str) -> int:
     return index
 
 
+def _commit_needing_an_index() -> MagicMock:
+    """A commit that, like the real one, needs a scalar slice index when it has a slice."""
+    from squadron.pipeline.git_ops import parse_slice_index
+
+    async def execute(ctx: ActionContext) -> ActionResult:
+        if "slice" in ctx.params:
+            try:
+                parse_slice_index(ctx.params["slice"])
+            except ValueError as exc:
+                return ActionResult(success=False, action_type="commit", outputs={}, error=str(exc))
+        return ActionResult(success=True, action_type="commit", outputs={})
+
+    action = MagicMock()
+    action.execute = execute
+    return action
+
+
 class _Fakes:
     """Scripted dispatch and review; records which slices each ran for."""
 
@@ -153,7 +170,7 @@ async def _run(repo: Path, tmp_path: Path, fakes: _Fakes) -> PipelineResult:
             "dispatch": dispatch,
             "review": review,
             "cf-op": _ok("cf-op"),
-            "commit": _ok("commit"),
+            "commit": _commit_needing_an_index(),
             "devlog": _ok("devlog"),
             "summary": _ok("summary"),
             "checkpoint": _ok("checkpoint"),

@@ -71,6 +71,8 @@ def _raw_steps(name: str) -> list[dict[str, object]]:
 
 
 def _normalize(value: object) -> object:
+    if value == {"devlog": "auto"}:  # scalar shorthand for {mode: auto}
+        return {"devlog": {"mode": "auto"}}
     if isinstance(value, dict):
         return {
             k: _normalize(v)
