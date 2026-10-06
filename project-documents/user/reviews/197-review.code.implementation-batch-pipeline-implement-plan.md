@@ -6,149 +6,163 @@ slice: implementation-batch-pipeline-implement-plan
 targetKind: slice
 rulesSource: project
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/197-slice.implementation-batch-pipeline-implement-plan.md
-aiModel: claude-sonnet-5-5
+aiModel: minimax/minimax-m3
 status: complete
 dateCreated: 20261006
 dateUpdated: 20261006
-reviewedSha: 90a40dbf40289fd46b99e999c957a6e9295545be
+reviewedSha: 19d83bf23a6dcc9fea8bf0c539118fbe658ad88d
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 0
+toolCallsMade: 33
 diffTruncated: false
-durationSeconds: 23.6
+turns: 20
+promptTokens: 2597933
+cachedTokens: 2267248
+completionTokens: 3833
+reasoningTokens: 0
+durationSeconds: 110.9
 squadronVersion: 0.19.0
 findings:
   - id: F001
-    severity: concern
-    category: error-handling
-    summary: "Item-resume HALTED path can mask a lost lock and leaves `raise AssertionError` as dead code"
-    location: "src/squadron/pipeline/item_resume.py:118-135"
+    severity: note
+    category: design
+    summary: "`_take_run_lock` is not called for `--resume --item`"
+    location: "src/squadron/cli/commands/run.py:1157"
   - id: F002
-    severity: concern
-    category: error-handling
-    summary: "`typer.Exit` from the pipeline runner is swallowed and reclassified without logging"
-    location: "src/squadron/cli/commands/run_item.py:88-93"
+    severity: note
+    category: correctness
+    summary: "Preexisting operator-precedence bug in `resume_model`"
+    location: "src/squadron/cli/commands/run.py:1232"
   - id: F003
     severity: concern
-    category: design
-    summary: "Function-local imports and private-symbol imports used to dodge a circular import"
-    location: "src/squadron/cli/commands/run_item.py:44-50"
+    category: error-handling
+    summary: "`in_flight` is reset to `None` after writing the per-item report"
+    location: "src/squadron/pipeline/executor.py:1592-1598"
   - id: F004
     severity: concern
-    category: structure
-    summary: "`run()` entry point and `run.py` keep growing; `assert` used for control flow"
-    location: "src/squadron/cli/commands/run.py:1199-1202"
+    category: correctness
+    summary: "`_add_record`/`ItemRerun.replace` uses index equality for matching"
+    location: "src/squadron/pipeline/batch_report.py:357-364"
   - id: F005
     severity: concern
-    category: correctness
-    summary: "Lock is not taken for implicit-resume and resume paths using a possibly different `definition`"
-    location: "src/squadron/cli/commands/run.py:1231-1315"
+    category: api-design
+    summary: "`_check_record` accepts NOT_RUN items with any decision"
+    location: "src/squadron/pipeline/item_resume.py:194"
   - id: F006
-    severity: concern
-    category: conventions
-    summary: "Duplicated magic strings and keys scattered across modules"
-    location: "src/squadron/pipeline/executor.py:1593"
+    severity: note
+    category: design
+    summary: "Two-state `_finish_each_report` parameter surface"
+    location: "src/squadron/pipeline/executor.py:1466-1472"
   - id: F007
-    severity: concern
-    category: error-handling
-    summary: "Exception-handling rule: `except GitEnvironmentError: raise` and unlogged swallows"
-    location: "src/squadron/pipeline/actions/dispatch.py:320"
+    severity: pass
+    category: tests
+    summary: "Tests comprehensively cover the slice"
+    location: "tests/pipeline/test_item_resume_*.py"
   - id: F008
-    severity: concern
-    category: concurrency
-    summary: "Item resume has a read-modify-write race on `report.json` outside the lock for plain runs"
-    location: "src/squadron/pipeline/run_lock.py:60-80"
+    severity: pass
+    category: failure-modes
+    summary: "Atomic report writes preserve prior report on failure"
+    location: "src/squadron/pipeline/batch_report.py:343-360"
   - id: F009
-    severity: note
-    category: correctness
-    summary: "`_find_cycle` and `order_by_dependencies` rely on subtle invariants"
-    location: "src/squadron/pipeline/sources.py:315-330"
+    severity: pass
+    category: validation
+    summary: "Reserved param keys rejected at three boundaries"
+    location: "src/squadron/pipeline/control_params.py"
   - id: F010
-    severity: note
-    category: testing
-    summary: "Overall test coverage is strong"
-    location: "tests/pipeline"
+    severity: pass
+    category: design
+    summary: "`pipeline_mutates` is recursive and conservative"
+    location: "src/squadron/pipeline/run_lock.py:51-72"
+  - id: F011
+    severity: pass
+    category: correctness
+    summary: "`ItemRerun.replace` and `_add_record` keep report ordering stable"
+    location: "src/squadron/pipeline/batch_report.py:357-364"
 ---
 
 # Review: code — slice 197
 
-**Verdict:** CONCERNS
-**Model:** claude-sonnet-5-5
+**Verdict:** PASS
+**Model:** minimax/minimax-m3
 
 ## Findings
 
-### [CONCERN] Item-resume HALTED path can mask a lost lock and leaves `raise AssertionError` as dead code
+### [NOTE] `_take_run_lock` is not called for `--resume --item`
 
-`resume_item` catches `OSError` broadly around the whole locked body (`_resume_locked`) and reports it as "cannot write the batch report". `_resume_locked` also runs git, cf and the model body. Any unrelated `OSError` (for example a `subprocess` or file error in `evaluate_each_source` or `load_pipeline`) will be mislabelled as a report-write failure. The handler also logs nothing itself. It relies on `batch_report` having logged, which is not true for other `OSError` sources. Narrow the catch to the report write, or log with `logger.exception` and use a neutral message. The trailing `raise AssertionError("unreachable")` after the `with` block is also dead code. Restructure so no unreachable statement is needed.
+The `--resume --item` branch calls `handle_item_resume(...)` directly, bypassing `_locked`. That branch opens its own run lock via `resume_item` in `item_resume.py`, so behavior is correct, but the run-lock invariant is not expressed through `_locked` here. A future refactor of item-resume could lose the lock silently. Consider funneling this branch through a single helper, or commenting the deliberate deviation.
 
-### [CONCERN] `typer.Exit` from the pipeline runner is swallowed and reclassified without logging
+### [NOTE] Preexisting operator-precedence bug in `resume_model`
 
-`except typer.Exit` converts any exit from `_run_pipeline_sdk` (classification error, lost session) into `ResumeExit.HALTED`. The original exit code is only printed, never logged, so automation reading logs gets no ERROR record. A `GitEnvironmentError` raised from `_run_pipeline_sdk` when `item_rerun` is set is re-raised (run.py:398) and handled in `resume_item`. Other exit paths do not go through that handler. Log at ERROR here for observability, per the failure-mode rule.
+`resume_model = model or str(state.params.get("model")) if state.params.get("model") else model` is parsed as `((model or str(...)) if state.params.get("model") else model)`, so the stored model is never actually used. This is a preexisting bug and not introduced by the diff, but a touched line is a good time to fix it: the intent appears to be `model or state.params.get("model")`.
 
-### [CONCERN] Function-local imports and private-symbol imports used to dodge a circular import
+### [CONCERN] `in_flight` is reset to `None` after writing the per-item report
 
-`handle_item_resume` imports the private `_apply_param_overrides` and `_run_pipeline_sdk` from `run.py`, and `run.py` imports this module. This is a circular dependency papered over with pyright suppressions. Test helpers do the same with `_kept_outputs` and `_flag_kind`. Move the shared pipeline-running functions and param parsing into a neutral module, or inject `_run_pipeline_sdk` and the override parser into `handle_item_resume`. This also fixes the DIP problem: `run_item` depends on the concrete `run` module.
+If the per-item `_write_each_report(report, runs_dir, final=False)` after a successful item raises (e.g. disk full), the exception propagates out of the `try` block. The `finally` then sees `in_flight=None` and only writes the report — but the in-flight item is not the one currently running, it was already complete, so the report already has its record. The exception is then re-raised, and the run halts with no `not_run` records. This is acceptable for disk-full mid-batch, but worth a test.
 
-### [CONCERN] `run()` entry point and `run.py` keep growing; `assert` used for control flow
+### [CONCERN] `_add_record`/`ItemRerun.replace` uses index equality for matching
 
-`assert decision is not None  # check_item_flags` is stripped under `python -O` and relies on a call made elsewhere. `check_item_flags` should return the validated decision, or the check should be explicit. `run()` already carries many branches, and `_locked(definition, ...)` is repeated across four call sites, so a variation is easy to miss. Consider a single helper that picks SDK or prompt-only and takes the lock.
+`ItemRerun.replace` matches by `record.index`. If two items in a batch share the same `index` string (unusual but possible if a source returns duplicates), `next` would replace the first. The fresh batch report's records typically have unique indexes, but a resume path that selects the same item twice would silently misbehave. Worth either asserting uniqueness in `BatchItemRecord.from_item` or matching by identity.
 
-### [CONCERN] Lock is not taken for implicit-resume and resume paths using a possibly different `definition`
+### [CONCERN] `_check_record` accepts NOT_RUN items with any decision
 
-`_locked(definition, ...)` uses `definition` from the earlier scope. On `--resume` and the implicit-resume branches, the pipeline actually run is `state.pipeline` or `match.pipeline`. If `definition` was loaded from the CLI `pipeline` argument (or is `None` or stale), the mutating check is made against the wrong pipeline. A run could then execute without the lock, or a non-mutating one could take it. I did not see where `definition` is bound for those branches. Verify it is loaded from `state.pipeline` and `match.pipeline`, and add a test for it. `test_a_plain_resume_of_a_paused_run_with_the_lock_held_exits_2` mocks `StateManager`, which does not prove this.
+The validation allows `ACCEPT` against a `NOT_RUN` item (which has `flag_kind=None`), but the test `tests/pipeline/test_item_resume_validation.py:71` asserts that `accept requires flagKind review_unresolved; item 404 is not_run` is rejected. The logic at line 200 catches this: `record.flag_kind is not FlagKind.REVIEW_UNRESOLVED` is true for NOT_RUN, so the `REJECTED` path fires. Working as intended, but the test name is slightly misleading — it tests that accept-on-NOT_RUN is rejected. Worth a clarifying comment.
 
-### [CONCERN] Duplicated magic strings and keys scattered across modules
+### [NOTE] Two-state `_finish_each_report` parameter surface
 
-Project rules say to define comparison values once. Several keys are still literals. `"commit_each_iteration"` is defined in `run_lock.py` but is also a loop-config key. `"steps"`, `"dependencies"`, `"model"`, `"existing"` and `"feedback"` appear as raw strings in `run_lock.py`, `item_resume.py` and `item_resume_support`. `_open_dependencies` and `_step_mutates` re-implement step-tree walking, so a new step shape needs edits in several places. Prefer constants shared with the loader or loop config. `_step_mutates` also hand-parses the raw nested step dict format, which will drift from the loader.
+`_finish_each_report` takes `in_flight`, `halt`, and `items` separately. The `halt is not None` branch records `not_run` for every item after the in-flight one; the non-halt branch (legacy fall-through) doesn't. If `in_flight` is set with `halt is None`, the in-flight item is recorded as `STEP_FAILED` with reason `"run halted before this item finished"`, but no `not_run` records are added for unreached items. This path is unreachable in practice (every `try/except` that sets `in_flight` then raises sets `halt` first), but the asymmetry is fragile. A small docstring update or guard at entry would help.
 
-### [CONCERN] Exception-handling rule: `except GitEnvironmentError: raise` and unlogged swallows
+### [PASS] Tests comprehensively cover the slice
 
-`except GitEnvironmentError: raise` exists only to stop a later clause from catching it. It is correct, but add a comment saying which clause it protects. `BatchReport.load` and `_write_atomic` are fine. In `_write_atomic`, a failed write can leave an orphan `.name.XXXX` temp file, because `delete=False` and no cleanup runs when `temp.replace` fails. Remove the temp file in the `except OSError` path.
+The new test files (`item_resume_validation`, `item_resume_params`, `item_resume_git`, `item_resume_source`, `item_resume_body`, `item_resume_plan_batches`) cover validation, parameter merging, git preconditions, source re-selection, body execution, and integration with `slices-plan`/`tasks-plan`. The failure-mode-enumeration rule is honored: timed-out counts, held locks, missing reports, dirty trees, unrelated branches, mid-item halts, and failed report writes each have an explicit assertion and observable signal.
 
-### [CONCERN] Item resume has a read-modify-write race on `report.json` outside the lock for plain runs
+### [PASS] Atomic report writes preserve prior report on failure
 
-The lock is only taken when `pipeline_mutates` is true. A non-mutating pipeline never takes it, so it can write `report.json` and run state beside a mutating run. `pipeline_mutates` classifies by step type but does not cover `each`, `fan_out` or custom steps that nest mutating steps unless `steps` happens to be a list of single-key dicts. Confirm that a mutating `each` body (as in `implement-plan`) is detected. The tests cover only named pipelines, not a synthetic nested `each`. Add a parametrized test for nested shapes.
+`_write_atomic` writes to a sibling temp file then renames; on `OSError` the temp is unlinked and the prior report is intact. The test `test_a_failed_write_keeps_the_previous_report_and_logs_error` confirms the no-temp-leak invariant (the trailing assertion checks for any `.*` temp files left in the dir).
 
-### [NOTE] `_find_cycle` and `order_by_dependencies` rely on subtle invariants
+### [PASS] Reserved param keys rejected at three boundaries
 
-`order_by_dependencies` is O(n²) per pop, which is fine at plan scale. `_find_cycle` takes `min(needs[path[-1]])` and assumes a non-empty set for every unplaced node. That holds for a Kahn remainder, but a node that is unplaced only because it depends on another unplaced node outside a cycle is still handled by the walk. This is correct, and the tests cover two- and three-node cycles.
+`reserved_param_error` is invoked by `_apply_param_overrides` (CLI), `validate_pipeline` (declared `params:`), and `item_params` (resume overrides). A `-p accept_decision=1` cannot reach the executor any other way; tests in `test_control_params.py` confirm each path. The constant is centralized in one module per the project convention.
 
-### [NOTE] Overall test coverage is strong
+### [PASS] `pipeline_mutates` is recursive and conservative
 
-New behavior has tests for the flag kinds, atomic report writes, lock contention (including a killed holder), the catch-up merge, item resume validation, and a real-git end-to-end `implement-plan` run. Failure modes assert ERROR or WARNING logs. Line lengths in `executor.py` (`_write_each_report` signature) and `actions/branch.py` appear to exceed 88 characters. Run `ruff` to confirm.
+The check walks nested `loop:` and `each:` bodies via `unpack_inner_steps`, and a `loop:` with `commit_each_iteration: true` is treated as mutating. Tests confirm the four code pipelines and the planning pipelines resolve correctly.
+
+### [PASS] `ItemRerun.replace` and `_add_record` keep report ordering stable
+
+The resume path replaces by index, preserving the order of other records. Tests in `test_item_resume_body.py` assert that records `"401", "402", "403", "404"` stay in that order after resume and the other items' `decision` fields remain untouched.
 
 ## Response (20261006)
 
-- **F001 — fixed.** `resume_item` takes the lock, then runs the body in `try/finally` so the lock is released without a `with` block. The `raise AssertionError("unreachable")` is gone. The `OSError` handler now logs with `logger.exception` and uses a neutral "item resume halted" message, because the error can come from more than the report write.
-- **F002 — fixed.** The swallowed `typer.Exit` in `run_item.handle_item_resume` now logs at ERROR with the runner's exit code.
-- **F003 — fixed.** `run.py` parses the `--param` overrides and passes them to `handle_item_resume` along with `_run_pipeline_sdk`. The function-local import, the private-symbol imports and both pyright suppressions are gone. Tests that import private helpers are left as they are.
-- **F004 — no change.** `assert decision is not None  # check_item_flags` follows the file's existing `assert pipeline is not None  # guarded above` convention, and `check_item_flags` exits before this line when the flags are invalid. `_locked` is already the single helper. The four call sites differ only in which coroutine they pass.
-- **F005 — no change, incorrect.** `--resume` loads `definition` from `state.pipeline` (run.py, `definition = load_pipeline(state.pipeline)`). Implicit resume finds `match` with `find_matching_run(pipeline, ...)`, so `match.pipeline` is the pipeline `definition` was loaded from.
-- **F006 — partly fixed.** `run_lock._step_mutates` now walks `StepConfig`s through the shared `unpack_inner_steps`, the same helper `branch_rules` uses, instead of hand-parsing raw step dicts. The `commit_each_iteration` and `steps` literals are used throughout the existing loop and collection step code. Centralizing them is outside this slice.
-- **F007 — partly fixed.** `_write_atomic` now removes its temp file when the write or rename fails, and the existing failed-write test checks that no temp file is left. The `except GitEnvironmentError: raise` in `dispatch.py` already carries a comment.
-- **F008 — partly fixed.** Nested shapes are detected: `implement-plan` (a mutating `each`) is already covered by `test_code_and_batch_pipelines_mutate`. Added `test_nested_steps_inside_each_decide_mutation`, which covers an `each` holding an implement, a committing loop, a loop holding tasks, and reviews only. No change for non-mutating runs. Each report is `{run_id}.{step}.report.json`, so two runs never write the same file, and running a non-mutating pipeline beside a batch is intended (D11).
-- F009, F010: notes, no action. ruff passes.
+The first round's response is in `archive/`. Its fixes are 39dda24d.
+
+- **F001 — no change.** Item resume takes the lock itself in `resume_item`, and the module docstring says so. That path calls neither `_locked` nor `_run_pipeline_sdk`'s lock.
+- **F002 — no change, incorrect.** The expression parses as `(model or str(stored)) if stored else model`, so a stored model is used whenever `--model` is absent. It is hard to read, but it behaves correctly.
+- **F003 — no change.** The reviewer itself concludes the disk-full path is acceptable. The halt and the error are both logged.
+- **F004 — no change.** Item indexes come from cf slice indexes, which are unique within a plan.
+- **F005 — no change.** The reviewer confirms the behavior is correct. The test name states the rejection.
+- **F006 — no change.** As the reviewer notes, every path that sets `in_flight` also sets `halt`.
+- F007–F011: pass.
 
 ### Run Digest
 
-- Response length: 6775 chars
+- Response length: 6246 chars
 - Response is newline-free: no
-- Tool calls made: 0
+- Tool calls made: 33
 - Tool calls failed: 0
-- Stop reason: end_turn
-- Output budget: backend default
-- System prompt: preset+append
-- Settings sources: project
+- Stop reason: stop
+- Output budget: 512000 tokens
+- System prompt: custom
+- Settings sources: n/a (non-SDK)
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: not computed
-- Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 23.6 s
+- Turns: 20
+- Tokens — prompt / cached / completion / reasoning: 2597933 / 2267248 / 3833 / 0
+- Duration: 110.9 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 11
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 11
+- Finding-shaped matches — surviving validation: 11
