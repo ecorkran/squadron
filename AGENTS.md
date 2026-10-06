@@ -180,24 +180,12 @@ The rules above always apply. The following are scoped to specific
 languages and tools and are deliberately not inlined here — read the
 relevant file when working in that area:
 
-- `project-documents/ai-project-guide/project-guides/rules/csharp.md` — C# and .NET coding standards and conventions. Use when writing, modifying, or reviewing .cs files, .csproj files, or .NET build configuration.
-  Applies to: `**/*.cs,**/*.csproj,**/Directory.Build.props,**/.editorconfig`
-- `project-documents/ai-project-guide/project-guides/rules/dart.md` — Dart language coding standards and conventions. Use when writing, modifying, or reviewing .dart files or pubspec.yaml.
-  Applies to: `**/*.dart,**/pubspec.yaml,**/analysis_options.yaml`
-- `project-documents/ai-project-guide/project-guides/rules/electron.md` — Electron desktop application rules including main/renderer process architecture, IPC patterns, preload scripts, and module loading. Use when working on Electron apps, desktop applications using Electron, or files involving IPC, BrowserWindow, or electron-vite.
-  Applies to: `electron/**/*,src/preload/**/*,electron-builder.*,forge.config.*,**/electron.vite.*`
-- `project-documents/ai-project-guide/project-guides/rules/flutter.md` — Flutter application development standards and conventions. Supplements dart.md; applies to Flutter projects (those with android/ or ios/ platform folders) — covers widget files, state management, navigation, and build configuration.
-  Applies to: `android/**,ios/**`
 - `project-documents/ai-project-guide/project-guides/rules/python.md` — Python coding standards and conventions. Use when writing, modifying, or reviewing .py files, pyproject.toml, or requirements files.
   Applies to: `**/*.py,**/pyproject.toml,**/requirements*.txt`
-- `project-documents/ai-project-guide/project-guides/rules/react.md` — React component patterns, hooks conventions, and JSX best practices. Use when working with React components. Assumes TypeScript rules also apply for .tsx files.
-  Applies to: `**/*.tsx,**/*.jsx,src/components/**/*,app/**/*`
 - `project-documents/ai-project-guide/project-guides/rules/shell.md` — Shell script standards for bash and sh, including CI/CD and pipeline scripts. Use when writing, modifying, or reviewing .sh/.bash files, extensionless scripts with a bash or sh shebang, or shell in CI workflow run blocks.
   Applies to: `**/*.sh,**/*.bash,**/.github/workflows/*.yml,**/.github/workflows/*.yaml,**/.gitlab-ci.yml`
 - `project-documents/ai-project-guide/project-guides/rules/sql.md` — SQL coding standards for PostgreSQL, pgvector, and TimescaleDB. Use when writing queries, migrations, schema definitions, database functions, or any code that connects to a database — including test fixtures and runners. Covers naming, indexing, query optimization, extension-specific patterns, and production-database protection.
   Applies to: `**/*.sql,**/*.psql,**/migrations/**,**/schema.sql,**/test/**/*.py,**/tests/**/*.py,**/conftest.py`
 - `project-documents/ai-project-guide/project-guides/rules/testing.md` — Testing standards and best practices. Use when writing, modifying, or reviewing tests. Covers test structure, naming, mocking patterns, assertion style, coverage expectations, and database safety in tests.
   Applies to: `**/*.test.*,**/*.spec.*,**/*.stories.*,src/stories/**/*,**/test_*.py,**/test/**/*.py,**/tests/**/*.py,**/conftest.py`
-- `project-documents/ai-project-guide/project-guides/rules/typescript.md` — TypeScript strict typing standards, idiomatic patterns, and project conventions. Use for all TypeScript files. Covers type annotations, generics, module patterns, and error handling.
-  Applies to: `**/*.ts,**/*.tsx`
 <!-- END:context-forge -->

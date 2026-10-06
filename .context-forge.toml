@@ -1,2 +1,5 @@
 [workflow]
 review_gate_effective_date = "20260706"
+
+[rules]
+exclude = "csharp.md,dart.md,electron.md,flutter.md,react.md,typescript.md"
