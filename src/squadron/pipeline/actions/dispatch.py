@@ -25,6 +25,7 @@ from squadron.metrology.preemption import read_fragment_body, read_fragment_head
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
+from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
@@ -475,7 +476,7 @@ class DispatchAction:
         review actually flagged, not a generic instruction repeated every
         iteration.
 
-        If ``context.params["override_instructions"]`` is set (injected by
+        If ``context.params[OVERRIDE_INSTRUCTIONS]`` is set (injected by
         the interactive checkpoint handler), prepends a delimited block to
         the resolved prompt so the model treats it as a directive.
         """
@@ -588,7 +589,7 @@ class DispatchAction:
     @staticmethod
     def _apply_override(context: ActionContext, prompt: str) -> str:
         """Prepend checkpoint-injected override instructions, if present."""
-        override = str(context.params.get("override_instructions", "")).strip()
+        override = str(context.params.get(OVERRIDE_INSTRUCTIONS, "")).strip()
         if override:
             prefix = (
                 f"--- Instructions from checkpoint resolution ---\n"

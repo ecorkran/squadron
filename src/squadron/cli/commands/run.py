@@ -39,6 +39,7 @@ from squadron.pipeline.classification import (
     classify_pipeline,
     has_profile_param,
 )
+from squadron.pipeline.control_params import reserved_param_error
 from squadron.pipeline.executor import (
     ExecutionStatus,
     LazySessionConnectError,
@@ -107,6 +108,8 @@ def _apply_param_overrides(params: dict[str, object], param_list: list[str] | No
         key, _, value = entry.partition("=")
         if not key:
             raise typer.BadParameter(f"Invalid --param format: '{entry}'")
+        if (reserved := reserved_param_error(key)) is not None:
+            raise typer.BadParameter(reserved)
         params[key] = value
 
 

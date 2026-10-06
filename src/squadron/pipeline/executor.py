@@ -34,6 +34,7 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
+from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -932,7 +933,7 @@ async def _execute_step_once(
                 )
             # Accept or Override: inject instructions and continue to next action
             if decision.override_instructions:
-                merged_params["override_instructions"] = decision.override_instructions
+                merged_params[OVERRIDE_INSTRUCTIONS] = decision.override_instructions
 
         # Action failure
         if not result.success:

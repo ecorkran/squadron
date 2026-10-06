@@ -184,6 +184,7 @@ def validate_pipeline(
     - Param placeholders in step configs reference declared params
     """
     from squadron.models.aliases import resolve_model_alias
+    from squadron.pipeline.control_params import reserved_param_error
     from squadron.pipeline.steps import (
         bootstrap_step_types,
         get_step_type,
@@ -204,6 +205,11 @@ def validate_pipeline(
     errors: list[ValidationError] = []
     registered = list_step_types()
     declared_params = set(definition.params.keys())
+    for key in sorted(declared_params):
+        if (reserved := reserved_param_error(key)) is not None:
+            errors.append(
+                ValidationError(field=f"params.{key}", message=reserved, action_type="pipeline")
+            )
     prior_step_names: set[str] = set()
 
     # Validate pipeline-level model alias
