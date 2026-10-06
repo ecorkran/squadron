@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261005
 
+### Release 0.19.0
+
+- **Contents:** slice 196 (branch enter/merge steps, scoped pipeline commits, `tasks-plan` re-review, dependency flagging in batches; delivers #152); unknown model aliases fail before any request; truncated PASS reviews imposed as CONCERNS; narrowed `dispatch_run` resolve catch and shared SDK teardown helper; ai-project-guide v0.20.2 with unused language rules excluded.
+
 ### Slice 197: task breakdown complete (Phase 5)
 
 - **Tasks:** `197-tasks.implementation-batch-pipeline-implement-plan.md`, 34 tasks (384 lines, one file), test-with ordering, a commit per task, checkpoints after Parts A, D and G.

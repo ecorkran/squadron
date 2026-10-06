@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.19.0] - 20261005
+
 ### Added
 - Pipelines can enter and merge a slice branch: `- branch: { op: enter }` and `- branch: { op: merge }`. The code pipelines (`P6`, `implement`, `P456`, `P56`) now do their implement work on `{index}-slice.{name}` and merge it back, and a failed merge is aborted so your target branch is never left half-merged.
 - `tasks-plan` re-reviews slices that already have tasks but no passing tasks review, instead of skipping them. A step can say `existing: keep` to review what's there rather than regenerate it.
