@@ -34,7 +34,7 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
-from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
+from squadron.pipeline.control_params import ACCEPT_DECISION, OVERRIDE_INSTRUCTIONS
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -954,6 +954,24 @@ async def _execute_step_once(
     )
 
 
+def _loop_accept_decision_result(
+    *, step: Any, merged_params: dict[str, object], start: int
+) -> StepResult | None:
+    """``--decision accept`` (slice 197 D9): the loop counts as met and accepted, with no
+    rounds run. Only before round 1."""
+    if merged_params.get(ACCEPT_DECISION) is not True or start != 1:
+        return None
+    _logger.info("loop step %s: accepted by decision; 0 rounds run", step.name)
+    return StepResult(
+        step_name=step.name,
+        step_type=step.step_type,
+        status=ExecutionStatus.COMPLETED,
+        action_results=[],
+        iteration=0,
+        accepted=True,
+    )
+
+
 def _loop_skip_result(
     *, step: Any, loop_config: LoopConfig, prior_outputs: dict[str, ActionResult], start: int
 ) -> StepResult | None:
@@ -1128,6 +1146,10 @@ async def _execute_loop_step(
             start_iteration=start_iteration,
             loop_max=loop_config.max,
         )
+    if accepted := _loop_accept_decision_result(
+        step=step, merged_params=merged_params, start=start_iteration
+    ):
+        return accepted
     if skipped := _loop_skip_result(
         step=step, loop_config=loop_config, prior_outputs=prior_outputs, start=start_iteration
     ):
@@ -1260,6 +1282,10 @@ async def _execute_loop_body(
             start_iteration=start_iteration,
             loop_max=loop_config.max,
         )
+    if accepted := _loop_accept_decision_result(
+        step=step, merged_params=merged_params, start=start_iteration
+    ):
+        return accepted
     if skipped := _loop_skip_result(
         step=step, loop_config=loop_config, prior_outputs=prior_outputs, start=start_iteration
     ):

@@ -1771,7 +1771,10 @@ async def test_e2e_paused_at_round_2_of_3_resumes_at_round_2_not_round_1(
 
 
 async def _run_after_prior_review(
-    prior_verdict: str, loop_cfg: dict[str, object], loop_verdicts: list[str]
+    prior_verdict: str,
+    loop_cfg: dict[str, object],
+    loop_verdicts: list[str],
+    extra_params: dict[str, object] | None = None,
 ) -> tuple[list[StepResult], MagicMock]:
     """A pre-loop review step, then a loop whose body is one review step."""
     prior_st = _mock_step_type([("review", {})])
@@ -1789,7 +1792,7 @@ async def _run_after_prior_review(
     )
     result = await execute_pipeline(
         pipeline,
-        {"_project": "test"},
+        {"_project": "test", **(extra_params or {})},
         resolver=MagicMock(),
         cf_client=MagicMock(),
         _action_registry={"review": review_action},
@@ -1935,3 +1938,31 @@ async def test_until_met_or_skipped_is_not_exhausted(
     steps, _ = await _run_after_prior_review(prior, loop_cfg, loop_verdicts)
     assert steps[1].status == ExecutionStatus.COMPLETED
     assert steps[1].exhausted is False
+
+
+# ---------------------------------------------------------------------------
+# Slice 197 D9 — accept_decision
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_accept_decision_accepts_the_loop_with_no_rounds() -> None:
+    steps, review = await _run_after_prior_review(
+        "FAIL",
+        {"max": 2, "until": "review.pass", "accept_if": "review.concerns_or_better"},
+        [],
+        extra_params={"accept_decision": True},
+    )
+    loop_result = steps[1]
+    assert loop_result.status == ExecutionStatus.COMPLETED
+    assert (loop_result.accepted, loop_result.iteration, loop_result.exhausted) == (True, 0, False)
+    assert review.execute.await_count == 1  # only the pre-loop review; no revise round
+
+
+@pytest.mark.asyncio
+async def test_without_an_accept_decision_the_loop_runs_its_rounds() -> None:
+    steps, review = await _run_after_prior_review(
+        "FAIL", {"max": 2, "until": "review.pass"}, ["CONCERNS", "PASS"]
+    )
+    assert steps[1].accepted is False
+    assert review.execute.await_count == 3
