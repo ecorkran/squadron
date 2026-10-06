@@ -31,6 +31,8 @@ _logger = logging.getLogger(__name__)
 # Goes up whenever the record shape or the FlagKind set changes (slice 197 D7).
 REPORT_SCHEMA_VERSION = 1
 REPORT_DOC_TYPE = "batch-report"
+# ``{run_id}.{step}.report.json`` sits in the runs dir beside run state files.
+REPORT_JSON_SUFFIX = ".report.json"
 
 # BatchItemRecord attribute → report.json key (camelCase, as review frontmatter).
 _JSON_KEYS: dict[str, str] = {
@@ -295,7 +297,7 @@ class BatchReport:
         return runs_dir / f"{self.run_id}.{self.step_name}.report.md"
 
     def json_path(self, runs_dir: Path) -> Path:
-        return runs_dir / f"{self.run_id}.{self.step_name}.report.json"
+        return runs_dir / f"{self.run_id}.{self.step_name}{REPORT_JSON_SUFFIX}"
 
     def write(self, runs_dir: Path) -> Path:
         """Write the Markdown and JSON reports beside the run state file; return the

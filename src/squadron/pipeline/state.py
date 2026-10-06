@@ -492,8 +492,12 @@ class StateManager:
         status: str | None = None,
     ) -> list[RunState]:
         """List all run states, optionally filtered, sorted by started_at desc."""
+        from squadron.pipeline.batch_report import REPORT_JSON_SUFFIX
+
         runs: list[RunState] = []
         for path in self._runs_dir.glob("*.json"):
+            if path.name.endswith(REPORT_JSON_SUFFIX):
+                continue  # a batch report beside the run state (slice 197 D7), not a run
             try:
                 run = self._load_raw(path)
             except (

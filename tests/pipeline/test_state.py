@@ -732,6 +732,21 @@ class TestListRuns:
         runs = state_manager.list_runs()
         assert len(runs) == 3
 
+    def test_batch_reports_beside_the_runs_are_not_runs(
+        self, state_manager: StateManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """slice 197: report.json shares the runs dir and must not read as a broken run."""
+        from squadron.pipeline.batch_report import BatchReport
+
+        run_id = self._create_run(state_manager, "implement-plan")
+        BatchReport("implement-plan", run_id, "slices", plan="100").write(state_manager.runs_dir)
+
+        with caplog.at_level("WARNING"):
+            runs = state_manager.list_runs()
+
+        assert [r.run_id for r in runs] == [run_id]
+        assert "Skipping unreadable state file" not in caplog.text
+
     def test_filter_by_pipeline(self, state_manager: StateManager) -> None:
         self._create_run(state_manager, "pipeline-a")
         self._create_run(state_manager, "pipeline-a")
