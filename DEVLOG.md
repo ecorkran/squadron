@@ -2,13 +2,40 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261005
+dateUpdated: 20261006
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261006
+
+### Slice 197: implementation complete (Phase 6)
+
+- **Delivered:** `implement-plan.yaml`; source `cf.slices_ready_to_implement` with `order_by_dependencies`; `existing: keep` on implement (`KeepCheck.BRANCH_WORK`, `branch_work_count`); catch-up merge on enter (#183) and `restore_target()`; `branch: { plan: }`; `FlagKind`, `ItemDecision`, `ItemOutcome.NOT_RUN`, `StepResult.exhausted`; versioned, atomic, per-item `report.json`; `control_params.py`; `run_lock.py` (`project_run_lock`, `pipeline_mutates`); `item_resume.py` and `sq run --resume … --item/--decision/--instructions` (`cli/commands/run_item.py`); P6, `implement`, P56 and P456 on the shared body with a drift test; loop `accept_decision`.
+- **Choices the design left open:**
+  - Item resume hands one item to the executor's `each` step through an explicit `ItemRerun` (item, loaded report, decision); the step skips its source and replaces that record. The CLI injects the body runner, so `item_resume.py` doesn't import the CLI.
+  - `restore_target(target, cwd)` takes the target rather than reading it.
+  - `KeepCheck` (artifact vs branch work) carries keep's meaning to dispatch; `ArtifactKind` gained no member, because its path resolver would silently misroute one.
+  - An exhausted loop now carries the reason `loop exhausted at {verdict} (accept: …)`, as D7's example shows.
+  - P56 and P456 lost the summary/compact/restore between implement and devlog: the drift test requires the D10 body there.
+  - Tasks 9–15 landed as four commits where they shared files (`executor.py`, `sources.py`).
+- **Found by the live walkthrough and fixed (each with a test):**
+  - `StateManager.list_runs` read every `report.json` in the runs dir as a broken run state and logged a traceback for each.
+  - `devlog: auto` inside `each` committed against the whole item record; `implement-plan` now uses `devlog: { mode: auto, slice: "{slice.index}" }`. The pipeline test's fake commit now rejects a non-index slice, as the real one does.
+- **Design corrections** (recorded in the slice's walkthrough): `max-revisions=0` is rejected by the loader; cf derives status from task checkboxes, which makes D2's "all tasks checked" row unreachable; an implement with no commits fails on `DiffRangeUnresolvedError`, not `EmptyDiffError` (same outcome).
+- **Filed:** #188, a merged slice whose implement agent left its tasks unchecked stays open: dependents can't resume and a batch rerun would reimplement it.
+- **Pre-existing, not from this slice:** `tests/metrology/test_audit_cli.py::test_audit_variance_writes_a_floor` hangs at 0% CPU on clean `main` too; it was deselected for full-suite runs.
+- **Tests:** 5763 passed / 4 skipped before the walkthrough fixes; ruff and pyright clean.
+- **Live walkthrough** (scratch project, plan 100, `--model haiku`, which also sets the review model):
+  1. `sq run implement-plan 100 --model haiku -v` with the architecture doc dirty → `item 108 FLAGGED: working tree not clean: …100-arch.tally-core.md`, 109 `not_run`, exit 1 (the halt path). After committing it: 108 then 109 in dependency order; 108 CONCERNS → 2 rounds → flagged at `devlog-4` (`commit needs a slice index`, fixed above); 109 `dependency 108 flagged`.
+  2. `sq run --resume <run> --item 108 --decision retry` → `left unmerged slice branch 108-slice.longest-line for main`, `keeps existing work on 108-slice.longest-line (13 commits ahead of main)`, PASS after one round, `merge: slice 108 — Longest Line`, `RESOLVED`, exit 0.
+  3. `--item 109 --decision retry` → exit 1, `dependency 108 not complete` (108's tasks unchecked, #188). After checking them off: CONCERNS/FAIL rounds → `review_unresolved` at `revise-code`, exit 1.
+  4. `NOTES.md` committed on `main`, `cf set arch 200`, then `--item 109 --decision retry --instructions …` → `cf-op set_arch(100)` before enter, `caught 109-slice.longest-line-in-json up to main (merge --no-ff)`, implement kept (6 ahead), PASS, merged, exit 0; `NOTES.md` not in 109's diff.
+  5. A second item resume during step 4 → exit 2, `another squadron run holds the project lock`. `--decision accept` on `not_run` 109 and `step_failed` 108 → exit 2 naming the kind. `--item 108 --decision retry` on the halted run after 108 merged → reconciled to `passed`, exit 0.
+  6. Not rerun live: accept on a `review_unresolved` item, a conflicting catch-up, P6 parity — covered by tests (see the slice's walkthrough).
 
 ## 20261005
 

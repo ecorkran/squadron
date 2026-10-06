@@ -218,37 +218,37 @@ status: in_progress
 
 ## Task 19 — `implement-plan.yaml`
 
-- [ ] Add `data/pipelines/implement-plan.yaml` exactly as D1 (params, `each` body, `on_exhaust: fail`)
-- [ ] Tests in `test_builtin_pipelines.py`: loads and validates; params defaults as D1; listed by `sq run --list` (or the existing builtin listing test)
-- [ ] Pipeline-level test with fake cf, dispatch and review, and real branch ops against a temp git repo (the dispatch fake commits a file on the slice branch): two items where the dependent is listed first run in dependency order; a FAIL-at-exhaust item is `review_unresolved` at `revise-code` with branch recorded and its dependent `dependency`; an independent item merges
-  - [ ] The run ends on the target, with one `merge: slice N — …` commit per merged slice (criterion 1)
-  - [ ] A `not_ready` item (no task file) is flagged with no dispatch call for it (criterion 2)
-  - [ ] A dependency on an undesigned in-plan slice flags the dependent `dependency N not designed` through the pipeline (criterion 4)
-  - [ ] The flagged item's branch has all its work committed and is unmerged; the next item's `branch enter` starts from a clean target (criterion 3)
-  - [ ] An implement dispatch that leaves no commits: the code review's `EmptyDiffError` flags the item `step_failed` with WARNING `item N flagged: …` asserted (D12 last row)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add implement-plan pipeline`
+- [x] Add `data/pipelines/implement-plan.yaml` exactly as D1 (params, `each` body, `on_exhaust: fail`)
+- [x] Tests in `test_builtin_pipelines.py`: loads and validates; params defaults as D1; listed by `sq run --list` (or the existing builtin listing test)
+- [x] Pipeline-level test with fake cf, dispatch and review, and real branch ops against a temp git repo (the dispatch fake commits a file on the slice branch): two items where the dependent is listed first run in dependency order; a FAIL-at-exhaust item is `review_unresolved` at `revise-code` with branch recorded and its dependent `dependency`; an independent item merges
+  - [x] The run ends on the target, with one `merge: slice N — …` commit per merged slice (criterion 1)
+  - [x] A `not_ready` item (no task file) is flagged with no dispatch call for it (criterion 2)
+  - [x] A dependency on an undesigned in-plan slice flags the dependent `dependency N not designed` through the pipeline (criterion 4)
+  - [x] The flagged item's branch has all its work committed and is unmerged; the next item's `branch enter` starts from a clean target (criterion 3)
+  - [x] An implement dispatch that leaves no commits: the code review's `EmptyDiffError` flags the item `step_failed` with WARNING `item N flagged: …` asserted (D12 last row)
+  - [x] Success: tests pass
+- [x] Commit: `feat: add implement-plan pipeline`
 
 ## Task 20 — Refresh single-slice pipelines (D10)
 
 Replace each file's implement section with the D10 steps (`on_exhaust: checkpoint`). Keep each file's model defaults.
 
-- [ ] `P6.yaml`: D10 body; add `max-revisions`, `pass-threshold`, `accept-threshold` params with P456's defaults
-- [ ] `implement.yaml`: D10 body; add the three params plus `review-model` (default `minimax`, matching P6)
-- [ ] Update the tests that cover P6 and `implement`; commit: `feat: add code review revise loop to P6 and implement`
-- [ ] `P56.yaml`: replace its implement section with the D10 body
-- [ ] `P456.yaml`: replace its implement section with the D10 body
-- [ ] Update existing tests that asserted the old step lists (`test_code_pipelines_branching.py`, `test_builtin_pipelines.py`)
-- [ ] Pipeline-level test (fake dispatch and review) for each of the four: a non-PASS review with `-p max-revisions=0 -p accept-threshold=review.pass` pauses the run at a checkpoint, with no merge (criterion 12)
-  - [ ] Success: all four validate; updated and new tests pass
-- [ ] Commit: `feat: add code review revise loop to P56 and P456`
+- [x] `P6.yaml`: D10 body; add `max-revisions`, `pass-threshold`, `accept-threshold` params with P456's defaults
+- [x] `implement.yaml`: D10 body; add the three params plus `review-model` (default `minimax`, matching P6)
+- [x] Update the tests that cover P6 and `implement`; commit: `feat: add code review revise loop to P6 and implement`
+- [x] `P56.yaml`: replace its implement section with the D10 body
+- [x] `P456.yaml`: replace its implement section with the D10 body
+- [x] Update existing tests that asserted the old step lists (`test_code_pipelines_branching.py`, `test_builtin_pipelines.py`)
+- [x] Pipeline-level test (fake dispatch and review) for each of the four: a non-PASS review with `-p max-revisions=0 -p accept-threshold=review.pass` pauses the run at a checkpoint, with no merge (criterion 12)
+  - [x] Success: all four validate; updated and new tests pass
+- [x] Commit: `feat: add code review revise loop to P56 and P456`
 
 ## Task 21 — Drift test
 
-- [ ] Test in `test_builtin_pipelines.py`: for each of P6, `implement`, P56, P456, the steps from `branch enter` through `branch merge` equal the `implement-plan` body from `branch enter` on, after normalizing `slice:`/`plan:` references and `on_exhaust`
-  - [ ] Success: passes; editing one file's loop `max` in a scratch copy makes it fail (verify once, don't commit the scratch change)
-- [ ] Single-slice test: a second P6 run on a slice whose branch has work skips the implement dispatch (criterion 12)
-- [ ] Commit: `test: keep single-slice code pipelines in step with implement-plan`
+- [x] Test in `test_builtin_pipelines.py`: for each of P6, `implement`, P56, P456, the steps from `branch enter` through `branch merge` equal the `implement-plan` body from `branch enter` on, after normalizing `slice:`/`plan:` references and `on_exhaust`
+  - [x] Success: passes; editing one file's loop `max` in a scratch copy makes it fail (verify once, don't commit the scratch change)
+- [x] Single-slice test: a second P6 run on a slice whose branch has work skips the implement dispatch (criterion 12)
+- [x] Commit: `test: keep single-slice code pipelines in step with implement-plan`
 
 ---
 
@@ -256,32 +256,32 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 
 ## Task 22 — `control_params.py`
 
-- [ ] Add `pipeline/control_params.py` defining `OVERRIDE_INSTRUCTIONS` and `ACCEPT_DECISION` keys and the reserved set
-- [ ] Replace the string literals in the executor checkpoint path and `_apply_override` with the constants (`grep override_instructions` over `src/` afterwards: only `control_params.py` holds the literal)
-- [ ] `_assemble_params` (`cli/commands/run.py`) rejects either key as a `-p` key: `'accept_decision' is reserved; use --decision accept` (and the matching message for instructions)
-- [ ] `validate_pipeline` rejects either key in a pipeline `params:` block
-- [ ] Tests: each `-p` key rejected with its message (criterion 16); each key rejected in a pipeline `params:` block; checkpoint override still reaches the dispatch prompt
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: reserve control param keys`
+- [x] Add `pipeline/control_params.py` defining `OVERRIDE_INSTRUCTIONS` and `ACCEPT_DECISION` keys and the reserved set
+- [x] Replace the string literals in the executor checkpoint path and `_apply_override` with the constants (`grep override_instructions` over `src/` afterwards: only `control_params.py` holds the literal)
+- [x] `_assemble_params` (`cli/commands/run.py`) rejects either key as a `-p` key: `'accept_decision' is reserved; use --decision accept` (and the matching message for instructions)
+- [x] `validate_pipeline` rejects either key in a pipeline `params:` block
+- [x] Tests: each `-p` key rejected with its message (criterion 16); each key rejected in a pipeline `params:` block; checkpoint override still reaches the dispatch prompt
+  - [x] Success: tests pass
+- [x] Commit: `feat: reserve control param keys`
 
 ## Task 23 — `project_run_lock`
 
-- [ ] Add `pipeline/run_lock.py` with `project_run_lock(cwd)` context manager: `git rev-parse --git-dir` via `run_git`, exclusive non-blocking `flock` on `{git dir}/squadron-run.flock`; `fcntl` imported inside the function (pattern: `codehost/metadata_lock.py`); Windows raises a clear error
-  - [ ] `rev-parse` failure/timeout → `GitEnvironmentError`, ERROR
-  - [ ] Held → a dedicated error; message `another squadron run holds the project lock ({path}); one mutating run per project at a time`, ERROR
-  - [ ] Other `OSError` → error with the path, ERROR
-- [ ] Tests (temp repo): second holder refused with message; lock released after the holder process exits (subprocess holds and is killed); separate worktrees lock independently; each D12 lock row's ERROR record asserted
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add per-checkout run lock`
+- [x] Add `pipeline/run_lock.py` with `project_run_lock(cwd)` context manager: `git rev-parse --git-dir` via `run_git`, exclusive non-blocking `flock` on `{git dir}/squadron-run.flock`; `fcntl` imported inside the function (pattern: `codehost/metadata_lock.py`); Windows raises a clear error
+  - [x] `rev-parse` failure/timeout → `GitEnvironmentError`, ERROR
+  - [x] Held → a dedicated error; message `another squadron run holds the project lock ({path}); one mutating run per project at a time`, ERROR
+  - [x] Other `OSError` → error with the path, ERROR
+- [x] Tests (temp repo): second holder refused with message; lock released after the holder process exits (subprocess holds and is killed); separate worktrees lock independently; each D12 lock row's ERROR record asserted
+  - [x] Success: tests pass
+- [x] Commit: `feat: add per-checkout run lock`
 
 ## Task 24 — `sq run` takes the lock for mutating pipelines
 
-- [ ] Add a definition walk (nested steps included) that reports whether a pipeline mutates: any phase step, `devlog`, `branch`, or `loop` with `commit_each_iteration`
-- [ ] `sq run` holds `project_run_lock` for the whole run when the pipeline mutates, on both paths: a fresh run and a plain `--resume <run_id>` of a paused run (item resume takes it in Task 26); held lock, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → exit 2, nothing runs
-- [ ] Find existing CLI and pipeline tests that run mutating pipelines outside a git repo (`grep` for `sq run`/`run_pipeline` invocations of P-pipelines, `slices-plan`, `tasks-plan`); give them a temp git repo or a lock fixture so they don't start exiting 2
-- [ ] Tests: `implement-plan`, `slices-plan`, `tasks-plan`, P6 detected as mutating; a review-only and a summary pipeline not; `sq run` with the lock held, with `rev-parse` failing, and with an `OSError` on open each exit 2 and dispatch nothing; a plain `--resume` of a paused P6 run with the lock held exits 2 and dispatches nothing (criterion 15, 17)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: hold the project run lock for mutating pipelines`
+- [x] Add a definition walk (nested steps included) that reports whether a pipeline mutates: any phase step, `devlog`, `branch`, or `loop` with `commit_each_iteration`
+- [x] `sq run` holds `project_run_lock` for the whole run when the pipeline mutates, on both paths: a fresh run and a plain `--resume <run_id>` of a paused run (item resume takes it in Task 26); held lock, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → exit 2, nothing runs
+- [x] Find existing CLI and pipeline tests that run mutating pipelines outside a git repo (`grep` for `sq run`/`run_pipeline` invocations of P-pipelines, `slices-plan`, `tasks-plan`); give them a temp git repo or a lock fixture so they don't start exiting 2
+- [x] Tests: `implement-plan`, `slices-plan`, `tasks-plan`, P6 detected as mutating; a review-only and a summary pipeline not; `sq run` with the lock held, with `rev-parse` failing, and with an `OSError` on open each exit 2 and dispatch nothing; a plain `--resume` of a paused P6 run with the lock held exits 2 and dispatches nothing (criterion 15, 17)
+  - [x] Success: tests pass
+- [x] Commit: `feat: hold the project run lock for mutating pipelines`
 
 ---
 
@@ -289,80 +289,80 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 
 ## Task 25 — Loop `accept_decision` (D9)
 
-- [ ] `_execute_loop_step` checks `ACCEPT_DECISION` in params before round 1 (next to `skip_if_met`): loop met with `accepted=True`, zero rounds run
-- [ ] Tests: with the param, no revise dispatch, result accepted; without it, unchanged behavior
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: accept loops on an accept decision`
+- [x] `_execute_loop_step` checks `ACCEPT_DECISION` in params before round 1 (next to `skip_if_met`): loop met with `accepted=True`, zero rounds run
+- [x] Tests: with the param, no revise dispatch, result accepted; without it, unchanged behavior
+  - [x] Success: tests pass
+- [x] Commit: `feat: accept loops on an accept decision`
 
 ## Task 26 — `item_resume.py`: exits and validation
 
-- [ ] Add `pipeline/item_resume.py` with `ResumeExit` IntEnum (`RESOLVED=0`, `FLAGGED=1`, `REJECTED=2`, `HALTED=3`) and `resume_item(...)`
-- [ ] Validation, each failing with REJECTED and a message naming the fact, before any git or model work (D8):
-  - [ ] Run exists; pipeline has exactly one `each` step (more than one → rejected with message)
-  - [ ] `report.json` exists and loads (Task 16 errors → REJECTED, ERROR logged)
-  - [ ] Record for the index exists with outcome FLAGGED or NOT_RUN
-  - [ ] `accept` requires `flagKind: review_unresolved` (`accept requires flagKind review_unresolved; item {n} is {kind}`); `accept` on NOT_RUN rejected
-- [ ] Run lock (Task 23) taken first; held, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → REJECTED (D12: nothing ran). This lock-time `GitEnvironmentError` is REJECTED, not HALTED; only errors after the lock is held map to HALTED (Task 28c)
-- [ ] Tests: each validation failure returns REJECTED with its message and touches neither git nor dispatch; each of the three lock failures returns REJECTED
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: validate item resume requests`
+- [x] Add `pipeline/item_resume.py` with `ResumeExit` IntEnum (`RESOLVED=0`, `FLAGGED=1`, `REJECTED=2`, `HALTED=3`) and `resume_item(...)`
+- [x] Validation, each failing with REJECTED and a message naming the fact, before any git or model work (D8):
+  - [x] Run exists; pipeline has exactly one `each` step (more than one → rejected with message)
+  - [x] `report.json` exists and loads (Task 16 errors → REJECTED, ERROR logged)
+  - [x] Record for the index exists with outcome FLAGGED or NOT_RUN
+  - [x] `accept` requires `flagKind: review_unresolved` (`accept requires flagKind review_unresolved; item {n} is {kind}`); `accept` on NOT_RUN rejected
+- [x] Run lock (Task 23) taken first; held, `rev-parse --git-dir` failure (`GitEnvironmentError`) and other lock `OSError` all → REJECTED (D12: nothing ran). This lock-time `GitEnvironmentError` is REJECTED, not HALTED; only errors after the lock is held map to HALTED (Task 28c)
+- [x] Tests: each validation failure returns REJECTED with its message and touches neither git nor dispatch; each of the three lock failures returns REJECTED
+  - [x] Success: tests pass
+- [x] Commit: `feat: validate item resume requests`
 
 ## Task 27 — Git precondition
 
-- [ ] After the lock, before source evaluation: on a slice branch → `restore_target()`; then require the target, a clean tree, and `verify_git_state(target)`
-  - [ ] Unrelated branch or dirty target → REJECTED with the 196 messages (`on {branch}, expected {target}…`, `working tree not clean: …`), nothing changed
-  - [ ] `restore_target` failure → HALTED
-- [ ] Tests (temp repo): flagged slice branch with leftovers → leftovers committed on that branch, ends on target, continues; unrelated branch → REJECTED; dirty target → REJECTED; restore failure → HALTED (criterion 14)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: return to the target before an item resume`
+- [x] After the lock, before source evaluation: on a slice branch → `restore_target()`; then require the target, a clean tree, and `verify_git_state(target)`
+  - [x] Unrelated branch or dirty target → REJECTED with the 196 messages (`on {branch}, expected {target}…`, `working tree not clean: …`), nothing changed
+  - [x] `restore_target` failure → HALTED
+- [x] Tests (temp repo): flagged slice branch with leftovers → leftovers committed on that branch, ends on target, continues; unrelated branch → REJECTED; dirty target → REJECTED; restore failure → HALTED (criterion 14)
+  - [x] Success: tests pass
+- [x] Commit: `feat: return to the target before an item resume`
 
 ## Task 28a — Item params
 
-- [ ] In `resume_item`, load pipeline and params from run state; strip reserved keys with a WARNING if present; apply `--model`/`-p` overrides; set `OVERRIDE_INSTRUCTIONS` from `--instructions` and `ACCEPT_DECISION` from `--decision accept` only
-- [ ] Tests: run-state params and models carried over; `-p` override applied on top; stored `override_instructions` stripped with WARNING asserted and not used; `--instructions` and `--decision accept` set their keys; `retry` leaves `ACCEPT_DECISION` unset
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: build item resume params from run state and the decision`
+- [x] In `resume_item`, load pipeline and params from run state; strip reserved keys with a WARNING if present; apply `--model`/`-p` overrides; set `OVERRIDE_INSTRUCTIONS` from `--instructions` and `ACCEPT_DECISION` from `--decision accept` only
+- [x] Tests: run-state params and models carried over; `-p` override applied on top; stored `override_instructions` stripped with WARNING asserted and not used; `--instructions` and `--decision accept` set their keys; `retry` leaves `ACCEPT_DECISION` unset
+  - [x] Success: tests pass
+- [x] Commit: `feat: build item resume params from run state and the decision`
 
 ## Task 28b — Source re-evaluation, reconcile and dependency check
 
-- [ ] Re-evaluate the source; take the item by index. Not returned:
-  - [ ] Reconcile: slice `complete` on target and slice branch ancestor of target (`git merge-base --is-ancestor`) → record PASSED with `reason: "reconciled: merged before the report was updated"`, WARNING, RESOLVED, nothing runs
-  - [ ] Otherwise REJECTED naming the status
-- [ ] Single-item dependency check: any in-plan dependency not complete on the target → record FLAGGED `dependency` (`dependency {d} not complete`), body not run, FLAGGED exit
-- [ ] Tests (fake cf, temp repo): reconcile → PASSED, WARNING, RESOLVED, no dispatch (criterion 17); deferred and undesigned → REJECTED naming the status; complete without a merged branch → REJECTED; dependency open on target → `dependency N not complete`, no body (criterion 9)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: reconcile and dependency-check resumed items`
+- [x] Re-evaluate the source; take the item by index. Not returned:
+  - [x] Reconcile: slice `complete` on target and slice branch ancestor of target (`git merge-base --is-ancestor`) → record PASSED with `reason: "reconciled: merged before the report was updated"`, WARNING, RESOLVED, nothing runs
+  - [x] Otherwise REJECTED naming the status
+- [x] Single-item dependency check: any in-plan dependency not complete on the target → record FLAGGED `dependency` (`dependency {d} not complete`), body not run, FLAGGED exit
+- [x] Tests (fake cf, temp repo): reconcile → PASSED, WARNING, RESOLVED, no dispatch (criterion 17); deferred and undesigned → REJECTED naming the status; complete without a merged branch → REJECTED; dependency open on target → `dependency N not complete`, no body (criterion 9)
+  - [x] Success: tests pass
+- [x] Commit: `feat: reconcile and dependency-check resumed items`
 
 ## Task 28c — Body run, record replace, exit mapping
 
-- [ ] Run the body once via `_run_each_item` (existing isolation and classification)
-- [ ] Replace the record (with `decision`, `resumed_at`), rewrite both report files atomically; exit RESOLVED for PASSED/ACCEPTED, FLAGGED otherwise; `GitEnvironmentError`/`GitStateUnknownError` raised after the lock is held → HALTED; report temp write or rename `OSError` → HALTED (logged by Task 16's `logger.exception`; prior report intact)
-- [ ] Tests (fake cf/dispatch/review over a temp repo):
-  - [ ] Retry on `review_unresolved` with branch work: implement dispatch skipped, review runs, revise prompts begin with the "Instructions from checkpoint resolution" block, merged, record `decision: retry`, RESOLVED (criterion 7)
-  - [ ] Accept: one code review, no revise rounds, merged, ACCEPTED with `decision: accept` (criterion 8)
-  - [ ] Retry flagged again → FLAGGED exit, record replaced
-  - [ ] Retry on a `not_run` record runs the body
-  - [ ] Mid-item `GitStateUnknownError` → HALTED
-  - [ ] Report rewrite `OSError` → HALTED, ERROR record asserted, previous `report.json` unchanged
-  - [ ] Item resume on a `tasks-plan` run and on a `slices-plan` run (retry, and accept on `review_unresolved`) works with no pipeline-specific code
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: rerun one batch item on a decision`
+- [x] Run the body once via `_run_each_item` (existing isolation and classification)
+- [x] Replace the record (with `decision`, `resumed_at`), rewrite both report files atomically; exit RESOLVED for PASSED/ACCEPTED, FLAGGED otherwise; `GitEnvironmentError`/`GitStateUnknownError` raised after the lock is held → HALTED; report temp write or rename `OSError` → HALTED (logged by Task 16's `logger.exception`; prior report intact)
+- [x] Tests (fake cf/dispatch/review over a temp repo):
+  - [x] Retry on `review_unresolved` with branch work: implement dispatch skipped, review runs, revise prompts begin with the "Instructions from checkpoint resolution" block, merged, record `decision: retry`, RESOLVED (criterion 7)
+  - [x] Accept: one code review, no revise rounds, merged, ACCEPTED with `decision: accept` (criterion 8)
+  - [x] Retry flagged again → FLAGGED exit, record replaced
+  - [x] Retry on a `not_run` record runs the body
+  - [x] Mid-item `GitStateUnknownError` → HALTED
+  - [x] Report rewrite `OSError` → HALTED, ERROR record asserted, previous `report.json` unchanged
+  - [x] Item resume on a `tasks-plan` run and on a `slices-plan` run (retry, and accept on `review_unresolved`) works with no pipeline-specific code
+  - [x] Success: tests pass
+- [x] Commit: `feat: rerun one batch item on a decision`
 
 ## Task 30 — CLI flags
 
-- [ ] `cli/commands/run.py`: `--item`, `--decision` (`retry`|`accept`, from `ItemDecision`), `--instructions` on `--resume`
-  - [ ] `--item` requires `--decision` (no default); `--instructions` or `--decision` without `--item` rejected
-  - [ ] `--item` works on COMPLETED runs; plain `--resume` unchanged
-  - [ ] Output: new record as one line plus the report path; process exit code = `ResumeExit` value
-- [ ] CLI tests: each flag-combination rejection exits 2; exit code passthrough for 0/1/2/3 (stub `resume_item`); plain `--resume` behavior unchanged
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add item resume flags to sq run`
+- [x] `cli/commands/run.py`: `--item`, `--decision` (`retry`|`accept`, from `ItemDecision`), `--instructions` on `--resume`
+  - [x] `--item` requires `--decision` (no default); `--instructions` or `--decision` without `--item` rejected
+  - [x] `--item` works on COMPLETED runs; plain `--resume` unchanged
+  - [x] Output: new record as one line plus the report path; process exit code = `ResumeExit` value
+- [x] CLI tests: each flag-combination rejection exits 2; exit code passthrough for 0/1/2/3 (stub `resume_item`); plain `--resume` behavior unchanged
+  - [x] Success: tests pass
+- [x] Commit: `feat: add item resume flags to sq run`
 
 ## Task 31 — Part G checkpoint
 
-- [ ] Full test suite; `ruff format`, `ruff check`, `pyright`
-- [ ] Map design Success Criteria 1–17 and each D12 row to a passing test or a walkthrough step; add any missing test (and commit) before continuing
-  - [ ] Success: all green; tree clean
+- [x] Full test suite; `ruff format`, `ruff check`, `pyright`
+- [x] Map design Success Criteria 1–17 and each D12 row to a passing test or a walkthrough step; add any missing test (and commit) before continuing
+  - [x] Success: all green; tree clean
 
 ---
 
@@ -370,10 +370,10 @@ Replace each file's implement section with the D10 steps (`on_exhaust: checkpoin
 
 ## Task 32 — Documentation
 
-- [ ] `docs/PIPELINES.md`: `implement-plan`, `existing: keep` on implement, `branch: { plan: }`, enter catch-up, `report.json` (fields, `schemaVersion`), item resume (flags, exit codes, run lock), and a "Batch reports and the flag handoff" section copying the design's flag handoff contract
-- [ ] `CHANGELOG.md`: short user-facing bullets (implement-plan, item resume, report.json, revise loop in P6/implement/P56/P456, catch-up on enter #183); technical detail stays in DEVLOG
-  - [ ] Success: docs match behavior
-- [ ] Commit: `docs: document implement-plan, item resume and the flag handoff`
+- [x] `docs/PIPELINES.md`: `implement-plan`, `existing: keep` on implement, `branch: { plan: }`, enter catch-up, `report.json` (fields, `schemaVersion`), item resume (flags, exit codes, run lock), and a "Batch reports and the flag handoff" section copying the design's flag handoff contract
+- [x] `CHANGELOG.md`: short user-facing bullets (implement-plan, item resume, report.json, revise loop in P6/implement/P56/P456, catch-up on enter #183); technical detail stays in DEVLOG
+  - [x] Success: docs match behavior
+- [x] Commit: `docs: document implement-plan, item resume and the flag handoff`
 
 ## Task 33 — Live walkthrough in the scratch project
 

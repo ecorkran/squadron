@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/180-slices.pipeline-intelligence.md
 dependencies: [196]
 interfaces: []
 dateCreated: 20261004
-dateUpdated: 20261004
-status: not_started
+dateUpdated: 20261006
+status: complete
 ---
 
 # Slice Design: implementation-batch-pipeline-implement-plan
@@ -185,10 +185,11 @@ steps:
             steps:
               - dispatch: { name: revise, model: "{model}", feedback: review }
               - review: { template: code, model: "{review-model}", slice: "{slice.index}" }
-        - devlog: auto
+        - devlog: { mode: auto, slice: "{slice.index}" }
         - branch: { op: merge, slice: "{slice.index}" }
 ```
 
+- **The devlog names the item's slice.** Inside `each`, a bare `devlog: auto` commits against `{slice}`, which is the whole item record there, and its commit fails (found in the live walkthrough).
 - **Thresholds work as in 195.** A pass ends the loop. If the rounds run out, a verdict at or above `accept-threshold` merges and the item is ACCEPTED. Anything below fails the loop, so the item is FLAGGED before devlog and merge, and its branch stays unmerged.
 - **`review-model` defaults to `minimax`**, matching P6, the single-slice pipeline this body is shared with (D10). `--model` and `-p review-model=` override it as usual.
 - **Loop-round commits** need no new code. The round's review template `code` maps to `CommitSubject.CODE`, which stages everything on the slice branch (196 D1, D3).
@@ -528,44 +529,56 @@ sq run --resume <run_id> --item <index> --decision retry|accept [--instructions 
 
 ### Verification Walkthrough
 
-Use the scratch project (`…/scratchpad/sq-scratch`, toy "tally" CLI, plan 100, slices 101–107) with `env -u CLAUDECODE uv run --project <squadron> sq …`. Always pass `--model`. Before starting, run `cf set arch 100`, and give `DEVLOG.md` YAML frontmatter (196 walkthrough caveats).
+Run in the scratch project (`…/scratchpad/sq-scratch`, toy "tally" CLI, plan 100) on 20261006 with `env -u CLAUDECODE uv run --project <squadron> sq …` and `--model haiku`. `--model` also overrides the review model, so every review below is haiku. `sq` is that command in what follows.
 
-**Setup.** Add two new slices (108, 109) to plan 100, with designs, tasks, and passing design and tasks reviews: `sq run slices-plan 100` then `sq run tasks-plan 100`. Give 109's design `dependencies: [108]`, and list 109 before 108 in the slice plan. Commit. The tree must be clean.
+**Corrections to the original plan, found while running it:**
+
+- `-p max-revisions=0` is rejected (`loop.max must be a positive integer`). Use `max-revisions=1`; a flag then needs a review that stays below the threshold for one round, which a live model doesn't guarantee. The tests force it deterministically.
+- cf takes a slice's status from its task-file checkboxes first. Marking 101–107 complete means checking off their tasks, not editing frontmatter or the plan. The same rule makes D2's "all tasks checked but slice not marked complete" row unreachable when cf reads the slice, and a merged slice whose agent left its tasks unchecked stays open (#188).
+- After `slices-plan`, the design agent had edited the architecture doc (`relatedSlices`), which planning commits leave out. Commit it before the batch, or `branch enter` halts the batch on a dirty tree (seen: 108 flagged `step_failed`, 109 `not_run`, exit 1 — the D7 halt path).
+- An implement that commits nothing fails its code review on `Could not resolve diff range for slice N` (a fresh branch has no range), before the review's empty-diff check. The item is still `step_failed` and unmerged.
+
+**Setup.** Check off 101–107's tasks; add `(109) Longest Line in JSON` (dependencies [108]) before `(108) Longest Line` in the plan; `cf set arch 100`; commit.
+
+```bash
+sq run slices-plan 100 --model haiku -v   # 2 items — 1 passed, 1 accepted; 109's design has dependencies: [108]
+sq run tasks-plan 100 --model haiku -v    # 2 items — 2 passed
+git commit -am "docs: list 108 and 109 in the tally-core architecture"   # see corrections
+```
 
 1. **Batch.**
    ```bash
    sq run implement-plan 100 --model haiku -v
    ```
-   Expected:
-   - 108 runs before 109 (ordering).
-   - Slices 101–107, already implemented and marked complete, aren't selected. Any that are open with all tasks checked are flagged `all tasks checked but slice not marked complete`.
-   - Each run item logs `branch enter`, the implement dispatch, a code review with a resolved diff range, rounds of `revise-code` as needed, devlog, and `branch merge`.
-   - The summary line prints both report paths.
+   Observed: items in dependency order (108, then 109) though the plan lists 109 first; 101–107 not selected; 108 entered, implemented, reviewed CONCERNS, revised twice. Before the devlog fix the item flagged at `devlog-4` and 109 was flagged `dependency 108 flagged`. The summary line prints both report paths.
    ```bash
-   git branch --show-current                     # main
-   git log --oneline --first-parent -4           # merge: slice 109 — …, merge: slice 108 — …
-   jq '.items[] | {index, outcome, flagKind}' ~/.config/squadron/runs/<run_id>.slices.report.json
+   jq -c '.items[] | {index, outcome, flagKind}' ~/.config/squadron/runs/<run_id>.slices.report.json
    ```
 
-2. **A flagged item and its dependent.** Force a flag deterministically with a threshold no review can meet in zero rounds: `-p max-revisions=0 -p pass-threshold=review.pass -p accept-threshold=review.pass`, on a fresh pair of slices (or reset 108 and 109 by reverting their merges). When 108's review isn't PASS:
-   - 108 is `review_unresolved` at `revise-code`, with `branch: 108-slice.…`.
-   - 109 is `dependency` (`dependency 108 flagged`).
-   - `git branch --list '108-slice.*'` exists, and `git log main..108-slice.…` shows the implement commit. `main` doesn't have it.
+2. **A flagged item and its dependent.** Seen without forcing: 109's retry (below) exhausted at FAIL → `review_unresolved` at `revise-code`, branch unmerged, with all its work committed.
 
-3. **Retry with instructions.**
+3. **Retry.** On the run above, with the checkout left on 108's branch and `DEVLOG.md` dirty:
    ```bash
-   sq run --resume <run_id> --item 108 --decision retry -p max-revisions=2 -p accept-threshold=review.concerns_or_better \
-     --instructions "Keep the CLI flags unchanged; fix only what the review lists."
+   sq run --resume <run_id> --item 108 --decision retry --model haiku -v
    ```
-   The log shows `implement: step … keeps existing work on 108-slice.… (1 commits ahead of main)`, a code review, revise rounds whose dispatch prompt begins with the instructions block (`-vv`), and a merge. It exits 0, and `report.json` now has 108 `accepted` or `passed` with `decision: retry`. 109 is still flagged. Resume it with `--item 109 --decision retry`. Its dependency is now complete on `main`, so it runs.
+   Log: `left unmerged slice branch 108-slice.longest-line for main`, `implement: step implement-2 keeps existing work on 108-slice.longest-line (13 commits ahead of main)`, one revise round to PASS, `merge: slice 108 — Longest Line`. Prints `RESOLVED 108 Longest Line — …; decision retry at …` and the report path; exit 0; the record is `passed`, `decision: retry`.
+   Then `--item 109 --decision retry` exited 1 with `dependency 108 not complete`: the agent hadn't checked off 108's tasks (#188). After checking them off by hand, the same command ran 109's body.
+   ```bash
+   sq run --resume <run_id> --item 109 --decision retry --model haiku \
+     -p max-revisions=2 -p accept-threshold=review.concerns_or_better \
+     --instructions "Keep the CLI flags unchanged; fix only what the review lists." -v
+   ```
+   With 109 at `review_unresolved` this kept the work, reviewed PASS, skipped the loop and merged; exit 0. (No revise round ran, so the instructions block is shown by the tests, not this run: `test_item_resume_body.py`.)
 
-4. **Accept.** Repeat step 2 to flag an item, then run `sq run --resume <run_id> --item 108 --decision accept`. One code review runs, there are no revise rounds, and the item merges, recorded `accepted` with `decision: accept`. Then `--decision accept` on the dependency-flagged 109 exits 2: `accept requires flagKind review_unresolved; item 109 is dependency`.
+4. **Accept.** On the earlier halted run, `--item 109 --decision accept` exits 2: `accept requires flagKind review_unresolved; item 109 is not_run` (and `… item 108 is step_failed` for 108). The accepted path (one review, no rounds, merged, `accepted`) is shown by `test_accept_reviews_once_runs_no_rounds_and_merges`.
 
-5. **Catch-up merge.** With 108 flagged and unmerged, commit an unrelated change on `main`. Run `--item 108 --decision retry`. Enter logs `merge: main into slice 108`, and the code review's diff range doesn't include the unrelated change. To see a conflict, commit on `main` an edit to a line 108's branch also changed, and retry. The item is flagged `branch_conflict`, and the message lists the conflicted path. `git -C . rev-parse -q --verify MERGE_HEAD` prints nothing. The checkout stays on the clean slice branch (D5). A later `--item 108` resume returns to `main` before doing anything (D8 precondition).
+5. **Catch-up merge.** Before step 3's 109 retry, `NOTES.md` was committed on `main`. Enter logged `caught 109-slice.longest-line-in-json up to main (merge --no-ff)`, the branch has `merge: main into slice 109`, and `git diff --name-only <merge>^1...<merge>^2` for 109's merge doesn't list `NOTES.md`. The conflict case is shown by `test_branch_catch_up.py`.
 
-6. **Wrong plan active.** `cf set arch 180`, then rerun step 1 on a fresh slice. The first item's enter succeeds (`set_arch 100` runs first).
+6. **Wrong plan active.** `cf set arch 200` before that retry: the log shows `cf-op set_arch(100)` before `branch enter`, and enter succeeded.
 
-7. **Single-slice parity.** `sq run P6 <slice> --model haiku` shows the same enter → implement → `revise-code` → devlog → merge sequence. With `-p max-revisions=0 -p accept-threshold=review.pass` and a non-PASS review, it pauses at a checkpoint instead of flagging.
+7. **Single-slice parity.** Not rerun live (every slice was merged). The drift test (`test_single_slice_code_pipelines_match_the_batch_body`) and `test_a_non_pass_code_review_pauses_without_merging[P6|implement|P56|P456]` cover it.
+
+**Also seen live:** a second item resume while one ran exited 2 with `another squadron run holds the project lock (…/.git/squadron-run.flock)`; retrying 108 on the halted run after it had merged reconciled the record to `passed` (`reconciled: merged before the report was updated`), exit 0.
 
 ## Risk Assessment
 
