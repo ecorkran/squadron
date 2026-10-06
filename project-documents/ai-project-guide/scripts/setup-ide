@@ -81,31 +81,44 @@ read_rules_exclude() {
 
     command -v cf >/dev/null 2>&1 || return 0
 
-    # A non-zero exit means the key is unknown (a cf predating this feature) or
-    # cf could not answer. Either way: no exclusions, never a hard error, so the
-    # script works on both sides of that cf release.
-    local output
-    output=$(cf config get rules.exclude 2>/dev/null) || return 0
+    # cf resolves config from its working directory, and each checkout (e.g. a
+    # worktree passed with --root) can have its own, so ask from PROJECT_ROOT.
+    local output status=0
+    if (cd "$PROJECT_ROOT" && cf config get --help 2>/dev/null) | grep -q -- '--value'; then
+        output=$(cd "$PROJECT_ROOT" && cf config get --value rules.exclude) || status=$?
+        case $status in
+            0) ;;
+            2) return 0 ;;   # cf does not know the key: nothing to exclude
+            *)
+                print_status $RED "❌ cf config get --value rules.exclude failed (exit $status)" >&2
+                exit 1
+                ;;
+        esac
+        RULES_EXCLUDE=$(printf '%s' "$output" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    else
+        # Older cf without --value. A non-zero exit means the key is unknown (a
+        # cf predating rules.exclude) or cf could not answer; there is no way to
+        # tell which, so treat both as no exclusions.
+        output=$(cd "$PROJECT_ROOT" && cf config get rules.exclude 2>/dev/null) || return 0
 
-    # `cf config get` prints a labeled block, not a bare value:
-    #   Key:     rules.exclude
-    #   Value:   dart.md,swift.md
-    #   Source:  project
-    # Take the Value line and strip its label and surrounding whitespace.
-    RULES_EXCLUDE=$(printf '%s' "$output" | awk '
-        /^Value:/ {
-            sub(/^Value:[[:space:]]*/, "")
-            sub(/[[:space:]]+$/, "")
-            print
-            exit
-        }
-    ')
+        # The labeled form:
+        #   Key:     rules.exclude
+        #   Value:   dart.md,swift.md
+        #   Source:  project
+        # Take the Value line and strip its label and surrounding whitespace.
+        RULES_EXCLUDE=$(printf '%s' "$output" | awk '
+            /^Value:/ {
+                sub(/^Value:[[:space:]]*/, "")
+                sub(/[[:space:]]+$/, "")
+                print
+                exit
+            }
+        ')
+    fi
 
     [ -n "$RULES_EXCLUDE" ] && RULES_EXCLUDE_SOURCE="cf config rules.exclude"
     return 0
 }
-
-read_rules_exclude
 
 # Patterns that matched at least one file, used to warn about typos.
 RULES_EXCLUDE_MATCHED=""
@@ -235,14 +248,60 @@ EOF
     esac
 }
 
+# Path of the target's manifest from the previous run; set by begin_manifest.
+OLD_MANIFEST=""
+
+# Args: target
 begin_manifest() {
     NEW_MANIFEST=$(mktemp)
+    OLD_MANIFEST="$TARGET_ROOT/$MANIFEST_DIR_NAME/$1.manifest"
 }
 
 # Record a file this run wrote. Args: absolute path under TARGET_ROOT
 record_installed_file() {
     local file=$1
     echo "$(cksum < "$file") ${file#"$TARGET_ROOT"/}" >> "$NEW_MANIFEST"
+}
+
+# Move a staged file into place and record it, unless that would overwrite a
+# file the guide does not own. Ownership is the previous manifest. A file with
+# identical content is adopted. Without any manifest (a first install, or one
+# from before the manifest existed) ownership is unknowable, so the existing
+# file is backed up before being replaced rather than lost.
+# Args: staged_file, dest_file. Returns 1 when the file was left alone.
+install_file() {
+    local staged=$1
+    local dest=$2
+    local rel="${dest#"$TARGET_ROOT"/}"
+
+    if [ -f "$dest" ] && ! cmp -s "$staged" "$dest"; then
+        if [ -f "$OLD_MANIFEST" ]; then
+            local entry
+            entry=$(awk -v p="$rel" '{ path = $0; sub(/^[^ ]+ [^ ]+ /, "", path); if (path == p) print }' "$OLD_MANIFEST")
+            if [ -z "$entry" ]; then
+                rm -f "$staged"
+                print_status $YELLOW "⚠️  Skipped $rel: it exists and was not installed by the guide — rename or remove it to let setup-ide manage it"
+                return 1
+            fi
+            # Installed by the guide but edited since: keep the edit, and keep
+            # the original manifest entry so the path stays guide-owned and the
+            # prune step does not warn about it a second time.
+            if [ "$(cksum < "$dest") $rel" != "$entry" ]; then
+                rm -f "$staged"
+                echo "$entry" >> "$NEW_MANIFEST"
+                print_status $YELLOW "⚠️  Kept $rel: edited since it was installed, so the guide's update was not written — remove it to get the update"
+                return 1
+            fi
+        else
+            backup_premanaged_file "$dest"
+        fi
+    fi
+
+    # cat rather than mv: a mktemp file is mode 600, and the install should get
+    # the usual umask permissions.
+    cat "$staged" > "$dest"
+    rm -f "$staged"
+    record_installed_file "$dest"
 }
 
 # Delete stale files, then replace the target's manifest with this run's.
@@ -319,21 +378,21 @@ find_project_root() {
     echo "$current_dir"
 }
 
+# Where output goes. main() replaces both when --root is given.
 PROJECT_ROOT="$(find_project_root)"
 TARGET_ROOT="$PROJECT_ROOT"
 
-# Set source directories
-if [[ "$SCRIPT_DIR" == */ai-project-guide/scripts ]]; then
-    # We're in the ai-project-guide source repository
-    RULES_SOURCE_DIR="$SCRIPT_DIR/../project-guides/rules"
-    AGENTS_SOURCE_DIR="$SCRIPT_DIR/../project-guides/agents"
-    SKILLS_SOURCE_DIR="$SCRIPT_DIR/../project-guides/skills"
-else
-    # We're in a project that includes ai-project-guide as submodule
-    RULES_SOURCE_DIR="$PROJECT_ROOT/project-documents/ai-project-guide/project-guides/rules"
-    AGENTS_SOURCE_DIR="$PROJECT_ROOT/project-documents/ai-project-guide/project-guides/agents"
-    SKILLS_SOURCE_DIR="$PROJECT_ROOT/project-documents/ai-project-guide/project-guides/skills"
-fi
+# Guide sources always come from the guide this script belongs to, never from
+# the project being installed into. That is what lets --root install into a
+# worktree that has no guide copy, or an older one.
+GUIDE_SOURCE_DIR="$(cd "$SCRIPT_DIR/../project-guides" && pwd)"
+RULES_SOURCE_DIR="$GUIDE_SOURCE_DIR/rules"
+AGENTS_SOURCE_DIR="$GUIDE_SOURCE_DIR/agents"
+SKILLS_SOURCE_DIR="$GUIDE_SOURCE_DIR/skills"
+LINT_SOURCE_DIR="$GUIDE_SOURCE_DIR/lint"
+
+# Lint config check (check_lint_configs, LINT_WRITE_PATHS).
+source "$SCRIPT_DIR/setup-ide-lint.sh"
 
 # Function to check if we're in the right directory
 check_directory() {
@@ -352,7 +411,12 @@ check_directory() {
 
 # Function to show usage
 show_usage() {
-    echo "Usage: $0 <ide>"
+    echo "Usage: $0 <ide> [--dry-run] [--write-lint] [--root <dir>]"
+    echo ""
+    echo "  --dry-run     List the files that would be added, changed or removed; write nothing"
+    echo "  --write-lint  Write required lint configs that are missing (default: report only)"
+    echo "  --root <dir>  Install into <dir> (e.g. a git worktree) using this script's guide"
+    echo "  --capabilities  Print supported features as one line and exit"
     echo ""
     echo "Supported targets:"
     echo "  cursor    - Always-on rules → AGENTS.md; scoped rules → .cursor/rules/ (paths→globs)"
@@ -497,8 +561,10 @@ copy_files() {
             target_filename="${filename%.md}.mdc"
         fi
 
-        cp "$file" "$target_dir/$target_filename"
-        record_installed_file "$target_dir/$target_filename"
+        local staged
+        staged=$(mktemp)
+        cp "$file" "$staged"
+        install_file "$staged" "$target_dir/$target_filename" || continue
         print_status $GREEN "✅ Copied $filename → $target_filename"
         copied_count=$((copied_count + 1))
     done
@@ -532,11 +598,15 @@ copy_skills() {
             continue
         fi
 
-        mkdir -p "$target_skill_dir"
-        cp -R "$skill_dir"* "$target_skill_dir/"
+        # File by file, so each one gets install_file's ownership check.
         local skill_file
         while IFS= read -r skill_file; do
-            record_installed_file "$target_skill_dir/${skill_file#"$skill_dir"}"
+            local dest="$target_skill_dir/${skill_file#"$skill_dir"}"
+            local staged
+            staged=$(mktemp)
+            cp "$skill_file" "$staged"
+            mkdir -p "$(dirname "$dest")"
+            install_file "$staged" "$dest" || true
         done < <(find "$skill_dir" -type f)
         print_status $GREEN "✅ Copied skill: $skill_name"
         copied_count=$((copied_count + 1))
@@ -590,8 +660,10 @@ copy_cursor_rules() {
         local target_path="$target_dir/$target_filename"
 
         # Convert paths to globs format for Cursor
-        convert_paths_to_globs "$file" "$target_path"
-        record_installed_file "$target_path"
+        local staged
+        staged=$(mktemp)
+        convert_paths_to_globs "$file" "$staged"
+        install_file "$staged" "$target_path" || continue
         print_status $GREEN "✅ Converted $filename → $target_filename"
 
         if ! validate_frontmatter "$target_path"; then
@@ -757,8 +829,10 @@ copy_claude_modular_rules() {
             continue
         fi
 
-        strip_name_field "$file" "$target_dir/$filename"
-        record_installed_file "$target_dir/$filename"
+        local staged
+        staged=$(mktemp)
+        strip_name_field "$file" "$staged"
+        install_file "$staged" "$target_dir/$filename" || continue
         print_status $GREEN "✅ Copied $filename → .claude/rules/$filename"
         copied_count=$((copied_count + 1))
     done
@@ -1246,6 +1320,8 @@ emit_copilot_instruction_files() {
         apply_to=$(get_apply_to "$file")
 
         local out_file="$target_dir/${stem}.instructions.md"
+        local staged
+        staged=$(mktemp)
 
         # Write translated frontmatter + managed marker + body
         {
@@ -1266,8 +1342,8 @@ emit_copilot_instruction_files() {
             in_fm { next }
             past_fm { print }
             ' "$file"
-        } > "$out_file"
-        record_installed_file "$out_file"
+        } > "$staged"
+        install_file "$staged" "$out_file" || continue
 
         print_status $GREEN "✅ $filename → .github/instructions/${stem}.instructions.md (applyTo: $apply_to)"
         copied_count=$((copied_count + 1))
@@ -1390,7 +1466,17 @@ run_target_setup() {
             ;;
     esac
 
-    begin_manifest
+    if [ "$DRY_RUN" = true ]; then
+        dry_run_install "$ide"
+    else
+        install_target "$ide"
+    fi
+}
+
+# Args: normalized target
+install_target() {
+    local ide=$1
+    begin_manifest "$ide"
     case "$ide" in
         agents) setup_agents ;;
         copilot) setup_copilot ;;
@@ -1398,6 +1484,91 @@ run_target_setup() {
         cursor) setup_cursor ;;
     esac
     finish_manifest "$ide"
+    echo ""
+    check_lint_configs
+}
+
+# Top-level paths any target may write, relative to TARGET_ROOT. Dry run copies
+# these into a sandbox and compares afterwards.
+# Claude Code keeps git worktrees under .claude/worktrees/: whole checkouts,
+# never install output. Dry run neither copies nor compares them.
+DRY_RUN_SKIP_PATH=".claude/worktrees"
+INSTALL_PATHS="CLAUDE.md CLAUDE.md$PREMANAGED_BACKUP_SUFFIX AGENTS.md AGENTS.md$PREMANAGED_BACKUP_SUFFIX .claude .cursor .github .agents $MANIFEST_DIR_NAME $LINT_WRITE_PATHS"
+
+# Run the install against a sandbox copy of the project's install paths, then
+# report what would be added, changed and removed. The project is not touched.
+# Args: normalized target
+dry_run_install() {
+    local ide=$1
+    local real_root=$TARGET_ROOT
+    local sandbox log
+    sandbox=$(mktemp -d)
+    log=$(mktemp)
+
+    local p
+    local existing=()
+    for p in $INSTALL_PATHS; do
+        [ -e "$real_root/$p" ] && existing+=("$p")
+    done
+    if [ ${#existing[@]} -gt 0 ]; then
+        tar -C "$real_root" --exclude="$DRY_RUN_SKIP_PATH" -cf - "${existing[@]}" | tar -C "$sandbox" -xf -
+    fi
+
+    TARGET_ROOT=$sandbox
+    install_target "$ide" > "$log"
+    TARGET_ROOT=$real_root
+
+    print_status $BLUE "🔍 Dry run for '$ide' — nothing was written"
+    # Warnings and skips from the run itself; the per-file success lines are noise here.
+    grep -E '⚠️|⊘|❌' "$log" || true
+    report_dry_run_changes "$real_root" "$sandbox"
+
+    rm -rf "$sandbox" "$log"
+}
+
+# Args: root. Prints install-path files relative to root, sorted.
+list_install_files() {
+    (
+        cd "$1" || exit 1
+        local p
+        for p in $INSTALL_PATHS; do
+            [ -e "$p" ] && find "$p" -path "$DRY_RUN_SKIP_PATH" -prune -o -type f -print
+        done
+    ) | sort
+}
+
+# Args: real_root, sandbox
+report_dry_run_changes() {
+    local before after
+    before=$(mktemp)
+    after=$(mktemp)
+    list_install_files "$1" > "$before"
+    list_install_files "$2" > "$after"
+
+    local count=0 rel
+    while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        print_status $GREEN "  + $rel"
+        count=$((count + 1))
+    done < <(comm -13 "$before" "$after")
+    while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        cmp -s "$1/$rel" "$2/$rel" && continue
+        print_status $YELLOW "  ~ $rel"
+        count=$((count + 1))
+    done < <(comm -12 "$before" "$after")
+    while IFS= read -r rel; do
+        [ -n "$rel" ] || continue
+        print_status $RED "  - $rel"
+        count=$((count + 1))
+    done < <(comm -23 "$before" "$after")
+
+    if [ $count -eq 0 ]; then
+        print_status $BLUE "📋 No changes"
+    else
+        print_status $BLUE "📋 $count file(s) would change (+ add, ~ modify, - remove)"
+    fi
+    rm -f "$before" "$after"
 }
 
 # Run full Claude Code setup.
@@ -1520,8 +1691,58 @@ setup_cursor() {
     echo "   • Restart Cursor to ensure rules are loaded"
 }
 
+DRY_RUN=false
+WRITE_LINT=false
+
+# Features this script supports, printed by --capabilities as one line of
+# space-separated words. A stable contract: cf decides which flags to pass from
+# it, so words are only ever added, never renamed or removed.
+CAPABILITIES="dry-run write-lint root"
+
 main() {
-    run_target_setup "$@"
+    # Flags may appear anywhere; everything else passes through unchanged.
+    # Older cf versions detect flag support by finding the literals "--dry-run"
+    # and "--write-lint" in this file, so keep the flag parsing here rather
+    # than in a sourced helper. Newer cf versions use --capabilities.
+    local args=()
+    local root=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --capabilities)
+                echo "$CAPABILITIES"
+                return 0
+                ;;
+            --dry-run) DRY_RUN=true ;;
+            --write-lint) WRITE_LINT=true ;;
+            --root)
+                if [ $# -lt 2 ]; then
+                    print_status $RED "❌ Error: --root needs a directory" >&2
+                    exit 1
+                fi
+                root=$2
+                shift
+                ;;
+            --root=*) root=${1#--root=} ;;
+            *) args+=("$1") ;;
+        esac
+        shift
+    done
+
+    # --root installs into the given checkout (e.g. a git worktree) using this
+    # script's guide; without it, the project root is found from the current
+    # directory.
+    if [ -n "$root" ]; then
+        if [ ! -d "$root" ]; then
+            print_status $RED "❌ Error: --root directory not found: $root" >&2
+            exit 1
+        fi
+        PROJECT_ROOT="$(cd "$root" && pwd)"
+        TARGET_ROOT="$PROJECT_ROOT"
+    fi
+
+    read_rules_exclude
+
+    run_target_setup ${args[@]+"${args[@]}"}
     local status=$?
     warn_unmatched_exclusions
     return $status

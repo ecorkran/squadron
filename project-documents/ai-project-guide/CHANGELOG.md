@@ -12,6 +12,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-10-05
+
+### Added
+
+- `rules/shell.md`: shell script rules for bash and CI pipeline code
+  (`set -euo pipefail`, quoting, shellcheck, `jq`/`yq` for YAML and JSON,
+  Python past ~50 lines of logic, guarded `cd`, `mktemp` + `trap`, CI `run:`
+  blocks). Applies to `*.sh`, `*.bash`, GitHub Actions and GitLab CI files.
+
+## [0.20.1] - 2026-10-05
+
+### Added
+
+- `setup-ide --root <dir>` installs into another checkout, such as a git
+  worktree, using the script's own guide (#31).
+- `setup-ide --capabilities` prints the supported features as one line, so
+  callers like cf no longer search the script's text for flags (#31).
+
+### Changed
+
+- Git rules now define release versioning: patch is the default, including new
+  flags, options and config keys. Minor is only for a new user-facing feature
+  or significant AI capability, confirmed by the Project Manager. A non-empty
+  CHANGELOG or an `### Added` section never decides the bump on its own.
+- `setup-ide` reads `rules.exclude` with `cf config get --value` when cf
+  supports it, and stops with an error when cf fails instead of silently
+  installing every rule. Older cf versions still work (#31).
+
+### Fixed
+
+- `setup-ide --dry-run` no longer copies `.claude/worktrees/` (whole git
+  checkouts) into its sandbox or lists them as changes.
+
+## [0.20.0] - 2026-10-05
+
+### Added
+
+- `setup-ide --dry-run` lists the files a run would add, change or remove,
+  plus any skip and warning lines, without writing anything.
+- `setup-ide` checks the linter config required by each language it detects
+  (Python, Dart/Flutter, TypeScript, C#) and reports a missing config or
+  missing required rules. `--write-lint` writes the baseline when no config
+  exists; for a `[tool.ruff]` section in `pyproject.toml` it adds a `ruff.toml`
+  that extends it. Baselines live in `project-guides/lint/` (#30).
+- `rules/csharp.md`, with an analyzer baseline that makes catching general
+  exceptions (CA1031) an error.
+
+### Changed
+
+- `setup-ide` no longer overwrites a file it did not install. When an existing
+  file differs and the manifest does not list it, the file is left alone with a
+  warning. With no manifest yet, the existing file is backed up to
+  `<name>.pre-context-forge` before it is replaced.
+- `setup-ide` no longer overwrites a file it installed that has been edited
+  since. It warns and keeps the edit; deleting the file takes the guide's
+  version again.
+- Phase 7 (Slice Integration) is now review, revise, then merge, and runs for
+  every slice. Phase 6 ends at the last commit on the slice branch. The Project
+  Manager or the orchestrating pipeline starts reviews; agents no longer start
+  them on their own when a review gate blocks.
+
+### Removed
+
+- The `tester` agent. Nothing in the guide used it, and `rules/testing.md`
+  covers testing. `setup-ide` removes unedited installed copies on its next run.
+
+### Fixed
+
+- Merging a slice is now tied to Phase 7, after code review passes. The git
+  rules, the task-breakdown guide, and the Phase 6 and Phase 7 prompts no longer
+  lead agents to write merge steps into task files or merge at the end of
+  implementation (#29).
+
+## [0.19.4] - 2026-10-03
+
+### Changed
+
+- Compressed the two `z-attachments/` UI mockup images from 3.5 MB to
+  325 KB total (downscaled to 1200px wide, quantized). Filenames and
+  format unchanged (#28).
+
 ## [0.19.3] - 2026-10-02
 
 ### Changed
