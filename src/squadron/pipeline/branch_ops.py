@@ -19,6 +19,8 @@ from squadron.pipeline.git_ops import (
     GitEnvironmentError,
     GitStateUnknownError,
     SliceNotInPlanError,
+    branch_behind_count,
+    branch_work_count,
     current_branch,
     read_integration_target,
     slice_branch_name,
@@ -96,7 +98,10 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
     if start not in (target, branch):
         _leave_other_slice_branch(start, target, branch, cwd)
     _require_clean_tree(cwd, slice_index)
-    return _switch_to(branch, target, cwd)
+    entered = _switch_to(branch, target, cwd)
+    if not entered.created:
+        _catch_up(slice_index, branch, target, cwd)
+    return entered
 
 
 def _slice_facts(slice_index: int, cf_client: CfClientProtocol) -> tuple[str, str]:
@@ -180,6 +185,31 @@ def _switch_to(branch: str, target: str, cwd: str) -> EnterResult:
     return EnterResult(branch=branch, target=target, created=created)
 
 
+def _catch_up(slice_index: int, branch: str, target: str, cwd: str) -> None:
+    """Bring an existing slice branch up to the target, never rewriting it (197 D5).
+
+    A branch with no work of its own fast-forwards; otherwise the target is merged in.
+    A failed merge is aborted back to the clean slice branch and fails the item.
+    """
+    if branch_behind_count(branch, target, cwd=cwd) == 0:
+        return
+    if branch_work_count(branch, target, cwd=cwd) == 0:
+        args = ["merge", "--ff-only", target]
+    else:
+        args = ["merge", "--no-ff", "-m", f"merge: {target} into slice {slice_index}", target]
+    merged = run_git(args, cwd=cwd)
+    if merged is not None and merged.returncode == 0:
+        _logger.info("caught %s up to %s (%s)", branch, target, " ".join(args[:2]))
+        return
+    raise _abort_merge(
+        merged,
+        expected_branch=branch,
+        action=f"catch-up merge of {target} into {branch}",
+        recovery="resolve on the branch and retry",
+        cwd=cwd,
+    )
+
+
 def _checkout(args: list[str], cwd: str, expected_branch: str) -> None:
     """Run a checkout; failure is classified, never forced.
 
@@ -240,7 +270,13 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
         ["merge", "--no-ff", "-m", f"merge: slice {slice_index} — {name}", branch], cwd=cwd
     )
     if merged is None or merged.returncode != 0:
-        _abandon_merge(branch, target, cwd, merged)
+        raise _abort_merge(
+            merged,
+            expected_branch=target,
+            action="merge",
+            recovery=f"slice branch {branch} left unmerged",
+            cwd=cwd,
+        )
     return MergeResult(branch, target, MergeOutcome.MERGED)
 
 
@@ -249,13 +285,18 @@ def _is_ancestor(branch: str, target: str, cwd: str) -> bool:
     return result is not None and result.returncode == 0
 
 
-def _abandon_merge(
-    branch: str, target: str, cwd: str, merged: subprocess.CompletedProcess[str] | None
-) -> None:
-    """Abort a failed merge back to a clean target, then report it as an item failure.
+def _abort_merge(
+    merged: subprocess.CompletedProcess[str] | None,
+    *,
+    expected_branch: str,
+    action: str,
+    recovery: str,
+    cwd: str,
+) -> MergeFailedError:
+    """Abort a failed merge back to a clean ``expected_branch``; return the item failure.
 
     Raises ``GitStateUnknownError`` instead when the abort fails or the state check
-    does not pass, because nothing may build on a target in an unknown state.
+    does not pass, because nothing may build on a branch in an unknown state.
     """
     reason = _merge_reason(merged)
     conflicted = run_git(["diff", "--name-only", "--diff-filter=U"], cwd=cwd)
@@ -270,16 +311,15 @@ def _abandon_merge(
         if aborted is None or aborted.returncode != 0:
             detail = aborted.stderr.strip() if aborted is not None else "git timed out"
             message = (
-                f"target state unknown after merge of {branch}: MERGE_HEAD present, "
+                f"{expected_branch} state unknown after {action}: MERGE_HEAD present, "
                 f"abort failed: {detail}"
             )
             _logger.error(message)
             raise GitStateUnknownError(message)
-    verify_git_state(target, cwd=cwd)
+    verify_git_state(expected_branch, cwd=cwd)
     suffix = f" (conflicted: {conflicted_paths})" if conflicted_paths else ""
-    raise MergeFailedError(
-        f"merge failed: {reason or 'git refused the merge'}{suffix}; "
-        f"slice branch {branch} left unmerged",
+    return MergeFailedError(
+        f"{action} failed: {reason or 'git refused the merge'}{suffix}; {recovery}",
         BranchFailure.CONFLICT if conflicted_paths else BranchFailure.OTHER,
     )
 
