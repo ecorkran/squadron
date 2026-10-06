@@ -34,6 +34,7 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
+from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
     ExhaustBehavior,
@@ -1410,15 +1411,16 @@ async def evaluate_each_source(
     return args, items
 
 
-async def _write_each_report(report: BatchReport, runs_dir: Path | None) -> None:
-    """Write the batch report on every exit: an all-flagged, stopped or halted batch (D9)."""
+async def _write_each_report(report: BatchReport, runs_dir: Path | None, *, final: bool = True) -> None:
+    """Write the batch report after every item and on every exit (D9; slice 197 D7)."""
     from squadron.pipeline.state import StateManager
 
     # Off-thread: mkdir, YAML dump and file write are blocking I/O.
     report_path = await asyncio.to_thread(
         lambda: report.write(StateManager(runs_dir=runs_dir).runs_dir)
     )
-    _logger.info("%s; report: %s", report.summary_line(), report_path)
+    if final:
+        _logger.info("%s; report: %s", report.summary_line(), report_path)
 
 
 async def _finish_each_report(
@@ -1426,20 +1428,28 @@ async def _finish_each_report(
     runs_dir: Path | None,
     step_name: str,
     in_flight: tuple[int, dict[str, object]] | None,
+    halt: GitEnvironmentError | None,
+    items: list[dict[str, object]],
 ) -> None:
     """Record a halted item, then write the report.
 
     ``in_flight`` is set only while an exception is ending the run. On that path a
     failed write is logged rather than raised, so the halting fault is the one that
-    propagates.
+    propagates. A git ``halt`` also records every unreached item as ``not_run``, so
+    the report names every item still owed (slice 197 D7).
     """
     if in_flight is None:
         await _write_each_report(report, runs_dir)
         return
     position, item = in_flight
-    reason = "run halted before this item finished"
+    reason = str(halt) if halt is not None else "run halted before this item finished"
     _warn_item_flagged(step_name, item, reason)
-    report.records.append(BatchItemRecord.from_item(item, position, [], reason))
+    report.records.append(
+        BatchItemRecord.from_item(item, position, [], reason, flag_kind=FlagKind.STEP_FAILED)
+    )
+    if halt is not None:
+        unreached = enumerate(items[position + 1 :], start=position + 1)
+        report.records.extend(BatchItemRecord.not_run(i, pos, reason) for pos, i in unreached)
     try:
         await _write_each_report(report, runs_dir)
     except OSError:
@@ -1484,6 +1494,7 @@ async def _execute_each_step(
     # item that depends on one of them is flagged without running, so a failure
     # propagates down the plan in run order.
     flagged: set[int] = set()
+    halt: GitEnvironmentError | None = None
     try:
         for position, item in enumerate(items):
             in_flight = (position, item)
@@ -1526,8 +1537,13 @@ async def _execute_each_step(
             in_flight = None
             if status is not ExecutionStatus.COMPLETED:
                 break
+            # A batch killed outright still leaves a report of every finished item.
+            await _write_each_report(report, runs_dir, final=False)
+    except GitEnvironmentError as exc:
+        halt = exc
+        raise
     finally:
-        await _finish_each_report(report, runs_dir, step.name, in_flight)
+        await _finish_each_report(report, runs_dir, step.name, in_flight, halt, items)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,

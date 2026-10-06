@@ -145,6 +145,16 @@ class BatchItemRecord:
             branch=_slice_branch(actions),
         )
 
+    @classmethod
+    def not_run(cls, item: dict[str, object], position: int, reason: str) -> BatchItemRecord:
+        """The record of an item a halted batch never reached (slice 197 D7)."""
+        return cls(
+            index=str(item.get("index", f"#{position + 1}")),
+            name=str(item.get("name", "")),
+            outcome=ItemOutcome.NOT_RUN,
+            reason=reason,
+        )
+
     def to_json(self) -> dict[str, object]:
         return {key: getattr(self, attr) for attr, key in _JSON_KEYS.items()}
 

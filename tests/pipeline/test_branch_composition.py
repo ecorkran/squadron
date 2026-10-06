@@ -184,7 +184,7 @@ async def test_a_halting_fault_ends_the_run_but_still_writes_the_report(
     assert len(reports) == 1
     text = reports[0].read_text()
     assert "105" in text and "106" in text
-    assert "run halted before this item finished" in text
+    assert "- 106 Other Thing — step_failed; working tree not clean: unrelated.txt" in text
 
 
 @pytest.mark.asyncio

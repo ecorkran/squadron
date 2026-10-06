@@ -605,7 +605,8 @@ def _display_batch_report(report: BatchReport) -> None:
     for record in report.flagged():
         rprint(f"  [yellow]FLAGGED[/yellow] {escape(record.render_line()[2:])}")
     if report.written_to is not None:
-        rprint(f"  Report: {report.written_to}")
+        json_path = report.json_path(report.written_to.parent)
+        rprint(f"  Report: {report.written_to}  JSON: {json_path}")
 
 
 # ---------------------------------------------------------------------------

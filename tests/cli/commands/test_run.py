@@ -1735,6 +1735,7 @@ def test_display_result_summarizes_batch_report(
     assert "slices-plan slices: 2 items — 1 passed, 0 accepted, 1 flagged" in out
     assert "FLAGGED 929 Serialize — step design failed" in out
     assert str(report_path) in out.replace("\n", "")
+    assert str(report_path.with_suffix(".json")) in out.replace("\n", "")
 
 
 class TestUnknownAliasRejectedPreRun:
