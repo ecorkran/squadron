@@ -25,6 +25,7 @@ from squadron.metrology.preemption import read_fragment_body, read_fragment_head
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
+from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.providers.base import ProfileName, ProviderType
@@ -217,26 +218,69 @@ class DispatchFeedback(StrEnum):
 # and the revision stamp read them: the artifact exists by construction, so neither applies.
 SKIPPED_KEY = "skipped"
 SKIPPED_ARTIFACT_EXISTS = "artifact exists"
+SKIPPED_BRANCH_HAS_WORK = "branch has work"
 
 
 def _kept_artifact_paths(context: ActionContext) -> list[str]:
-    """The step's existing artifact files when it says ``existing: keep``; else empty."""
+    """The step's existing design or tasks files on disk; empty when there are none."""
     from squadron.events.builtin.artifact_paths import expected_artifact_paths
     from squadron.pipeline.commit_plan import SLICE_PARAM
     from squadron.pipeline.git_ops import parse_slice_index
-    from squadron.pipeline.steps.phase import (
-        ARTIFACT_KIND_PARAM,
-        EXISTING_PARAM,
-        ArtifactKind,
-        ExistingArtifactPolicy,
-    )
+    from squadron.pipeline.steps.phase import ARTIFACT_KIND_PARAM, ArtifactKind
 
-    if context.params.get(EXISTING_PARAM) != ExistingArtifactPolicy.KEEP:
-        return []
     kind = ArtifactKind(str(context.params[ARTIFACT_KIND_PARAM]))
     slice_index = parse_slice_index(context.params.get(SLICE_PARAM))
     expected = expected_artifact_paths(kind, slice_index, context.cf_client)
     return [path for path in expected if (Path(context.cwd) / path).is_file()]
+
+
+def _kept_branch_work(context: ActionContext) -> dict[str, object] | None:
+    """Skip outputs when an implement step keeps a slice branch that has work (197 D4).
+
+    Work is the branch's own commits ahead of the target, merge commits excluded. A
+    failed count raises ``GitStateUnknownError``; it is never read as no work.
+    """
+    from squadron.pipeline.branch_ops import slice_facts
+    from squadron.pipeline.commit_plan import SLICE_PARAM
+    from squadron.pipeline.git_ops import (
+        branch_work_count,
+        parse_slice_index,
+        read_integration_target,
+    )
+
+    target = read_integration_target(context.cf_client)
+    branch, _ = slice_facts(parse_slice_index(context.params.get(SLICE_PARAM)), context.cf_client)
+    ahead = branch_work_count(branch, target, cwd=context.cwd)
+    if ahead == 0:
+        return None
+    _logger.info(
+        "implement: step %s keeps existing work on %s (%d commits ahead of %s)",
+        context.step_name,
+        branch,
+        ahead,
+        target,
+    )
+    return {SKIPPED_KEY: SKIPPED_BRANCH_HAS_WORK, "ahead": ahead}
+
+
+def _kept_outputs(context: ActionContext) -> dict[str, object] | None:
+    """The skip outputs when the step keeps what it already has; ``None`` to dispatch."""
+    from squadron.pipeline.steps.phase import (
+        EXISTING_PARAM,
+        KEEP_CHECK_PARAM,
+        ExistingArtifactPolicy,
+        KeepCheck,
+    )
+
+    if context.params.get(EXISTING_PARAM) != ExistingArtifactPolicy.KEEP:
+        return None
+    if context.params.get(KEEP_CHECK_PARAM) == KeepCheck.BRANCH_WORK:
+        return _kept_branch_work(context)
+    kept = _kept_artifact_paths(context)
+    if not kept:
+        return None
+    _logger.info("dispatch: step %s keeps existing artifact %s", context.step_name, kept)
+    return {SKIPPED_KEY: SKIPPED_ARTIFACT_EXISTS, "paths": kept}
 
 
 class DispatchFeedbackError(ValueError):
@@ -272,6 +316,9 @@ class DispatchAction:
         except DispatchFeedbackError as exc:
             _logger.warning("dispatch: step %s: %s", context.step_name, exc)
             return ActionResult(success=False, action_type=self.action_type, outputs={}, error=str(exc))
+        except GitEnvironmentError:
+            # An unknown git state ends the run; it is never one item's dispatch failure.
+            raise
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
             return ActionResult(
                 success=False,
@@ -306,16 +353,12 @@ class DispatchAction:
         persistent session and is therefore blocked without one.
 
         A step with ``existing: keep`` whose artifact is already on disk skips the model
-        call entirely (slice 196 D11).
+        call entirely (slice 196 D11), as does an implement step whose slice branch
+        already has work (slice 197 D4).
         """
-        # cf runs as a subprocess; keep it off the event loop.
-        if kept := await asyncio.to_thread(_kept_artifact_paths, context):
-            _logger.info("dispatch: step %s keeps existing artifact %s", context.step_name, kept)
-            return ActionResult(
-                success=True,
-                action_type=self.action_type,
-                outputs={SKIPPED_KEY: SKIPPED_ARTIFACT_EXISTS, "paths": kept},
-            )
+        # cf and git run as subprocesses; keep them off the event loop.
+        if (kept := await asyncio.to_thread(_kept_outputs, context)) is not None:
+            return ActionResult(success=True, action_type=self.action_type, outputs=kept)
         if context.sdk_session is None:
             _, alias_profile = self._resolve_model(context)
             # Guard: pool selected an explicitly SDK-profiled alias at runtime,

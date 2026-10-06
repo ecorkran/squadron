@@ -26,9 +26,24 @@ class ExistingArtifactPolicy(StrEnum):
     KEEP = "keep"  # skip the model call; the step's review still runs
 
 
-# Dispatch config keys that carry the policy and the artifact kind to the dispatch action.
+class KeepCheck(StrEnum):
+    """What ``existing: keep`` looks for before skipping a step's dispatch."""
+
+    ARTIFACT = "artifact"  # the design or tasks file is on disk (196 D11)
+    BRANCH_WORK = "branch_work"  # the slice branch has commits ahead of the target (197 D4)
+
+
+# Dispatch config keys that carry the policy, its check and the artifact kind to the
+# dispatch action.
 EXISTING_PARAM = "existing"
+KEEP_CHECK_PARAM = "keep_check"
 ARTIFACT_KIND_PARAM = "artifact_kind"
+
+_KEEP_CHECK: dict[str, KeepCheck] = {
+    StepTypeName.DESIGN: KeepCheck.ARTIFACT,
+    StepTypeName.TASKS: KeepCheck.ARTIFACT,
+    StepTypeName.IMPLEMENT: KeepCheck.BRANCH_WORK,
+}
 
 _EXPECTED_ARTIFACT_KIND: dict[str, ArtifactKind | None] = {
     StepTypeName.DESIGN: ArtifactKind.DESIGN,
@@ -165,7 +180,7 @@ class PhaseStepType:
         return errors
 
     def _validate_existing(self, config: StepConfig) -> list[ValidationError]:
-        """``existing:`` must name a policy, and ``keep`` needs a slice's design or tasks."""
+        """``existing:`` must name a policy, and ``keep`` needs a slice-scoped phase step."""
         cfg = config.config
         raw = cfg.get(EXISTING_PARAM)
         if raw is None:
@@ -175,12 +190,12 @@ class PhaseStepType:
             return [self._existing_error(f"'{raw}' is not a valid 'existing' policy; one of {valid}")]
         initiative_scoped = "plan" in cfg and "slice" not in cfg
         if raw == ExistingArtifactPolicy.KEEP and (
-            self.expected_artifact_kind is None or initiative_scoped
+            self._phase_name not in _KEEP_CHECK or initiative_scoped
         ):
             return [
                 self._existing_error(
-                    "'existing: keep' applies to a slice's design or tasks step, which has "
-                    "an artifact to keep"
+                    "'existing: keep' applies to a slice's design, tasks or implement step, "
+                    "which has an artifact or branch work to keep"
                 )
             ]
         return []
@@ -211,9 +226,12 @@ class PhaseStepType:
         if "pre_emption_fragment" in cfg:
             dispatch_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
         # Only a ``keep`` policy travels to dispatch, so the default shape is unchanged.
-        if cfg.get(EXISTING_PARAM) == ExistingArtifactPolicy.KEEP and self.expected_artifact_kind:
+        if cfg.get(EXISTING_PARAM) == ExistingArtifactPolicy.KEEP:
             dispatch_config[EXISTING_PARAM] = ExistingArtifactPolicy.KEEP
-            dispatch_config[ARTIFACT_KIND_PARAM] = self.expected_artifact_kind
+            if self.expected_artifact_kind is not None:
+                dispatch_config[ARTIFACT_KIND_PARAM] = self.expected_artifact_kind
+            else:
+                dispatch_config[KEEP_CHECK_PARAM] = _KEEP_CHECK[self._phase_name]
         # Tools go only to the dispatch action; the review path is slice 265.
         if "allowed_tools" in cfg:
             dispatch_config["allowed_tools"] = cfg["allowed_tools"]

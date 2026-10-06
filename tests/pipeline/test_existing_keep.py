@@ -1,7 +1,8 @@
-"""`existing: keep` on design and tasks steps (slice 196 D11)."""
+"""`existing: keep` on design and tasks steps (slice 196 D11) and implement (slice 197 D4)."""
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -15,8 +16,15 @@ from squadron.events.builtin.revision_stamp import RevisionStampAction
 from squadron.events.contexts import PostActionContext
 from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
 from squadron.pipeline.actions.dispatch import DispatchAction
+from squadron.pipeline.git_ops import GitStateUnknownError
 from squadron.pipeline.models import ActionContext, ActionResult, StepConfig
-from squadron.pipeline.steps.phase import ArtifactKind, ExistingArtifactPolicy, PhaseStepType
+from squadron.pipeline.steps.phase import (
+    ArtifactKind,
+    ExistingArtifactPolicy,
+    KeepCheck,
+    PhaseStepType,
+)
+from tests.conftest import run_test_git
 
 SLICE = 105
 DESIGN = "project-documents/user/slices/105-slice.stub.md"
@@ -46,10 +54,25 @@ def test_unknown_policy_is_rejected() -> None:
     assert "'overwrite' is not a valid 'existing' policy" in errors[0].message
 
 
-def test_keep_on_implement_is_rejected() -> None:
+def test_keep_on_implement_is_accepted() -> None:
     step = StepConfig(step_type="implement", name="i", config={"phase": 6, "existing": "keep"})
+    assert PhaseStepType("implement").validate(step) == []
+
+
+def test_unknown_policy_on_implement_is_still_rejected() -> None:
+    step = StepConfig(step_type="implement", name="i", config={"phase": 6, "existing": "reuse"})
     errors = PhaseStepType("implement").validate(step)
     assert [e.field for e in errors] == ["existing"]
+
+
+def test_keep_on_implement_travels_as_a_branch_work_check() -> None:
+    step = StepConfig(step_type="implement", name="i", config={"phase": 6, "existing": "keep"})
+    actions = PhaseStepType("implement").expand(step)
+
+    dispatch = next(cfg for kind, cfg in actions if kind == "dispatch")
+    assert dispatch["existing"] == ExistingArtifactPolicy.KEEP
+    assert dispatch["keep_check"] == KeepCheck.BRANCH_WORK
+    assert "artifact_kind" not in dispatch
 
 
 def test_keep_on_an_initiative_scoped_step_is_rejected() -> None:
@@ -231,3 +254,103 @@ async def test_a_normal_loop_dispatch_is_still_stamped(tmp_path: Path) -> None:
 
     frontmatter = read_frontmatter(tmp_path / TASKS)
     assert frontmatter is not None and frontmatter.get("revision_number") == 1
+
+
+# ---------------------------------------------------------------------------
+# implement: keep work on the slice branch (slice 197 D4)
+# ---------------------------------------------------------------------------
+
+BRANCH = "105-slice.stub"
+_KEEP_WORK: dict[str, object] = {
+    "existing": ExistingArtifactPolicy.KEEP,
+    "keep_check": KeepCheck.BRANCH_WORK,
+}
+
+
+def _implement_context(repo: Path) -> ActionContext:
+    context = _dispatch_context(repo, **_KEEP_WORK)
+    context.cf_client.get_config.return_value = ""  # type: ignore[attr-defined]
+    return context
+
+
+def _commit(repo: Path, name: str) -> None:
+    (repo / name).write_text(f"{name}\n")
+    run_test_git(repo, "add", name)
+    run_test_git(repo, "commit", "-q", "-m", f"add {name}")
+
+
+async def _run_implement(repo: Path) -> tuple[ActionResult, AsyncMock]:
+    context = _implement_context(repo)
+    normal = ActionResult(success=True, action_type="dispatch", outputs={"response": "built"})
+    context.resolver.resolve.return_value = ("m", "openai")  # type: ignore[attr-defined]
+    with patch.object(
+        DispatchAction, "_dispatch_via_agent", new_callable=AsyncMock, return_value=normal
+    ) as agent:
+        result = await DispatchAction().execute(context)
+    return result, agent
+
+
+@pytest.mark.asyncio
+async def test_implement_keeps_a_branch_with_work(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
+    _commit(temp_git_repo, "a.py")
+    _commit(temp_git_repo, "b.py")
+
+    with caplog.at_level(logging.INFO, logger=_P):
+        result, agent = await _run_implement(temp_git_repo)
+
+    agent.assert_not_called()
+    assert result.success is True
+    assert result.outputs == {"skipped": "branch has work", "ahead": 2}
+    assert any(
+        f"implement: step tasks-0 keeps existing work on {BRANCH} (2 commits ahead of main)"
+        in r.getMessage()
+        for r in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_implement_dispatches_when_the_branch_is_not_ahead(temp_git_repo: Path) -> None:
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
+
+    result, agent = await _run_implement(temp_git_repo)
+
+    agent.assert_awaited_once()
+    assert result.outputs == {"response": "built"}
+
+
+@pytest.mark.asyncio
+async def test_implement_dispatches_when_only_merge_commits_are_ahead(temp_git_repo: Path) -> None:
+    run_test_git(temp_git_repo, "branch", BRANCH)
+    _commit(temp_git_repo, "main-only.py")
+    run_test_git(temp_git_repo, "checkout", "-q", BRANCH)
+    run_test_git(temp_git_repo, "merge", "-q", "--no-ff", "-m", "merge: main", "main")
+    run_test_git(temp_git_repo, "checkout", "-q", "main")
+    run_test_git(temp_git_repo, "commit", "-q", "--allow-empty", "-m", "later")
+    run_test_git(temp_git_repo, "checkout", "-q", BRANCH)
+
+    _, agent = await _run_implement(temp_git_repo)
+
+    agent.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_implement_keep_count_timeout_raises_and_logs_error(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """D12 row 1: a failed count is never no work; it ends the run."""
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
+
+    with (
+        patch("squadron.pipeline.git_ops.run_git", return_value=None),
+        caplog.at_level(logging.ERROR),
+    ):
+        with pytest.raises(GitStateUnknownError, match=f"cannot count work on {BRANCH}"):
+            await _run_implement(temp_git_repo)
+
+    assert any(
+        r.levelno == logging.ERROR and f"cannot count work on {BRANCH}" in r.getMessage()
+        for r in caplog.records
+    )

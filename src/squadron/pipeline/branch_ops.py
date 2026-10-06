@@ -50,8 +50,10 @@ class BranchFailure(StrEnum):
     OTHER = "other"  # any other item failure (refused merge, missing design file, …)
 
 
-# The branch action output key holding a ``BranchFailure``.
+# Branch action output keys: the ``BranchFailure`` of a failed action, and the slice
+# branch a successful one entered or merged.
 FAILURE_OUTPUT = "failure"
+BRANCH_OUTPUT = "branch"
 
 
 class MergeFailedError(ValueError):
@@ -92,7 +94,7 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
     """
     target = read_integration_target(cf_client)
     _require_registered_worktree(cwd, cf_client)
-    branch, _ = _slice_facts(slice_index, cf_client)
+    branch, _ = slice_facts(slice_index, cf_client)
 
     start = current_branch(cwd)
     if start not in (target, branch):
@@ -106,7 +108,7 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
     return entered
 
 
-def _slice_facts(slice_index: int, cf_client: CfClientProtocol) -> tuple[str, str]:
+def slice_facts(slice_index: int, cf_client: CfClientProtocol) -> tuple[str, str]:
     """The slice's branch name and its display name, from cf."""
     try:
         info = resolve_slice_info(cf_client, slice_index)
@@ -266,7 +268,7 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
         SliceNotInPlanError: the slice is not in the current plan (an item failure).
     """
     target = read_integration_target(cf_client)  # re-read; never taken from the enter step
-    branch, name = _slice_facts(slice_index, cf_client)
+    branch, name = slice_facts(slice_index, cf_client)
     current = current_branch(cwd)
 
     if current == target and _is_ancestor(branch, target, cwd):
