@@ -128,6 +128,37 @@ def verify_git_state(expected_branch: str, *, cwd: str) -> None:
         raise GitStateUnknownError(message)
 
 
+def branch_work_count(branch: str, target: str, *, cwd: str) -> int:
+    """Commits of the branch's own that the target lacks, merge commits excluded (197 D4, D5).
+
+    A catch-up merge alone is not work. A failed or timed-out count raises
+    ``GitStateUnknownError``: a guessed 0 would reimplement over existing work.
+    """
+    return _rev_count(
+        ["rev-list", "--count", "--no-merges", f"{target}..{branch}"],
+        cwd,
+        f"cannot count work on {branch}",
+    )
+
+
+def branch_behind_count(branch: str, target: str, *, cwd: str) -> int:
+    """Commits on the target that the branch lacks, merges included (197 D5)."""
+    return _rev_count(
+        ["rev-list", "--count", f"{branch}..{target}"],
+        cwd,
+        f"cannot compare {branch} with {target}",
+    )
+
+
+def _rev_count(args: list[str], cwd: str, failure: str) -> int:
+    result = run_git(args, cwd=cwd)
+    if result is None or result.returncode != 0:
+        message = f"{failure}: {_failure_text(result)}"
+        _logger.error(message)
+        raise GitStateUnknownError(message)
+    return int(result.stdout.strip())
+
+
 def _failure_text(result: subprocess.CompletedProcess[str] | None) -> str:
     """git's stderr for a refused command, or the timeout text when git never answered."""
     if result is not None and result.stderr.strip():
