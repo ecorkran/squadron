@@ -202,3 +202,29 @@ def body_runner(project: Project, fakes: BodyFakes):  # type: ignore[no-untyped-
         )
 
     return run
+
+
+async def resume(
+    project: Project,
+    index: str,
+    decision: object,
+    fakes: BodyFakes,
+    *,
+    instructions: str | None = None,
+    overrides: dict[str, str] | None = None,
+):  # type: ignore[no-untyped-def]
+    from squadron.pipeline.item_resume import ResumeRequest, resume_item
+
+    return await resume_item(
+        ResumeRequest(
+            run_id=project.run_id,
+            index=index,
+            decision=decision,  # type: ignore[arg-type]
+            instructions=instructions,
+            param_overrides=overrides or {},
+        ),
+        cwd=str(project.repo),
+        cf_client=project.cf,
+        state_manager=StateManager(runs_dir=project.runs_dir),
+        run_body=body_runner(project, fakes),
+    )
