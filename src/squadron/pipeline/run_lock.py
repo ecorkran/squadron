@@ -19,14 +19,52 @@ import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, cast
 
 from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.models import PipelineDefinition
+from squadron.pipeline.steps import StepTypeName
 from squadron.review.git_utils import run_git
 
 _logger = logging.getLogger(__name__)
 
 _LOCK_FILENAME = "squadron-run.flock"
+
+
+# Steps that commit or move cf's arch, slice or phase. A loop mutates when it commits
+# each round; every other step mutates only through what it nests.
+_MUTATING_STEP_TYPES = frozenset(
+    {
+        StepTypeName.DESIGN,
+        StepTypeName.TASKS,
+        StepTypeName.IMPLEMENT,
+        StepTypeName.DEVLOG,
+        StepTypeName.BRANCH,
+    }
+)
+_COMMIT_EACH_ITERATION = "commit_each_iteration"
+
+
+def pipeline_mutates(definition: PipelineDefinition) -> bool:
+    """Whether any step, nested steps included, commits or moves cf state (D11)."""
+    return any(_step_mutates(s.step_type, s.config) for s in definition.steps)
+
+
+def _step_mutates(step_type: str, config: dict[str, object]) -> bool:
+    if step_type in _MUTATING_STEP_TYPES:
+        return True
+    if step_type == StepTypeName.LOOP and config.get(_COMMIT_EACH_ITERATION) is True:
+        return True
+    nested = config.get("steps")
+    if not isinstance(nested, list):
+        return False
+    for raw in cast(list[object], nested):
+        if isinstance(raw, dict):
+            for inner_type, inner_config in cast(dict[str, object], raw).items():
+                inner = cast(dict[str, object], inner_config) if isinstance(inner_config, dict) else {}
+                if _step_mutates(inner_type, inner):
+                    return True
+    return False
 
 
 class RunLockError(Exception):

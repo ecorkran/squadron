@@ -6,8 +6,10 @@ import asyncio
 import logging
 import os
 import sys
+from collections.abc import Coroutine
+from contextlib import ExitStack
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import typer
 from rich import print as rprint
@@ -62,6 +64,7 @@ from squadron.pipeline.prompt_renderer import (
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ModelResolver
+from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
 from squadron.pipeline.sdk_session import SDKExecutionSession, open_pipeline_session
 from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError, StateManager
 from squadron.pipeline.steps.phase import PhaseStepType
@@ -917,6 +920,33 @@ def _handle_step_done(
 # ---------------------------------------------------------------------------
 
 
+def _take_run_lock(stack: ExitStack, definition: PipelineDefinition) -> None:
+    """Hold the project run lock for the run when the pipeline mutates (slice 197 D11).
+
+    Any failure to take it exits 2: nothing ran. The cause is already logged at ERROR.
+    """
+    if not pipeline_mutates(definition):
+        return
+    try:
+        stack.enter_context(project_run_lock(os.getcwd()))
+    except (GitEnvironmentError, RunLockError) as exc:
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
+        raise typer.Exit(2) from None
+
+
+def _locked(
+    definition: PipelineDefinition, run_coroutine: Coroutine[Any, Any, PipelineResult]
+) -> PipelineResult:
+    """Run *run_coroutine* holding the project run lock when the pipeline mutates."""
+    with ExitStack() as lock:
+        try:
+            _take_run_lock(lock, definition)
+        except typer.Exit:
+            run_coroutine.close()  # never started; close it so it is not left unawaited
+            raise
+        return asyncio.run(run_coroutine)
+
+
 def run(
     pipeline: str | None = typer.Argument(None, help="Pipeline name or path to YAML definition."),
     target: str | None = typer.Argument(
@@ -1179,7 +1209,8 @@ def run(
         try:
             match state.execution_mode:
                 case ExecutionMode.SDK:
-                    result = asyncio.run(
+                    result = _locked(
+                        definition,
                         _run_pipeline_sdk(
                             state.pipeline,
                             dict(state.params),
@@ -1188,10 +1219,11 @@ def run(
                             from_step=resume_from,
                             from_iteration=resume_iteration,
                             strict=strict,
-                        )
+                        ),
                     )
                 case ExecutionMode.PROMPT_ONLY:
-                    result = asyncio.run(
+                    result = _locked(
+                        definition,
                         _run_pipeline(
                             state.pipeline,
                             dict(state.params),
@@ -1199,7 +1231,7 @@ def run(
                             run_id=run_id,
                             from_step=resume_from,
                             from_iteration=resume_iteration,
-                        )
+                        ),
                     )
         except KeyboardInterrupt:
             rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
@@ -1235,7 +1267,8 @@ def run(
                     try:
                         match match.execution_mode:
                             case ExecutionMode.SDK:
-                                result = asyncio.run(
+                                result = _locked(
+                                    definition,
                                     _run_pipeline_sdk(
                                         match.pipeline,
                                         dict(match.params),
@@ -1244,10 +1277,11 @@ def run(
                                         from_step=implicit_from,
                                         from_iteration=implicit_iteration,
                                         strict=strict,
-                                    )
+                                    ),
                                 )
                             case ExecutionMode.PROMPT_ONLY:
-                                result = asyncio.run(
+                                result = _locked(
+                                    definition,
                                     _run_pipeline(
                                         match.pipeline,
                                         dict(match.params),
@@ -1255,7 +1289,7 @@ def run(
                                         run_id=match.run_id,
                                         from_step=implicit_from,
                                         from_iteration=implicit_iteration,
-                                    )
+                                    ),
                                 )
                     except KeyboardInterrupt:
                         rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
@@ -1267,14 +1301,15 @@ def run(
 
     # Fresh run
     try:
-        result = asyncio.run(
+        result = _locked(
+            definition,
             _run_pipeline_sdk(
                 pipeline,
                 params,
                 model_override=model,
                 from_step=from_step,
                 strict=strict,
-            )
+            ),
         )
     except FileNotFoundError:
         # Already printed by _run_pipeline
