@@ -55,9 +55,7 @@ class TestBuiltInPipelineStructure:
             "summary",
             "branch",
             "implement",
-            "summary",
-            "compact",
-            "summary",
+            "loop",
             "devlog",
             "branch",
         ]
