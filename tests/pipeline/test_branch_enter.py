@@ -16,7 +16,7 @@ from squadron.integrations.context_forge import (
     WorktreeEntry,
 )
 from squadron.pipeline.actions.branch import BranchAction
-from squadron.pipeline.branch_ops import enter_slice_branch
+from squadron.pipeline.branch_ops import enter_slice_branch, restore_target
 from squadron.pipeline.git_ops import GitEnvironmentError, GitStateUnknownError, NoDesignFileError
 from squadron.pipeline.models import ActionContext
 from tests.conftest import run_test_git
@@ -376,5 +376,48 @@ def test_a_checkout_timeout_with_an_unverifiable_state_raises_state_unknown(
     ):
         with pytest.raises(GitStateUnknownError):
             _enter(temp_git_repo)
+
+    assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# restore_target (slice 197 D8, D12 row 5)
+# ---------------------------------------------------------------------------
+
+
+def test_restore_target_commits_leftovers_and_returns_to_the_target(temp_git_repo: Path) -> None:
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", "106-slice.other")
+    _write(temp_git_repo, "leftover.txt")
+
+    restore_target("main", str(temp_git_repo))
+
+    assert _branch(temp_git_repo) == "main"
+    assert run_test_git(temp_git_repo, "status", "--porcelain", "-uall") == ""
+    subjects = run_test_git(temp_git_repo, "log", "106-slice.other", "--format=%s").splitlines()
+    assert subjects[0] == "chore: preserve uncommitted work on flagged slice 106"
+    on_branch = run_test_git(temp_git_repo, "ls-tree", "-r", "--name-only", "106-slice.other")
+    assert "leftover.txt" in on_branch
+
+
+@pytest.mark.parametrize("failing", ["commit", "checkout"])
+def test_restore_target_failure_raises_state_unknown_and_logs_error(
+    temp_git_repo: Path, failing: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    from squadron.review.git_utils import run_git as real_run_git
+
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", "106-slice.other")
+    _write(temp_git_repo, "leftover.txt")
+
+    def fake_run_git(args: list[str], *, cwd: str):  # type: ignore[no-untyped-def]
+        if args[0] == failing:
+            return None  # timeout
+        return real_run_git(args, cwd=cwd)
+
+    with (
+        patch("squadron.pipeline.branch_ops.run_git", side_effect=fake_run_git),
+        caplog.at_level(logging.ERROR),
+    ):
+        with pytest.raises(GitStateUnknownError):
+            restore_target("main", str(temp_git_repo))
 
     assert any(r.levelno == logging.ERROR for r in caplog.records)

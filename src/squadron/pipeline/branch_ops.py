@@ -96,7 +96,9 @@ def enter_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
 
     start = current_branch(cwd)
     if start not in (target, branch):
-        _leave_other_slice_branch(start, target, branch, cwd)
+        if parse_slice_branch(start) is None:
+            raise GitEnvironmentError(f"on {start}, expected {target} or {branch}")
+        restore_target(target, cwd)
     _require_clean_tree(cwd, slice_index)
     entered = _switch_to(branch, target, cwd)
     if not entered.created:
@@ -137,25 +139,38 @@ def _require_registered_worktree(cwd: str, cf_client: CfClientProtocol) -> None:
         )
 
 
-def _leave_other_slice_branch(start: str, target: str, branch: str, cwd: str) -> None:
-    """Return to the target from another slice's unmerged branch, keeping its leftovers.
+def restore_target(target: str, cwd: str) -> None:
+    """Return to the target from a slice's unmerged branch, keeping its leftovers (196 D5.4).
 
     An earlier item ended there because its implement, review, devlog or merge failed or
     paused. Its tree was clean when that branch was entered, so whatever is dirty now is
-    that slice's own work, which is committed on its branch before leaving.
+    that slice's own work, which is committed on its branch before leaving. Shared by
+    ``branch enter`` and item resume (197 D8).
+
+    Raises:
+        GitEnvironmentError: the checkout is not on a slice branch.
+        GitStateUnknownError: the commit or checkout failed or timed out.
     """
+    start = current_branch(cwd)
     other = parse_slice_branch(start)
     if other is None:
-        raise GitEnvironmentError(f"on {start}, expected {target} or {branch}")
-    if _git_stdout(["status", "--porcelain"], cwd).strip():
-        _write_or_unknown(["add", "-A"], cwd, start, "git add")
-        _write_or_unknown(
-            ["commit", "-m", f"chore: preserve uncommitted work on flagged slice {other}"],
-            cwd,
-            start,
-            "git commit",
-        )
-    _checkout(["checkout", target], cwd, start)
+        raise GitEnvironmentError(f"on {start}, which is not a slice branch; expected {target}")
+    try:
+        if _git_stdout(["status", "--porcelain"], cwd).strip():
+            _write_or_unknown(["add", "-A"], cwd, start, "git add")
+            _write_or_unknown(
+                ["commit", "-m", f"chore: preserve uncommitted work on flagged slice {other}"],
+                cwd,
+                start,
+                "git commit",
+            )
+        _checkout(["checkout", target], cwd, start)
+    except GitStateUnknownError:
+        raise
+    except GitEnvironmentError as exc:
+        message = f"cannot restore {target} from {start}: {exc}"
+        _logger.error(message)
+        raise GitStateUnknownError(message) from exc
     _logger.warning("left unmerged slice branch %s for %s", start, target)
 
 
