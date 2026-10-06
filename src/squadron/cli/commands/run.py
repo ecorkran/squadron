@@ -1199,7 +1199,11 @@ def run(
     # ---- --resume --item (slice 197 D8) ----
     if resume is not None and item is not None:
         assert decision is not None  # check_item_flags
-        handle_item_resume(resume, item, decision, instructions, model, param, strict)
+        overrides: dict[str, object] = {}
+        _apply_param_overrides(overrides, param)  # rejects reserved keys
+        handle_item_resume(
+            resume, item, decision, instructions, model, overrides, strict, _run_pipeline_sdk
+        )
 
     # ---- --resume ----
     if resume is not None:

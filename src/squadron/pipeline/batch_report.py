@@ -342,16 +342,19 @@ class BatchReport:
 
 def _write_atomic(target: Path, text: str) -> None:
     """Write *text* to a temp file beside *target*, then rename it over *target*."""
+    temp: Path | None = None
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(
             "w", encoding="utf-8", dir=target.parent, prefix=f".{target.name}.", delete=False
         ) as handle:
-            handle.write(text)
             temp = Path(handle.name)
+            handle.write(text)
         temp.replace(target)
     except OSError:
         _logger.exception("cannot write batch report %s", target)
+        if temp is not None:
+            temp.unlink(missing_ok=True)
         raise
 
 

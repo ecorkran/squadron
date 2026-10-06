@@ -52,6 +52,27 @@ def test_a_loop_that_commits_each_round_mutates() -> None:
     assert pipeline_mutates(definition) is True
 
 
+@pytest.mark.parametrize(
+    ("inner", "mutates"),
+    [
+        ([{"implement": {"phase": 6}}], True),
+        ([{"loop": {"max": 2, "commit_each_iteration": True, "steps": [{"review": {}}]}}], True),
+        ([{"loop": {"max": 2, "steps": [{"tasks": "P5"}]}}], True),
+        ([{"review": {}}, {"summary": None}], False),
+    ],
+)
+def test_nested_steps_inside_each_decide_mutation(
+    inner: list[dict[str, object]], mutates: bool
+) -> None:
+    definition = PipelineDefinition(
+        name="e",
+        description="",
+        params={},
+        steps=[StepConfig(step_type="each", name="each-0", config={"source": "x", "steps": inner})],
+    )
+    assert pipeline_mutates(definition) is mutates
+
+
 @pytest.fixture
 def in_repo(temp_git_repo: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(temp_git_repo)

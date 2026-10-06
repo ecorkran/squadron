@@ -316,6 +316,7 @@ class TestReportJson:
             r.levelno == logging.ERROR and str(report.path(tmp_path)) in r.getMessage()
             for r in caplog.records
         )
+        assert not [p for p in tmp_path.iterdir() if p.name.startswith(".")]
 
     def test_a_version_mismatch_names_both_versions(self, tmp_path: Path) -> None:
         path = tmp_path / "r.report.json"

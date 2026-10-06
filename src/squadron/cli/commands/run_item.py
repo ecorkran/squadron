@@ -8,8 +8,10 @@ with the ``ResumeExit`` code.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import sys
+from collections.abc import Awaitable, Callable
 
 import typer
 from rich import print as rprint
@@ -24,6 +26,8 @@ from squadron.pipeline.item_resume import (
     resume_item,
 )
 from squadron.pipeline.state import StateManager
+
+_logger = logging.getLogger(__name__)
 
 # Exit code for a refused combination of flags: Typer's usage error, "nothing ran".
 USAGE_EXIT = int(ResumeExit.REJECTED)
@@ -54,18 +58,15 @@ def handle_item_resume(
     decision: ItemDecision,
     instructions: str | None,
     model: str | None,
-    param_list: list[str] | None,
+    overrides: dict[str, object],
     strict: bool,
+    run_pipeline_sdk: Callable[..., Awaitable[object]],
 ) -> None:
-    """Run the item resume and exit with its ``ResumeExit`` code."""
-    # Imported here: run.py imports this module.
-    from squadron.cli.commands.run import (
-        _apply_param_overrides,  # pyright: ignore[reportPrivateUsage]
-        _run_pipeline_sdk,  # pyright: ignore[reportPrivateUsage]
-    )
+    """Run the item resume and exit with its ``ResumeExit`` code.
 
-    overrides: dict[str, object] = {}
-    _apply_param_overrides(overrides, param_list)  # rejects reserved keys
+    ``run_pipeline_sdk`` is the runner a fresh ``sq run`` uses, so the item's body
+    runs exactly as it would in the batch.
+    """
     request = ResumeRequest(
         run_id=run_id,
         index=item,
@@ -76,7 +77,7 @@ def handle_item_resume(
     )
 
     async def run_body(pipeline: str, params: dict[str, object], rerun: ItemRerun) -> object:
-        return await _run_pipeline_sdk(
+        return await run_pipeline_sdk(
             pipeline,
             params,
             model_override=model,
@@ -99,6 +100,9 @@ def handle_item_resume(
     except typer.Exit as exc:
         # The pipeline runner refused mid-item (classification, lost session); it has
         # printed why. The item did not finish.
+        _logger.error(
+            "item resume %s item %s halted: pipeline runner exited %s", run_id, item, exc.exit_code
+        )
         rprint(f"[red]Item {escape(item)} did not finish (exit {exc.exit_code}).[/red]")
         raise typer.Exit(int(ResumeExit.HALTED)) from None
     _print(outcome)

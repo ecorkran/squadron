@@ -115,25 +115,27 @@ async def resume_item(
     run_body: BodyRunner,
 ) -> ResumeOutcome:
     """Apply *request*'s decision to one item; never raises for an expected refusal."""
-    with ExitStack() as stack:
-        try:
-            stack.enter_context(project_run_lock(cwd))
-        except (RunLockError, GitEnvironmentError) as exc:
-            # Logged at ERROR by the lock; a busy lock means "retry later".
-            return ResumeOutcome(ResumeExit.REJECTED, str(exc))
-        try:
-            return await _resume_locked(request, cwd, cf_client, state_manager, run_body)
-        except _Stop as stop:
-            log = _logger.error if stop.exit is ResumeExit.HALTED else _logger.warning
-            log("item resume %s item %s: %s", request.run_id, request.index, stop)
-            return ResumeOutcome(stop.exit, str(stop))
-        except GitEnvironmentError as exc:
-            _logger.error("item resume %s halted: %s", request.run_id, exc)
-            return ResumeOutcome(ResumeExit.HALTED, str(exc))
-        except OSError as exc:
-            # A report write failed; batch_report logged it and the old report is intact.
-            return ResumeOutcome(ResumeExit.HALTED, f"cannot write the batch report: {exc}")
-    raise AssertionError("unreachable")  # pragma: no cover
+    lock = ExitStack()
+    try:
+        lock.enter_context(project_run_lock(cwd))
+    except (RunLockError, GitEnvironmentError) as exc:
+        # Logged at ERROR by the lock; a busy lock means "retry later".
+        return ResumeOutcome(ResumeExit.REJECTED, str(exc))
+    try:
+        return await _resume_locked(request, cwd, cf_client, state_manager, run_body)
+    except _Stop as stop:
+        log = _logger.error if stop.exit is ResumeExit.HALTED else _logger.warning
+        log("item resume %s item %s: %s", request.run_id, request.index, stop)
+        return ResumeOutcome(stop.exit, str(stop))
+    except GitEnvironmentError as exc:
+        _logger.error("item resume %s halted: %s", request.run_id, exc)
+        return ResumeOutcome(ResumeExit.HALTED, str(exc))
+    except OSError as exc:
+        # A file or process fault mid-item (a failed report write leaves the old one intact).
+        _logger.exception("item resume %s item %s halted", request.run_id, request.index)
+        return ResumeOutcome(ResumeExit.HALTED, f"item resume halted: {exc}")
+    finally:
+        lock.close()
 
 
 async def _resume_locked(
