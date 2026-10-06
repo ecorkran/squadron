@@ -259,3 +259,84 @@ async def test_a_non_pass_code_review_pauses_without_merging(
     assert result.paused_at == "revise-code"
     assert run_test_git(repo, "branch", "--show-current").strip() == _BRANCH
     assert "merge: slice" not in run_test_git(repo, "log", "main", "--format=%s")
+
+
+@pytest.mark.asyncio
+async def test_a_second_p6_run_keeps_the_branch_work(temp_git_repo: Path, tmp_path: Path) -> None:
+    """slice 197 criterion 12: implement is skipped when the slice branch has work."""
+    from squadron.pipeline.actions.dispatch import DispatchAction
+    from squadron.pipeline.state import StateManager
+
+    repo = temp_git_repo
+    (repo / "DEVLOG.md").write_text("# devlog\n")
+    (repo / _ROOT_DESIGN).write_text("# stub design\n")
+    run_test_git(repo, "add", "-A")
+    run_test_git(repo, "commit", "-q", "-m", "setup")
+    # A first run's work, left on the slice branch.
+    run_test_git(repo, "checkout", "-q", "-b", _BRANCH)
+    (repo / "feature.py").write_text("print('first run')\n")
+    run_test_git(repo, "add", "-A")
+    run_test_git(repo, "commit", "-q", "-m", "feat: first run")
+    run_test_git(repo, "checkout", "-q", "main")
+
+    model_calls: list[str] = []
+    real_dispatch = DispatchAction()
+
+    class _Dispatch:
+        action_type = "dispatch"
+
+        def validate(self, config: dict[str, object]) -> list[object]:
+            return []
+
+        async def execute(self, context: ActionContext) -> ActionResult:
+            if context.params.get("existing") == "keep":
+                return await real_dispatch.execute(context)
+            model_calls.append(context.step_name)
+            return ActionResult(success=True, action_type="dispatch", outputs={})
+
+    def _ok(action_type: str) -> MagicMock:
+        action = MagicMock()
+        action.execute = AsyncMock(
+            return_value=ActionResult(success=True, action_type=action_type, outputs={})
+        )
+        return action
+
+    review = MagicMock()
+    review.execute = AsyncMock(
+        return_value=ActionResult(success=True, action_type="review", outputs={}, verdict="PASS")
+    )
+    definition = load_pipeline("P6")
+    params: dict[str, object] = {k: v for k, v in definition.params.items() if v != "required"}
+    params["slice"] = str(_SLICE)
+    runs_dir = tmp_path / "runs"
+    run_id = StateManager(runs_dir=runs_dir).init_run("P6", params)
+    cf_client = phase_artifact_cf_client(_SLICE, _ROOT_DESIGN, f"{_SLICE}-tasks.stub.md")
+    cf_client.get_config.return_value = ""
+    cf_client.list_worktrees.return_value = []
+
+    result = await execute_pipeline(
+        definition,
+        params,
+        resolver=MagicMock(),
+        cf_client=cf_client,
+        cwd=str(repo),
+        run_id=run_id,
+        runs_dir=runs_dir,
+        _action_registry={
+            "cf-op": _ok("cf-op"),
+            "dispatch": _Dispatch(),
+            "review": review,
+            "checkpoint": _ok("checkpoint"),
+            "commit": CommitAction(),
+            "devlog": _ok("devlog"),
+            "summary": _ok("summary"),
+            "branch": BranchAction(),
+        },
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert model_calls == []  # implement kept the branch's work; the passing review skipped revise
+    implement = next(r for r in result.step_results if r.step_type == "implement")
+    kept = next(a for a in implement.action_results if a.action_type == "dispatch")
+    assert kept.outputs == {"skipped": "branch has work", "ahead": 1}
+    assert run_test_git(repo, "log", "-1", "--format=%s", "main").strip() == "merge: slice 105 — stub"
