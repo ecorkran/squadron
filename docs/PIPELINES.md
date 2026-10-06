@@ -106,7 +106,7 @@ The cf calls follow Context Forge's switching rule: arch (which switches the ini
 | `model` | string | no | Model alias for the dispatch action |
 | `review` | string or dict | no | Review template name, or `{template, model}` dict |
 | `checkpoint` | string | no | When to pause: `always`, `on-concerns`, `on-fail`, `never` (default: `never`) |
-| `existing` | string | no | `create` (default) — the dispatch always writes the artifact. `keep` — when the slice's design or tasks file already exists, skip the model call and go straight to the review (and any revise loop). Only valid on a slice's `design` or `tasks` step. `tasks-plan` uses it to re-review slices that already have tasks |
+| `existing` | string | no | `create` (default) — the dispatch always writes the artifact. `keep` — skip the model call and go straight to the review (and any revise loop) when there is already something to review: for a slice's `design` or `tasks` step, its file exists; for `implement`, the slice branch has commits of its own ahead of the target (merge commits don't count, so a branch that was only caught up still gets implemented). Not valid on an initiative-scoped step. `tasks-plan` uses it to re-review existing tasks; the code pipelines use it so a rerun re-reviews a slice's work instead of reimplementing it |
 
 **Example:**
 
@@ -369,6 +369,7 @@ Prefer scalar shorthand:
 
 ```yaml
 - branch: { op: enter }                       # slice defaults to "{slice}"
+- branch: { op: enter, plan: "{plan}", slice: "{slice.index}" }
 - branch: { op: merge, slice: "{slice.index}" }
 ```
 
@@ -376,6 +377,7 @@ Prefer scalar shorthand:
 |---|---|---|---|
 | `op` | string | yes | `enter` or `merge` |
 | `slice` | string | no | Slice index (default `{slice}`; use `{slice.index}` inside an `each`) |
+| `plan` | string | no | `enter` only. Architecture index; cf is switched to it (`set_arch`) before entering, as phase steps do, so the slice resolves even when cf's active plan is another one. A failed `set_arch` fails the item |
 
 Any other key is rejected.
 
@@ -387,11 +389,13 @@ Any other key is rejected.
 
 If an earlier item ended on its own unmerged slice branch, `enter` commits that branch's leftovers (`chore: preserve uncommitted work on flagged slice N`), returns to the target with a WARNING, and carries on. A slice with no design file fails only that item.
 
+**Catch-up.** When the slice branch already exists and the target has moved on, `enter` brings the branch up to date before any work runs (#183): a branch with no commits of its own fast-forwards; otherwise the target is merged in (`merge: main into slice N`). It never rebases, resets or forces. A conflicting catch-up is aborted, the checkout stays on the clean slice branch, and the item is flagged `branch_conflict` with the conflicted paths — resolve it on the branch and retry. The code review still diffs the branch against its merge base, so the catch-up merge isn't reviewed as slice work.
+
 **`merge`** merges the slice branch into the target with a merge commit (`merge: slice N — name`). If the branch is already merged (an agent merged it itself), it succeeds without doing anything. A merge that fails — a conflict, or git refusing — is aborted so the target is never left mid-merge; the item is flagged and the branch stays unmerged for you. Branches are never deleted or pushed.
 
 **Validation:** an `implement` step must come after a `branch: {op: enter}` step — earlier in its own step list, or earlier in an enclosing list than the `loop:` or `each:` that contains it. Otherwise loading fails with `implement step … needs a preceding branch: {op: enter}`. **This is a deliberate break for custom pipelines with an `implement` step:** add the enter before it, and a merge after its review. There is no compatibility flag; without the enter, `implement` would run on whatever is checked out and its commit would refuse to stage.
 
-Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter → implement → devlog → branch merge`. A FAIL code review pauses at `checkpoint: on-fail` before the merge; a CONCERNS review merges.
+Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter → implement (existing: keep) → revise-code loop → devlog → branch merge`, the same steps as each item of [`implement-plan`](#implement-plan). The revise loop revises against the code review until `pass-threshold`; if its rounds run out it accepts at `accept-threshold`, and otherwise pauses at a checkpoint before the merge. A test keeps these four in step with `implement-plan`.
 
 ---
 
@@ -439,6 +443,7 @@ The verdict is read from the review file's frontmatter. The review clause is lef
 | `cf.unfinished_slices("{plan}")` | Slices in the plan whose status is not `complete` |
 | `cf.undesigned_slices("{plan}")` | Slices that are not `complete` or `deferred` and have no design file |
 | `cf.slices_needing_tasks("{plan}", "<threshold>")` | Slices that are not `complete` or `deferred`, have a design file, and either have no task file or have one whose tasks review (`{index}-review.tasks.{name}.md`) is missing, has no readable verdict, or falls below the threshold. `<threshold>` is `review.pass` or `review.concerns_or_better`. A slice whose design review (`{index}-review.slice.{name}.md`) is missing, has no readable verdict, or falls below the threshold is returned *pre-flagged* |
+| `cf.slices_ready_to_implement("{plan}", "<threshold>")` | Every open slice with a design file, **in dependency order** (a stable sort; ties keep plan order; a cycle fails the run before any item, naming it). Slices that aren't ready are returned pre-flagged `not_ready`, first hit wins: design review missing or below the threshold, `no task file`, tasks review missing or below the threshold, `all tasks checked but slice not marked complete`. A dependency on an open, undesigned slice in the plan pre-flags `dependency N not designed`; a dependency outside the plan is not checked (WARNING) |
 
 Item fields are accessed as dotted references: `{slice.index}`, `{slice.name}`, `{slice.status}`, `{slice.design_file}`.
 
@@ -450,7 +455,7 @@ Item fields are accessed as dotted references: `{slice.index}`, `{slice.name}`, 
 - **Pauses.** A checkpoint pause inside an item stops the run under either policy, so `sq run --resume` can pick it up. Batch pipelines use `checkpoint: never`.
 - Every flagged item is logged at WARNING with its reason.
 
-**Batch report.** Every `each` step writes `{run_id}.{step_name}.report.md` next to the run state file (`~/.config/squadron/runs/` by default) — on success, on a stop, and when every item flagged. Its frontmatter carries `docType: batch-report`, `pipeline`, `runId`, `plan` (when the source had one) and the `passed` / `accepted` / `flagged` counts; the body lists flagged items first, each with its reason, last verdict and review file. An item is **FLAGGED** if it was pre-flagged, failed, or paused; **ACCEPTED** if a loop in it exhausted but met `accept_if`; otherwise **PASSED**. `sq run` prints the counts, the flagged items and the report path at the end of the run.
+**Batch report.** Every `each` step writes `{run_id}.{step_name}.report.md` and `{run_id}.{step_name}.report.json` next to the run state file (`~/.config/squadron/runs/` by default). Both are rewritten after every item and on every exit, each through a temp file and a rename, so a reader never sees a partial file and a batch killed outright still leaves a report of every item it finished. The Markdown frontmatter carries `docType: batch-report`, `pipeline`, `runId`, `plan` (when the source had one) and the `passed` / `accepted` / `flagged` / `not_run` counts; the body lists flagged items first, each with its flag kind, failed step, reason, last verdict, branch and review file. An item is **FLAGGED** if it was pre-flagged, failed, or paused; **ACCEPTED** if a loop in it exhausted but met `accept_if`; otherwise **PASSED**. When a git environment fault halts the batch, the item in flight is flagged `step_failed` and every item not reached is **NOT_RUN**, both with the fault as the reason. `sq run` prints the counts, the flagged items and both report paths at the end of the run. See [Batch reports and the flag handoff](#batch-reports-and-the-flag-handoff) for the JSON.
 
 **Example:**
 
@@ -750,12 +755,13 @@ sq run --list    # shows all available pipelines with descriptions
 | `P2` | Phase 2 (architecture) for an initiative, with arch review | `plan`, `model`, `review-model`, `summary-model` |
 | `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
-| `P6` | Phase 6: `branch enter` → implement with code review → devlog → `branch merge` → summary | `slice`, `model`, `review-model`, `summary-model` |
-| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → `branch enter` → implement → compact → devlog → `branch merge` | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
-| `P56` | Tasks (revised like `P5`) → compact → `branch enter` → implement → compact → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P6` | Phase 6: `branch enter` → implement with code review → `revise-code` loop → devlog → `branch merge` → summary | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold`, `summary-model` |
+| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P56` | Tasks (revised like `P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `slices-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable, and a re-review of slices whose tasks review is missing or below the threshold — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
-| `implement` | Implementation only (design and tasks already exist): `branch enter` → implement → devlog → `branch merge` | `slice`, `model` |
+| `implement` | Implementation only (design and tasks already exist): `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold` |
+| `implement-plan` | Implement every ready slice in a plan, in dependency order; flags failures, writes a batch report — see [`implement-plan`](#implement-plan) | `plan`, `model`, `review-model`, `max-revisions` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice`, `model`, `review-model`, `max-revisions` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |
@@ -808,6 +814,95 @@ A design step that writes no design, a provider failure, or any other step failu
 - **Run from a terminal.** `sq run` refuses inside a Claude Code session (#144), and these pipelines dispatch through an SDK session.
 - **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.
 - `--prompt-only` doesn't render `each` or `loop:` steps yet (#145).
+- **One mutating run per checkout.** See [Run lock](#run-lock).
+
+### `implement-plan`
+
+`implement-plan` runs Phase 6 over every ready slice of a plan with no one watching:
+
+```bash
+sq run implement-plan 180 --model sonnet
+sq run implement-plan 180 -p review-model=minimax -p max-revisions=1
+```
+
+Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: fresh session (`item-reset`) → `branch enter` (with `plan:`, and a catch-up if the branch exists) → implement (`existing: keep`) → code review → `revise-code` loop → devlog → `branch merge`. The run ends on the target with one `merge: slice N — …` commit per merged slice.
+
+- A slice whose rounds run out below `accept-threshold` is flagged `review_unresolved` at `revise-code` (the loop has `on_exhaust: fail`). Its branch stays unmerged with all its work committed, its dependents are flagged `dependency`, and independent slices carry on.
+- A rerun keeps work: an implement step whose slice branch already has commits of its own skips the model call and goes straight to the code review. The only way to start a slice over is to delete or rename its branch yourself; squadron never deletes branches.
+- If you fix a flagged slice by hand on its branch and commit, a retry re-reviews it, and a passing review merges it.
+- An implement dispatch that commits nothing fails its code review (no diff to review), so the item is flagged `step_failed`, not merged.
+- Same params as the plan batches above, except `review-model` defaults to `minimax`, matching `P6`.
+
+### Item resume
+
+A flagged item is fixed by a decision, applied to that item of that run:
+
+```bash
+sq run --resume <run_id> --item 196 --decision retry --instructions "Use the existing CommitPlan."
+sq run --resume <run_id> --item 196 --decision accept
+```
+
+- `retry` reruns the item's body once, from the top, with the run's own pipeline, params and models (`--model` and `-p` apply on top). Work already on the slice branch is kept, so a retry re-reviews it and revises it. `--instructions` is put at the head of every dispatch prompt in the item, in the "Instructions from checkpoint resolution" block.
+- `accept` does the same, except the revise loop counts as met with no rounds: one code review runs (so the report shows what was accepted), then devlog and merge, and the item is recorded **ACCEPTED**. Only items flagged `review_unresolved` can be accepted. A conflict still flags the item; accept overrides the review, not git.
+- Works on `flagged` and `not_run` items (`not_run` takes `retry` only), on a completed run, and on any pipeline with exactly one `each` step — `slices-plan` and `tasks-plan` too.
+- Before anything reads the tree, item resume commits a flagged slice branch's leftovers and returns to the target. It refuses to start on another branch or on a dirty target.
+- An item that is no longer selected (deferred, now undesigned) is refused, naming its status. A slice already merged and complete on the target — an earlier resume that died before rewriting the report — is reconciled to PASSED (`reconciled: merged before the report was updated`) without running.
+- A lone item whose in-plan dependency is not complete on the target is flagged `dependency N not complete` without running.
+- The item's record is replaced, with `decision` and `resumedAt`, and both report files are rewritten. The new record and the report path are printed.
+
+| Exit | Meaning |
+|---|---|
+| 0 `RESOLVED` | the item ended passed or accepted |
+| 1 `FLAGGED` | the decision was applied and the item was flagged again; the record says why |
+| 2 `REJECTED` | refused, nothing ran: a bad request, the git precondition, or a busy run lock |
+| 3 `HALTED` | an environment fault or an unknown git state ended it mid-item; needs a human |
+
+`override_instructions` and `accept_decision` are reserved: they're rejected as `-p` keys (`'accept_decision' is reserved; use --decision accept`) and in a pipeline's `params:`, and dropped (with a WARNING) from the stored params of the run being resumed.
+
+### Run lock
+
+Any `sq run` whose pipeline commits or moves cf state (a phase step, `devlog`, `branch`, or a loop with `commit_each_iteration`, at any depth) and every item resume hold an exclusive lock on `{git dir}/squadron-run.flock` for the whole run. A second one in the same checkout exits 2 at once with `another squadron run holds the project lock (…); one mutating run per project at a time`; it never waits. Separate registered worktrees have separate git dirs, so they still run in parallel. A killed run releases the lock with its process. Review-only and summary pipelines don't take it. POSIX only.
+
+### Batch reports and the flag handoff
+
+This is squadron's half of the contract with an unattended caller (Amoeba, amoeba#1). Squadron doesn't decide what to do with a flag; it reports it precisely and acts on a decision.
+
+- **Event.** A batch run completes and its `{run_id}.{step}.report.json` has items with `outcome: flagged` or `not_run`. The report sits beside the run's `runs/{run_id}.json`.
+- **Versioning.** Check `schemaVersion` (currently `1`) before reading the items. It goes up whenever the record shape or the `flagKind` set changes. Squadron refuses to load any other version, naming both.
+- **Routing input**, per item: `flagKind`, `failedStep`, `reason` (text for humans; never route on it), `finalVerdict`, `reviewFile`, `branch`.
+
+| `flagKind` | Meaning |
+|---|---|
+| `not_ready` | the source pre-flagged it (no task file, a review below the threshold, all tasks checked but not closed) |
+| `dependency` | a dependency was flagged, isn't designed, or isn't complete |
+| `review_unresolved` | the revise loop ran out below `accept-threshold` |
+| `branch_conflict` | a catch-up or merge stopped on a git conflict |
+| `step_failed` | any other failed step (implement dispatch, devlog, a refused merge, `set_arch`, a halt) |
+| `paused` | a checkpoint paused the item (not used by `implement-plan`) |
+
+```json
+{
+  "docType": "batch-report",
+  "schemaVersion": 1,
+  "pipeline": "implement-plan",
+  "runId": "3f9c2a1b7d10",
+  "stepName": "slices",
+  "plan": "180",
+  "counts": {"passed": 3, "accepted": 1, "flagged": 2, "not_run": 0},
+  "items": [
+    {"index": "196", "name": "…", "outcome": "flagged",
+     "flagKind": "review_unresolved", "failedStep": "revise-code",
+     "reason": "loop exhausted at FAIL (accept: review.concerns_or_better)",
+     "finalVerdict": "FAIL", "reviewFile": "project-documents/user/reviews/196-review.code.….md",
+     "unsavedParts": [], "branch": "196-slice.…", "decision": null, "resumedAt": null}
+  ]
+}
+```
+
+- **Decision back.** `sq run --resume <run_id> --item <index> --decision retry|accept [--instructions TEXT]`, with non-TTY stdin. A free-text resolution maps to `--instructions`.
+- **Result.** Exit 0 resolved (merged), 1 flagged again — the rewritten record says why — 2 rejected and nothing ran (bad request, git precondition, or the lock is busy: try again later), 3 halted on the environment or an unknown git state, which needs a human.
+- **Concurrency.** One item resume per checkout at a time.
+- **Not covered by squadron:** abandoning or deferring a slice (a cf status change), and fixing `not_ready` or `dependency` flags, which are fixed upstream (design, tasks, or the dependency) before the item is retried or the batch rerun.
 
 ## Writing a Custom Pipeline
 

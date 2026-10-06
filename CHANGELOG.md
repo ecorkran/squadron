@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq run implement-plan <plan>` implements every ready slice of a plan unattended, in dependency order: branch, implement, code review, revise rounds, devlog, merge. Slices it can't finish are flagged and left on their unmerged branch; their dependents are flagged too; everything else carries on.
+- Item resume: `sq run --resume <run_id> --item <index> --decision retry|accept [--instructions TEXT]` reruns one flagged item of a batch run with your decision, keeping the work already on its branch. Distinct exit codes (0 resolved, 1 flagged again, 2 refused, 3 halted).
+- Batch runs write `report.json` beside the Markdown report, with a `flagKind` per flagged item and a `schemaVersion`. Both reports are rewritten after every item, and items a halted batch never reached are listed as `not_run`.
+- `branch: { op: enter, plan: … }` switches cf to the plan before entering, so a batch's first slice enters even when cf points at another plan.
+
+### Changed
+- `P6`, `implement`, `P56` and `P456` revise against the code review until it passes, then accept at `accept-threshold` or pause at a checkpoint. A rerun keeps the work already on the slice branch instead of reimplementing it (`existing: keep` now works on `implement`).
+- `branch enter` catches an existing slice branch up to the target (merge, never rebase) before work starts (#183).
+- Only one pipeline that commits or moves cf state runs per checkout at a time; a second exits 2 straight away.
+- `-p override_instructions=…` and `-p accept_decision=…` are rejected; use `--instructions` and `--decision accept`.
+
 ## [0.19.0] - 20261005
 
 ### Added
