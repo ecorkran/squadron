@@ -17,6 +17,7 @@ import yaml
 from squadron.documents.frontmatter import FRONTMATTER_LINE_WIDTH
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.review_outputs import review_file, unsaved_parts
+from squadron.pipeline.branch_ops import BRANCH_OUTPUT
 from squadron.pipeline.models import ActionResult
 
 if TYPE_CHECKING:
@@ -29,10 +30,31 @@ class ItemOutcome(StrEnum):
     PASSED = "passed"
     ACCEPTED = "accepted"
     FLAGGED = "flagged"
+    NOT_RUN = "not_run"  # a halt ended the batch before this item (slice 197 D7)
 
 
+class FlagKind(StrEnum):
+    """Why an item was flagged; routing reads this, never ``reason`` (slice 197 D7)."""
+
+    NOT_READY = "not_ready"  # source flag_reason (D2), except dependency rows
+    DEPENDENCY = "dependency"  # flagged or not-designed dependency
+    REVIEW_UNRESOLVED = "review_unresolved"  # loop exhausted below accept-threshold
+    BRANCH_CONFLICT = "branch_conflict"  # catch-up or merge stopped on a git conflict
+    STEP_FAILED = "step_failed"  # any other failed step (implement dispatch, devlog, …)
+    PAUSED = "paused"  # a checkpoint paused the item
+
+
+class ItemDecision(StrEnum):
+    """A decision applied to one flagged item by item resume (slice 197 D8)."""
+
+    RETRY = "retry"
+    ACCEPT = "accept"
+
+
+# Report sections in render order: the items a human owes something first.
 _SECTION_TITLES: dict[ItemOutcome, str] = {
     ItemOutcome.FLAGGED: "Flagged for PM",
+    ItemOutcome.NOT_RUN: "Not run",
     ItemOutcome.ACCEPTED: "Accepted",
     ItemOutcome.PASSED: "Passed",
 }
@@ -49,6 +71,11 @@ class BatchItemRecord:
     final_verdict: str | None = None
     review_file: str | None = None
     unsaved_parts: list[str] = field(default_factory=lambda: [])
+    flag_kind: FlagKind | None = None
+    failed_step: str | None = None  # the failing step's name; None for a pre-flag
+    branch: str | None = None  # the slice branch, when the item entered one
+    decision: ItemDecision | None = None
+    resumed_at: str | None = None
 
     @classmethod
     def from_item(
@@ -57,13 +84,17 @@ class BatchItemRecord:
         position: int,
         step_results: list[StepResult],
         failure_reason: str | None = None,
+        *,
+        flag_kind: FlagKind | None = None,
+        failed_step: str | None = None,
     ) -> BatchItemRecord:
         """Build the record for *item* (the ``position``-th, 0-based) from its
         inner step results.
 
         *failure_reason* is set when the item was pre-flagged, failed, or
-        paused — any of which makes it FLAGGED. Otherwise an ``accepted`` loop
-        makes it ACCEPTED, and anything else PASSED.
+        paused — any of which makes it FLAGGED, with *flag_kind* set where the
+        flag was raised. Otherwise an ``accepted`` loop makes it ACCEPTED, and
+        anything else PASSED.
         """
         actions = [r for step in step_results for r in step.action_results]
         if failure_reason is not None:
@@ -80,20 +111,40 @@ class BatchItemRecord:
             final_verdict=_last_verdict(actions),
             review_file=_last_review_file(actions),
             unsaved_parts=_last_review_unsaved_parts(actions),
+            flag_kind=flag_kind if failure_reason is not None else None,
+            failed_step=failed_step if failure_reason is not None else None,
+            branch=_slice_branch(actions),
         )
 
     def render_line(self) -> str:
         label = f"{self.index} {self.name}".strip()
         details: list[str] = []
+        if self.flag_kind:
+            at = f" at {self.failed_step}" if self.failed_step else ""
+            details.append(f"{self.flag_kind}{at}")
         if self.reason:
             details.append(self.reason)
         if self.final_verdict:
             details.append(f"verdict {self.final_verdict}")
+        if self.branch:
+            details.append(f"branch {self.branch}")
+        if self.decision:
+            details.append(f"decision {self.decision} at {self.resumed_at}")
         if self.review_file:
             details.append(f"review: {self.review_file}")
         if self.unsaved_parts:
             details.append(f"unsaved: {', '.join(self.unsaved_parts)}")
         return f"- {label} — {'; '.join(details)}" if details else f"- {label}"
+
+
+def _slice_branch(actions: list[ActionResult]) -> str | None:
+    """The slice branch a branch action entered or merged, when one ran successfully."""
+    for result in actions:
+        if result.action_type == ActionType.BRANCH and result.success:
+            branch = result.outputs.get(BRANCH_OUTPUT)
+            if branch:
+                return str(branch)
+    return None
 
 
 def _last_verdict(actions: list[ActionResult]) -> str | None:
@@ -136,8 +187,8 @@ class BatchReport:
         return f"{self.pipeline} {self.step_name}: {len(self.records)} items — {counts}"
 
     def render(self) -> str:
-        """The report as Markdown: frontmatter counts, then flagged, accepted
-        and passed sections, flagged first."""
+        """The report as Markdown: frontmatter counts, then flagged, not run,
+        accepted and passed sections, flagged first."""
         frontmatter: dict[str, object] = {
             "docType": "batch-report",
             "pipeline": self.pipeline,
@@ -156,7 +207,7 @@ class BatchReport:
             "",
             heading,
         ]
-        for outcome in (ItemOutcome.FLAGGED, ItemOutcome.ACCEPTED, ItemOutcome.PASSED):
+        for outcome in _SECTION_TITLES:
             section = [r for r in self.records if r.outcome is outcome]
             lines += ["", f"## {_SECTION_TITLES[outcome]}"]
             lines += [r.render_line() for r in section] or ["- none"]
