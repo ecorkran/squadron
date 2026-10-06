@@ -121,8 +121,8 @@ class TestListSlices:
 # ---------------------------------------------------------------------------
 
 _TASKS_JSON = [
-    {"index": 100, "files": ["100-tasks.project-setup.md"]},
-    {"index": 101},
+    {"index": 100, "files": ["100-tasks.project-setup.md"], "completed": 3, "total": 5},
+    {"index": 101, "completed": 0, "total": 0},
 ]
 
 
@@ -133,6 +133,7 @@ class TestListTasks:
             assert len(tasks) == 2
             assert tasks[0].index == 100
             assert tasks[0].files == ["100-tasks.project-setup.md"]
+            assert (tasks[0].completed, tasks[0].total) == (3, 5)
 
     def test_list_tasks_no_files(self) -> None:
         with patch("subprocess.run", return_value=_mock_completed(json.dumps(_TASKS_JSON))):

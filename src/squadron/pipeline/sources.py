@@ -7,6 +7,7 @@ iterates over. Each item is a dict bound to the step's ``as:`` name.
 
 from __future__ import annotations
 
+import heapq
 import logging
 import re
 from collections.abc import Awaitable, Callable
@@ -15,13 +16,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from squadron.documents.frontmatter import read_frontmatter
+from squadron.pipeline.batch_report import FlagKind
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.review.models import Verdict
 from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_review_stem
 from squadron.review.templates import BuiltinReviewTemplate
 
 if TYPE_CHECKING:
-    from squadron.integrations.context_forge import ContextForgeClient, SliceEntry
+    from squadron.integrations.context_forge import ContextForgeClient, SliceEntry, TaskEntry
 
 _logger = logging.getLogger(__name__)
 
@@ -144,7 +146,7 @@ async def _cf_undesigned_slices(
 def _accept_arg(args: list[str]) -> LoopCondition:
     """The ``accept`` threshold: a verdict-bearing LoopCondition value."""
     if len(args) < 2:
-        raise ValueError("slices_needing_tasks requires (plan, accept) arguments")
+        raise ValueError("this source requires (plan, accept) arguments")
     try:
         accept = LoopCondition(args[1])
     except ValueError:
@@ -213,9 +215,124 @@ async def _cf_slices_needing_tasks(
     return items
 
 
+# Item keys a source sets on an item that must not run.
+FLAG_REASON_KEY = "flag_reason"
+FLAG_KIND_KEY = "flag_kind"
+
+
+def _not_ready_reason(entry: SliceEntry, task: TaskEntry | None, accept: LoopCondition) -> str | None:
+    """Why a designed, open slice is not ready to implement (197 D2); first hit wins."""
+    if (reason := _review_flag(entry, _DESIGN_REVIEW_TEMPLATE, accept)) is not None:
+        return reason
+    if task is None or not task.files:
+        return "no task file"
+    if (reason := _review_flag(entry, _TASKS_REVIEW_TEMPLATE, accept)) is not None:
+        return reason
+    if task.total > 0 and task.completed == task.total:
+        # Implemented and merged but not closed out; rerunning would reimplement it.
+        return "all tasks checked but slice not marked complete"
+    return None
+
+
+def _flag(item: dict[str, object], reason: str, kind: FlagKind) -> None:
+    item[FLAG_REASON_KEY] = reason
+    item[FLAG_KIND_KEY] = kind
+
+
+async def _cf_slices_ready_to_implement(
+    args: list[str],
+    cf_client: ContextForgeClient,
+    params: dict[str, object],
+) -> list[dict[str, object]]:
+    """Open, designed slices of the plan, in dependency order (slice 197 D2, D3).
+
+    A slice that is not ready is still returned, with ``flag_reason`` and ``flag_kind``,
+    so the report names it and ``each`` flags its dependents.
+    """
+    plan = _plan_arg(args)
+    accept = _accept_arg(args)
+    tasks = {task.index: task for task in cf_client.list_tasks(plan)}
+    entries = cf_client.list_slices(plan)
+    in_plan = {entry.index for entry in entries}
+    open_in_plan = {e.index for e in entries if e.status not in _EXCLUDED_STATUSES}
+    items: list[dict[str, object]] = []
+    for entry in entries:
+        if entry.status in _EXCLUDED_STATUSES or not entry.design_file:
+            continue
+        item = _slice_item(entry)
+        reason = _not_ready_reason(entry, tasks.get(entry.index), accept)
+        if reason is not None:
+            _flag(item, reason, FlagKind.NOT_READY)
+        items.append(item)
+
+    returned = {int(str(item["index"])) for item in items}
+    for item in items:
+        for dependency in cast(list[int], item["dependencies"]):
+            if dependency not in in_plan:
+                _logger.warning(
+                    "slice %s: dependency %d is outside plan %s; not checked",
+                    item["index"],
+                    dependency,
+                    plan,
+                )
+            elif dependency in open_in_plan and dependency not in returned:
+                if FLAG_REASON_KEY not in item:
+                    _flag(item, f"dependency {dependency} not designed", FlagKind.DEPENDENCY)
+    try:
+        return order_by_dependencies(items, plan)
+    except ValueError:
+        _logger.exception("cf.slices_ready_to_implement: cannot order plan %s", plan)
+        raise
+
+
+def order_by_dependencies(
+    items: list[dict[str, object]], plan: str | None = None
+) -> list[dict[str, object]]:
+    """Items in dependency order: a stable topological sort, ties by input order (197 D3).
+
+    Only dependencies between the given items count. A cycle raises ``ValueError``
+    naming its path, for example ``dependency cycle in plan 180: 196 → 197 → 196``.
+    """
+    indices = [int(str(item["index"])) for item in items]
+    position = {index: pos for pos, index in enumerate(indices)}
+    needs = {
+        index: {d for d in cast(list[int], item.get("dependencies", [])) if d in position}
+        for index, item in zip(indices, items, strict=True)
+    }
+    ready = [pos for pos, index in enumerate(indices) if not needs[index]]
+    heapq.heapify(ready)
+    ordered: list[dict[str, object]] = []
+    placed: set[int] = set()
+    while ready:
+        pos = heapq.heappop(ready)
+        ordered.append(items[pos])
+        placed.add(indices[pos])
+        for index in indices:
+            if index not in placed and indices[pos] in needs[index]:
+                needs[index].discard(indices[pos])
+                if not needs[index]:
+                    heapq.heappush(ready, position[index])
+    if len(ordered) < len(items):
+        cycle = _find_cycle(needs, placed)
+        raise ValueError(f"dependency cycle in plan {plan}: " + " → ".join(map(str, cycle)))
+    return ordered
+
+
+def _find_cycle(needs: dict[int, set[int]], placed: set[int]) -> list[int]:
+    """One cycle among the unplaced items, as a path that ends where it starts."""
+    start = min(index for index in needs if index not in placed)
+    path = [start]
+    while True:
+        following = min(needs[path[-1]])
+        if following in path:
+            return [*path[path.index(following) :], following]
+        path.append(following)
+
+
 SOURCE_REGISTRY[("cf", "unfinished_slices")] = _cf_unfinished_slices
 SOURCE_REGISTRY[("cf", "undesigned_slices")] = _cf_undesigned_slices
 SOURCE_REGISTRY[("cf", "slices_needing_tasks")] = _cf_slices_needing_tasks
+SOURCE_REGISTRY[("cf", "slices_ready_to_implement")] = _cf_slices_ready_to_implement
 
 
 def parse_source(

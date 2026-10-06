@@ -55,6 +55,8 @@ class TaskEntry:
 
     index: int
     files: list[str] = field(default_factory=lambda: [])
+    completed: int = 0  # checked task items
+    total: int = 0  # all task items
 
 
 @dataclass
@@ -178,6 +180,8 @@ class ContextForgeClient:
             TaskEntry(
                 index=int(e["index"]),
                 files=e.get("files", []),
+                completed=int(e["completed"]),
+                total=int(e["total"]),
             )
             for e in raw_entries
         ]
