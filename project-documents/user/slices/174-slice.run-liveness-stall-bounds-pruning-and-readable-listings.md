@@ -50,9 +50,9 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
   - A new config key, `pipeline.foreground_idle_timeout_s`, bounds silence on a foreground turn.
   - When the bound fires, the turn is interrupted, the step fails with a named reason, and a WARNING is logged. The session stays usable if the interrupt completes cleanly, and is marked unusable if not.
 - **(c) `sq runs prune`.**
-  - Select runs by category (`failed`, `orphaned`, `stale`, `unavailable`, `unreadable`, `completed`, `paused`), `--pipeline`, `--older-than` and explicit run-ids.
+  - Select runs by category (`failed`, `orphaned`, `stale`, `unavailable`, `unreadable`, `completed`, `paused`, `unowned`), `--pipeline`, `--older-than` and explicit run-ids.
   - Preview by default. `--yes` deletes.
-  - Paused runs are protected unless selected by name or by `--status paused`. A live run is never deleted.
+  - Paused and unowned running runs are protected unless selected by name or by their `--status`. A live run is never deleted.
 - **(d) `sq runs list` output.**
   - One stderr summary line replaces the per-run "pipeline unavailable" warnings. `-v` prints the details, once per pipeline.
   - A shared column-fitting renderer replaces the rich table.
@@ -172,7 +172,7 @@ Dependency direction is unchanged from 199: `cli/commands/*` → `cli/run_views`
 
 ### Technology Choices
 - **Liveness signal: PID plus heartbeat.** The PID alone is fooled by PID reuse, and it cannot be checked from another host when the runs directory is synced or shared. A heartbeat alone cannot tell a crash from a blocked event loop. So the two signals carry different weight (D3): a dead PID on the same host is conclusive (`ORPHANED`), and an overdue heartbeat is only suspect (`STALE`).
-- **`os.kill(pid, 0)`** for the process check (`ProcessLookupError` means gone, `PermissionError` means alive). No new dependency such as psutil.
+- **`os.kill(pid, 0)`** for the process check (`ProcessLookupError` means gone, `PermissionError` means alive). No new dependency such as psutil. `process_alive` returns `bool | None`: `None` (unknown) for a PID that is not positive (`0` and negatives address process groups, so they would read as alive) and for any other `OSError`, each logged at WARNING with the run-id and PID. An unknown result never yields `ORPHANED`; D3 falls through to the heartbeat row. A corrupt PID therefore shows as `stale` at worst and never raises out of a listing.
 - **Heartbeat as an `asyncio` task**, not a thread. State writes then stay on one thread, with no lock (D5).
 - **Interrupt through `ClaudeSDKClient.interrupt()`**, the SDK's supported way to end a turn. A stalled session is not torn down: a reconnect would lose the session's context for the steps after it.
 - **Own column fitter in place of rich `Table` (D11).**
@@ -223,7 +223,7 @@ active_item: ActiveItem | None
 | Condition | Result |
 |---|---|
 | `owner is None` (v3/v4 file, prompt-only run) | `UNOWNED` |
-| `owner.hostname == hostname` and `not process_alive(owner.pid)` | `ORPHANED` |
+| `owner.hostname == hostname` and `process_alive(owner.pid) is False` | `ORPHANED` |
 | `now - heartbeat_at > STALE_HEARTBEAT_INTERVALS × owner.heartbeat_interval_s` | `STALE` |
 | otherwise | `LIVE` |
 
@@ -255,7 +255,7 @@ active_item: ActiveItem | None
 - `_read_turn` already applies `idle_s` to each read with its own `_IdleTimer`. Today `_collect_turns` passes `idle_s=None` for foreground reads (`:217`) and will pass `foreground_idle_timeout_s` instead.
 - A private `_ForegroundIdleTimeout` marks expiry, as `_BackgroundIdleTimeout` does. `_collect_turns` handles it:
   1. Log WARNING `dispatch: foreground turn silent for %ds; interrupting`.
-  2. `await client.interrupt()`.
+  2. `await client.interrupt()`, inside `asyncio.timeout(INTERRUPT_DRAIN_TIMEOUT_S)`. The SDK bounds the control request itself, but that bound is internal and undocumented, so squadron owns this one too. Expiry counts as "the interrupt raises" (step 5).
   3. Drain with `_read_turn(idle_s=INTERRUPT_DRAIN_TIMEOUT_S)` until the dispatch's own result arrives. A `ResultMessage` with `is_error` is expected here and is not re-raised as `ProviderAPIError`.
   4. **Session stays usable** when the interrupt and the drain both complete. The next step, or the next `each` item, dispatches as usual.
   5. **Session becomes unusable** when the interrupt raises, the drain times out or the stream ends. `unusable_reason` is set to `foreground stall: interrupt did not complete (<detail>)`, logged at ERROR. Every later call fails fast through the existing `_require_usable`.
@@ -280,6 +280,7 @@ active_item: ActiveItem | None
 | `UNREADABLE` | the file is in `STATE_READ_ERRORS`, schema-obsolete included |
 | `COMPLETED` | status `completed` |
 | `PAUSED` | status `paused` |
+| `UNOWNED` | status `running`, assessed `UNOWNED` (D3): v3/v4 files and prompt-only runs |
 
 **Selection rules:**
 - **Default** (no `--status`): `failed`, `orphaned`, `unavailable`, `unreadable`. `stale` is never in the default set (D3); it is selected only by `--status stale` or by run-id, and the preview labels it `stale`.
@@ -292,7 +293,8 @@ active_item: ActiveItem | None
 
 **Protection rules,** applied after selection:
 - **Paused:** a paused run is dropped unless it was named by run-id or `PAUSED` is in `--status`. This holds even when it also matches `unavailable`.
-- **Live:** a `LIVE` run is never a candidate. Naming one is refused: a stderr line, and exit 1 after the rest of the preview or deletion. An `UNOWNED` `running` run is protected the same way, because liveness cannot be judged.
+- **Live:** a `LIVE` run is never a candidate. Naming one is refused: a stderr line, and exit 1 after the rest of the preview or deletion.
+- **Unowned:** liveness cannot be judged, so an `UNOWNED` `running` run is never in the default selection, even when it also matches `unavailable`. It is a candidate only when named by run-id or when `UNOWNED` is in `--status`, and the preview labels it `unowned`. This is how pre-174 crash leftovers are cleared: they are v4 `running` files with no owner (34 of 188 in one real runs directory), which the default listing now shows. `--status unowned --older-than 1d` is the expected form.
 
 **`--older-than`** takes `<int><unit>`, with unit `s`, `m`, `h`, `d` or `w`. The parse is lenient about surrounding whitespace and case. An invalid value is a usage error naming the accepted form.
 
@@ -349,6 +351,7 @@ The 173 events dispatcher (`run_event`) is not used for this, because the two se
 **D13. No ownerless `running` window.** A run must never be `running` without an owner, or it is a crash orphan that cannot be detected.
 - **New runs:** `init_run(pipeline_name, params, *, owner: RunOwner | None, ...)` writes `owner`, `heartbeat_at` and `progress_at` in the same `_write_atomic` that first writes `status: running`. `_run_pipeline_sdk` builds the owner with `RunOwner.current(heartbeat_interval_s)` before calling it. A process that dies anywhere after `init_run`, including before the heartbeat task starts, has a dead PID on record and lists as `ORPHANED`.
 - **Resumed runs:** the file is `paused` or `failed` until `claim`, which writes status and owner together. A crash before `claim` leaves the run in its prior, resumable status, not `running`.
+- **Discriminator:** `_run_pipeline_sdk` already knows which case it is in (it either calls `init_run` or loads a run to resume). It passes `RunHeartbeat(..., claim=True)` only on the resume and item-resume paths. Nothing is inferred from the file. `claim` raises if the file is already `running` with a `LIVE` owner, so two processes cannot own one run.
 - **Prompt-only runs** pass `owner=None` and are `UNOWNED` by design (Technical Scope).
 - The heartbeat task's first write follows one interval after start. Until then `heartbeat_at` from `init_run` or `claim` is the reference, so the run is never `STALE` early.
 
@@ -366,7 +369,8 @@ The 173 events dispatcher (`run_event`) is not used for this, because the two se
 | Foreground silence | WARNING; step error `dispatch stalled: …` | step fails; session usable |
 | Interrupt or drain fails | ERROR; `unusable_reason` set | step fails; later dispatches fail fast |
 | Prune delete `OSError` | ERROR with path | continues; exit 1 |
-| Prune names a live/unowned running run | stderr refusal | not deleted; exit 1 |
+| Prune names a live running run | stderr refusal | not deleted; exit 1 |
+| Process check: non-positive PID or `OSError` other than `ProcessLookupError`/`PermissionError` | WARNING naming run and PID | treated as unknown; heartbeat rule decides (D3) |
 | Pipeline unavailable in listing | stderr summary line; `-v` detail | row marker as in 199 |
 | `pipelines show`: name not found | stderr loader message | exit 1 |
 | `pipelines show`: file resolved but unreadable (permissions, deleted before the read) | ERROR naming the path; stderr `Error: cannot read <path>: <reason>` | exit 1, nothing on stdout |
@@ -491,7 +495,8 @@ User (1)
 - `sq runs prune`:
   - Without `--yes`, it deletes nothing.
   - With `--yes`, it deletes exactly the previewed runs and their report files.
-  - It never deletes a live or unowned running run.
+  - It never deletes a live running run.
+  - It deletes an unowned running run only when the run is named or `--status unowned` is given.
   - It deletes a paused run only when the run is named or `--status paused` is given.
 - `sq runs list` prints no per-run warnings. It prints at most one unavailable-pipeline summary line, and `-v` prints one detail line per pipeline.
 - On a TTY, `sq runs list` fits within the terminal width, shrinking the widest shrinkable column with `…` and never below 8. When piped, it never truncates.
@@ -575,6 +580,7 @@ cd $S/proj && export HOME=$S/home
    ```bash
    sq runs prune                      # preview: orphan, failed, gone, junk; paused and stale absent
    sq runs prune --status stale       # preview: the stale run only
+   sq runs prune --status unowned     # preview: the unowned run only
    ls $HOME/.config/squadron/runs | wc -l     # unchanged
    sq runs prune --yes                # "Removed 4 run(s)."
    sq runs prune <paused-id>          # preview shows the paused run (named)
@@ -595,14 +601,14 @@ cd $S/proj && export HOME=$S/home
    kill -9 %1; sq runs list              # orphaned
    ```
    Also kill a second run within a second of starting it (`sq run p4 <slice> --model <alias> & sleep 1; kill -9 %2`): it lists as `orphaned`, never as an ownerless `running`.
-8. **Listing cost** (read-only, real runs dir).
-   ```bash
-   time sq runs list --all            # under 1 s, as measured for 199 (0.67 s for 188 runs)
-   ```
 7. **Foreground stall** (credentials). Set `pipeline.foreground_idle_timeout_s = 20` in the scratch project's `.squadron.toml`. Run a one-step pipeline whose dispatch prompt asks the model to run `sleep 120` in Bash.
    - The run log shows `dispatch: foreground turn silent for 20s; interrupting`.
    - The step fails with `dispatch stalled: no output for 20s; turn interrupted`.
    - The run ends `failed` within a few seconds of the bound.
+8. **Listing cost** (read-only, real runs dir).
+   ```bash
+   time sq runs list --all            # under 1 s, as measured for 199 (0.67 s for 188 runs)
+   ```
 
 ## Risk Assessment
 
