@@ -12,6 +12,21 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Slice 174: implementation complete (Phase 6)
+
+- **Delivered:** RunState schema v5 (`RunOwner`, `heartbeat_at`, `active_step`, `active_item`, `progress_at`); `run_liveness` (`assess_liveness`, `process_alive`, LIVE/STALE/ORPHANED/UNOWNED); `RunObserver` replaces `on_step_complete`; `RunHeartbeat` around every SDK run (owner in the creating write, `claim` on resume); foreground idle bound with interrupt and drain (`DispatchStalledError`, dispatch maps it to `dispatch stalled: …`); `sq runs wait` exit 8; `cli/columns.py`; both listings rebuilt on it; `sq runs list -v` and one unavailable-pipeline summary line; `sq pipelines list -v`; `sq pipelines show [--path]`; `StateManager.scan_runs`; `run_prune` and `sq runs prune`. Config keys `pipeline.foreground_idle_timeout_s`, `pipeline.run_heartbeat_interval_s`. Issue #195 (resume an orphaned run).
+- **Spike:** on the installed SDK, `interrupt()` returns at once; a fresh `receive_response()` yields the turn's own `ResultMessage` (`is_error`, `error_during_execution`) and the next `query()` works. D7 stands; the drain reads with `accept_error=True`. No state write runs off the loop thread, so no lock.
+- **Choices the design left open:**
+  - `resolve_pipeline` returns `PipelineLocation(name, source, path)`, not `PipelineInfo`, so `show` works on a pipeline that fails validation (recorded in the design).
+  - One `_IdleTimeout` replaces `_BackgroundIdleTimeout`; `_collect_turns` knows which kind of read it made.
+  - Progress-write failure handling lives once in `StateManager._write_progress`; `RunHeartbeat`'s done-callback logs anything else at ERROR.
+  - Prune protection is one rule: every protected category a run has (paused, unowned, stale) must be selected, unless the run is named. Named missing runs are refusals. `apply_prune` attempts every file of a run and refuses paths outside the runs dir.
+  - `RunOwner.heartbeat_interval_s` is rounded up to at least 1 for sub-second test intervals.
+  - `format_duration` lives in `run_liveness`, shared by the listing, prune preview and wait's stale WARNING.
+  - `DefinitionCache` (was `_Definitions`) is shared by listing and prune; `state_file_name` defines `{run_id}.json` once.
+- **Verification:** main tree 6248 passed, 4 skipped (baseline 6081); pyright 0. Walkthrough steps 1–5 and 8 in a scratch HOME (`tests/pipeline/walkthrough_seed.py`); `sq runs list --all` 0.66–0.73 s for 188 runs. Steps 6–7 not run (`sq run` refuses inside Claude Code). Real runs dir preview: 95 runs in the default prune set, 34 unowned pre-174 leftovers. Frozen-worktree runs fail 4 cf schema-drift/live-contract tests (checkout path is not the registered project); they pass in the main tree.
+- **Next:** Phase 7 code review, then merge into `main`; close #190 and #165 after the merge.
+
 ### Slice 174: task breakdown complete (Phase 5)
 
 - **Tasks:** `user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md` (42 tasks, 511 lines, one file; overrun under 100 so no split). Parts: spike and baseline; `RunObserver` refactor (no behaviour change); schema v5, `run_liveness`, `RunHeartbeat`; foreground stall (`DispatchStalledError`); wait and listing; `cli/columns.py` and both listings; `pipelines show` and `resolve_pipeline`; `run_prune` and `sq runs prune`; docs, issue, walkthrough.

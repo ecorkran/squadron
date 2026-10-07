@@ -7,7 +7,7 @@ dependencies: [150, 156, 199, 932]
 interfaces: []
 dateCreated: 20261007
 dateUpdated: 20261007
-status: not_started
+status: complete
 ---
 
 # Slice Design: run-liveness-stall-bounds-pruning-and-readable-listings
@@ -542,73 +542,74 @@ User (1)
 
 ### Verification Walkthrough
 
-Draft, to be refined in Phase 6. Steps 1–5 use a scratch `HOME` and project. Steps 6 and 7 need model credentials and read nothing from real runs.
+Verified in Phase 6 (20261007) on macOS. Steps 1–5 use a scratch `HOME` and project and touch nothing real. Step 8 reads the real runs directory without writing. Steps 6–7 were **not run**: `sq run` refuses to start inside a Claude Code session (`CLAUDECODE` is set), and both steps write to a real project. Run them from a plain terminal. Their behaviour is covered by tests: `test_cli_integration.py::TestRunOwnership` (owner present from the creating write, on new, resume and item-resume paths) and `test_sdk_session.py::TestForegroundStall` (interrupt, drain, usable or unusable session). The SDK's real post-interrupt stream is recorded under Risk Assessment.
 
-**Scratch setup.** Seed runs with the 199 support helpers (`tests/pipeline/run_listing_support.py`). Add a running v5 run owned by a dead PID, and copy a v4-shaped running file:
+**Scratch setup.** `tests/pipeline/walkthrough_seed.py` writes the runs through `StateManager` and prints one `<label> <run-id>` line each. Run it from the repo root; `S` is any empty scratch directory.
 
 ```bash
 S=$(mktemp -d); mkdir -p $S/home $S/proj
-# seed.py (Phase 6 adds a helper): writes paused/failed/completed runs as in 199, plus
-#  - "orphan": init_run(owner=) with the pid of an already-exited `python -c pass`
-#  - "stale": owner pid of a live `sleep 600 &`, heartbeat_at an hour old
-#  - "unowned": a running state with no owner (v4 shape)
-#  - "gone": a completed run of a pipeline that no longer exists
-#  - "junk": a run file with invalid JSON
-HOME=$S/home PYTHONPATH=. python $S/seed.py $S/proj
+sleep 600 & SPID=$!                                   # a live process for the stale run
+HOME=$S/home python -m tests.pipeline.walkthrough_seed $S/proj --stale-pid $SPID > $S/ids.txt
 cd $S/proj && export HOME=$S/home
+id() { awk -v k=$1 '$1==k{print $2}' $S/ids.txt; }   # id orphan -> its run-id
 ```
+
+Seeded runs: `paused` and `failed` (pipeline `steps`, which exists in the scratch project), `gone` (a completed run of a missing pipeline), `gone-paused` (a paused run of the same missing pipeline), `orphan` (owned by an exited PID, active step `tasks-1`), `stale` (owned by `$SPID`, heartbeat from 20260101), `unowned` (running, no owner, as a v4 file) and `junk` (invalid JSON).
 
 1. **Liveness in the listing.**
    ```bash
    sq runs list
+   sq runs list -v
    ```
-   - The orphan row shows `orphaned` with an Activity cell; the stale row shows `stale`.
-   - The unowned row shows `running`.
-   - One stderr line reads `1 runs reference 1 unavailable pipelines (-v for details; …)`, with no per-run warnings.
-   - `sq runs list -v` adds the `gone` pipeline's loader message once.
-2. **Wait on an orphan.**
+   - Rows: `unowned` shows `running` with empty Activity; `stale` shows `stale` with Activity like `0s · 0s ago · heartbeat 279d21h ago`; `orphan` shows `orphaned`, At `tasks-1`; `gone-paused` shows `paused`, At `<pipeline unavailable>`; `failed` and `paused` show their resume steps. `gone` is absent: a completed run with no batch report has nothing to resume, and the listing never loads its definition (199 D12).
+   - stderr: `1 runs reference 1 unavailable pipelines (-v for details; sq runs prune --status unavailable removes them).` No per-run pipeline warnings.
+   - `-v` adds `  gone: Pipeline 'gone' not found in any pipeline directory. Searched: [...]`, once.
+   - *Caveat:* the junk file still logs 199's `Skipping unreadable state file: …` WARNING with a traceback on stderr. That record is unchanged by design (D10).
+2. **Wait.**
    ```bash
-   sq runs wait <orphan-id>; echo "exit $?"          # "… orphaned (process <pid> gone)"; exit 8
-   sq runs wait <stale-id> --timeout 5; echo $?      # one "heartbeat overdue" WARNING; exit 4
-   sq runs wait <unowned-id> --timeout 3; echo $?    # exit 4 (still treated as running)
+   sq runs wait $(id orphan); echo "exit $?"            # stderr "sq runs wait: run <id> orphaned (process <pid> gone)"; exit 8
+   sq runs wait $(id stale) --timeout 5; echo "exit $?" # one "run <id> heartbeat overdue by 279d21h; still waiting"; exit 4
+   sq runs wait $(id unowned) --timeout 3; echo "exit $?" # exit 4: still treated as running
    ```
 3. **Width.**
    ```bash
-   COLUMNS=90 sq runs list            # Target shrinks with "…"; Run ID intact
-   sq runs list | cat                 # no "…" anywhere; full params
+   COLUMNS=90 script -q /dev/null sq runs list   # needs a TTY: Target cut to "slice=1…" (8-cell floor), Run ID intact
+   sq runs list | grep -c "…"                    # 0: piped output is never cut
    ```
+   At 90 columns the rows still wrap: every shrinkable column is at its floor and Run ID and Status never shrink. That is the designed stop.
 4. **Prune.**
    ```bash
-   sq runs prune                      # preview: orphan, failed, gone, junk; paused and stale absent
-   sq runs prune --status stale       # preview: the stale run only
-   sq runs prune --status unowned     # preview: the unowned run only
-   ls $HOME/.config/squadron/runs | wc -l     # unchanged
-   sq runs prune --yes                # "Removed 4 run(s)."
-   sq runs prune <paused-id>          # preview shows the paused run (named)
-   sq runs prune --status running     # usage error: not a category
+   sq runs prune                      # preview: junk, gone (unavailable, completed), orphan, failed; exit 0
+   sq runs prune --status stale       # the stale run only
+   sq runs prune --status unowned     # the unowned run only
+   ls $HOME/.config/squadron/runs | wc -l     # 8: nothing deleted by previews
+   sq runs prune --yes                # same four rows, then "Removed 4 run(s)."; 4 files left
+   sq runs prune $(id paused)         # preview shows the named paused run
+   sq runs prune --status running; echo $?   # Typer usage error listing the categories; exit 2
    ```
+   `gone-paused` is never in the default preview, though it matches `unavailable`: paused runs need a name or `--status paused`.
 5. **Pipelines.**
    ```bash
-   sq pipelines list                  # Built-in (N), aligned, no boxes
-   sq pipelines list -v               # params column, e.g. "slice=required model=…"
-   sq pipelines show p4 | head -3     # "# source: built-in", "# path: …/data/pipelines/P4.yaml", YAML
-   $EDITOR "$(sq pipelines show p4 --path)"
-   sq pipelines show nope; echo $?    # loader message; exit 1
+   sq pipelines list                  # "Built-in (16)", aligned names, no box drawing
+   sq pipelines list -v               # third column, e.g. "slice=required model=sonnet review-model=minimax +2"
+   sq pipelines show p4 | head -3     # "# source: built-in", "# path: …/data/pipelines/P4.yaml", "name: P4"
+   sq pipelines show p4 --path        # the path only
+   sq pipelines show nope; echo $?    # stderr: Pipeline 'nope' not found … Searched: [...]; exit 1
    ```
-6. **Live run** (credentials).
+6. **Live run** (credentials, plain terminal; not run in Phase 6).
    ```bash
    sq run p4 <slice> --model <alias> &   # any multi-step pipeline
    sq runs list                          # running; At = current step; Activity advancing
    kill -9 %1; sq runs list              # orphaned
    ```
    Also kill a second run within a second of starting it (`sq run p4 <slice> --model <alias> & sleep 1; kill -9 %2`): it lists as `orphaned`, never as an ownerless `running`.
-7. **Foreground stall** (credentials). Set `pipeline.foreground_idle_timeout_s = 20` in the scratch project's `.squadron.toml`. Run a one-step pipeline whose dispatch prompt asks the model to run `sleep 120` in Bash.
+7. **Foreground stall** (credentials, plain terminal; not run in Phase 6). Set `pipeline.foreground_idle_timeout_s = 20` in the scratch project's `.squadron.toml`. Run a one-step pipeline whose dispatch prompt asks the model to run a 120 s command in the foreground Bash tool. Use a command a user hook won't rewrite: in the spike, a hook blocked a bare `sleep 60` and the model reran it in the background, so `perl -e 'select(undef,undef,undef,120)'` was used.
    - The run log shows `dispatch: foreground turn silent for 20s; interrupting`.
    - The step fails with `dispatch stalled: no output for 20s; turn interrupted`.
    - The run ends `failed` within a few seconds of the bound.
 8. **Listing cost** (read-only, real runs dir).
    ```bash
-   time sq runs list --all            # under 1 s, as measured for 199 (0.67 s for 188 runs)
+   time sq runs list --all            # measured 0.66–0.73 s for 188 run files (199: 0.67 s)
    ```
 
 ## Risk Assessment

@@ -9,7 +9,7 @@ projectState: >
   932 (SDK session idle timer) are complete. Integration branch is unset, so the target is `main`.
 dateCreated: 20261007
 dateUpdated: 20261007
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -486,30 +486,33 @@ status: in_progress
 
 ## Task 40 — Docs and architecture note (design Dev Approach step 8)
 
-- [ ] Update `README.md`, `docs/PIPELINES.md` and `docs/COMMANDS.md`: `orphaned`/`stale`,
+- [x] Update `README.md`, `docs/PIPELINES.md` and `docs/COMMANDS.md`: `orphaned`/`stale`,
       `sq runs list -v`, `sq runs wait` exit 8, `sq runs prune`, `sq pipelines show`, both new
       config keys
-- [ ] Add short user-facing bullets to `CHANGELOG.md` (technical detail goes in DEVLOG)
-- [ ] Add the D12 paragraph (events vs `RunObserver`) to the Component Architecture section
+- [x] Add short user-facing bullets to `CHANGELOG.md` (technical detail goes in DEVLOG)
+- [x] Add the D12 paragraph (events vs `RunObserver`) to the Component Architecture section
       of `user/architecture/140-arch.pipeline-foundation.md`
-  - [ ] Success: every new command and key appears in COMMANDS.md; docs build nothing new
-- [ ] Commit: `docs: document run liveness, prune, pipelines show`
+  - [x] Success: every new command and key appears in COMMANDS.md; docs build nothing new
+- [x] Commit: `docs: document run liveness, prune, pipelines show`
 
 ## Task 41 — Close-out issues
 
-- [ ] Open a GitHub issue for resuming orphaned runs (Technical Scope, Excluded; needs a rule
+- [x] Open a GitHub issue for resuming orphaned runs (Technical Scope, Excluded; needs a rule
       for the in-flight step); link its number from the slice design's Excluded entry
-  - [ ] Success: the new issue number is recorded in the slice design; #190 and #165 are
+  - Opened #195 (https://github.com/ecorkran/squadron/issues/195); linked from the slice design's Excluded entry.
+  - [x] Success: the new issue number is recorded in the slice design; #190 and #165 are
         closed in Phase 7 after the merge, not here
 
 ## Task 42 — Full validation and walkthrough
 
-- [ ] Run `ruff format`, `ruff check`, `pyright` and `pytest tests -q`
-  - [ ] Success: zero pyright errors; results match the Task 3 baseline plus new tests
-- [ ] Run Verification Walkthrough steps 1–5 and 8 from the slice design in a scratch HOME
+- [x] Run `ruff format`, `ruff check`, `pyright` and `pytest tests -q`
+  - [x] Success: zero pyright errors; results match the Task 3 baseline plus new tests
+  Main tree: 6248 passed, 4 skipped, 0 failed; pyright 0 errors (baseline 6081 passed).
+- [x] Run Verification Walkthrough steps 1–5 and 8 from the slice design in a scratch HOME
       (add a seed helper under `tests/pipeline/` that writes the orphan, stale, unowned,
       gone and junk runs); steps 6–7 need credentials, so run them if available and
       otherwise record them as not run
-  - [ ] Success: outputs match the design; any difference is noted in the DEVLOG
-- [ ] Mark the slice design `status: complete` and update the slice plan entry
-- [ ] Commit: `docs: record slice 174 verification`
+  - [x] Success: outputs match the design; any difference is noted in the DEVLOG
+  Steps 1–5 and 8 run in a scratch HOME (seed: tests/pipeline/walkthrough_seed.py); steps 6–7 not run: sq run refuses inside a Claude Code session. Corrections recorded in the slice design's Verification Walkthrough.
+- [x] Mark the slice design `status: complete` and update the slice plan entry
+- [x] Commit: `docs: record slice 174 verification`
