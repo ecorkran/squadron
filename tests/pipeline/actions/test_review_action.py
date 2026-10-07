@@ -91,6 +91,7 @@ def _mock_template() -> ReviewTemplate:
     mock.judge = None
     mock.is_judge = False
     mock.model = None
+    mock.profile = None
     return mock
 
 
@@ -279,7 +280,7 @@ class TestReviewModelResolution:
 
         ctx = _make_context(params={"template": "code", "model": "opus"})
         await ReviewAction().execute(ctx)
-        ctx.resolver.resolve_full.assert_called_once_with("opus", None)
+        ctx.resolver.resolve_full.assert_called_once_with("opus", None, profile_source=False)
 
     @pytest.mark.asyncio
     @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
@@ -374,7 +375,7 @@ class TestReviewModelResolution:
         result = await ReviewAction().execute(ctx)
         assert result.success is True
         assert ctx.resolver.resolve_full.call_count == 2
-        ctx.resolver.resolve_full.assert_called_with("opus", None)
+        ctx.resolver.resolve_full.assert_called_with("opus", None, profile_source=False)
 
 
 class TestReviewAliasParity:
@@ -1691,3 +1692,57 @@ class TestUnknownAliasBackstop:
         mock_save.assert_not_called()
         assert existing.read_text() == "original review\n"
         assert sorted(os.listdir(tmp_path)) == [existing.name]
+
+
+class TestReviewProfileCascade:
+    """The pipeline review step resolves its profile exactly as `sq review` does (#184)."""
+
+    @staticmethod
+    async def _run(
+        params: dict[str, object],
+        template_profile: str | None,
+        config_profile: str | None,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> tuple[ActionContext, str]:
+        template = _mock_template()
+        template.profile = template_profile
+        monkeypatch.setattr(
+            "squadron.review.profile_resolution.get_config",
+            lambda key: config_profile if key == "default_review_profile" else None,
+        )
+        ctx = _make_context(params={"template": "code", **params})
+        ctx.resolver.resolve_full.return_value = ResolvedModel("sonnet", None)
+        with (
+            patch(f"{_P}.get_template", return_value=template),
+            patch(f"{_P}.load_all_templates"),
+            patch(f"{_P}.run_review_with_profile", return_value=_make_review_result()),
+            patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md")),
+        ):
+            result = await ReviewAction().execute(ctx)
+        return ctx, str(result.metadata["profile"])
+
+    @pytest.mark.asyncio
+    async def test_template_profile_used_without_param(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ctx, profile = await self._run({}, "openrouter", "local", monkeypatch)
+        assert profile == "openrouter"
+        assert ctx.resolver.resolve_full.call_args.kwargs["profile_source"] is True
+
+    @pytest.mark.asyncio
+    async def test_config_profile_used_when_template_has_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ctx, profile = await self._run({}, None, "local", monkeypatch)
+        assert profile == "local"
+        assert ctx.resolver.resolve_full.call_args.kwargs["profile_source"] is True
+
+    @pytest.mark.asyncio
+    async def test_sdk_when_nothing_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ctx, profile = await self._run({}, None, None, monkeypatch)
+        assert profile == ProfileName.SDK
+        assert ctx.resolver.resolve_full.call_args.kwargs["profile_source"] is False
+
+    @pytest.mark.asyncio
+    async def test_explicit_param_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        ctx, profile = await self._run({"profile": "openai"}, "openrouter", "local", monkeypatch)
+        assert profile == "openai"
+        assert ctx.resolver.resolve_full.call_args.kwargs["profile_source"] is True

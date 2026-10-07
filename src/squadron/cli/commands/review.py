@@ -743,9 +743,9 @@ def _run_review_command(
 async def _execute_review(
     template: ReviewTemplate,
     inputs: dict[str, str],
-    rules_content: str | None = None,
-    model: str | None = None,
-    profile: str = "sdk",
+    rules_content: str | None,
+    model: str | None,
+    profile: str,
     verbosity: int = 0,
     model_allows_tools: bool = True,
     no_tools: bool = False,
