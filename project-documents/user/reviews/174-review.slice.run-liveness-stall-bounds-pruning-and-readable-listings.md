@@ -107,3 +107,11 @@ The new modules sit where the architecture places them: `run_liveness`, `run_hea
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 6
 - Finding-shaped matches — surviving validation: 6
+
+## Response (20261007)
+
+- **Crash window, fixed (new D13).** `init_run(owner=...)` writes the owner, `heartbeat_at` and `progress_at` in the same atomic write that first sets `status: running`. A process that dies anywhere after `init_run` has a dead PID on record and lists as `orphaned`. A resumed run stays `paused`/`failed` until `claim`, which writes status and owner together. Only v3/v4 files and prompt-only runs can be ownerless. A test and a walkthrough step (kill within a second of start) were added.
+- **Stale heartbeat, fixed (D3, D8, D9).** `HEARTBEAT_STALE` is now its own liveness state, `STALE`, and `ORPHANED` means only "same host, process gone". D3 states one policy that every consumer applies: only `ORPHANED` ends a wait or enters prune's default set. On `STALE`, wait logs one WARNING and keeps waiting to the run's end or `--timeout`, and prune selects it only by `--status stale` or run-id. `OrphanReason` is removed.
+- **Third observer hook, fixed (new D12).** `on_step_complete` plus the two new notifications become one `RunObserver` protocol (`step_started`, `item_started`, `step_completed`). D12 says why the 173 events dispatcher is not used: events are user-bindable, can fail the action, cost a manifest load per fire, and run async user code. Run-state bookkeeping must always run, must never fail a step, and fires per item. The refactor is its own no-behaviour-change step.
+- **Performance target, fixed.** Special Considerations restates 199's advisory `< 1 s` target and how 174 changes the cost: no new file reads, one `os.kill` per same-host running run, no definition or report loads for running rows. It also adds a success criterion, an I/O-bounds test extension (20 running runs, `process_alive` called exactly 20 times) and a timing step in the walkthrough.
+- **PASS findings:** no action.

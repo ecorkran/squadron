@@ -41,14 +41,16 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
 - **(a) Liveness (#190).**
   - `RunState` schema v5 gains an owner record (PID, host, claim time, heartbeat interval), a heartbeat timestamp, the active step, the active `each` item and a progress timestamp.
   - A heartbeat task runs for the life of every SDK run.
-  - A pure liveness assessment classifies a `running` run as live, orphaned or unowned.
-  - `sq runs list` shows running and orphaned runs. `sq runs wait` gains an `ORPHANED` outcome.
+  - A new SDK run is written with its owner in the same write that creates it, so no v5 `running` file is ever ownerless (D13).
+  - A pure liveness assessment classifies a `running` run as live, stale, orphaned or unowned. `orphaned` is conclusive (process gone); `stale` is suspect (heartbeat overdue) and no command treats it as terminal (D3).
+  - `sq runs list` shows running, stale and orphaned runs. `sq runs wait` gains an `ORPHANED` outcome.
   - Resuming a run marks it `running` again, under the new owner.
+  - Executor progress reporting moves onto one `RunObserver` protocol, which replaces `on_step_complete` (D12).
 - **(b) Foreground stall bound (#165).**
   - A new config key, `pipeline.foreground_idle_timeout_s`, bounds silence on a foreground turn.
   - When the bound fires, the turn is interrupted, the step fails with a named reason, and a WARNING is logged. The session stays usable if the interrupt completes cleanly, and is marked unusable if not.
 - **(c) `sq runs prune`.**
-  - Select runs by category (`failed`, `orphaned`, `unavailable`, `unreadable`, `completed`, `paused`), `--pipeline`, `--older-than` and explicit run-ids.
+  - Select runs by category (`failed`, `orphaned`, `stale`, `unavailable`, `unreadable`, `completed`, `paused`), `--pipeline`, `--older-than` and explicit run-ids.
   - Preview by default. `--yes` deletes.
   - Paused runs are protected unless selected by name or by `--status paused`. A live run is never deleted.
 - **(d) `sq runs list` output.**
@@ -60,7 +62,7 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
 - **(f) `sq pipelines show <name> [--path]`.**
 
 **Excluded**
-- Resuming an orphaned run. `RESUMABLE_STATUSES` stays `{paused, failed}`. An orphaned run is visible and prunable but not resumable. That needs a rule for the step that was in flight, which is beyond this slice. A GitHub issue records it (Implementation Notes, step 7).
+- Resuming an orphaned run. `RESUMABLE_STATUSES` stays `{paused, failed}`. An orphaned run is visible and prunable but not resumable. That needs a rule for the step that was in flight, which is beyond this slice. A GitHub issue records it (Implementation Notes, step 8).
 - Fixing #169 (`sq run <path>` records the path as the pipeline name). Prune removes the rows it produces, but the cause stays.
 - Liveness for prompt-only runs. No squadron process owns a prompt-only run between `--next` and `--step-done` calls, so these runs are `UNOWNED` (D3).
 - Changing the automatic keep-10 `StateManager.prune()` that `init_run` calls.
@@ -71,7 +73,8 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
 
 ### Prerequisites
 - **150 (complete):** `RunState`, `StateManager`, the schema-version gate and `--resume`.
-- **156 (complete):** executor hardening. This slice adds a progress callback beside `on_step_complete`.
+- **156 (complete):** executor hardening. This slice replaces `on_step_complete` with a `RunObserver` (D12).
+- **173 (complete):** the events dispatcher (`squadron.events`, `run_event`). This slice does not use it for run-state bookkeeping; D12 says why.
 - **199 (complete):**
   - `sq runs list` and `sq runs wait`
   - `run_listing.py`, `run_wait.py`, `run_views.py`
@@ -84,7 +87,7 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
   - `STATE_READ_ERRORS`, `RUNNING_STATUS`, `RESUMABLE_STATUSES`
   - `StateManager.list_runs`, `_write_atomic`, `_append_step`, `finalize`
 - `cli/commands/run.py` `_run_pipeline_sdk`: the single `execute_pipeline` call site for new, resumed and item-resumed SDK runs.
-- `executor.py` `execute_pipeline(on_step_complete=...)` and the `each` loop (`executor.py:1553-1597`).
+- `executor.py` `execute_pipeline(on_step_complete=...)`, its POST_ACTION `run_event` call site (`executor.py:884-912`) and the `each` loop (`executor.py:1553-1597`).
 - `sdk_session.py`:
   - `_collect_turns`, `_read_turn`, `_IdleTimer`
   - `unusable_reason` and `_require_usable`
@@ -101,12 +104,13 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
 ### Component Structure
 
 ```
-pipeline/state.py          RunState v5 fields; RunOwner, ActiveItem models;
-                           StateManager.claim(), heartbeat(), record_progress(), scan_runs()
-pipeline/run_liveness.py   (new) RunLiveness, OrphanReason, LivenessAssessment,
-                           assess_liveness(), process_alive(); STALE_HEARTBEAT_INTERVALS
-pipeline/run_heartbeat.py  (new) RunHeartbeat async context manager (claim + periodic heartbeat)
-pipeline/executor.py       on_progress callback: step start, each-item start
+pipeline/state.py          RunState v5 fields; RunOwner, ActiveItem models; init_run(owner=);
+                           StateManager.claim(), heartbeat(), scan_runs(), observer(run_id)
+pipeline/run_observer.py   (new) RunObserver protocol; RunStateRecorder (StateManager-backed)
+pipeline/run_liveness.py   (new) RunLiveness, LivenessAssessment, assess_liveness(),
+                           process_alive(); STALE_HEARTBEAT_INTERVALS
+pipeline/run_heartbeat.py  (new) RunHeartbeat async context manager (claim on resume + heartbeat)
+pipeline/executor.py       observer: RunObserver replaces on_step_complete
 pipeline/sdk_session.py    foreground idle bound; interrupt + drain; DispatchStalledError
 pipeline/actions/dispatch.py  maps DispatchStalledError to a failed ActionResult (WARNING)
 pipeline/run_listing.py    RunSummary gains liveness + progress; running runs in default view;
@@ -128,19 +132,14 @@ Dependency direction is unchanged from 199: `cli/commands/*` → `cli/run_views`
 ### Data Flow
 
 **Run lifecycle (SDK mode).** `_run_pipeline_sdk` enters `RunHeartbeat(state_mgr, run_id, interval)` around `execute_pipeline`.
-1. **Enter:** `StateManager.claim(run_id)` writes:
-   - `owner = RunOwner(pid, hostname, claimed_at, heartbeat_interval_s)`
-   - `heartbeat_at = now`
-   - `status = RUNNING_STATUS`
-   - `progress_at = now`
-
-   It does this for new and resumed runs alike. On resume this replaces today's behaviour, where a resumed run keeps its `paused` or `failed` status while it runs.
+1. **Ownership.** The owner fields are `owner = RunOwner(pid, hostname, claimed_at, heartbeat_interval_s)`, `heartbeat_at = now` and `progress_at = now`. When they are written depends on the run (D13):
+   - **New run:** `_run_pipeline_sdk` builds the owner before `init_run` and passes it in. `init_run(owner=...)` writes it in the same atomic write that creates the file with `status: running`. `RunHeartbeat` then only starts the heartbeat task.
+   - **Resumed run:** `RunHeartbeat` enter calls `StateManager.claim(run_id)`, which writes the owner fields and `status = RUNNING_STATUS` in one write. This replaces today's behaviour, where a resumed run keeps its `paused` or `failed` status while it runs.
 2. **Heartbeat:** an `asyncio` task calls `StateManager.heartbeat(run_id)` every `interval` seconds. That call rewrites `heartbeat_at` only.
-3. **Progress:** `execute_pipeline(on_progress=state_mgr.make_progress_callback(run_id))`.
-   - At each top-level step start, the executor reports `RunProgress(step=name, item=None)`.
-   - At each `each` item start, it reports `RunProgress(step=each_name, item=ActiveItem(position, total, index))`.
-   - `record_progress` writes `active_step`, `active_item` and `progress_at`.
-   - `_append_step` (step complete) clears `active_item` and sets `progress_at`.
+3. **Progress:** `execute_pipeline(observer=state_mgr.observer(run_id))` (D12).
+   - At each top-level step start, the executor calls `observer.step_started(name)`, which writes `active_step`, clears `active_item` and sets `progress_at`.
+   - At each `each` item start, it calls `observer.item_started(each_name, ActiveItem(position, total, index))`, which writes `active_item` and `progress_at`.
+   - At each step completion, it calls `observer.step_completed(result)`: today's `_append_step` and compact-summary recording, plus clearing `active_item` and setting `progress_at`.
 4. **Exit:** the heartbeat task is cancelled, then `finalize` writes the terminal status as today and clears `active_step` and `active_item`. The owner record stays as history. Liveness is assessed only while status is `running`.
 
 **Liveness assessment.** `assess_liveness(state, *, now, hostname, process_alive) -> LivenessAssessment` follows D3. Its readers are listing, wait and prune.
@@ -170,7 +169,7 @@ Dependency direction is unchanged from 199: `cli/commands/*` → `cli/run_views`
 ## Technical Decisions
 
 ### Technology Choices
-- **Liveness signal: PID plus heartbeat.** The PID alone is fooled by PID reuse, and it cannot be checked from another host when the runs directory is synced or shared. A heartbeat alone cannot tell a crash from a slow write for up to the stale window. Either signal can convict on its own (D3).
+- **Liveness signal: PID plus heartbeat.** The PID alone is fooled by PID reuse, and it cannot be checked from another host when the runs directory is synced or shared. A heartbeat alone cannot tell a crash from a blocked event loop. So the two signals carry different weight (D3): a dead PID on the same host is conclusive (`ORPHANED`), and an overdue heartbeat is only suspect (`STALE`).
 - **`os.kill(pid, 0)`** for the process check (`ProcessLookupError` means gone, `PermissionError` means alive). No new dependency such as psutil.
 - **Heartbeat as an `asyncio` task**, not a thread. State writes then stay on one thread, with no lock (D5).
 - **Interrupt through `ClaudeSDKClient.interrupt()`**, the SDK's supported way to end a turn. A stalled session is not torn down: a reconnect would lose the session's context for the steps after it.
@@ -222,25 +221,27 @@ active_item: ActiveItem | None
 | Condition | Result |
 |---|---|
 | `owner is None` (v3/v4 file, prompt-only run) | `UNOWNED` |
-| `owner.hostname == hostname` and `not process_alive(owner.pid)` | `ORPHANED`, reason `PROCESS_GONE` |
-| `now - heartbeat_at > STALE_HEARTBEAT_INTERVALS × owner.heartbeat_interval_s` | `ORPHANED`, reason `HEARTBEAT_STALE` |
+| `owner.hostname == hostname` and `not process_alive(owner.pid)` | `ORPHANED` |
+| `now - heartbeat_at > STALE_HEARTBEAT_INTERVALS × owner.heartbeat_interval_s` | `STALE` |
 | otherwise | `LIVE` |
 
-- On another host, only the heartbeat test applies.
-- `LivenessAssessment(liveness, reason, elapsed, progress_age)` carries both durations:
+- **`ORPHANED` is conclusive.** The owning process is gone, so nothing will ever write a final status.
+- **`STALE` is suspect.** The heartbeat is overdue but no process check convicts the run. Three causes look the same: a live process whose event loop is blocked, a dead process whose PID was reused, and a run owned by another host. The rows are evaluated top to bottom, so a same-host run with a dead PID is `ORPHANED` even when its heartbeat is also overdue.
+- **One policy, applied by every consumer:** only `ORPHANED` may end a wait, enter prune's default selection, or be shown in red. `STALE` is shown (`stale`, yellow) and can be pruned only when asked for by `--status stale` or by run-id (D8, D9). No consumer has its own rule.
+- `LivenessAssessment(liveness, elapsed, progress_age, heartbeat_age)` carries the durations:
   - `elapsed` is `now - owner.claimed_at`, so a resumed run counts from its resume.
   - `progress_age` is `now - progress_at`.
-- `UNOWNED` runs keep today's behaviour everywhere: listed as `running`, waited on, never pruned as orphaned.
+- `UNOWNED` runs keep today's behaviour everywhere: listed as `running`, waited on, never pruned as orphaned. After this slice only v3/v4 files and prompt-only runs can be `UNOWNED` (D13).
 
-**D4. `orphaned` is derived, never persisted.** A read never writes. The listing, wait and prune each assess the run themselves, and the state file keeps `running`. Persisting it would put a second writer on a file the owner may still be writing, if the verdict was wrong. It would also need the status enum (#191). The display status lives in `run_views` as `RUN_DISPLAY_ORPHANED`, keyed by `RunLiveness.ORPHANED`.
+**D4. `orphaned` and `stale` are derived, never persisted.** A read never writes. The listing, wait and prune each assess the run themselves, and the state file keeps `running`. Persisting it would put a second writer on a file the owner may still be writing, if the verdict was wrong. It would also need the status enum (#191). The display statuses live in `run_views` in one dict keyed by `RunLiveness` (`ORPHANED` → `orphaned`, `STALE` → `stale`).
 
 **D5. One writer thread.**
-- All `StateManager` writes for a run happen on the event-loop thread of the owning process: the step callback, the progress callback, pool selection, the heartbeat and finalize.
+- All `StateManager` writes for a run happen on the event-loop thread of the owning process: the observer, pool selection, the heartbeat and finalize.
 - Load, modify and write is synchronous, so two writes cannot interleave.
 - The one `to_thread` near state writes, `executor.py:1459`, writes the batch report, not the state file.
 - Task 1 confirms no state write runs off the loop thread. If one does, `StateManager` gains a per-run `threading.Lock` around load, modify and write.
 
-**D6. Heartbeat failure.** An `OSError` from a heartbeat write is logged at WARNING with the run-id, and the run continues. A run is not killed because its bookkeeping failed. If writes keep failing, the run turns `ORPHANED (HEARTBEAT_STALE)` after the stale window. That is the observable signal, and the WARNINGs explain it. `claim` failing at start is fatal: it raises, the way `init_run` does today.
+**D6. Heartbeat failure.** An `OSError` from a heartbeat write is logged at WARNING with the run-id, and the run continues. A run is not killed because its bookkeeping failed. If writes keep failing, the run turns `STALE` after the stale window. That is the observable signal, and the WARNINGs explain it. A failed `observer.step_started` or `item_started` write is handled the same way (WARNING, run continues); `step_completed` keeps today's `_append_step` behaviour and raises. `init_run` or `claim` failing at start is fatal: it raises, the way `init_run` does today.
 
 **D7. Foreground stall.**
 - `_read_turn` already applies `idle_s` to each read with its own `_IdleTimer`. Today `_collect_turns` passes `idle_s=None` for foreground reads (`:217`) and will pass `foreground_idle_timeout_s` instead.
@@ -254,7 +255,9 @@ active_item: ActiveItem | None
 - `dispatch.execute()` catches `DispatchStalledError` ahead of its generic `Exception` handler. It logs a WARNING without a traceback and returns `ActionResult(success=False, error="dispatch stalled: no output for <N>s; turn interrupted", metadata={"stalled": True, "session_usable": ...})`.
 - Background tracking is not affected. If the stall fires while 932's ledger is active, the turn is a background wait and is governed by 932's key.
 
-**D8. `sq runs wait`.** On each poll that sees `running`, `wait_for_run` assesses liveness. `ORPHANED` ends the wait with `WaitOutcome.ORPHANED`, exit **8**. This is the next free code: 0–7 are taken (199 D13). The result is logged at WARNING with the reason, and stderr reads `sq runs wait: run <id> orphaned (<reason>)`. `wait_for_run` gains injected `now: Callable[[], datetime]`, `hostname` and `process_alive`, beside the existing `clock` and `sleep`.
+**D8. `sq runs wait`.** On each poll that sees `running`, `wait_for_run` assesses liveness.
+- `ORPHANED` ends the wait with `WaitOutcome.ORPHANED`, exit **8**. This is the next free code: 0–7 are taken (199 D13). The result is logged at WARNING, and stderr reads `sq runs wait: run <id> orphaned (process <pid> gone)`.
+- `STALE` does not end the wait, because the run may still finish (D3). The first poll that sees `STALE` logs one WARNING, `run <id> heartbeat overdue by <age>; still waiting`. A later poll that sees `LIVE` again logs one INFO record that the heartbeat resumed. `--timeout` remains the bound, as it is for any run that never finishes. A stale run on another host, or one whose PID was reused, therefore waits until `--timeout`; the WARNING names that case. `wait_for_run` gains injected `now: Callable[[], datetime]`, `hostname` and `process_alive`, beside the existing `clock` and `sleep`.
 
 **D9. Prune selection.**
 
@@ -264,13 +267,14 @@ active_item: ActiveItem | None
 |---|---|
 | `FAILED` | status `failed` |
 | `ORPHANED` | assessed `ORPHANED` (D3) |
+| `STALE` | assessed `STALE` (D3) |
 | `UNAVAILABLE` | pipeline cannot be loaded (199's `ResumeProblem.PIPELINE_UNAVAILABLE` rule) |
 | `UNREADABLE` | the file is in `STATE_READ_ERRORS`, schema-obsolete included |
 | `COMPLETED` | status `completed` |
 | `PAUSED` | status `paused` |
 
 **Selection rules:**
-- **Default** (no `--status`): `failed`, `orphaned`, `unavailable`, `unreadable`. In the default set, `orphaned` matches only `PROCESS_GONE` orphans. A `HEARTBEAT_STALE` orphan is selected only by an explicit `--status orphaned` or by run-id (see Risk Assessment).
+- **Default** (no `--status`): `failed`, `orphaned`, `unavailable`, `unreadable`. `stale` is never in the default set (D3); it is selected only by `--status stale` or by run-id, and the preview labels it `stale`.
 - **`--status`** is repeatable and replaces the default set.
 - **Run-ids**, given as positional arguments, select exactly those runs whatever their category. Run-ids combined with `--status` is a usage error (exit 2).
 - **Matching:** a run is a candidate if any selected category matches it.
@@ -313,14 +317,40 @@ def available_width(console: Console) -> int | None   # None when not a terminal
 - `available=None` means no truncation. Truncation uses `Text.truncate(width, overflow="ellipsis")`.
 - The column gap is 2 and the indent is 2, both as in cf.
 
+**D12. One executor observer, separate from events.** `execute_pipeline` today takes `on_step_complete`, and this slice needs two more notifications (step start, item start). Rather than add a third callback, they become one protocol in `pipeline/run_observer.py`:
+
+```python
+class RunObserver(Protocol):
+    def step_started(self, step_name: str) -> None: ...
+    def item_started(self, step_name: str, item: ActiveItem) -> None: ...
+    def step_completed(self, result: StepResult) -> None: ...
+```
+
+`execute_pipeline(observer: RunObserver | None)` replaces `on_step_complete`, and `StateManager.observer(run_id)` returns `RunStateRecorder`, which replaces `make_step_callback`. `on_pool_selection` stays on `ModelResolver`, because pool selection is the resolver's event, not the executor's.
+
+The 173 events dispatcher (`run_event`) is not used for this, because the two serve different purposes:
+- **Events are user-bindable.** A project's `events.yaml` decides which bindings fire. Run-state bookkeeping must always happen and must not depend on a manifest.
+- **Events can fail the action.** The POST_ACTION call site turns a failed outcome into a failed step (`executor.py:902-912`). A progress write must never fail a step (D6).
+- **Events cost a manifest load and plugin discovery per fire** (`run_event`). That is acceptable once per action, but not once per `each` item and per heartbeat-adjacent write.
+- **Events are async and run user code.** The observer is synchronous and in-process, which keeps D5's single-writer rule.
+
+`EventType` gains no `step-start` or `item-start` member in this slice. If users later want to bind actions to those moments, a step-start event can be fired from the same call sites the observer uses, without changing the observer.
+
+**D13. No ownerless `running` window.** A run must never be `running` without an owner, or it is a crash orphan that cannot be detected.
+- **New runs:** `init_run(pipeline_name, params, *, owner: RunOwner | None, ...)` writes `owner`, `heartbeat_at` and `progress_at` in the same `_write_atomic` that first writes `status: running`. `_run_pipeline_sdk` builds the owner with `RunOwner.current(heartbeat_interval_s)` before calling it. A process that dies anywhere after `init_run`, including before the heartbeat task starts, has a dead PID on record and lists as `ORPHANED`.
+- **Resumed runs:** the file is `paused` or `failed` until `claim`, which writes status and owner together. A crash before `claim` leaves the run in its prior, resumable status, not `running`.
+- **Prompt-only runs** pass `owner=None` and are `UNOWNED` by design (Technical Scope).
+- The heartbeat task's first write follows one interval after start. Until then `heartbeat_at` from `init_run` or `claim` is the reference, so the run is never `STALE` early.
+
 ### Error handling summary
 
 | Failure | Observable signal | Outcome |
 |---|---|---|
-| Heartbeat write `OSError` | WARNING per failure | run continues; turns `ORPHANED` after stale window |
-| `claim` fails | exception | run does not start (as `init_run` today) |
-| Process dies | `ORPHANED (PROCESS_GONE)` in list; wait exit 8 | — |
-| Event loop blocked > stale window | `ORPHANED (HEARTBEAT_STALE)` while blocked | clears on next heartbeat |
+| Heartbeat or progress write `OSError` | WARNING per failure | run continues; turns `STALE` after stale window |
+| `init_run` or `claim` fails | exception | run does not start (as `init_run` today) |
+| Process dies, at any point after `init_run` | `orphaned` in list; wait exit 8 | — |
+| Event loop blocked > stale window | `stale` in list; one WARNING from wait | wait continues; clears on next heartbeat |
+| Process dies on another host, or PID reused | `stale` in list; one WARNING from wait | wait runs to `--timeout`; prune by `--status stale` or run-id |
 | Foreground silence | WARNING; step error `dispatch stalled: …` | step fails; session usable |
 | Interrupt or drain fails | ERROR; `unusable_reason` set | step fails; later dispatches fail fast |
 | Prune delete `OSError` | ERROR with path | continues; exit 1 |
@@ -385,9 +415,9 @@ def apply_prune(plan: PrunePlan, runs_dir: Path) -> PruneResult
   run-20261006-p4-1a2b3c4d           p4              slice=199             paused    review-design              2026-10-06 14:02
 2 runs reference 2 unavailable pipelines (-v for details; sq runs prune --status unavailable removes them).
 ```
-- **Status:** `running` is cyan. `orphaned` is red, with its reason in the `-v` detail. `UNOWNED` running runs show `running` with an empty Activity cell.
+- **Status:** `running` is cyan, `stale` is yellow and `orphaned` is red. `UNOWNED` running runs show `running` with an empty Activity cell.
 - **At:** for a resumable run, 199's "Resume at" text. For a running or orphaned run, `active_step`, plus `[item P/T · index]` when an item is active.
-- **Activity:** `elapsed · progress-age ago`, for running and orphaned runs only.
+- **Activity:** `elapsed · progress-age ago`, for running, stale and orphaned runs only. A stale run appends ` · heartbeat <age> ago`.
 - **Run ID** and **Status** never shrink.
 
 `sq pipelines list`:
@@ -406,7 +436,7 @@ User (1)
 ```
   Run ID                          Pipeline   Status     Reason                 Age
   run-20261002-test-p4-…          test-p4    completed  unavailable            5d
-  run-20261004-p6-77aa…           p6         running    orphaned (process gone) 3d
+  run-20261004-p6-77aa…           p6         running    orphaned               3d
   run-20261001-x.json             —          —          unreadable             6d
 3 run(s) would be removed. Re-run with --yes to delete.
 ```
@@ -418,7 +448,8 @@ User (1)
 ## Integration Points
 
 ### Provides to Other Slices
-- `assess_liveness` and `RunLiveness`: the single definition of orphaned, for any future orchestrator or `--json` surface (#192).
+- `assess_liveness` and `RunLiveness`: the single definition of orphaned and stale, for any future orchestrator or `--json` surface (#192).
+- `RunObserver`: the executor's one progress interface, for any later in-process consumer (D12).
 - `RunState.active_step`, `active_item` and `progress_at`: live progress for in-process callers.
 - `DispatchStalledError` and the `stalled` metadata: a named stall signal for review loops and metrology (320).
 - `loader.resolve_pipeline`: resolution without loading.
@@ -433,9 +464,11 @@ User (1)
 
 ### Functional Requirements
 - A new SDK run, a resumed run and an item-resumed run each record `owner` and set `status: running` at start. `heartbeat_at` advances every `run_heartbeat_interval_s` while the run lives.
+- A new SDK run's state file has its `owner` from the write that creates it. A process killed between `init_run` and the first heartbeat lists as `orphaned`, not `running`.
 - `active_step` names the running step, and during an `each` step `active_item` names the running item. Both clear at finalize.
 - A running run whose process is killed (`kill -9`) lists as `orphaned` within one listing call. `sq runs wait` on it exits 8.
 - A v4 `running` file lists as `running` (`UNOWNED`), and `wait` keeps waiting on it, as in 0.21.
+- A run with an overdue heartbeat and a live PID lists as `stale`. `sq runs wait` on it logs one WARNING and keeps waiting, and default `sq runs prune` does not select it.
 - A foreground turn silent longer than `pipeline.foreground_idle_timeout_s` is interrupted:
   - The step fails with an error starting `dispatch stalled:`.
   - A WARNING is logged.
@@ -449,19 +482,21 @@ User (1)
 - On a TTY, `sq runs list` fits within the terminal width, shrinking the widest shrinkable column with `…` and never below 8. When piped, it never truncates.
 - `sq pipelines list` prints aligned groups with counts and shared widths, and no box drawing. `-v` adds the params column.
 - `sq pipelines show p4` prints the source, the path and the YAML exactly as written. `--path` prints only the path.
+- `sq runs list --all` stays under 1 s with a few hundred run-state files on local disk (199's advisory target, restated in Special Considerations).
 
 ### Technical Requirements
 - `run_liveness` unit tests cover every D3 row with injected `now`, `hostname` and `process_alive`:
-  - same host, process gone;
-  - stale heartbeat with the process alive (PID reuse);
-  - another host, fresh heartbeat and stale heartbeat;
+  - same host, process gone (`ORPHANED`), including with an overdue heartbeat;
+  - overdue heartbeat with the process alive (`STALE`);
+  - another host, fresh heartbeat (`LIVE`) and overdue heartbeat (`STALE`);
   - unowned.
+- `init_run(owner=...)` test: the first write already holds the owner; there is no intermediate ownerless `running` file.
 - `RunHeartbeat` test, with a short interval and a real `StateManager` in `tmp_path`:
   - the claim is written;
   - at least two heartbeats are written;
   - the task is cancelled on exit;
   - an `OSError` on write logs a WARNING and does not raise.
-- Executor tests assert the `on_progress` call order for a plain step and for an `each` step (one call per item).
+- Executor tests assert the `RunObserver` call order for a plain step and for an `each` step (`step_started`, one `item_started` per item, `step_completed`). The existing `on_step_complete` tests move to the observer unchanged in substance.
 - `sdk_session` tests use a fake client whose stream goes silent:
   - the interrupt is sent;
   - the drain reaches the result;
@@ -472,7 +507,8 @@ User (1)
 - The dispatch action test asserts a `DispatchStalledError` gives a failed `ActionResult` and a WARNING, with no traceback logged.
 - `plan_prune` tests cover each category, each protection rule, filter combinations, run-id selection and the run-id/`--status` usage error. `apply_prune` tests use real files, including reports, a missing file and an unwritable directory.
 - `fit_widths` tests: fits already; one column shrinks; several shrink; the minimum floor; a non-shrinkable column; `available=None`.
-- `wait_for_run` gains an `ORPHANED` test. The CLI exit-code mapping test covers exit 8.
+- `wait_for_run` gains an `ORPHANED` test, and a `STALE` test: one WARNING, the wait continues, and it ends on the run's terminal status or on `--timeout`. The CLI exit-code mapping test covers exit 8.
+- 199's I/O-bounds test gains 20 running runs (10 with a live PID, 10 with a dead one). It asserts the `load_definition` and `load_report` counts are unchanged and that `process_alive` is called exactly 20 times.
 - Fixtures are real: run states are written through `StateManager`, and a dead PID comes from a subprocess that has already exited.
 - Tests never read the real runs directory or the user pipelines (`tests/_hermetic.py`).
 - `ruff format`, `ruff check` and `pyright` pass with zero errors.
@@ -490,7 +526,8 @@ Draft, to be refined in Phase 6. Steps 1–5 use a scratch `HOME` and project. S
 ```bash
 S=$(mktemp -d); mkdir -p $S/home $S/proj
 # seed.py (Phase 6 adds a helper): writes paused/failed/completed runs as in 199, plus
-#  - "orphan": claim() with pid of an already-exited `python -c pass`
+#  - "orphan": init_run(owner=) with the pid of an already-exited `python -c pass`
+#  - "stale": owner pid of a live `sleep 600 &`, heartbeat_at an hour old
 #  - "unowned": a running state with no owner (v4 shape)
 #  - "gone": a completed run of a pipeline that no longer exists
 #  - "junk": a run file with invalid JSON
@@ -502,13 +539,14 @@ cd $S/proj && export HOME=$S/home
    ```bash
    sq runs list
    ```
-   - The orphan row shows `orphaned` with an Activity cell.
+   - The orphan row shows `orphaned` with an Activity cell; the stale row shows `stale`.
    - The unowned row shows `running`.
    - One stderr line reads `1 runs reference 1 unavailable pipelines (-v for details; …)`, with no per-run warnings.
    - `sq runs list -v` adds the `gone` pipeline's loader message once.
 2. **Wait on an orphan.**
    ```bash
-   sq runs wait <orphan-id>; echo "exit $?"          # "… orphaned (process gone)"; exit 8
+   sq runs wait <orphan-id>; echo "exit $?"          # "… orphaned (process <pid> gone)"; exit 8
+   sq runs wait <stale-id> --timeout 5; echo $?      # one "heartbeat overdue" WARNING; exit 4
    sq runs wait <unowned-id> --timeout 3; echo $?    # exit 4 (still treated as running)
    ```
 3. **Width.**
@@ -518,7 +556,8 @@ cd $S/proj && export HOME=$S/home
    ```
 4. **Prune.**
    ```bash
-   sq runs prune                      # preview: orphan, failed, gone, junk; paused absent
+   sq runs prune                      # preview: orphan, failed, gone, junk; paused and stale absent
+   sq runs prune --status stale       # preview: the stale run only
    ls $HOME/.config/squadron/runs | wc -l     # unchanged
    sq runs prune --yes                # "Removed 4 run(s)."
    sq runs prune <paused-id>          # preview shows the paused run (named)
@@ -536,7 +575,12 @@ cd $S/proj && export HOME=$S/home
    ```bash
    sq run p4 <slice> --model <alias> &   # any multi-step pipeline
    sq runs list                          # running; At = current step; Activity advancing
-   kill -9 %1; sq runs list              # orphaned (process gone)
+   kill -9 %1; sq runs list              # orphaned
+   ```
+   Also kill a second run within a second of starting it (`sq run p4 <slice> --model <alias> & sleep 1; kill -9 %2`): it lists as `orphaned`, never as an ownerless `running`.
+8. **Listing cost** (read-only, real runs dir).
+   ```bash
+   time sq runs list --all            # under 1 s, as measured for 199 (0.67 s for 188 runs)
    ```
 7. **Foreground stall** (credentials). Set `pipeline.foreground_idle_timeout_s = 20` in the scratch project's `.squadron.toml`. Run a one-step pipeline whose dispatch prompt asks the model to run `sleep 120` in Bash.
    - The run log shows `dispatch: foreground turn silent for 20s; interrupting`.
@@ -547,28 +591,37 @@ cd $S/proj && export HOME=$S/home
 
 ### Technical Risks
 - **Interrupting a live turn.** The SDK's state after `interrupt()` is not documented. The drain assumes the CLI emits the turn's own `ResultMessage` after an interrupt.
-- **False orphan from a blocked event loop.** A synchronous call that blocks the loop for longer than 10 heartbeat intervals (300 s by default) makes a live run read as orphaned. `sq runs prune` could then delete a live run's file, and that run's next state write fails.
+- **Blocked event loop.** A synchronous call that blocks the loop for longer than 10 heartbeat intervals (300 s by default) makes a live run read as `STALE`. If a user prunes it explicitly, the run's next state write fails.
 - **Silent tool calls.** A legitimate foreground tool call (a long test suite run through Bash) that emits nothing for the idle bound gets interrupted.
 
 ### Mitigation Strategies
 - **Interrupt:** Phase 6 task 1 is a spike against the installed SDK. It interrupts a real turn and records the messages that follow. If no result arrives, D7's fallback applies (session unusable, step fails). The decision then narrows to "always mark unusable" and the design is updated.
-- **Blocked loop:** prune deletes `ORPHANED (HEARTBEAT_STALE)` runs only when `--status orphaned` is given explicitly, or the run is named. The default prune set includes only `PROCESS_GONE` orphans on the same host. The preview shows the reason.
+- **Blocked loop:** `STALE` is never terminal (D3). Wait keeps waiting, and prune selects a stale run only by `--status stale` or by run-id, with the preview labelling it `stale`.
 - **Silent tool calls:** the default bound equals 932's 30 minutes, and it is configurable. The walkthrough records whether the CLI emits progress during a long Bash call.
 
 ## Implementation Notes
 
 ### Development Approach
 1. **Spike:** run `interrupt()` against the installed SDK to confirm the post-interrupt stream (risk above). Confirm no `StateManager` write runs off the loop thread (D5).
-2. **Schema v5 and the liveness core:** the `RunState` fields, `claim`, `heartbeat`, `record_progress`, `run_liveness.py` and `RunHeartbeat`. Wire them into `_run_pipeline_sdk` and add `on_progress` to the executor. Tests.
-3. **Foreground stall:** the config key, the `_collect_turns` change, the interrupt and drain, `DispatchStalledError`, and the dispatch mapping. Tests.
-4. **Wait and listing:** `WaitOutcome.ORPHANED`; `RunSummary` liveness, `RunListing` and the unavailable summary; running runs in the default view.
-5. **Renderer and listings:** `cli/columns.py`, then move the runs and pipelines renderers onto it (`PipelineInfo.params`, `-v`).
-6. **`resolve_pipeline`, show and prune:** `resolve_pipeline` (refactor `load_pipeline` onto it) and `sq pipelines show`. `scan_runs`, `run_prune.py` and `sq runs prune`.
-7. **Docs and issues:** update README, docs/PIPELINES.md and docs/COMMANDS.md, add the CHANGELOG lines, and close #190 and #165. Open an issue for resuming orphaned runs (Technical Scope, Excluded).
+2. **Observer refactor (no behaviour change):** add `RunObserver`, move `on_step_complete` and its call sites and tests onto it, and commit on its own (D12).
+3. **Schema v5 and the liveness core:** the `RunState` fields, `init_run(owner=)`, `claim`, `heartbeat`, the observer's progress writes, `run_liveness.py` and `RunHeartbeat`. Wire them into `_run_pipeline_sdk`. Tests.
+4. **Foreground stall:** the config key, the `_collect_turns` change, the interrupt and drain, `DispatchStalledError`, and the dispatch mapping. Tests.
+5. **Wait and listing:** `WaitOutcome.ORPHANED` and the `STALE` wait policy; `RunSummary` liveness, `RunListing` and the unavailable summary; running runs in the default view.
+6. **Renderer and listings:** `cli/columns.py`, then move the runs and pipelines renderers onto it (`PipelineInfo.params`, `-v`).
+7. **`resolve_pipeline`, show and prune:** `resolve_pipeline` (refactor `load_pipeline` onto it) and `sq pipelines show`. `scan_runs`, `run_prune.py` and `sq runs prune`.
+8. **Docs and issues:** update README, docs/PIPELINES.md and docs/COMMANDS.md, add the CHANGELOG lines, and close #190 and #165. Open an issue for resuming orphaned runs (Technical Scope, Excluded).
 
-Effort: 3/5. The parts are independent apart from the shared liveness definition. Steps 2–4 carry the risk; 5 and 6 are mechanical.
+Effort: 3/5. The parts are independent apart from the shared liveness definition. Steps 3–5 carry the risk; 2, 6 and 7 are mechanical.
 
 ### Special Considerations
-- **Write volume:** one extra state write per heartbeat (30 s) and one per `each` item start. Both are small atomic rewrites of a single JSON file.
+- **Write volume:** one extra state write per heartbeat (30 s), one per step start and one per `each` item start. Each is a small atomic rewrite of a single JSON file.
+- **Listing performance.** 199's advisory target stands: `sq runs list --all` under 1 s with a few hundred run-state files on local disk (measured at 0.67 s for 188 runs). 174 changes the cost as follows:
+  - **No new file reads.** The v5 fields live in the state file `list_runs` already parses.
+  - **One `os.kill(pid, 0)` per running run** with a same-host owner, and nothing per other run. `hostname` is read once per call.
+  - **Running runs now appear in the default view** but load no definition and no report, since they have no resume point.
+  - **The unavailable summary** reuses `_Definitions`' per-pipeline cache, so it adds no loads.
+  - **Prune** loads each distinct pipeline at most once through the same cache, and globs reports only for runs it deletes.
+
+  The I/O-bounds test enforces the counts, and walkthrough step 8 measures wall-clock time. There is still no assertion on time in tests.
 - **Prune is destructive,** and it touches only `~/.config/squadron/runs`. The preview is the default, and `--yes` is never implied by any other flag.
 - **Prompt-only runs** stay `UNOWNED` by design (Technical Scope). The listing's empty Activity cell is the visible signal that liveness is unknown for them.
