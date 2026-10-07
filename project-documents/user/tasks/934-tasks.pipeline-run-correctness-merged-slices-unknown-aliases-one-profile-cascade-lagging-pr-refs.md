@@ -204,10 +204,10 @@ status: in_progress
 
 ## Task 20 — Primary fetch timeout (D10)
 
-- [ ] In `refs.py`, convert `ProcessTimedOutError` on the primary `_fetch` into `HostCommandTimeoutError`, as `github_cli.py` does for `gh` calls, logging a WARNING tagged `extra={RENDERED_BY_CALLER: True}` first (the command renders the error)
-- [ ] Tests (fake `ProcessRunner`): primary fetch timeout raises `HostCommandTimeoutError`, not a traceback
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: render primary PR fetch timeout as a code host error`
+- [x] In `refs.py`, convert `ProcessTimedOutError` on the primary `_fetch` into `HostCommandTimeoutError`, as `github_cli.py` does for `gh` calls, logging a WARNING tagged `extra={RENDERED_BY_CALLER: True}` first (the command renders the error)
+- [x] Tests (fake `ProcessRunner`): primary fetch timeout raises `HostCommandTimeoutError`, not a traceback
+  - [x] Success: tests pass
+- [x] Commit: `fix: render primary PR fetch timeout as a code host error`
 
 ## Task 21 — Obtain the API head locally (D6 step 1)
 
