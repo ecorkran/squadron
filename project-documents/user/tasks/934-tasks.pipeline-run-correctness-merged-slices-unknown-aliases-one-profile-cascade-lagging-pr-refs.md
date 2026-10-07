@@ -264,11 +264,11 @@ status: in_progress
 
 ## Task 25a — Print adjustments and record the reviewed head (D9)
 
-- [ ] Print each `RefAdjustment` once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`; `sq review pr` and `sq pr show` share the fetch path, so both print it. The PR review artifact's provenance records the head sha actually reviewed
-- [ ] Tag the adjustment WARNINGs (Tasks 19 and 22b) with `extra={RENDERED_BY_CALLER: True}` in this task, now that the line they duplicate exists. The tag stays inert until Tasks 25b/25c install the handler
-- [ ] Tests: lag success prints exactly one adjustment line and the artifact carries the API head sha; a base fast-forward adjustment prints once; both adjustment records carry the tag
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: print ref adjustments and record the reviewed head sha`
+- [x] Print each `RefAdjustment` once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`; `sq review pr` and `sq pr show` share the fetch path, so both print it. The PR review artifact's provenance records the head sha actually reviewed
+- [x] Tag the adjustment WARNINGs (Tasks 19 and 22b) with `extra={RENDERED_BY_CALLER: True}` in this task, now that the line they duplicate exists. The tag stays inert until Tasks 25b/25c install the handler
+- [x] Tests: lag success prints exactly one adjustment line and the artifact carries the API head sha; a base fast-forward adjustment prints once; both adjustment records carry the tag
+  - [x] Success: tests pass
+- [x] Commit: `feat: print ref adjustments and record the reviewed head sha`
 
 ## Task 25b — Wire `sq review pr` (D8)
 
