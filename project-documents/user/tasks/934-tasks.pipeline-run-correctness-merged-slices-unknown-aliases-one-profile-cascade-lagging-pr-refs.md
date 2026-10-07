@@ -272,10 +272,10 @@ status: in_progress
 
 ## Task 25b — Wire `sq review pr` (D8)
 
-- [ ] Wrap the body after `_resolve_verbosity(verbose)` in `with code_host_logging(verbosity):`
-- [ ] Tests (`tests/cli/test_review_pr.py`): a `CodeHostError` appears on stderr exactly once at default and `-v`; at `-vv` the tagged WARNING also appears; an untagged codehost WARNING shows at default verbosity; at default verbosity a lag success shows the adjustment line once and no duplicate WARNING; a fetch timeout never produces a traceback
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: print code host failures once in sq review pr (#186)`
+- [x] Wrap the body after `_resolve_verbosity(verbose)` in `with code_host_logging(verbosity):`
+- [x] Tests (`tests/cli/test_review_pr.py`): a `CodeHostError` appears on stderr exactly once at default and `-v`; at `-vv` the tagged WARNING also appears; an untagged codehost WARNING shows at default verbosity; at default verbosity a lag success shows the adjustment line once and no duplicate WARNING; a fetch timeout never produces a traceback
+  - [x] Success: tests pass
+- [x] Commit: `fix: print code host failures once in sq review pr (#186)`
 
 ## Task 25c — Wire `sq pr show` and `sq pr create` (D8)
 
