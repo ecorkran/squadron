@@ -18,6 +18,7 @@ from squadron.codehost.errors import (
     RENDERED_BY_CALLER,
     HostCommandTimeoutError,
     NoMergeBaseError,
+    PullRequestHeadUnavailableError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
@@ -40,6 +41,18 @@ _REF_NAMESPACE = "refs/squadron/pr"
 def local_ref(remote_name: str, number: int, role: RefRole) -> str:
     """The local ref a fetched endpoint lands on."""
     return f"{_REF_NAMESPACE}/{remote_name}/{number}/{role.value}"
+
+
+def api_head_ref(remote_name: str, number: int) -> str:
+    """Where the host API's head commit lands when the pull-request ref lags it."""
+    return f"{_REF_NAMESPACE}/{remote_name}/{number}/api-head"
+
+
+#: What ``ensure_api_head`` reports for a commit that needed no fetch.
+HEAD_PRESENT_LOCALLY = "present locally"
+
+#: The label for the host-neutral attempt: fetch the commit by its sha.
+HEAD_FETCHED_BY_SHA = "fetched by sha"
 
 
 def fetch_and_range(
@@ -159,6 +172,96 @@ def _fetch(
         RefRole.BASE,
         f"git fetch failed: {result.stderr.strip() or '(no stderr)'}",
     )
+
+
+def ensure_api_head(
+    runner: ProcessRunner,
+    *,
+    cwd: str,
+    remote_name: str,
+    api_sha: str,
+    api_local: str,
+    pr_ref: str,
+    pr_ref_sha: str,
+    head_fallback_sources: tuple[str, ...],
+) -> str:
+    """Make the host API's head commit present locally; say how it got there.
+
+    Tries, in order: the commit already being present, ``fetch <remote> +<sha>``
+    (host-neutral), then each ``head_fallback_sources`` entry, each into
+    ``api_local``. After every fetch ``api_local`` must resolve to ``api_sha``: a
+    fork PR's same-named base branch is a different commit and is rejected, so the
+    stale pull-request ref's sha is never reviewed. Returns ``HEAD_PRESENT_LOCALLY``,
+    ``HEAD_FETCHED_BY_SHA`` or the fallback source that worked.
+
+    Raises:
+        HostCommandTimeoutError: the presence check timed out.
+        PullRequestHeadUnavailableError: no source yielded the commit; it names
+            each source with its reason. ``pr_ref`` and ``pr_ref_sha`` describe
+            the lagging ref for that message.
+    """
+    if _commit_is_present(runner, cwd=cwd, sha=api_sha):
+        return HEAD_PRESENT_LOCALLY
+
+    attempts: list[tuple[str, str]] = []
+    sources = ((HEAD_FETCHED_BY_SHA, api_sha), *((entry, entry) for entry in head_fallback_sources))
+    for label, source in sources:
+        reason = _fetch_api_head(
+            runner,
+            cwd=cwd,
+            remote_name=remote_name,
+            source=source,
+            api_local=api_local,
+            api_sha=api_sha,
+        )
+        if reason is None:
+            return label
+        _logger.debug("api head %s: %s: %s", api_sha, label, reason)
+        attempts.append((label, reason))
+
+    _logger.warning(
+        "api head %s could not be fetched from %s: %s",
+        api_sha,
+        remote_name,
+        "; ".join(f"{label}: {reason}" for label, reason in attempts),
+        extra={RENDERED_BY_CALLER: True},
+    )
+    raise PullRequestHeadUnavailableError(api_sha, pr_ref, pr_ref_sha, remote_name, attempts)
+
+
+def _commit_is_present(runner: ProcessRunner, *, cwd: str, sha: str) -> bool:
+    """``cat-file -e``: exit 0 is present; non-zero is simply absent."""
+    argv = ["git", "cat-file", "-e", f"{sha}^{{commit}}"]
+    try:
+        result = runner.run(argv, cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
+    except ProcessTimedOutError as exc:
+        _logger.warning("git cat-file exceeded %ss", exc.timeout, extra={RENDERED_BY_CALLER: True})
+        raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
+    _logger.debug("commit %s present locally: %s", sha, result.returncode == 0)
+    return result.returncode == 0
+
+
+def _fetch_api_head(
+    runner: ProcessRunner,
+    *,
+    cwd: str,
+    remote_name: str,
+    source: str,
+    api_local: str,
+    api_sha: str,
+) -> str | None:
+    """One fetch attempt into ``api_local``; ``None`` on success, else the reason."""
+    argv = ["git", "fetch", "--no-tags", remote_name, f"+{source}:{api_local}"]
+    try:
+        result = runner.run(argv, cwd=cwd, timeout=GIT_FETCH_TIMEOUT_SECONDS)
+        if result.returncode != 0:
+            return result.stderr.strip() or "(no stderr)"
+        fetched = _rev_parse(runner, cwd=cwd, ref=api_local)
+    except ProcessTimedOutError as exc:
+        return f"timed out after {exc.timeout:g}s"
+    if fetched == api_sha:
+        return None
+    return f"fetched {fetched or 'nothing'}, not the API head {api_sha}"
 
 
 def _verify(

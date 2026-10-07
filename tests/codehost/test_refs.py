@@ -30,6 +30,10 @@ from squadron.codehost.models import RefRole
 from squadron.codehost.refs import (
     GIT_FETCH_TIMEOUT_SECONDS,
     GIT_QUERY_TIMEOUT_SECONDS,
+    HEAD_FETCHED_BY_SHA,
+    HEAD_PRESENT_LOCALLY,
+    api_head_ref,
+    ensure_api_head,
     fetch_and_range,
     local_ref,
 )
@@ -435,3 +439,112 @@ def test_primary_fetch_timeout_raises_a_code_host_error_not_a_traceback(
     assert len(timeout_records) == 1
     assert timeout_records[0].levelno == logging.WARNING
     assert getattr(timeout_records[0], RENDERED_BY_CALLER) is True
+
+
+# --- ensure_api_head (slice 934 D6 step 1, D10) --------------------------------
+
+API_SHA = "ae1cbf2" + "0" * 33
+OTHER_SHA = "d3008a6" + "0" * 33
+API_LOCAL = api_head_ref(REMOTE, NUMBER)
+FALLBACK = "refs/heads/dev/jane"
+_CAT_FILE = ["git", "cat-file", "-e", f"{API_SHA}^{{commit}}"]
+_API_REV = ["git", "rev-parse", "--verify", f"{API_LOCAL}^{{commit}}"]
+
+
+def _ensure(runner: FakeProcessRunner) -> str:
+    return ensure_api_head(
+        runner,
+        cwd="/repo",
+        remote_name=REMOTE,
+        api_sha=API_SHA,
+        api_local=API_LOCAL,
+        pr_ref=f"refs/pull/{NUMBER}/head",
+        pr_ref_sha=OTHER_SHA,
+        head_fallback_sources=(FALLBACK,),
+    )
+
+
+def test_a_present_commit_needs_no_fetch() -> None:
+    runner = FakeProcessRunner([(_CAT_FILE, _ok())])
+    assert _ensure(runner) == HEAD_PRESENT_LOCALLY
+    assert [call.argv[1] for call in runner.calls] == ["cat-file"]
+
+
+def test_presence_check_timeout_is_a_code_host_error() -> None:
+    runner = FakeProcessRunner([(_CAT_FILE, ProcessTimedOutError(_CAT_FILE, 30.0))])
+    with pytest.raises(HostCommandTimeoutError):
+        _ensure(runner)
+
+
+def test_an_absent_commit_is_fetched_by_sha() -> None:
+    runner = FakeProcessRunner(
+        [(_CAT_FILE, _fail("")), (["git", "fetch"], _ok()), (_API_REV, _ok(API_SHA))]
+    )
+    assert _ensure(runner) == HEAD_FETCHED_BY_SHA
+    fetch = next(call for call in runner.calls if call.argv[1] == "fetch")
+    assert f"+{API_SHA}:{API_LOCAL}" in fetch.argv
+
+
+def test_a_refused_sha_fetch_falls_back_to_the_head_branch() -> None:
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("upload-pack: not our ref")),
+            (["git", "fetch"], _ok()),
+            (_API_REV, _ok(API_SHA)),
+        ]
+    )
+    assert _ensure(runner) == FALLBACK
+    fetches = [call for call in runner.calls if call.argv[1] == "fetch"]
+    assert f"+{FALLBACK}:{API_LOCAL}" in fetches[1].argv
+
+
+def test_a_fallback_that_returns_a_different_sha_is_rejected() -> None:
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("not our ref")),
+            (["git", "fetch"], _ok()),
+            (_API_REV, _ok(OTHER_SHA)),
+        ]
+    )
+    with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+        _ensure(runner)
+    reasons = dict(excinfo.value.attempts)
+    assert "not the API head" in reasons[FALLBACK]
+
+
+def test_a_fallback_timeout_is_recorded_as_the_reason() -> None:
+    argv = ["git", "fetch"]
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("not our ref")),
+            (["git", "fetch"], ProcessTimedOutError(argv, 300.0)),
+        ]
+    )
+    with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+        _ensure(runner)
+    assert dict(excinfo.value.attempts)[FALLBACK] == "timed out after 300s"
+
+
+def test_when_every_source_fails_the_error_names_each_one(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("not our ref")),
+            (["git", "fetch"], _fail("couldn't find remote ref")),
+        ]
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+            _ensure(runner)
+    assert excinfo.value.attempts == (
+        (HEAD_FETCHED_BY_SHA, "not our ref"),
+        (FALLBACK, "couldn't find remote ref"),
+    )
+    assert str(excinfo.value).count(FALLBACK) == 1
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and getattr(warnings[0], RENDERED_BY_CALLER) is True
