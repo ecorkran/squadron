@@ -12,6 +12,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261006
 
+### Slice 934: Pipeline Run Correctness — Design Complete
+
+- **Delivered:** `user/slices/934-slice.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md` (validator PASS).
+- **Decisions:** #188: git, not task checkboxes, is the record of a merged slice. The test is ancestor of the target and not on its first-parent chain, which relies on 197's `--no-ff` merges. implement-plan does not check boxes for the agent. #184: one `review/profile_resolution.py` cascade, with `sq review`'s order. The alias check's profile source is per action (`resolve_full(profile_source=)`). #186: fetch the API head by sha, then `refs/heads/<head_ref>`, verifying the sha either way. Errors name each source. `FetchedRange.adjustments` replaces log-only notes. A NullHandler on `squadron.codehost` below `-vv`.
+- **Surprises:** #175's guard already shipped in 196 (D13). What remains is the profile source (#184) and `--dry-run`, which skips classification: `sq run review 931 --model glm-flash-low. --dry-run` exits 0 today. #186's double print comes from `logging.lastResort` echoing the adapter's WARNING, since no handler is attached to `squadron.codehost`.
+
 ### Release 0.20.1
 
 - **Contents:** 0.20.0 (unpublished: CI failed on two CLI tests that matched Rich output without stripping ANSI codes, which Typer forces on when `GITHUB_ACTIONS` is set) plus that test fix.
