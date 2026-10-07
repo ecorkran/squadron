@@ -6,6 +6,7 @@ validates them via the Pydantic schema, and converts to PipelineDefinition.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from dataclasses import dataclass
 from enum import StrEnum
@@ -56,6 +57,8 @@ class PipelineInfo:
     description: str
     source: PipelineSource
     path: Path
+    # Declared params in declaration order: name -> default, or "required" (174).
+    params: dict[str, str] = dataclasses.field(default_factory=dict[str, str])
 
 
 def pipeline_identity(path: Path) -> str:
@@ -179,6 +182,7 @@ def discover_pipelines(
                     description=schema.description,
                     source=source,
                     path=yaml_path,
+                    params=dict(schema.params),
                 )
             except (OSError, yaml.YAMLError, PydanticValidationError):
                 # Narrowed to: unreadable file, malformed YAML, or a document

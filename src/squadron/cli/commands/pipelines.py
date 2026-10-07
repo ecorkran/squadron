@@ -15,6 +15,10 @@ pipelines_app = typer.Typer(
 
 
 @pipelines_app.command("list")
-def list_pipelines() -> None:
+def list_pipelines(
+    verbose: bool = typer.Option(
+        False, "-v", "--verbose", help="Add each pipeline's first params and their defaults."
+    ),
+) -> None:
     """List effective pipelines grouped by source (built-in, project, user)."""
-    render_pipeline_listing(discover_pipelines())
+    render_pipeline_listing(discover_pipelines(), verbose=verbose)

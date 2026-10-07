@@ -362,3 +362,37 @@ class TestValidatePipelineAllowedTools:
 
         defn = self._make_pipeline({"prompt": "hi", "allowed_tools": ["read_file"]})
         assert validate_pipeline(defn) == []
+
+
+class TestPipelineInfoParams:
+    """PipelineInfo.params keeps declaration order and defaults (slice 174)."""
+
+    def test_params_in_declaration_order_with_defaults(self, tmp_path: Path) -> None:
+        proj = tmp_path / "project"
+        proj.mkdir()
+        (proj / "ordered.yaml").write_text(
+            "name: ordered\n"
+            "description: d\n"
+            "params:\n"
+            "  slice: required\n"
+            "  model: sonnet\n"
+            "  max-revisions: '2'\n"
+            "steps:\n"
+            "  - design: { phase: 4 }\n"
+        )
+
+        info = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=tmp_path / "u")}
+
+        assert list(info["ordered"].params.items()) == [
+            ("slice", "required"),
+            ("model", "sonnet"),
+            ("max-revisions", "2"),
+        ]
+
+    def test_pipeline_without_params_has_none(self, tmp_path: Path) -> None:
+        proj = tmp_path / "project"
+        _write_pipeline_yaml(proj, "bare")
+
+        info = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=tmp_path / "u")}
+
+        assert info["bare"].params == {}

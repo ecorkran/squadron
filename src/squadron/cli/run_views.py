@@ -15,7 +15,6 @@ from rich import print as rprint
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
-from rich.table import Table
 from rich.text import Text
 
 from squadron.cli.columns import Column, available_width, render_rows
@@ -85,21 +84,51 @@ def render_run_status(state: RunState) -> None:
     rprint(Panel("\n".join(lines), title="Run Status"))
 
 
-def render_pipeline_listing(pipelines: list[PipelineInfo]) -> None:
-    """Print one table per non-empty source group, in LISTING_ORDER, names sorted."""
+# Params shown per pipeline under ``sq pipelines list -v``; the rest are counted.
+LISTED_PARAMS = 3
+_GROUP_LABEL_STYLE = "bold"
+_GROUP_COUNT_STYLE = "dim"
+
+
+def params_cell(params: dict[str, str]) -> str:
+    """Up to ``LISTED_PARAMS`` params as ``name=default``, then `` +N`` for the rest."""
+    shown = " ".join(f"{name}={default}" for name, default in list(params.items())[:LISTED_PARAMS])
+    hidden = len(params) - LISTED_PARAMS
+    return f"{shown} +{hidden}" if hidden > 0 else shown
+
+
+def render_pipeline_listing(
+    pipelines: list[PipelineInfo], *, verbose: bool = False, console: Console | None = None
+) -> None:
+    """Print the pipelines as one aligned list, grouped by source in LISTING_ORDER.
+
+    The Name column is as wide across every group as its longest name, so groups
+    line up. ``verbose`` adds a params column.
+    """
+    target = console or get_console()
     if not pipelines:
-        rprint("No pipelines found.")
+        target.print("No pipelines found.")
         return
-    for source in LISTING_ORDER:
-        group = sorted((p for p in pipelines if p.source is source), key=lambda p: p.name)
-        if not group:
-            continue
-        table = Table(title=f"{_SOURCE_TITLES[source]} ({len(group)})", title_justify="left")
-        table.add_column("Name", style="bold")
-        table.add_column("Description")
+    groups = [
+        (source, sorted((p for p in pipelines if p.source is source), key=lambda p: p.name))
+        for source in LISTING_ORDER
+    ]
+    groups = [(source, group) for source, group in groups if group]
+    columns = [Column(None, shrinkable=False), Column(None, shrinkable=True)]
+    if verbose:
+        columns.append(Column(None, shrinkable=True))
+    rows: list[list[Text]] = []
+    for _, group in groups:
         for info in group:
-            table.add_row(escape(info.name), escape(info.description))
-        rprint(table)
+            row = [Text(info.name), Text(info.description)]
+            if verbose:
+                row.append(Text(params_cell(info.params)))
+            rows.append(row)
+    lines = iter(render_rows(columns, rows, available=available_width(target)))
+    for source, group in groups:
+        label = Text(_SOURCE_TITLES[source], style=_GROUP_LABEL_STYLE)
+        label.append(f" ({len(group)})", style=_GROUP_COUNT_STYLE)
+        print_lines([label, *(next(lines) for _ in group)], target)
 
 
 def resume_cell(summary: RunSummary) -> str:
