@@ -245,12 +245,12 @@ status: in_progress
 
 ## Task 24a — `code_host_logging` context manager (D8)
 
-- [ ] Add `code_host_logging(verbosity: int)` next to `render_code_host_error`. On entry: record the `squadron.codehost` logger level, add one stderr handler (format `%(levelname)s %(name)s: %(message)s`) with the tag filter, set level WARNING/INFO/DEBUG for verbosity 0/1/2+. On exit (`finally`): remove exactly that handler, restore the level. `propagate` untouched
-- [ ] Filter drops records carrying `RENDERED_BY_CALLER` below verbosity 2 and keeps them at 2+
-- [ ] Nested entry is a no-op on entry and exit
-- [ ] Tests (log records emitted directly in the test, with and without the tag): tagged absent at verbosity 0 and 1, present at 2 with prefix; untagged reaches stderr at every verbosity; entering twice shows one handler inside and zero after, level restored; a raised `typer.Exit` inside still cleans up; records still reach `caplog`
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: code host logging scope that prints each failure once`
+- [x] Add `code_host_logging(verbosity: int)` next to `render_code_host_error`. On entry: record the `squadron.codehost` logger level, add one stderr handler (format `%(levelname)s %(name)s: %(message)s`) with the tag filter, set level WARNING/INFO/DEBUG for verbosity 0/1/2+. On exit (`finally`): remove exactly that handler, restore the level. `propagate` untouched
+- [x] Filter drops records carrying `RENDERED_BY_CALLER` below verbosity 2 and keeps them at 2+
+- [x] Nested entry is a no-op on entry and exit
+- [x] Tests (log records emitted directly in the test, with and without the tag): tagged absent at verbosity 0 and 1, present at 2 with prefix; untagged reaches stderr at every verbosity; entering twice shows one handler inside and zero after, level restored; a raised `typer.Exit` inside still cleans up; records still reach `caplog`
+  - [x] Success: tests pass
+- [x] Commit: `feat: code host logging scope that prints each failure once`
 
 ## Task 24b — Tag the remaining pre-raise WARNINGs (D8)
 
