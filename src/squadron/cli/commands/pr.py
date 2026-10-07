@@ -90,6 +90,10 @@ def resolve_and_fetch_pull_request(
 
     Raises ``CodeHostError`` on any adapter failure; callers render it the
     same way ``pr show`` does.
+
+    Also prints each ``RefAdjustment`` once, on stderr. It lives here, not in the
+    callers, so every command sharing this fetch prints it exactly once and none
+    can forget; a caller that must stay silent needs the helper split first.
     """
     host, locator, parsed = resolve_locator(target, repo_cwd)
     resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)

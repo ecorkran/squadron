@@ -26,17 +26,15 @@ from squadron.codehost.errors import (
     RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
-from squadron.codehost.models import RefRole
-from squadron.codehost.refs import (
-    GIT_FETCH_TIMEOUT_SECONDS,
-    GIT_QUERY_TIMEOUT_SECONDS,
+from squadron.codehost.git_refs import GIT_FETCH_TIMEOUT_SECONDS, GIT_QUERY_TIMEOUT_SECONDS
+from squadron.codehost.head_resolution import (
     HEAD_FETCHED_BY_SHA,
     HEAD_PRESENT_LOCALLY,
     api_head_ref,
     ensure_api_head,
-    fetch_and_range,
-    local_ref,
 )
+from squadron.codehost.models import RefRole
+from squadron.codehost.refs import fetch_and_range, local_ref
 from squadron.core.process_runner import ProcessResult, ProcessTimedOutError, SubprocessRunner
 from tests.codehost.fake_runner import FakeProcessRunner
 

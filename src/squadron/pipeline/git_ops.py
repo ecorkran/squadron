@@ -223,7 +223,11 @@ def _first_parent_chain(target: str, cwd: str) -> set[str]:
 
 
 def _is_ancestor(tip: str, target: str, cwd: str) -> bool:
-    """``merge-base --is-ancestor``: exit 0 is yes, 1 is no, anything else is a failure."""
+    """``merge-base --is-ancestor``: exit 0 is yes, 1 is no, anything else is a failure.
+
+    Raises on a failure, unlike ``codehost.git_refs.is_ancestor``, which answers "no".
+    A wrong "no" here would reopen a merged slice and reimplement it.
+    """
     result = _checked_git(
         ["merge-base", "--is-ancestor", tip, target],
         cwd,

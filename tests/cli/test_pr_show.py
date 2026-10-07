@@ -512,4 +512,4 @@ def test_an_untagged_codehost_warning_still_shows_in_pr_show(
     result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
 
     assert result.exit_code == 1
-    assert "WARNING squadron.codehost.refs: could not test ancestry" in result.stderr
+    assert "WARNING squadron.codehost.git_refs: could not test ancestry" in result.stderr

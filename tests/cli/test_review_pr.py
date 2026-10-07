@@ -539,7 +539,7 @@ def test_an_untagged_codehost_warning_still_shows_at_default_verbosity(
     result = CliRunner().invoke(app, ["review", "pr", "83"])
 
     assert result.exit_code == 1
-    assert "WARNING squadron.codehost.refs: could not test ancestry" in result.stderr
+    assert "WARNING squadron.codehost.git_refs: could not test ancestry" in result.stderr
 
 
 def test_a_lagging_ref_prints_the_adjustment_once_and_no_duplicate_warning(

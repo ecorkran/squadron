@@ -18,8 +18,8 @@ from pathlib import Path
 import pytest
 
 from squadron.codehost import metadata_lock, worktree
+from squadron.codehost.git_refs import GIT_FETCH_TIMEOUT_SECONDS
 from squadron.codehost.models import PullRequestRecord
-from squadron.codehost.refs import GIT_FETCH_TIMEOUT_SECONDS
 from squadron.codehost.worktree import (
     ProcessIdentityUnresolvableError,
     ScratchWorktree,
