@@ -148,85 +148,86 @@ status: in_progress
 
 ## Task 12 — Create `cli/run_views.py` with `STATUS_COLORS`
 
-- [ ] Create `src/squadron/cli/run_views.py`; move `_STATUS_COLORS` from `cli/commands/run.py`
+- [x] Create `src/squadron/cli/run_views.py`; move `_STATUS_COLORS` from `cli/commands/run.py`
       here as `STATUS_COLORS` (single definition)
-- [ ] Move `_display_run_status` (the Rich "Run Status" panel, `run.py` ~line 553) into
+- [x] Move `_display_run_status` (the Rich "Run Status" panel, `run.py` ~line 553) into
       `run_views.py` as the public `render_run_status(state: RunState)`, unchanged in output;
       `sq run --status` and, later, `sq runs wait` both call it
-- [ ] Update `run.py` (result display around line 592) to import `STATUS_COLORS` and
+- [x] Update `run.py` (result display around line 592) to import `STATUS_COLORS` and
       `render_run_status`
-  - [ ] Success: `grep -rn "_STATUS_COLORS\|_display_run_status" src` returns nothing;
+  - [x] Success: `grep -rn "_STATUS_COLORS\|_display_run_status" src` returns nothing;
         existing `sq run --status` tests pass unchanged
 
 ## Task 13 — `render_pipeline_listing()` (D1, D2, UI Specifications)
 
-- [ ] In `run_views.py` add `render_pipeline_listing(pipelines)`: group by
+- [x] In `run_views.py` add `render_pipeline_listing(pipelines)`: group by
       `PipelineSource` in `LISTING_ORDER`, keep alphabetical name order within groups, one
       Rich table per non-empty group headed `Built-in (N)` / `Project (N)` / `User (N)`; with
       no pipelines print `No pipelines found.`
-  - [ ] Success: output shape matches the design's `sq pipelines list` mock
+  - [x] Success: output shape matches the design's `sq pipelines list` mock
 
 ## Task 14 — `pipelines.py` command and registration
 
-- [ ] Create `src/squadron/cli/commands/pipelines.py` with `pipelines_app`
+- [x] Create `src/squadron/cli/commands/pipelines.py` with `pipelines_app`
       (`no_args_is_help=True`) and a `list` subcommand calling `discover_pipelines()` and
       `render_pipeline_listing()`
-- [ ] Register with `app.add_typer(pipelines_app, name="pipelines")` in `cli/app.py`
-  - [ ] Success: `sq pipelines list` runs; `sq pipelines` prints help; no command module
+- [x] Register with `app.add_typer(pipelines_app, name="pipelines")` in `cli/app.py`
+  - [x] Success: `sq pipelines list` runs; `sq pipelines` prints help; no command module
         imports another command module
 
 ## Task 15 — Pipeline listing tests
 
-- [ ] Unit test for grouping/ordering/empty-group omission/`No pipelines found.` using
+- [x] Unit test for grouping/ordering/empty-group omission/`No pipelines found.` using
       `project_dir` and `user_dir` overrides with real YAML in `tmp_path`, covering all three
       sources plus a shadowed built-in
-- [ ] `CliRunner` test for `sq pipelines list` (hermetic, via the same overrides or monkeypatched
+- [x] `CliRunner` test for `sq pipelines list` (hermetic, via the same overrides or monkeypatched
       directories per `tests/_hermetic.py`), exit code 0 incl. empty result
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add sq pipelines list`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add sq pipelines list`
 
 ## Task 16 — Remove `sq run --list` (D8)
 
-- [ ] In `cli/commands/run.py` delete the `--list`/`-l` option (line ~971), its
+- [x] In `cli/commands/run.py` delete the `--list`/`-l` option (line ~971), its
       mutual-exclusion check, its handler and any helper used only by it
-- [ ] Delete the `--list` tests in `tests/cli/commands/test_run.py`
-  - [ ] Success: `sq run --list` fails with Typer "No such option"; remaining `test_run.py`
+- [x] Delete the `--list` tests in `tests/cli/commands/test_run.py`
+  - [x] Success: `sq run --list` fails with Typer "No such option"; remaining `test_run.py`
         tests pass; no dead imports (`ruff check` clean)
 
 ## Task 17 — Test the removed flag
 
-- [ ] Add a `CliRunner` test asserting `sq run --list` and `sq run -l` exit non-zero
-- [ ] Confirm `sq run --status`, `--resume` and `--item` tests still pass unchanged
-  - [ ] Success: tests pass
-- [ ] Commit: `refactor: remove sq run --list in favor of sq pipelines list`
+- [x] Add a `CliRunner` test asserting `sq run --list` and `sq run -l` exit non-zero
+- [x] Confirm `sq run --status`, `--resume` and `--item` tests still pass unchanged
+  - [x] Success: tests pass
+- [x] Commit: `refactor: remove sq run --list in favor of sq pipelines list`
 
 ## Task 18 — `sq agents list` (D14)
 
-- [ ] In `cli/commands/list.py` expose `agents_app` (`no_args_is_help=True`) with
+- [x] In `cli/commands/list.py` expose `agents_app` (`no_args_is_help=True`) with
       `list_agents` as its `list` subcommand; flags `--state`, `--provider` unchanged
-- [ ] In `cli/app.py` register `add_typer(agents_app, name="agents")` and remove
+- [x] In `cli/app.py` register `add_typer(agents_app, name="agents")` and remove
       `app.command("list")`
-  - [ ] Success: no command module imports another; `agents` name does not collide with an
+  - [x] Success: no command module imports another; `agents` name does not collide with an
         existing group (check `app.py`)
 
 ## Task 19 — Update `sq list` references (D14)
 
-- [ ] Change the three "Use 'sq list' to see active agents" messages in `task.py`,
+- [x] Change the three "Use 'sq list' to see active agents" messages in `task.py`,
       `shutdown.py`, `message.py` to name `sq agents list`; update any tests asserting that text
-- [ ] Change `commands/sq/list.md` and `commands/agents/sq-list/SKILL.md` to run
+- [x] Change `commands/sq/list.md` and `commands/agents/sq-list/SKILL.md` to run
       `sq agents list $ARGUMENTS`, keeping their file names
-  - [ ] Success: `grep -rn "sq list" src commands tests` returns only intentional historical mentions (none expected)
+  - [x] Success: `grep -rn "sq list" src commands tests` returns only intentional historical mentions (none expected)
+  - Note: `commands/agents/sq-list/SKILL.md` runs `sq agents list` with the user's arguments appended in prose, NOT the literal `sq agents list $ARGUMENTS`, because test `test_no_agents_skill_uses_claude_argument_substitution` forbids `$ARGUMENTS` in agents skills
 
 ## Task 20 — Tests for `sq agents list`
 
-- [ ] Move/adapt existing `sq list` CLI tests to `sq agents list`; add a test that `sq list`
+- [x] Move/adapt existing `sq list` CLI tests to `sq agents list`; add a test that `sq list`
       exits non-zero (no such command) and that the error messages in Task 19 name
       `sq agents list`; `--state` and `--provider` still work
-- [ ] Test that `commands/sq/list.md` and `commands/agents/sq-list/SKILL.md` contain
+- [x] Test that `commands/sq/list.md` and `commands/agents/sq-list/SKILL.md` contain
       `sq agents list $ARGUMENTS` and no bare `sq list`
-  - [ ] Success: tests pass
-- [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/cli -q`
-- [ ] Commit: `refactor: move sq list to sq agents list`
+  - [x] Success: tests pass
+- [x] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/cli -q`
+- [x] Commit: `refactor: move sq list to sq agents list`
 
 ---
 
