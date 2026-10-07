@@ -2,21 +2,36 @@
 
 from __future__ import annotations
 
+import socket
+from datetime import UTC, datetime, timedelta
+
 import typer
 
 from squadron.cli.run_views import (
+    render_prune_preview,
     render_run_listing,
     render_run_status,
     unavailable_details,
     unavailable_summary,
 )
+from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.run_listing import list_run_summaries
+from squadron.pipeline.run_liveness import LivenessAssessment, assess_liveness
+from squadron.pipeline.run_prune import (
+    DEFAULT_CATEGORIES,
+    DURATION_FORM,
+    PruneCategory,
+    PruneUsageError,
+    apply_prune,
+    parse_duration,
+    plan_prune,
+)
 from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, orphaned_message, wait_for_run
-from squadron.pipeline.state import StateManager
+from squadron.pipeline.state import RunState, StateManager
 
 runs_app = typer.Typer(
     name="runs",
-    help="List and wait on pipeline runs.",
+    help="List, wait on and prune pipeline runs.",
     no_args_is_help=True,
 )
 
@@ -75,3 +90,73 @@ def wait(
     elif code != 0:
         typer.echo(f"sq runs wait: run {run_id} {outcome}", err=True)
     raise typer.Exit(code)
+
+
+def _older_than(value: str | None) -> timedelta | None:
+    if value is None:
+        return None
+    try:
+        return parse_duration(value)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from None
+
+
+_PRUNE_DEFAULT_HELP = ", ".join(sorted(DEFAULT_CATEGORIES))
+
+
+@runs_app.command("prune")
+def prune(
+    run_ids: list[str] | None = typer.Argument(
+        None, help="Prune exactly these runs (any category except a live run)."
+    ),
+    statuses: list[PruneCategory] | None = typer.Option(
+        None,
+        "--status",
+        help=f"Category to prune; repeatable. Replaces the default set ({_PRUNE_DEFAULT_HELP}).",
+    ),
+    pipeline: str | None = typer.Option(None, "--pipeline", help="Only runs of this pipeline."),
+    older_than: str | None = typer.Option(
+        None, "--older-than", help=f"Only runs last updated longer ago than {DURATION_FORM}."
+    ),
+    yes: bool = typer.Option(False, "--yes", help="Delete. Without it, only preview."),
+) -> None:
+    """Remove dead run-state files and their reports. Previews unless --yes."""
+    age = _older_than(older_than)
+    state_manager = StateManager()
+    now = datetime.now(UTC)
+    hostname = socket.gethostname()
+
+    def assess(state: RunState) -> LivenessAssessment | None:
+        return assess_liveness(state, now=now, hostname=hostname)
+
+    try:
+        plan = plan_prune(
+            state_manager.scan_runs(),
+            runs_dir=state_manager.runs_dir,
+            statuses=None if not statuses else frozenset(statuses),
+            run_ids=run_ids or [],
+            pipeline=pipeline,
+            older_than=age,
+            now=now,
+            load_definition=load_pipeline,
+            assess=assess,
+        )
+    except PruneUsageError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        raise typer.Exit(2) from None
+    for refusal in plan.refusals:
+        typer.echo(f"sq runs prune: run {refusal.run_id}: {refusal.reason}", err=True)
+    failed = 0
+    if not plan.candidates:
+        typer.echo("No runs to prune.")
+    else:
+        render_prune_preview(plan.candidates)
+        count = len(plan.candidates)
+        if yes:
+            result = apply_prune(plan, state_manager.runs_dir)
+            failed = result.failed
+            typer.echo(f"Removed {result.removed} run(s).")
+        else:
+            typer.echo(f"{count} run(s) would be removed. Re-run with --yes to delete.")
+    if plan.refusals or failed:
+        raise typer.Exit(1)

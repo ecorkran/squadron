@@ -22,6 +22,7 @@ from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loader import LISTING_ORDER, PipelineInfo, PipelineSource
 from squadron.pipeline.run_listing import ResumeKind, ResumeProblem, RunListing, RunSummary
 from squadron.pipeline.run_liveness import RunLiveness
+from squadron.pipeline.run_prune import PruneCandidate, PruneCategory
 from squadron.pipeline.state import RUNNING_STATUS, RunState
 
 # Keyed by ExecutionStatus values; a status not listed renders UNKNOWN_STATUS_COLOR.
@@ -268,3 +269,29 @@ def unavailable_summary(listing: RunListing) -> str:
 def unavailable_details(listing: RunListing) -> list[str]:
     """One ``  <pipeline>: <message>`` line per unavailable pipeline, for ``-v``."""
     return [f"  {name}: {message}" for name, message in sorted(listing.unavailable.items())]
+
+
+_NO_VALUE = "—"
+_PRUNE_COLUMNS = (
+    Column("Run ID", shrinkable=False),
+    Column("Pipeline", shrinkable=True),
+    Column("Status", shrinkable=False),
+    Column("Reason", shrinkable=True),
+    Column("Age", shrinkable=False),
+)
+
+
+def render_prune_preview(candidates: list[PruneCandidate], console: Console | None = None) -> None:
+    """Print the runs a prune selects: stored status, matched categories and age."""
+    target = console or get_console()
+    rows = [
+        [
+            Text(candidate.run_id),
+            Text(candidate.pipeline or _NO_VALUE),
+            Text(candidate.status or _NO_VALUE),
+            Text(", ".join(c.value for c in PruneCategory if c in candidate.categories)),
+            Text(_NO_VALUE if candidate.age is None else format_duration(candidate.age)),
+        ]
+        for candidate in candidates
+    ]
+    print_lines(render_rows(_PRUNE_COLUMNS, rows, available=available_width(target)), target)

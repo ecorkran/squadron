@@ -8,6 +8,7 @@ protection rules. ``apply_prune`` deletes what a plan names and nothing else.
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -235,3 +236,22 @@ def _delete(path: Path, root: Path) -> bool:
         _logger.exception("prune: cannot delete %s", path)
         return False
     return True
+
+
+_DURATION_UNITS: dict[str, timedelta] = {
+    "s": timedelta(seconds=1),
+    "m": timedelta(minutes=1),
+    "h": timedelta(hours=1),
+    "d": timedelta(days=1),
+    "w": timedelta(weeks=1),
+}
+DURATION_FORM = "<int><unit>, unit one of s m h d w (e.g. 7d)"
+_DURATION_RE = re.compile(r"^\s*(\d+)\s*([a-z])\s*$")
+
+
+def parse_duration(text: str) -> timedelta:
+    """Parse ``--older-than``: ``<int><unit>``, lenient on case and whitespace."""
+    match = _DURATION_RE.match(text.lower())
+    if match is None or match.group(2) not in _DURATION_UNITS:
+        raise ValueError(f"invalid duration {text!r}: expected {DURATION_FORM}")
+    return int(match.group(1)) * _DURATION_UNITS[match.group(2)]

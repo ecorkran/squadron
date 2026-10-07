@@ -6,14 +6,18 @@ project pipelines are read from the temp cwd.
 
 from __future__ import annotations
 
+import os
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from click.testing import Result
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.cli.commands import runs
 from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.run_prune import parse_duration
 from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult, orphaned_message
 from squadron.pipeline.state import StateManager
 from tests.pipeline.liveness_support import exited_pid
@@ -23,8 +27,10 @@ from tests.pipeline.run_listing_support import (
     begin_owned,
     completed_batch_run,
     end,
+    mixed_records,
     pause_at,
     write_batch_pipeline,
+    write_report,
     write_step_pipeline,
 )
 
@@ -155,3 +161,117 @@ class TestRunsWait:
 
         assert result.exit_code == WAIT_EXIT_CODES[WaitOutcome.NOT_FOUND]
         assert "sq runs wait: run no-such-run not_found" in result.stderr
+
+
+# ---------------------------------------------------------------------------
+# sq runs prune (slice 174 D9)
+# ---------------------------------------------------------------------------
+
+
+def _prune(*args: str) -> Result:
+    return CliRunner().invoke(app, ["runs", "prune", *args])
+
+
+def _files(sm: StateManager) -> set[str]:
+    return {p.name for p in sm.runs_dir.iterdir()}
+
+
+class TestRunsPrune:
+    def test_preview_deletes_nothing(self, sm: StateManager) -> None:
+        failed = begin(sm, "steps")
+        end(sm, failed, ExecutionStatus.FAILED)
+        before = _files(sm)
+
+        result = _prune()
+
+        assert result.exit_code == 0, result.output
+        assert failed in result.stdout
+        assert "1 run(s) would be removed. Re-run with --yes to delete." in result.stdout
+        assert _files(sm) == before
+
+    def test_yes_deletes_exactly_the_previewed_runs_and_reports(self, sm: StateManager) -> None:
+        failed = begin(sm, "batch", {"plan": "180"})
+        write_report(sm, "batch", failed, mixed_records())
+        end(sm, failed, ExecutionStatus.FAILED)
+        paused = begin(sm, "steps")
+        pause_at(sm, paused, STEP_NAMES[0])
+        preview = _prune()
+
+        result = _prune("--yes")
+
+        assert result.exit_code == 0, result.output
+        assert "Removed 1 run(s)." in result.stdout
+        assert failed in preview.stdout and paused not in preview.stdout
+        assert not any(name.startswith(failed) for name in _files(sm))
+        assert f"{paused}.json" in _files(sm)
+
+    def test_preview_labels_stale_and_unowned(self, sm: StateManager) -> None:
+        stale = begin_owned(sm, "steps", os.getpid())
+        state = sm.load(stale)
+        state.heartbeat_at = datetime(2020, 1, 1, tzinfo=UTC)
+        sm._save(state)  # pyright: ignore[reportPrivateUsage]
+        unowned = begin(sm, "steps")
+
+        stale_out = " ".join(_prune("--status", "stale").stdout.split())
+        unowned_out = " ".join(_prune("--status", "unowned").stdout.split())
+
+        assert f"{stale} steps running stale" in stale_out
+        assert f"{unowned} steps running unowned" in unowned_out
+        assert unowned not in stale_out and stale not in unowned_out
+
+    def test_paused_only_by_name_or_status(self, sm: StateManager) -> None:
+        paused = begin(sm, "steps")
+        pause_at(sm, paused, STEP_NAMES[0])
+
+        assert paused not in _prune().stdout
+        assert paused in _prune(paused).stdout
+        assert paused in _prune("--status", "paused").stdout
+
+    def test_named_live_run_is_refused_with_exit_1(self, sm: StateManager) -> None:
+        live = begin_owned(sm, "steps", os.getpid())
+
+        result = _prune(live, "--yes")
+
+        assert result.exit_code == 1
+        assert f"sq runs prune: run {live}: run is live; not pruned" in result.stderr
+        assert f"{live}.json" in _files(sm)
+
+    @pytest.mark.parametrize(
+        "args",
+        [
+            ("run-x", "--status", "failed"),
+            ("--status", "running"),
+            ("--older-than", "3 fortnights"),
+            ("--older-than", "7"),
+        ],
+        ids=["run-id-with-status", "not-a-category", "bad-unit", "no-unit"],
+    )
+    def test_usage_errors_exit_2(self, sm: StateManager, args: tuple[str, ...]) -> None:
+        assert _prune(*args).exit_code == 2
+
+    def test_older_than_filters(self, sm: StateManager) -> None:
+        failed = begin(sm, "steps")
+        end(sm, failed, ExecutionStatus.FAILED)
+
+        assert "No runs to prune." in _prune("--older-than", " 2D ").stdout
+        assert failed in _prune("--older-than", "0s").stdout
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("30s", timedelta(seconds=30)),
+        ("5m", timedelta(minutes=5)),
+        (" 2H ", timedelta(hours=2)),
+        ("7d", timedelta(days=7)),
+        ("1 w", timedelta(weeks=1)),
+    ],
+)
+def test_parse_duration(text: str, expected: timedelta) -> None:
+    assert parse_duration(text) == expected
+
+
+@pytest.mark.parametrize("text", ["", "7", "d", "7y", "-1d", "1.5h"])
+def test_parse_duration_rejects(text: str) -> None:
+    with pytest.raises(ValueError, match="expected <int><unit>"):
+        parse_duration(text)
