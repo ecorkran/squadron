@@ -48,7 +48,25 @@ _SUPPORTED_SCHEMA_VERSIONS = {3, 4}
 # step via the same unconditional _append_step before returning on failure
 # (see executor.py), so a failed step is recorded complete by the identical
 # mechanism a paused step is.
-_RESUMABLE_STATUSES = {ExecutionStatus.PAUSED.value, ExecutionStatus.FAILED.value}
+RESUMABLE_STATUSES = frozenset({ExecutionStatus.PAUSED.value, ExecutionStatus.FAILED.value})
+
+# Status init_run writes for a live run. Not an ExecutionStatus member; typing
+# RunState.status as an enum that includes it is a schema change (slice 199 D10).
+RUNNING_STATUS = "running"
+
+
+def first_unfinished_step_of(state: RunState, definition: PipelineDefinition) -> str | None:
+    """Return name of the first step in *definition* not completed in *state*.
+
+    A step recorded with a status in RESUMABLE_STATUSES (PAUSED, FAILED)
+    is not treated as done, so resume returns to that step rather than
+    past it.
+    """
+    completed = {s.step_name for s in state.completed_steps if s.status not in RESUMABLE_STATUSES}
+    for step in definition.steps:
+        if step.name not in completed:
+            return step.name
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +243,7 @@ class StateManager:
             execution_mode=execution_mode,
             started_at=now,
             updated_at=now,
-            status="running",
+            status=RUNNING_STATUS,
         )
         self._write_atomic(
             self._state_path(run_id),
@@ -457,18 +475,8 @@ class StateManager:
         return prior
 
     def first_unfinished_step(self, run_id: str, definition: PipelineDefinition) -> str | None:
-        """Return name of the first step in definition not completed.
-
-        A step recorded with a status in _RESUMABLE_STATUSES (PAUSED, FAILED)
-        is not treated as done, so resume returns to that step rather than
-        past it.
-        """
-        state = self.load(run_id)
-        completed = {s.step_name for s in state.completed_steps if s.status not in _RESUMABLE_STATUSES}
-        for step in definition.steps:
-            if step.name not in completed:
-                return step.name
-        return None
+        """Load *run_id* and return its first unfinished step (see first_unfinished_step_of)."""
+        return first_unfinished_step_of(self.load(run_id), definition)
 
     def resume_iteration_for(self, run_id: str, step_name: str) -> int:
         """Return the recorded loop iteration to resume *step_name* at.

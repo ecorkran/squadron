@@ -17,6 +17,7 @@ import pytest
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import (
+    RUNNING_STATUS,
     CheckpointState,
     CompactSummary,
     ExecutionMode,
@@ -24,6 +25,7 @@ from squadron.pipeline.state import (
     SchemaVersionError,
     StateManager,
     StepState,
+    first_unfinished_step_of,
 )
 
 # ---------------------------------------------------------------------------
@@ -645,6 +647,42 @@ class TestFirstUnfinishedStep:
 
         defn = _make_definition(["design", "review-loop", "implement", "deploy"])
         assert state_manager.first_unfinished_step(run_id, defn) == "review-loop"
+
+
+class TestFirstUnfinishedStepOf:
+    """The pure function the method delegates to (slice 199 D4)."""
+
+    def test_paused_run_returns_paused_step(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        cb(_make_step_result(step_name="review", status=ExecutionStatus.PAUSED))
+        defn = _make_definition(["design", "review", "implement"])
+        assert first_unfinished_step_of(state_manager.load(run_id), defn) == "review"
+
+    def test_failed_run_returns_failed_step(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        cb(_make_step_result(step_name="design"))
+        cb(_make_step_result(step_name="implement", status=ExecutionStatus.FAILED))
+        defn = _make_definition(["design", "implement", "review"])
+        assert first_unfinished_step_of(state_manager.load(run_id), defn) == "implement"
+
+    def test_all_complete_returns_none(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        cb = state_manager.make_step_callback(run_id)
+        for name in ["design", "tasks"]:
+            cb(_make_step_result(step_name=name))
+        defn = _make_definition(["design", "tasks"])
+        assert first_unfinished_step_of(state_manager.load(run_id), defn) is None
+
+
+class TestRunningStatus:
+    def test_init_run_writes_running_status(self, state_manager: StateManager, tmp_path: Path) -> None:
+        run_id = state_manager.init_run("pipe", {})
+        assert state_manager.load(run_id).status == RUNNING_STATUS
+        raw = json.loads((tmp_path / f"{run_id}.json").read_text())
+        assert raw["status"] == "running"
 
 
 # ---------------------------------------------------------------------------
