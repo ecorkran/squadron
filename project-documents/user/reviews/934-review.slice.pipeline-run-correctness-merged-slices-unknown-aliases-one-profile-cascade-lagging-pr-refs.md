@@ -78,6 +78,14 @@ D5 has `--dry-run` "use[] it with the params from `_assemble_params` and `_extra
 
 D10 gives a row per new call for both the #188 predicate (local git) and the #186 head fallback (network), each with the hang/timeout outcome, the git-refuses or peer-disconnect outcome, the observable signal, and the resulting state — including the two distinctions that most often get flattened: `cat-file -e` exiting non-zero is "absent, a normal answer" rather than a failure, and a partial/refused fallback fetch is caught and recorded as that attempt's reason rather than aborting. It correctly orders fetch before classification because `refs._is_ancestor` answers "no" for an absent commit, and it names the publisher of each bound against the real constants (`GIT_COMMAND_TIMEOUT_SECONDS` for `run_git`, `GIT_FETCH_TIMEOUT_SECONDS`/`GIT_QUERY_TIMEOUT_SECONDS` in `codehost/refs.py`, all verified present). It also closes a pre-existing traceback hole on the same path (the primary `_fetch` timeout escaping `sq review pr`) rather than leaving it implicit. The parent architecture states no NFRs (latency, throughput) for any path this slice touches, so there is no NFR target to restate; the bounds above are what carries that role here.
 
+## Response (20261007)
+
+- **Bundling — no change.** The PM chose to bundle these four issues into one slice so it can run in its own worktree alongside 199.
+- **D4 raise on the labelling path — fixed.** `_review_template` never raises, so the executor's labelling path behaves as today. A separate `_require_review_template`, called only from `classify_pipeline`, raises `UnknownReviewTemplateError(ValueError)`, which is collected into `ClassificationError`. Runtime unknowns still go through the review action's `KeyError` path, and a test covers that with verbose labelling on.
+- **935 interface claim — fixed.** The sentence is dropped.
+- **`--dry-run --strict` criterion — fixed.** Rephrased so it can be observed: the same classification errors as a strict run, and the same step list as `--dry-run`.
+- Final finding: pass.
+
 ### Run Digest
 
 - Response length: 8944 chars
