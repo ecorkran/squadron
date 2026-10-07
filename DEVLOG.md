@@ -12,6 +12,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Slice 174: slice design complete (Phase 4)
+
+- **Design:** `user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md`. RunState schema v5 (owner PID/host/interval, heartbeat, `active_step`, `active_item`, `progress_at`); `run_liveness.assess_liveness` (PID or stale heartbeat convicts; `orphaned` derived, never persisted); every SDK run, resumed runs included, is claimed as `running`; `sq runs wait` exit 8 for orphaned. Foreground idle bound `pipeline.foreground_idle_timeout_s` (1800): interrupt, bounded drain, `DispatchStalledError`; the session stays usable only when the interrupt completes. `sq runs prune` (categories, preview unless `--yes`, paused and live protected), `cli/columns.py` fitter (cf algorithm, non-shrinkable columns), one unavailable-pipeline summary line, plain `sq pipelines list`, `sq pipelines show [--path]`.
+- **Open:** Phase 6 starts with an SDK interrupt spike; resuming orphaned runs is excluded (an issue is opened in Phase 6).
+- **Next:** Phase 4 review, then Phase 5 task breakdown.
+
 ### Release 0.21.0
 
 - **Contents:** slice 199 (`sq pipelines list`, `sq runs list`, `sq runs wait`; `sq run --list` removed; `sq list` → `sq agents list`; #185, #187), slice 934 (pipeline run correctness: merged slices not reimplemented #188, one review-profile cascade #184, `--dry-run` rejects unknown aliases/templates #175, lagging PR refs and single code-host failure output #186).
