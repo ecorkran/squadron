@@ -65,11 +65,11 @@ status: in_progress
 
 ## Task 4 — `ModelResolver.resolve_full(profile_source=)` (D4)
 
-- [ ] In `pipeline/resolver.py`, add keyword `profile_source: bool | None = None` to `resolve_full`; `None` uses the run's value; `resolve()` unchanged. The run-level `profile_source` still drives dispatch, summary and compact
-- [ ] The backstop in `ModelResolver._resolved` uses the per-call value
-- [ ] Tests (`tests/pipeline/test_resolver.py`): override True accepts a literal id the run-level False would reject; override False rejects one the run-level True would accept; `None` falls back to the run-level value; `resolve()` unaffected
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: per-call profile source on resolve_full`
+- [x] In `pipeline/resolver.py`, add keyword `profile_source: bool | None = None` to `resolve_full`; `None` uses the run's value; `resolve()` unchanged. The run-level `profile_source` still drives dispatch, summary and compact
+- [x] The backstop in `ModelResolver._resolved` uses the per-call value
+- [x] Tests (`tests/pipeline/test_resolver.py`): override True accepts a literal id the run-level False would reject; override False rejects one the run-level True would accept; `None` falls back to the run-level value; `resolve()` unaffected
+  - [x] Success: tests pass
+- [x] Commit: `feat: per-call profile source on resolve_full`
 
 ## Task 5 — Pipeline review action uses the shared helper (D3, D4)
 
