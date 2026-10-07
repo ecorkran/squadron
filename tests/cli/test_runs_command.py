@@ -12,7 +12,9 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.cli.commands import runs
 from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.run_listing import WAIT_EXIT_CODES, WaitOutcome
 from squadron.pipeline.state import StateManager
 from tests.pipeline.run_listing_support import (
     STEP_NAMES,
@@ -77,3 +79,35 @@ class TestRunsList:
     def test_bare_group_prints_help(self) -> None:
         result = CliRunner().invoke(app, ["runs"])
         assert "list" in result.output
+
+
+class TestRunsWait:
+    @pytest.mark.parametrize("outcome", list(WaitOutcome))
+    def test_every_outcome_maps_to_its_exit_code(
+        self, sm: StateManager, monkeypatch: pytest.MonkeyPatch, outcome: WaitOutcome
+    ) -> None:
+        run_id = begin(sm, "steps")
+        end(sm, run_id, ExecutionStatus.COMPLETED)
+        monkeypatch.setattr(runs, "wait_for_run", lambda *_a, **_k: outcome)
+
+        result = CliRunner().invoke(app, ["runs", "wait", run_id])
+
+        assert result.exit_code == WAIT_EXIT_CODES[outcome]
+        stderr_line = f"sq runs wait: run {run_id} {outcome}"
+        assert (stderr_line in result.stderr) is (outcome is not WaitOutcome.COMPLETED)
+
+    def test_completed_run_prints_status_and_exits_zero(self, sm: StateManager) -> None:
+        run_id = begin(sm, "steps")
+        end(sm, run_id, ExecutionStatus.COMPLETED)
+
+        result = CliRunner().invoke(app, ["runs", "wait", run_id])
+
+        assert result.exit_code == 0, result.output
+        assert "Run Status" in result.stdout
+        assert run_id in result.stdout
+
+    def test_missing_run_exits_not_found(self, sm: StateManager) -> None:
+        result = CliRunner().invoke(app, ["runs", "wait", "no-such-run"])
+
+        assert result.exit_code == WAIT_EXIT_CODES[WaitOutcome.NOT_FOUND]
+        assert "sq runs wait: run no-such-run not_found" in result.stderr
