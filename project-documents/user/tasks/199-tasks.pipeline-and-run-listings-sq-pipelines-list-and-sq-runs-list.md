@@ -28,8 +28,8 @@ status: not_started
   tests before its commit. Tests are hermetic: `tmp_path` runs dir and pipeline dirs, per
   `tests/_hermetic.py`; real `StateManager`, `BatchReport.write` and YAML fixtures.
 - Traceability (design → tasks): D1/D2 → 10–15; D3 → 7–9; D4/D11 → 3–4; D5 → 5–6; D6/D10 →
-  21; D7 → 22–24; D8 → 16–17; D9 → 25; D12 → 26; D13 → 30–33; D14 → 18–20; docs, CHANGELOG
-  and follow-up issues → 34–36; Verification Walkthrough → 37.
+  21; D7 → 22–24; D8 → 16–17; D9 → 25; D12 → 26; D13 → 29–32; D14 → 18–20; docs, CHANGELOG
+  and follow-up issues → 33–35; Verification Walkthrough → 36.
 - Effort: 3/5. Next planned slice: per `cf next` after 199 closes.
 
 ---
@@ -68,8 +68,10 @@ status: not_started
 
 - [ ] In the existing state test module, add tests calling `first_unfinished_step_of`
       directly: paused run → step name; failed run → step name; all steps complete → `None`
+- [ ] Add a test that a run created by `init_run` has `status == RUNNING_STATUS` and the
+      persisted JSON still contains `"running"`
   - [ ] Success: new tests pass; existing `first_unfinished_step` tests pass unchanged
-- [ ] Commit: `refactor: extract first_unfinished_step_of and publish RESUMABLE_STATUSES`
+- [ ] Commit: `refactor: extract first_unfinished_step_of; publish RESUMABLE_STATUSES and RUNNING_STATUS`
 
 ## Task 5 — Add report path helpers to `batch_report.py` (D5)
 
@@ -148,9 +150,13 @@ status: not_started
 
 - [ ] Create `src/squadron/cli/run_views.py`; move `_STATUS_COLORS` from `cli/commands/run.py`
       here as `STATUS_COLORS` (single definition)
-- [ ] Update `run.py` (`_display_run_status` around line 562, result display around line 592)
-      to import it
-  - [ ] Success: `grep -rn _STATUS_COLORS src` returns nothing; `sq run --status` output unchanged
+- [ ] Move `_display_run_status` (the Rich "Run Status" panel, `run.py` ~line 553) into
+      `run_views.py` as the public `render_run_status(state: RunState)`, unchanged in output;
+      `sq run --status` and, later, `sq runs wait` both call it
+- [ ] Update `run.py` (result display around line 592) to import `STATUS_COLORS` and
+      `render_run_status`
+  - [ ] Success: `grep -rn "_STATUS_COLORS\|_display_run_status" src` returns nothing;
+        existing `sq run --status` tests pass unchanged
 
 ## Task 13 — `render_pipeline_listing()` (D1, D2, UI Specifications)
 
@@ -309,7 +315,7 @@ status: not_started
 
 ## Part D — `sq runs list` (Dev Approach step 4)
 
-## Task 27 — Marker text and `render_run_listing()`
+## Task 27 — Marker text, `render_run_listing()` and tests
 
 - [ ] In `run_views.py` add a dict of marker text keyed by `ResumeProblem` (the only place
       marker text is defined) with exactly these values: `PIPELINE_UNAVAILABLE` →
@@ -324,20 +330,17 @@ status: not_started
   - [ ] Footer prints the two resume hints; empty result prints `No resumable runs.` plus
         ` Use --all to include completed runs.` when `--all` was not given
   - [ ] Success: dispatch is on the enums, no string comparison of marker text
+- [ ] Add `tests/cli/test_run_views.py` tests: every `ResumeProblem` member has marker text;
+      each Resume-at form; Target formatting; empty-result message with and without `--all`
+  - [ ] Success: tests pass
 
-## Task 28 — `runs.py` command and registration
+## Task 28 — `sq runs list` command and tests
 
 - [ ] Create `src/squadron/cli/commands/runs.py` with `runs_app` (`no_args_is_help=True`) and
       `list` subcommand: `--all`, `--pipeline NAME`; builds a `StateManager` the same way
       `run.py --status` does, calls `list_run_summaries`, then `render_run_listing`
 - [ ] Register with `add_typer(runs_app, name="runs")` in `cli/app.py`
   - [ ] Success: exits 0 including on empty results
-
-## Task 29 — Tests: run rendering and command
-
-- [ ] Test every `ResumeProblem` member has marker text in `run_views`
-- [ ] Rendering tests: each Resume-at form, Target formatting, empty-result messages with and
-      without `--all`
 - [ ] `CliRunner` tests for `sq runs list`, `--all`, `--pipeline`, hermetic runs dir
   - [ ] Success: tests pass
 - [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/cli tests/pipeline -q`
@@ -347,35 +350,38 @@ status: not_started
 
 ## Part E — `sq runs wait` (Dev Approach step 5)
 
-## Task 30 — `WaitOutcome` and `wait_for_run` (D13)
+## Task 29 — `WaitOutcome` and `wait_for_run` (D13)
 
 - [ ] In `run_listing.py` add `WAIT_POLL_INTERVAL_SECONDS`, `WaitOutcome(StrEnum)`
       (`COMPLETED`, `FAILED`, `PAUSED`, `TIMED_OUT`, `NOT_FOUND`, `UNREADABLE`,
       `UNKNOWN_STATUS`) and the single definition of outcome → exit code (0, 1, 3, 4, 5, 6, 7)
 - [ ] Implement `wait_for_run(state_manager, run_id, *, timeout, poll_interval, clock, sleep) -> WaitOutcome`:
       re-read state each poll; return when status is not `RUNNING_STATUS`; `timeout=None` waits
-      indefinitely; first unreadable poll → `UNREADABLE` with no retry; log every non-`COMPLETED`
+      indefinitely; `StateManager.load` raising `FileNotFoundError` → `NOT_FOUND`; the first
+      `json.JSONDecodeError`, `OSError`, `SchemaVersionError` or pydantic `ValidationError`
+      → `UNREADABLE` with no retry (any other exception propagates); log every non-`COMPLETED`
       outcome at WARNING
   - [ ] Success: exit code 2 is not used; no default timeout is set
 
-## Task 31 — Tests for `wait_for_run`
+## Task 30 — Tests for `wait_for_run`
 
 - [ ] With injected fake `clock`/`sleep` and real state files, one test per `WaitOutcome`:
       run moves `running` → each terminal status mid-wait; timeout while `running`; missing
-      run-id; unreadable state file on the first poll; unknown status value
+      run-id (`NOT_FOUND`); corrupt JSON, unsupported `schema_version` and schema-invalid files
+      on the first poll (each `UNREADABLE`, never `NOT_FOUND`); unknown status value
   - [ ] Success: each non-`COMPLETED` case asserts its WARNING record; no real sleeping
 - [ ] Commit: `feat: add wait_for_run helper`
 
-## Task 32 — `sq runs wait` command
+## Task 31 — `sq runs wait` command
 
 - [ ] In `runs.py` add `wait` subcommand: `<run-id>` argument, `--timeout SECONDS`; help text
       states that a crashed run stays `running` and `--timeout` is the bound
-- [ ] On a terminal status print the status line through the shared `run_views` renderer
-      (same as `sq run --status <run-id>`); for every non-zero outcome print one stderr line
+- [ ] On a terminal status print the status panel via `run_views.render_run_status`
+      (Task 12; the same output as `sq run --status <run-id>`); for every non-zero outcome print one stderr line
       naming the run-id and outcome; exit with the D13 code
   - [ ] Success: status-line rendering is shared with `run.py`, not duplicated
 
-## Task 33 — CLI tests for `sq runs wait`
+## Task 32 — CLI tests for `sq runs wait`
 
 - [ ] `CliRunner` test asserting every `WaitOutcome` maps to its exit code and prints the
       stderr line (inject poll/clock via the helper's parameters or a monkeypatched
@@ -389,7 +395,7 @@ status: not_started
 
 ## Part F — Docs, CHANGELOG, issues (Dev Approach step 6)
 
-## Task 34 — Update docs
+## Task 33 — Update docs
 
 - [ ] Replace `sq run --list` references with `sq pipelines list` in `README.md`,
       `docs/PIPELINES.md`, `docs/QUICKSTART.md` (find via `grep -rn "run --list\|sq run -l" .`
@@ -399,7 +405,7 @@ status: not_started
       `sq agents list`
   - [ ] Success: grep finds no remaining `sq run --list` or bare `sq list` in user-facing docs
 
-## Task 35 — CHANGELOG
+## Task 34 — CHANGELOG
 
 - [ ] Add short user-facing bullets under the unreleased section: new `sq pipelines list`,
       `sq runs list`, `sq runs wait`; removed `sq run --list` (use `sq pipelines list`);
@@ -407,19 +413,21 @@ status: not_started
   - [ ] Success: bullets are user-facing only; technical detail goes to DEVLOG
 - [ ] Commit: `docs: document run and pipeline listings; update changelog`
 
-## Task 36 — Open follow-up GitHub issues (feedback: issues over Future Work)
+## Task 35 — Open follow-up GitHub issues (feedback: issues over Future Work)
 
-- [ ] Open three issues with `gh issue create`: (1) type `RunState.status` as a `RunStatus`
-      enum including `RUNNING` (D10); (2) record the run's PID in run state so `sq runs list`
-      and `sq runs wait` can detect crashed runs (D13); (3) `sq runs list --json` for
-      out-of-process consumers such as Amoeba
-- [ ] Link the issue numbers from the slice design where each is deferred (D10, D13, the
-      `--json` exclusion in Technical Scope)
-  - [ ] Success: three issue numbers recorded in the slice design
+- [ ] `gh issue list --search` first; the PID-in-run-state issue already exists as #190 (linked
+      from D13), so do not reopen it. Open two issues with `gh issue create`: (1) type
+      `RunState.status` as a `RunStatus` enum including `RUNNING` (D10); (2)
+      `sq runs list --json` for out-of-process consumers such as Amoeba
+  - [ ] Success: two new issue numbers; no duplicate of #190
+- [ ] Edit the slice design: link the typing issue from D10 and the `--json` issue from the
+      Technical Scope exclusion
+- [ ] Commit: `docs: link follow-up issues in slice 199 design`
+  - [ ] Success: design diff contains only those two links
 
 ---
 
-## Task 37 — Verification walkthrough and final validation
+## Task 36 — Verification walkthrough and final validation
 
 - [ ] Walkthrough steps 1, 2, 5 and 6 (listing, removed flags, filters, failure marker): run
       against a scratch project directory and a scratch runs dir seeded with real
