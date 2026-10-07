@@ -140,7 +140,7 @@ status: not_started
   - [ ] One `for-each-ref refs/heads` call for tips, one `rev-list --first-parent {target}` call, one `merge-base --is-ancestor` call per candidate
   - [ ] A slice is merged only when its tip is an ancestor of the target **and** not on the target's first-parent chain
   - [ ] A missing branch reads as not merged, with no log
-  - [ ] Any timeout (`run_git` returns `None`) or unexpected exit (for `--is-ancestor`: not 0 or 1) logs ERROR via `logger.exception` naming the command and stderr, and raises `GitStateUnknownError`. Never returns an empty set on failure
+  - [ ] Any timeout (`run_git` returns `None`) or unexpected exit (for `--is-ancestor`: not 0 or 1) logs ERROR via `_logger.error(message)` (as `git_ops.py` does before its other `GitStateUnknownError` raises; there is no active exception, so not `logger.exception`) naming the command and stderr, and raises `GitStateUnknownError`. Never returns an empty set on failure
 - [ ] Docstring cites the `--no-ff` assertion at `tests/pipeline/test_branch_merge.py:88`
 - [ ] Tests in `tests/pipeline/test_git_ops.py` (real temp repos): `--no-ff` merged → in the set; fast-forward merged → not; branch entered with no commits → not; missing branch → not; mixed set returns only merged. D10 rows with the fake/patched `run_git`: each of the three calls timing out and exiting non-zero raises `GitStateUnknownError` with the asserted ERROR record (target missing for `rev-list`)
   - [ ] Success: tests pass
@@ -197,14 +197,14 @@ status: not_started
 
 ## Task 19 — Base fast-forward onto `adjustments` (D9)
 
-- [ ] The #131 base fast-forward in `refs.py` records a `RefAdjustment` (role BASE) instead of a log-only note; its WARNING is tagged `extra={RENDERED_BY_CALLER: True}`
+- [ ] The #131 base fast-forward in `refs.py` records a `RefAdjustment` (role BASE) instead of a log-only note. Its WARNING stays untagged here: Task 25a tags it in the same commit that prints the adjustment line, so no run ever has the tag without the line
 - [ ] Tests: existing #131 tests pass; the fast-forward case returns one adjustment with the reported and used shas
   - [ ] Success: tests pass
 - [ ] Commit: `refactor: record base fast-forward as a ref adjustment`
 
 ## Task 20 — Primary fetch timeout (D10)
 
-- [ ] In `refs.py`, convert `ProcessTimedOutError` on the primary `_fetch` into `HostCommandTimeoutError`, as `github_cli.py` does for `gh` calls
+- [ ] In `refs.py`, convert `ProcessTimedOutError` on the primary `_fetch` into `HostCommandTimeoutError`, as `github_cli.py` does for `gh` calls, logging a WARNING tagged `extra={RENDERED_BY_CALLER: True}` first (the command renders the error)
 - [ ] Tests (fake `ProcessRunner`): primary fetch timeout raises `HostCommandTimeoutError`, not a traceback
   - [ ] Success: tests pass
 - [ ] Commit: `fix: render primary PR fetch timeout as a code host error`
@@ -213,24 +213,26 @@ status: not_started
 
 - [ ] In `refs.py` add a helper that, given the API head sha, makes it present locally. `cat-file -e <sha>^{commit}` first; if absent, try in order, each into `<api_local>` (a sibling of `head_local` in the per-PR namespace): (1) `fetch <remote> +<sha>:<api_local>`; (2) for each entry of the new argument `head_fallback_sources: tuple[str, ...]`, `fetch <remote> +<entry>:<api_local>`. The helper itself names no host refspec
 - [ ] After each attempt `rev-parse <api_local>` must equal the API head sha; a mismatch rejects that attempt
+- [ ] A `cat-file` timeout (`ProcessTimedOutError`) raises `HostCommandTimeoutError` with a tagged WARNING; a non-zero `cat-file` exit means absent (DEBUG) and goes to the fetch attempts
 - [ ] A fallback attempt catches `ProcessTimedOutError` and records `timed out after Ns`; non-zero exit records stderr. Each attempt logs DEBUG
 - [ ] No attempt yields the sha: raise `PullRequestHeadUnavailableError` naming every source with its sha or reason (WARNING tagged `RENDERED_BY_CALLER`)
-- [ ] Tests (fake runner; the API head sha **absent** locally before the fetch): sha already present → no fetch; fetch-by-sha succeeds; sha fetch `not our ref` then a fallback source succeeds; fallback returns a different sha → rejected; timeout on a fallback recorded as the reason; all fail → error naming each source
+- [ ] Tests (fake runner; the API head sha **absent** locally before the fetch): sha already present → no fetch; `cat-file` timeout → `HostCommandTimeoutError`; `cat-file` non-zero → proceeds to fetch; fetch-by-sha succeeds; sha fetch `not our ref` then a fallback source succeeds; fallback returns a different sha → rejected; timeout on a fallback recorded as the reason; all fail → error naming each source
   - [ ] Success: tests pass
+  - [ ] The helper has no caller until Task 22a wires it; that is expected
 - [ ] Commit: `feat: fetch the API head by sha or fallback source when the PR ref lags`
 
 ## Task 22a — Classify the PR-ref sha against the API head (D6 step 2)
 
-- [ ] In `fetch_and_range`, when the PR-ref sha differs from the API head: call Task 21's helper first, then test whether the PR-ref sha is an ancestor of the API head (`merge-base --is-ancestor`). Ancestor → lag (handled in 22b). Descends or unrelated → `RefMovedSinceResolutionError` naming both sources, hint rerun
-- [ ] Tests (lagging fixture from the issue, API sha absent locally until a fallback fetch): pushed after resolution → `RefMovedSinceResolutionError`; unrelated → same; ancestry timeout and non-0/1 exit answer "no" with the existing WARNING, giving the same error
+- [ ] In `fetch_and_range`, when the PR-ref sha differs from the API head: call Task 21's helper first, then test whether the PR-ref sha is an ancestor of the API head (`merge-base --is-ancestor`). Express the answer as a private `HeadRelation` StrEnum (`LAGS`, `MOVED`, `UNRELATED`). `MOVED` and `UNRELATED` raise `RefMovedSinceResolutionError` naming both sources, hint rerun. `LAGS` keeps today's behavior in this task: it raises the same `RefMovedSinceResolutionError`. Task 22b replaces that one branch
+- [ ] Tests (lagging fixture from the issue, API sha absent locally until a fallback fetch): pushed after resolution → `RefMovedSinceResolutionError`; unrelated → same; ancestry timeout and non-0/1 exit answer "no" with the existing WARNING, giving the same error; `LAGS` currently raises (the test is rewritten in 22b)
   - [ ] Success: tests pass
 - [ ] Commit: `feat: classify lagging, moved and rewritten PR refs`
 
 ## Task 22b — Use the API head on a lagging ref (D6, D9, D10)
 
-- [ ] Lag case: `update-ref head_local <api-sha>`, record a head `RefAdjustment` (WARNING tagged), build the range on the API head. Only the exact API head sha is ever reviewed
+- [ ] Replace 22a's `LAGS` raise: `update-ref head_local <api-sha>`, record a head `RefAdjustment` (its WARNING stays untagged; Task 25a tags it), build the range on the API head. Only the exact API head sha is ever reviewed
 - [ ] `update-ref` failure renders `RefNotFetchableError`; timeout renders `HostCommandTimeoutError`; both log a tagged WARNING
-- [ ] Tests: lag → range built on the API head with one adjustment; `update-ref` non-zero and timeout. `uv run pytest tests/codehost -k lagging -v` selects the lag cases (name them accordingly)
+- [ ] Tests: lag → range built on the API head with one adjustment; `update-ref` non-zero and timeout; 22a's `LAGS`-raises test is replaced by the lag-success test. `uv run pytest tests/codehost -k lagging -v` selects the lag cases (name them accordingly)
   - [ ] Success: tests pass
 - [ ] Commit: `fix: review the API head when refs/pull/N/head lags (#186)`
 
@@ -252,31 +254,35 @@ status: not_started
 
 ## Task 24b — Tag the remaining pre-raise WARNINGs (D8)
 
-- [ ] Tasks 18, 19, 21 and 22b tagged their own records. Sweep the rest: every WARNING logged immediately before raising a `CodeHostError` in `codehost/refs.py` (e.g. the `_fetch` failure records) and in the GitHub adapter gets `extra={RENDERED_BY_CALLER: True}`. Tag nothing else (`remotes`, `worktree`, `metadata_lock` and other warnings stay untagged)
-- [ ] Tests: for each tagged site, drive the failure through the fake runner and assert the record carries the tag; assert one untagged warning from another module (e.g. `remotes`) does not
-  - [ ] Success: tests pass; `grep -rn RENDERED_BY_CALLER src/` sites each precede a raise or describe a `RefAdjustment`
+- [ ] Tasks 18, 20, 21 and 22b tagged their own records; the adjustment WARNINGs are tagged in 25a. Tag exactly these remaining sites with `extra={RENDERED_BY_CALLER: True}`, each of which logs and then raises a `CodeHostError`:
+  - [ ] `codehost/refs.py`: the `_fetch` failure WARNING per endpoint, the `git fetch exited` WARNING, the `ref … is missing after fetch` WARNING in `_verify`, and the `no merge base` WARNING
+  - [ ] `codehost/github_cli.py`: `_log_and_raise`, the `gh is not on PATH` WARNING, and the `gh exceeded …s` WARNING
+- [ ] Leave untagged: the nonexistent-cwd WARNING (re-raises a non-`CodeHostError`), the review-thread page-limit WARNING, the ancestry-answered-no WARNING, and every WARNING in `remotes`, `worktree`, `metadata_lock`
+- [ ] Tests: for each tagged site, drive the failure through the fake runner or fake `gh` and assert the record carries the tag; assert the untagged sites listed above do not
+  - [ ] Success: tests pass
 - [ ] Commit: `fix: tag code host warnings the command prints itself`
 
-## Task 25a — Wire `sq review pr` (D8)
+## Task 25a — Print adjustments and record the reviewed head (D9)
+
+- [ ] Print each `RefAdjustment` once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`; `sq review pr` and `sq pr show` share the fetch path, so both print it. The PR review artifact's provenance records the head sha actually reviewed
+- [ ] Tag the adjustment WARNINGs (Tasks 19 and 22b) with `extra={RENDERED_BY_CALLER: True}` in this task, now that the line they duplicate exists. The tag stays inert until Tasks 25b/25c install the handler
+- [ ] Tests: lag success prints exactly one adjustment line and the artifact carries the API head sha; a base fast-forward adjustment prints once; both adjustment records carry the tag
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: print ref adjustments and record the reviewed head sha`
+
+## Task 25b — Wire `sq review pr` (D8)
 
 - [ ] Wrap the body after `_resolve_verbosity(verbose)` in `with code_host_logging(verbosity):`
-- [ ] Tests (`tests/cli/test_review_pr.py`): a `CodeHostError` appears on stderr exactly once at default and `-v`; at `-vv` the tagged WARNING also appears; an untagged codehost WARNING shows at default verbosity; a fetch timeout never produces a traceback
+- [ ] Tests (`tests/cli/test_review_pr.py`): a `CodeHostError` appears on stderr exactly once at default and `-v`; at `-vv` the tagged WARNING also appears; an untagged codehost WARNING shows at default verbosity; at default verbosity a lag success shows the adjustment line once and no duplicate WARNING; a fetch timeout never produces a traceback
   - [ ] Success: tests pass
 - [ ] Commit: `fix: print code host failures once in sq review pr (#186)`
 
-## Task 25b — Wire `sq pr show` and `sq pr create` (D8)
+## Task 25c — Wire `sq pr show` and `sq pr create` (D8)
 
 - [ ] Both call `code_host_logging(0)`; no new flags
 - [ ] Tests: `tests/cli/test_pr_show.py` and `tests/cli/test_pr_create_failures.py` each assert a `CodeHostError` appears on stderr exactly once and an untagged codehost WARNING still shows
   - [ ] Success: tests pass
 - [ ] Commit: `fix: print code host failures once in sq pr show and create`
-
-## Task 25c — Print adjustments and record the reviewed head (D9)
-
-- [ ] Print each `RefAdjustment` once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`; both `sq review pr` and `sq pr show` share the fetch path, so both print it. The PR review artifact's provenance records the head sha actually reviewed
-- [ ] Tests: lag success prints exactly one adjustment line (no duplicate from a log record at default verbosity) and the artifact carries the API head sha; a base fast-forward adjustment prints once too
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: print ref adjustments and record the reviewed head sha`
 
 ## Task 26 — Part C validation
 
