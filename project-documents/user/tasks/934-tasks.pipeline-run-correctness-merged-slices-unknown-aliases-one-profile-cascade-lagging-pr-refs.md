@@ -118,11 +118,11 @@ status: in_progress
 
 ## Task 11 — `--dry-run` classifies (D5, #175)
 
-- [ ] `--dry-run` calls `_classify_for_run` with params from `_assemble_params` and `_extract_model_override(model, param)`, and accepts `--strict` like the other paths
-- [ ] On `ClassificationError` print the run path's message (`Error: Pipeline classification failed — …`) and exit 1 before rendering any step; on success render as today
-- [ ] Tests: `review 931 --model glm-flash-low. --dry-run` exits 1 with `unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low?`; a valid model renders the same step list as before; `--dry-run --strict` is accepted, raises the same errors as a strict run, otherwise renders the same step list; a real run with the bad alias fails before step 1 and the slot's existing review artifact is byte-identical afterwards (fixture file, compare bytes)
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: sq run --dry-run runs the pre-run alias check (#175)`
+- [x] `--dry-run` calls `_classify_for_run` with params from `_assemble_params` and `_extract_model_override(model, param)`, and accepts `--strict` like the other paths
+- [x] On `ClassificationError` print the run path's message (`Error: Pipeline classification failed — …`) and exit 1 before rendering any step; on success render as today
+- [x] Tests: `review 931 --model glm-flash-low. --dry-run` exits 1 with `unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low?`; a valid model renders the same step list as before; `--dry-run --strict` is accepted, raises the same errors as a strict run, otherwise renders the same step list; a real run with the bad alias fails before step 1 and the slot's existing review artifact is byte-identical afterwards (fixture file, compare bytes)
+  - [x] Success: tests pass
+- [x] Commit: `fix: sq run --dry-run runs the pre-run alias check (#175)`
 
 ## Task 12 — Part A validation
 
