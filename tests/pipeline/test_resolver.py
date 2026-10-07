@@ -138,3 +138,28 @@ def test_valid_alias_still_resolves_without_profile_source() -> None:
     resolver = ModelResolver(pipeline_model="sonnet")
     model_id, _ = resolver.resolve()
     assert model_id == "claude-sonnet-5-5"
+
+
+def test_per_call_profile_source_true_accepts_a_literal_id_the_run_rejects() -> None:
+    resolver = ModelResolver(pipeline_model="my-custom-model", profile_source=False)
+    assert resolver.resolve_full(profile_source=True).model_id == "my-custom-model"
+
+
+def test_per_call_profile_source_false_rejects_a_literal_id_the_run_accepts() -> None:
+    resolver = ModelResolver(pipeline_model="my-custom-model", profile_source=True)
+    with pytest.raises(UnknownModelAliasError):
+        resolver.resolve_full(profile_source=False)
+
+
+def test_per_call_profile_source_none_uses_the_run_value() -> None:
+    accepting = ModelResolver(pipeline_model="my-custom-model", profile_source=True)
+    assert accepting.resolve_full(profile_source=None).model_id == "my-custom-model"
+    rejecting = ModelResolver(pipeline_model="my-custom-model", profile_source=False)
+    with pytest.raises(UnknownModelAliasError):
+        rejecting.resolve_full(profile_source=None)
+
+
+def test_resolve_ignores_per_call_override() -> None:
+    resolver = ModelResolver(pipeline_model="my-custom-model", profile_source=False)
+    with pytest.raises(UnknownModelAliasError):
+        resolver.resolve()

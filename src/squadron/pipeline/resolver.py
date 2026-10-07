@@ -174,8 +174,14 @@ class ModelResolver:
         self,
         action_model: str | None = None,
         step_model: str | None = None,
+        *,
+        profile_source: bool | None = None,
     ) -> ResolvedModel:
         """Resolve as :meth:`resolve` does, keeping the alias's capability.
+
+        ``profile_source`` overrides the run-level value for this call only, so a
+        review step can pass the profile source its own template and config give
+        it (#184). ``None`` uses the run's value.
 
         The capability can only be read while the alias name is still known:
         ``resolve_model_alias`` collapses a name to a model id, and several
@@ -183,13 +189,14 @@ class ModelResolver:
         no sound reverse lookup. Call sites that hand tools to an agent must
         resolve through here (slice 266).
         """
+        effective_source = self._profile_source if profile_source is None else profile_source
         for candidate in self.cascade_candidates(action_model, step_model):
             if candidate is None:
                 continue
             if candidate.startswith(_POOL_PREFIX):
                 pool_name = candidate.removeprefix(_POOL_PREFIX)
-                return self._resolve_pool(pool_name, action_model, step_model)
-            return _resolved(candidate, profile_source=self._profile_source)
+                return self._resolve_pool(pool_name, action_model, step_model, effective_source)
+            return _resolved(candidate, profile_source=effective_source)
 
         raise ModelResolutionError(
             "No model could be resolved: all cascade levels are None. "
@@ -201,6 +208,7 @@ class ModelResolver:
         pool_name: str,
         action_model: str | None,
         step_model: str | None,
+        profile_source: bool,
     ) -> ResolvedModel:
         """Resolve a pool name to a :class:`ResolvedModel`.
 
@@ -227,7 +235,7 @@ class ModelResolver:
             action_type=action_model or step_model or "",
         )
         alias = self._pool_backend.select(pool_name, context)
-        result = _resolved(alias, profile_source=self._profile_source)
+        result = _resolved(alias, profile_source=profile_source)
 
         if self._on_pool_selection is not None:
             from squadron.pipeline.intelligence.pools.models import PoolSelection
