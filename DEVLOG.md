@@ -23,7 +23,12 @@ A lightweight, append-only record of development activity. Newest entries first.
   - `RefAdjustment.source` is a phrase (`fetched by sha`, `fetched from refs/heads/main`) and `describe()` is the printed line.
   - `_execute_review` lost its `"sdk"` default; the parameter is required.
 - **Existing tests changed:** `tests/cli/test_review_profile.py` called the deleted `_resolve_profile`, so it calls the shared module and patches its config read; dry-run tests that built model-less pipelines now give them a model (a real run would fail them too); the error-table test counts 20 classes.
-- **Walkthrough (design file has the commands):** step 1 exit 1 with the alias error; step 2 ran both halves live (`OPENROUTER_API_KEY` configured), both on openrouter, and both failed with the same message once the config key was unset (key restored); step 3 against a scratch cf project (created, then removed): A absent, B unflagged, WARNING naming A's branch; step 4 five `lagging` tests pass. Not run live: the item-resume half of step 3 (needs model calls; covered by `tests/pipeline/test_item_resume_source.py`) and a real lagging PR (needs GHE).
+- **Walkthrough** (full commands and caveats in the slice design):
+  - Step 1, `sq run review 931 --model glm-flash-low. --dry-run`: `Error: Pipeline classification failed — unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low, glm-flash, gemini-flash? …`, exit 1.
+  - Step 2, `default_review_profile=openrouter` and a literal id (`meta-llama/llama-3.1-8b-instruct`): `sq review slice 934 -v --no-save` printed `Review via openrouter (provider=openai, …)`; `sq run review 934 -v` dispatched through the OpenAI-compatible provider (its small model then failed on the full-diff code review; the failure artifact was deleted) and its verbose line names no profile (#193). With the key unset, both fail: `unknown model alias 'meta-llama/llama-3.1-8b-instruct' If this is a literal model ID, set a profile.` Key restored.
+  - Step 3, scratch cf project (created, then removed), A merged `--no-ff` with unchecked tasks, `sq run implement-plan 100 --model sonnet --dry-run`: only `102 Slice B` listed, unflagged, and `slice 101: branch 101-slice.a is merged into main but cf reports not_started; treating it as complete. …`.
+  - Step 4, `uv run pytest tests/codehost -k lagging -v`: 5 passed.
+  - Not run live: the item-resume half of step 3 (needs model calls; covered by `tests/pipeline/test_item_resume_source.py`) and a real lagging PR (needs GHE).
 - **Filed:** #193, the pipeline review step's verbose line does not name the profile (the design expected `profile=openrouter` in both headers).
 
 ### Slice 934: Pipeline Run Correctness — Tasks Complete

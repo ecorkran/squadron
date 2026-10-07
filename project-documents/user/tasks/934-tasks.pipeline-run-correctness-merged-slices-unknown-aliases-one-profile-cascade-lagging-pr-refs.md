@@ -5,12 +5,11 @@ project: squadron
 lld: user/slices/934-slice.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md
 dependencies: [196, 197]
 projectState: >
-  Slice design complete (20261006) and through two review rounds (both CONCERNS, all findings
-  addressed). No code written. 196 and 197 are complete. `git.integration_branch` is set
-  (`squadron-issues`), so the slice branch forks from it.
+  Implemented on the slice branch (20261007): all four fixes, docs, and the live walkthrough.
+  Awaiting code review and the Phase 7 merge into `squadron-issues`.
 dateCreated: 20261007
 dateUpdated: 20261007
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
