@@ -35,7 +35,6 @@ from squadron.pipeline.classification import (
     StepClass,
     StepClassification,
 )
-from squadron.pipeline.loader import PipelineInfo
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.state import CheckpointState, RunState
@@ -80,16 +79,6 @@ class TestMutualExclusivity:
         assert result.exit_code == 1
         assert "--resume and --from cannot be used together" in result.output
 
-    def test_list_with_pipeline_exits_error(self) -> None:
-        result = runner.invoke(app, ["run", "--list", "slice"])
-        assert result.exit_code == 1
-        assert "--list cannot be combined" in result.output
-
-    def test_list_with_model_exits_error(self) -> None:
-        result = runner.invoke(app, ["run", "--list", "--model", "opus"])
-        assert result.exit_code == 1
-        assert "--list cannot be combined" in result.output
-
     def test_status_with_pipeline_exits_error(self) -> None:
         result = runner.invoke(app, ["run", "--status", "latest", "slice"])
         assert result.exit_code == 1
@@ -99,12 +88,6 @@ class TestMutualExclusivity:
         result = runner.invoke(app, ["run"])
         assert result.exit_code == 1
         assert "pipeline argument is required" in result.output
-
-    def test_valid_list_does_not_error_at_validation(self) -> None:
-        """--list alone should pass mutual exclusivity (may fail later in execution)."""
-        with patch("squadron.cli.commands.run.discover_pipelines", return_value=[]):
-            result = runner.invoke(app, ["run", "--list"])
-        assert result.exit_code == 0
 
     def test_valid_status_latest_does_not_error_at_validation(self) -> None:
         """--status latest should pass mutual exclusivity."""
@@ -173,45 +156,16 @@ class TestAssembleParams:
 
 
 # ---------------------------------------------------------------------------
-# T5: --list
+# --list removed in favor of sq pipelines list (slice 199 D8)
 # ---------------------------------------------------------------------------
 
 
-class TestList:
-    """sq run --list displays discovered pipelines."""
-
-    def test_list_shows_pipeline_names(self) -> None:
-        pipelines = [
-            PipelineInfo(
-                name="slice",
-                description="Full slice lifecycle",
-                source="built-in",
-                path=MagicMock(),
-            ),
-            PipelineInfo(
-                name="review",
-                description="Run a review",
-                source="built-in",
-                path=MagicMock(),
-            ),
-        ]
-        with patch(
-            "squadron.cli.commands.run.discover_pipelines",
-            return_value=pipelines,
-        ):
-            result = runner.invoke(app, ["run", "--list"])
-        assert result.exit_code == 0
-        assert "slice" in result.output
-        assert "review" in result.output
-        assert "built-in" in result.output
-
-    def test_list_empty(self) -> None:
-        with patch(
-            "squadron.cli.commands.run.discover_pipelines",
-            return_value=[],
-        ):
-            result = runner.invoke(app, ["run", "--list"])
-        assert result.exit_code == 0
+class TestListRemoved:
+    @pytest.mark.parametrize("flag", ["--list", "-l"])
+    def test_list_flag_is_rejected(self, flag: str) -> None:
+        result = runner.invoke(app, ["run", flag])
+        assert result.exit_code != 0
+        assert "No such option" in result.output
 
 
 # ---------------------------------------------------------------------------

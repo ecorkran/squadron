@@ -54,7 +54,6 @@ from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loader import (
-    discover_pipelines,
     load_pipeline,
     validate_pipeline,
 )
@@ -931,7 +930,6 @@ def run(
     resume: str | None = typer.Option(None, "--resume", "-r", help="Resume a paused run by run-id."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Show plan without executing."),
     validate_only: bool = typer.Option(False, "--validate", help="Validate pipeline and exit."),
-    list_pipelines: bool = typer.Option(False, "--list", "-l", help="List available pipelines."),
     status: str | None = typer.Option(
         None, "--status", help="Show run status. Use 'latest' for most recent."
     ),
@@ -1025,10 +1023,6 @@ def run(
         rprint("[red]Error: --explain cannot be combined with --validate.[/red]")
         raise typer.Exit(1)
 
-    if list_pipelines and any([pipeline, model, from_step, resume, dry_run, validate_only, status]):
-        rprint("[red]Error: --list cannot be combined with other options.[/red]")
-        raise typer.Exit(1)
-
     if status is not None and any([pipeline, model, from_step, resume, dry_run, validate_only]):
         rprint("[red]Error: --status cannot be combined with execution options.[/red]")
         raise typer.Exit(1)
@@ -1043,17 +1037,10 @@ def run(
             handler.setFormatter(logging.Formatter("%(message)s"))
             pipeline_logger.addHandler(handler)
 
-    if (
-        not list_pipelines
-        and status is None
-        and resume is None
-        and step_done is None
-        and pipeline is None
-    ):
+    if status is None and resume is None and step_done is None and pipeline is None:
         rprint(
             "[red]Error: pipeline argument is required"
-            " unless using --list, --status, --resume,"
-            " or --step-done.[/red]"
+            " unless using --status, --resume, or --step-done.[/red]"
         )
         raise typer.Exit(1)
 
@@ -1073,18 +1060,6 @@ def run(
             rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
             raise typer.Exit(1)
         _handle_prompt_only_init(pipeline.lower(), target, model, param, verbosity=verbose)
-        raise typer.Exit(0)
-
-    # ---- --list ----
-    if list_pipelines:
-        pipelines = discover_pipelines()
-        table = Table(title="Available Pipelines")
-        table.add_column("Name", style="bold")
-        table.add_column("Description")
-        table.add_column("Source")
-        for p in pipelines:
-            table.add_row(p.name, p.description, p.source)
-        rprint(table)
         raise typer.Exit(0)
 
     # ---- --status ----
