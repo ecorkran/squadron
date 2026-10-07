@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Release 0.21.0
+
+- **Contents:** slice 199 (`sq pipelines list`, `sq runs list`, `sq runs wait`; `sq run --list` removed; `sq list` → `sq agents list`; #185, #187), slice 934 (pipeline run correctness: merged slices not reimplemented #188, one review-profile cascade #184, `--dry-run` rejects unknown aliases/templates #175, lagging PR refs and single code-host failure output #186).
+
 ### Slice 199: implementation complete (Phase 6)
 
 - **Delivered:** `sq pipelines list` (`PipelineSource`, `LISTING_ORDER`), `sq runs list` and `sq runs wait` on `pipeline/run_listing.py` (`RunSummary`, `ResumePoint`, `ResumeProblem`, `wait_for_run`, `WaitOutcome`, `WAIT_EXIT_CODES`); `cli/run_views.py` (status colours, run status panel, both listings, marker text); `pipeline/item_eligibility.py` shared with item resume; `first_unfinished_step_of`, public `RESUMABLE_STATUSES`, `RUNNING_STATUS`; `report_json_path(s)`. `sq run --list` removed; `sq list` → `sq agents list`. Follow-ups: #191 (RunStatus enum), #192 (`--json`).

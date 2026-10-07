@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.0] - 20261007
+
 ### Added
 - `sq pipelines list` lists the pipelines `sq run` can load, grouped into built-in, project and user (#185).
 - `sq runs list` lists runs you can resume, newest first, with the step `--resume` restarts at, or the open item count of a finished batch run. `--all` shows every run; `--pipeline NAME` filters (#187).
