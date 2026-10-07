@@ -40,7 +40,7 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 - Slash commands and agent skills for the new commands. Adding `/sq:pipelines` and `/sq:runs` widens the slash surface for little gain.
 - Changing `sq run --status`. It behaves as today.
 - Deleting or pruning runs.
-- `--json` output. The listing's Python API serves in-process callers. An out-of-process orchestrator such as Amoeba would need `--json`, which this slice does not build because no such consumer exists yet. A GitHub issue opened during this slice (Development Approach step 6) records the follow-up.
+- `--json` output. The listing's Python API serves in-process callers. An out-of-process orchestrator such as Amoeba would need `--json`, which this slice does not build because no such consumer exists yet. [#192](https://github.com/ecorkran/squadron/issues/192) records the follow-up.
 - An MCP surface. Squadron has no MCP server: `src/squadron/server` is the agent daemon, with `agents` and `health` routes only.
 - Typing `RunState.status`. See D10.
 
@@ -164,7 +164,7 @@ A `running` run is outside `RESUMABLE_STATUSES`. The listing reports exactly wha
 
 **D9. Normalising the pipeline filter.** `--pipeline` is lowercased, matching `pipeline_identity` and run-state names (#147).
 
-**D10. `RunSummary.status` stays `str`.** It mirrors `RunState.status`, which the persisted schema stores as a string. `init_run` writes `"running"`, which is not an `ExecutionStatus` member, so narrowing the summary to `ExecutionStatus` would fail on live runs. The listing adds no status literals: it compares only through `RESUMABLE_STATUSES` and `ExecutionStatus.COMPLETED.value`. `STATUS_COLORS` is keyed by `ExecutionStatus` values, and a status not in it renders `dim`, as it does today. A GitHub issue opened during this slice covers typing `RunState.status` (a `RunStatus` enum that includes `RUNNING`), because that is a run-state schema change.
+**D10. `RunSummary.status` stays `str`.** It mirrors `RunState.status`, which the persisted schema stores as a string. `init_run` writes `"running"`, which is not an `ExecutionStatus` member, so narrowing the summary to `ExecutionStatus` would fail on live runs. The listing adds no status literals: it compares only through `RESUMABLE_STATUSES` and `ExecutionStatus.COMPLETED.value`. `STATUS_COLORS` is keyed by `ExecutionStatus` values, and a status not in it renders `dim`, as it does today. [#191](https://github.com/ecorkran/squadron/issues/191) covers typing `RunState.status` (a `RunStatus` enum that includes `RUNNING`), because that is a run-state schema change.
 
 **D11. `RESUMABLE_STATUSES` becomes public.** `state.py`'s `_RESUMABLE_STATUSES` is renamed `RESUMABLE_STATUSES` and becomes a `frozenset`. `first_unfinished_step_of` and `run_listing` import it; no module imports an underscore-named constant across module boundaries.
 
