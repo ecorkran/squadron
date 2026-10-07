@@ -47,7 +47,7 @@ register_step_type("fake-dispatch", _FakeStepType())
 def test_step_callback_records_compact_summary(tmp_path: Path) -> None:
     mgr = StateManager(runs_dir=tmp_path)
     run_id = mgr.init_run("test-pipeline", {"slice": "154"})
-    cb = mgr.make_step_callback(run_id)
+    cb = mgr.observer(run_id).step_completed
 
     # Slice 166: compact steps now produce summary-typed results with rotate emit
     ar = ActionResult(
@@ -82,7 +82,7 @@ def test_step_callback_records_compact_summary(tmp_path: Path) -> None:
 def test_step_callback_skips_non_compact(tmp_path: Path) -> None:
     mgr = StateManager(runs_dir=tmp_path)
     run_id = mgr.init_run("test-pipeline", {"slice": "154"})
-    cb = mgr.make_step_callback(run_id)
+    cb = mgr.observer(run_id).step_completed
 
     ar = ActionResult(
         success=True,

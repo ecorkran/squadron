@@ -90,14 +90,14 @@ def end(sm: StateManager, run_id: str, status: ExecutionStatus) -> None:
 
 
 def pause_at(sm: StateManager, run_id: str, step: str, *, done: list[str] | None = None) -> None:
-    callback = sm.make_step_callback(run_id)
+    callback = sm.observer(run_id).step_completed
     for name in done or []:
         callback(_step(name, ExecutionStatus.COMPLETED))
     callback(_step(step, ExecutionStatus.PAUSED))
 
 
 def fail_at(sm: StateManager, run_id: str, step: str, *, done: list[str] | None = None) -> None:
-    callback = sm.make_step_callback(run_id)
+    callback = sm.observer(run_id).step_completed
     for name in done or []:
         callback(_step(name, ExecutionStatus.COMPLETED))
     callback(_step(step, ExecutionStatus.FAILED))
@@ -105,7 +105,7 @@ def fail_at(sm: StateManager, run_id: str, step: str, *, done: list[str] | None 
 
 
 def complete_steps(sm: StateManager, run_id: str, steps: list[str]) -> None:
-    callback = sm.make_step_callback(run_id)
+    callback = sm.observer(run_id).step_completed
     for name in steps:
         callback(_step(name, ExecutionStatus.COMPLETED))
 

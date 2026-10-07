@@ -129,7 +129,7 @@ async def test_cli_pool_override_resolves_and_logs(tmp_path: Path, tmp_state_fil
         resolver=resolver,
         cf_client=MagicMock(),
         run_id=run_id,
-        on_step_complete=state_mgr.make_step_callback(run_id),
+        observer=state_mgr.observer(run_id),
         _action_registry=_registry(),
     )
     assert result.status == ExecutionStatus.COMPLETED

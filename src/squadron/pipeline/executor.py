@@ -16,7 +16,6 @@ import os
 import re
 import sys
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -61,7 +60,9 @@ from squadron.pipeline.summary_render import gather_cf_params
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
     from squadron.pipeline.resolver import ModelResolver
+    from squadron.pipeline.run_observer import RunObserver
     from squadron.pipeline.sdk_session import SDKExecutionSession
+    from squadron.pipeline.state import ActiveItem
 
 _logger = logging.getLogger(__name__)
 
@@ -387,7 +388,7 @@ async def execute_pipeline(
     start_from_iteration: int = 0,
     sdk_session: SDKExecutionSession | None = None,
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
-    on_step_complete: Callable[[StepResult], None] | None = None,
+    observer: RunObserver | None = None,
     runs_dir: Path | None = None,
     item_rerun: ItemRerun | None = None,
     _action_registry: dict[str, object] | None = None,
@@ -424,8 +425,9 @@ async def execute_pipeline(
         first step that statically requires SDK.  Under ``STRICT`` the
         caller is expected to have passed a connected session for any
         pipeline whose classification returned ``needs_persistent_session``.
-    on_step_complete:
-        Optional observer called after each step completes (any status).
+    observer:
+        Receives step starts, ``each`` item starts and step completions (any
+        status) for the run's own bookkeeping (slice 174 D12).
     runs_dir:
         Directory where run state files live; forwarded to any internal
         ``StateManager`` lookups (SDK-resume seeding, dispatch artifact
@@ -549,6 +551,9 @@ async def execute_pipeline(
                     )
                     raise LazySessionConnectError(step.name, exc) from exc
 
+        if observer is not None:
+            observer.step_started(step.name)
+
         step_result = await _execute_step(
             step=step,
             resolved_config=resolved_config,
@@ -569,12 +574,13 @@ async def execute_pipeline(
                 step=step, start_from=start_from, start_from_iteration=start_from_iteration
             ),
             item_rerun=item_rerun,
+            observer=observer,
         )
 
         step_results.append(step_result)
 
-        if on_step_complete is not None:
-            on_step_complete(step_result)
+        if observer is not None:
+            observer.step_completed(step_result)
 
         if step_result.status == ExecutionStatus.PAUSED:
             return PipelineResult(
@@ -722,6 +728,7 @@ async def _execute_step(
     iteration: int = 0,
     prior_iteration_step_outputs: dict[str, ActionResult] | None = None,
     item_rerun: ItemRerun | None = None,
+    observer: RunObserver | None = None,
 ) -> StepResult:
     """Route *step* to the executor for its shape (D3, slice 195).
 
@@ -749,7 +756,7 @@ async def _execute_step(
     }
     if step.step_type == StepTypeName.EACH:
         return await _execute_each_step(
-            resolved_config=resolved_config, item_rerun=item_rerun, **common
+            resolved_config=resolved_config, item_rerun=item_rerun, observer=observer, **common
         )
     if step.step_type == StepTypeName.FAN_OUT:
         return await _execute_fan_out_step(resolved_config=resolved_config, **common)
@@ -1526,6 +1533,7 @@ async def _execute_each_step(
     get_action_fn: Any,
     runs_dir: Path | None = None,
     item_rerun: ItemRerun | None = None,
+    observer: RunObserver | None = None,
 ) -> StepResult:
     """Execute an `each` collection step; on an item resume, only that item (197 D8)."""
     as_name = str(resolved_config.get("as", ""))
@@ -1553,6 +1561,8 @@ async def _execute_each_step(
     try:
         for position, item in enumerate(items):
             in_flight = (position, item)
+            if observer is not None:
+                observer.item_started(step.name, _active_item(item, position, len(items)))
             item_results: list[StepResult] = []
             failed_step: str | None = None
             # A pre-flagged item is a failed precondition, not an execution
@@ -1608,6 +1618,15 @@ async def _execute_each_step(
         action_results=all_action_results,
         batch_report=report,
     )
+
+
+def _active_item(item: dict[str, object], position: int, total: int) -> ActiveItem:
+    """The observer's view of *item*: its place in the list and its own index (174 D2)."""
+    # Deferred: state imports this module at load time.
+    from squadron.pipeline.state import ActiveItem
+
+    index = item.get("index")
+    return ActiveItem(position=position, total=total, index=None if index is None else str(index))
 
 
 def _pre_flag(item: dict[str, object], flagged: set[int]) -> tuple[str | None, FlagKind | None]:

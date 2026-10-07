@@ -1635,7 +1635,7 @@ async def test_e2e_pause_and_resume_reenters_loop_at_recorded_round(tmp_path: Pa
         cf_client=MagicMock(),
         run_id=run_id,
         runs_dir=tmp_path,
-        on_step_complete=mgr.make_step_callback(run_id),
+        observer=mgr.observer(run_id),
         _action_registry=_e2e_registry([_action_result(True, "review", verdict="CONCERNS")]),
     )
     assert result1.status == ExecutionStatus.PAUSED
@@ -1666,7 +1666,7 @@ async def test_e2e_pause_and_resume_reenters_loop_at_recorded_round(tmp_path: Pa
         runs_dir=tmp_path,
         start_from=resume_from,
         start_from_iteration=resume_iteration,
-        on_step_complete=mgr.make_step_callback(run_id),
+        observer=mgr.observer(run_id),
         _action_registry=_e2e_registry([_action_result(True, "review", verdict="PASS")]),
     )
     mgr.finalize(run_id, result2)
@@ -1728,7 +1728,7 @@ async def test_e2e_paused_at_round_2_of_3_resumes_at_round_2_not_round_1(
         cf_client=MagicMock(),
         run_id=run_id,
         runs_dir=tmp_path,
-        on_step_complete=mgr.make_step_callback(run_id),
+        observer=mgr.observer(run_id),
         _action_registry={
             "dispatch": dispatch_action,
             "review": review_action,
@@ -1755,7 +1755,7 @@ async def test_e2e_paused_at_round_2_of_3_resumes_at_round_2_not_round_1(
         runs_dir=tmp_path,
         start_from=resume_from,
         start_from_iteration=resume_iteration,
-        on_step_complete=mgr.make_step_callback(run_id),
+        observer=mgr.observer(run_id),
         _action_registry=_e2e_registry([_action_result(True, "review", verdict="PASS")]),
     )
     assert result2.status == ExecutionStatus.COMPLETED

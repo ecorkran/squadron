@@ -204,7 +204,7 @@ class TestSummaryStep:
         """
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("test-pipeline", {"slice": "154"})
-        cb = mgr.make_step_callback(run_id)
+        cb = mgr.observer(run_id).step_completed
 
         # Outputs produced by SummaryAction._execute_summary with emit=rotate
         ar = ActionResult(
@@ -242,7 +242,7 @@ class TestSummaryStep:
 
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("test-pipeline", {"slice": "154"})
-        cb = mgr.make_step_callback(run_id)
+        cb = mgr.observer(run_id).step_completed
 
         ar = ActionResult(
             success=True,
@@ -272,7 +272,7 @@ class TestSummaryStep:
 
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("test-pipeline", {"slice": "154"})
-        cb = mgr.make_step_callback(run_id)
+        cb = mgr.observer(run_id).step_completed
 
         ar = ActionResult(
             success=True,
@@ -302,7 +302,7 @@ class TestSummaryStep:
 
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("test-pipeline", {"slice": "154"})
-        cb = mgr.make_step_callback(run_id)
+        cb = mgr.observer(run_id).step_completed
 
         ar = ActionResult(
             success=True,

@@ -248,7 +248,7 @@ async def _run_pipeline(
             start_from_iteration=from_iteration,
             sdk_session=sdk_session,  # type: ignore[arg-type]
             pool_policy=pool_policy,
-            on_step_complete=state_mgr.make_step_callback(run_id),
+            observer=state_mgr.observer(run_id),
             runs_dir=runs_dir,
             item_rerun=item_rerun,
             _action_registry=_action_registry,

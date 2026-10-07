@@ -21,6 +21,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefini
 from squadron.pipeline.sources import SOURCE_REGISTRY
 from squadron.pipeline.state import _default_runs_dir  # pyright: ignore[reportPrivateUsage]
 from squadron.pipeline.steps import register_step_type
+from tests.pipeline.observer_support import RecordingObserver
 
 _OK = ActionResult(success=True, action_type="dispatch", outputs={})
 
@@ -37,6 +38,7 @@ async def _run(
     items: list[dict[str, object]],
     outcome_for: Callable[[str], ActionResult],
     policy: str | None = None,
+    observer: RecordingObserver | None = None,
 ) -> tuple[PipelineResult, list[str]]:
     """Run an ``each`` over *items*; return the result and the indices whose body ran."""
 
@@ -75,6 +77,7 @@ async def _run(
         {"_project": "test"},
         resolver=MagicMock(),
         cf_client=MagicMock(),
+        observer=observer,
         _action_registry={"dispatch": dispatch},
     )
     return result, ran
@@ -89,6 +92,30 @@ def _items(*indices: str, **flags: str) -> list[dict[str, object]]:
         }
         for i in indices
     ]
+
+
+class TestObserverCallOrder:
+    @pytest.mark.asyncio
+    async def test_each_step_reports_every_item_between_start_and_completion(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        observer = RecordingObserver()
+
+        await _run(monkeypatch, _items("180", "181", "182"), lambda _: _OK, observer=observer)
+
+        assert [(kind, name) for kind, name, _ in observer.events] == [
+            ("step_started", "slices"),
+            ("item_started", "slices"),
+            ("item_started", "slices"),
+            ("item_started", "slices"),
+            ("step_completed", "slices"),
+        ]
+        items = [item for _, _, item in observer.events if item is not None]
+        assert [(i.position, i.total, i.index) for i in items] == [
+            (0, 3, "180"),
+            (1, 3, "181"),
+            (2, 3, "182"),
+        ]
 
 
 class TestContinuePolicy:

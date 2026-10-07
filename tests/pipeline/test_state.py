@@ -1,7 +1,7 @@
 """Unit tests for squadron.pipeline.state.
 
 Tests cover: Pydantic models, StateManager init, atomic writes, init_run,
-make_step_callback/_append_step, finalize, load, load_prior_outputs,
+observer().step_completed/_append_step, finalize, load, load_prior_outputs,
 first_unfinished_step, list_runs, find_matching_run, prune.
 """
 
@@ -224,7 +224,7 @@ class TestInitRun:
 
 
 # ---------------------------------------------------------------------------
-# T8: make_step_callback / _append_step tests
+# T8: observer().step_completed / _append_step tests
 # ---------------------------------------------------------------------------
 
 
@@ -258,14 +258,14 @@ def _make_step_result(
 class TestStepCallback:
     def test_verdict_from_last_non_none(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(verdicts=[None, "PASS"]))
         state = state_manager.load(run_id)
         assert state.completed_steps[0].verdict == "PASS"
 
     def test_outputs_from_last_action(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         ar = ActionResult(
             success=True,
             action_type="cf-op",
@@ -284,7 +284,7 @@ class TestStepCallback:
 
     def test_two_callbacks_produce_two_entries(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(_make_step_result(step_name="tasks"))
         state = state_manager.load(run_id)
@@ -292,7 +292,7 @@ class TestStepCallback:
 
     def test_paused_step_sets_status_and_checkpoint(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         paused_step = _make_step_result(
             step_name="implement",
             status=ExecutionStatus.PAUSED,
@@ -307,7 +307,7 @@ class TestStepCallback:
 
     def test_action_results_stored_as_dicts(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result())
         state = state_manager.load(run_id)
         ar_list = state.completed_steps[0].action_results
@@ -332,21 +332,21 @@ class TestStepCallbackScore:
 
     def test_score_hoisted_from_action(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_with_scores([87.5]))
         state = state_manager.load(run_id)
         assert state.completed_steps[0].score == 87.5
 
     def test_no_action_score_is_none(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_with_scores([None]))
         state = state_manager.load(run_id)
         assert state.completed_steps[0].score is None
 
     def test_last_non_none_score_wins(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_with_scores([10.0, 20.0, None]))
         state = state_manager.load(run_id)
         # Mirrors the verdict hoist: last non-None, scanning from the end.
@@ -441,7 +441,7 @@ def _write_run_with_action_results(
 ) -> str:
     """Helper: create a run with completed steps that have stored action_results."""
     run_id = state_manager.init_run(pipeline, {})
-    cb = state_manager.make_step_callback(run_id)
+    cb = state_manager.observer(run_id).step_completed
     verdicts = ["PASS"] * num_action_results
     step = StepResult(
         step_name="design",
@@ -572,7 +572,7 @@ class TestFirstUnfinishedStep:
 
     def test_first_two_completed_returns_third(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(_make_step_result(step_name="tasks"))
         defn = _make_definition(["design", "tasks", "implement"])
@@ -593,7 +593,7 @@ class TestFirstUnfinishedStep:
         raised; slice 915 answers it (D1: yes, resume re-enters).
         """
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(
             _make_step_result(
@@ -616,7 +616,7 @@ class TestFirstUnfinishedStep:
         append, so resume must return to it rather than past it.
         """
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(_make_step_result(step_name="implement", status=ExecutionStatus.FAILED))
 
@@ -625,7 +625,7 @@ class TestFirstUnfinishedStep:
 
     def test_all_completed_returns_none(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         for name in ["design", "tasks", "implement"]:
             cb(_make_step_result(step_name=name))
         defn = _make_definition(["design", "tasks", "implement"])
@@ -640,7 +640,7 @@ class TestFirstUnfinishedStep:
         last gap in the sequence.
         """
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(_make_step_result(step_name="review-loop", status=ExecutionStatus.PAUSED))
         cb(_make_step_result(step_name="implement"))
@@ -654,7 +654,7 @@ class TestFirstUnfinishedStepOf:
 
     def test_paused_run_returns_paused_step(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(_make_step_result(step_name="review", status=ExecutionStatus.PAUSED))
         defn = _make_definition(["design", "review", "implement"])
@@ -662,7 +662,7 @@ class TestFirstUnfinishedStepOf:
 
     def test_failed_run_returns_failed_step(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         cb(_make_step_result(step_name="implement", status=ExecutionStatus.FAILED))
         defn = _make_definition(["design", "implement", "review"])
@@ -670,7 +670,7 @@ class TestFirstUnfinishedStepOf:
 
     def test_all_complete_returns_none(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         for name in ["design", "tasks"]:
             cb(_make_step_result(step_name=name))
         defn = _make_definition(["design", "tasks"])
@@ -693,7 +693,7 @@ class TestRunningStatus:
 class TestResumeIterationFor:
     def test_paused_loop_step_returns_recorded_iteration(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(
             StepResult(
                 step_name="review-loop",
@@ -707,19 +707,19 @@ class TestResumeIterationFor:
 
     def test_unknown_step_name_returns_zero(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         assert state_manager.resume_iteration_for(run_id, "does-not-exist") == 0
 
     def test_non_loop_step_with_no_iteration_returns_zero(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(_make_step_result(step_name="design"))
         assert state_manager.resume_iteration_for(run_id, "design") == 0
 
     def test_repeated_step_name_returns_last_occurrence(self, state_manager: StateManager) -> None:
         run_id = state_manager.init_run("pipe", {})
-        cb = state_manager.make_step_callback(run_id)
+        cb = state_manager.observer(run_id).step_completed
         cb(
             StepResult(
                 step_name="review-loop",

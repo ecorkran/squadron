@@ -216,7 +216,7 @@ class TestCliIntegration:
                 run_id=run_id,
                 runs_dir=tmp_path,
                 start_from=next_step,
-                on_step_complete=mgr.make_step_callback(run_id),
+                observer=mgr.observer(run_id),
                 _action_registry=_success_registry(dispatch_action=dispatch_action),
             )
         mgr.finalize(run_id, result2)

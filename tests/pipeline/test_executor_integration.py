@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from squadron.pipeline.executor import ExecutionStatus, StepResult, execute_pipeline
+from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult
 from tests.pipeline.conftest import (
@@ -19,6 +19,7 @@ from tests.pipeline.conftest import (
     load_fixture_pipeline,
     phase_artifact_cf_client,
 )
+from tests.pipeline.observer_support import RecordingObserver
 
 
 def _mock_action_fn(success: bool = True, verdict: str | None = None) -> MagicMock:
@@ -101,7 +102,7 @@ class TestSliceLifecycleIntegration:
         assert all(sr.status == ExecutionStatus.COMPLETED for sr in result.step_results)
 
     @pytest.mark.asyncio
-    async def test_on_step_complete_called_in_order(self, tmp_path: Path) -> None:
+    async def test_observer_step_completed_in_order(self, tmp_path: Path) -> None:
         from squadron.pipeline.state import StateManager
 
         definition = load_fixture_pipeline("slice")
@@ -109,7 +110,7 @@ class TestSliceLifecycleIntegration:
         cf_client = phase_artifact_cf_client(149, "149-slice.stub.md", "149-tasks.stub.md")
         state_mgr = StateManager(runs_dir=tmp_path)
         run_id = state_mgr.init_run("slice", {"slice": "149"})
-        received: list[StepResult] = []
+        observer = RecordingObserver()
 
         await execute_pipeline(
             definition,
@@ -119,12 +120,12 @@ class TestSliceLifecycleIntegration:
             cwd=str(tmp_path),
             run_id=run_id,
             runs_dir=tmp_path,
-            on_step_complete=received.append,
+            observer=observer,
             _action_registry=registry,
         )
 
-        assert len(received) == 12
-        step_names = [sr.step_name for sr in received]
+        assert len(observer.completed) == 12
+        step_names = [sr.step_name for sr in observer.completed]
         assert step_names[0].startswith("design")
         assert step_names[-1].startswith("branch")
         assert step_names[-2].startswith("devlog")

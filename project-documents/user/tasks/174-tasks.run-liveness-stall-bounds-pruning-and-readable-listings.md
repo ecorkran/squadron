@@ -9,7 +9,7 @@ projectState: >
   932 (SDK session idle timer) are complete. Integration branch is unset, so the target is `main`.
 dateCreated: 20261007
 dateUpdated: 20261007
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -37,32 +37,32 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
+- [x] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
       `git status` is clean
-- [ ] If the branch does not exist:
+- [x] If the branch does not exist:
       `git checkout -b 174-slice.run-liveness-stall-bounds-pruning-and-readable-listings main`;
       if it exists, `git checkout` it
-  - [ ] Success: `git branch --show-current` prints the branch name
+  - [x] Success: `git branch --show-current` prints the branch name
 
 ## Task 2 — Spike: SDK interrupt and state-write threading (design Dev Approach step 1)
 
-- [ ] Write a throwaway script (outside `src/`, not committed) that starts a
+- [x] Write a throwaway script (outside `src/`, not committed) that starts a
       `ClaudeSDKClient` turn asking for a long Bash `sleep`, calls `client.interrupt()`, and
       prints every message that follows, in order
-  - [ ] Record: does a `ResultMessage` for the interrupted turn arrive, is `is_error` set,
+  - [x] Record: does a `ResultMessage` for the interrupted turn arrive, is `is_error` set,
         and does a following `query()` on the same client succeed
-  - [ ] Success: findings recorded under the design's "Interrupting a live turn" risk; if no
+  - [x] Success: findings recorded under the design's "Interrupting a live turn" risk; if no
         `ResultMessage` arrives, apply the design's fallback (D7 narrows to "always mark
         unusable"), update D7 to say so, and carry it into Task 16
-- [ ] Confirm no `StateManager` write runs off the event-loop thread (D5): grep
+- [x] Confirm no `StateManager` write runs off the event-loop thread (D5): grep
       `to_thread` and `run_in_executor` in `src/squadron/pipeline` and `cli/commands/run.py`
-  - [ ] Success: each hit is listed with whether it touches the state file; if any does, add
+  - [x] Success: each hit is listed with whether it touches the state file; if any does, add
         D5's per-run `threading.Lock` around load, modify and write in Task 11
 
 ## Task 3 — Baseline the existing tests
 
-- [ ] Run `pytest tests -q` and record pass/fail counts
-  - [ ] Success: failures (if any) are noted as pre-existing before any edit
+- [x] Run `pytest tests -q` and record pass/fail counts
+  - [x] Success: failures (if any) are noted as pre-existing before any edit
 
 ---
 

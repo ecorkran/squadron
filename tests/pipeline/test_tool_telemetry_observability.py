@@ -133,7 +133,7 @@ async def test_run_state_action_results_contains_tools_metadata(tmp_path: Path) 
         run_id=run_id,
         runs_dir=tmp_path,
         # The same persistence seam `sq run` wires up, so this asserts the real path.
-        on_step_complete=state_manager.make_step_callback(run_id),
+        observer=state_manager.observer(run_id),
         _action_registry={"dispatch": _tool_bearing_action()},
     )
 

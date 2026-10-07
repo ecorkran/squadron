@@ -614,6 +614,7 @@ cd $S/proj && export HOME=$S/home
 
 ### Technical Risks
 - **Interrupting a live turn.** The SDK's state after `interrupt()` is not documented. The drain assumes the CLI emits the turn's own `ResultMessage` after an interrupt.
+  - **Spike result (Phase 6, Task 2, haiku-4.5, foreground Bash call blocked 60 s, interrupted after 8 s of silence):** `interrupt()` returned at once. A fresh `receive_response()` then yielded, in order, a `TaskNotificationMessage` (`status: stopped`), the tool's rejected `ToolResultBlock`, a `UserMessage` `[Request interrupted by user for tool use]`, and the turn's own `ResultMessage` with `is_error=True`, `subtype='error_during_execution'`. A following `query()` on the same client succeeded. D7 stands as written; the "always unusable" fallback is not needed. The drain must accept the `is_error` result rather than raise on it, and must read through a fresh iterator, because the timed-out one is closed by the cancellation.
 - **Blocked event loop.** A synchronous call that blocks the loop for longer than 10 heartbeat intervals (300 s by default) makes a live run read as `STALE`. If a user prunes it explicitly, the run's next state write fails.
 - **Silent tool calls.** A legitimate foreground tool call (a long test suite run through Bash) that emits nothing for the idle bound gets interrupted.
 

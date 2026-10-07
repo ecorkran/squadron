@@ -14,7 +14,6 @@ import json
 import logging
 import re
 import uuid
-from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -27,6 +26,7 @@ from squadron.pipeline.models import ActionResult
 
 if TYPE_CHECKING:
     from squadron.pipeline.models import PipelineDefinition
+    from squadron.pipeline.run_observer import RunObserver
 
 _logger = logging.getLogger(__name__)
 
@@ -152,6 +152,14 @@ class CompactSummary(BaseModel):
     created_at: datetime
 
 
+class ActiveItem(BaseModel):
+    """The ``each`` item a run is working on now (slice 174 D2)."""
+
+    position: int  # 0-based position in the each step's item list
+    total: int
+    index: str | None  # the item's own "index" field when present (plan slice index)
+
+
 class RunState(BaseModel):
     """Complete persisted state of a pipeline run."""
 
@@ -264,14 +272,16 @@ class StateManager:
         self.prune(pipeline_name)
         return run_id
 
-    def make_step_callback(self, run_id: str) -> Callable[[StepResult], None]:
-        """Return a closure for use as execute_pipeline's on_step_complete."""
+    def observer(self, run_id: str) -> RunObserver:
+        """Return the ``RunObserver`` that records *run_id*'s progress (D12)."""
+        from squadron.pipeline.run_observer import RunStateRecorder
 
-        def _callback(step_result: StepResult) -> None:
-            self._append_step(run_id, step_result)
-            self._maybe_record_compact_summaries(run_id, step_result)
+        return RunStateRecorder(self, run_id)
 
-        return _callback
+    def record_step_completed(self, run_id: str, step_result: StepResult) -> None:
+        """Append a completed step and record any compact summaries it produced."""
+        self._append_step(run_id, step_result)
+        self._maybe_record_compact_summaries(run_id, step_result)
 
     def _maybe_record_compact_summaries(self, run_id: str, step_result: StepResult) -> None:
         """Inspect action results for compact summaries and persist them."""

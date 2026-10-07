@@ -108,7 +108,7 @@ class TestStateIntegration:
             cf_client=cf_client,
             cwd=str(tmp_path),
             run_id=run_id,
-            on_step_complete=mgr.make_step_callback(run_id),
+            observer=mgr.observer(run_id),
             runs_dir=tmp_path,
             _action_registry=_success_registry(dispatch_action=dispatch_action),
         )
@@ -138,7 +138,7 @@ class TestStateIntegration:
             cf_client=cf_client,
             cwd=str(tmp_path),
             run_id=run_id,
-            on_step_complete=mgr.make_step_callback(run_id),
+            observer=mgr.observer(run_id),
             runs_dir=tmp_path,
             _action_registry=_paused_checkpoint_registry(
                 pause_on_step=2, dispatch_action=dispatch_action
@@ -164,7 +164,7 @@ class TestStateIntegration:
             cwd=str(tmp_path),
             run_id=run_id,
             start_from=start_from,
-            on_step_complete=mgr.make_step_callback(run_id),
+            observer=mgr.observer(run_id),
             runs_dir=tmp_path,
             _action_registry=_success_registry(dispatch_action=dispatch_action),
         )

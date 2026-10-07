@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
+from tests.pipeline.observer_support import RecordingObserver
 
 # ---------------------------------------------------------------------------
 # T1 — Test infrastructure helpers
@@ -391,11 +392,11 @@ class TestExecutePipelineHappyPath:
         assert "dispatch-0" in ctx.prior_outputs
 
     @pytest.mark.asyncio
-    async def test_on_step_complete_called_per_step(self) -> None:
+    async def test_observer_step_completed_per_step(self) -> None:
         from squadron.pipeline.executor import execute_pipeline
         from squadron.pipeline.steps import register_step_type
 
-        calls: list[object] = []
+        observer = RecordingObserver()
 
         action = mock_action([make_action_result(True, "dispatch")])
         step = mock_step_type([("dispatch", {})])
@@ -408,11 +409,35 @@ class TestExecutePipelineHappyPath:
             {},
             resolver=MagicMock(),
             cf_client=MagicMock(),
-            on_step_complete=calls.append,
+            observer=observer,
             _action_registry={"dispatch": action},
         )
 
-        assert len(calls) == 1
+        assert len(observer.completed) == 1
+
+    @pytest.mark.asyncio
+    async def test_observer_sees_start_before_completion(self) -> None:
+        from squadron.pipeline.executor import execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        observer = RecordingObserver()
+        action = mock_action([make_action_result(True, "dispatch")])
+        register_step_type("_test_observer_order", mock_step_type([("dispatch", {})]))
+        pipeline = make_pipeline([make_step_config("_test_observer_order", "step-1", {})])
+
+        await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            observer=observer,
+            _action_registry={"dispatch": action},
+        )
+
+        assert [(kind, name) for kind, name, _ in observer.events] == [
+            ("step_started", "step-1"),
+            ("step_completed", "step-1"),
+        ]
 
     @pytest.mark.asyncio
     async def test_missing_required_param_raises(self) -> None:
