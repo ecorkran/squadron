@@ -29,6 +29,7 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 **Included**
 - `sq pipelines list`: effective pipelines grouped by source (built-in, project, user), alphabetical within each group.
 - `sq runs list`: one row per run, newest first. The default shows resumable runs and runs whose resumability could not be determined. `--all` shows every run. `--pipeline NAME` filters by pipeline.
+- `sq runs wait <run-id> [--timeout SECONDS]`: blocks until the run leaves `running`, prints its final status line, and exits with a code per outcome (D13). Lets an agent or script that started a pipeline in the background learn when it is done without polling the runs directory itself.
 - A pure run-listing layer (`squadron/pipeline/run_listing.py`) that builds row data from `StateManager` and batch reports. Rendering stays in the CLI.
 - One eligibility module (`squadron/pipeline/item_eligibility.py`) shared by the listing and item resume.
 - `sq run --list` stays as a deprecated alias for `sq pipelines list` and prints a deprecation notice on stderr.
@@ -175,6 +176,24 @@ A `running` run is outside `RESUMABLE_STATUSES`. The listing reports exactly wha
 
 The definition and report loaders are injected (see API Contracts), so a test asserts these bounds by counting calls.
 
+**D13. `sq runs wait`.** A pure helper in `run_listing.py`, `wait_for_run(state_manager, run_id, *, timeout, poll_interval, clock, sleep) -> WaitOutcome`, re-reads the run's state file every `poll_interval` until its status is not `running`, or until `timeout` elapses. `clock` and `sleep` are injected so tests run without real time. `WAIT_POLL_INTERVAL_SECONDS` is a module constant in `run_listing.py`, the single definition. `--timeout` has no default: without it the command waits indefinitely, which is the right behaviour for a long batch, and a caller that needs a bound passes one.
+
+`WaitOutcome(StrEnum)` and its exit codes are defined once, in `run_listing.py`:
+
+| Outcome | When | Exit |
+|---|---|---|
+| `COMPLETED` | status `completed` | 0 |
+| `FAILED` | status `failed` | 1 |
+| `PAUSED` | status `paused` (checkpoint or flag) | 3 |
+| `TIMED_OUT` | `--timeout` elapsed while still `running` | 4 |
+| `NOT_FOUND` | no state file for the run-id | 5 |
+| `UNREADABLE` | state file present but unreadable or invalid on a poll | 6 |
+| `UNKNOWN_STATUS` | any other status value | 7 |
+
+Exit 2 is left to Typer's usage errors. Every non-zero outcome prints one line on stderr naming the run-id and the outcome, and every outcome except `COMPLETED` is logged at WARNING. On a terminal status the command prints the same status line `sq run --status <run-id>` prints, through the shared `run_views` renderer.
+
+Failure modes: a crashed process leaves its run at `running` forever, and `wait` cannot tell that from a live run (D7). `--timeout` is the bound, and the help text says so. A run-state file mid-replace is never torn (`_write_atomic`); a single failed read on one poll is retried on the next poll, and only a second consecutive failure ends with `UNREADABLE`. `running` and the other status literals are compared through `ExecutionStatus` and the `running` constant that `init_run` writes, which becomes a named module constant in `state.py` (`RUNNING_STATUS`) if it is not one already; the D10 typing issue covers replacing it with an enum member.
+
 ## Implementation Details
 
 ### API Contracts
@@ -182,10 +201,11 @@ The definition and report loaders are injected (see API Contracts), so a test as
 ```
 sq pipelines list
 sq runs list [--all] [--pipeline NAME]
+sq runs wait <run-id> [--timeout SECONDS]
 sq run --list            # deprecated alias of `sq pipelines list`
 ```
 
-Both commands exit 0 on success, including empty results. Usage errors use Typer's standard non-zero code.
+Both listing commands exit 0 on success, including empty results. `sq runs wait` exits per D13. Usage errors use Typer's standard non-zero code.
 
 ```python
 # squadron/pipeline/run_listing.py
@@ -245,7 +265,8 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - `commands/sq/pipelines.md` and `commands/sq/runs.md` follow the `list.md` pattern. Each runs `sq pipelines list $ARGUMENTS` or `sq runs list $ARGUMENTS`, shows the results, and documents its flags under a `## Subcommand: list` section.
 - `commands/agents/sq-pipelines/SKILL.md` and `commands/agents/sq-runs/SKILL.md` carry the same content in skill form.
 - Both installers find these files by glob (`skills/targets.py`), so no registry edit is needed.
-- `tests/cli/test_command_surface.py` gains two entries: `(("pipelines", "list"), "pipelines.md", "## Subcommand: list")` and `(("runs", "list"), "runs.md", "## Subcommand: list")`.
+- `commands/sq/runs.md` and the `sq-runs` skill also document `wait` under `## Subcommand: wait`, including the exit codes and that an agent running a pipeline in the background calls `sq runs wait <run-id>` to learn when it ends.
+- `tests/cli/test_command_surface.py` gains three entries: `(("pipelines", "list"), "pipelines.md", "## Subcommand: list")`, `(("runs", "list"), "runs.md", "## Subcommand: list")` and `(("runs", "wait"), "runs.md", "## Subcommand: wait")`.
 
 ## Integration Points
 
@@ -273,6 +294,7 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - For a paused run, "Resume at" equals the step `sq run --resume <id>` resumes at.
 - For a completed batch run, every item counted as open is accepted by `--item <index> --decision retry`, and every item counted toward "accept" is accepted by `--decision accept`. Here "accepted" means the run passes item resume's validation; git preconditions are separate.
 - `sq run --list` prints the deprecation notice on stderr and the same output as `sq pipelines list` on stdout.
+- `sq runs wait <run-id>` returns when the run leaves `running`, with the D13 exit code for its outcome; with `--timeout` it returns exit 4 if the run is still `running` when the timeout elapses.
 
 ### Technical Requirements
 - `PipelineSource` replaces the bare source strings.
@@ -290,6 +312,7 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - Each `ResumeProblem` test asserts both the enum value and the WARNING record (`caplog`, logger `squadron.pipeline.run_listing`).
 - A parity test feeds the same report to `item_decisions` and to `item_resume._check_record` for every outcome and flag-kind combination. It asserts that a decision `_check_record` rejects never appears in the decision set `item_decisions` reports.
 - `run_views` has a test that every `ResumeProblem` member has marker text.
+- `wait_for_run` unit tests, with injected `clock` and `sleep` and real `StateManager` state files: a run that moves `running` → each terminal status mid-wait, one test per `WaitOutcome`; timeout while `running`; a missing run-id; one unreadable poll followed by a good one (recovers), and two in a row (`UNREADABLE`). Each non-`COMPLETED` case asserts its WARNING record. A CLI test asserts every `WaitOutcome` maps to its exit code.
 - The pipeline-grouping unit test covers all three sources plus shadowing, through the `project_dir` and `user_dir` overrides.
 - CLI tests use `CliRunner` for both commands and the deprecated alias, including the stderr notice.
 - Fixtures are real:
@@ -359,7 +382,14 @@ These commands do not exist yet. This is the draft demo for Phase 6.
    ```
    Record the run count and the elapsed time in the walkthrough. The target is under 1 s for a few hundred runs (see Special Considerations).
 
-8. **Slash surfaces.** After `sq install-commands`, run `/sq:runs` in Claude Code. The table should match `sq runs list`.
+8. **Waiting on a run.** Start a short pipeline in one terminal and wait on it from another:
+   ```bash
+   sq run review <slice> --model <alias> &      # note the run-id it prints
+   sq runs wait <run-id>; echo "exit $?"
+   ```
+   Expect the final status line and `exit 0` on completion (3 if it pauses at a checkpoint). Then `sq runs wait <run-id-of-a-running-run> --timeout 5; echo $?` prints the timeout line and `4`, and `sq runs wait no-such-run; echo $?` prints `5`.
+
+9. **Slash surfaces.** After `sq install-commands`, run `/sq:runs` in Claude Code. The table should match `sq runs list`.
 
 ## Implementation Notes
 
@@ -373,6 +403,7 @@ These commands do not exist yet. This is the draft demo for Phase 6.
 2. Create `cli/run_views.py` with `STATUS_COLORS`, moved from `run.py`, and `render_pipeline_listing()`. Add `pipelines.py` and register it in `app.py`. Point `sq run --list` at `render_pipeline_listing()`, with the deprecation notice.
 3. Write `run_listing.py` with its unit tests.
 4. Add `render_run_listing()` and the marker text to `run_views`. Add `runs.py` and register it.
+4a. Add `wait_for_run` and `WaitOutcome` to `run_listing.py` with their tests, then `sq runs wait` in `runs.py` (D13).
 5. Add the slash commands, skills and drift-test entries.
 6. Update the docs. Open GitHub issues for:
    - removing `sq run --list`;
