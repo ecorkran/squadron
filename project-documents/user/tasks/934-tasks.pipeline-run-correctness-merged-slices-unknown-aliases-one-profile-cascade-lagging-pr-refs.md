@@ -230,11 +230,11 @@ status: in_progress
 
 ## Task 22b — Use the API head on a lagging ref (D6, D9, D10)
 
-- [ ] Replace 22a's `LAGS` raise: `update-ref head_local <api-sha>`, record a head `RefAdjustment` (its WARNING stays untagged; Task 25a tags it), build the range on the API head. Only the exact API head sha is ever reviewed
-- [ ] `update-ref` failure renders `RefNotFetchableError`; timeout renders `HostCommandTimeoutError`; both log a tagged WARNING
-- [ ] Tests: lag → range built on the API head with one adjustment; `update-ref` non-zero and timeout; 22a's `LAGS`-raises test is replaced by the lag-success test. `uv run pytest tests/codehost -k lagging -v` selects the lag cases (name them accordingly)
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: review the API head when refs/pull/N/head lags (#186)`
+- [x] Replace 22a's `LAGS` raise: `update-ref head_local <api-sha>`, record a head `RefAdjustment` (its WARNING stays untagged; Task 25a tags it), build the range on the API head. Only the exact API head sha is ever reviewed
+- [x] `update-ref` failure renders `RefNotFetchableError`; timeout renders `HostCommandTimeoutError`; both log a tagged WARNING
+- [x] Tests: lag → range built on the API head with one adjustment; `update-ref` non-zero and timeout; 22a's `LAGS`-raises test is replaced by the lag-success test. `uv run pytest tests/codehost -k lagging -v` selects the lag cases (name them accordingly)
+  - [x] Success: tests pass
+- [x] Commit: `fix: review the API head when refs/pull/N/head lags (#186)`
 
 ## Task 23 — GitHub adapter passes the head refspec (D6)
 
