@@ -27,6 +27,9 @@ status: not_started
 - Every code task ends with `ruff format`, `ruff check`, `pyright` (zero errors) and its
   tests before its commit. Tests are hermetic: `tmp_path` runs dir and pipeline dirs, per
   `tests/_hermetic.py`; real `StateManager`, `BatchReport.write` and YAML fixtures.
+- Traceability (design → tasks): D1/D2 → 10–15; D3 → 7–9; D4/D11 → 3–4; D5 → 5–6; D6/D10 →
+  21; D7 → 22–24; D8 → 16–17; D9 → 25; D12 → 26; D13 → 30–33; D14 → 18–20; docs, CHANGELOG
+  and follow-up issues → 34–36; Verification Walkthrough → 37.
 - Effort: 3/5. Next planned slice: per `cf next` after 199 closes.
 
 ---
@@ -35,7 +38,8 @@ status: not_started
 
 - [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
       `git status` is clean
-- [ ] `git checkout -b 199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list main`
+- [ ] If the branch does not exist: `git checkout -b 199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list main`;
+      if it exists, `git checkout` it
   - [ ] Success: `git branch --show-current` prints the new branch name
 
 ## Task 2 — Baseline the existing tests
@@ -94,6 +98,9 @@ status: not_started
         plus `ACCEPT` when `flag_kind is FlagKind.REVIEW_UNRESOLVED`
   - [ ] `single_each_step` is today's `item_resume._single_each_step` rule, moved
   - [ ] Success: module has no I/O imports (no git, lock, executor)
+- [ ] Add `tests/pipeline/test_item_eligibility.py`: `item_decisions` over every `ItemOutcome`
+      × relevant `FlagKind`; `single_each_step` with zero, one and two `each` steps
+  - [ ] Success: tests pass
 
 ## Task 8 — Move `item_resume` onto `item_eligibility`
 
@@ -104,10 +111,8 @@ status: not_started
 - [ ] Remove the old `_single_each_step` and any now-duplicate outcome constant
   - [ ] Success: existing item-resume tests pass unchanged
 
-## Task 9 — Eligibility unit and parity tests
+## Task 9 — Item-resume parity test
 
-- [ ] Unit tests for `item_decisions` over every `ItemOutcome` × relevant `FlagKind`
-- [ ] Unit tests for `single_each_step`: zero, one, two `each` steps
 - [ ] Parity test: for every outcome and flag-kind combination and each `ItemDecision`,
       build the real report/record, run `item_resume._check_record`, and assert any decision it
       rejects is absent from `item_decisions(record)`
@@ -185,7 +190,8 @@ status: not_started
 ## Task 17 — Test the removed flag
 
 - [ ] Add a `CliRunner` test asserting `sq run --list` and `sq run -l` exit non-zero
-  - [ ] Success: test passes
+- [ ] Confirm `sq run --status`, `--resume` and `--item` tests still pass unchanged
+  - [ ] Success: tests pass
 - [ ] Commit: `refactor: remove sq run --list in favor of sq pipelines list`
 
 ## Task 18 — `sq agents list` (D14)
@@ -209,7 +215,9 @@ status: not_started
 
 - [ ] Move/adapt existing `sq list` CLI tests to `sq agents list`; add a test that `sq list`
       exits non-zero (no such command) and that the error messages in Task 19 name
-      `sq agents list`
+      `sq agents list`; `--state` and `--provider` still work
+- [ ] Test that `commands/sq/list.md` and `commands/agents/sq-list/SKILL.md` contain
+      `sq agents list $ARGUMENTS` and no bare `sq list`
   - [ ] Success: tests pass
 - [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/cli -q`
 - [ ] Commit: `refactor: move sq list to sq agents list`
@@ -218,7 +226,7 @@ status: not_started
 
 ## Part C — `run_listing.py` (Dev Approach step 3)
 
-## Task 21 — Row types (D6, D10)
+## Task 21 — Row types and their tests (D6, D10)
 
 - [ ] Create `src/squadron/pipeline/run_listing.py` with `ResumeKind(StrEnum)`
       (`STEP`, `ITEMS`), `ResumeProblem(StrEnum)` (`PIPELINE_UNAVAILABLE`,
@@ -226,52 +234,73 @@ status: not_started
       dataclass `ResumePoint` (`kind`, `step_name`, `open_items`, `acceptable_items`) and
       frozen dataclass `RunSummary` per API Contracts (`status` stays `str`)
   - [ ] Success: signatures match the design; module has no rendering code
-
-## Task 22 — Per-status resume resolution
-
-- [ ] Add private helpers in `run_listing.py`, each ≤ ~50 lines, one per branch of the Data
-      Flow section: paused/failed → `ResumePoint(STEP)` or `NO_UNFINISHED_STEP` or
-      `PIPELINE_UNAVAILABLE`; completed → no reports → none, else `single_each_step` →
-      `BatchReport.load` → `item_decisions` counts → `ResumePoint(ITEMS)` or none, with the
-      matching problem for `ItemResumeUnsupportedError` / `BatchReportLoadError` / load
-      failure; other status → none
-- [ ] Definition loading: per-call dict keyed by pipeline name; a failed load is cached as
-      failed too so it is attempted once per name; catch exactly `FileNotFoundError`,
-      `OSError`, `yaml.YAMLError`, pydantic `ValidationError` (D7); let others propagate
-- [ ] Log each problem at WARNING on logger `squadron.pipeline.run_listing`, with the
-      context named in the D7 table (run-id, pipeline, exception / `each` count / path)
-  - [ ] Success: compare only via `RESUMABLE_STATUSES` and `ExecutionStatus.COMPLETED.value`;
-        no new status literals
-
-## Task 23 — `list_run_summaries()`
-
-- [ ] Implement `list_run_summaries(state_manager, *, pipeline, include_all, load_definition=load_pipeline, load_report=BatchReport.load)`:
-      lowercase the `pipeline` filter (D9), call `state_manager.list_runs(pipeline=)`, build
-      rows, and unless `include_all` keep only rows with a resume point or a problem
-  - [ ] Success: newest-first order preserved; `running` runs appear only with `include_all`
-
-## Task 24 — Tests: resume resolution
-
-- [ ] Using real `StateManager.init_run` + update methods, `BatchReport.write`, and YAML
-      pipelines in `tmp_path`, add tests for: paused run and failed run each resolved to a step
-      (equal to `first_unfinished_step`); completed batch run with mixed flag kinds
-      (`review_unresolved` and others) checking `open_items` and `acceptable_items`; completed
-      batch run with all items passed (no resume point); completed non-batch run (no report, and
-      `load_definition` is never called); `running` run
+- [ ] Add `tests/pipeline/test_run_listing.py` (hermetic fixtures reused by Tasks 22–26) with
+      tests that both dataclasses reject attribute assignment and the enums have exactly the
+      members above
   - [ ] Success: tests pass
 
-## Task 25 — Tests: filtering, ordering, problems, bounds
+## Task 22 — Cached definition loading and its tests (D7, D12)
 
-- [ ] `--pipeline` filter (including mixed-case `P4` matching `p4`) and newest-first ordering;
-      default view vs `include_all`
-- [ ] One test per `ResumeProblem` (D7 table), each asserting the enum value and the WARNING
-      record via `caplog` on `squadron.pipeline.run_listing`
+- [ ] In `run_listing.py` add a private per-call loader around the injected `load_definition`:
+      one attempt per pipeline name; a failed load is remembered so it is not retried; catches
+      exactly `FileNotFoundError`, `OSError`, `yaml.YAMLError` and pydantic `ValidationError`;
+      any other exception propagates
+- [ ] Tests, with a call-counting `load_definition` and real YAML in `tmp_path`: two runs of
+      one pipeline load once; a missing file, a malformed-YAML file and a schema-invalid file
+      each yield "unavailable" and are attempted once; a `RuntimeError` from the loader
+      propagates
+  - [ ] Success: tests pass; no module-level cache (the dict is local to one call)
+
+## Task 23 — Paused/failed resume resolution and its tests (Data Flow)
+
+- [ ] Add a private helper (≤ ~50 lines) resolving a `paused`/`failed` run: load definition
+      (failure → `PIPELINE_UNAVAILABLE`), `first_unfinished_step_of` (`None` →
+      `NO_UNFINISHED_STEP`), else `ResumePoint(STEP, step_name)`
+- [ ] Log each problem at WARNING on logger `squadron.pipeline.run_listing` with the D7 context
+      (run-id, pipeline, exception / run-id)
+- [ ] Tests: paused run and failed run each resolve to the step `first_unfinished_step` returns;
+      `PIPELINE_UNAVAILABLE` and `NO_UNFINISHED_STEP` each assert the enum value and the WARNING
+      record via `caplog`
+  - [ ] Success: tests pass; status comparisons use only `RESUMABLE_STATUSES`
+
+## Task 24 — Completed-run resume resolution and its tests (Data Flow)
+
+- [ ] Add private helpers (each ≤ ~50 lines) for a `completed` run: `report_json_paths` empty →
+      no resume point, definition never loaded; else `single_each_step`
+      (`ItemResumeUnsupportedError` → `ITEM_RESUME_UNSUPPORTED`, logging the `each` count);
+      `load_report(report_json_path(...))` (`BatchReportLoadError` → `REPORT_UNREADABLE`,
+      logging the path); count `open_items` / `acceptable_items` from `item_decisions`;
+      `open_items > 0` → `ResumePoint(ITEMS, each.name, open, acceptable)`, else none
+- [ ] Add the dispatch for any other status (`running`) → no resume point, no problem; compare
+      only via `ExecutionStatus.COMPLETED.value` and `RUNNING_STATUS`; no new status literals
+- [ ] Tests (real `BatchReport.write` reports): mixed flag kinds (`review_unresolved` and
+      others) check both counts; all items passed → no resume point; completed non-batch run →
+      no resume point and `load_definition` never called; `running` run → none;
+      `ITEM_RESUME_UNSUPPORTED` (pipeline edited to two `each` steps); `REPORT_UNREADABLE` for
+      a corrupt report and for a renamed `each` step (file not found); `PIPELINE_UNAVAILABLE` for
+      a completed run with reports. Each problem case asserts enum value and WARNING record
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: resolve resume points for runs`
+
+## Task 25 — `list_run_summaries()` and its tests
+
+- [ ] Implement `list_run_summaries(state_manager, *, pipeline, include_all, load_definition=load_pipeline, load_report=BatchReport.load)`:
+      lowercase the `pipeline` filter (D9), call `state_manager.list_runs(pipeline=)`, build one
+      `RunSummary` per run via Tasks 22–24, and unless `include_all` keep only rows with a
+      resume point or a problem
+- [ ] Tests: `--pipeline P4` matches runs of `p4`; newest-first order preserved; default view
+      hides completed-no-open-items and `running` runs and keeps problem rows; `include_all`
+      returns every readable run with an empty resume cell for nothing-to-resume rows
+  - [ ] Success: tests pass
+
+## Task 26 — I/O-bounds and listing/resume parity tests (D12)
+
 - [ ] I/O-bounds test: 300 runs (200 completed non-batch, 50 completed batch across two
       pipelines, 30 paused and 20 failed across two other pipelines) with call-counting
       wrappers: `load_definition` called 4 times, `load_report` 50 times
-- [ ] Listing/resume parity test (Success Criteria): for a completed batch
-      run, every item counted open passes `item_resume._check_record` with `retry`, and every
-      acceptable item passes with `accept`
+- [ ] Listing/resume parity test (Success Criteria): for a completed batch run, every item
+      counted open passes `item_resume._check_record` with `retry`, and every item counted
+      acceptable passes with `accept`
   - [ ] Success: tests pass
 - [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/pipeline -q`
 - [ ] Commit: `feat: add run_listing layer for resumable runs`
@@ -280,11 +309,13 @@ status: not_started
 
 ## Part D — `sq runs list` (Dev Approach step 4)
 
-## Task 26 — Marker text and `render_run_listing()`
+## Task 27 — Marker text and `render_run_listing()`
 
 - [ ] In `run_views.py` add a dict of marker text keyed by `ResumeProblem` (the only place
-      marker text is defined; `PIPELINE_UNAVAILABLE` renders `<pipeline unavailable>`; choose
-      analogous bracketed texts for the other three)
+      marker text is defined) with exactly these values: `PIPELINE_UNAVAILABLE` →
+      `<pipeline unavailable>`, `NO_UNFINISHED_STEP` → `<no unfinished step>`,
+      `ITEM_RESUME_UNSUPPORTED` → `<item resume unsupported>`, `REPORT_UNREADABLE` →
+      `<report unreadable>`
 - [ ] Add `render_run_listing(summaries, *, include_all)` per UI Specifications: columns Run ID,
       Pipeline, Target (`key=value` joined by spaces), Status (coloured via `STATUS_COLORS`,
       unknown status `dim`), Resume at, Started (`%Y-%m-%d %H:%M`)
@@ -294,7 +325,7 @@ status: not_started
         ` Use --all to include completed runs.` when `--all` was not given
   - [ ] Success: dispatch is on the enums, no string comparison of marker text
 
-## Task 27 — `runs.py` command and registration
+## Task 28 — `runs.py` command and registration
 
 - [ ] Create `src/squadron/cli/commands/runs.py` with `runs_app` (`no_args_is_help=True`) and
       `list` subcommand: `--all`, `--pipeline NAME`; builds a `StateManager` the same way
@@ -302,7 +333,7 @@ status: not_started
 - [ ] Register with `add_typer(runs_app, name="runs")` in `cli/app.py`
   - [ ] Success: exits 0 including on empty results
 
-## Task 28 — Tests: run rendering and command
+## Task 29 — Tests: run rendering and command
 
 - [ ] Test every `ResumeProblem` member has marker text in `run_views`
 - [ ] Rendering tests: each Resume-at form, Target formatting, empty-result messages with and
@@ -316,7 +347,7 @@ status: not_started
 
 ## Part E — `sq runs wait` (Dev Approach step 5)
 
-## Task 29 — `WaitOutcome` and `wait_for_run` (D13)
+## Task 30 — `WaitOutcome` and `wait_for_run` (D13)
 
 - [ ] In `run_listing.py` add `WAIT_POLL_INTERVAL_SECONDS`, `WaitOutcome(StrEnum)`
       (`COMPLETED`, `FAILED`, `PAUSED`, `TIMED_OUT`, `NOT_FOUND`, `UNREADABLE`,
@@ -327,7 +358,7 @@ status: not_started
       outcome at WARNING
   - [ ] Success: exit code 2 is not used; no default timeout is set
 
-## Task 30 — Tests for `wait_for_run`
+## Task 31 — Tests for `wait_for_run`
 
 - [ ] With injected fake `clock`/`sleep` and real state files, one test per `WaitOutcome`:
       run moves `running` → each terminal status mid-wait; timeout while `running`; missing
@@ -335,7 +366,7 @@ status: not_started
   - [ ] Success: each non-`COMPLETED` case asserts its WARNING record; no real sleeping
 - [ ] Commit: `feat: add wait_for_run helper`
 
-## Task 31 — `sq runs wait` command
+## Task 32 — `sq runs wait` command
 
 - [ ] In `runs.py` add `wait` subcommand: `<run-id>` argument, `--timeout SECONDS`; help text
       states that a crashed run stays `running` and `--timeout` is the bound
@@ -344,7 +375,7 @@ status: not_started
       naming the run-id and outcome; exit with the D13 code
   - [ ] Success: status-line rendering is shared with `run.py`, not duplicated
 
-## Task 32 — CLI tests for `sq runs wait`
+## Task 33 — CLI tests for `sq runs wait`
 
 - [ ] `CliRunner` test asserting every `WaitOutcome` maps to its exit code and prints the
       stderr line (inject poll/clock via the helper's parameters or a monkeypatched
@@ -358,7 +389,7 @@ status: not_started
 
 ## Part F — Docs, CHANGELOG, issues (Dev Approach step 6)
 
-## Task 33 — Update docs
+## Task 34 — Update docs
 
 - [ ] Replace `sq run --list` references with `sq pipelines list` in `README.md`,
       `docs/PIPELINES.md`, `docs/QUICKSTART.md` (find via `grep -rn "run --list\|sq run -l" .`
@@ -368,7 +399,7 @@ status: not_started
       `sq agents list`
   - [ ] Success: grep finds no remaining `sq run --list` or bare `sq list` in user-facing docs
 
-## Task 34 — CHANGELOG
+## Task 35 — CHANGELOG
 
 - [ ] Add short user-facing bullets under the unreleased section: new `sq pipelines list`,
       `sq runs list`, `sq runs wait`; removed `sq run --list` (use `sq pipelines list`);
@@ -376,7 +407,7 @@ status: not_started
   - [ ] Success: bullets are user-facing only; technical detail goes to DEVLOG
 - [ ] Commit: `docs: document run and pipeline listings; update changelog`
 
-## Task 35 — Open follow-up GitHub issues (feedback: issues over Future Work)
+## Task 36 — Open follow-up GitHub issues (feedback: issues over Future Work)
 
 - [ ] Open three issues with `gh issue create`: (1) type `RunState.status` as a `RunStatus`
       enum including `RUNNING` (D10); (2) record the run's PID in run state so `sq runs list`
@@ -388,12 +419,25 @@ status: not_started
 
 ---
 
-## Task 36 — Verification walkthrough and final validation
+## Task 37 — Verification walkthrough and final validation
 
-- [ ] Run the slice design's Verification Walkthrough steps 1, 2, 5, 6, 8 against a scratch
-      project/runs dir and record results; run steps 3, 4, 7 against `~/.config/squadron/runs`
-      read-only (record run count and elapsed time for step 7)
-  - [ ] Success: each step behaves as the design states; deviations are logged as issues, not silently accepted
+- [ ] Walkthrough steps 1, 2, 5 and 6 (listing, removed flags, filters, failure marker): run
+      against a scratch project directory and a scratch runs dir seeded with real
+      `StateManager` / `BatchReport.write` fixtures (reuse the Task 21 fixtures)
+- [ ] Walkthrough steps 3 and 4 are read-only: run `sq runs list` and `sq run --status <run-id>`
+      against `~/.config/squadron/runs` and compare "Resume at" to the status output. Do NOT run
+      `sq run --resume` or `--item` there: both mutate real runs. Resume-step and item
+      equivalence is asserted by the Task 23, 24 and 26 tests
+- [ ] Walkthrough step 7: record the run count (`ls ~/.config/squadron/runs/*.json | wc -l`)
+      and the elapsed time of `sq runs list --all` against the real runs dir (read-only)
+- [ ] Walkthrough step 8: the `wait` timeout (4) and not-found (5) cases run against the scratch
+      runs dir with a hand-seeded `running` run. The live-pipeline case (exit 0/3) needs model
+      credentials; if unavailable, record it as skipped with the reason
+  - [ ] Success: each executed step behaves as the design states; deviations are logged as
+        issues, not silently accepted
+- [ ] Hermeticity check: run `HOME=$(mktemp -d) pytest tests -q`; no test may touch the real
+      `~/.config/squadron`
+  - [ ] Success: suite passes with an empty HOME
 - [ ] Full gate: `ruff format`, `ruff check`, `pyright` (zero errors), `pytest tests -q`
   - [ ] Success: zero lint/type errors; existing item-resume and `--resume` tests pass unchanged
 - [ ] Mark any dropped/skipped items above `[x]` with a note before closing (visualizer reads checkbox state)
