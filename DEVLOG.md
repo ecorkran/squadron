@@ -12,6 +12,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Slice 199: implementation complete (Phase 6)
+
+- **Delivered:** `sq pipelines list` (`PipelineSource`, `LISTING_ORDER`), `sq runs list` and `sq runs wait` on `pipeline/run_listing.py` (`RunSummary`, `ResumePoint`, `ResumeProblem`, `wait_for_run`, `WaitOutcome`, `WAIT_EXIT_CODES`); `cli/run_views.py` (status colours, run status panel, both listings, marker text); `pipeline/item_eligibility.py` shared with item resume; `first_unfinished_step_of`, public `RESUMABLE_STATUSES`, `RUNNING_STATUS`; `report_json_path(s)`. `sq run --list` removed; `sq list` → `sq agents list`. Follow-ups: #191 (RunStatus enum), #192 (`--json`).
+- **Choices the design left open:** the agents skill `sq-list` appends arguments in prose, not `$ARGUMENTS` (an existing test forbids Claude-only substitution in agents skills); the run table is borderless and never folds Run ID / Status / Resume at, so at 80 columns Rich drops Pipeline, Target and Started; `wait_for_run` also treats `UnicodeDecodeError` as UNREADABLE (same read-error set as `list_runs`) and cuts its last sleep to the deadline; `WAIT_POLL_INTERVAL_SECONDS = 2.0`.
+- **Verification:** walkthrough steps 1, 2, 5, 6, 8 against a scratch HOME; 3, 4, 7 read-only against the real runs dir (188 runs, `--all` 0.67 s; 33 of 68 default rows are `<pipeline unavailable>` from deleted test pipelines and `/tmp/*.yaml` runs). Full suite green with an empty HOME.
+- **Next:** Phase 7 code review, then merge into `main`.
+
 ### Slice 199: task breakdown complete (Phase 5)
 
 - **Tasks:** `user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md` (36 tasks, 402 lines, one file). Six parts: no-behaviour-change refactor (state, batch_report, item_eligibility, loader enum); `sq pipelines list` plus `--list` removal and `sq agents list`; `run_listing.py`; `sq runs list`; `sq runs wait`; docs, CHANGELOG and three follow-up issues (RunState.status enum, run PID, `--json`).

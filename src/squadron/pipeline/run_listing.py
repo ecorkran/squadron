@@ -269,7 +269,8 @@ def wait_for_run(
             if outcome is not WaitOutcome.COMPLETED:
                 _logger.warning("wait on run %s ended: %s", run_id, outcome)
             return outcome
-        sleep(poll_interval)
+        # The last sleep before a deadline is cut short so the timeout is not overshot.
+        sleep(poll_interval if deadline is None else min(poll_interval, deadline - clock()))
 
 
 def _poll(state_manager: StateManager, run_id: str) -> WaitOutcome | None:

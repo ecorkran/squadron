@@ -10,7 +10,7 @@ projectState: >
   complete. Integration branch is unset, so the target is `main`.
 dateCreated: 20261007
 dateUpdated: 20261007
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -235,82 +235,83 @@ status: in_progress
 
 ## Task 21 — Row types and their tests (D6, D10)
 
-- [ ] Create `src/squadron/pipeline/run_listing.py` with `ResumeKind(StrEnum)`
+- [x] Create `src/squadron/pipeline/run_listing.py` with `ResumeKind(StrEnum)`
       (`STEP`, `ITEMS`), `ResumeProblem(StrEnum)` (`PIPELINE_UNAVAILABLE`,
       `NO_UNFINISHED_STEP`, `ITEM_RESUME_UNSUPPORTED`, `REPORT_UNREADABLE`), frozen
       dataclass `ResumePoint` (`kind`, `step_name`, `open_items`, `acceptable_items`) and
       frozen dataclass `RunSummary` per API Contracts (`status` stays `str`)
-  - [ ] Success: signatures match the design; module has no rendering code
-- [ ] Add `tests/pipeline/test_run_listing.py` (hermetic fixtures reused by Tasks 22–26) with
+  - [x] Success: signatures match the design; module has no rendering code
+- [x] Add `tests/pipeline/test_run_listing.py` (hermetic fixtures reused by Tasks 22–26) with
       tests that both dataclasses reject attribute assignment and the enums have exactly the
       members above
-  - [ ] Success: tests pass
+  - [x] Success: tests pass
 
 ## Task 22 — Cached definition loading and its tests (D7, D12)
 
-- [ ] In `run_listing.py` add a private per-call loader around the injected `load_definition`:
+- [x] In `run_listing.py` add a private per-call loader around the injected `load_definition`:
       one attempt per pipeline name; a failed load is remembered so it is not retried; catches
       exactly `FileNotFoundError`, `OSError`, `yaml.YAMLError` and pydantic `ValidationError`;
       any other exception propagates
-- [ ] Tests, with a call-counting `load_definition` and real YAML in `tmp_path`: two runs of
+- [x] Tests, with a call-counting `load_definition` and real YAML in `tmp_path`: two runs of
       one pipeline load once; a missing file, a malformed-YAML file and a schema-invalid file
       each yield "unavailable" and are attempted once; a `RuntimeError` from the loader
       propagates
-  - [ ] Success: tests pass; no module-level cache (the dict is local to one call)
+  - [x] Success: tests pass; no module-level cache (the dict is local to one call)
 
 ## Task 23 — Paused/failed resume resolution and its tests (Data Flow)
 
-- [ ] Add a private helper (≤ ~50 lines) resolving a `paused`/`failed` run: load definition
+- [x] Add a private helper (≤ ~50 lines) resolving a `paused`/`failed` run: load definition
       (failure → `PIPELINE_UNAVAILABLE`), `first_unfinished_step_of` (`None` →
       `NO_UNFINISHED_STEP`), else `ResumePoint(STEP, step_name)`
-- [ ] Log each problem at WARNING on logger `squadron.pipeline.run_listing` with the D7 context
+- [x] Log each problem at WARNING on logger `squadron.pipeline.run_listing` with the D7 context
       (run-id, pipeline, exception / run-id)
-- [ ] Tests: paused run and failed run each resolve to the step `first_unfinished_step` returns;
+- [x] Tests: paused run and failed run each resolve to the step `first_unfinished_step` returns;
       `PIPELINE_UNAVAILABLE` and `NO_UNFINISHED_STEP` each assert the enum value and the WARNING
       record via `caplog`
-  - [ ] Success: tests pass; status comparisons use only `RESUMABLE_STATUSES`
+  - [x] Success: tests pass; status comparisons use only `RESUMABLE_STATUSES`
 
 ## Task 24 — Completed-run resume resolution and its tests (Data Flow)
 
-- [ ] Add private helpers (each ≤ ~50 lines) for a `completed` run: `report_json_paths` empty →
+- [x] Add private helpers (each ≤ ~50 lines) for a `completed` run: `report_json_paths` empty →
       no resume point, definition never loaded; else `single_each_step`
       (`ItemResumeUnsupportedError` → `ITEM_RESUME_UNSUPPORTED`, logging the `each` count);
       `load_report(report_json_path(...))` (`BatchReportLoadError` → `REPORT_UNREADABLE`,
       logging the path); count `open_items` / `acceptable_items` from `item_decisions`;
       `open_items > 0` → `ResumePoint(ITEMS, each.name, open, acceptable)`, else none
-- [ ] Add the dispatch for any other status (`running`) → no resume point, no problem; compare
+- [x] Add the dispatch for any other status (`running`) → no resume point, no problem; compare
       only via `ExecutionStatus.COMPLETED.value` and `RUNNING_STATUS`; no new status literals
-- [ ] Tests (real `BatchReport.write` reports): mixed flag kinds (`review_unresolved` and
+- [x] Tests (real `BatchReport.write` reports): mixed flag kinds (`review_unresolved` and
       others) check both counts; all items passed → no resume point; completed non-batch run →
       no resume point and `load_definition` never called; `running` run → none;
       `ITEM_RESUME_UNSUPPORTED` (pipeline edited to two `each` steps); `REPORT_UNREADABLE` for
       a corrupt report and for a renamed `each` step (file not found); `PIPELINE_UNAVAILABLE` for
       a completed run with reports. Each problem case asserts enum value and WARNING record
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: resolve resume points for runs`
+  - [x] Success: tests pass
+- [x] Commit: `feat: resolve resume points for runs`
+  Note: Tasks 21–26 were committed together as `feat: add run_listing layer for resumable runs` (the module and its tests landed as one unit).
 
 ## Task 25 — `list_run_summaries()` and its tests
 
-- [ ] Implement `list_run_summaries(state_manager, *, pipeline, include_all, load_definition=load_pipeline, load_report=BatchReport.load)`:
+- [x] Implement `list_run_summaries(state_manager, *, pipeline, include_all, load_definition=load_pipeline, load_report=BatchReport.load)`:
       lowercase the `pipeline` filter (D9), call `state_manager.list_runs(pipeline=)`, build one
       `RunSummary` per run via Tasks 22–24, and unless `include_all` keep only rows with a
       resume point or a problem
-- [ ] Tests: `--pipeline P4` matches runs of `p4`; newest-first order preserved; default view
+- [x] Tests: `--pipeline P4` matches runs of `p4`; newest-first order preserved; default view
       hides completed-no-open-items and `running` runs and keeps problem rows; `include_all`
       returns every readable run with an empty resume cell for nothing-to-resume rows
-  - [ ] Success: tests pass
+  - [x] Success: tests pass
 
 ## Task 26 — I/O-bounds and listing/resume parity tests (D12)
 
-- [ ] I/O-bounds test: 300 runs (200 completed non-batch, 50 completed batch across two
+- [x] I/O-bounds test: 300 runs (200 completed non-batch, 50 completed batch across two
       pipelines, 30 paused and 20 failed across two other pipelines) with call-counting
       wrappers: `load_definition` called 4 times, `load_report` 50 times
-- [ ] Listing/resume parity test (Success Criteria): for a completed batch run, every item
+- [x] Listing/resume parity test (Success Criteria): for a completed batch run, every item
       counted open passes `item_resume._check_record` with `retry`, and every item counted
       acceptable passes with `accept`
-  - [ ] Success: tests pass
-- [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/pipeline -q`
-- [ ] Commit: `feat: add run_listing layer for resumable runs`
+  - [x] Success: tests pass
+- [x] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/pipeline -q`
+- [x] Commit: `feat: add run_listing layer for resumable runs`
 
 ---
 
@@ -318,34 +319,35 @@ status: in_progress
 
 ## Task 27 — Marker text, `render_run_listing()` and tests
 
-- [ ] In `run_views.py` add a dict of marker text keyed by `ResumeProblem` (the only place
+- [x] In `run_views.py` add a dict of marker text keyed by `ResumeProblem` (the only place
       marker text is defined) with exactly these values: `PIPELINE_UNAVAILABLE` →
       `<pipeline unavailable>`, `NO_UNFINISHED_STEP` → `<no unfinished step>`,
       `ITEM_RESUME_UNSUPPORTED` → `<item resume unsupported>`, `REPORT_UNREADABLE` →
       `<report unreadable>`
-- [ ] Add `render_run_listing(summaries, *, include_all)` per UI Specifications: columns Run ID,
+- [x] Add `render_run_listing(summaries, *, include_all)` per UI Specifications: columns Run ID,
       Pipeline, Target (`key=value` joined by spaces), Status (coloured via `STATUS_COLORS`,
       unknown status `dim`), Resume at, Started (`%Y-%m-%d %H:%M`)
-  - [ ] `STEP` → step name; `ITEMS` → `N items in <each-step>` plus ` (K accept)` when K > 0;
+  - [x] `STEP` → step name; `ITEMS` → `N items in <each-step>` plus ` (K accept)` when K > 0;
         problem → marker text; none → empty cell
-  - [ ] Footer prints the two resume hints; empty result prints `No resumable runs.` plus
+  - [x] Footer prints the two resume hints; empty result prints `No resumable runs.` plus
         ` Use --all to include completed runs.` when `--all` was not given
-  - [ ] Success: dispatch is on the enums, no string comparison of marker text
-- [ ] Add `tests/cli/test_run_views.py` tests: every `ResumeProblem` member has marker text;
+  - [x] Success: dispatch is on the enums, no string comparison of marker text
+- [x] Add `tests/cli/test_run_views.py` tests: every `ResumeProblem` member has marker text;
       each Resume-at form; Target formatting; empty-result message with and without `--all`
-  - [ ] Success: tests pass
+  - [x] Success: tests pass
+  Note: Run ID, Status and Resume at never fold (borderless table); at 80 columns Rich drops Pipeline/Target/Started rather than folding the run-id.
 
 ## Task 28 — `sq runs list` command and tests
 
-- [ ] Create `src/squadron/cli/commands/runs.py` with `runs_app` (`no_args_is_help=True`) and
+- [x] Create `src/squadron/cli/commands/runs.py` with `runs_app` (`no_args_is_help=True`) and
       `list` subcommand: `--all`, `--pipeline NAME`; builds a `StateManager` the same way
       `run.py --status` does, calls `list_run_summaries`, then `render_run_listing`
-- [ ] Register with `add_typer(runs_app, name="runs")` in `cli/app.py`
-  - [ ] Success: exits 0 including on empty results
-- [ ] `CliRunner` tests for `sq runs list`, `--all`, `--pipeline`, hermetic runs dir
-  - [ ] Success: tests pass
-- [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/cli tests/pipeline -q`
-- [ ] Commit: `feat: add sq runs list`
+- [x] Register with `add_typer(runs_app, name="runs")` in `cli/app.py`
+  - [x] Success: exits 0 including on empty results
+- [x] `CliRunner` tests for `sq runs list`, `--all`, `--pipeline`, hermetic runs dir
+  - [x] Success: tests pass
+- [x] Run `ruff format`, `ruff check`, `pyright`, `pytest tests/cli tests/pipeline -q`
+- [x] Commit: `feat: add sq runs list`
 
 ---
 
@@ -353,44 +355,45 @@ status: in_progress
 
 ## Task 29 — `WaitOutcome` and `wait_for_run` (D13)
 
-- [ ] In `run_listing.py` add `WAIT_POLL_INTERVAL_SECONDS`, `WaitOutcome(StrEnum)`
+- [x] In `run_listing.py` add `WAIT_POLL_INTERVAL_SECONDS`, `WaitOutcome(StrEnum)`
       (`COMPLETED`, `FAILED`, `PAUSED`, `TIMED_OUT`, `NOT_FOUND`, `UNREADABLE`,
       `UNKNOWN_STATUS`) and the single definition of outcome → exit code (0, 1, 3, 4, 5, 6, 7)
-- [ ] Implement `wait_for_run(state_manager, run_id, *, timeout, poll_interval, clock, sleep) -> WaitOutcome`:
+- [x] Implement `wait_for_run(state_manager, run_id, *, timeout, poll_interval, clock, sleep) -> WaitOutcome`:
       re-read state each poll; return when status is not `RUNNING_STATUS`; `timeout=None` waits
       indefinitely; `StateManager.load` raising `FileNotFoundError` → `NOT_FOUND`; the first
       `json.JSONDecodeError`, `OSError`, `SchemaVersionError` or pydantic `ValidationError`
       → `UNREADABLE` with no retry (any other exception propagates); log every non-`COMPLETED`
       outcome at WARNING
-  - [ ] Success: exit code 2 is not used; no default timeout is set
+  - [x] Success: exit code 2 is not used; no default timeout is set
+  Note: UNREADABLE also covers `UnicodeDecodeError`, matching `StateManager.list_runs`'s read-error set.
 
 ## Task 30 — Tests for `wait_for_run`
 
-- [ ] With injected fake `clock`/`sleep` and real state files, one test per `WaitOutcome`:
+- [x] With injected fake `clock`/`sleep` and real state files, one test per `WaitOutcome`:
       run moves `running` → each terminal status mid-wait; timeout while `running`; missing
       run-id (`NOT_FOUND`); corrupt JSON, unsupported `schema_version` and schema-invalid files
       on the first poll (each `UNREADABLE`, never `NOT_FOUND`); unknown status value
-  - [ ] Success: each non-`COMPLETED` case asserts its WARNING record; no real sleeping
-- [ ] Commit: `feat: add wait_for_run helper`
+  - [x] Success: each non-`COMPLETED` case asserts its WARNING record; no real sleeping
+- [x] Commit: `feat: add wait_for_run helper`
 
 ## Task 31 — `sq runs wait` command
 
-- [ ] In `runs.py` add `wait` subcommand: `<run-id>` argument, `--timeout SECONDS`; help text
+- [x] In `runs.py` add `wait` subcommand: `<run-id>` argument, `--timeout SECONDS`; help text
       states that a crashed run stays `running` and `--timeout` is the bound
-- [ ] On a terminal status print the status panel via `run_views.render_run_status`
+- [x] On a terminal status print the status panel via `run_views.render_run_status`
       (Task 12; the same output as `sq run --status <run-id>`); for every non-zero outcome print one stderr line
       naming the run-id and outcome; exit with the D13 code
-  - [ ] Success: status-line rendering is shared with `run.py`, not duplicated
+  - [x] Success: status-line rendering is shared with `run.py`, not duplicated
 
 ## Task 32 — CLI tests for `sq runs wait`
 
-- [ ] `CliRunner` test asserting every `WaitOutcome` maps to its exit code and prints the
+- [x] `CliRunner` test asserting every `WaitOutcome` maps to its exit code and prints the
       stderr line (inject poll/clock via the helper's parameters or a monkeypatched
       `wait_for_run` returning each outcome)
-- [ ] One end-to-end test: pre-completed run prints the status line and exits 0
-  - [ ] Success: tests pass
-- [ ] Run `ruff format`, `ruff check`, `pyright`, `pytest tests -q -x`
-- [ ] Commit: `feat: add sq runs wait`
+- [x] One end-to-end test: pre-completed run prints the status line and exits 0
+  - [x] Success: tests pass
+- [x] Run `ruff format`, `ruff check`, `pyright`, `pytest tests -q -x`
+- [x] Commit: `feat: add sq runs wait`
 
 ---
 
@@ -398,58 +401,60 @@ status: in_progress
 
 ## Task 33 — Update docs
 
-- [ ] Replace `sq run --list` references with `sq pipelines list` in `README.md`,
+- [x] Replace `sq run --list` references with `sq pipelines list` in `README.md`,
       `docs/PIPELINES.md`, `docs/QUICKSTART.md` (find via `grep -rn "run --list\|sq run -l" .`
       excluding `project-documents/archive`)
-- [ ] Document `sq pipelines list`, `sq runs list`, `sq runs wait` (with exit codes) in the
+- [x] Document `sq pipelines list`, `sq runs list`, `sq runs wait` (with exit codes) in the
       appropriate docs; update `docs/COMMANDS.md` and the README agent-lifecycle paragraph for
       `sq agents list`
-  - [ ] Success: grep finds no remaining `sq run --list` or bare `sq list` in user-facing docs
+  - [x] Success: grep finds no remaining `sq run --list` or bare `sq list` in user-facing docs
 
 ## Task 34 — CHANGELOG
 
-- [ ] Add short user-facing bullets under the unreleased section: new `sq pipelines list`,
+- [x] Add short user-facing bullets under the unreleased section: new `sq pipelines list`,
       `sq runs list`, `sq runs wait`; removed `sq run --list` (use `sq pipelines list`);
       renamed `sq list` to `sq agents list`; mention #185 and #187
-  - [ ] Success: bullets are user-facing only; technical detail goes to DEVLOG
-- [ ] Commit: `docs: document run and pipeline listings; update changelog`
+  - [x] Success: bullets are user-facing only; technical detail goes to DEVLOG
+- [x] Commit: `docs: document run and pipeline listings; update changelog`
 
 ## Task 35 — Open follow-up GitHub issues (feedback: issues over Future Work)
 
-- [ ] `gh issue list --search` first; the PID-in-run-state issue already exists as #190 (linked
+- [x] `gh issue list --search` first; the PID-in-run-state issue already exists as #190 (linked
       from D13), so do not reopen it. Open two issues with `gh issue create`: (1) type
       `RunState.status` as a `RunStatus` enum including `RUNNING` (D10); (2)
       `sq runs list --json` for out-of-process consumers such as Amoeba
-  - [ ] Success: two new issue numbers; no duplicate of #190
-- [ ] Edit the slice design: link the typing issue from D10 and the `--json` issue from the
+  - [x] Success: two new issue numbers; no duplicate of #190
+- [x] Edit the slice design: link the typing issue from D10 and the `--json` issue from the
       Technical Scope exclusion
-- [ ] Commit: `docs: link follow-up issues in slice 199 design`
-  - [ ] Success: design diff contains only those two links
+- [x] Commit: `docs: link follow-up issues in slice 199 design`
+  - [x] Success: design diff contains only those two links
+  Note: opened #191 (RunStatus enum) and #192 (`sq runs list --json`).
 
 ---
 
 ## Task 36 — Verification walkthrough and final validation
 
-- [ ] Walkthrough steps 1, 2, 5 and 6 (listing, removed flags, filters, failure marker): run
+- [x] Walkthrough steps 1, 2, 5 and 6 (listing, removed flags, filters, failure marker): run
       against a scratch project directory and a scratch runs dir seeded with real
       `StateManager` / `BatchReport.write` fixtures (reuse the Task 21 fixtures)
-- [ ] Walkthrough steps 3 and 4 are read-only: run `sq runs list` and `sq run --status <run-id>`
+- [x] Walkthrough steps 3 and 4 are read-only: run `sq runs list` and `sq run --status <run-id>`
       against `~/.config/squadron/runs` and compare "Resume at" to the status output. Do NOT run
       `sq run --resume` or `--item` there: both mutate real runs. Resume-step and item
       equivalence is asserted by the Task 23, 24 and 26 tests
-- [ ] Walkthrough step 7: record the run count (`ls ~/.config/squadron/runs/*.json | wc -l`)
+- [x] Walkthrough step 7: record the run count (`ls ~/.config/squadron/runs/*.json | wc -l`)
       and the elapsed time of `sq runs list --all` against the real runs dir (read-only)
-- [ ] Walkthrough step 8: the `wait` timeout (4) and not-found (5) cases run against the scratch
+- [x] Walkthrough step 8: the `wait` timeout (4) and not-found (5) cases run against the scratch
       runs dir with a hand-seeded `running` run. The live-pipeline case (exit 0/3) needs model
       credentials; if unavailable, record it as skipped with the reason
-  - [ ] Success: each executed step behaves as the design states; deviations are logged as
+  - [x] Success: each executed step behaves as the design states; deviations are logged as
         issues, not silently accepted
-- [ ] Hermeticity check: run `HOME=$(mktemp -d) pytest tests -q`; no test may touch the real
+- [x] Hermeticity check: run `HOME=$(mktemp -d) pytest tests -q`; no test may touch the real
       `~/.config/squadron`
-  - [ ] Success: suite passes with an empty HOME
-- [ ] Full gate: `ruff format`, `ruff check`, `pyright` (zero errors), `pytest tests -q`
-  - [ ] Success: zero lint/type errors; existing item-resume and `--resume` tests pass unchanged
-- [ ] Mark any dropped/skipped items above `[x]` with a note before closing (visualizer reads checkbox state)
-- [ ] Commit any remaining changes: `chore: finalize slice 199 verification`
-  - [ ] Success: working tree clean on the slice branch; code review (Phase 6 gate) and merge
+  - [x] Success: suite passes with an empty HOME
+        Note: 5931 passed; the 6 failures are `host_cf` tests (`test_schema_drift.py`, `test_cf_contract_live.py`) that run the real `cf` CLI and get `REAL_HOME`, which is the empty dir when HOME is emptied before pytest starts. Independent of this slice; with the normal HOME the full suite passed (5937).
+- [x] Full gate: `ruff format`, `ruff check`, `pyright` (zero errors), `pytest tests -q`
+  - [x] Success: zero lint/type errors; existing item-resume and `--resume` tests pass unchanged
+- [x] Mark any dropped/skipped items above `[x]` with a note before closing (visualizer reads checkbox state)
+- [x] Commit any remaining changes: `chore: finalize slice 199 verification`
+  - [x] Success: working tree clean on the slice branch; code review (Phase 6 gate) and merge
         happen later in Phase 7, not here

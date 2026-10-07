@@ -7,7 +7,7 @@ dependencies: [197]
 interfaces: []
 dateCreated: 20261006
 dateUpdated: 20261007
-status: not_started
+status: complete
 ---
 
 # Slice Design: pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list
@@ -326,66 +326,94 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 
 ### Verification Walkthrough
 
-These commands do not exist yet. This is the draft demo for Phase 6.
+Run during Phase 6 (20261007). Steps 1, 2, 5, 6 and 8 used a scratch project and a scratch `HOME`, so they never touched real runs. Steps 3, 4 and 7 read the real `~/.config/squadron/runs` and changed nothing.
+
+**Scratch setup.** Seed a runs dir with real `StateManager` and `BatchReport.write` fixtures (`tests/pipeline/run_listing_support.py`):
+
+```bash
+S=$(mktemp -d); mkdir -p $S/home $S/proj
+cat > $S/seed.py <<'PY'
+import sys
+from pathlib import Path
+from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.state import StateManager
+from tests.pipeline.run_listing_support import (STEP_NAMES, begin, end, pause_at, fail_at,
+    completed_batch_run, write_step_pipeline, write_batch_pipeline)
+pipelines = Path(sys.argv[1]) / "project-documents/user/pipelines"
+write_step_pipeline(pipelines, "my-steps"); write_batch_pipeline(pipelines, "my-batch")
+sm = StateManager()
+p = begin(sm, "my-steps"); pause_at(sm, p, STEP_NAMES[1], done=[STEP_NAMES[0]])
+f = begin(sm, "my-steps"); fail_at(sm, f, STEP_NAMES[2], done=STEP_NAMES[:2])
+b = completed_batch_run(sm, "my-batch")          # 3 open items, 1 acceptable
+c = begin(sm, "my-steps"); end(sm, c, ExecutionStatus.COMPLETED)
+r = begin(sm, "my-steps")                        # left running
+for label, run in (("paused", p), ("failed", f), ("batch", b), ("completed", c), ("running", r)):
+    print(label, run)
+PY
+HOME=$S/home PYTHONPATH=. python $S/seed.py $S/proj    # from the squadron repo root
+cd $S/proj && export HOME=$S/home
+```
 
 1. **Pipeline listing.**
    ```bash
    sq pipelines list
    ```
-   Expect a "Built-in (N)" table with names in alphabetical order. Then add a project pipeline and list again:
+   Prints `Built-in (15)` with names in alphabetical order. Then:
    ```bash
-   mkdir -p project-documents/user/pipelines
-   cp src/squadron/data/pipelines/P4.yaml project-documents/user/pipelines/P4.yaml
+   cp <squadron>/src/squadron/data/pipelines/P4.yaml project-documents/user/pipelines/P4.yaml
    sq pipelines list
    ```
-   Expect a "Project (1)" group containing `p4`, and no `p4` under Built-in. Remove the copy afterwards.
+   Prints `Built-in (14)` and `Project (3)` (the two seeded pipelines plus `p4`). `p4` appears only under Project. Remove the copy afterwards.
 
-2. **Removed flag.**
+2. **Removed flags.**
    ```bash
-   sq run --list; echo "exit $?"   # Typer: No such option: --list; non-zero exit
-   sq agents list                  # agent table, as `sq list` printed (needs `sq serve`)
-   sq list; echo "exit $?"         # Typer: No such command 'list'; non-zero exit
+   sq run --list; echo "exit $?"   # "No such option: --list"; exit 2
+   sq run -l; echo "exit $?"       # "No such option: -l"; exit 2
+   sq list; echo "exit $?"         # "No such command 'list'."; exit 2
+   sq agents list; echo "exit $?"  # agent table with `sq serve` running; without it,
+                                   # "Error: Daemon is not running. Start it with: sq serve", exit 1
    ```
 
-3. **Resumable runs.** Use existing runs in `~/.config/squadron/runs`, or start a pipeline that reaches a checkpoint and let it pause.
+3. **Resumable runs** (read-only, real runs dir).
    ```bash
    sq runs list
+   sq run --status <paused-run-id>
    ```
-   Expect paused and failed runs, newest first, each with a "Resume at" step. Copy a paused run-id, then run:
-   ```bash
-   sq run --status <run-id>
-   sq run --resume <run-id>
-   ```
-   Confirm that the step it resumes at matches the "Resume at" column.
+   For `run-20261004-p6-8bc5e634`, "Resume at" showed `implement-1`, the status panel showed `Checkpoint: paused at 'implement-1'`, and `StateManager.first_unfinished_step` returned `implement-1`. Do not run `sq run --resume` here: it changes real runs. The Task 23 tests check that resume-step equivalence.
 
-4. **Batch items (197).** `~/.config/squadron/runs` holds `implement-plan` runs with `*.slices.report.json` reports. If one of them is a completed run with open items, `sq runs list` shows it as `N items in slices`. Pick an index from its report's flagged section, then run:
+4. **Batch items (197)** (read-only, real runs dir). No completed batch run in the real runs dir had open items. The only batch run with one (`run-20261006-implement-plan-4b07931e`, 1 not_run item) ended `failed`, so it lists as a step resume at `slices`, as the Data Flow says. The completed batch runs with every item passed or accepted show only under `--all`, with an empty "Resume at". The scratch run covers the item case: `run-…-my-batch-…  completed  3 items in slices (1 accept)`. The Task 24 and Task 26 parity tests check that `--item … --decision retry|accept` accepts exactly the counted items. Do not run `--item` against real runs.
+
+5. **Filters** (scratch).
    ```bash
-   sq run --resume <run-id> --item <index> --decision retry
+   sq runs list                   # batch (3 items in slices (1 accept)), failed (devlog-2), paused (tasks-1)
+   sq runs list --all             # also the running and completed my-steps runs, Resume at empty
+   sq runs list --pipeline MY-BATCH   # only the my-batch run (case-insensitive)
+   ```
+
+6. **Failure visibility** (scratch).
+   ```bash
+   mv project-documents/user/pipelines/my-steps.yaml{,.bak}
    sq runs list
+   mv project-documents/user/pipelines/my-steps.yaml{.bak,}
    ```
-   The count drops by one when the item resolves. The run leaves the default view when the count reaches zero.
+   Both `my-steps` rows show `<pipeline unavailable>`. stderr carries one line per row: `run <run-id>: pipeline my-steps unavailable: Pipeline 'my-steps' not found in any pipeline directory. …`
 
-5. **Filters.**
+7. **Listing cost** (read-only, real runs dir).
    ```bash
-   sq runs list --all             # completed and running runs appear; Resume at empty
-   sq runs list --pipeline P4     # only p4 runs
+   ls ~/.config/squadron/runs/*.json | grep -v report.json | wc -l   # 188 run-state files (+4 reports)
+   time sq runs list --all                                          # 0.67 s total
    ```
+   The result is within the 1 s target. Caveat: the default view showed 68 rows on this machine, 33 of them `<pipeline unavailable>`. These are runs of deleted test pipelines (`test-p4`, `test-fanout`, …) and of pipelines started from a `/tmp/*.yaml` path. Showing them is intended (D7), and pruning them is out of scope.
 
-6. **Failure visibility.** Rename the YAML file of a paused project-pipeline run, then run `sq runs list`. Expect `<pipeline unavailable>` in its row and a WARNING on stderr. Restore the file afterwards.
-
-7. **Listing cost.**
+8. **Waiting on a run** (scratch, using the seeded run-ids).
    ```bash
-   ls ~/.config/squadron/runs/*.json | wc -l
-   time sq runs list --all
+   sq runs wait <running-id> --timeout 5; echo "exit $?"   # "sq runs wait: run <id> timed_out"; exit 4, after ~5 s
+   sq runs wait no-such-run; echo "exit $?"                # "sq runs wait: run no-such-run not_found"; exit 5
+   sq runs wait <completed-id>; echo "exit $?"             # Run Status panel; exit 0
+   sq runs wait <paused-id>; echo "exit $?"                # panel + "… paused"; exit 3
+   sq runs wait <failed-id>; echo "exit $?"                # panel + "… failed"; exit 1
    ```
-   Record the run count and the elapsed time in the walkthrough. The target is under 1 s for a few hundred runs (see Special Considerations).
-
-8. **Waiting on a run.** Start a short pipeline in one terminal and wait on it from another:
-   ```bash
-   sq run review <slice> --model <alias> &      # note the run-id it prints
-   sq runs wait <run-id>; echo "exit $?"
-   ```
-   Expect the final status line and `exit 0` on completion (3 if it pauses at a checkpoint). Then `sq runs wait <run-id-of-a-running-run> --timeout 5; echo $?` prints the timeout line and `4`, and `sq runs wait no-such-run; echo $?` prints `5`.
+   Every non-zero exit also logs `wait on run <id> ended: <outcome>` (WARNING) on stderr. A live pipeline started in the background (`sq run review <slice> --model <alias> &`) was not run: it needs model credentials, and the pre-finished runs above exercise the same exit path.
 
 ## Implementation Notes
 

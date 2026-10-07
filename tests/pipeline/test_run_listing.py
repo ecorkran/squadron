@@ -494,7 +494,7 @@ class TestWaitForRun:
         with caplog.at_level(logging.WARNING, logger=_LOGGER):
             assert _wait(sm, run_id, fake, timeout=5) is WaitOutcome.TIMED_OUT
 
-        assert fake.now >= 5
+        assert fake.now == 5  # the last sleep is cut to the deadline
         assert _warned(caplog, run_id, "timed_out")
 
     def test_missing_run(self, sm: StateManager, caplog: pytest.LogCaptureFixture) -> None:
