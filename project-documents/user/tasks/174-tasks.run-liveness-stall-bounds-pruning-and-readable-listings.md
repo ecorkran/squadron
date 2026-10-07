@@ -29,7 +29,7 @@ status: not_started
   before its commit. Tests are hermetic (`tests/_hermetic.py`): `tmp_path` runs dir, real
   `StateManager`, dead PIDs from a subprocess that has already exited.
 - Traceability (design → tasks): spike/D5 → 2; D12 → 4–7; D2/D13 → 8–13; D3 → 9–10; D6 →
-  11–12; D1 → 8; D7 → 15–18; D8 → 19–20; D10 → 21–22; D11 → 23–26; pipelines list →
+  11–12; D1 → 8; D7 → 15–18; D8 → 19–20; D10 → 21–22; listing-time NFR → 22a; D11 → 23–26; pipelines list →
   27–28; show → 29–31; D9 prune → 32–39; docs → 40; issues → 41; walkthrough → 42.
 - Effort: 3/5. Next planned slice: per `cf next` after 174 closes.
 
@@ -121,7 +121,8 @@ status: not_started
       `pipeline.run_heartbeat_interval_s` (default 30) to `CONFIG_KEYS`, typed `int`
   - [ ] Add a typed reader for each that raises `ValueError` naming the key when the value is
         `<= 0`
-- [ ] In `state.py` add `RunOwner` with a `RunOwner.current(heartbeat_interval_s)` factory
+- [ ] In `state.py` (`ActiveItem` already exists from Task 4; do not redefine it) add
+      `RunOwner` with a `RunOwner.current(heartbeat_interval_s)` factory
       (pid, hostname, `claimed_at = now`); add the five `RunState` fields from D2, all
       default `None`; set `_SCHEMA_VERSION = 5` and `_SUPPORTED_SCHEMA_VERSIONS = {3, 4, 5}`
   - [ ] Success: a v4 fixture file loads with all new fields `None`; a v6 file still raises
@@ -208,9 +209,10 @@ status: not_started
       `OSError` logs WARNING and does not raise; an unexpected exception in the task is
       logged at ERROR by the done-callback and the heartbeat stops
   - [ ] Success: tests pass
-- [ ] Add a CLI-level test (existing `tests/pipeline/test_cli_integration.py` style) that a
-      resumed run is `running` with an owner while the executor runs, and `failed` or
-      `completed` after
+- [ ] Add a CLI-level test (existing `tests/pipeline/test_cli_integration.py` style),
+      parametrized over the three SDK paths (new run, `--resume`, `--item` item-resume), that
+      the run is `running` with an owner while the executor runs, and `failed` or `completed`
+      after; the new-run case also asserts the owner was present from the creating write
   - [ ] Success: tests pass; existing `sq run` / `--resume` / `--item` tests unchanged
 - [ ] Commit: `feat: heartbeat and claim SDK runs`
 
@@ -302,6 +304,20 @@ status: not_started
         report load counts unchanged, `process_alive` called exactly 20 times
   - [ ] Success: tests pass
 - [ ] Commit: `feat: show running runs and liveness in run listings`
+
+## Task 22a — Load test for the listing-time NFR (Success Criteria; `.claude/rules/python.md` load tier)
+
+- [ ] Add `tests/load/test_run_listing_scale.py`, modelled on `tests/load/test_usage_reader_loop.py`
+      (module docstring naming the slice and NFR; bounds as named constants)
+  - [ ] Seed a few hundred run-state files in `tmp_path` through `StateManager` (mix of
+        completed, failed, paused, and running with live and dead PIDs; a few unreadable
+        files), then time `list_run_summaries(..., include_all=True)` with the real
+        `process_alive`
+  - [ ] Assert wall-clock under `MAX_LISTING_S = 1.0` (the design's target; generous enough
+        for CI jitter), and that the row count equals the seeded readable count
+  - [ ] Success: test passes locally; no new CI wiring is needed because `testpaths = ["tests"]`
+        already collects `tests/load/`
+- [ ] Commit: `test: add run listing scale load test`
 
 ---
 
