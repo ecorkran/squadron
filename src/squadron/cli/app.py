@@ -32,6 +32,7 @@ from squadron.cli.commands.review_pr import (
     review_pr as _review_pr,  # noqa: F401  # pyright: ignore[reportUnusedImport]
 )
 from squadron.cli.commands.run import run as run_command
+from squadron.cli.commands.runs import runs_app
 from squadron.cli.commands.serve import serve
 from squadron.cli.commands.setup import setup
 from squadron.cli.commands.shutdown import shutdown
@@ -58,6 +59,7 @@ app.add_typer(review_app, name="review")
 app.add_typer(models_app, name="models")
 app.add_typer(pools_app, name="pools")
 app.add_typer(pipelines_app, name="pipelines")
+app.add_typer(runs_app, name="runs")
 app.add_typer(config_app, name="config")
 app.add_typer(metrology_app, name="metrology")
 app.add_typer(auth_app, name="auth")

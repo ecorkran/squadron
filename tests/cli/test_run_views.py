@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import yaml
 
-from squadron.cli.run_views import render_pipeline_listing
+from squadron.cli.run_views import (
+    RESUME_PROBLEM_MARKERS,
+    render_pipeline_listing,
+    render_run_listing,
+    resume_cell,
+    target_cell,
+)
 from squadron.data import data_dir
 from squadron.pipeline.loader import discover_pipelines
+from squadron.pipeline.run_listing import ResumeKind, ResumePoint, ResumeProblem, RunSummary
 
 
 def write_pipeline(directory: Path, name: str, description: str = "") -> None:
@@ -58,3 +66,68 @@ class TestPipelineListing:
     def test_no_pipelines(self, capsys: pytest.CaptureFixture[str]) -> None:
         render_pipeline_listing([])
         assert capsys.readouterr().out.strip() == "No pipelines found."
+
+
+def _summary(
+    resume: ResumePoint | None = None,
+    problem: ResumeProblem | None = None,
+    status: str = "paused",
+    params: dict[str, object] | None = None,
+) -> RunSummary:
+    return RunSummary(
+        run_id="run-20261006-p4-abc",
+        pipeline="p4",
+        params=params if params is not None else {"slice": "199"},
+        status=status,
+        resume=resume,
+        problem=problem,
+        started_at=datetime(2026, 10, 6, 14, 2, tzinfo=UTC),
+    )
+
+
+class TestRunListing:
+    def test_every_problem_has_marker_text(self) -> None:
+        assert set(RESUME_PROBLEM_MARKERS) == set(ResumeProblem)
+        assert all(RESUME_PROBLEM_MARKERS[p] for p in ResumeProblem)
+
+    @pytest.mark.parametrize(
+        ("summary", "expected"),
+        [
+            (_summary(ResumePoint(ResumeKind.STEP, "review-design")), "review-design"),
+            (_summary(ResumePoint(ResumeKind.ITEMS, "slices", 3, 1)), "3 items in slices (1 accept)"),
+            (_summary(ResumePoint(ResumeKind.ITEMS, "slices", 2, 0)), "2 items in slices"),
+            (
+                _summary(problem=ResumeProblem.PIPELINE_UNAVAILABLE),
+                "<pipeline unavailable>",
+            ),
+            (_summary(status="completed"), ""),
+        ],
+    )
+    def test_resume_cell(self, summary: RunSummary, expected: str) -> None:
+        assert resume_cell(summary) == expected
+
+    def test_target_joins_params(self) -> None:
+        assert target_cell({"slice": "199", "model": "opus"}) == "slice=199 model=opus"
+
+    def test_table_row_and_hints(self, capsys: pytest.CaptureFixture[str]) -> None:
+        render_run_listing([_summary(problem=ResumeProblem.REPORT_UNREADABLE)], include_all=False)
+        out = " ".join(capsys.readouterr().out.split())
+
+        # At the pinned 80 columns the run-id, status and resume cell are never folded.
+        assert "run-20261006-p4-abc" in out
+        assert "<report unreadable>" in out
+        assert "Resume a step: sq run --resume <run-id>" in out
+        assert "--item N --decision retry" in out
+
+    @pytest.mark.parametrize(
+        ("include_all", "expected"),
+        [
+            (False, "No resumable runs. Use --all to include completed runs."),
+            (True, "No resumable runs."),
+        ],
+    )
+    def test_empty_result(
+        self, capsys: pytest.CaptureFixture[str], include_all: bool, expected: str
+    ) -> None:
+        render_run_listing([], include_all=include_all)
+        assert capsys.readouterr().out.strip() == expected
