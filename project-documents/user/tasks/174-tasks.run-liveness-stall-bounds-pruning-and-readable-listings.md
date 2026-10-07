@@ -70,45 +70,45 @@ status: in_progress
 
 ## Task 4 — Add `run_observer.py` with `RunObserver` and `RunStateRecorder`
 
-- [ ] Create `src/squadron/pipeline/run_observer.py` with the `RunObserver` protocol
+- [x] Create `src/squadron/pipeline/run_observer.py` with the `RunObserver` protocol
       (`step_started`, `item_started`, `step_completed`) per D12
-  - [ ] `item_started` takes an `ActiveItem`; define `ActiveItem` (D2) in `state.py` now so
+  - [x] `item_started` takes an `ActiveItem`; define `ActiveItem` (D2) in `state.py` now so
         the module imports it
-- [ ] Add `RunStateRecorder(state_mgr, run_id)` implementing the protocol; `step_completed`
+- [x] Add `RunStateRecorder(state_mgr, run_id)` implementing the protocol; `step_completed`
       does exactly what `StateManager.make_step_callback`'s closure does today
       (`state.py:267`); `step_started` and `item_started` are no-ops for now
-- [ ] Add `StateManager.observer(run_id) -> RunObserver` returning the recorder
-  - [ ] Success: `pyright` clean; the module has no import of `executor`
+- [x] Add `StateManager.observer(run_id) -> RunObserver` returning the recorder
+  - [x] Success: `pyright` clean; the module has no import of `executor`
 
 ## Task 5 — Move `execute_pipeline` onto the observer
 
-- [ ] In `executor.py`, replace the `on_step_complete` parameter and its docstring entry
+- [x] In `executor.py`, replace the `on_step_complete` parameter and its docstring entry
       (`:390`, `:427`) with `observer: RunObserver | None`; the call at `:576` becomes
       `observer.step_completed(step_result)`
-- [ ] Call `observer.step_started(step.name)` at each top-level step start, and
+- [x] Call `observer.step_started(step.name)` at each top-level step start, and
       `observer.item_started(each_name, ActiveItem(...))` at each `each` item start
       (`executor.py` each loop, design cites `:1553-1597`)
-  - [ ] `ActiveItem.index` is the item's own `index` field when present, else `None`
-  - [ ] Success: with the recorder's no-op start methods, behaviour is unchanged
-- [ ] In `cli/commands/run.py:251` pass `observer=state_mgr.observer(run_id)`; delete
+  - [x] `ActiveItem.index` is the item's own `index` field when present, else `None`
+  - [x] Success: with the recorder's no-op start methods, behaviour is unchanged
+- [x] In `cli/commands/run.py:251` pass `observer=state_mgr.observer(run_id)`; delete
       `make_step_callback`
-  - [ ] Success: `grep -rn "on_step_complete\|make_step_callback" src tests` is empty after
+  - [x] Success: `grep -rn "on_step_complete\|make_step_callback" src tests` is empty after
         Task 6
 
 ## Task 6 — Move the existing callback tests onto the observer
 
-- [ ] Update every test that passed `on_step_complete` or `make_step_callback` to pass an
+- [x] Update every test that passed `on_step_complete` or `make_step_callback` to pass an
       observer (a small recording fake, or `state_mgr.observer`), same assertions
-  - [ ] Success: those tests pass with unchanged intent
+  - [x] Success: those tests pass with unchanged intent
 
 ## Task 7 — Observer call-order tests; commit
 
-- [ ] In `tests/pipeline/test_executor.py` add: a plain step yields `step_started` then
+- [x] In `tests/pipeline/test_executor.py` add: a plain step yields `step_started` then
       `step_completed`; in `tests/pipeline/test_executor_each.py` an `each` step with three
       items yields `step_started`, three `item_started` (positions 0–2, total 3, index from
       the item), `step_completed`
-  - [ ] Success: tests pass; `pytest tests -q` matches the Task 3 baseline
-- [ ] Commit: `refactor: replace on_step_complete with RunObserver`
+  - [x] Success: tests pass; `pytest tests -q` matches the Task 3 baseline
+- [x] Commit: `refactor: replace on_step_complete with RunObserver`
 
 ---
 
@@ -116,104 +116,105 @@ status: in_progress
 
 ## Task 8 — Config keys (D1) and `RunOwner` / schema v5 fields (D2)
 
-- [ ] Add `pipeline.foreground_idle_timeout_s` (default 1800) and
+- [x] Add `pipeline.foreground_idle_timeout_s` (default 1800) and
       `pipeline.run_heartbeat_interval_s` (default 30) to `CONFIG_KEYS`, typed `int`
-  - [ ] Add a typed reader for each that raises `ValueError` naming the key when the value is
+  - [x] Add a typed reader for each that raises `ValueError` naming the key when the value is
         `<= 0`
-- [ ] In `state.py` (`ActiveItem` already exists from Task 4; do not redefine it) add
+- [x] In `state.py` (`ActiveItem` already exists from Task 4; do not redefine it) add
       `RunOwner` with a `RunOwner.current(heartbeat_interval_s)` factory
       (pid, hostname, `claimed_at = now`); add the five `RunState` fields from D2, all
       default `None`; set `_SCHEMA_VERSION = 5` and `_SUPPORTED_SCHEMA_VERSIONS = {3, 4, 5}`
-  - [ ] Success: a v4 fixture file loads with all new fields `None`; a v6 file still raises
+  - [x] Success: a v4 fixture file loads with all new fields `None`; a v6 file still raises
         `SchemaVersionError`
-- [ ] Tests in `tests/test_config.py` and `tests/pipeline/test_state.py`: both keys resolve
+- [x] Tests in `tests/test_config.py` and `tests/pipeline/test_state.py`: both keys resolve
       with defaults; `0` and negative values raise naming the key; v3/v4/v5 load; v6 rejected
-  - [ ] Success: tests pass
+      - Tests live in tests/config/test_keys.py
+  - [x] Success: tests pass
 
 ## Task 9 — `run_liveness.py`
 
-- [ ] Create `src/squadron/pipeline/run_liveness.py` with `RunLiveness` (`LIVE`, `STALE`,
+- [x] Create `src/squadron/pipeline/run_liveness.py` with `RunLiveness` (`LIVE`, `STALE`,
       `ORPHANED`, `UNOWNED`), `LivenessAssessment(liveness, elapsed, progress_age,
       heartbeat_age)`, `STALE_HEARTBEAT_INTERVALS = 10`, `process_alive(pid) -> bool | None`
       and `assess_liveness(state, *, now, hostname, process_alive)`
-  - [ ] `process_alive` uses `os.kill(pid, 0)`: `ProcessLookupError` → `False`,
+  - [x] `process_alive` uses `os.kill(pid, 0)`: `ProcessLookupError` → `False`,
         `PermissionError` → `True`; non-positive PID or any other `OSError` → `None` with a
         WARNING naming the PID (the run-id is logged by the caller that has it)
-  - [ ] `assess_liveness` applies the D3 table top to bottom, only for `RUNNING_STATUS`; a
+  - [x] `assess_liveness` applies the D3 table top to bottom, only for `RUNNING_STATUS`; a
         `None` from `process_alive` falls through to the heartbeat row
-  - [ ] `elapsed` is `now - owner.claimed_at`; `progress_age` is `now - progress_at`
-  - [ ] Success: module performs no I/O except the injected `process_alive` default
+  - [x] `elapsed` is `now - owner.claimed_at`; `progress_age` is `now - progress_at`
+  - [x] Success: module performs no I/O except the injected `process_alive` default
 
 ## Task 10 — `run_liveness` tests
 
-- [ ] Add `tests/pipeline/test_run_liveness.py` covering every D3 row with injected `now`,
+- [x] Add `tests/pipeline/test_run_liveness.py` covering every D3 row with injected `now`,
       `hostname`, `process_alive`: same host process gone (also with overdue heartbeat) →
       `ORPHANED`; process alive + overdue → `STALE`; other host fresh → `LIVE`; other host
       overdue → `STALE`; no owner → `UNOWNED`; `process_alive` returns `None` → heartbeat rule
-  - [ ] Add `process_alive` tests with a real exited subprocess PID (`False`), the test's own
+  - [x] Add `process_alive` tests with a real exited subprocess PID (`False`), the test's own
         PID (`True`), PID `0` and `-1` (`None` plus WARNING)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add RunState v5 owner fields and run_liveness`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add RunState v5 owner fields and run_liveness`
 
 ## Task 11 — `init_run(owner=)`, `claim`, `heartbeat`, progress writes (D13, D6)
 
-- [ ] `init_run(..., owner: RunOwner | None)`: when given, the same `_write_atomic` that
+- [x] `init_run(..., owner: RunOwner | None)`: when given, the same `_write_atomic` that
       creates the file with `status: running` also writes `owner`, `heartbeat_at` and
       `progress_at`
-- [ ] `StateManager.claim(run_id, owner)`: one write setting owner fields and
+- [x] `StateManager.claim(run_id, owner)`: one write setting owner fields and
       `status = RUNNING_STATUS`; raises if the file is already `running` with a `LIVE`
       owner (assessed via `assess_liveness`)
-- [ ] `StateManager.heartbeat(run_id)`: rewrites `heartbeat_at` only
-- [ ] `RunStateRecorder`: `step_started` writes `active_step`, clears `active_item`, sets
+- [x] `StateManager.heartbeat(run_id)`: rewrites `heartbeat_at` only
+- [x] `RunStateRecorder`: `step_started` writes `active_step`, clears `active_item`, sets
       `progress_at`; `item_started` writes `active_item` and `progress_at`; `step_completed`
       also clears `active_item` and sets `progress_at`; `finalize` clears `active_step` and
       `active_item`
-  - [ ] `heartbeat` and the two start writes catch `OSError` and `STATE_READ_ERRORS` by name,
+  - [x] `heartbeat` and the two start writes catch `OSError` and `STATE_READ_ERRORS` by name,
         log WARNING with run-id and exception, and continue; any other exception propagates
         (D6)
-  - [ ] Success: no new try/except swallows without a comment saying why
+  - [x] Success: no new try/except swallows without a comment saying why
 
 ## Task 12 — Tests for state writes
 
-- [ ] In `test_state.py`: first `init_run(owner=...)` file already holds the owner (read the
+- [x] In `test_state.py`: first `init_run(owner=...)` file already holds the owner (read the
       file immediately; no ownerless `running` state); `claim` flips `paused` and `failed` to
       `running` with owner; `claim` on a `LIVE` running run raises; `heartbeat` changes only
       `heartbeat_at`; recorder start/complete writes set and clear `active_step`,
       `active_item`, `progress_at`; `finalize` clears the active fields and keeps `owner`
-  - [ ] Failure modes: an `OSError` on heartbeat and on `step_started` logs a WARNING and
+  - [x] Failure modes: an `OSError` on heartbeat and on `step_started` logs a WARNING and
         does not raise (`caplog`); a non-I/O exception from `step_started` propagates
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: record owner, heartbeat and progress in run state`
+  - [x] Success: tests pass
+- [x] Commit: `feat: record owner, heartbeat and progress in run state`
 
 ## Task 13 — `RunHeartbeat` and wiring into `_run_pipeline_sdk`
 
-- [ ] Create `src/squadron/pipeline/run_heartbeat.py`: async context manager
+- [x] Create `src/squadron/pipeline/run_heartbeat.py`: async context manager
       `RunHeartbeat(state_mgr, run_id, interval, *, claim: bool)`
-  - [ ] Enter: when `claim`, call `StateManager.claim` with a `RunOwner.current(interval)`;
+  - [x] Enter: when `claim`, call `StateManager.claim` with a `RunOwner.current(interval)`;
         start the heartbeat task (first write after one interval)
-  - [ ] The task catches `OSError` / `STATE_READ_ERRORS` per D6; a done-callback logs any
+  - [x] The task catches `OSError` / `STATE_READ_ERRORS` per D6; a done-callback logs any
         other exception except `CancelledError` with `logger.exception` and the heartbeat
         stops
-  - [ ] Exit: cancel the task and await it
-- [ ] In `cli/commands/run.py` `_run_pipeline_sdk`: new runs build
+  - [x] Exit: cancel the task and await it
+- [x] In `cli/commands/run.py` `_run_pipeline_sdk`: new runs build
       `RunOwner.current(...)` before `init_run(owner=...)` and enter `RunHeartbeat(...,
       claim=False)`; resume and item-resume paths enter `RunHeartbeat(..., claim=True)`;
       prompt-only paths pass `owner=None` and no heartbeat
-  - [ ] Success: the executor call sits inside the context manager on all three SDK paths
+  - [x] Success: the executor call sits inside the context manager on all three SDK paths
 
 ## Task 14 — `RunHeartbeat` and wiring tests; commit
 
-- [ ] `tests/pipeline/test_run_heartbeat.py`, real `StateManager` in `tmp_path`, interval
+- [x] `tests/pipeline/test_run_heartbeat.py`, real `StateManager` in `tmp_path`, interval
       0.05 s: claim written; at least two heartbeats written; task cancelled on exit; write
       `OSError` logs WARNING and does not raise; an unexpected exception in the task is
       logged at ERROR by the done-callback and the heartbeat stops
-  - [ ] Success: tests pass
-- [ ] Add a CLI-level test (existing `tests/pipeline/test_cli_integration.py` style),
+  - [x] Success: tests pass
+- [x] Add a CLI-level test (existing `tests/pipeline/test_cli_integration.py` style),
       parametrized over the three SDK paths (new run, `--resume`, `--item` item-resume), that
       the run is `running` with an owner while the executor runs, and `failed` or `completed`
       after; the new-run case also asserts the owner was present from the creating write
-  - [ ] Success: tests pass; existing `sq run` / `--resume` / `--item` tests unchanged
-- [ ] Commit: `feat: heartbeat and claim SDK runs`
+  - [x] Success: tests pass; existing `sq run` / `--resume` / `--item` tests unchanged
+- [x] Commit: `feat: heartbeat and claim SDK runs`
 
 ---
 

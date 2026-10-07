@@ -1081,7 +1081,7 @@ class TestBackgroundIdleTimeout:
         assert len(errors) == 1 and "t1" in errors[0].getMessage() and errors[0].exc_info
 
     @pytest.mark.asyncio
-    async def test_slow_foreground_turn_has_no_timer(self) -> None:
+    async def test_slow_foreground_turn_is_not_a_background_wait(self) -> None:
         client = ScriptedClient([0.1, sdk_text("slow answer"), sdk_result()])
         session = scripted_session(client)
 
@@ -1182,3 +1182,95 @@ async def test_unrelated_timeout_while_waiting_is_not_treated_as_idle() -> None:
         await session.dispatch("p")  # type: ignore[attr-defined]
     client.stop_task.assert_not_called()
     assert session.background_tasks_stopped == 0  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Foreground stall bound (slice 174 D7)
+# ---------------------------------------------------------------------------
+
+_SILENT = 5.0  # longer than the patched bounds below; cancelled by the idle timer
+
+
+def _stall_patches(drain_s: float = 0.5) -> object:
+    from contextlib import ExitStack
+
+    stack = ExitStack()
+    stack.enter_context(patch(f"{_MOD}.get_positive_int_config", return_value=0.05))
+    stack.enter_context(patch(f"{_MOD}.INTERRUPT_DRAIN_TIMEOUT_S", drain_s))
+    return stack
+
+
+class TestForegroundStall:
+    @pytest.mark.asyncio
+    async def test_silent_turn_is_interrupted_and_session_stays_usable(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.pipeline.sdk_session import DispatchStalledError
+
+        client = ScriptedClient(
+            [sdk_text("Running the suite."), _SILENT],
+            [sdk_text("[Request interrupted by user for tool use]"), sdk_result(interrupted=True)],
+            [sdk_text("PONG"), sdk_result()],
+        )
+        session = scripted_session(client)
+
+        with _stall_patches(), caplog.at_level(logging.WARNING, logger=_MOD):  # type: ignore[attr-defined]
+            with pytest.raises(DispatchStalledError) as raised:
+                await session.dispatch("run the tests")  # type: ignore[attr-defined]
+            follow_up = await session.dispatch("ping")  # type: ignore[attr-defined]
+
+        client.interrupt.assert_awaited_once()
+        assert raised.value.session_usable is True
+        assert session.unusable_reason is None  # type: ignore[attr-defined]
+        assert follow_up == "PONG"
+        assert any(
+            r.levelno == logging.WARNING and "foreground turn silent" in r.getMessage()
+            for r in caplog.records
+        )
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+    @pytest.mark.asyncio
+    async def test_interrupt_failure_marks_session_unusable(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.pipeline.sdk_session import DispatchStalledError
+        from squadron.providers.errors import ProviderError
+
+        client = ScriptedClient([_SILENT])
+        client.interrupt.side_effect = Exception("control request timeout: interrupt")
+        session = scripted_session(client)
+
+        with _stall_patches(), caplog.at_level(logging.ERROR, logger=_MOD):  # type: ignore[attr-defined]
+            with pytest.raises(DispatchStalledError) as raised:
+                await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert raised.value.session_usable is False
+        assert session.unusable_reason is not None  # type: ignore[attr-defined]
+        assert session.unusable_reason.startswith("foreground stall: interrupt did not complete")  # type: ignore[attr-defined]
+        assert any(r.levelno == logging.ERROR for r in caplog.records)
+        with pytest.raises(ProviderError, match="foreground stall"):
+            await session.dispatch("next")  # type: ignore[attr-defined]
+        client.query.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "drain",
+        [[_SILENT], []],
+        ids=["drain-never-ends", "stream-ends"],
+    )
+    async def test_incomplete_drain_marks_session_unusable(
+        self, caplog: pytest.LogCaptureFixture, drain: list[object]
+    ) -> None:
+        from squadron.pipeline.sdk_session import DispatchStalledError
+
+        client = ScriptedClient([_SILENT], drain)
+        session = scripted_session(client)
+
+        with _stall_patches(drain_s=0.05), caplog.at_level(logging.ERROR, logger=_MOD):  # type: ignore[attr-defined]
+            with pytest.raises(DispatchStalledError) as raised:
+                await session.dispatch("p")  # type: ignore[attr-defined]
+
+        client.interrupt.assert_awaited_once()
+        assert raised.value.session_usable is False
+        assert session.unusable_reason is not None  # type: ignore[attr-defined]
+        assert any(r.levelno == logging.ERROR for r in caplog.records)

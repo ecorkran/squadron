@@ -111,15 +111,19 @@ def sdk_text(text: str, *, parent_tool_use_id: str | None = None) -> object:
     )
 
 
-def sdk_result(text: str = "", *, injected: bool = False) -> object:
-    """A real ResultMessage; ``injected`` marks a task-notification turn."""
+def sdk_result(text: str = "", *, injected: bool = False, interrupted: bool = False) -> object:
+    """A real ResultMessage; ``injected`` marks a task-notification turn.
+
+    ``interrupted`` gives the shape the CLI sends after ``interrupt()`` (slice
+    174 spike): ``is_error`` with subtype ``error_during_execution``.
+    """
     from claude_agent_sdk import ResultMessage
 
     return ResultMessage(
-        subtype="success",
+        subtype="error_during_execution" if interrupted else "success",
         duration_ms=1,
         duration_api_ms=1,
-        is_error=False,
+        is_error=interrupted,
         num_turns=1,
         session_id="sess-1",
         result=text,
@@ -185,6 +189,7 @@ class ScriptedClient:
         self.set_model = AsyncMock()
         self.query = AsyncMock()
         self.stop_task = AsyncMock()
+        self.interrupt = AsyncMock()
 
     async def _play(self, script: list[object]):  # type: ignore[no-untyped-def]
         import asyncio

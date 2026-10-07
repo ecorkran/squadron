@@ -29,6 +29,7 @@ from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
+from squadron.pipeline.sdk_session import DispatchStalledError
 from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile, profile_credentials
@@ -320,6 +321,17 @@ class DispatchAction:
         except GitEnvironmentError:
             # An unknown git state ends the run; it is never one item's dispatch failure.
             raise
+        except DispatchStalledError as exc:
+            # An expected, named failure (slice 174 D7): the session already logged
+            # the interrupt, so no traceback; the step fails through its result.
+            _logger.warning("dispatch: step %s stalled: %s", context.step_name, exc)
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=f"dispatch stalled: {exc}",
+                metadata={"stalled": True, "session_usable": exc.session_usable},
+            )
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
             return ActionResult(
                 success=False,

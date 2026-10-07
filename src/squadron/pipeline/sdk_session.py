@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import NoReturn
 
 from claude_agent_sdk import (
     ClaudeAgentOptions,
@@ -29,7 +30,8 @@ from claude_agent_sdk import (
 )
 from claude_agent_sdk.types import SystemPromptPreset
 
-from squadron.config.manager import get_typed_config
+from squadron.config.keys import FOREGROUND_IDLE_TIMEOUT_KEY
+from squadron.config.manager import get_positive_int_config, get_typed_config
 from squadron.core.teardown import close_best_effort
 from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
 from squadron.pipeline.text_tail import tail_text
@@ -53,7 +55,14 @@ from squadron.providers.sdk.settings import (
 
 _logger = logging.getLogger(__name__)
 
-__all__ = ["SDKExecutionSession", "SeedSource", "frame_summary_for_seed", "open_pipeline_session"]
+__all__ = [
+    "INTERRUPT_DRAIN_TIMEOUT_S",
+    "DispatchStalledError",
+    "SDKExecutionSession",
+    "SeedSource",
+    "frame_summary_for_seed",
+    "open_pipeline_session",
+]
 
 
 _SEED_FRAMING_PREFIX = (
@@ -99,8 +108,26 @@ def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOp
     return dataclasses.replace(base, system_prompt=preset)
 
 
-class _BackgroundIdleTimeout(Exception):
-    """The idle bound on a background-agent wait expired (D5)."""
+# Per-read bound on the post-interrupt drain, and on the interrupt request itself
+# (slice 174 D7). Matches the SDK's own 60 s control-request bound.
+INTERRUPT_DRAIN_TIMEOUT_S = 60
+
+
+class _IdleTimeout(Exception):
+    """A read's idle bound expired: a background wait (932 D5) or a foreground turn (174 D7)."""
+
+
+class DispatchStalledError(ProviderError):
+    """A foreground turn was silent past ``pipeline.foreground_idle_timeout_s`` (174 D7).
+
+    The turn was interrupted. ``session_usable`` says whether the interrupt and
+    the drain completed, so the next dispatch on this session can proceed.
+    """
+
+    def __init__(self, idle_s: float, session_usable: bool) -> None:
+        super().__init__(f"no output for {idle_s:.0f}s; turn interrupted")
+        self.idle_s = idle_s
+        self.session_usable = session_usable
 
 
 @dataclass
@@ -212,16 +239,19 @@ class SDKExecutionSession:
     async def _collect_turns(self, turns: DispatchTurns) -> str:
         """Read turns until our own result arrives with no agent running."""
         idle_s: float | None = None
+        foreground_idle_s = self._foreground_idle_timeout_s()
         while True:
             if not turns.waiting:
-                # Foreground turns get no timer (#165).
-                result = await self._read_turn_with_retry(turns, idle_s=None)
+                try:
+                    result = await self._read_turn_with_retry(turns, idle_s=foreground_idle_s)
+                except _IdleTimeout:
+                    await self._interrupt_stalled_turn(turns, foreground_idle_s)
             else:
                 if idle_s is None:
                     idle_s = self._background_idle_timeout_s()
                 try:
                     result = await self._read_turn_with_retry(turns, idle_s=idle_s)
-                except _BackgroundIdleTimeout:
+                except _IdleTimeout:
                     await self._stop_background(turns, idle_s)
                     return turns.text()
             if result is None:
@@ -285,12 +315,15 @@ class SDKExecutionSession:
                 )
                 await asyncio.sleep(delay)
 
-    async def _read_turn(self, turns: DispatchTurns, *, idle_s: float | None) -> ResultMessage | None:
+    async def _read_turn(
+        self, turns: DispatchTurns, *, idle_s: float | None, accept_error: bool = False
+    ) -> ResultMessage | None:
         """Read one turn; return its result, or None if the stream ended first.
 
         With ``idle_s`` set, each wait for the next message is bounded by it
-        (the timer resets on every message) and expiry raises
-        ``_BackgroundIdleTimeout``.
+        (the timer resets on every message) and expiry raises ``_IdleTimeout``.
+        With ``accept_error``, an ``is_error`` result is returned rather than
+        raised: the interrupted turn's own result ends that way (174 D7).
         """
         stream = aiter(self.client.receive_response())
         while True:
@@ -303,7 +336,7 @@ class SDKExecutionSession:
             except TimeoutError as exc:
                 # Only our own timer means "idle"; any other TimeoutError propagates.
                 if idle_timer.expired():
-                    raise _BackgroundIdleTimeout from exc
+                    raise _IdleTimeout from exc
                 raise
             # Inspect a RateLimitEvent before anything else touches it, and
             # before collect() marks progress: a rejected event is not
@@ -312,7 +345,7 @@ class SDKExecutionSession:
                 raise RateLimitRejected(f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}")
             # Raise before collecting any content so no partial error text
             # reaches the caller or _check_cli_error.
-            if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error:
+            if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error and not accept_error:
                 turns.progressed = True
                 raise ProviderAPIError(
                     f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
@@ -326,9 +359,50 @@ class SDKExecutionSession:
 
     def _background_idle_timeout_s(self) -> float:
         """Read ``pipeline.background_idle_timeout_s`` for this session's cwd."""
+        return get_typed_config("pipeline.background_idle_timeout_s", int, cwd=self._config_cwd())
+
+    def _foreground_idle_timeout_s(self) -> float:
+        """Read ``pipeline.foreground_idle_timeout_s`` for this session's cwd (174 D1)."""
+        return get_positive_int_config(FOREGROUND_IDLE_TIMEOUT_KEY, cwd=self._config_cwd())
+
+    def _config_cwd(self) -> str:
         # The CLI itself runs in the process cwd when options carry none.
-        cwd = str(self.base_options.cwd or Path.cwd())
-        return get_typed_config("pipeline.background_idle_timeout_s", int, cwd=cwd)
+        return str(self.base_options.cwd or Path.cwd())
+
+    async def _interrupt_stalled_turn(self, turns: DispatchTurns, idle_s: float) -> NoReturn:
+        """Interrupt a silent foreground turn and drain it, then raise (174 D7).
+
+        The session stays usable when the interrupt and the drain both
+        complete; otherwise it is marked unusable and later calls fail fast.
+        """
+        _logger.warning("dispatch: foreground turn silent for %ds; interrupting", idle_s)
+        failure = await self._interrupt_and_drain(turns)
+        if failure is not None:
+            self.unusable_reason = f"foreground stall: interrupt did not complete ({failure})"
+            _logger.error("dispatch: %s", self.unusable_reason)
+        raise DispatchStalledError(idle_s, session_usable=failure is None)
+
+    async def _interrupt_and_drain(self, turns: DispatchTurns) -> str | None:
+        """Send the interrupt and read to the dispatch's own result; the failure, or None."""
+        try:
+            async with asyncio.timeout(INTERRUPT_DRAIN_TIMEOUT_S):
+                await self.client.interrupt()
+        except Exception as exc:  # noqa: BLE001
+            # The SDK raises a bare Exception when the control request fails or
+            # times out, and our own bound raises TimeoutError; either way the
+            # interrupt did not complete, which the caller reports at ERROR.
+            return f"interrupt failed: {exc!r}"
+        while True:
+            try:
+                result = await self._read_turn(
+                    turns, idle_s=INTERRUPT_DRAIN_TIMEOUT_S, accept_error=True
+                )
+            except _IdleTimeout:
+                return f"no result within {INTERRUPT_DRAIN_TIMEOUT_S}s of the interrupt"
+            if result is None:
+                return "stream ended before the interrupted turn's result"
+            if is_own_result(result):
+                return None
 
     async def _stop_background(self, turns: DispatchTurns, idle_s: float) -> None:
         """Stop every tracked agent after an idle timeout, best-effort (D5)."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -9,7 +10,7 @@ import pytest
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
-from squadron.pipeline.sdk_session import SDKExecutionSession
+from squadron.pipeline.sdk_session import DispatchStalledError, SDKExecutionSession
 from squadron.providers.errors import ProviderError
 
 
@@ -283,3 +284,24 @@ async def test_session_dispatch_records_prompt_and_settings(
     assert result.metadata["system_prompt_mode"] == mode
     assert result.metadata["setting_sources"] == "project"
     assert result.metadata["auto_memory"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("usable", [True, False])
+async def test_stalled_dispatch_fails_step_with_warning_and_no_traceback(
+    action: DispatchAction, caplog: pytest.LogCaptureFixture, usable: bool
+) -> None:
+    session = _make_session()
+    session.dispatch.side_effect = DispatchStalledError(1800, session_usable=usable)
+    ctx = _make_context(session=session)
+
+    with caplog.at_level(logging.WARNING, logger="squadron.pipeline.actions.dispatch"):
+        result = await action.execute(ctx)
+
+    assert result.success is False
+    assert result.error == "dispatch stalled: no output for 1800s; turn interrupted"
+    assert result.metadata == {"stalled": True, "session_usable": usable}
+    records = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+    assert records[0].exc_info is None
