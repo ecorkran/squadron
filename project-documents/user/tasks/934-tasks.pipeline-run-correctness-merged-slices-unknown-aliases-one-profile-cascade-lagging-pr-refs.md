@@ -136,15 +136,15 @@ status: in_progress
 
 ## Task 13 — `merged_slice_branches` predicate (D1, D10)
 
-- [ ] In `pipeline/git_ops.py` add `merged_slice_branches(entries, target, cwd) -> set[int]`. Branch names come from the same helper the enter step uses (locate with grep; do not re-derive)
-  - [ ] One `for-each-ref refs/heads` call for tips, one `rev-list --first-parent {target}` call, one `merge-base --is-ancestor` call per candidate
-  - [ ] A slice is merged only when its tip is an ancestor of the target **and** not on the target's first-parent chain
-  - [ ] A missing branch reads as not merged, with no log
-  - [ ] Any timeout (`run_git` returns `None`) or unexpected exit (for `--is-ancestor`: not 0 or 1) logs ERROR via `_logger.error(message)` (as `git_ops.py` does before its other `GitStateUnknownError` raises; there is no active exception, so not `logger.exception`) naming the command and stderr, and raises `GitStateUnknownError`. Never returns an empty set on failure
-- [ ] Docstring cites the `--no-ff` assertion at `tests/pipeline/test_branch_merge.py:88`
-- [ ] Tests in `tests/pipeline/test_git_ops.py` (real temp repos): `--no-ff` merged → in the set; fast-forward merged → not; branch entered with no commits → not; missing branch → not; mixed set returns only merged. D10 rows with the fake/patched `run_git`: each of the three calls timing out and exiting non-zero raises `GitStateUnknownError` with the asserted ERROR record (target missing for `rev-list`)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add merged_slice_branches predicate`
+- [x] In `pipeline/git_ops.py` add `merged_slice_branches(entries, target, cwd) -> set[int]`. Branch names come from the same helper the enter step uses (locate with grep; do not re-derive)
+  - [x] One `for-each-ref refs/heads` call for tips, one `rev-list --first-parent {target}` call, one `merge-base --is-ancestor` call per candidate
+  - [x] A slice is merged only when its tip is an ancestor of the target **and** not on the target's first-parent chain
+  - [x] A missing branch reads as not merged, with no log
+  - [x] Any timeout (`run_git` returns `None`) or unexpected exit (for `--is-ancestor`: not 0 or 1) logs ERROR via `_logger.error(message)` (as `git_ops.py` does before its other `GitStateUnknownError` raises; there is no active exception, so not `logger.exception`) naming the command and stderr, and raises `GitStateUnknownError`. Never returns an empty set on failure
+- [x] Docstring cites the `--no-ff` assertion at `tests/pipeline/test_branch_merge.py:88`
+- [x] Tests in `tests/pipeline/test_git_ops.py` (real temp repos): `--no-ff` merged → in the set; fast-forward merged → not; branch entered with no commits → not; missing branch → not; mixed set returns only merged. D10 rows with the fake/patched `run_git`: each of the three calls timing out and exiting non-zero raises `GitStateUnknownError` with the asserted ERROR record (target missing for `rev-list`)
+  - [x] Success: tests pass
+- [x] Commit: `feat: add merged_slice_branches predicate`
 
 ## Task 14 — Sources take `cwd` (D1)
 
