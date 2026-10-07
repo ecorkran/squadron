@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq run implement-plan` no longer reimplements a slice that is already merged but still shows open in cf, and no longer flags its dependents (#188). Item resume agrees.
+- Pipeline `review` steps pick their profile the way `sq review` does: the template's `profile:` and `default_review_profile` now apply (#184).
+- `sq run <pipeline> --dry-run` rejects unknown model aliases and unknown review templates, as a real run does, instead of previewing a plan that cannot run (#175).
+- `sq review pr` no longer fails with "head moved since resolution" when GitHub's `refs/pull/N/head` lags the PR's real head: it reviews the real head and prints one line saying so (#186).
+- Code host failures in `sq review pr`, `sq pr show` and `sq pr create` print once instead of twice, and say which sources disagreed (#186).
+
 ## [0.20.1] - 20261006
 
 ### Fixed
