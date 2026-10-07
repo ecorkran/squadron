@@ -11,53 +11,49 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: f2501b28b735b879f0b3333043d71a0e623da752
+reviewedSha: 5431d67f5b97df851569f0b83c8d33ff8301b364
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-durationSeconds: 41.1
+toolCallsMade: 5
+durationSeconds: 42.4
 runId: run-20261007-p5-56b33e7c
 squadronVersion: 0.20.1
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success criteria coverage is complete"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:37-281"
+    summary: "Success-criteria coverage is complete"
+    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md"
   - id: F002
     severity: pass
-    category: sequencing
-    summary: "Sequencing, test-with pattern and commit cadence are sound"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:45-256"
+    category: process
+    summary: "Test-with pattern and commit cadence"
+    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md"
   - id: F003
-    severity: pass
-    category: nfr
-    summary: "Load-test and CI-gating requirements do not apply"
-    location: "project-documents/user/slices/934-slice.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:316-339"
+    severity: concern
+    category: sequencing
+    summary: "Suppression is wired before the adjustment line exists"
+    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md (Tasks 19, 22b, 25a–25c)"
   - id: F004
     severity: concern
     category: sequencing
-    summary: "Task 18 changes an error constructor that an existing call site still uses"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:190"
+    summary: "Task 22a leaves the lag branch undefined"
+    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md (Tasks 21, 22a)"
   - id: F005
     severity: concern
-    category: task-sizing
-    summary: "Task 22 bundles too many behaviours for one task"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:219-225"
-  - id: F006
-    severity: concern
-    category: task-sizing
-    summary: "Task 24 mixes a new component with a cross-cutting tagging sweep"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:234-242"
-  - id: F007
-    severity: concern
     category: test-coverage
-    summary: "`sq pr create` wiring has no test"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:246-248"
-  - id: F008
+    summary: "D10 `cat-file` timeout row has no test"
+    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md (Task 21)"
+  - id: F006
     severity: note
-    category: clarity
-    summary: "Smaller inconsistencies and omissions"
-    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md:211"
+    category: implementation-detail
+    summary: "`logger.exception` outside an exception context"
+    location: "src/squadron/pipeline/git_ops.py#GitStateUnknownError"
+  - id: F007
+    severity: note
+    category: scope
+    summary: "Task 24b sweep is open-ended"
+    location: "project-documents/user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md (Task 24b)"
 ---
 
 # Review: tasks — slice 934
@@ -67,64 +63,39 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria coverage is complete
+### [PASS] Success-criteria coverage is complete
 
-Each functional criterion maps to at least one task, and the failure-mode tables have tests too.
-- **#188:** Tasks 13–16 cover the predicate, `cwd` plumbing, source selection, item resume, the D10 failure rows and the `cwd`-differs-from-process test.
-- **#184 and #175:** Tasks 2–9 cover the shared module, the parity test (Task 6), the unknown-template pre-run error, and the review-step profile source in the alias check. Tasks 10–11 cover `--dry-run`, `--strict` and the byte-identical artifact check.
-- **#186:** Tasks 18–25 cover the models, the base fast-forward adjustment, the primary-fetch timeout, the head fallback with an absent-locally fixture, classification, the GitHub refspec, the logging scope and the CLI wiring.
-- **Walkthrough, docs and close-out:** Tasks 27–29 cover these.
+The #188 criteria map to Task 13 (predicate, git-failure rows, temp repos), Task 15 (selection, WARNING, `cwd` test) and Task 16 (resume and reconcile). The #184 and #175 criteria map to Tasks 2–6 (shared module, parity test), Tasks 7–9 (template lookup, unknown template, per-action profile source) and Tasks 10–11 (`_classify_for_run`, dry-run, byte-identical artifact). The #186 criteria map to Tasks 18–25c: lagging fixture with the API sha absent locally, source-naming errors, a single printed failure, and fetch timeouts. Issue closure is covered in the Notes and Task 29. Every task traces to a design decision or success criterion.
 
-### [PASS] Sequencing, test-with pattern and commit cadence are sound
+### [PASS] Test-with pattern and commit cadence
 
-- **Dependencies:** each task's inputs exist before it runs. For example, Task 2 comes before Tasks 3 and 5, Task 7 before Task 8, Task 8 before Task 9, Task 13 before Tasks 15–16, and Task 14 before Task 15.
-- **Test-with:** tests sit inside the task that implements the behaviour.
-- **Commits and checkpoints:** every code task ends with a commit, and each part closes with a validation checkpoint (Tasks 12, 17, 26), so commits are spread across the slice rather than batched.
-- **Merge:** no merge task is listed, which matches the project rule.
-- **Cycles:** there are none.
+Every code task carries its own tests and a semantic commit. Validation tasks 12, 17 and 26 close each part, so commits are not batched at the end. No merge task appears, which follows the git rules. The lettered splits of Tasks 22, 24 and 25 keep each task a manageable size. Task 21 and Task 8 are the largest tasks, and both are still acceptable.
 
-### [PASS] Load-test and CI-gating requirements do not apply
+### [CONCERN] Suppression is wired before the adjustment line exists
 
-The slice restates no throughput, latency or scale NFR. D10 bounds are timeouts with failure-mode tests, not performance targets. A `tests/load/` task and a CI gate are therefore not required.
+Tasks 19 and 22b tag the base fast-forward and head-lag WARNINGs with `RENDERED_BY_CALLER`. Task 25a then makes `sq review pr` drop tagged records below `-vv`. Task 25c is the task that prints the adjustment line that is meant to replace those records. Between 25a and 25c the user sees neither the WARNING nor the adjustment line. That includes the #131 base fast-forward notice that is visible today, which contradicts D8's "nothing visible today disappears". Move 25c before 25a, or merge 25c into 25a and 25b, so the replacement output lands in the same commit as the suppression.
 
-### [CONCERN] Task 18 changes an error constructor that an existing call site still uses
+### [CONCERN] Task 22a leaves the lag branch undefined
 
-Task 18 adds `expected_source` and `actual_source` to `RefMovedSinceResolutionError`, but the only task that updates the raise site in `refs.py` is Task 22. If the new fields are required, Task 18's pyright and test run, and its commit, break at the existing raise site. Task 18 does not say how existing callers and tests keep working.
+Task 22a says "Ancestor → lag (handled in 22b)" but does not say what the code does in the lag case before 22b lands. The committed intermediate state could silently build a range on the stale PR-ref sha, which the design forbids. State the interim behaviour, for example raising `RefMovedSinceResolutionError` or a `NotImplementedError` until 22b. Alternatively fold 22a and 22b into one task. Task 21 also adds the `head_fallback_sources` argument to `fetch_and_range`, but nothing calls the helper until 22a. Say explicitly that the `fetch_and_range` signature change belongs in 22a and 23, so the commit does not leave a dead parameter.
 
-Do one of these:
-- update the current raise site in Task 18;
-- make the new fields temporarily optional; or
-- move the constructor change into Task 22.
+### [CONCERN] D10 `cat-file` timeout row has no test
 
-### [CONCERN] Task 22 bundles too many behaviours for one task
+D10 says a timeout on `cat-file -e <sha>^{commit}` raises `HostCommandTimeoutError`. The fetch-timeout row is covered, since Task 21 records a fallback timeout and Task 20 covers the primary fetch. The Task 21 test list has no case for the `cat-file` timeout. The project's Failure-Mode Enumeration rule requires a test for each failure-mode row. Add that case, plus the non-zero `cat-file` exit meaning "absent" that produces the DEBUG record.
 
-Task 22 changes `fetch_and_range` to call the Task 21 helper, add the ancestry classification, run `update-ref`, record the adjustment, and raise `RefMovedSinceResolutionError`. It also renders `update-ref` failure and timeout, and adds the lagging-fixture test suite with about eight cases. That is a lot for one junior-AI task.
+### [NOTE] `logger.exception` outside an exception context
 
-Suggested split:
-- 22a: classification and `RefMovedSinceResolutionError` for the descends and unrelated cases.
-- 22b: `update-ref`, the adjustment record, and the failure and timeout rendering.
+Task 13 requires `logger.exception` when `run_git` returns `None` on a timeout or spawn failure. `run_git` returns `None` rather than raising, so no exception is active there. The log record would then carry `NoneType: None` instead of a traceback. The test should assert the ERROR level, the command and the stderr text. The implementer may use `logger.error` there, since the exception-handling rule only applies to `try/except` blocks. `GitStateUnknownError` already exists, so Task 13 correctly reuses it and does not create it.
 
-### [CONCERN] Task 24 mixes a new component with a cross-cutting tagging sweep
+### [NOTE] Task 24b sweep is open-ended
 
-Task 24 builds the `code_host_logging` context manager, its filter, nesting and cleanup. It also asks the implementer to find and tag every WARNING that precedes a raised `CodeHostError` across the adapter and `refs.py`. The sweep is open-ended, and Tasks 19, 21 and 22 already tag some records themselves.
-
-Split the sweep out as its own sub-task. It would list the tagged call sites explicitly and add a test that those, and only those, carry the tag.
-
-### [CONCERN] `sq pr create` wiring has no test
-
-D8 requires `sq pr show` and `sq pr create` to use `code_host_logging(0)`. Task 25's tests name `test_review_pr.py` and `test_pr_show.py` only. Nothing asserts that `pr create` is wrapped or prints a `CodeHostError` once. Add a `pr create` case so one of the three commands cannot silently go unwrapped.
-
-### [NOTE] Smaller inconsistencies and omissions
-
-- **Task 21** names the parameter `head_fallback_sources: tuple[str, ...]` but also writes "`head_fallback_source`" (singular). Use the plural name throughout.
-- **Plan entry:** the design says the plan entry is updated to Effort 4/5. Task 29 only checks off 934 in `900-slices.maintenance-and-refactoring.md`. Add a sub-item to confirm the effort and risk text there matches.
-- **Task 10:** it is a pure refactor with no new tests. That is acceptable because it relies on the existing run and explain tests, and the new `--dry-run` tests in Task 11 exercise the shared helper. Consider adding a small direct unit test of `_classify_for_run`.
+The task asks for every pre-raise WARNING in `refs.py` and the GitHub adapter to be tagged, with only "e.g." examples. The grep check at the end (every `RENDERED_BY_CALLER` site precedes a raise or describes a `RefAdjustment`) checks only the sites that were tagged. A WARNING that was missed fails no check. Consider listing the candidate sites found by `grep -n "logger.warning" src/squadron/codehost/refs.py src/squadron/codehost/github_cli.py` in the task, so the sweep has a closed set.
 
 ### Run Digest
 
-- Response length: 6093 chars
+- Response length: 5562 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -134,10 +105,10 @@ D8 requires `sq pr show` and `sq pr create` to use `code_host_logging(0)`. Task 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 41.1 s
+- Duration: 42.4 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
