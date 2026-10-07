@@ -11,48 +11,49 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261006
 dateUpdated: 20261006
-reviewedSha: d50272e5a201fe494179ad84cff612529f3dace0
+reviewedSha: 817adb82ae79bec1966109609dad374a6d9660a2
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 7
-durationSeconds: 42.8
+toolCallsMade: 4
+durationSeconds: 25.9
 runId: run-20261007-p4-08b6c078
 squadronVersion: 0.20.1
 findings:
   - id: F001
-    severity: concern
-    category: integration
-    summary: "D3 \"listing and resume cannot disagree\" is overstated for item resume"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D3"
+    severity: pass
+    category: architecture-alignment
+    summary: "Alignment with the parent architecture's 199 description"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Overview"
   - id: F002
-    severity: concern
+    severity: pass
     category: error-handling
-    summary: "Failure-mode table omits cases for the new filesystem read paths"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D7"
+    summary: "Failure modes enumerated with observable signals"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D7. Failure modes"
   - id: F003
     severity: concern
-    category: design
-    summary: "Free-text `resume_problem` and display markers carry logical meaning"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#API Contracts"
+    category: dependency-direction
+    summary: "`run_listing` pulls the executor's heavy import graph through `ExecutionStatus` and a private constant"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:85"
   - id: F004
     severity: concern
-    category: dependencies
-    summary: "Under-specified shared location and command-to-command dependency"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Component Structure"
+    category: nfr
+    summary: "The performance target is verified manually, not by a test"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Special Considerations"
   - id: F005
     severity: note
-    category: nfr
-    summary: "No stated performance target for the listing"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Special Considerations"
+    category: scope
+    summary: "Refactoring of 197-owned code widens the slice's footprint"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D3"
   - id: F006
     severity: note
-    category: scope
-    summary: "Capability is not reflected in the parent architecture"
-    location: "project-documents/user/architecture/180-arch.pipeline-intelligence.md"
+    category: integration
+    summary: "`--json` deferral and the architecture's Amoeba framing"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Technical Scope"
   - id: F007
-    severity: pass
-    category: architecture
-    summary: "Layering, dependency direction and read-only design"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Architecture"
+    severity: note
+    category: documentation
+    summary: "Architecture overview was already updated for 199"
+    location: "project-documents/user/architecture/180-arch.pipeline-intelligence.md:49"
 ---
 
 # Review: slice — slice 199
@@ -62,54 +63,54 @@ findings:
 
 ## Findings
 
-### [CONCERN] D3 "listing and resume cannot disagree" is overstated for item resume
+### [PASS] Alignment with the parent architecture's 199 description
 
-D3 and the Technical Requirements say the listing and the resume path "cannot disagree". Only `RESUMABLE_OUTCOMES` is shared. Item resume (slice 197, `item_resume._validate`) also rejects a run in these cases:
-- Its pipeline doesn't have exactly one `each` step (`_single_each_step`).
-- `--decision accept` is used on a record whose `flagKind` isn't `review_unresolved` (`_check_record`).
+The slice implements what 180-arch §Relationship to 140 attributes to it: runs `--resume` can act on, including finished batches with open items, listed via `pipeline/run_listing.py`, and `sq pipelines list` replacing `sq run --list`. It is read-only. It adds no grammar and no review-model changes, so the architecture's "Out of Scope" limits on 140 grammar and review models hold. The slice reads 197's `BatchReport`, `ItemOutcome`, `FlagKind` and `ItemDecision` as the interface for flag handoff.
 
-The listing counts any `flagged` or `not_run` record in any `<run_id>.*.report.json`. A completed run could therefore show as "N items" and then be rejected by `--item`. Several reports in one run (more than one `each` step) would also be summed, yet `ResumePoint` carries a single `step_name`. The hint line always advertises `retry|accept`. The doc should do one of two things:
-- Share the eligibility check with `item_resume`, including the `each`-step rule.
-- Narrow the claim and say how a multi-report run is shown.
+### [PASS] Failure modes enumerated with observable signals
 
-### [CONCERN] Failure-mode table omits cases for the new filesystem read paths
+D7 covers the cases on this slice's I/O paths:
+- corrupt run state;
+- unloadable definition;
+- missing unfinished step;
+- unsupported `each` count;
+- unreadable report;
+- `running` runs;
+- concurrent writers, with the atomic-replace argument.
 
-The table covers corrupt state, a missing pipeline, and an unreadable report. It leaves out these cases:
-- **Concurrent writer:** a running pipeline (per-checkout run lock, slice 197) writes state or a report while `sq runs list` reads. A torn read would surface as a skipped row or `<report unreadable>`. The doc should say whether this is accepted as transient and logged, or handled.
-- **Paused or failed run with no unfinished step:** `first_unfinished_step_of` returns `None` when the pipeline was edited after the run. D7 doesn't say whether such a run gets `resume=None` and is dropped from the default view or gets a marker. Silently hiding a paused run contradicts the "no silent fallback" principle.
-- **Exceptions that make a definition "invalid":** `load_pipeline` can raise several types. The doc should name them. The Exception Handling rule needs narrow catches.
-- **Orphaned `running` runs:** a crashed run is neither listed by default nor resumable by `_RESUMABLE_STATUSES`. The doc should say that is intended.
-- **Test coverage:** the Technical Requirements require unit tests for the first two D7 rows, but none asserts the WARNING itself (log or metric). The architecture review criteria require at least one such test.
+Each case has a row marker or a WARNING log, and unlisted exceptions propagate. Hang and timeout are not discussed. That is reasonable because everything is local-disk reads, but the slice does not say so. A one-line statement would close the gap.
 
-### [CONCERN] Free-text `resume_problem` and display markers carry logical meaning
+### [CONCERN] `run_listing` pulls the executor's heavy import graph through `ExecutionStatus` and a private constant
 
-`RunSummary.resume_problem: str | None` holds the D7 marker text (`<pipeline unavailable>`, `<report unreadable>`). Those strings are user-visible labels. The project rule says never use user-accessible labels as logical structure, and the doc applies that discipline to `ResumeKind` but not here. A `ResumeProblem` enum, rendered to text only in the CLI, is the consistent design. `status: str` should likewise be an `ExecutionStatus`, or the doc should justify the string. The "resumable even with a marker" logic in D7 also depends on this field.
+The slice justifies `item_eligibility` by saying it keeps the read-only listing from pulling in git machinery. But the listing still depends on `ExecutionStatus` (Interfaces Required, line 58) and `_RESUMABLE_STATUSES`. `state.py` already imports `ExecutionStatus` from `executor.py` (state.py:25), and `executor.py` imports `git_ops`, `branch_ops`, `commit_plan` and `loop_commit` at module level. So `run_listing` reaches git-related modules transitively, and the stated isolation claim does not hold.
 
-### [CONCERN] Under-specified shared location and command-to-command dependency
+D10 also has the listing import a private, underscore-named constant (`_RESUMABLE_STATUSES`) across modules. Two options:
+- Expose a public `RESUMABLE_STATUSES` from `state.py`.
+- Move the status enum to a lightweight module.
 
-`_STATUS_COLORS` moves from `run.py` to "a shared location" that the doc doesn't name. `run.py` also imports `render_pipeline_listing()` from `commands/pipelines.py`, which makes one command module depend on another. Name the shared module, and consider putting the rendering helpers in a CLI-level module that both command files import.
+Either one, or an explicit acknowledgement that the import cost is accepted, would remove the inconsistency.
 
-### [NOTE] No stated performance target for the listing
+### [CONCERN] The performance target is verified manually, not by a test
 
-The parent architecture states no NFR for listing paths, so nothing is violated. The slice adds one pipeline load per paused or failed run and one report glob per completed run. It sets no latency target and no bound on unbounded filesystem I/O. "Acceptable at current run counts" is implicit. Consider giving a rough target (for example, under 1s at a few hundred runs). Also consider memoizing pipeline definitions per name within one call, which is cheap and needs no cross-call cache.
+The architecture states no NFR for this path, so the slice correctly sets its own: under 1 s for a few hundred runs. The only check is the walkthrough timing in step 7, and a miss is deferred to "a finding for Phase 7". Two parts of the path are not bounded: one glob per completed run, and one report read per completed batch run. A cheap automated check would be a test with a few hundred synthetic runs that asserts the number of definition loads and report reads. The slice already specifies one-definition-load-per-pipeline, but not a bound on globs or reads. Adding one would make the target regress-detectable.
 
-### [NOTE] Capability is not reflected in the parent architecture
+### [NOTE] Refactoring of 197-owned code widens the slice's footprint
 
-The architecture documents 197's `sq run --resume --item` as the Amoeba or human interface. It has no listing surface for finding runs that need a decision, and its CLI scope names only `sq pools`. The slice's value (finding resumable batch runs) follows from 197. Still, add a one-line mention in the architecture's 197 bullet so that `sq pipelines list`, `sq runs list` and `run_listing` don't count as scope creep. The "Provides to Other Slices" claim that Amoeba can use `list_run_summaries` "without parsing CLI output" also sits oddly beside the exclusion of `--json` because "no consumer needs JSON yet". An out-of-process orchestrator can only use the Python API by importing it.
+The slice moves eligibility rules out of `item_resume`, extracts `first_unfinished_step_of`, adds `report_json_path`, and retypes `PipelineInfo.source`. This touches 197 and 140 code. It is justified by DRY and a no-drift guarantee, and it is protected by the parity test and by "existing tests pass unchanged". The slice is rated effort 2/5 but carries a refactor across four modules. Keep it as the first implementation step, as the development approach already does.
 
-### [PASS] Layering, dependency direction and read-only design
+### [NOTE] `--json` deferral and the architecture's Amoeba framing
 
-- Pure listing logic sits in `pipeline/run_listing.py`, and rendering stays in the CLI.
-- `StateManager` is injected for testability.
-- The slice consolidates `RESUMABLE_OUTCOMES`, `first_unfinished_step_of` and `report_json_paths` rather than duplicating them.
-- It reuses 197's `BatchReportLoadError` instead of treating a bad report as "no open items".
-- The parent field points at the slice plan (`180-slices.pipeline-intelligence.md`), which exists.
+180-arch names Amoeba as an intended consumer of the item-resume interface. The slice defers `--json`, so an out-of-process consumer cannot enumerate runs programmatically. The slice states this openly and Python callers are served. No change is needed. The slice or the architecture should record the follow-up if Amoeba starts consuming runs.
+
+### [NOTE] Architecture overview was already updated for 199
+
+The architecture already names slice 199, `sq runs list` and `run_listing.py`, so the parent document and the slice agree. No update is required.
 
 ### Run Digest
 
-- Response length: 6493 chars
+- Response length: 5352 chars
 - Response is newline-free: no
-- Tool calls made: 7
+- Tool calls made: 4
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -119,7 +120,7 @@ The architecture documents 197's `sq run --resume --item` as the Amoeba or human
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 42.8 s
+- Duration: 25.9 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 7
