@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import logging
 import os
 import socket
 from dataclasses import dataclass
@@ -14,9 +16,12 @@ from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.run_liveness import assess_liveness
 from squadron.pipeline.run_prune import (
     DEFAULT_CATEGORIES,
+    PruneCandidate,
     PruneCategory,
     PrunePlan,
+    PruneResult,
     PruneUsageError,
+    apply_prune,
     plan_prune,
 )
 from squadron.pipeline.state import RunState, StateManager
@@ -269,3 +274,87 @@ class TestSelectionAndFilters:
         assert candidate.run_id == runs.junk
         assert candidate.age is not None and candidate.age >= timedelta(days=3)
         assert candidate.pipeline is None
+
+
+# ---------------------------------------------------------------------------
+# apply_prune
+# ---------------------------------------------------------------------------
+
+
+def _write_run_with_reports(runs_dir: Path, run_id: str) -> list[Path]:
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    paths = [
+        runs_dir / f"{run_id}.json",
+        runs_dir / f"{run_id}.slices.report.json",
+        runs_dir / f"{run_id}.slices.report.md",
+    ]
+    for path in paths:
+        path.write_text("x")
+    return paths
+
+
+def _plan_for(runs_dir: Path, *run_ids: str) -> PrunePlan:
+    candidates = [
+        PruneCandidate(
+            run_id=run_id,
+            pipeline="p",
+            status="failed",
+            categories=frozenset({PruneCategory.FAILED}),
+            age=timedelta(days=1),
+            path=runs_dir / f"{run_id}.json",
+        )
+        for run_id in run_ids
+    ]
+    return PrunePlan(candidates, [])
+
+
+class TestApplyPrune:
+    def test_removes_state_and_reports_and_keeps_other_runs(self, tmp_path: Path) -> None:
+        gone = _write_run_with_reports(tmp_path, "run-a")
+        kept = _write_run_with_reports(tmp_path, "run-ab")
+
+        result = apply_prune(_plan_for(tmp_path, "run-a"), tmp_path)
+
+        assert result == PruneResult(removed=1, failed=0)
+        assert not any(p.exists() for p in gone)
+        assert all(p.exists() for p in kept)
+
+    def test_missing_file_is_not_a_failure(self, tmp_path: Path) -> None:
+        result = apply_prune(_plan_for(tmp_path, "run-never-there"), tmp_path)
+
+        assert result == PruneResult(removed=1, failed=0)
+
+    def test_undeletable_file_logs_error_and_continues(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        stuck = _write_run_with_reports(tmp_path, "run-stuck")
+        # A directory where the state file should be: unlink() raises an OSError.
+        stuck[0].unlink()
+        stuck[0].mkdir()
+        (stuck[0] / "inside").write_text("x")
+        free = _write_run_with_reports(tmp_path, "run-free")
+
+        with caplog.at_level(logging.ERROR, logger="squadron.pipeline.run_prune"):
+            result = apply_prune(_plan_for(tmp_path, "run-stuck", "run-free"), tmp_path)
+
+        assert result == PruneResult(removed=1, failed=1)
+        assert stuck[0].exists()
+        assert not any(p.exists() for p in stuck[1:])  # its reports were still attempted
+        assert not any(p.exists() for p in free)
+        errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert len(errors) == 1 and str(stuck[0]) in errors[0].getMessage()
+
+    def test_never_deletes_outside_the_runs_dir(self, tmp_path: Path) -> None:
+        outside = tmp_path / "elsewhere" / "run-x.json"
+        outside.parent.mkdir()
+        outside.write_text("x")
+        runs_dir = tmp_path / "runs"
+        runs_dir.mkdir()
+        plan = PrunePlan(
+            [dataclasses.replace(_plan_for(runs_dir, "run-x").candidates[0], path=outside)], []
+        )
+
+        result = apply_prune(plan, runs_dir)
+
+        assert result.failed == 1
+        assert outside.exists()

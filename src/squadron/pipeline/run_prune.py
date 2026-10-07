@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.pipeline.batch_report import report_sibling_paths
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.run_listing import DefinitionCache, DefinitionLoader
 from squadron.pipeline.run_liveness import LivenessAssessment, RunLiveness
@@ -193,3 +194,44 @@ def _consider_unreadable(entry: UnreadableRun, now: datetime) -> _Considered:
         path=entry.path,
     )
     return _Considered(candidate, live=False)
+
+
+@dataclass(frozen=True)
+class PruneResult:
+    removed: int  # runs whose state file is gone after the call
+    failed: int  # runs with at least one file that could not be deleted
+
+
+def apply_prune(plan: PrunePlan, runs_dir: Path) -> PruneResult:
+    """Delete each candidate's state file and its report siblings (D9).
+
+    Only paths inside *runs_dir* are touched. A file already gone counts as
+    removed; any other ``OSError`` is logged at ERROR with the path and the
+    rest of the plan still runs.
+    """
+    root = runs_dir.resolve()
+    removed = failed = 0
+    for candidate in plan.candidates:
+        paths = [candidate.path, *report_sibling_paths(runs_dir, candidate.run_id)]
+        deleted = [_delete(path, root) for path in paths]  # attempt every file
+        if all(deleted):
+            removed += 1
+        else:
+            failed += 1
+    return PruneResult(removed, failed)
+
+
+def _delete(path: Path, root: Path) -> bool:
+    if not path.resolve().is_relative_to(root):
+        _logger.error("prune: refusing to delete %s: outside the runs directory %s", path, root)
+        return False
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return True  # already gone: the goal state
+    except OSError:
+        # One undeletable file must not stop the rest of the prune; the caller
+        # counts it and the command exits 1.
+        _logger.exception("prune: cannot delete %s", path)
+        return False
+    return True
