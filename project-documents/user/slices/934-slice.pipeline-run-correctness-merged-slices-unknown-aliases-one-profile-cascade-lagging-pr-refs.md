@@ -42,6 +42,14 @@ Four bugs where a run does the wrong thing instead of failing or finishing clean
 - The base-side fast-forward rule (#131) is unchanged. It moves onto `adjustments` so it stays visible (D9).
 - GitLab or other code hosts. Only the GitHub adapter implements `fetch_pull_request_refs` today.
 
+**Effort and risk, restated.** The plan entry (Effort 3/5, Risk Low) covered four fixes. The design adds four pieces the fixes need:
+- the `cwd` argument on each-sources (D1)
+- unknown review templates failing before the run (D4)
+- one classification helper shared by run, dry-run and explain (D5)
+- `FetchedRange.adjustments` and the code-host log filter (D8, D9)
+
+Revised: **Effort 4/5, Risk Low.** Each piece is local and has its own test, and every ambiguous case fails closed (D1, D6) or fails before the run (D4, D5). The plan entry is updated to match.
+
 ## Dependencies
 
 ### Prerequisites
@@ -59,18 +67,20 @@ Four bugs where a run does the wrong thing instead of failing or finishing clean
 
 ```
 pipeline/git_ops.py            CHANGED  merged_slice_branches()                      (#188)
-pipeline/sources.py            CHANGED  merged slices excluded and count as closed   (#188)
+pipeline/sources.py            CHANGED  sources take cwd; merged slices count as closed (#188)
+pipeline/executor.py           CHANGED  evaluate_each_source(..., cwd=) passes the run's cwd (#188)
+cli/commands/run_dry_run.py    CHANGED  passes cwd to evaluate_each_source (#188)
 pipeline/item_resume.py        CHANGED  dependency check and reconcile use the predicate (#188)
 review/profile_resolution.py   NEW      resolve_review_profile(), review_profile_source() (#184)
 cli/commands/review.py         CHANGED  _resolve_profile and _reject_unknown_alias delegate (#184)
 pipeline/actions/review.py     CHANGED  profile from the shared helper; per-action profile source (#184)
 pipeline/resolver.py           CHANGED  resolve_full(..., profile_source=) per-call override (#184)
-pipeline/classification.py     CHANGED  review candidates use review_profile_source (#175/#184)
-cli/commands/run.py            CHANGED  --dry-run runs the pre-run alias check (#175)
+pipeline/classification.py     CHANGED  one template lookup; review profile source; unknown template pre-run (#175/#184)
+cli/commands/run.py            CHANGED  _classify_for_run shared by run, --explain, --dry-run (#175)
 codehost/refs.py               CHANGED  head fallback, source-naming errors, adjustments (#186)
 codehost/errors.py             CHANGED  PullRequestRefLaggingError; RefMoved message names sources (#186)
 codehost/models.py             CHANGED  RefAdjustment; FetchedRange.adjustments (#186)
-cli/commands/pr.py             CHANGED  no lastResort echo; adjustments printed once (#186)
+cli/commands/pr.py             CHANGED  configure_code_host_logging; adjustments printed once (#186)
 ```
 
 ### Data Flow
@@ -130,7 +140,10 @@ Ancestry alone is not enough. A branch that was entered but never committed to s
 
 `merged_slice_branches(entries, target, cwd) -> set[int]` makes one `for-each-ref` call for branch tips, one `rev-list --first-parent` call, and one `--is-ancestor` call per candidate. A git failure is logged and raises `GitStateUnknownError`. Selection does not guess.
 
-`sources.py` has no `cwd` today. Every `cf` call it makes runs in the process cwd, so the predicate gets that same directory (`os.getcwd()` at the call site). The executor's `effective_cwd` already defaults to it.
+**The repository is the run's `cwd`, passed in, never read from the process.** Sources get no `cwd` today (`(args, cf_client, params)`). D1 widens the each-source contract instead of having a source call `os.getcwd()`, which would be a second definition of "the repository":
+- `SourceFn` gains a keyword `cwd: str`, and `evaluate_each_source(source, params, cf_client, *, cwd)` passes it on. All four registered sources take it. Only `slices_ready_to_implement` uses it.
+- Callers pass the `cwd` they already hold: the executor's `effective_cwd` ([executor.py:1535](../../../src/squadron/pipeline/executor.py#L1535)), item resume's `cwd` ([item_resume.py:289](../../../src/squadron/pipeline/item_resume.py#L289)), and the dry-run renderer ([run_dry_run.py:77](../../../src/squadron/cli/commands/run_dry_run.py#L77)), which gets it from `run()`, the same value `_run_pipeline` would use.
+- `cf` subprocesses still run in the process cwd. `sq run` has no `--cwd` flag, so the two are equal in every CLI path today. The predicate does not check that equality. A future `--cwd` must point the cf client at the same directory, and that is that change's work, not this slice's.
 
 ### D2: #188, the D2 "all tasks checked" row stays
 
@@ -150,13 +163,38 @@ It keeps `sq review`'s order, alias profile included. That order is the publishe
 
 ### D4: #175/#184, the alias check's profile source is per action
 
-`ModelResolver` keeps the run-level `profile_source` for dispatch, summary and compact. `resolve_full` gains a keyword `profile_source: bool | None = None`. `None` uses the run's value, and the review action passes `review_profile_source(...)`. `resolve()` is unchanged. `classify_pipeline`'s `_collect_unknown_alias` takes a `profile_source: bool` from its caller. For `review` actions the caller loads the template named in the action config (after placeholder resolution) and calls `review_profile_source`. An unknown template is already a classification error, so no new failure path is added.
+`ModelResolver` keeps the run-level `profile_source` for dispatch, summary and compact. `resolve_full` gains a keyword `profile_source: bool | None = None`. `None` uses the run's value, and the review action passes `review_profile_source(...)`. `resolve()` is unchanged. `classify_pipeline`'s `_collect_unknown_alias` takes a `profile_source: bool` from its caller. For `review` actions the caller loads the template named in the action config (after placeholder resolution) and calls `review_profile_source`.
+
+**An unknown review template becomes a pre-run error. That is a new failure path.** Today classification tolerates it: `_review_template_model_fallback` ([classification.py:77](../../../src/squadron/pipeline/classification.py#L77)) returns `None` for an unknown name, and the run fails later when the review action raises `KeyError` on template load. Once the profile source depends on the template, an unknown template would quietly mean "no template profile", and the alias check would report a misleading unknown alias. So:
+- One template lookup in classification, `_review_template(action_type, resolved_cfg) -> ReviewTemplate | None`, serves both the model fallback and `review_profile_source`. It raises `UnknownReviewTemplateError(name, close_matches)` when the resolved name has no template.
+- These errors are collected with the alias errors into the single pre-run `ClassificationError` (196 D13's shape), so one run reports every bad name. Message: `unknown review template 'cod'; did you mean: code?`
+- A name that still holds an unresolved placeholder after merging params (filled per `each` item) is skipped before the run, as alias candidates already are. At run time the review action's existing `KeyError` path and the resolver backstop cover it.
+- Any review pipeline that names an unknown template now fails before step 1 instead of at that step. That is the intended change. No built-in pipeline does this (`src/squadron/data/pipelines` names templates only literally). A test loads every built-in pipeline through classification to keep it that way.
 
 Result: a literal model id that `sq review` accepts because `default_review_profile` is set is accepted by a pipeline review step too, and it runs on that profile.
 
 ### D5: #175, `--dry-run` runs the pre-run alias check
 
-The dry-run path calls `classify_pipeline` with the merged params and reports `UnknownModelAliasError` the same way a run does (exit 1, same message, same close matches). A preview is meant to select what a run would, and a dry run is the safe place to catch a typo.
+A preview is meant to select what a run would, and a dry run is the safe place to catch a typo. Today the run path builds its classifier inline ([run.py:322-347](../../../src/squadron/cli/commands/run.py#L322)), `--explain` builds a second copy ([run.py:531-545](../../../src/squadron/cli/commands/run.py#L531)), and `--dry-run` ([run.py:1175](../../../src/squadron/cli/commands/run.py#L1175)) never classifies.
+
+`run.py` gains one helper:
+
+```python
+def _classify_for_run(definition, *, model_override, params, strict) -> PipelineClassification
+```
+
+It owns everything the three paths must agree on:
+- **Policy:** YAML `auth_policy` < `--strict`.
+- **Pool backend:** `DefaultPoolBackend()`. Classification needs it to recognise `pool:` candidates and check pool membership, and it never calls `select()`.
+- **Resolver:** `ModelResolver(cli_override=model_override, pipeline_model=definition.model, pool_backend=…, profile_source=has_profile_param(params))`.
+- **Call:** `classify_pipeline(definition, resolver, pool_backend, policy=…, params=params)`.
+
+It returns the classification or raises `ClassificationError`. Callers:
+- `_run_pipeline_sdk` uses it in place of its inline block, and its own pool backend for the authoritative resolver is unchanged.
+- `--explain` uses it with `explain_params`.
+- `--dry-run` uses it with the params from `_assemble_params` and `_extract_model_override(model, param)`, the same inputs a run gets.
+
+On `ClassificationError`, dry-run prints the run path's message (`Error: Pipeline classification failed — …`) and exits 1 before rendering any step. On success it renders as today. Dry-run gains the `--strict` handling the other two paths already have.
 
 ### D6: #186, the head fallback
 
@@ -185,11 +223,57 @@ The refspec strings are GitHub conventions. `fetch_pull_request_refs` passes the
 
 ### D8: #186, one line per failure
 
-The adapter keeps logging every failure at WARNING (Failure-Mode Enumeration). The duplicate comes from `logging.lastResort`. The code-host commands (`sq pr show`, `sq review pr`, and the other `sq pr` commands that render `CodeHostError`) attach a `NullHandler` to `squadron.codehost` at default verbosity and `-v`. At `-vv` they route it to stderr with a `%(levelname)s %(name)s:` prefix, so a diagnostic record never looks like the operator error. The wiring is one helper next to `render_code_host_error`, called by every such command.
+The adapter keeps logging every failure at WARNING (Failure-Mode Enumeration). The duplicate comes from `logging.lastResort`. The fix suppresses only the records the command itself prints. Every other `squadron.codehost` diagnostic stays visible at every verbosity.
+
+- **Tag.** `codehost/errors.py` defines `RENDERED_BY_CALLER` (one constant, the `extra` key). A codehost log call sets `extra={RENDERED_BY_CALLER: True}` only when the command is guaranteed to print the same fact:
+  - a WARNING logged right before raising a `CodeHostError` (printed by `render_code_host_error`)
+  - a WARNING describing a `RefAdjustment` (printed by D9's adjustment line)
+
+  Nothing else is tagged: other WARNINGs from `remotes`, `worktree`, `metadata_lock`, and so on.
+- **Handler.** `configure_code_host_logging(verbosity)`, next to `render_code_host_error`, attaches one stderr handler to `squadron.codehost`, with format `%(levelname)s %(name)s: %(message)s` and `propagate = False`. It is idempotent like `_configure_agent_logging`. Level: WARNING by default, INFO at `-v`, DEBUG at `-vv`.
+- **Filter.** Below `-vv`, it drops tagged records. At `-vv` it keeps them, so the full diagnostic trail is there when asked for.
+- **Callers.** Every command that renders `CodeHostError` (`sq pr show`, `sq review pr`, and the other `sq pr` subcommands) calls it once, before its first host call.
+
+Effect: at default and `-v`, a failure prints exactly once (the render). An untagged codehost warning prints once with its level and logger prefix, as it already does via `lastResort` but now prefixed. Nothing that is visible today disappears. A test asserts that an untagged WARNING still reaches stderr at default verbosity, and that a tagged one does not.
 
 ### D9: #186, adjustments are data, not log lines
 
-`RefAdjustment(role: RefRole, reported_sha: str, used_sha: str, source: str, reason: str)` goes on `FetchedRange.adjustments: tuple[RefAdjustment, ...]`. It covers the #131 base fast-forward and the #186 head fallback. The command prints each adjustment once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`. D8 hides codehost log records below `-vv`, so without this the #131 note would disappear at default verbosity.
+`RefAdjustment(role: RefRole, reported_sha: str, used_sha: str, source: str, reason: str)` goes on `FetchedRange.adjustments: tuple[RefAdjustment, ...]`. It covers the #131 base fast-forward and the #186 head fallback. The command prints each adjustment once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`. The matching WARNING is tagged under D8, so each adjustment prints once at default verbosity. The PR review artifact gets the head sha that was actually reviewed.
+
+### D10: Failure modes of the new I/O paths
+
+Every new git or network call has a bound, an observable signal, and a test asserting that signal. Bounds:
+- `run_git` (pipeline): `GIT_COMMAND_TIMEOUT_SECONDS`; it returns `None` on a timeout or a spawn failure.
+- `refs.py` fetches: `GIT_FETCH_TIMEOUT_SECONDS`.
+- `refs.py` queries: `GIT_QUERY_TIMEOUT_SECONDS`.
+
+**#188 predicate** (`merged_slice_branches`, local git):
+
+| Call | Hangs / times out | Git refuses (non-zero) | Observable signal | Result |
+|---|---|---|---|---|
+| `for-each-ref refs/heads` (tips) | `None` | non-zero exit | ERROR via `logger.exception`, naming the command and stderr | raises `GitStateUnknownError` |
+| `rev-list --first-parent <target>` | `None` | non-zero (e.g. target missing) | same | raises `GitStateUnknownError` |
+| `merge-base --is-ancestor` per candidate | `None` | exit not in (0, 1) | same | raises `GitStateUnknownError` |
+| branch absent from `for-each-ref` | — | — | none (a normal answer) | not merged; cf decides |
+| branch merged, cf says open | — | — | WARNING naming slice, branch, target, cf status | treated as complete |
+
+When the source raises, the `each` step fails before any item runs. That failure is logged and reported the way a cf failure in a source is today. Item resume surfaces it as the resume's error and changes no report record.
+
+**#186 head fallback** (network):
+
+| Call | Hangs / times out | Peer disconnects or host refuses | Observable signal | Result |
+|---|---|---|---|---|
+| `fetch <remote> +<sha>:<head_local>` | `ProcessTimedOutError` caught for this attempt; recorded as `timed out after Ns` | non-zero exit (e.g. `not our ref`, `upload-pack: not our ref`); stderr recorded | DEBUG per attempt; reason carried into the next step | next fallback |
+| `fetch <remote> +refs/heads/<head_ref>:<head_local>` | same | same | same | verify, or raise |
+| `head_local` after a partial or failed fetch | — | ref left at the stale sha | verification against the API head sha | stale sha never reviewed |
+| all attempts fail | — | — | WARNING (tagged, D8) plus a single rendered `PullRequestRefLaggingError` naming each attempt and its reason | exit 1 |
+| fallback succeeds | — | — | dim adjustment line (D9) plus a tagged WARNING | review proceeds |
+
+`ProcessRunner.run` raises `ProcessTimedOutError` on timeout. `refs.py` catches it nowhere today, so even the primary `_fetch` timing out escapes `sq review pr` as a traceback instead of a rendered `CodeHostError`. The slice handles both cases:
+- The primary fetch converts the timeout to the existing `HostCommandTimeoutError`, as `github_cli.py:504` does for `gh` calls.
+- A fallback attempt catches it and records it as that attempt's reason.
+
+The fallback adds no new runner method. Tests drive each row through the fake `ProcessRunner`: timeout, `not our ref`, a branch whose fetched sha disagrees, and success.
 
 ## Integration Points
 
@@ -208,13 +292,17 @@ The adapter keeps logging every failure at WARNING (Failure-Mode Enumeration). T
 - **#188:** In a plan where slice A's branch is merged into the target with `--no-ff` and its tasks are unchecked, `cf.slices_ready_to_implement` does not return A, does not flag A's dependents for A, and logs one WARNING naming A, its branch, the target and cf's status.
 - **#188:** Item resume of a dependent of A runs (no `dependency A not complete`). Item resume of A itself reconciles to PASSED.
 - **#188:** A slice branch entered but with no commits, a missing branch, or a fast-forward-merged branch is not treated as merged.
-- **#188:** A git failure in the predicate raises `GitStateUnknownError`. It never returns an empty set silently.
+- **#188:** A git failure or timeout in the predicate logs at ERROR and raises `GitStateUnknownError`; it never returns an empty set silently (D10 rows, one test each).
+- **#188:** The predicate reads the `cwd` handed to the source; a test runs the source with a `cwd` different from the process cwd and gets that repository's answer.
 - **#184:** A pipeline `review:` step with no `profile` param, on a template that declares `profile:`, runs on that profile. With neither, it runs on `default_review_profile` when that is set. `sq review` and the pipeline choose the same profile for the same template, model and config (a parametrized parity test over every `ReviewProfileSource`).
 - **#175/#184:** A literal non-alias model id with `default_review_profile` set is accepted by both `sq review` and a pipeline review step. With no profile source on either path, both reject it with the same message and close matches.
+- **#175/#184:** A pipeline review step naming an unknown template fails before step 1 with `unknown review template '…'; did you mean: …?`, collected with any alias errors into one message. Every built-in pipeline still classifies cleanly.
+- **#175:** `--dry-run`, `--explain` and a real run all classify through `_classify_for_run`; `--dry-run --strict` applies the strict policy.
 - **#175:** `sq run review 931 --model glm-flash-low. --dry-run` exits 1 with `unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low?…`. A real run fails before step 1, and the slot's existing review artifact is byte-identical afterwards.
 - **#186:** When `refs/pull/N/head` lags and the API head sha is fetchable, the review runs on the API head sha and prints one adjustment line.
 - **#186:** When nothing yields the API head sha, `PullRequestRefLaggingError` names every source tried with its sha or failure, and gives the hint. A head that truly moved raises `RefMovedSinceResolutionError` naming both sources.
-- **#186:** At default verbosity and `-v`, a `CodeHostError` appears on stderr exactly once. At `-vv` the WARNING record also appears, prefixed with level and logger name.
+- **#186:** At default verbosity and `-v`, a `CodeHostError` appears on stderr exactly once. At `-vv` the tagged WARNING record also appears, prefixed with level and logger name. An untagged codehost WARNING appears at every verbosity.
+- **#186:** A fetch timeout, primary or fallback, never escapes as a traceback: the primary raises `HostCommandTimeoutError`; a fallback timeout is a recorded attempt reason (D10).
 
 ### Technical Requirements
 - Tests for each item above. The #188 predicate is tested against real temporary git repositories (merged `--no-ff`, fast-forward, empty branch, missing branch, git failure). The #186 cases use a fake `ProcessRunner` with a lagging `refs/pull` fixture shaped like the issue (PR ref one commit behind, branch and API at head).
