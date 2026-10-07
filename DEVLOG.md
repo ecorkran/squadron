@@ -12,6 +12,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Slice 174: task breakdown complete (Phase 5)
+
+- **Tasks:** `user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md` (42 tasks, 511 lines, one file; overrun under 100 so no split). Parts: spike and baseline; `RunObserver` refactor (no behaviour change); schema v5, `run_liveness`, `RunHeartbeat`; foreground stall (`DispatchStalledError`); wait and listing; `cli/columns.py` and both listings; `pipelines show` and `resolve_pipeline`; `run_prune` and `sq runs prune`; docs, issue, walkthrough.
+- **Notes:** Task 2 (SDK interrupt spike, state-write threading check) gates Part C and D5; no merge task, per the Phase 5 guide.
+- **Next:** PM approval, then Phase 6 on branch `174-slice.run-liveness-stall-bounds-pruning-and-readable-listings`.
+
 ### Slice 174: slice design complete (Phase 4)
 
 - **Design:** `user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md`. RunState schema v5 (owner PID/host/interval, heartbeat, `active_step`, `active_item`, `progress_at`); `run_liveness.assess_liveness` (PID or stale heartbeat convicts; `orphaned` derived, never persisted); every SDK run, resumed runs included, is claimed as `running`; `sq runs wait` exit 8 for orphaned. Foreground idle bound `pipeline.foreground_idle_timeout_s` (1800): interrupt, bounded drain, `DispatchStalledError`; the session stays usable only when the interrupt completes. `sq runs prune` (categories, preview unless `--yes`, paused and live protected), `cli/columns.py` fitter (cf algorithm, non-shrinkable columns), one unavailable-pipeline summary line, plain `sq pipelines list`, `sq pipelines show [--path]`.
