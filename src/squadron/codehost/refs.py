@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 
 from squadron.codehost.errors import (
+    RENDERED_BY_CALLER,
     NoMergeBaseError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
@@ -74,6 +75,7 @@ def fetch_and_range(
         ref=base_local,
         role=RefRole.BASE,
         expected=expected_base_sha,
+        source=base_refspec_source,
         accept_fast_forward=True,
     )
     head_sha = _verify(
@@ -82,6 +84,7 @@ def fetch_and_range(
         ref=head_local,
         role=RefRole.HEAD,
         expected=expected_head_sha,
+        source=head_refspec_source,
         accept_fast_forward=False,
     )
 
@@ -153,6 +156,7 @@ def _verify(
     ref: str,
     role: RefRole,
     expected: str,
+    source: str,
     accept_fast_forward: bool,
 ) -> str:
     """Resolve ``ref`` and confirm it is the sha the host reported.
@@ -179,8 +183,16 @@ def _verify(
             actual,
         )
         return actual
-    _logger.warning("%s moved since resolution: expected %s, found %s", role.value, expected, actual)
-    raise RefMovedSinceResolutionError(role, expected, actual)
+    _logger.warning(
+        "%s moved since resolution: expected %s, found %s",
+        role.value,
+        expected,
+        actual,
+        extra={RENDERED_BY_CALLER: True},
+    )
+    raise RefMovedSinceResolutionError(
+        role, expected, actual, expected_source="host API", actual_source=source
+    )
 
 
 def _is_ancestor(runner: ProcessRunner, *, cwd: str, ancestor: str, descendant: str) -> bool:

@@ -1,6 +1,6 @@
 """The code-host error hierarchy.
 
-Nineteen classes across the design's fifteen error-table rows — three rows group
+Twenty classes across the design's fifteen error-table rows — three rows group
 more than one class. Every failure path raises one of these, logs once at
 WARNING or ERROR with structured fields before raising, and exits 1 through the
 CLI. There is no silent path.
@@ -14,6 +14,17 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from squadron.codehost.models import RefRole
+
+#: ``extra`` key on a log record the command prints itself as a rendered error or
+#: adjustment line. The code-host log filter drops tagged records below ``-vv``,
+#: so each failure prints once.
+RENDERED_BY_CALLER = "rendered_by_caller"
+
+_SHA_DISPLAY_LENGTH = 7
+
+
+def _short(sha: str) -> str:
+    return f"{sha[:_SHA_DISPLAY_LENGTH]}…"
 
 
 class CodeHostError(Exception):
@@ -108,7 +119,12 @@ class RefNotFetchableError(CodeHostError):
 
 
 class RefMovedSinceResolutionError(CodeHostError):
-    """A ref changed between resolution and fetch, invalidating the range."""
+    """A ref changed between resolution and fetch, invalidating the range.
+
+    ``expected_source`` and ``actual_source`` name where each sha came from (for
+    example ``host API`` and ``refs/pull/49/head``), so the message says which
+    two readings disagree.
+    """
 
     def __init__(
         self,
@@ -116,15 +132,52 @@ class RefMovedSinceResolutionError(CodeHostError):
         expected: str,
         actual: str,
         *,
-        fix_hint: str | None = None,
+        expected_source: str,
+        actual_source: str,
+        fix_hint: str | None = "Rerun to resolve the pull request again.",
     ) -> None:
         super().__init__(
-            f"{role.value} moved since resolution: expected {expected}, found {actual}",
+            f"{role.value} moved since resolution: {expected_source} reported {_short(expected)}, "
+            f"{actual_source} fetched {_short(actual)}",
             fix_hint=fix_hint,
         )
         self.role = role
         self.expected = expected
         self.actual = actual
+        self.expected_source = expected_source
+        self.actual_source = actual_source
+
+
+class PullRequestHeadUnavailableError(CodeHostError):
+    """The host's API head commit could not be fetched from any source.
+
+    Raised when the pull-request ref and the API disagree and the API head is
+    not obtainable, so whether the ref merely lags is unknown. ``attempts`` pairs
+    each source tried with its reason for failing.
+    """
+
+    def __init__(
+        self,
+        api_sha: str,
+        pr_ref: str,
+        pr_ref_sha: str,
+        remote_name: str,
+        attempts: Sequence[tuple[str, str]],
+    ) -> None:
+        tried = "; ".join(f"{source}: {reason}" for source, reason in attempts)
+        super().__init__(
+            f"pull request head {_short(api_sha)} (host API) could not be fetched; "
+            f"{pr_ref} on {remote_name} is {_short(pr_ref_sha)}; {tried}",
+            fix_hint=(
+                "The host's pull-request ref and its API disagree, and the API head is not "
+                "fetchable from origin yet. Rerun later, or push the head branch to a remote "
+                "this checkout can fetch."
+            ),
+        )
+        self.role = RefRole.HEAD
+        self.api_sha = api_sha
+        self.pr_ref_sha = pr_ref_sha
+        self.attempts = tuple(attempts)
 
 
 class NoMergeBaseError(CodeHostError):

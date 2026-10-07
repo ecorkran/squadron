@@ -39,6 +39,7 @@ from squadron.codehost.errors import (
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
     PullRequestCreationRejectedError,
+    PullRequestHeadUnavailableError,
     PullRequestNotFoundError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
@@ -305,7 +306,7 @@ def test_enterprise_run_carries_the_enterprise_hostname(
 # The design's test_errors_observable.py. Placement deviation, deliberate: it
 # lives here rather than under tests/codehost/ because exit codes are only
 # observable through the CLI, and the criterion couples error type, log level,
-# and exit code in a single assertion. The count is the check — all nineteen.
+# and exit code in a single assertion. The count is the check — all twenty.
 
 _ALL_ERROR_CLASSES = [
     AmbiguousBranchPullRequestsError,
@@ -322,6 +323,7 @@ _ALL_ERROR_CLASSES = [
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
     PullRequestCreationRejectedError,
+    PullRequestHeadUnavailableError,
     PullRequestNotFoundError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
@@ -337,7 +339,7 @@ def test_the_error_table_covers_every_subclass() -> None:
         for obj in vars(errors_module).values()
         if isinstance(obj, type) and issubclass(obj, CodeHostError) and obj is not CodeHostError
     }
-    assert len(_ALL_ERROR_CLASSES) == 19
+    assert len(_ALL_ERROR_CLASSES) == 20
     assert set(_ALL_ERROR_CLASSES) == declared
 
 
@@ -346,7 +348,13 @@ def _instance(error_class: type[CodeHostError]) -> CodeHostError:
     if error_class is HostCommandTimeoutError:
         return HostCommandTimeoutError(["gh", "api"], 30.0)
     if error_class is RefMovedSinceResolutionError:
-        return RefMovedSinceResolutionError(RefRole.BASE, "aaa", "bbb")
+        return RefMovedSinceResolutionError(
+            RefRole.BASE, "aaa", "bbb", expected_source="host API", actual_source="refs/heads/main"
+        )
+    if error_class is PullRequestHeadUnavailableError:
+        return PullRequestHeadUnavailableError(
+            "aaa", "refs/pull/83/head", "bbb", "origin", [("fetch by sha", "not our ref")]
+        )
     if error_class is RefNotFetchableError:
         return RefNotFetchableError(RefRole.HEAD, "head could not be fetched")
     if error_class is HostRequestRejectedError:

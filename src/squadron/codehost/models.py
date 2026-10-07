@@ -113,6 +113,22 @@ class LocalRemote:
 
 
 @dataclass(frozen=True)
+class RefAdjustment:
+    """A place where the sha reviewed differs from the sha the host first reported.
+
+    Recorded as data so the command prints it once, and the review artifact can
+    name the sha actually reviewed. ``source`` is where ``used_sha`` was obtained
+    (a ref name, or a description such as ``fetched by sha``).
+    """
+
+    role: RefRole
+    reported_sha: str
+    used_sha: str
+    source: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class FetchedRange:
     """The result of fetching a pull request's base and head."""
 
@@ -123,6 +139,7 @@ class FetchedRange:
     merge_base: str
     diff_range: str
     changed_paths: tuple[str, ...]
+    adjustments: tuple[RefAdjustment, ...] = ()
 
 
 @dataclass(frozen=True)

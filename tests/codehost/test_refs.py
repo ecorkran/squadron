@@ -19,7 +19,9 @@ from pathlib import Path
 import pytest
 
 from squadron.codehost.errors import (
+    RENDERED_BY_CALLER,
     NoMergeBaseError,
+    PullRequestHeadUnavailableError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
@@ -347,3 +349,58 @@ def test_real_git_base_merged_after_resolution(tmp_path: Path) -> None:
     _git(remote, "reset", "-q", "--hard", reported_base)
     with pytest.raises(RefMovedSinceResolutionError):
         fetch(merged_base)
+
+
+# --- Source-naming errors and adjustments (slice 934 D7, D9) -------------------
+
+
+def test_moved_error_message_names_each_source_and_sha() -> None:
+    error = RefMovedSinceResolutionError(
+        RefRole.HEAD,
+        "ae1cbf2" + "0" * 33,
+        "d3008a6" + "0" * 33,
+        expected_source="host API",
+        actual_source="refs/pull/49/head",
+    )
+    assert str(error) == (
+        "head moved since resolution: host API reported ae1cbf2…, refs/pull/49/head fetched d3008a6…"
+    )
+    assert error.fix_hint == "Rerun to resolve the pull request again."
+    assert (error.expected_source, error.actual_source) == ("host API", "refs/pull/49/head")
+
+
+def test_head_unavailable_error_names_every_attempt_and_has_a_hint() -> None:
+    error = PullRequestHeadUnavailableError(
+        "ae1cbf2" + "0" * 33,
+        "refs/pull/49/head",
+        "d3008a6" + "0" * 33,
+        "origin",
+        [("fetch by sha", "not our ref"), ("refs/heads/dev/jane", "sha did not match")],
+    )
+    assert str(error) == (
+        "pull request head ae1cbf2… (host API) could not be fetched; "
+        "refs/pull/49/head on origin is d3008a6…; fetch by sha: not our ref; "
+        "refs/heads/dev/jane: sha did not match"
+    )
+    assert error.role is RefRole.HEAD
+    assert error.fix_hint is not None and "Rerun later" in error.fix_hint
+
+
+def test_adjustments_default_to_empty() -> None:
+    assert _run(FakeProcessRunner(_script())).adjustments == ()
+
+
+def test_a_base_side_move_through_verify_names_its_sources(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    moved = "9999999999999999999999999999999999999999"
+    runner = FakeProcessRunner(_script_with_moved_base(moved, _fail("")))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError) as excinfo:
+            _run(runner)
+
+    assert excinfo.value.expected_source == "host API"
+    assert excinfo.value.actual_source == "refs/heads/main"
+    assert "refs/heads/main fetched 9999999…" in str(excinfo.value)
+    moved_records = [r for r in caplog.records if "moved since resolution" in r.getMessage()]
+    assert moved_records and getattr(moved_records[0], RENDERED_BY_CALLER) is True
