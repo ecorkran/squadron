@@ -197,10 +197,10 @@ status: in_progress
 
 ## Task 19 — Base fast-forward onto `adjustments` (D9)
 
-- [ ] The #131 base fast-forward in `refs.py` records a `RefAdjustment` (role BASE) instead of a log-only note. Its WARNING stays untagged here: Task 25a tags it in the same commit that prints the adjustment line, so no run ever has the tag without the line
-- [ ] Tests: existing #131 tests pass; the fast-forward case returns one adjustment with the reported and used shas
-  - [ ] Success: tests pass
-- [ ] Commit: `refactor: record base fast-forward as a ref adjustment`
+- [x] The #131 base fast-forward in `refs.py` records a `RefAdjustment` (role BASE) instead of a log-only note. Its WARNING stays untagged here: Task 25a tags it in the same commit that prints the adjustment line, so no run ever has the tag without the line
+- [x] Tests: existing #131 tests pass; the fast-forward case returns one adjustment with the reported and used shas
+  - [x] Success: tests pass
+- [x] Commit: `refactor: record base fast-forward as a ref adjustment`
 
 ## Task 20 — Primary fetch timeout (D10)
 
