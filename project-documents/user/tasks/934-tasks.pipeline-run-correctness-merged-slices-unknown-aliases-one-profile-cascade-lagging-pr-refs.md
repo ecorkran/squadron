@@ -186,14 +186,14 @@ status: in_progress
 
 ## Task 18 — Models and errors (D7, D8, D9)
 
-- [ ] `codehost/models.py`: add `RefAdjustment(role, reported_sha, used_sha, source, reason)` and `FetchedRange.adjustments: tuple[RefAdjustment, ...]` (default empty)
-- [ ] `codehost/errors.py`: add `RENDERED_BY_CALLER` (the `extra` key constant) and `PullRequestHeadUnavailableError` (a `CodeHostError`, role HEAD) with the D7 message and hint
-- [ ] `RefMovedSinceResolutionError` gains required keyword-only `expected_source` and `actual_source` (no defaults, so no silent label), the D7 message, and hint `Rerun to resolve the pull request again.`
-  - [ ] Update its one existing call site, `refs._verify` (it serves both base and head): `expected_source="host API"`, `actual_source` the ref that was read (e.g. `refs/pull/49/head`, or the base ref). The `_verify` WARNING is tagged `extra={RENDERED_BY_CALLER: True}`
-  - [ ] Update the existing constructions and message assertions in `tests/codehost/test_refs.py` (grep `RefMovedSinceResolutionError`) to the new signature and message
-- [ ] Tests (`tests/codehost/`): message text names each source and sha; hints present; `adjustments` defaults to `()`; a base-side move through `_verify` names its sources
-  - [ ] Success: tests pass; existing `test_refs.py` cases updated, none deleted
-- [ ] Commit: `feat: add RefAdjustment and source-naming code host errors`
+- [x] `codehost/models.py`: add `RefAdjustment(role, reported_sha, used_sha, source, reason)` and `FetchedRange.adjustments: tuple[RefAdjustment, ...]` (default empty)
+- [x] `codehost/errors.py`: add `RENDERED_BY_CALLER` (the `extra` key constant) and `PullRequestHeadUnavailableError` (a `CodeHostError`, role HEAD) with the D7 message and hint
+- [x] `RefMovedSinceResolutionError` gains required keyword-only `expected_source` and `actual_source` (no defaults, so no silent label), the D7 message, and hint `Rerun to resolve the pull request again.`
+  - [x] Update its one existing call site, `refs._verify` (it serves both base and head): `expected_source="host API"`, `actual_source` the ref that was read (e.g. `refs/pull/49/head`, or the base ref). The `_verify` WARNING is tagged `extra={RENDERED_BY_CALLER: True}`
+  - [x] Update the existing constructions and message assertions in `tests/codehost/test_refs.py` (grep `RefMovedSinceResolutionError`) to the new signature and message
+- [x] Tests (`tests/codehost/`): message text names each source and sha; hints present; `adjustments` defaults to `()`; a base-side move through `_verify` names its sources
+  - [x] Success: tests pass; existing `test_refs.py` cases updated, none deleted
+- [x] Commit: `feat: add RefAdjustment and source-naming code host errors`
 
 ## Task 19 — Base fast-forward onto `adjustments` (D9)
 
