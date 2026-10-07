@@ -21,6 +21,8 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
     StepClass,
     StepClassification,
+    _review_template,  # pyright: ignore[reportPrivateUsage]
+    _review_template_model_fallback,  # pyright: ignore[reportPrivateUsage]
     classify_pipeline,
 )
 from squadron.pipeline.intelligence.pools.models import (
@@ -943,3 +945,32 @@ def test_label_and_classifier_agree(
     row = result.steps[0]
     expected = row.resolved_alias or f"pool:{row.pool_name}"
     assert action_model_label(resolver, "dispatch", config, None) == f"model={expected}"
+
+
+def test_review_template_returns_a_known_template() -> None:
+    template = _make_template(model="minimax")
+    with patch("squadron.review.templates.get_template", return_value=template):
+        assert _review_template("review", {"template": "code"}) is template
+
+
+def test_review_template_returns_none_for_an_unknown_name_without_raising() -> None:
+    assert _review_template("review", {"template": "no-such-template-name"}) is None
+
+
+@pytest.mark.parametrize(
+    ("action_type", "config"),
+    [("dispatch", {"template": "code"}), ("review", {}), ("review", {"template": 3})],
+)
+def test_review_template_returns_none_when_there_is_no_template_to_read(
+    action_type: str, config: dict[str, object]
+) -> None:
+    assert _review_template(action_type, config) is None
+
+
+def test_model_fallback_is_unchanged_for_known_and_unknown_templates() -> None:
+    with patch(
+        "squadron.review.templates.get_template",
+        return_value=_make_template(model="minimax"),
+    ):
+        assert _review_template_model_fallback("review", {"template": "code"}) == "minimax"
+    assert _review_template_model_fallback("review", {"template": "no-such-template-name"}) is None

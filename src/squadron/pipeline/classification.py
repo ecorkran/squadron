@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
     from squadron.pipeline.models import PipelineDefinition, StepConfig
     from squadron.pipeline.resolver import ModelResolver
+    from squadron.review.templates import ReviewTemplate
 
 # The pipeline param that names a profile; its presence lets a literal model id through.
 PROFILE_PARAM = "profile"
@@ -74,6 +75,25 @@ PERSISTENT_SESSION_STEP_TYPES = frozenset({"dispatch", "summary", "compact"})
 _ONE_SHOT_STEP_TYPES = frozenset({"review"})
 
 
+def _review_template(action_type: str, resolved_cfg: dict[str, object]) -> ReviewTemplate | None:
+    """Return the review step's template, or None when there is none to read.
+
+    Never raises: an unknown name, a non-review action, or a ``template`` that is
+    not a string all return None. The labelling path reaches this, so it must not
+    fail; the pre-run check that rejects unknown names is ``_require_review_template``.
+    """
+    if action_type != "review":
+        return None
+    template_name = resolved_cfg.get("template")
+    if not isinstance(template_name, str):
+        return None
+
+    from squadron.review.templates import get_template, load_all_templates
+
+    load_all_templates()
+    return get_template(template_name)
+
+
 def _review_template_model_fallback(action_type: str, resolved_cfg: dict[str, object]) -> str | None:
     """Return a review template's declared default ``model:``, if any.
 
@@ -85,16 +105,7 @@ def _review_template_model_fallback(action_type: str, resolved_cfg: dict[str, ob
     will raise a false ``ClassificationError`` for pipelines that rely
     solely on a template's default model (slice 303 F002).
     """
-    if action_type != "review":
-        return None
-    template_name_raw = resolved_cfg.get("template")
-    if not isinstance(template_name_raw, str):
-        return None
-
-    from squadron.review.templates import get_template, load_all_templates
-
-    load_all_templates()
-    template = get_template(template_name_raw)
+    template = _review_template(action_type, resolved_cfg)
     return template.model if template is not None else None
 
 
