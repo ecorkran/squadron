@@ -137,3 +137,52 @@ async def test_resume_hands_the_source_the_run_cwd(
     monkeypatch.setattr(item_resume, "evaluate_each_source", recording)
     await _resume(project, "401", AsyncMock())
     assert seen == [str(project.repo)]
+
+
+@pytest.mark.asyncio
+async def test_a_dependency_merged_in_git_does_not_block_while_cf_still_reports_it_open(
+    project: Project,
+) -> None:
+    run_test_git(project.repo, "merge", "-q", "--no-ff", "-m", "merge: slice 401 — S401", branch(401))
+    assert project.status[401] == "not_started"
+    body = AsyncMock()
+
+    outcome = await _resume(project, "402", body)
+
+    body.assert_awaited_once()
+    assert "not complete" not in outcome.message
+
+
+@pytest.mark.asyncio
+async def test_a_merged_slice_reconciles_to_passed_whatever_cf_reports(project: Project) -> None:
+    run_test_git(project.repo, "merge", "-q", "--no-ff", "-m", "merge: slice 401 — S401", branch(401))
+    assert project.status[401] == "not_started"
+    body = AsyncMock()
+
+    outcome = await _resume(project, "401", body)
+
+    assert outcome.exit is ResumeExit.RESOLVED
+    body.assert_not_awaited()
+    assert project.record("401").reason == RECONCILED_REASON
+
+
+@pytest.mark.asyncio
+async def test_a_predicate_failure_halts_and_leaves_the_report_unchanged(
+    project: Project, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from squadron.pipeline import item_resume
+    from squadron.pipeline.git_ops import GitStateUnknownError
+
+    def failing(*_: object, **__: object) -> set[int]:
+        raise GitStateUnknownError("cannot read the history of main (git rev-list): boom")
+
+    monkeypatch.setattr(item_resume, "merged_slice_branches", failing)
+    before = project.report_path.read_bytes()
+
+    with caplog.at_level(logging.ERROR, logger="squadron.pipeline.item_resume"):
+        outcome = await _resume(project, "402", AsyncMock())
+
+    assert outcome.exit is ResumeExit.HALTED
+    assert "cannot read the history of main" in outcome.message
+    assert project.report_path.read_bytes() == before
+    assert any(r.levelno == logging.ERROR for r in caplog.records)

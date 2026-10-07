@@ -39,6 +39,7 @@ from squadron.pipeline.executor import evaluate_each_source
 from squadron.pipeline.git_ops import (
     GitEnvironmentError,
     current_branch,
+    merged_slice_branches,
     read_integration_target,
     slice_branch_name,
     verify_git_state,
@@ -50,7 +51,6 @@ from squadron.pipeline.sources import CfSliceStatus
 from squadron.pipeline.state import SchemaVersionError, StateManager
 from squadron.pipeline.steps import StepTypeName
 from squadron.pr.branch import parse_slice_branch
-from squadron.review.git_utils import run_git
 
 _logger = logging.getLogger(__name__)
 
@@ -152,7 +152,7 @@ async def _resume_locked(
     if item is None:  # reconciled
         return _outcome(run, request.index)
     rerun = ItemRerun(item, run.report, request.decision, datetime.now(UTC).isoformat())
-    if (reason := _open_dependencies(item, run.report.plan, cf_client)) is not None:
+    if (reason := _open_dependencies(item, run.report.plan, cf_client, target, cwd)) is not None:
         rerun.replace(BatchItemRecord.from_item(item, 0, [], reason, flag_kind=FlagKind.DEPENDENCY))
         run.report.write(run.report_path.parent)
         return _outcome(run, request.index)
@@ -294,13 +294,15 @@ async def _select_item(
         (e for e in cf_client.list_slices(run.report.plan) if str(e.index) == request.index), None
     )
     status = entry.status if entry is not None else "not in the plan"
-    if entry is not None and status == CfSliceStatus.COMPLETE and entry.design_file:
-        branch = slice_branch_name(entry.index, entry.design_file)
-        merged = run_git(["merge-base", "--is-ancestor", branch, target], cwd=cwd)
-        if merged is not None and merged.returncode == 0:
+    # Git is the record of a merged slice, whatever cf says (#188): an item the source
+    # no longer selects because it was merged is reconciled, never rejected.
+    if entry is not None and entry.design_file:
+        if entry.index in merged_slice_branches([entry], target, cwd=cwd):
             _reconcile(request, run, entry.name)
             return None
-        status = f"{status} but {branch} is not merged into {target}"
+        if status == CfSliceStatus.COMPLETE:
+            branch = slice_branch_name(entry.index, entry.design_file)
+            status = f"{status} but {branch} is not merged into {target}"
     raise _Stop(
         ResumeExit.REJECTED,
         f"item {request.index} is no longer selected by {source}: status {status}",
@@ -324,14 +326,24 @@ def _reconcile(request: ResumeRequest, run: _Run, name: str) -> None:
     run.report.write(run.report_path.parent)
 
 
-def _open_dependencies(item: dict[str, object], plan: str | None, cf_client: Any) -> str | None:
-    """Why a lone item must not run: in-plan dependencies not complete on the target."""
+def _open_dependencies(
+    item: dict[str, object], plan: str | None, cf_client: Any, target: str, cwd: str
+) -> str | None:
+    """Why a lone item must not run: in-plan dependencies complete in neither cf nor git.
+
+    A dependency merged into the target counts as complete even when cf still reports
+    it open (#188); a git failure propagates and halts the resume.
+    """
     raw = item.get("dependencies")
     dependencies = (
         [d for d in cast(list[object], raw) if isinstance(d, int)] if isinstance(raw, list) else []
     )
     if not dependencies:
         return None
-    status = {e.index: e.status for e in cf_client.list_slices(plan)}
-    open_ = [d for d in dependencies if d in status and status[d] != CfSliceStatus.COMPLETE]
+    entries = {e.index: e for e in cf_client.list_slices(plan)}
+    open_entries = [
+        entries[d] for d in dependencies if d in entries and entries[d].status != CfSliceStatus.COMPLETE
+    ]
+    merged = merged_slice_branches(open_entries, target, cwd=cwd)
+    open_ = [e.index for e in open_entries if e.index not in merged]
     return "; ".join(f"dependency {d} not complete" for d in open_) or None
