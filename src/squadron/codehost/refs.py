@@ -20,7 +20,7 @@ from squadron.codehost.errors import (
     RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
-from squadron.codehost.models import FetchedRange, RefRole
+from squadron.codehost.models import FetchedRange, RefAdjustment, RefRole
 from squadron.core.process_runner import ProcessRunner
 
 _logger = logging.getLogger(__name__)
@@ -69,7 +69,7 @@ def fetch_and_range(
         ),
     )
 
-    base_sha = _verify(
+    base_sha, base_adjustment = _verify(
         runner,
         cwd=cwd,
         ref=base_local,
@@ -78,7 +78,7 @@ def fetch_and_range(
         source=base_refspec_source,
         accept_fast_forward=True,
     )
-    head_sha = _verify(
+    head_sha, _ = _verify(
         runner,
         cwd=cwd,
         ref=head_local,
@@ -102,6 +102,7 @@ def fetch_and_range(
         merge_base=merge_base,
         diff_range=diff_range,
         changed_paths=_changed_paths(runner, cwd=cwd, diff_range=diff_range),
+        adjustments=(base_adjustment,) if base_adjustment is not None else (),
     )
 
 
@@ -158,8 +159,11 @@ def _verify(
     expected: str,
     source: str,
     accept_fast_forward: bool,
-) -> str:
+) -> tuple[str, RefAdjustment | None]:
     """Resolve ``ref`` and confirm it is the sha the host reported.
+
+    Returns the sha to use and, when it differs from the reported one, the
+    ``RefAdjustment`` that says so.
 
     With ``accept_fast_forward``, a fetched sha that descends from ``expected``
     passes and is returned in its place. GitHub's ``baseRefOid`` can trail the
@@ -173,7 +177,7 @@ def _verify(
         _logger.warning("%s ref %s is missing after fetch", role.value, ref)
         raise RefNotFetchableError(role, f"{role.value} ref {ref} is missing after fetch")
     if actual == expected:
-        return actual
+        return actual, None
     if accept_fast_forward and _is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
         _logger.warning(
             "%s advanced since resolution: host reported %s, fetched %s (a descendant); "
@@ -182,7 +186,14 @@ def _verify(
             expected,
             actual,
         )
-        return actual
+        adjustment = RefAdjustment(
+            role=role,
+            reported_sha=expected,
+            used_sha=actual,
+            source=source,
+            reason=f"{role.value} advanced since resolution",
+        )
+        return actual, adjustment
     _logger.warning(
         "%s moved since resolution: expected %s, found %s",
         role.value,

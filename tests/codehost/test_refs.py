@@ -404,3 +404,16 @@ def test_a_base_side_move_through_verify_names_its_sources(
     assert "refs/heads/main fetched 9999999…" in str(excinfo.value)
     moved_records = [r for r in caplog.records if "moved since resolution" in r.getMessage()]
     assert moved_records and getattr(moved_records[0], RENDERED_BY_CALLER) is True
+
+
+def test_base_fast_forward_is_recorded_as_one_adjustment() -> None:
+    advanced = "7777777777777777777777777777777777777777"
+    runner = FakeProcessRunner(_script_with_moved_base(advanced, _ok()))
+
+    fetched = _run(runner)
+
+    assert len(fetched.adjustments) == 1
+    adjustment = fetched.adjustments[0]
+    assert adjustment.role is RefRole.BASE
+    assert (adjustment.reported_sha, adjustment.used_sha) == (BASE_SHA, advanced)
+    assert adjustment.source == "refs/heads/main"
