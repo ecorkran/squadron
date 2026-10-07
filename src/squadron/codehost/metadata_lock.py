@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import TextIO
 
 from squadron.codehost.errors import CodeHostError
-from squadron.codehost.refs import GIT_QUERY_TIMEOUT_SECONDS
+from squadron.codehost.git_refs import GIT_QUERY_TIMEOUT_SECONDS
 
 _logger = logging.getLogger(__name__)
 

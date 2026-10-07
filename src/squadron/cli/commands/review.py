@@ -58,6 +58,7 @@ from squadron.review.persistence import (
     save_provider_failure,
     save_review_result,
 )
+from squadron.review.profile_resolution import resolve_review_profile, review_profile_source
 from squadron.review.resolution import Resolution, ResolutionResult, resolve_review
 from squadron.review.resolution_evidence import ResolutionError
 from squadron.review.review_client import run_review_with_profile
@@ -528,25 +529,6 @@ def _resolve_slice_number(num: str) -> SliceInfo:
         raise typer.Exit(code=1) from exc
 
 
-def _resolve_profile(
-    flag: str | None,
-    template: ReviewTemplate | None = None,
-) -> str:
-    """Resolve profile: CLI flag → template → config → sdk.
-
-    Model-based inference is handled upstream by alias resolution
-    in _run_review_command().
-    """
-    if flag is not None:
-        return flag
-    if template is not None and template.profile is not None:
-        return template.profile
-    config_val = get_config("default_review_profile")
-    if isinstance(config_val, str):
-        return config_val
-    return "sdk"
-
-
 def _reject_unknown_alias(
     name: str,
     profile_flag: str | None,
@@ -559,17 +541,13 @@ def _reject_unknown_alias(
     typo'd alias indistinguishable from a real ID, so it dispatches and fails
     downstream as an UNKNOWN verdict (issue #67). A supplied profile is the
     signal that the caller meant a literal ID; with no profile from any of the
-    three channels ``_resolve_profile`` consults, treat it as a typo and fail
+    three channels the shared cascade consults, treat it as a typo and fail
     fast here.
 
-    Mirrors ``_resolve_profile``'s cascade *without* its ``"sdk"`` fallback —
-    the fallback is what silently rescued typos before.
+    The profile-source test is ``review_profile_source``, the same one pipeline
+    review steps use, which excludes the sdk fallback that silently rescued typos.
     """
-    profile_source = (
-        profile_flag is not None
-        or (template is not None and template.profile is not None)
-        or isinstance(get_config("default_review_profile"), str)
-    )
+    profile_source = review_profile_source(profile_flag is not None, template)
     try:
         require_known_model(name, profile_source=profile_source)
     except UnknownModelAliasError as exc:
@@ -603,7 +581,8 @@ def _resolve_model_and_profile(
         if alias_model == raw_model and alias_profile is None:
             _reject_unknown_alias(raw_model, profile_flag, template)
 
-    return alias_model or raw_model, _resolve_profile(profile_flag or alias_profile, template)
+    choice = resolve_review_profile(profile_flag, alias_profile, template)
+    return alias_model or raw_model, choice.name
 
 
 def _resolve_model(
@@ -764,9 +743,9 @@ def _run_review_command(
 async def _execute_review(
     template: ReviewTemplate,
     inputs: dict[str, str],
-    rules_content: str | None = None,
-    model: str | None = None,
-    profile: str = "sdk",
+    rules_content: str | None,
+    model: str | None,
+    profile: str,
     verbosity: int = 0,
     model_allows_tools: bool = True,
     no_tools: bool = False,

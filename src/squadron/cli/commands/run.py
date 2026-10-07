@@ -268,6 +268,34 @@ async def _run_pipeline(
     return result
 
 
+def _classify_for_run(
+    definition: PipelineDefinition,
+    *,
+    model_override: str | None,
+    params: dict[str, object],
+    strict: bool,
+) -> PipelineClassification:
+    """Classify *definition* the one way every ``sq run`` path does.
+
+    Owns the policy (YAML ``auth_policy`` < ``--strict``), the classification
+    pool backend and resolver, and the ``classify_pipeline`` call, so a run,
+    ``--explain`` and ``--dry-run`` cannot disagree. Raises ``ClassificationError``;
+    each caller words its own message.
+    """
+    policy = PoolClassificationPolicy.LAZY
+    if definition.auth_policy == PoolClassificationPolicy.STRICT or strict:
+        policy = PoolClassificationPolicy.STRICT
+
+    pool_backend = DefaultPoolBackend()
+    resolver = ModelResolver(
+        cli_override=model_override,
+        pipeline_model=definition.model,
+        pool_backend=pool_backend,
+        profile_source=has_profile_param(params),
+    )
+    return classify_pipeline(definition, resolver, pool_backend, policy=policy, params=params)
+
+
 async def _run_pipeline_sdk(
     pipeline_name: str,
     params: dict[str, object],
@@ -307,33 +335,17 @@ async def _run_pipeline_sdk(
         msg = "; ".join(f"{e.field}: {e.message}" for e in errors)
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
-    # Resolve effective policy: YAML auth_policy < CLI --strict (CLI wins).
-    policy = PoolClassificationPolicy.LAZY
-    if definition.auth_policy == PoolClassificationPolicy.STRICT:
-        policy = PoolClassificationPolicy.STRICT
-    if strict:
-        policy = PoolClassificationPolicy.STRICT
-
-    # Shared pool backend — used by both the classification resolver and
-    # the authoritative resolver built inside _run_pipeline.
-    pool_backend = DefaultPoolBackend()
-
-    # Classification-only resolver (no on_pool_selection callback needed;
-    # classify_pipeline never calls pool_backend.select()).
-    _classify_resolver = ModelResolver(
-        cli_override=model_override,
-        pipeline_model=definition.model,
-        pool_backend=pool_backend,
-        profile_source=has_profile_param(params),
-    )
-
     try:
-        classification = classify_pipeline(
-            definition, _classify_resolver, pool_backend, policy=policy, params=params
+        classification = _classify_for_run(
+            definition, model_override=model_override, params=params, strict=strict
         )
     except ClassificationError as exc:
         rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
         raise typer.Exit(1) from None
+
+    # The authoritative resolver built inside _run_pipeline shares this backend
+    # with the executor; classification used its own (it never calls select()).
+    pool_backend = DefaultPoolBackend()
 
     _logger.info(
         "pipeline '%s' shape: %s (%d classified steps)",
@@ -504,29 +516,15 @@ def _handle_explain(
 
     cli_override = _extract_model_override(model_override, param)
 
-    policy = PoolClassificationPolicy.LAZY
-    if definition.auth_policy == PoolClassificationPolicy.STRICT:
-        policy = PoolClassificationPolicy.STRICT
-    if strict:
-        policy = PoolClassificationPolicy.STRICT
-
     # Explain has no target, so the merged params are defaults plus overrides.
     explain_params: dict[str, object] = {
         key: value for key, value in definition.params.items() if value != "required"
     }
     _apply_param_overrides(explain_params, param)
 
-    pool_backend = DefaultPoolBackend()
-    resolver = ModelResolver(
-        cli_override=cli_override,
-        pipeline_model=definition.model,
-        pool_backend=pool_backend,
-        profile_source=has_profile_param(explain_params),
-    )
-
     try:
-        classification = classify_pipeline(
-            definition, resolver, pool_backend, policy=policy, params=explain_params
+        classification = _classify_for_run(
+            definition, model_override=cli_override, params=explain_params, strict=strict
         )
     except ClassificationError as exc:
         rprint(f"[red]Error: Classification failed — {exc}[/red]")
@@ -1127,11 +1125,23 @@ def run(
             raise typer.Exit(1)
 
         params = _assemble_params(definition, target, model, param)
+        # The same pre-run check a real run applies, so a typo'd alias or template
+        # fails here instead of rendering a plan that cannot run (#175).
+        try:
+            _classify_for_run(
+                definition,
+                model_override=_extract_model_override(model, param),
+                params=params,
+                strict=strict,
+            )
+        except ClassificationError as exc:
+            rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
+            raise typer.Exit(1) from None
         rprint(f"\n[bold]Pipeline:[/bold] {definition.name}")
         rprint(f"[bold]Description:[/bold] {definition.description}")
         rprint(f"[bold]Params:[/bold] {params}")
         rprint("\n[bold]Steps:[/bold]")
-        render_steps(definition.steps, params, ContextForgeClient())
+        render_steps(definition.steps, params, ContextForgeClient(), cwd=os.getcwd())
         raise typer.Exit(0)
 
     # ---- --resume --item (slice 197 D8) ----

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from squadron.pipeline.sources import (  # pyright: ignore[reportPrivateUsage]
     _design_dependencies,
     _slice_item,
 )
+from tests.conftest import run_test_git
 
 _SLICES_DIR = "project-documents/user/slices/"
 
@@ -96,12 +98,20 @@ _TASKS_900 = [
 class StubCfClient(ContextForgeClient):
     """Real client parsing, canned subprocess output; records every call."""
 
-    def __init__(self, slices: object = _SLICES_900, tasks: object = _TASKS_900) -> None:
+    def __init__(
+        self,
+        slices: object = _SLICES_900,
+        tasks: object = _TASKS_900,
+        integration_branch: str = "",
+    ) -> None:
         self._outputs = {"slices": slices, "tasks": tasks}
+        self._integration_branch = integration_branch
         self.calls: list[list[str]] = []
 
     def _run(self, args: list[str]) -> str:
         self.calls.append(args)
+        if args[0] == "config":
+            return json.dumps({"value": self._integration_branch})
         return json.dumps(self._outputs[args[1]])
 
 
@@ -115,7 +125,7 @@ class TestUnfinishedSlices:
         from squadron.pipeline.sources import _cf_unfinished_slices
 
         client = StubCfClient()
-        items = await _cf_unfinished_slices(["900"], client, {})
+        items = await _cf_unfinished_slices(["900"], client, {}, cwd=os.getcwd())
 
         assert client.calls == [["list", "slices", "900", "--json"]]
         assert _indices(items) == ["907", "914", "923", "924", "928", "929"]
@@ -125,7 +135,7 @@ class TestUnfinishedSlices:
         from squadron.pipeline.sources import _cf_unfinished_slices
 
         client = StubCfClient()
-        await _cf_unfinished_slices([], client, {})
+        await _cf_unfinished_slices([], client, {}, cwd=os.getcwd())
 
         assert client.calls == [["list", "slices", "--json"]]
 
@@ -135,7 +145,7 @@ class TestUnfinishedSlices:
         from squadron.pipeline.sources import _cf_unfinished_slices
 
         with pytest.raises(ValueError, match="plan must be an architecture index, got"):
-            await _cf_unfinished_slices([plan], StubCfClient(), {})
+            await _cf_unfinished_slices([plan], StubCfClient(), {}, cwd=os.getcwd())
 
 
 class TestUndesignedSlices:
@@ -144,7 +154,7 @@ class TestUndesignedSlices:
         from squadron.pipeline.sources import _cf_undesigned_slices
 
         client = StubCfClient()
-        items = await _cf_undesigned_slices(["900"], client, {})
+        items = await _cf_undesigned_slices(["900"], client, {}, cwd=os.getcwd())
 
         # 907 is deferred, 914 is designed, 901 is complete.
         assert _indices(items) == ["923", "924", "928", "929"]
@@ -154,7 +164,7 @@ class TestUndesignedSlices:
     async def test_item_shape(self) -> None:
         from squadron.pipeline.sources import _cf_undesigned_slices
 
-        items = await _cf_undesigned_slices(["900"], StubCfClient(), {})
+        items = await _cf_undesigned_slices(["900"], StubCfClient(), {}, cwd=os.getcwd())
 
         assert items[0] == {
             "index": "923",
@@ -218,7 +228,7 @@ class TestSlicesNeedingTasks:
     async def _run(self, accept: str = "review.concerns_or_better") -> list[dict[str, object]]:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
-        return await _cf_slices_needing_tasks(["900", accept], StubCfClient(), {})
+        return await _cf_slices_needing_tasks(["900", accept], StubCfClient(), {}, cwd=os.getcwd())
 
     @pytest.mark.asyncio
     async def test_900_plan_selects_only_914_flagged_missing_review(self) -> None:
@@ -289,7 +299,7 @@ class TestSlicesNeedingTasks:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         client = StubCfClient(tasks=self._TASKED)
-        return await _cf_slices_needing_tasks(["900", accept], client, {})
+        return await _cf_slices_needing_tasks(["900", accept], client, {}, cwd=os.getcwd())
 
     @pytest.mark.asyncio
     async def test_tasked_slice_with_no_tasks_review_is_selected(self) -> None:
@@ -364,7 +374,7 @@ class TestSlicesNeedingTasks:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         client = StubCfClient()
-        await _cf_slices_needing_tasks(["900", "review.pass"], client, {})
+        await _cf_slices_needing_tasks(["900", "review.pass"], client, {}, cwd=os.getcwd())
 
         assert ["list", "tasks", "900", "--json"] in client.calls
         assert ["list", "slices", "900", "--json"] in client.calls
@@ -382,7 +392,7 @@ class TestSlicesNeedingTasks:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         with pytest.raises(ValueError, match=match):
-            await _cf_slices_needing_tasks(args, StubCfClient(), {})
+            await _cf_slices_needing_tasks(args, StubCfClient(), {}, cwd=os.getcwd())
 
 
 class TestSliceDependencies:
@@ -520,12 +530,24 @@ class TestSlicesReadyToImplement:
     """Each slice is ``30N-slice.s30N``; its design, reviews and tasks are per test."""
 
     @pytest.fixture(autouse=True)
-    def _in_tmp_project(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.chdir(tmp_path)
-        (tmp_path / "project-documents" / "user" / "reviews").mkdir(parents=True)
-        (tmp_path / _SLICES_DIR).mkdir(parents=True)
+    def _in_tmp_project(self, temp_git_repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A git repo on main: the source reads which slice branches are merged into it."""
+        monkeypatch.chdir(temp_git_repo)
+        self.repo = temp_git_repo
+        (temp_git_repo / "project-documents" / "user" / "reviews").mkdir(parents=True)
+        (temp_git_repo / _SLICES_DIR).mkdir(parents=True)
         self.slices: list[dict[str, object]] = []
         self.tasks: list[dict[str, object]] = []
+
+    def _merge_slice(self, index: int) -> None:
+        """Give slice *index* a branch with one commit, merged into main with --no-ff."""
+        branch = f"{index}-slice.s{index}"
+        run_test_git(self.repo, "checkout", "-q", "-b", branch)
+        (self.repo / f"impl{index}.py").write_text("x\n")
+        run_test_git(self.repo, "add", f"impl{index}.py")
+        run_test_git(self.repo, "commit", "-q", "-m", f"implement {index}")
+        run_test_git(self.repo, "checkout", "-q", "main")
+        run_test_git(self.repo, "merge", "-q", "--no-ff", "-m", f"merge {index}", branch)
 
     def _slice(
         self,
@@ -563,7 +585,9 @@ class TestSlicesReadyToImplement:
         from squadron.pipeline.sources import SOURCE_REGISTRY
 
         client = StubCfClient(slices={"entries": self.slices}, tasks=self.tasks)
-        return await SOURCE_REGISTRY[("cf", "slices_ready_to_implement")](["300", accept], client, {})
+        return await SOURCE_REGISTRY[("cf", "slices_ready_to_implement")](
+            ["300", accept], client, {}, cwd=os.getcwd()
+        )
 
     async def _only(self) -> dict[str, object]:
         items = await self._run()
@@ -677,3 +701,73 @@ class TestSlicesReadyToImplement:
         assert parse_source('cf.slices_ready_to_implement("300", "review.pass")')[1] == (
             "slices_ready_to_implement"
         )
+
+    # -- Slice 934 D1 (#188): git, not cf's checkboxes, says a slice is merged. --
+
+    @pytest.mark.asyncio
+    async def test_a_merged_slice_with_unchecked_tasks_is_not_returned_or_a_cause_of_flags(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        self._slice(301)  # cf reports not_started and unchecked tasks
+        self._slice(302, dependencies=(301,))
+        self._merge_slice(301)
+
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.sources"):
+            items = await self._run()
+
+        assert _indices(items) == ["302"]
+        assert "flag_reason" not in items[0]
+        warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+        assert warnings == [
+            "slice 301: branch 301-slice.s301 is merged into main but cf reports not_started; "
+            "treating it as complete. Check off its tasks to close it in cf."
+        ]
+
+    @pytest.mark.asyncio
+    async def test_an_unmerged_open_dependency_still_flags_its_dependent(self) -> None:
+        self._slice(301, designed=False)
+        self._slice(302, dependencies=(301,))
+
+        item = await self._only()
+
+        assert item["flag_reason"] == "dependency 301 not designed"
+
+    @pytest.mark.asyncio
+    async def test_the_source_reads_the_cwd_it_is_given_not_the_process_cwd(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from squadron.pipeline.sources import SOURCE_REGISTRY
+
+        self._slice(301)
+        self._merge_slice(301)
+        elsewhere = tmp_path / "elsewhere"
+        elsewhere.mkdir()
+        monkeypatch.chdir(elsewhere)  # not a git repo
+        client = StubCfClient(slices={"entries": self.slices}, tasks=self.tasks)
+
+        items = await SOURCE_REGISTRY[("cf", "slices_ready_to_implement")](
+            ["300", "review.concerns_or_better"], client, {}, cwd=str(self.repo)
+        )
+
+        assert items == []
+
+    @pytest.mark.asyncio
+    async def test_a_git_failure_fails_the_source_before_any_item(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.pipeline.git_ops import GitStateUnknownError
+        from squadron.pipeline.sources import SOURCE_REGISTRY
+
+        self._slice(301)
+        not_a_repo = tmp_path / "not-a-repo"
+        not_a_repo.mkdir()
+        client = StubCfClient(slices={"entries": self.slices}, tasks=self.tasks)
+
+        with (
+            caplog.at_level(logging.ERROR, logger="squadron.pipeline.git_ops"),
+            pytest.raises(GitStateUnknownError),
+        ):
+            await SOURCE_REGISTRY[("cf", "slices_ready_to_implement")](
+                ["300", "review.concerns_or_better"], client, {}, cwd=str(not_a_repo)
+            )
+        assert any(r.levelno == logging.ERROR for r in caplog.records)

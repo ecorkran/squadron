@@ -15,29 +15,30 @@ from __future__ import annotations
 import logging
 
 from squadron.codehost.errors import (
+    RENDERED_BY_CALLER,
+    HostCommandTimeoutError,
     NoMergeBaseError,
-    RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
-from squadron.codehost.models import FetchedRange, RefRole
-from squadron.core.process_runner import ProcessRunner
+from squadron.codehost.git_refs import (
+    GIT_FETCH_TIMEOUT_SECONDS,
+    GIT_QUERY_TIMEOUT_SECONDS,
+    REF_NAMESPACE,
+    is_ancestor,
+    moved_since_resolution,
+    read_ref,
+    rev_parse,
+)
+from squadron.codehost.head_resolution import resolve_head
+from squadron.codehost.models import FetchedRange, RefAdjustment, RefRole
+from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
 
 _logger = logging.getLogger(__name__)
-
-#: Wall-clock bound on the git queries here — rev-parse, merge-base, diff.
-GIT_QUERY_TIMEOUT_SECONDS = 30
-
-#: Fetch moves data over the network; the query bound is far too tight for it.
-GIT_FETCH_TIMEOUT_SECONDS = 300
-
-#: Where fetched pull-request endpoints land. Namespacing by remote keeps PR 12
-#: on ``origin`` distinct from PR 12 on ``upstream``.
-_REF_NAMESPACE = "refs/squadron/pr"
 
 
 def local_ref(remote_name: str, number: int, role: RefRole) -> str:
     """The local ref a fetched endpoint lands on."""
-    return f"{_REF_NAMESPACE}/{remote_name}/{number}/{role.value}"
+    return f"{REF_NAMESPACE}/{remote_name}/{number}/{role.value}"
 
 
 def fetch_and_range(
@@ -50,10 +51,14 @@ def fetch_and_range(
     head_refspec_source: str,
     expected_base_sha: str,
     expected_head_sha: str,
+    head_fallback_sources: tuple[str, ...] = (),
 ) -> FetchedRange:
     """Fetch base and head, verify they are what the host reported, describe the range.
 
     ``namespace`` is the pull-request number the local refs are filed under.
+    ``head_fallback_sources`` are host-supplied refspec sources to try, after
+    fetching by sha, when the pull-request ref and the API disagree about the
+    head (a host's convention, so the caller names them).
     """
     base_local = local_ref(remote_name, namespace, RefRole.BASE)
     head_local = local_ref(remote_name, namespace, RefRole.HEAD)
@@ -68,21 +73,23 @@ def fetch_and_range(
         ),
     )
 
-    base_sha = _verify(
+    base_sha, base_adjustment = _verify(
         runner,
         cwd=cwd,
         ref=base_local,
         role=RefRole.BASE,
         expected=expected_base_sha,
-        accept_fast_forward=True,
+        source=base_refspec_source,
     )
-    head_sha = _verify(
+    head_sha, head_adjustment = resolve_head(
         runner,
         cwd=cwd,
-        ref=head_local,
-        role=RefRole.HEAD,
+        remote_name=remote_name,
+        namespace=namespace,
+        head_local=head_local,
+        head_source=head_refspec_source,
         expected=expected_head_sha,
-        accept_fast_forward=False,
+        head_fallback_sources=head_fallback_sources,
     )
 
     merge_base = _merge_base(runner, cwd=cwd, base=base_local, head=head_local)
@@ -99,6 +106,7 @@ def fetch_and_range(
         merge_base=merge_base,
         diff_range=diff_range,
         changed_paths=_changed_paths(runner, cwd=cwd, diff_range=diff_range),
+        adjustments=tuple(a for a in (base_adjustment, head_adjustment) if a is not None),
     )
 
 
@@ -116,19 +124,30 @@ def _fetch(
     """
     argv = ["git", "fetch", "--no-tags", remote_name]
     argv += [f"+{source}:{destination}" for source, destination in specs]
-    result = runner.run(argv, cwd=cwd, timeout=GIT_FETCH_TIMEOUT_SECONDS)
+    try:
+        result = runner.run(argv, cwd=cwd, timeout=GIT_FETCH_TIMEOUT_SECONDS)
+    except ProcessTimedOutError as exc:
+        # Rendered by the command as a code host error, never a traceback.
+        _logger.warning(
+            "git fetch from %s exceeded %ss",
+            remote_name,
+            exc.timeout,
+            extra={RENDERED_BY_CALLER: True},
+        )
+        raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
     if result.returncode == 0:
         return
 
     # Which endpoint actually failed? Ask, rather than guess from the message:
     # a fetch that could not reach one of two refspecs fails the whole call.
     for (_, destination), role in zip(specs, (RefRole.BASE, RefRole.HEAD), strict=True):
-        if _rev_parse(runner, cwd=cwd, ref=destination) is None:
+        if rev_parse(runner, cwd=cwd, ref=destination) is None:
             _logger.warning(
                 "fetch of %s from %s failed: %s",
                 role.value,
                 remote_name,
                 result.stderr.strip(),
+                extra={RENDERED_BY_CALLER: True},
             )
             raise RefNotFetchableError(
                 role,
@@ -139,7 +158,12 @@ def _fetch(
 
     # Both refs are present despite the non-zero exit; treat it as a base-side
     # failure rather than continuing with an unexplained error.
-    _logger.warning("git fetch exited %s: %s", result.returncode, result.stderr.strip())
+    _logger.warning(
+        "git fetch exited %s: %s",
+        result.returncode,
+        result.stderr.strip(),
+        extra={RENDERED_BY_CALLER: True},
+    )
     raise RefNotFetchableError(
         RefRole.BASE,
         f"git fetch failed: {result.stderr.strip() or '(no stderr)'}",
@@ -153,65 +177,41 @@ def _verify(
     ref: str,
     role: RefRole,
     expected: str,
-    accept_fast_forward: bool,
-) -> str:
-    """Resolve ``ref`` and confirm it is the sha the host reported.
+    source: str,
+) -> tuple[str, RefAdjustment | None]:
+    """Resolve the base ref and confirm it is the sha the host reported.
 
-    With ``accept_fast_forward``, a fetched sha that descends from ``expected``
-    passes and is returned in its place. GitHub's ``baseRefOid`` can trail the
-    base branch's real tip after a merge, while ``git fetch`` already serves the
-    new tip (#131). A base that only moved forward still yields the same
-    three-dot range, so the fetched tip is the right one to review against. Any
-    other movement (rewind, force-push) still fails.
+    Returns the sha to use and, when it differs from the reported one, the
+    ``RefAdjustment`` that says so.
+
+    A fetched sha that descends from ``expected`` passes and is returned in its
+    place. GitHub's ``baseRefOid`` can trail the base branch's real tip after a
+    merge, while ``git fetch`` already serves the new tip (#131). A base that only
+    moved forward still yields the same three-dot range, so the fetched tip is the
+    right one to review against. Any other movement (rewind, force-push) fails.
     """
-    actual = _rev_parse(runner, cwd=cwd, ref=ref)
-    if actual is None:
-        _logger.warning("%s ref %s is missing after fetch", role.value, ref)
-        raise RefNotFetchableError(role, f"{role.value} ref {ref} is missing after fetch")
+    actual = read_ref(runner, cwd=cwd, ref=ref, role=role)
     if actual == expected:
-        return actual
-    if accept_fast_forward and _is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
+        return actual, None
+    if is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
+        # Tagged: the command prints the matching adjustment line.
         _logger.warning(
             "%s advanced since resolution: host reported %s, fetched %s (a descendant); "
             "using the fetched tip",
             role.value,
             expected,
             actual,
+            extra={RENDERED_BY_CALLER: True},
         )
-        return actual
-    _logger.warning("%s moved since resolution: expected %s, found %s", role.value, expected, actual)
-    raise RefMovedSinceResolutionError(role, expected, actual)
-
-
-def _is_ancestor(runner: ProcessRunner, *, cwd: str, ancestor: str, descendant: str) -> bool:
-    """Is ``ancestor`` reachable from ``descendant``?
-
-    ``merge-base --is-ancestor`` exits 0 for yes and 1 for no. Anything else
-    (e.g. ``ancestor`` absent locally) is logged and answered no, so the caller
-    fails closed.
-    """
-    result = runner.run(
-        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
-        cwd=cwd,
-        timeout=GIT_QUERY_TIMEOUT_SECONDS,
-    )
-    if result.returncode not in (0, 1):
-        _logger.warning(
-            "could not test ancestry of %s in %s: %s", ancestor, descendant, result.stderr.strip()
+        adjustment = RefAdjustment(
+            role=role,
+            reported_sha=expected,
+            used_sha=actual,
+            source=f"fetched from {source}",
+            reason="advanced since resolution",
         )
-    return result.returncode == 0
-
-
-def _rev_parse(runner: ProcessRunner, *, cwd: str, ref: str) -> str | None:
-    """Resolve a ref to its sha, or ``None`` when it does not exist."""
-    result = runner.run(
-        ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
-        cwd=cwd,
-        timeout=GIT_QUERY_TIMEOUT_SECONDS,
-    )
-    if result.returncode != 0:
-        return None
-    return result.stdout.strip() or None
+        return actual, adjustment
+    raise moved_since_resolution(role, expected, actual, source)
 
 
 def _merge_base(runner: ProcessRunner, *, cwd: str, base: str, head: str) -> str:
@@ -219,7 +219,13 @@ def _merge_base(runner: ProcessRunner, *, cwd: str, base: str, head: str) -> str
     result = runner.run(["git", "merge-base", base, head], cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
     merge_base = result.stdout.strip()
     if result.returncode != 0 or not merge_base:
-        _logger.warning("no merge base between %s and %s: %s", base, head, result.stderr.strip())
+        _logger.warning(
+            "no merge base between %s and %s: %s",
+            base,
+            head,
+            result.stderr.strip(),
+            extra={RENDERED_BY_CALLER: True},
+        )
         raise NoMergeBaseError(
             f"{base} and {head} share no common ancestor, so there is no range to review"
         )

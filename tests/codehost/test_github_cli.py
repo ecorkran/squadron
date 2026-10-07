@@ -17,7 +17,9 @@ from typing import Any
 import pytest
 
 from squadron.codehost.errors import (
+    RENDERED_BY_CALLER,
     AmbiguousBranchPullRequestsError,
+    CodeHostError,
     GitHubCliMissingError,
     HostCommandTimeoutError,
     HostRequestRejectedError,
@@ -47,6 +49,13 @@ from squadron.core.process_runner import (
     ProcessTimedOutError,
 )
 from tests.codehost.fake_runner import FakeProcessRunner
+from tests.codehost.lagging_support import (
+    API_LOCAL,
+    HEAD_BRANCH,
+    RESOLVED_HEAD,
+    lagging_script,
+    resolved_pr83,
+)
 
 GITHUB = "github.com"
 ENTERPRISE = "ghe.corp.example"
@@ -678,3 +687,87 @@ def test_find_marked_comments_records_no_identity_call() -> None:
     cli, runner = _host([(["gh", "api", "--paginate"], _ok(_comments_page()))])
     cli.find_marked_comments(_record(), marker=_MARKER)
     assert all("user" not in call.argv for call in runner.calls)
+
+
+# --- fetch_pull_request_refs: the head-branch fallback (slice 934 D6, #186) -------
+
+
+def test_adapter_hands_the_head_branch_to_the_lagging_ref_fallback() -> None:
+    runner = FakeProcessRunner(lagging_script(fallback_returns=RESOLVED_HEAD))
+    cli, resolved = resolved_pr83(runner)
+
+    fetched = cli.fetch_pull_request_refs(resolved, remote_name="origin", cwd="/repo")
+
+    assert fetched.head_sha == RESOLVED_HEAD
+    fallback_fetch = [c for c in runner.calls if c.argv[:2] == ("git", "fetch")][-1]
+    assert f"+refs/heads/{HEAD_BRANCH}:{API_LOCAL}" in fallback_fetch.argv
+    assert fetched.adjustments[0].source == f"fetched from refs/heads/{HEAD_BRANCH}"
+
+
+def test_a_fork_branch_that_returns_another_sha_is_rejected_by_the_sha_check() -> None:
+    from squadron.codehost.errors import PullRequestHeadUnavailableError
+
+    other = "9" * 40
+    script = lagging_script(fallback_returns=other)
+    # The by-sha attempt and the fallback both fail; nothing past the sha check runs.
+    runner = FakeProcessRunner(script[:8])
+    cli, resolved = resolved_pr83(runner)
+
+    with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+        cli.fetch_pull_request_refs(resolved, remote_name="origin", cwd="/repo")
+
+    assert "not the API head" in dict(excinfo.value.attempts)[f"refs/heads/{HEAD_BRANCH}"]
+
+
+# --- Which warnings the command renders itself (slice 934 D8) -------------------
+
+
+def _only(caplog: pytest.LogCaptureFixture, fragment: str) -> logging.LogRecord:
+    matches = [r for r in caplog.records if fragment in r.getMessage()]
+    assert len(matches) == 1, f"expected one record containing {fragment!r}"
+    return matches[0]
+
+
+def test_classified_failure_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    cli, _ = _host([(["gh", "api"], _fail(1, stderr="gh: Not Found (HTTP 404)"))])
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.github_cli"):
+        with pytest.raises(CodeHostError):
+            cli.default_branch(_locator())
+    record = _only(caplog, "Error")
+    assert getattr(record, RENDERED_BY_CALLER, False) is True
+
+
+def test_gh_not_on_path_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    cli, _ = _host([(["gh", "api"], ProcessNotFoundError("gh"))])
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.github_cli"):
+        with pytest.raises(GitHubCliMissingError):
+            cli.default_branch(_locator())
+    assert getattr(_only(caplog, "not on PATH"), RENDERED_BY_CALLER, False) is True
+
+
+def test_gh_timeout_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    cli, _ = _host([(["gh", "api"], ProcessTimedOutError(["gh", "api"], 30.0))])
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.github_cli"):
+        with pytest.raises(HostCommandTimeoutError):
+            cli.default_branch(_locator())
+    assert getattr(_only(caplog, "gh exceeded"), RENDERED_BY_CALLER, False) is True
+
+
+def test_nonexistent_cwd_warning_is_not_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    """It re-raises a non-CodeHostError, which the command does not render as one."""
+    cli, _ = _host([(["gh", "api"], ProcessCwdNotFoundError("/nonexistent-922"))])
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.github_cli"):
+        with pytest.raises(ProcessCwdNotFoundError):
+            cli.default_branch(_locator())
+    assert getattr(_only(caplog, "nonexistent cwd"), RENDERED_BY_CALLER, False) is False
+
+
+def test_review_thread_page_limit_warning_is_not_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    script: list[tuple[list[str], Any]] = [
+        (["gh", "api", "graphql"], _ok(_threads_page(has_next=True)))
+        for _ in range(MAX_DISCUSSION_PAGES)
+    ]
+    cli, _ = _host(script)
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.github_cli"):
+        cli.list_unresolved_discussions(_record())
+    assert getattr(_only(caplog, "stopped at"), RENDERED_BY_CALLER, False) is False

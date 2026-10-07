@@ -30,9 +30,9 @@ from pathlib import Path
 from typing import cast
 
 from squadron.codehost.errors import CodeHostError
+from squadron.codehost.git_refs import GIT_FETCH_TIMEOUT_SECONDS, GIT_QUERY_TIMEOUT_SECONDS
 from squadron.codehost.metadata_lock import MetadataLockError, git_metadata_lock
 from squadron.codehost.models import PullRequestRecord
-from squadron.codehost.refs import GIT_FETCH_TIMEOUT_SECONDS, GIT_QUERY_TIMEOUT_SECONDS
 from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
 
 _logger = logging.getLogger(__name__)

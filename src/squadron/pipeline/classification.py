@@ -18,6 +18,7 @@ caught by ``test_classification_is_idempotent_and_side_effect_free``.
 
 from __future__ import annotations
 
+import difflib
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -25,15 +26,21 @@ from typing import TYPE_CHECKING, cast
 
 from squadron.models.aliases import (
     UnknownModelAliasError,
+    UnknownReviewTemplateError,
     require_known_model,
     resolve_model_alias,
 )
 from squadron.providers.profiles import is_sdk_profile
+from squadron.review.profile_resolution import review_profile_source
 
 if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
     from squadron.pipeline.models import PipelineDefinition, StepConfig
     from squadron.pipeline.resolver import ModelResolver
+    from squadron.review.templates import ReviewTemplate
+
+# Pre-run errors about a name that resolves to nothing; collected so one message lists them all.
+PreRunNameError = UnknownModelAliasError | UnknownReviewTemplateError
 
 # The pipeline param that names a profile; its presence lets a literal model id through.
 PROFILE_PARAM = "profile"
@@ -74,6 +81,60 @@ PERSISTENT_SESSION_STEP_TYPES = frozenset({"dispatch", "summary", "compact"})
 _ONE_SHOT_STEP_TYPES = frozenset({"review"})
 
 
+def _review_template(action_type: str, resolved_cfg: dict[str, object]) -> ReviewTemplate | None:
+    """Return the review step's template, or None when there is none to read.
+
+    Never raises: an unknown name, a non-review action, or a ``template`` that is
+    not a string all return None. The labelling path reaches this, so it must not
+    fail; the pre-run check that rejects unknown names is ``_require_review_template``.
+    """
+    if action_type != "review":
+        return None
+    template_name = resolved_cfg.get("template")
+    if not isinstance(template_name, str):
+        return None
+
+    from squadron.review.templates import get_template, load_all_templates
+
+    load_all_templates()
+    return get_template(template_name)
+
+
+def _require_review_template(
+    action_type: str, resolved_cfg: dict[str, object]
+) -> ReviewTemplate | None:
+    """Return the review step's template, raising when its name is unknown.
+
+    Used only by ``classify_pipeline``. A name still holding an unresolved
+    ``{placeholder}`` is skipped: it is filled per ``each`` item at run time, and
+    the review action's own ``KeyError`` path reports it then. Non-review actions
+    and steps with no template name return None.
+    """
+    template = _review_template(action_type, resolved_cfg)
+    name = resolved_cfg.get("template")
+    if template is not None or action_type != "review" or not isinstance(name, str):
+        return template
+    if "{" in name:
+        return None
+
+    from squadron.review.templates import list_templates
+
+    known = [candidate.name for candidate in list_templates()]
+    raise UnknownReviewTemplateError(name, difflib.get_close_matches(name, known, n=3))
+
+
+def _collect_unknown_template(
+    action_type: str,
+    resolved_cfg: dict[str, object],
+    errors: list[PreRunNameError],
+) -> None:
+    """Record an unknown review template instead of raising, so all names are listed."""
+    try:
+        _require_review_template(action_type, resolved_cfg)
+    except UnknownReviewTemplateError as exc:
+        errors.append(exc)
+
+
 def _review_template_model_fallback(action_type: str, resolved_cfg: dict[str, object]) -> str | None:
     """Return a review template's declared default ``model:``, if any.
 
@@ -85,16 +146,7 @@ def _review_template_model_fallback(action_type: str, resolved_cfg: dict[str, ob
     will raise a false ``ClassificationError`` for pipelines that rely
     solely on a template's default model (slice 303 F002).
     """
-    if action_type != "review":
-        return None
-    template_name_raw = resolved_cfg.get("template")
-    if not isinstance(template_name_raw, str):
-        return None
-
-    from squadron.review.templates import get_template, load_all_templates
-
-    load_all_templates()
-    template = get_template(template_name_raw)
+    template = _review_template(action_type, resolved_cfg)
     return template.model if template is not None else None
 
 
@@ -319,17 +371,37 @@ def action_model_label(
     return "model=unresolved"
 
 
+def _action_profile_source(
+    action_type: str,
+    resolved_cfg: dict[str, object],
+    classify_params: dict[str, object],
+) -> bool:
+    """Whether this action has a profile that justifies a literal model id (#175, #184).
+
+    A review step asks the same question ``sq review`` does: an explicit profile
+    (the run's ``--param profile=…`` or the step's own), its template's
+    ``profile:``, or ``default_review_profile``. Any other action keeps the
+    run-level param test. An unknown template reads as no template profile here;
+    ``_collect_unknown_template`` reports that name separately.
+    """
+    explicit = has_profile_param(classify_params)
+    if action_type != "review":
+        return explicit
+    template = _review_template(action_type, resolved_cfg)
+    return review_profile_source(explicit or PROFILE_PARAM in resolved_cfg, template)
+
+
 def _collect_unknown_alias(
     candidate: str,
-    classify_params: dict[str, object],
-    alias_errors: list[UnknownModelAliasError],
+    profile_source: bool,
+    alias_errors: list[PreRunNameError],
 ) -> None:
     """Record ``candidate`` when it is an unknown alias with no profile source (#175).
 
     Collected rather than raised so one pre-run error can list every bad alias.
     """
     try:
-        require_known_model(candidate, profile_source=has_profile_param(classify_params))
+        require_known_model(candidate, profile_source=profile_source)
     except UnknownModelAliasError as exc:
         alias_errors.append(exc)
 
@@ -341,7 +413,7 @@ def _classify_container_inner(
     resolver: ModelResolver,
     pool_backend: PoolBackend | None,
     classify_params: dict[str, object],
-    alias_errors: list[UnknownModelAliasError],
+    alias_errors: list[PreRunNameError],
 ) -> list[StepClassification]:
     """Classify a single inner step returned by a container step's inner_steps().
 
@@ -410,6 +482,7 @@ def _classify_container_inner(
         resolved_cfg = resolve_placeholders(action_cfg, classify_params)
         if _calls_no_new_model(action_type, resolved_cfg):
             continue
+        _collect_unknown_template(action_type, resolved_cfg, alias_errors)
 
         candidate = action_model_candidate(resolver, action_type, resolved_cfg, None)
         if candidate is None and action_type in _SESSION_MODEL_ACTION_TYPES:
@@ -445,7 +518,11 @@ def _classify_container_inner(
             )
             continue
 
-        _collect_unknown_alias(candidate, classify_params, alias_errors)
+        _collect_unknown_alias(
+            candidate,
+            _action_profile_source(action_type, resolved_cfg, classify_params),
+            alias_errors,
+        )
         model_id, profile = resolve_model_alias(candidate)
         classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
         rationale = (
@@ -515,7 +592,8 @@ def classify_pipeline(
     Raises:
         ClassificationError: If a step's entire cascade is None, if a pool
             candidate is encountered but ``pool_backend`` is None, or if any
-            non-pool candidate is an unknown model alias (#175; all are listed).
+            non-pool candidate is an unknown model alias or a review step names an
+            unknown template (#175; all are listed).
         PoolNotFoundError: Propagated from ``pool_backend.get_pool()``.
     """
     # Local imports to avoid circular imports at module load: the steps
@@ -533,7 +611,7 @@ def classify_pipeline(
     classify_params: dict[str, object] = {k: v for k, v in source_params.items() if v != "required"}
 
     results: list[StepClassification] = []
-    alias_errors: list[UnknownModelAliasError] = []
+    alias_errors: list[PreRunNameError] = []
 
     for step_index, step in enumerate(definition.steps):
         try:
@@ -586,6 +664,7 @@ def classify_pipeline(
             resolved_cfg = resolve_placeholders(action_cfg, classify_params)
             if _calls_no_new_model(action_type, resolved_cfg):
                 continue
+            _collect_unknown_template(action_type, resolved_cfg, alias_errors)
             candidate = action_model_candidate(resolver, action_type, resolved_cfg, step_model)
             if candidate is None and action_type in _SESSION_MODEL_ACTION_TYPES:
                 continue
@@ -610,7 +689,11 @@ def classify_pipeline(
                 )
                 continue
 
-            _collect_unknown_alias(candidate, classify_params, alias_errors)
+            _collect_unknown_alias(
+                candidate,
+                _action_profile_source(action_type, resolved_cfg, classify_params),
+                alias_errors,
+            )
             model_id, profile = resolve_model_alias(candidate)
             classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
             rationale = (

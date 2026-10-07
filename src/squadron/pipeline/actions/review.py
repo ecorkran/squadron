@@ -20,7 +20,6 @@ from squadron.pipeline.resolver import (
     ModelResolutionError,
     ResolvedModel,
 )
-from squadron.providers.base import ProfileName
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
@@ -42,6 +41,7 @@ from squadron.review.persistence import (
     save_provider_failure,
     save_review_result,
 )
+from squadron.review.profile_resolution import resolve_review_profile, review_profile_source
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
     RulesSource,
@@ -195,12 +195,11 @@ class ReviewAction:
         template = self._load_template(template_name)
         resolved = self._resolve_model(context, template)
 
-        # Profile resolution — explicit param → alias-derived → SDK default
-        profile_name = (
-            str(context.params["profile"])
-            if "profile" in context.params
-            else resolved.profile or ProfileName.SDK
-        )
+        # Same cascade `sq review` uses: explicit param → alias → template →
+        # default_review_profile config → SDK (#184).
+        profile_name = resolve_review_profile(
+            self._explicit_profile(context), resolved.profile, template
+        ).name
 
         inputs = self._base_inputs(context)
 
@@ -285,12 +284,23 @@ class ReviewAction:
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         # resolve_full, not resolve: the alias's tool_use gate and output budget can
         # only be read while its name is known (slice 924 D6).
+        # The profile source is this step's own (param, template, config), not the
+        # run-level one, so the alias check agrees with `sq review` (#175, #184).
+        profile_source = review_profile_source(self._explicit_profile(context) is not None, template)
         try:
-            return context.resolver.resolve_full(action_model, step_model)
+            return context.resolver.resolve_full(
+                action_model, step_model, profile_source=profile_source
+            )
         except ModelResolutionError:
             if template.model is None:
                 raise
-            return context.resolver.resolve_full(template.model, step_model)
+            return context.resolver.resolve_full(
+                template.model, step_model, profile_source=profile_source
+            )
+
+    @staticmethod
+    def _explicit_profile(context: ActionContext) -> str | None:
+        return str(context.params["profile"]) if "profile" in context.params else None
 
     def _base_inputs(self, context: ActionContext) -> dict[str, str]:
         cwd = context.cwd

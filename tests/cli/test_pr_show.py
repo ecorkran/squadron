@@ -39,6 +39,7 @@ from squadron.codehost.errors import (
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
     PullRequestCreationRejectedError,
+    PullRequestHeadUnavailableError,
     PullRequestNotFoundError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
@@ -305,7 +306,7 @@ def test_enterprise_run_carries_the_enterprise_hostname(
 # The design's test_errors_observable.py. Placement deviation, deliberate: it
 # lives here rather than under tests/codehost/ because exit codes are only
 # observable through the CLI, and the criterion couples error type, log level,
-# and exit code in a single assertion. The count is the check — all nineteen.
+# and exit code in a single assertion. The count is the check — all twenty.
 
 _ALL_ERROR_CLASSES = [
     AmbiguousBranchPullRequestsError,
@@ -322,6 +323,7 @@ _ALL_ERROR_CLASSES = [
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
     PullRequestCreationRejectedError,
+    PullRequestHeadUnavailableError,
     PullRequestNotFoundError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
@@ -337,7 +339,7 @@ def test_the_error_table_covers_every_subclass() -> None:
         for obj in vars(errors_module).values()
         if isinstance(obj, type) and issubclass(obj, CodeHostError) and obj is not CodeHostError
     }
-    assert len(_ALL_ERROR_CLASSES) == 19
+    assert len(_ALL_ERROR_CLASSES) == 20
     assert set(_ALL_ERROR_CLASSES) == declared
 
 
@@ -346,7 +348,13 @@ def _instance(error_class: type[CodeHostError]) -> CodeHostError:
     if error_class is HostCommandTimeoutError:
         return HostCommandTimeoutError(["gh", "api"], 30.0)
     if error_class is RefMovedSinceResolutionError:
-        return RefMovedSinceResolutionError(RefRole.BASE, "aaa", "bbb")
+        return RefMovedSinceResolutionError(
+            RefRole.BASE, "aaa", "bbb", expected_source="host API", actual_source="refs/heads/main"
+        )
+    if error_class is PullRequestHeadUnavailableError:
+        return PullRequestHeadUnavailableError(
+            "aaa", "refs/pull/83/head", "bbb", "origin", [("fetch by sha", "not our ref")]
+        )
     if error_class is RefNotFetchableError:
         return RefNotFetchableError(RefRole.HEAD, "head could not be fetched")
     if error_class is HostRequestRejectedError:
@@ -404,3 +412,104 @@ def test_error_message_and_hint_go_to_stderr_not_stdout(
 
     assert result.exit_code == 1
     assert "no supported remote" not in result.stdout
+
+
+# --- Adjustments print once, on stderr (slice 934 D9) ------------------------------
+
+_PR_REF_SHA = "8888888888888888888888888888888888888888"
+
+
+def _lagging_read_script() -> list[tuple[list[str], ProcessResult | Exception]]:
+    script = _read_script(GITHUB)
+    # The PR ref reads a stale sha; the API head (HEAD_SHA) is already local.
+    script[5] = (["git", "rev-parse", "--verify"], _ok(_PR_REF_SHA))
+    script[6:6] = [
+        (["git", "cat-file", "-e"], _ok()),
+        (["git", "merge-base", "--is-ancestor", _PR_REF_SHA, HEAD_SHA], _ok()),
+        (["git", "update-ref"], _ok()),
+    ]
+    return script
+
+
+def test_a_lagging_pr_ref_prints_exactly_one_adjustment_line(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], _lagging_read_script())
+
+    assert result.exit_code == 0, result.output
+    line = f"head: refs/pull/83/head lags; reviewed {HEAD_SHA[:7]}… present locally"
+    assert " ".join(result.output.split()).count(line) == 1
+
+
+def test_a_base_fast_forward_prints_exactly_one_adjustment_line(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    advanced = "7" * 40
+    script = _read_script(GITHUB)
+    script[4] = (["git", "rev-parse", "--verify"], _ok(advanced))
+    script.insert(5, (["git", "merge-base", "--is-ancestor", BASE_SHA], _ok()))
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
+
+    assert result.exit_code == 0, result.output
+    line = "base: advanced since resolution; reviewed 7777777… fetched from refs/heads/main"
+    assert " ".join(result.output.split()).count(line) == 1
+
+
+# --- One line per failure; untagged diagnostics stay visible (slice 934 D8) --------
+
+
+def test_pr_show_enters_the_code_host_logging_scope_without_a_verbosity_flag(
+    cli_runner: CliRunner, patched_host: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import contextmanager
+
+    entered: list[int] = []
+
+    @contextmanager
+    def spy(verbosity: int) -> Iterator[None]:
+        entered.append(verbosity)
+        yield
+
+    monkeypatch.setattr("squadron.cli.commands.pr.code_host_logging", spy)
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], _read_script(GITHUB))
+
+    assert result.exit_code == 0, result.output
+    assert entered == [0]
+
+
+def test_a_pr_show_failure_appears_once_on_stderr(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    script = _read_script(GITHUB)
+    script[3] = (["git", "fetch"], ProcessResult(argv=(), returncode=1, stdout="", stderr="no route"))
+    script[4] = (
+        ["git", "rev-parse", "--verify"],
+        ProcessResult(argv=(), returncode=1, stdout="", stderr=""),
+    )
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
+
+    assert result.exit_code == 1
+    assert result.stderr.count("could not fetch base from origin: no route") == 1
+    assert "WARNING squadron.codehost.refs: fetch of base" not in result.stderr
+
+
+def test_an_untagged_codehost_warning_still_shows_in_pr_show(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    script = _read_script(GITHUB)
+    script[4] = (["git", "rev-parse", "--verify"], _ok("7" * 40))
+    script.insert(
+        5,
+        (
+            ["git", "merge-base", "--is-ancestor", BASE_SHA],
+            ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object"),
+        ),
+    )
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
+
+    assert result.exit_code == 1
+    assert "WARNING squadron.codehost.git_refs: could not test ancestry" in result.stderr

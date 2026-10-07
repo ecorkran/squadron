@@ -466,3 +466,119 @@ def test_resolution_produces_the_same_record_pr_show_would(
         payload["fetched"]["diff_range"]
         == f"{payload['fetched']['base_ref']}...{payload['fetched']['head_ref']}"
     )
+
+
+def test_the_review_artifact_carries_the_api_head_sha_when_the_pr_ref_lags() -> None:
+    """The reviewed sha is the API head, never the stale pull-request ref's."""
+    from squadron.cli.commands.review_pr import PrTarget
+    from squadron.review.rules import RulesSource
+    from tests.codehost.lagging_support import lagging_script, resolved_pr83
+
+    api_head = "b67cf55495f01bc2da843d8f96c767a11770e330"
+    runner = FakeProcessRunner(lagging_script(fallback_returns=api_head))
+    cli, resolved = resolved_pr83(runner)
+
+    fetched = cli.fetch_pull_request_refs(resolved, remote_name="origin", cwd="/repo")
+    target = PrTarget(resolved.record, RulesSource.NONE, qualify=False)
+
+    assert fetched.head_sha == api_head
+    assert target.reviewed_sha() == api_head
+
+
+# ---------------------------------------------------------------------------
+# One line per code host failure (slice 934 D8, #186)
+# ---------------------------------------------------------------------------
+
+
+def _fail_proc(stderr: str, returncode: int = 1) -> ProcessResult:
+    return ProcessResult(argv=(), returncode=returncode, stdout="", stderr=stderr)
+
+
+def _arm_failed_base_fetch(patched_host: dict[str, object]) -> None:
+    script = _resolve_and_fetch_script()
+    script[3] = (["git", "fetch"], _fail_proc("no route to host"))
+    script[4] = (["git", "rev-parse", "--verify"], _fail_proc(""))
+    patched_host["script_holder"]["script"] = script  # type: ignore[index]
+
+
+@pytest.mark.parametrize("flags", [[], ["-v"]])
+def test_a_fetch_failure_prints_once_below_dash_vv(
+    patched_host: dict[str, object], flags: list[str]
+) -> None:
+    _arm_failed_base_fetch(patched_host)
+
+    result = CliRunner().invoke(app, ["review", "pr", "83", *flags])
+
+    assert result.exit_code == 1
+    assert result.stderr.count("could not fetch base from origin: no route to host") == 1
+    assert "WARNING squadron.codehost.refs: fetch of base" not in result.stderr
+
+
+def test_a_fetch_failure_also_shows_the_tagged_warning_at_dash_vv(
+    patched_host: dict[str, object],
+) -> None:
+    _arm_failed_base_fetch(patched_host)
+
+    result = CliRunner().invoke(app, ["review", "pr", "83", "-vv"])
+
+    assert result.exit_code == 1
+    assert "WARNING squadron.codehost.refs: fetch of base from origin failed" in result.stderr
+
+
+def test_an_untagged_codehost_warning_still_shows_at_default_verbosity(
+    patched_host: dict[str, object],
+) -> None:
+    advanced = "7" * 40
+    script = _resolve_and_fetch_script()
+    script[4] = (["git", "rev-parse", "--verify"], _ok(advanced))
+    script.insert(
+        5, (["git", "merge-base", "--is-ancestor", BASE_SHA], _fail_proc("fatal: bad object", 128))
+    )
+    patched_host["script_holder"]["script"] = script  # type: ignore[index]
+
+    result = CliRunner().invoke(app, ["review", "pr", "83"])
+
+    assert result.exit_code == 1
+    assert "WARNING squadron.codehost.git_refs: could not test ancestry" in result.stderr
+
+
+def test_a_lagging_ref_prints_the_adjustment_once_and_no_duplicate_warning(
+    patched_host: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from squadron.review.git_utils import EmptyScopeError
+
+    pr_ref_sha = "8" * 40
+    script = _resolve_and_fetch_script()
+    script[5] = (["git", "rev-parse", "--verify"], _ok(pr_ref_sha))
+    script[6:6] = [
+        (["git", "cat-file", "-e"], _ok()),
+        (["git", "merge-base", "--is-ancestor", pr_ref_sha, HEAD_SHA], _ok()),
+        (["git", "update-ref"], _ok()),
+    ]
+    patched_host["script_holder"]["script"] = script  # type: ignore[index]
+
+    def _stop(*_args: object, **_kwargs: object) -> None:
+        raise EmptyScopeError("stop after the fetch")
+
+    monkeypatch.setattr("squadron.cli.commands.review_pr.assert_reviewable_scope", _stop)
+
+    result = CliRunner().invoke(app, ["review", "pr", "83"])
+
+    stderr = " ".join(result.stderr.split())
+    assert stderr.count(f"head: refs/pull/83/head lags; reviewed {HEAD_SHA[:7]}… present locally") == 1
+    assert "lags the host API head" not in stderr
+
+
+def test_a_fetch_timeout_is_rendered_not_a_traceback(patched_host: dict[str, object]) -> None:
+    from squadron.core.process_runner import ProcessTimedOutError
+
+    script = _resolve_and_fetch_script()
+    script[3] = (["git", "fetch"], ProcessTimedOutError(["git", "fetch"], 300.0))
+    patched_host["script_holder"]["script"] = script  # type: ignore[index]
+
+    result = CliRunner().invoke(app, ["review", "pr", "83"])
+
+    assert result.exit_code == 1
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert "Traceback" not in result.stderr
+    assert result.stderr.count("host command exceeded 300.0s") == 1

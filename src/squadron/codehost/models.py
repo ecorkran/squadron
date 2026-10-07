@@ -112,6 +112,35 @@ class LocalRemote:
     url: str
 
 
+#: How many characters of a commit sha an operator-facing message shows.
+SHA_DISPLAY_LENGTH = 7
+
+
+def short_sha(sha: str) -> str:
+    """A sha as shown in messages: its first ``SHA_DISPLAY_LENGTH`` characters and ``…``."""
+    return f"{sha[:SHA_DISPLAY_LENGTH]}…"
+
+
+@dataclass(frozen=True)
+class RefAdjustment:
+    """A place where the sha reviewed differs from the sha the host first reported.
+
+    Recorded as data so the command prints it once, and the review artifact can
+    name the sha actually reviewed. ``source`` is a phrase for how ``used_sha`` was
+    obtained (``fetched by sha``, ``fetched from refs/heads/main``).
+    """
+
+    role: RefRole
+    reported_sha: str
+    used_sha: str
+    source: str
+    reason: str
+
+    def describe(self) -> str:
+        """The one line a command prints for this adjustment."""
+        return f"{self.role.value}: {self.reason}; reviewed {short_sha(self.used_sha)} {self.source}"
+
+
 @dataclass(frozen=True)
 class FetchedRange:
     """The result of fetching a pull request's base and head."""
@@ -123,6 +152,7 @@ class FetchedRange:
     merge_base: str
     diff_range: str
     changed_paths: tuple[str, ...]
+    adjustments: tuple[RefAdjustment, ...] = ()
 
 
 @dataclass(frozen=True)

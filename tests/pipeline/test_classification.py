@@ -21,6 +21,9 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
     StepClass,
     StepClassification,
+    _review_template,  # pyright: ignore[reportPrivateUsage]
+    _review_template_model_fallback,  # pyright: ignore[reportPrivateUsage]
+    action_model_label,
     classify_pipeline,
 )
 from squadron.pipeline.intelligence.pools.models import (
@@ -730,7 +733,7 @@ def test_top_level_steps_still_classified_alongside_containers() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_template(model: str | None) -> object:
+def _make_template(model: str | None, profile: str | None = None) -> object:
     from squadron.review.templates import ReviewTemplate
 
     return ReviewTemplate(
@@ -743,6 +746,7 @@ def _make_template(model: str | None) -> object:
         required_inputs=[],
         optional_inputs=[],
         model=model,
+        profile=profile,
         prompt_template="Review all.",
     )
 
@@ -943,3 +947,170 @@ def test_label_and_classifier_agree(
     row = result.steps[0]
     expected = row.resolved_alias or f"pool:{row.pool_name}"
     assert action_model_label(resolver, "dispatch", config, None) == f"model={expected}"
+
+
+def test_review_template_returns_a_known_template() -> None:
+    template = _make_template(model="minimax")
+    with patch("squadron.review.templates.get_template", return_value=template):
+        assert _review_template("review", {"template": "code"}) is template
+
+
+def test_review_template_returns_none_for_an_unknown_name_without_raising() -> None:
+    assert _review_template("review", {"template": "no-such-template-name"}) is None
+
+
+@pytest.mark.parametrize(
+    ("action_type", "config"),
+    [("dispatch", {"template": "code"}), ("review", {}), ("review", {"template": 3})],
+)
+def test_review_template_returns_none_when_there_is_no_template_to_read(
+    action_type: str, config: dict[str, object]
+) -> None:
+    assert _review_template(action_type, config) is None
+
+
+def test_model_fallback_is_unchanged_for_known_and_unknown_templates() -> None:
+    with patch(
+        "squadron.review.templates.get_template",
+        return_value=_make_template(model="minimax"),
+    ):
+        assert _review_template_model_fallback("review", {"template": "code"}) == "minimax"
+    assert _review_template_model_fallback("review", {"template": "no-such-template-name"}) is None
+
+
+# ---------------------------------------------------------------------------
+# Unknown review templates fail before the run (slice 934 D4)
+# ---------------------------------------------------------------------------
+
+
+def _review_pipeline(template: str, *, model: str | None = "sonnet") -> PipelineDefinition:
+    step = make_step("review", "review-0", {"template": template, "model": model})
+    return make_pipeline([step])
+
+
+def test_unknown_review_template_fails_classification_with_a_suggestion() -> None:
+    with pytest.raises(ClassificationError, match="unknown review template 'cod'; did you mean"):
+        classify_pipeline(_review_pipeline("cod"), make_resolver())
+
+
+def test_unknown_template_and_unknown_alias_are_reported_together() -> None:
+    pipeline = _review_pipeline("cod", model="glm-flash-low.")
+    with pytest.raises(ClassificationError) as raised:
+        classify_pipeline(pipeline, make_resolver())
+    message = str(raised.value)
+    assert "unknown review template 'cod'" in message
+    assert "unknown model alias 'glm-flash-low.'" in message
+
+
+def test_template_name_holding_a_placeholder_is_skipped() -> None:
+    result = classify_pipeline(_review_pipeline("{template}"), make_resolver())
+    assert len(result.steps) == 1
+
+
+def test_unknown_template_name_does_not_raise_from_the_labelling_path() -> None:
+    label = action_model_label(make_resolver(), "review", {"template": "no-such-template"}, None)
+    assert label == "model=unresolved"
+
+
+@pytest.mark.asyncio
+async def test_run_time_unknown_template_fails_through_the_review_action() -> None:
+    from unittest.mock import MagicMock
+
+    from squadron.pipeline.actions.review import ReviewAction
+    from squadron.pipeline.models import ActionContext
+
+    context = ActionContext(
+        pipeline_name="p",
+        run_id="run-12345678",
+        params={"template": "no-such-template"},
+        step_name="review-0",
+        step_index=0,
+        prior_outputs={},
+        resolver=make_resolver(pipeline_model="sonnet"),
+        cf_client=MagicMock(),
+        cwd="/tmp/test",
+    )
+    label = action_model_label(context.resolver, "review", dict(context.params), None)
+    assert label == "model=sonnet"
+    result = await ReviewAction().execute(context)
+    assert result.success is False
+    assert "no-such-template" in (result.error or "")
+
+
+def test_every_builtin_pipeline_names_only_known_review_templates() -> None:
+    from pathlib import Path
+
+    import squadron
+    from squadron.pipeline.loader import load_pipeline
+
+    pipelines_dir = Path(squadron.__file__).parent / "data" / "pipelines"
+    for path in sorted(pipelines_dir.glob("*.yaml")):
+        definition = load_pipeline(str(path))
+        try:
+            classify_pipeline(definition, make_resolver(pipeline_model="sonnet"))
+        except ClassificationError as exc:
+            # Other classification errors (e.g. required params with no value here) are not
+            # this test's concern; only an unknown template name fails it.
+            assert "unknown review template" not in str(exc), f"{path.name}: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# The alias check uses the review step's own profile source (slice 934 D4, #175/#184)
+# ---------------------------------------------------------------------------
+
+_LITERAL_ID = "my-literal-model-id"
+
+
+def _config_stub(monkeypatch: pytest.MonkeyPatch, profile: str | None) -> None:
+    def fake_get_config(key: str) -> str | None:
+        return profile if key == "default_review_profile" else None
+
+    monkeypatch.setattr("squadron.review.profile_resolution.get_config", fake_get_config)
+
+
+def _classify_review_with_template(template: object, model: str) -> object:
+    with patch("squadron.review.templates.get_template", return_value=template):
+        return classify_pipeline(_review_pipeline("code", model=model), make_resolver())
+
+
+def test_literal_id_passes_for_a_review_step_when_default_review_profile_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config_stub(monkeypatch, "openrouter")
+    result = _classify_review_with_template(_make_template(model=None), _LITERAL_ID)
+    assert isinstance(result, PipelineClassification)
+    assert len(result.steps) == 1
+
+
+def test_literal_id_without_a_profile_source_fails_with_the_sq_review_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from squadron.models.aliases import UnknownModelAliasError, require_known_model
+
+    _config_stub(monkeypatch, None)
+    with pytest.raises(UnknownModelAliasError) as expected:
+        require_known_model(_LITERAL_ID, profile_source=False)
+    with pytest.raises(ClassificationError) as raised:
+        _classify_review_with_template(_make_template(model=None), _LITERAL_ID)
+    assert str(expected.value) in str(raised.value)
+
+
+def test_template_declared_profile_makes_a_literal_id_acceptable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config_stub(monkeypatch, None)
+    result = _classify_review_with_template(
+        _make_template(model=None, profile="openrouter"), _LITERAL_ID
+    )
+    assert isinstance(result, PipelineClassification)
+
+
+def test_non_review_actions_keep_the_run_level_profile_param(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config_stub(monkeypatch, "openrouter")  # must not rescue a dispatch step
+    pipeline = make_pipeline([make_step("dispatch", "dispatch-0", {"model": _LITERAL_ID})])
+    with pytest.raises(ClassificationError, match="unknown model alias"):
+        classify_pipeline(pipeline, make_resolver())
+    result = classify_pipeline(pipeline, make_resolver(), params={"profile": "openrouter"})
+    assert len(result.steps) == 1

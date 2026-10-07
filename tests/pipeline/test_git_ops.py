@@ -3,18 +3,24 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
+from squadron.integrations.context_forge import (
+    ContextForgeError,
+    ContextForgeNotAvailable,
+    SliceEntry,
+)
 from squadron.pipeline.git_ops import (
     GitEnvironmentError,
     GitStateUnknownError,
     NoDesignFileError,
     branch_behind_count,
     branch_work_count,
+    merged_slice_branches,
     read_integration_target,
     slice_branch_name,
     verify_git_state,
@@ -201,3 +207,148 @@ def test_count_failure_raises_and_logs_error(
             with pytest.raises(GitStateUnknownError, match=message):
                 count("slice", "main", cwd=cwd)
     assert any(r.levelno == logging.ERROR and message in r.getMessage() for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# merged_slice_branches (slice 934 D1, D10)
+# ---------------------------------------------------------------------------
+
+_DESIGN = "105-slice.batch-foo.md"
+_BRANCH = "105-slice.batch-foo"
+_ENTRY = SliceEntry(index=105, name="Batch Foo", design_file=_DESIGN, status="in_progress")
+
+
+def _commit(repo: Path, filename: str) -> None:
+    (repo / filename).write_text(f"{filename}\n")
+    run_test_git(repo, "add", filename)
+    run_test_git(repo, "commit", "-q", "-m", f"add {filename}")
+
+
+def _slice_branch_with_work(repo: Path) -> None:
+    """Create the slice branch with one commit of its own, then return to main."""
+    run_test_git(repo, "checkout", "-q", "-b", _BRANCH)
+    _commit(repo, "feature.py")
+    run_test_git(repo, "checkout", "-q", "main")
+
+
+def test_no_ff_merged_branch_is_merged(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    run_test_git(temp_git_repo, "merge", "-q", "--no-ff", "-m", "merge slice", _BRANCH)
+    assert merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo)) == {105}
+
+
+def test_fast_forward_merged_branch_is_not_merged(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    run_test_git(temp_git_repo, "merge", "-q", "--ff-only", _BRANCH)
+    assert merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo)) == set()
+
+
+def test_branch_entered_with_no_commits_is_not_merged(temp_git_repo: Path) -> None:
+    run_test_git(temp_git_repo, "branch", _BRANCH)
+    assert merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo)) == set()
+
+
+def test_unmerged_branch_with_work_is_not_merged(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    assert merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo)) == set()
+
+
+def test_missing_branch_is_not_merged_and_logs_nothing(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.DEBUG, logger="squadron.pipeline.git_ops"):
+        assert merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo)) == set()
+    assert caplog.records == []
+
+
+def test_slice_without_a_design_file_is_not_merged(temp_git_repo: Path) -> None:
+    entry = SliceEntry(index=106, name="No Design", design_file=None, status="not_started")
+    assert merged_slice_branches([entry], "main", cwd=str(temp_git_repo)) == set()
+
+
+def test_mixed_set_returns_only_the_merged_slices(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    run_test_git(temp_git_repo, "merge", "-q", "--no-ff", "-m", "merge slice", _BRANCH)
+    other = SliceEntry(index=107, name="Open", design_file="107-slice.open.md", status="x")
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", "107-slice.open")
+    _commit(temp_git_repo, "open.py")
+    run_test_git(temp_git_repo, "checkout", "-q", "main")
+    entries = [_ENTRY, other]
+    assert merged_slice_branches(entries, "main", cwd=str(temp_git_repo)) == {105}
+
+
+# D10: each of the three git calls, timing out and exiting non-zero.
+
+_OK = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+_TIP = f"{_BRANCH} {'a' * 40}\n"
+
+
+def _git_stub(failing: str, outcome: subprocess.CompletedProcess[str] | None):  # type: ignore[no-untyped-def]
+    """A ``run_git`` fake that answers every call sanely except the ``failing`` one."""
+
+    def fake(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+        if args[0] == failing or (failing == "merge-base" and args[0] == "merge-base"):
+            return outcome
+        if args[0] == "for-each-ref":
+            return subprocess.CompletedProcess(args, 0, stdout=_TIP, stderr="")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    return fake
+
+
+@pytest.mark.parametrize("command", ["for-each-ref", "rev-list", "merge-base"])
+@pytest.mark.parametrize(
+    "outcome",
+    [None, subprocess.CompletedProcess(args=[], returncode=128, stdout="", stderr="fatal: boom")],
+    ids=["timeout", "non-zero"],
+)
+def test_git_failure_raises_and_logs_error(
+    command: str,
+    outcome: subprocess.CompletedProcess[str] | None,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    with (
+        patch("squadron.pipeline.git_ops.run_git", _git_stub(command, outcome)),
+        caplog.at_level(logging.ERROR, logger="squadron.pipeline.git_ops"),
+        pytest.raises(GitStateUnknownError),
+    ):
+        merged_slice_branches([_ENTRY], "main", cwd="/unused")
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert command in errors[0].getMessage()
+
+
+def test_missing_target_raises_from_rev_list(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)  # a candidate, so the target's history is read
+    with pytest.raises(GitStateUnknownError, match="rev-list"):
+        merged_slice_branches([_ENTRY], "no-such-target", cwd=str(temp_git_repo))
+
+
+def test_fast_forward_counts_recognises_a_fast_forwarded_branch(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    run_test_git(temp_git_repo, "merge", "-q", "--ff-only", _BRANCH)
+    cwd = str(temp_git_repo)
+
+    assert merged_slice_branches([_ENTRY], "main", cwd=cwd) == set()
+    assert merged_slice_branches([_ENTRY], "main", cwd=cwd, fast_forward_counts=True) == {105}
+
+
+def test_fast_forward_counts_still_excludes_an_unmerged_branch(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    assert (
+        merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo), fast_forward_counts=True)
+        == set()
+    )
+
+
+def test_target_history_is_not_read_when_no_slice_has_a_branch() -> None:
+    calls: list[str] = []
+
+    def fake(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str]:
+        calls.append(args[0])
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    with patch("squadron.pipeline.git_ops.run_git", fake):
+        assert merged_slice_branches([_ENTRY], "main", cwd="/unused") == set()
+
+    assert calls == ["for-each-ref"]

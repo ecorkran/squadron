@@ -154,7 +154,7 @@ async def test_conflict_flags_the_item_with_a_warning(
     from squadron.pipeline.models import PipelineDefinition, StepConfig
     from squadron.pipeline.sources import SOURCE_REGISTRY
 
-    async def source(*_: object) -> list[dict[str, object]]:
+    async def source(*_: object, **__: object) -> list[dict[str, object]]:
         return [{"index": str(SLICE), "name": "Batch Foo"}]
 
     monkeypatch.setitem(SOURCE_REGISTRY, ("test", "slices"), source)

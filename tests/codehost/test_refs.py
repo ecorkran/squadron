@@ -19,18 +19,23 @@ from pathlib import Path
 import pytest
 
 from squadron.codehost.errors import (
+    RENDERED_BY_CALLER,
+    HostCommandTimeoutError,
     NoMergeBaseError,
+    PullRequestHeadUnavailableError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
-from squadron.codehost.models import RefRole
-from squadron.codehost.refs import (
-    GIT_FETCH_TIMEOUT_SECONDS,
-    GIT_QUERY_TIMEOUT_SECONDS,
-    fetch_and_range,
-    local_ref,
+from squadron.codehost.git_refs import GIT_FETCH_TIMEOUT_SECONDS, GIT_QUERY_TIMEOUT_SECONDS
+from squadron.codehost.head_resolution import (
+    HEAD_FETCHED_BY_SHA,
+    HEAD_PRESENT_LOCALLY,
+    api_head_ref,
+    ensure_api_head,
 )
-from squadron.core.process_runner import ProcessResult, SubprocessRunner
+from squadron.codehost.models import RefRole
+from squadron.codehost.refs import fetch_and_range, local_ref
+from squadron.core.process_runner import ProcessResult, ProcessTimedOutError, SubprocessRunner
 from tests.codehost.fake_runner import FakeProcessRunner
 
 BASE_SHA = "4edf5f1709489da9494906b2178e27dea6a9ae10"
@@ -69,7 +74,7 @@ def _script(
     ]
 
 
-def _run(runner: FakeProcessRunner):
+def _run(runner: FakeProcessRunner, *, head_fallback_sources: tuple[str, ...] = ()):
     return fetch_and_range(
         runner,
         cwd="/repo",
@@ -79,6 +84,7 @@ def _run(runner: FakeProcessRunner):
         head_refspec_source=f"refs/pull/{NUMBER}/head",
         expected_base_sha=BASE_SHA,
         expected_head_sha=HEAD_SHA,
+        head_fallback_sources=head_fallback_sources,
     )
 
 
@@ -240,16 +246,140 @@ def test_moved_base_reports_expected_and_actual(caplog: pytest.LogCaptureFixture
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
-def test_moved_head_reports_expected_and_actual() -> None:
-    """Head gets no fast-forward allowance — new commits are different code to
-    review. The fake raises on an unscripted ancestry probe, so none ran."""
-    moved = "8888888888888888888888888888888888888888"
-    runner = FakeProcessRunner(_script(head_rev=_ok(moved)))
-    with pytest.raises(RefMovedSinceResolutionError) as excinfo:
-        _run(runner)
+PR_REF_SHA = "8888888888888888888888888888888888888888"
+_API_PRESENT = (["git", "cat-file", "-e", f"{HEAD_SHA}^{{commit}}"], _ok())
+_PR_BEHIND_API = ["git", "merge-base", "--is-ancestor", PR_REF_SHA, HEAD_SHA]
+_API_BEHIND_PR = ["git", "merge-base", "--is-ancestor", HEAD_SHA, PR_REF_SHA]
+
+
+def _script_with_head_disagreement(*steps: tuple[list[str], ProcessResult | Exception]):
+    """The PR ref reads PR_REF_SHA while the API says HEAD_SHA.
+
+    The ancestry probes precede the generic merge-base entry: the fake answers the
+    first matching prefix."""
+    script = _script(head_rev=_ok(PR_REF_SHA))
+    script[3:3] = list(steps)
+    return script
+
+
+def test_head_pushed_after_resolution_is_a_moved_error(caplog: pytest.LogCaptureFixture) -> None:
+    """The PR ref descends from the API head: new commits are different code to review."""
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, _fail("")), (_API_BEHIND_PR, _ok())
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError) as excinfo:
+            _run(runner)
 
     assert excinfo.value.role is RefRole.HEAD
-    assert excinfo.value.actual == moved
+    assert excinfo.value.expected == HEAD_SHA
+    assert excinfo.value.actual == PR_REF_SHA
+    assert excinfo.value.actual_source == f"refs/pull/{NUMBER}/head"
+
+
+def test_head_unrelated_to_the_api_head_is_a_moved_error() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, _fail("")), (_API_BEHIND_PR, _fail(""))
+        )
+    )
+    with pytest.raises(RefMovedSinceResolutionError):
+        _run(runner)
+
+
+def test_head_ancestry_probe_error_is_answered_no_with_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    probe_error = ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object")
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, probe_error), (_API_BEHIND_PR, probe_error)
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError):
+            _run(runner)
+
+    assert any("could not test ancestry" in r.getMessage() for r in caplog.records)
+
+
+def test_head_ancestry_timeout_is_a_code_host_error() -> None:
+    timeout = ProcessTimedOutError(_PR_BEHIND_API, 30.0)
+    runner = FakeProcessRunner(_script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, timeout)))
+    with pytest.raises(HostCommandTimeoutError):
+        _run(runner)
+
+
+_UPDATE_REF = ["git", "update-ref", HEAD_LOCAL, HEAD_SHA]
+
+
+def test_lagging_ref_builds_the_range_on_the_api_head() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _ok()))
+    )
+
+    fetched = _run(runner)
+
+    assert fetched.head_sha == HEAD_SHA
+    assert len(fetched.adjustments) == 1
+    adjustment = fetched.adjustments[0]
+    assert adjustment.role is RefRole.HEAD
+    assert (adjustment.reported_sha, adjustment.used_sha) == (PR_REF_SHA, HEAD_SHA)
+    assert adjustment.source == HEAD_PRESENT_LOCALLY
+    assert any(call.argv[:2] == ("git", "update-ref") for call in runner.calls)
+
+
+def test_lagging_ref_from_the_issue_fetches_the_api_head_from_the_fallback() -> None:
+    """The API head is absent locally and refused by sha; the head branch has it."""
+    api_local = api_head_ref(REMOTE, NUMBER)
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            (["git", "cat-file", "-e", f"{HEAD_SHA}^{{commit}}"], _fail("")),
+            (["git", "fetch", "--no-tags", REMOTE, f"+{HEAD_SHA}:{api_local}"], _fail("not our ref")),
+            (["git", "fetch", "--no-tags", REMOTE, f"+refs/heads/dev/jane:{api_local}"], _ok()),
+            (["git", "rev-parse", "--verify", f"{api_local}^{{commit}}"], _ok(HEAD_SHA)),
+            (_PR_BEHIND_API, _ok()),
+            (_UPDATE_REF, _ok()),
+        )
+    )
+
+    fetched = _run(runner, head_fallback_sources=("refs/heads/dev/jane",))
+
+    assert fetched.head_sha == HEAD_SHA
+    assert fetched.adjustments[0].source == "fetched from refs/heads/dev/jane"
+    kinds = [call.argv[1] for call in runner.calls]
+    assert kinds.index("cat-file") < kinds.index("merge-base")
+
+
+def test_lagging_ref_update_failure_is_a_rendered_ref_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _fail("cannot lock ref"))
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError) as excinfo:
+            _run(runner)
+
+    assert excinfo.value.role is RefRole.HEAD
+    tagged = [r for r in caplog.records if getattr(r, RENDERED_BY_CALLER, False)]
+    assert any("could not point" in r.getMessage() for r in tagged)
+
+
+def test_lagging_ref_update_timeout_is_a_code_host_error() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT,
+            (_PR_BEHIND_API, _ok()),
+            (_UPDATE_REF, ProcessTimedOutError(_UPDATE_REF, 30.0)),
+        )
+    )
+    with pytest.raises(HostCommandTimeoutError):
+        _run(runner)
 
 
 def test_unrelated_histories_raise_no_merge_base(caplog: pytest.LogCaptureFixture) -> None:
@@ -347,3 +477,286 @@ def test_real_git_base_merged_after_resolution(tmp_path: Path) -> None:
     _git(remote, "reset", "-q", "--hard", reported_base)
     with pytest.raises(RefMovedSinceResolutionError):
         fetch(merged_base)
+
+
+# --- Source-naming errors and adjustments (slice 934 D7, D9) -------------------
+
+
+def test_moved_error_message_names_each_source_and_sha() -> None:
+    error = RefMovedSinceResolutionError(
+        RefRole.HEAD,
+        "ae1cbf2" + "0" * 33,
+        "d3008a6" + "0" * 33,
+        expected_source="host API",
+        actual_source="refs/pull/49/head",
+    )
+    assert str(error) == (
+        "head moved since resolution: host API reported ae1cbf2…, refs/pull/49/head fetched d3008a6…"
+    )
+    assert error.fix_hint == "Rerun to resolve the pull request again."
+    assert (error.expected_source, error.actual_source) == ("host API", "refs/pull/49/head")
+
+
+def test_head_unavailable_error_names_every_attempt_and_has_a_hint() -> None:
+    error = PullRequestHeadUnavailableError(
+        "ae1cbf2" + "0" * 33,
+        "refs/pull/49/head",
+        "d3008a6" + "0" * 33,
+        "origin",
+        [("fetch by sha", "not our ref"), ("refs/heads/dev/jane", "sha did not match")],
+    )
+    assert str(error) == (
+        "pull request head ae1cbf2… (host API) could not be fetched; "
+        "refs/pull/49/head on origin is d3008a6…; fetch by sha: not our ref; "
+        "refs/heads/dev/jane: sha did not match"
+    )
+    assert error.role is RefRole.HEAD
+    assert error.fix_hint is not None and "Rerun later" in error.fix_hint
+
+
+def test_adjustments_default_to_empty() -> None:
+    assert _run(FakeProcessRunner(_script())).adjustments == ()
+
+
+def test_a_base_side_move_through_verify_names_its_sources(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    moved = "9999999999999999999999999999999999999999"
+    runner = FakeProcessRunner(_script_with_moved_base(moved, _fail("")))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError) as excinfo:
+            _run(runner)
+
+    assert excinfo.value.expected_source == "host API"
+    assert excinfo.value.actual_source == "refs/heads/main"
+    assert "refs/heads/main fetched 9999999…" in str(excinfo.value)
+    moved_records = [r for r in caplog.records if "moved since resolution" in r.getMessage()]
+    assert moved_records and getattr(moved_records[0], RENDERED_BY_CALLER) is True
+
+
+def test_base_fast_forward_is_recorded_as_one_adjustment() -> None:
+    advanced = "7777777777777777777777777777777777777777"
+    runner = FakeProcessRunner(_script_with_moved_base(advanced, _ok()))
+
+    fetched = _run(runner)
+
+    assert len(fetched.adjustments) == 1
+    adjustment = fetched.adjustments[0]
+    assert adjustment.role is RefRole.BASE
+    assert (adjustment.reported_sha, adjustment.used_sha) == (BASE_SHA, advanced)
+    assert adjustment.source == "fetched from refs/heads/main"
+
+
+def test_primary_fetch_timeout_raises_a_code_host_error_not_a_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    argv = ["git", "fetch", "--no-tags", REMOTE]
+    runner = FakeProcessRunner([(["git", "fetch"], ProcessTimedOutError(argv, 300.0))])
+
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(HostCommandTimeoutError) as excinfo:
+            _run(runner)
+
+    assert excinfo.value.seconds == 300.0
+    timeout_records = [r for r in caplog.records if "exceeded" in r.getMessage()]
+    assert len(timeout_records) == 1
+    assert timeout_records[0].levelno == logging.WARNING
+    assert getattr(timeout_records[0], RENDERED_BY_CALLER) is True
+
+
+# --- ensure_api_head (slice 934 D6 step 1, D10) --------------------------------
+
+API_SHA = "ae1cbf2" + "0" * 33
+OTHER_SHA = "d3008a6" + "0" * 33
+API_LOCAL = api_head_ref(REMOTE, NUMBER)
+FALLBACK = "refs/heads/dev/jane"
+_CAT_FILE = ["git", "cat-file", "-e", f"{API_SHA}^{{commit}}"]
+_API_REV = ["git", "rev-parse", "--verify", f"{API_LOCAL}^{{commit}}"]
+
+
+def _ensure(runner: FakeProcessRunner) -> str:
+    return ensure_api_head(
+        runner,
+        cwd="/repo",
+        remote_name=REMOTE,
+        api_sha=API_SHA,
+        api_local=API_LOCAL,
+        pr_ref=f"refs/pull/{NUMBER}/head",
+        pr_ref_sha=OTHER_SHA,
+        head_fallback_sources=(FALLBACK,),
+    )
+
+
+def test_a_present_commit_needs_no_fetch() -> None:
+    runner = FakeProcessRunner([(_CAT_FILE, _ok())])
+    assert _ensure(runner) == HEAD_PRESENT_LOCALLY
+    assert [call.argv[1] for call in runner.calls] == ["cat-file"]
+
+
+def test_presence_check_timeout_is_a_code_host_error() -> None:
+    runner = FakeProcessRunner([(_CAT_FILE, ProcessTimedOutError(_CAT_FILE, 30.0))])
+    with pytest.raises(HostCommandTimeoutError):
+        _ensure(runner)
+
+
+def test_an_absent_commit_is_fetched_by_sha() -> None:
+    runner = FakeProcessRunner(
+        [(_CAT_FILE, _fail("")), (["git", "fetch"], _ok()), (_API_REV, _ok(API_SHA))]
+    )
+    assert _ensure(runner) == HEAD_FETCHED_BY_SHA
+    fetch = next(call for call in runner.calls if call.argv[1] == "fetch")
+    assert f"+{API_SHA}:{API_LOCAL}" in fetch.argv
+
+
+def test_a_refused_sha_fetch_falls_back_to_the_head_branch() -> None:
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("upload-pack: not our ref")),
+            (["git", "fetch"], _ok()),
+            (_API_REV, _ok(API_SHA)),
+        ]
+    )
+    assert _ensure(runner) == FALLBACK
+    fetches = [call for call in runner.calls if call.argv[1] == "fetch"]
+    assert f"+{FALLBACK}:{API_LOCAL}" in fetches[1].argv
+
+
+def test_a_fallback_that_returns_a_different_sha_is_rejected() -> None:
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("not our ref")),
+            (["git", "fetch"], _ok()),
+            (_API_REV, _ok(OTHER_SHA)),
+        ]
+    )
+    with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+        _ensure(runner)
+    reasons = dict(excinfo.value.attempts)
+    assert "not the API head" in reasons[FALLBACK]
+
+
+def test_a_fallback_timeout_is_recorded_as_the_reason() -> None:
+    argv = ["git", "fetch"]
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("not our ref")),
+            (["git", "fetch"], ProcessTimedOutError(argv, 300.0)),
+        ]
+    )
+    with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+        _ensure(runner)
+    assert dict(excinfo.value.attempts)[FALLBACK] == "timed out after 300s"
+
+
+def test_when_every_source_fails_the_error_names_each_one(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner(
+        [
+            (_CAT_FILE, _fail("")),
+            (["git", "fetch"], _fail("not our ref")),
+            (["git", "fetch"], _fail("couldn't find remote ref")),
+        ]
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
+            _ensure(runner)
+    assert excinfo.value.attempts == (
+        (HEAD_FETCHED_BY_SHA, "not our ref"),
+        (FALLBACK, "couldn't find remote ref"),
+    )
+    assert str(excinfo.value).count(FALLBACK) == 1
+    warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1 and getattr(warnings[0], RENDERED_BY_CALLER) is True
+
+
+# --- Which warnings the command renders itself (slice 934 D8) -------------------
+
+
+def _tagged(caplog: pytest.LogCaptureFixture, fragment: str) -> bool:
+    """Whether the one record containing ``fragment`` carries the rendered-by-caller tag."""
+    matches = [r for r in caplog.records if fragment in r.getMessage()]
+    assert len(matches) == 1, f"expected one record containing {fragment!r}"
+    return bool(getattr(matches[0], RENDERED_BY_CALLER, False))
+
+
+def test_per_endpoint_fetch_failure_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    runner = FakeProcessRunner(
+        [(["git", "fetch"], _fail("no route")), (["git", "rev-parse"], _fail(""))]
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError):
+            _run(runner)
+    assert _tagged(caplog, "fetch of base from")
+
+
+def test_fetch_exit_with_both_refs_present_warning_is_tagged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner(
+        [
+            (["git", "fetch"], _fail("odd")),
+            (["git", "rev-parse"], _ok(BASE_SHA)),
+            (["git", "rev-parse"], _ok(HEAD_SHA)),
+        ]
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError):
+            _run(runner)
+    assert _tagged(caplog, "git fetch exited")
+
+
+def test_ref_missing_after_fetch_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    runner = FakeProcessRunner(_script(base_rev=_fail("")))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError):
+            _run(runner)
+    assert _tagged(caplog, "is missing after fetch")
+
+
+def test_no_merge_base_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    runner = FakeProcessRunner(_script(merge_base=_fail("none")))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(NoMergeBaseError):
+            _run(runner)
+    assert _tagged(caplog, "no merge base between")
+
+
+def test_the_ancestry_answered_no_warning_is_not_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    """Nothing renders this one: it is a diagnostic, so it must stay visible."""
+    probe_error = ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object")
+    runner = FakeProcessRunner(_script_with_moved_base("7" * 40, probe_error))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError):
+            _run(runner)
+    assert not _tagged(caplog, "could not test ancestry")
+
+
+def test_adjustment_warnings_are_tagged_because_the_command_prints_the_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    lag = FakeProcessRunner(
+        _script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _ok()))
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        _run(lag)
+    assert _tagged(caplog, "lags the host API head")
+
+    caplog.clear()
+    forward = FakeProcessRunner(_script_with_moved_base("7" * 40, _ok()))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        _run(forward)
+    assert _tagged(caplog, "advanced since resolution")
+
+
+def test_adjustment_describes_itself_as_the_line_the_command_prints() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _ok()))
+    )
+    [adjustment] = _run(runner).adjustments
+    assert adjustment.describe() == (
+        f"head: refs/pull/{NUMBER}/head lags; reviewed {HEAD_SHA[:7]}… present locally"
+    )

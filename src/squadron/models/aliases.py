@@ -249,6 +249,16 @@ class UnknownModelAliasError(ValueError):
         )
 
 
+class UnknownReviewTemplateError(ValueError):
+    """A review step names a template that is not registered (#175, #184)."""
+
+    def __init__(self, name: str, close_matches: list[str]) -> None:
+        self.name = name
+        self.close_matches = close_matches
+        suggestion = f"; did you mean: {', '.join(close_matches)}?" if close_matches else ""
+        super().__init__(f"unknown review template '{name}'{suggestion}")
+
+
 def require_known_model(name: str, *, profile_source: bool) -> None:
     """Raise ``UnknownModelAliasError`` unless ``name`` can be resolved (#175).
 

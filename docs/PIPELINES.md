@@ -245,7 +245,10 @@ A revise round inside a loop:
 | `model` | string | no | Model alias for the review. If omitted and no other cascade level (CLI/step/pipeline/config) supplies one, falls back to the template's own `model:` default (e.g. `judge.slice-vs-arch` defaults to `opus`) — but prefer setting this explicitly via a named `params` entry; see the `loop` example below |
 | `slice` | — | no | Not a step field — set `slice` in the pipeline's top-level `params:` block instead. `judge.*` and other slice-aware templates auto-resolve `input`/`against` from the pipeline's `slice` param |
 | `judge` | dict | no | Step-level threshold override for judge templates, e.g. `{pass_floor: 90}` — merges over the template's default thresholds |
+| `profile` | string | no | Provider profile. Without it the step picks one the way `sq review` does: the model alias's own profile, then the template's `profile:`, then `default_review_profile`, then `sdk`. The same cascade serves both, so a review gives the same profile either way |
 | `checkpoint` | string | no | Same triggers as phase steps |
+
+A `template` name that is not registered fails before the first step runs, naming close matches (`unknown review template 'cod'; did you mean: code?`), not at the step that uses it.
 
 **Example:**
 
@@ -698,6 +701,8 @@ If all levels are `None`, the run fails with an explicit error. There is no hidd
 
 Model values are **aliases** (e.g. `opus`, `sonnet`, `minimax`, `glm5`, `haiku`), not raw model IDs. Alias resolution happens at execution time. Aliases are defined in `src/squadron/data/models.toml` (built-in) and can be extended or overridden in `~/.config/squadron/models.toml`.
 
+A name that is neither an alias nor a known model id is rejected **before step 1**, listing close matches, unless a profile is set to justify a literal id. That check also runs under `sq run <pipeline> --dry-run`, so a typo fails the preview instead of rendering a plan that cannot run. For a `review` step, the profile that justifies a literal id is the step's own: its `profile`, its template's `profile:`, or `default_review_profile`; for other steps it is `--param profile=…`.
+
 **Parameter-driven model example:**
 
 ```yaml
@@ -832,6 +837,7 @@ Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: 
 - If you fix a flagged slice by hand on its branch and commit, a retry re-reviews it, and a passing review merges it.
 - An implement dispatch that commits nothing fails its code review (no diff to review), so the item is flagged `step_failed`, not merged.
 - Same params as the plan batches above, except `review-model` defaults to `minimax`, matching `P6`.
+- Git, not cf's checkboxes, says a slice is merged. A slice whose branch is merged into the target counts as complete even when cf still reports it open (its tasks were never checked off): it is skipped, its dependents are not flagged, and a WARNING names the slice, branch and target. Fast-forwarded branches and branches with no commits of their own are not treated as merged. If git cannot be read, the batch fails before any item runs.
 
 ### Item resume
 
@@ -847,7 +853,7 @@ sq run --resume <run_id> --item 196 --decision accept
 - Works on `flagged` and `not_run` items (`not_run` takes `retry` only), on a completed run, and on any pipeline with exactly one `each` step — `slices-plan` and `tasks-plan` too.
 - Before anything reads the tree, item resume commits a flagged slice branch's leftovers and returns to the target. It refuses to start on another branch or on a dirty target.
 - An item that is no longer selected (deferred, now undesigned) is refused, naming its status. A slice already merged and complete on the target — an earlier resume that died before rewriting the report — is reconciled to PASSED (`reconciled: merged before the report was updated`) without running.
-- A lone item whose in-plan dependency is not complete on the target is flagged `dependency N not complete` without running.
+- A lone item whose in-plan dependency is not complete is flagged `dependency N not complete` without running. A dependency merged into the target counts as complete even if cf still reports it open. A merged item that cf still reports open is reconciled to PASSED the same way.
 - The item's record is replaced, with `decision` and `resumedAt`, and both report files are rewritten. The new record and the report path are printed.
 
 | Exit | Meaning |

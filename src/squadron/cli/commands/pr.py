@@ -9,14 +9,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
-from squadron.codehost.errors import CodeHostError, TargetUnresolvableError
+from squadron.codehost.errors import RENDERED_BY_CALLER, CodeHostError, TargetUnresolvableError
 from squadron.codehost.github_cli import build_github_host
 from squadron.codehost.models import FetchedRange, RepositoryLocator, ResolvedPullRequest
 from squadron.codehost.protocol import CodeHost
@@ -85,11 +90,23 @@ def resolve_and_fetch_pull_request(
 
     Raises ``CodeHostError`` on any adapter failure; callers render it the
     same way ``pr show`` does.
+
+    Also prints each ``RefAdjustment`` once, on stderr. It lives here, not in the
+    callers, so every command sharing this fetch prints it exactly once and none
+    can forget; a caller that must stay silent needs the helper split first.
     """
     host, locator, parsed = resolve_locator(target, repo_cwd)
     resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
     fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
+    _print_adjustments(fetched)
     return host, resolved, fetched
+
+
+def _print_adjustments(fetched: FetchedRange) -> None:
+    """Say, once each, where the range reviewed differs from what the host first reported."""
+    errors = Console(stderr=True)
+    for adjustment in fetched.adjustments:
+        errors.print(f"[dim]{escape(adjustment.describe())}[/dim]")
 
 
 def render_code_host_error(exc: CodeHostError) -> None:
@@ -105,8 +122,63 @@ def render_code_host_error(exc: CodeHostError) -> None:
         errors.print(f"[dim]{exc.fix_hint}[/dim]")
 
 
+_CODE_HOST_LOGGER = "squadron.codehost"
+
+#: From this verbosity up, records the command also renders are kept in the log.
+_TAGGED_RECORDS_VERBOSITY = 2
+
+_VERBOSITY_LEVELS = {0: logging.WARNING, 1: logging.INFO}
+
+
+class _CodeHostLogHandler(logging.StreamHandler):  # type: ignore[type-arg]
+    """The stderr handler ``code_host_logging`` installs; a type so nesting can find it."""
+
+
+class _RenderedRecordFilter(logging.Filter):
+    """Drops records the command renders itself, below ``-vv``."""
+
+    def __init__(self, verbosity: int) -> None:
+        super().__init__()
+        self._verbosity = verbosity
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._verbosity >= _TAGGED_RECORDS_VERBOSITY:
+            return True
+        return not getattr(record, RENDERED_BY_CALLER, False)
+
+
+@contextmanager
+def code_host_logging(verbosity: int) -> Iterator[None]:
+    """Print ``squadron.codehost`` diagnostics once, and leave nothing behind.
+
+    The adapter logs every failure at WARNING before raising, and the command then
+    renders the same fact, so without this a failure prints twice (#186). The
+    handler drops only records tagged ``RENDERED_BY_CALLER``; every other codehost
+    diagnostic still reaches stderr. ``propagate`` is untouched, so root handlers
+    (and ``caplog``) still see every record. The logger is process-global, so the
+    handler is removed and the level restored on exit, including a raised
+    ``typer.Exit``. A nested entry is a no-op.
+    """
+    logger = logging.getLogger(_CODE_HOST_LOGGER)
+    if any(isinstance(handler, _CodeHostLogHandler) for handler in logger.handlers):
+        yield
+        return
+    previous_level = logger.level
+    handler = _CodeHostLogHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
+    handler.addFilter(_RenderedRecordFilter(verbosity))
+    logger.addHandler(handler)
+    logger.setLevel(_VERBOSITY_LEVELS.get(verbosity, logging.DEBUG))
+    try:
+        yield
+    finally:
+        logger.removeHandler(handler)
+        logger.setLevel(previous_level)
+
+
 @pr_app.command("show")
 def show(
+    ctx: typer.Context,
     target: str | None = typer.Argument(
         None,
         help=(
@@ -119,6 +191,8 @@ def show(
 ) -> None:
     """Resolve a pull request, fetch its endpoints, and report the range."""
     repo_cwd = resolve_repo_cwd(cwd)
+    # No -v here: render each failure once, and keep untagged diagnostics visible (#186).
+    ctx.with_resource(code_host_logging(0))
 
     try:
         _host, resolved, fetched = resolve_and_fetch_pull_request(target, repo_cwd)
@@ -223,6 +297,7 @@ async def _compose_title_and_body(
 
 @pr_app.command("create")
 def create(
+    ctx: typer.Context,
     base: str | None = typer.Option(None, "--base", help="Base branch."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print title and body without creating."),
     model: str | None = typer.Option(None, "--model", help="Model for the one-shot composer."),
@@ -239,6 +314,7 @@ def create(
     selection, all before input gathering, assembly, and composition.
     """
     repo_cwd = resolve_repo_cwd(cwd)
+    ctx.with_resource(code_host_logging(0))  # as ``show``: no -v, render each failure once
     errors = Console(stderr=True)
 
     try:

@@ -18,7 +18,11 @@ from rich import print as rprint
 from rich.console import Console
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
-from squadron.cli.commands.pr import render_code_host_error, resolve_and_fetch_pull_request
+from squadron.cli.commands.pr import (
+    code_host_logging,
+    render_code_host_error,
+    resolve_and_fetch_pull_request,
+)
 from squadron.cli.commands.review import (
     _exit_on,  # pyright: ignore[reportPrivateUsage]
     _resolve_save_outcome,  # pyright: ignore[reportPrivateUsage]
@@ -289,6 +293,7 @@ def _post_review(
 
 @review_app.command("pr")
 def review_pr(
+    ctx: typer.Context,
     target: str | None = typer.Argument(
         None,
         help=(
@@ -347,6 +352,11 @@ def review_pr(
 
     checkout_cwd = resolve_repo_cwd(cwd)
 
+    verbosity = _resolve_verbosity(verbose)
+    # Print each code host failure once (#186). Entered through the click context so
+    # it covers resolution, fetch and posting, and is left when the command ends.
+    ctx.with_resource(code_host_logging(verbosity))
+
     try:
         host, resolved, fetched = resolve_and_fetch_pull_request(target, checkout_cwd)
         # Inside the handler: assemble_pr_metadata fetches unresolved discussions over the
@@ -375,7 +385,6 @@ def review_pr(
 
     if use_json:
         output = "json"
-    verbosity = _resolve_verbosity(verbose)
 
     # --no-rules reports NONE rather than the source a resolver would have
     # picked: no rules reached the reviewer, so naming a directory in the

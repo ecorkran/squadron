@@ -53,7 +53,7 @@ async def _run_batch(
     An implement that succeeds also commits its file, as the real agent would.
     """
 
-    async def source(*_: object) -> list[dict[str, object]]:
+    async def source(*_: object, **__: object) -> list[dict[str, object]]:
         return [{"index": str(i), "name": SLICES[i][0]} for i in SLICES]
 
     monkeypatch.setitem(SOURCE_REGISTRY, ("test", "slices"), source)
