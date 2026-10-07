@@ -23,6 +23,7 @@ from squadron.pipeline.classification import (
     StepClassification,
     _review_template,  # pyright: ignore[reportPrivateUsage]
     _review_template_model_fallback,  # pyright: ignore[reportPrivateUsage]
+    action_model_label,
     classify_pipeline,
 )
 from squadron.pipeline.intelligence.pools.models import (
@@ -974,3 +975,79 @@ def test_model_fallback_is_unchanged_for_known_and_unknown_templates() -> None:
     ):
         assert _review_template_model_fallback("review", {"template": "code"}) == "minimax"
     assert _review_template_model_fallback("review", {"template": "no-such-template-name"}) is None
+
+
+# ---------------------------------------------------------------------------
+# Unknown review templates fail before the run (slice 934 D4)
+# ---------------------------------------------------------------------------
+
+
+def _review_pipeline(template: str, *, model: str | None = "sonnet") -> PipelineDefinition:
+    step = make_step("review", "review-0", {"template": template, "model": model})
+    return make_pipeline([step])
+
+
+def test_unknown_review_template_fails_classification_with_a_suggestion() -> None:
+    with pytest.raises(ClassificationError, match="unknown review template 'cod'; did you mean"):
+        classify_pipeline(_review_pipeline("cod"), make_resolver())
+
+
+def test_unknown_template_and_unknown_alias_are_reported_together() -> None:
+    pipeline = _review_pipeline("cod", model="glm-flash-low.")
+    with pytest.raises(ClassificationError) as raised:
+        classify_pipeline(pipeline, make_resolver())
+    message = str(raised.value)
+    assert "unknown review template 'cod'" in message
+    assert "unknown model alias 'glm-flash-low.'" in message
+
+
+def test_template_name_holding_a_placeholder_is_skipped() -> None:
+    result = classify_pipeline(_review_pipeline("{template}"), make_resolver())
+    assert len(result.steps) == 1
+
+
+def test_unknown_template_name_does_not_raise_from_the_labelling_path() -> None:
+    label = action_model_label(make_resolver(), "review", {"template": "no-such-template"}, None)
+    assert label == "model=unresolved"
+
+
+@pytest.mark.asyncio
+async def test_run_time_unknown_template_fails_through_the_review_action() -> None:
+    from unittest.mock import MagicMock
+
+    from squadron.pipeline.actions.review import ReviewAction
+    from squadron.pipeline.models import ActionContext
+
+    context = ActionContext(
+        pipeline_name="p",
+        run_id="run-12345678",
+        params={"template": "no-such-template"},
+        step_name="review-0",
+        step_index=0,
+        prior_outputs={},
+        resolver=make_resolver(pipeline_model="sonnet"),
+        cf_client=MagicMock(),
+        cwd="/tmp/test",
+    )
+    label = action_model_label(context.resolver, "review", dict(context.params), None)
+    assert label == "model=sonnet"
+    result = await ReviewAction().execute(context)
+    assert result.success is False
+    assert "no-such-template" in (result.error or "")
+
+
+def test_every_builtin_pipeline_names_only_known_review_templates() -> None:
+    from pathlib import Path
+
+    import squadron
+    from squadron.pipeline.loader import load_pipeline
+
+    pipelines_dir = Path(squadron.__file__).parent / "data" / "pipelines"
+    for path in sorted(pipelines_dir.glob("*.yaml")):
+        definition = load_pipeline(str(path))
+        try:
+            classify_pipeline(definition, make_resolver(pipeline_model="sonnet"))
+        except ClassificationError as exc:
+            # Other classification errors (e.g. required params with no value here) are not
+            # this test's concern; only an unknown template name fails it.
+            assert "unknown review template" not in str(exc), f"{path.name}: {exc}"
