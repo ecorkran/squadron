@@ -112,6 +112,15 @@ class LocalRemote:
     url: str
 
 
+#: How many characters of a commit sha an operator-facing message shows.
+SHA_DISPLAY_LENGTH = 7
+
+
+def short_sha(sha: str) -> str:
+    """A sha as shown in messages: its first ``SHA_DISPLAY_LENGTH`` characters and ``…``."""
+    return f"{sha[:SHA_DISPLAY_LENGTH]}…"
+
+
 @dataclass(frozen=True)
 class RefAdjustment:
     """A place where the sha reviewed differs from the sha the host first reported.
@@ -129,7 +138,7 @@ class RefAdjustment:
 
     def describe(self) -> str:
         """The one line a command prints for this adjustment."""
-        return f"{self.role.value}: {self.reason}; reviewed {self.used_sha[:7]}… {self.source}"
+        return f"{self.role.value}: {self.reason}; reviewed {short_sha(self.used_sha)} {self.source}"
 
 
 @dataclass(frozen=True)

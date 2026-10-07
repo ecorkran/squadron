@@ -13,18 +13,12 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from squadron.codehost.models import RefRole
+from squadron.codehost.models import RefRole, short_sha
 
 #: ``extra`` key on a log record the command prints itself as a rendered error or
 #: adjustment line. The code-host log filter drops tagged records below ``-vv``,
 #: so each failure prints once.
 RENDERED_BY_CALLER = "rendered_by_caller"
-
-_SHA_DISPLAY_LENGTH = 7
-
-
-def _short(sha: str) -> str:
-    return f"{sha[:_SHA_DISPLAY_LENGTH]}…"
 
 
 class CodeHostError(Exception):
@@ -137,8 +131,8 @@ class RefMovedSinceResolutionError(CodeHostError):
         fix_hint: str | None = "Rerun to resolve the pull request again.",
     ) -> None:
         super().__init__(
-            f"{role.value} moved since resolution: {expected_source} reported {_short(expected)}, "
-            f"{actual_source} fetched {_short(actual)}",
+            f"{role.value} moved since resolution: {expected_source} reported {short_sha(expected)}, "
+            f"{actual_source} fetched {short_sha(actual)}",
             fix_hint=fix_hint,
         )
         self.role = role
@@ -166,8 +160,8 @@ class PullRequestHeadUnavailableError(CodeHostError):
     ) -> None:
         tried = "; ".join(f"{source}: {reason}" for source, reason in attempts)
         super().__init__(
-            f"pull request head {_short(api_sha)} (host API) could not be fetched; "
-            f"{pr_ref} on {remote_name} is {_short(pr_ref_sha)}; {tried}",
+            f"pull request head {short_sha(api_sha)} (host API) could not be fetched; "
+            f"{pr_ref} on {remote_name} is {short_sha(pr_ref_sha)}; {tried}",
             fix_hint=(
                 "The host's pull-request ref and its API disagree, and the API head is not "
                 "fetchable from origin yet. Rerun later, or push the head branch to a remote "
