@@ -2,13 +2,20 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261006
+dateUpdated: 20261007
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261007
+
+### Slice 934: Pipeline Run Correctness — Tasks Complete
+
+- **Delivered:** `user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md` (29 tasks, 287 lines): Part A #184/#175 (Tasks 2–12), Part B #188 (13–17), Part C #186 (18–26), Part D docs/walkthrough/close-out (27–29). Test-with ordering; a commit per task or pair.
+- **Choices:** Walkthrough step 2 needs a credentialed non-SDK profile, so Task 28 runs only the unset half when none exists and records that in the DEVLOG. No merge task (Phase 7). The design's DEVLOG line mentioning a NullHandler is superseded by D8 (scoped `code_host_logging`).
 
 ## 20261006
 
