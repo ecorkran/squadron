@@ -1187,6 +1187,18 @@ def run(
             raise typer.Exit(1)
 
         params = _assemble_params(definition, target, model, param)
+        # The same pre-run check a real run applies, so a typo'd alias or template
+        # fails here instead of rendering a plan that cannot run (#175).
+        try:
+            _classify_for_run(
+                definition,
+                model_override=_extract_model_override(model, param),
+                params=params,
+                strict=strict,
+            )
+        except ClassificationError as exc:
+            rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
+            raise typer.Exit(1) from None
         rprint(f"\n[bold]Pipeline:[/bold] {definition.name}")
         rprint(f"[bold]Description:[/bold] {definition.description}")
         rprint(f"[bold]Params:[/bold] {params}")

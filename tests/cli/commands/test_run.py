@@ -58,12 +58,14 @@ def _make_definition(
     name: str = "test-pipeline",
     params: dict[str, object] | None = None,
     steps: list[StepConfig] | None = None,
+    model: str | None = None,
 ) -> PipelineDefinition:
     return PipelineDefinition(
         name=name,
         description="Test pipeline",
         params=params or {},
         steps=steps or [],
+        model=model,
     )
 
 
@@ -414,6 +416,7 @@ class TestRunPipeline:
     def test_dry_run_expands_loop_step_body(self) -> None:
         """--dry-run on a loop: step shows body, max, until, on_exhaust."""
         defn = _make_definition(
+            model="sonnet",
             params={"slice": "required"},
             steps=[
                 StepConfig(
@@ -447,6 +450,7 @@ class TestRunPipeline:
     def test_dry_run_loop_without_until_shows_default_message(self) -> None:
         """--dry-run on a loop: step with no until: shows the no-until fallback."""
         defn = _make_definition(
+            model="sonnet",
             params={"slice": "required"},
             steps=[
                 StepConfig(
@@ -470,6 +474,7 @@ class TestRunPipeline:
     def test_dry_run_loop_with_commit_each_iteration_shows_line(self) -> None:
         """--dry-run on a loop: step with commit_each_iteration: true renders it."""
         defn = _make_definition(
+            model="sonnet",
             params={"slice": "required"},
             steps=[
                 StepConfig(
@@ -495,6 +500,7 @@ class TestRunPipeline:
     def test_dry_run_loop_without_commit_each_iteration_omits_line(self) -> None:
         """--dry-run on a loop: step without the key renders no such line."""
         defn = _make_definition(
+            model="sonnet",
             params={"slice": "required"},
             steps=[
                 StepConfig(
@@ -519,6 +525,7 @@ class TestRunPipeline:
     @staticmethod
     def _each_definition() -> PipelineDefinition:
         return _make_definition(
+            model="sonnet",
             params={"plan": "required", "rounds": "2"},
             steps=[
                 StepConfig(
@@ -1806,3 +1813,66 @@ class TestGitEnvironmentFaultHaltsTheRun:
 
         assert excinfo.value.exit_code == 1
         assert message in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# --dry-run runs the pre-run alias check (slice 934 D5, #175)
+# ---------------------------------------------------------------------------
+
+_BAD_ALIAS = "glm-flash-low."
+
+
+def _expected_alias_error() -> str:
+    """The message ``sq review`` gives for the bad alias, whatever aliases are installed."""
+    from squadron.models.aliases import UnknownModelAliasError, require_known_model
+
+    with pytest.raises(UnknownModelAliasError) as raised:
+        require_known_model(_BAD_ALIAS, profile_source=False)
+    return str(raised.value)
+
+
+class TestDryRunClassifies:
+    def test_bad_alias_exits_1_before_rendering_any_step(self) -> None:
+        result = runner.invoke(app, ["run", "review", "931", "--model", _BAD_ALIAS, "--dry-run"])
+        assert result.exit_code == 1
+        out = " ".join(result.output.split())
+        assert "Pipeline classification failed" in out
+        assert _expected_alias_error() in out
+        assert "Steps:" not in out
+
+    def test_valid_model_renders_the_step_list(self) -> None:
+        result = runner.invoke(app, ["run", "review", "931", "--model", "sonnet", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        assert "Steps:" in result.output
+
+    def test_strict_is_accepted_and_renders_the_same_steps(self) -> None:
+        plain = runner.invoke(app, ["run", "review", "931", "--model", "sonnet", "--dry-run"])
+        strict = runner.invoke(
+            app, ["run", "review", "931", "--model", "sonnet", "--dry-run", "--strict"]
+        )
+        assert strict.exit_code == 0, strict.output
+        assert strict.output == plain.output
+
+    def test_strict_raises_the_same_error_as_a_strict_run(self) -> None:
+        result = runner.invoke(
+            app,
+            ["run", "review", "931", "--model", _BAD_ALIAS, "--dry-run", "--strict"],
+        )
+        assert result.exit_code == 1
+        assert _expected_alias_error() in " ".join(result.output.split())
+
+    def test_real_run_with_the_bad_alias_fails_before_step_one_and_keeps_the_artifact(
+        self, tmp_path: Path
+    ) -> None:
+        artifact = tmp_path / "931-review.slice.example.md"
+        artifact.write_bytes(b"existing review artifact\n\x00\xff bytes")
+        before = artifact.read_bytes()
+        with (
+            patch("squadron.cli.commands.run._resolve_execution_mode"),
+            patch("squadron.cli.commands.run._run_pipeline") as run_pipeline,
+        ):
+            result = runner.invoke(app, ["run", "review", "931", "--model", _BAD_ALIAS])
+        assert result.exit_code == 1
+        assert _expected_alias_error() in " ".join(result.output.split())
+        run_pipeline.assert_not_called()
+        assert artifact.read_bytes() == before
