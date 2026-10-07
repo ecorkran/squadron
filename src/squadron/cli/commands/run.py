@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, Any
 import typer
 from rich import print as rprint
 from rich.markup import escape
-from rich.panel import Panel
 from rich.table import Table
 
 if TYPE_CHECKING:
@@ -22,6 +21,7 @@ if TYPE_CHECKING:
 
 from squadron.cli.commands.run_dry_run import render_steps
 from squadron.cli.commands.run_item import check_item_flags, handle_item_resume
+from squadron.cli.run_views import render_run_status, status_color
 from squadron.events import EventType, bootstrap_event_actions
 from squadron.events.contexts import PostActionContext
 from squadron.events.discovery import PluginLoadError
@@ -71,17 +71,6 @@ from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError,
 from squadron.pipeline.steps.phase import PhaseStepType
 
 _logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Status display colours
-# ---------------------------------------------------------------------------
-
-_STATUS_COLORS: dict[str, str] = {
-    "completed": "bright_green",
-    "failed": "red",
-    "paused": "yellow",
-}
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -552,32 +541,6 @@ def _handle_explain(
 # ---------------------------------------------------------------------------
 
 
-def _display_run_status(state: object) -> None:
-    """Print a Rich Panel summarising a RunState."""
-    from squadron.pipeline.state import RunState
-
-    if not isinstance(state, RunState):
-        return
-
-    color = _STATUS_COLORS.get(state.status, "dim")
-    lines: list[str] = [
-        f"[bold]Run:[/bold]      {state.run_id}",
-        f"[bold]Pipeline:[/bold] {state.pipeline}",
-        f"[bold]Params:[/bold]   {state.params}",
-        f"[bold]Status:[/bold]   [{color}]{state.status}[/{color}]",
-        f"[bold]Mode:[/bold]     {state.execution_mode.value}",
-        f"[bold]Started:[/bold]  {state.started_at:%Y-%m-%d %H:%M:%S}",
-        f"[bold]Updated:[/bold]  {state.updated_at:%Y-%m-%d %H:%M:%S}",
-        f"[bold]Steps:[/bold]    {len(state.completed_steps)} completed",
-    ]
-    if state.checkpoint is not None:
-        lines.append(
-            f"[bold]Checkpoint:[/bold] paused at '{state.checkpoint.step}' — {state.checkpoint.reason}"
-        )
-
-    rprint(Panel("\n".join(lines), title="Run Status"))
-
-
 def _exit_code(result: PipelineResult) -> int:
     """Process exit code for a finished run: 1 when the pipeline failed.
 
@@ -589,7 +552,7 @@ def _exit_code(result: PipelineResult) -> int:
 
 def _display_result(result: PipelineResult) -> None:
     """Print a brief final summary of a completed pipeline run."""
-    color = _STATUS_COLORS.get(result.status.value, "dim")
+    color = status_color(result.status.value)
     name = result.pipeline_name
     rprint(f"\n[{color}]Pipeline '{name}' — {result.status.value}[/{color}]")
     rprint(f"  Steps: {len(result.step_results)}")
@@ -1132,7 +1095,7 @@ def run(
             if not runs:
                 rprint("No runs found.")
                 raise typer.Exit(0)
-            _display_run_status(runs[0])
+            render_run_status(runs[0])
         else:
             try:
                 state = state_mgr.load(status)
@@ -1142,7 +1105,7 @@ def run(
             except SchemaVersionError as exc:
                 rprint(f"[red]Error: {exc}[/red]")
                 raise typer.Exit(1) from None
-            _display_run_status(state)
+            render_run_status(state)
         raise typer.Exit(0)
 
     # ---- --validate ----

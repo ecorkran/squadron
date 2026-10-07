@@ -3,7 +3,7 @@
 Covers: run_id / execution_mode threading through _run_pipeline and
 _run_pipeline_sdk, --resume dispatch by ExecutionMode, implicit resume
 dispatch, _handle_prompt_only_init recording PROMPT_ONLY, pipeline name
-normalisation at CLI boundary, and _display_run_status execution_mode field.
+normalisation at CLI boundary, and render_run_status execution_mode field.
 """
 
 from __future__ import annotations
@@ -14,7 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from squadron.cli.commands.run import _display_run_status, _handle_prompt_only_init
+from squadron.cli.commands.run import _handle_prompt_only_init
+from squadron.cli.run_views import render_run_status
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.state import ExecutionMode, RunState, StateManager
@@ -549,21 +550,21 @@ class TestRunExitCode:
 
 
 # ---------------------------------------------------------------------------
-# T12: _display_run_status shows execution_mode
+# T12: render_run_status shows execution_mode
 # ---------------------------------------------------------------------------
 
 
 class TestDisplayRunStatus:
     def test_sdk_execution_mode_shown(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """_display_run_status output includes 'sdk' for SDK mode."""
+        """render_run_status output includes 'sdk' for SDK mode."""
         state = _make_run_state(execution_mode=ExecutionMode.SDK, status="completed")
-        _display_run_status(state)
+        render_run_status(state)
         captured = capsys.readouterr()
         assert "sdk" in captured.out
 
     def test_prompt_only_execution_mode_shown(self, capsys: pytest.CaptureFixture[str]) -> None:
-        """_display_run_status output includes 'prompt-only' for PROMPT_ONLY mode."""
+        """render_run_status output includes 'prompt-only' for PROMPT_ONLY mode."""
         state = _make_run_state(execution_mode=ExecutionMode.PROMPT_ONLY, status="paused")
-        _display_run_status(state)
+        render_run_status(state)
         captured = capsys.readouterr()
         assert "prompt-only" in captured.out

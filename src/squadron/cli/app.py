@@ -21,6 +21,7 @@ from squadron.cli.commands.list import list_agents
 from squadron.cli.commands.message import message
 from squadron.cli.commands.metrology import metrology_app
 from squadron.cli.commands.models import models_app
+from squadron.cli.commands.pipelines import pipelines_app
 from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.pr import pr_app
 from squadron.cli.commands.review import review_app
@@ -56,6 +57,7 @@ app.command("shutdown")(shutdown)
 app.add_typer(review_app, name="review")
 app.add_typer(models_app, name="models")
 app.add_typer(pools_app, name="pools")
+app.add_typer(pipelines_app, name="pipelines")
 app.add_typer(config_app, name="config")
 app.add_typer(metrology_app, name="metrology")
 app.add_typer(auth_app, name="auth")

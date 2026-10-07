@@ -10,7 +10,7 @@ projectState: >
   complete. Integration branch is unset, so the target is `main`.
 dateCreated: 20261007
 dateUpdated: 20261007
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -36,16 +36,16 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
+- [x] Confirm `cf config get git.integration_branch` is empty (target = `main`) and
       `git status` is clean
-- [ ] If the branch does not exist: `git checkout -b 199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list main`;
+- [x] If the branch does not exist: `git checkout -b 199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list main`;
       if it exists, `git checkout` it
-  - [ ] Success: `git branch --show-current` prints the new branch name
+  - [x] Success: `git branch --show-current` prints the new branch name
 
 ## Task 2 — Baseline the existing tests
 
-- [ ] Run `pytest tests/pipeline tests/cli -q` and record pass/fail counts
-  - [ ] Success: failures (if any) are noted as pre-existing before any edit. Known:
+- [x] Run `pytest tests/pipeline tests/cli -q` and record pass/fail counts
+  - [x] Success: failures (if any) are noted as pre-existing before any edit. Known:
         3 schema-drift failures in squadron-pr are cf issue #88, not squadron bugs
 
 ---
@@ -54,93 +54,93 @@ status: not_started
 
 ## Task 3 — Make `RESUMABLE_STATUSES` public and extract `first_unfinished_step_of` (D4, D11)
 
-- [ ] In `src/squadron/pipeline/state.py`, rename `_RESUMABLE_STATUSES` to
+- [x] In `src/squadron/pipeline/state.py`, rename `_RESUMABLE_STATUSES` to
       `RESUMABLE_STATUSES` and make it a `frozenset`; update the in-module use
-- [ ] Extract the body of `StateManager.first_unfinished_step` into module function
+- [x] Extract the body of `StateManager.first_unfinished_step` into module function
       `first_unfinished_step_of(state: RunState, definition: PipelineDefinition) -> str | None`
-  - [ ] The method loads state, then delegates to the function
-  - [ ] Success: signature matches the design's D4; no other logic changes
-- [ ] Make the `"running"` literal in `init_run` a named module constant `RUNNING_STATUS`
+  - [x] The method loads state, then delegates to the function
+  - [x] Success: signature matches the design's D4; no other logic changes
+- [x] Make the `"running"` literal in `init_run` a named module constant `RUNNING_STATUS`
       (D13) and use it there
-  - [ ] Success: `grep -n '"running"' src/squadron/pipeline/state.py` shows only the constant definition
+  - [x] Success: `grep -n '"running"' src/squadron/pipeline/state.py` shows only the constant definition
 
 ## Task 4 — Tests for the state extraction
 
-- [ ] In the existing state test module, add tests calling `first_unfinished_step_of`
+- [x] In the existing state test module, add tests calling `first_unfinished_step_of`
       directly: paused run → step name; failed run → step name; all steps complete → `None`
-- [ ] Add a test that a run created by `init_run` has `status == RUNNING_STATUS` and the
+- [x] Add a test that a run created by `init_run` has `status == RUNNING_STATUS` and the
       persisted JSON still contains `"running"`
-  - [ ] Success: new tests pass; existing `first_unfinished_step` tests pass unchanged
-- [ ] Commit: `refactor: extract first_unfinished_step_of; publish RESUMABLE_STATUSES and RUNNING_STATUS`
+  - [x] Success: new tests pass; existing `first_unfinished_step` tests pass unchanged
+- [x] Commit: `refactor: extract first_unfinished_step_of; publish RESUMABLE_STATUSES and RUNNING_STATUS`
 
 ## Task 5 — Add report path helpers to `batch_report.py` (D5)
 
-- [ ] Add module functions `report_json_path(runs_dir, run_id, step_name) -> Path` and
+- [x] Add module functions `report_json_path(runs_dir, run_id, step_name) -> Path` and
       `report_json_paths(runs_dir, run_id) -> list[Path]` (glob
       `f"{run_id}.*{REPORT_JSON_SUFFIX}"`)
-- [ ] Make `BatchReport.json_path` delegate to `report_json_path`
-- [ ] Replace the inline `".report.json"` literal in `item_resume._validate` with
+- [x] Make `BatchReport.json_path` delegate to `report_json_path`
+- [x] Replace the inline `".report.json"` literal in `item_resume._validate` with
       `report_json_path`
-  - [ ] Success: `grep -rn '\.report\.json' src/squadron` shows only the suffix constant definition
+  - [x] Success: `grep -rn '\.report\.json' src/squadron` shows only the suffix constant definition
 
 ## Task 6 — Tests for report path helpers
 
-- [ ] Add tests: `report_json_path` equals the path `BatchReport.write` produced;
+- [x] Add tests: `report_json_path` equals the path `BatchReport.write` produced;
       `report_json_paths` returns `[]` for a run with no report, one path per written
       report, and does not match another run's reports (including a run-id that is a prefix)
-  - [ ] Success: tests pass; 197's batch-report and item-resume tests pass unchanged
-- [ ] Commit: `refactor: centralize batch report file naming`
+  - [x] Success: tests pass; 197's batch-report and item-resume tests pass unchanged
+- [x] Commit: `refactor: centralize batch report file naming`
 
 ## Task 7 — Create `item_eligibility.py` (D3)
 
-- [ ] Create `src/squadron/pipeline/item_eligibility.py` with `RESUMABLE_OUTCOMES`
+- [x] Create `src/squadron/pipeline/item_eligibility.py` with `RESUMABLE_OUTCOMES`
       (`FLAGGED`, `NOT_RUN`), `item_decisions(record)`, `single_each_step(definition)` and
       `ItemResumeUnsupportedError`
-  - [ ] `item_decisions` returns an empty set outside `RESUMABLE_OUTCOMES`, else `{RETRY}`
+  - [x] `item_decisions` returns an empty set outside `RESUMABLE_OUTCOMES`, else `{RETRY}`
         plus `ACCEPT` when `flag_kind is FlagKind.REVIEW_UNRESOLVED`
-  - [ ] `single_each_step` is today's `item_resume._single_each_step` rule, moved
-  - [ ] Success: module has no I/O imports (no git, lock, executor)
-- [ ] Add `tests/pipeline/test_item_eligibility.py`: `item_decisions` over every `ItemOutcome`
+  - [x] `single_each_step` is today's `item_resume._single_each_step` rule, moved
+  - [x] Success: module has no I/O imports (no git, lock, executor)
+- [x] Add `tests/pipeline/test_item_eligibility.py`: `item_decisions` over every `ItemOutcome`
       × relevant `FlagKind`; `single_each_step` with zero, one and two `each` steps
-  - [ ] Success: tests pass
+  - [x] Success: tests pass
 
 ## Task 8 — Move `item_resume` onto `item_eligibility`
 
-- [ ] In `item_resume._validate`, catch `ItemResumeUnsupportedError` and convert it to
+- [x] In `item_resume._validate`, catch `ItemResumeUnsupportedError` and convert it to
       `_Stop(REJECTED, ...)` with the existing message text
-- [ ] In `item_resume._check_record`, reject when `request.decision not in item_decisions(record)`,
+- [x] In `item_resume._check_record`, reject when `request.decision not in item_decisions(record)`,
       keeping the two existing messages (wrong outcome; accept without `review_unresolved`)
-- [ ] Remove the old `_single_each_step` and any now-duplicate outcome constant
-  - [ ] Success: existing item-resume tests pass unchanged
+- [x] Remove the old `_single_each_step` and any now-duplicate outcome constant
+  - [x] Success: existing item-resume tests pass unchanged
 
 ## Task 9 — Item-resume parity test
 
-- [ ] Parity test: for every outcome and flag-kind combination and each `ItemDecision`,
+- [x] Parity test: for every outcome and flag-kind combination and each `ItemDecision`,
       build the real report/record, run `item_resume._check_record`, and assert any decision it
       rejects is absent from `item_decisions(record)`
-  - [ ] Success: tests pass
-- [ ] Commit: `refactor: share item eligibility rules between item resume and listings`
+  - [x] Success: tests pass
+- [x] Commit: `refactor: share item eligibility rules between item resume and listings`
 
 ## Task 10 — `PipelineSource` and `LISTING_ORDER` in the loader (D1)
 
-- [ ] In `src/squadron/pipeline/loader.py` add `PipelineSource(StrEnum)`
+- [x] In `src/squadron/pipeline/loader.py` add `PipelineSource(StrEnum)`
       (`BUILT_IN="built-in"`, `PROJECT="project"`, `USER="user"`) and
       `LISTING_ORDER: tuple[PipelineSource, ...] = (BUILT_IN, PROJECT, USER)`
-- [ ] Type `PipelineInfo.source` as `PipelineSource`; update `discover_pipelines` to use the
+- [x] Type `PipelineInfo.source` as `PipelineSource`; update `discover_pipelines` to use the
       enum; leave scan order (built-in → user → project) unchanged
-- [ ] Update every other producer/consumer of the source strings found by
+- [x] Update every other producer/consumer of the source strings found by
       `grep -rn '"built-in"\|"project"\|"user"' src/squadron/pipeline src/squadron/cli`
-  - [ ] Success: no bare source string literals remain outside the enum
+  - [x] Success: no bare source string literals remain outside the enum
 
 ## Task 11 — Loader tests
 
-- [ ] Add tests: `discover_pipelines` tags built-in/user/project with the enum members;
+- [x] Add tests: `discover_pipelines` tags built-in/user/project with the enum members;
       a project pipeline shadows a built-in of the same name (appears once, as `PROJECT`);
       `LISTING_ORDER` order is as specified
-  - [ ] Success: new tests pass; existing loader tests pass unchanged
-- [ ] Run `ruff format`, `ruff check`, `pyright`, then `pytest tests/pipeline tests/cli -q`
-  - [ ] Success: zero lint/type errors; counts match Task 2 baseline plus new tests
-- [ ] Commit: `refactor: type pipeline source as PipelineSource enum`
+  - [x] Success: new tests pass; existing loader tests pass unchanged
+- [x] Run `ruff format`, `ruff check`, `pyright`, then `pytest tests/pipeline tests/cli -q`
+  - [x] Success: zero lint/type errors; counts match Task 2 baseline plus new tests
+- [x] Commit: `refactor: type pipeline source as PipelineSource enum`
 
 ---
 
