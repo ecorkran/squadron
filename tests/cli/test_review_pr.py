@@ -472,14 +472,11 @@ def test_the_review_artifact_carries_the_api_head_sha_when_the_pr_ref_lags() -> 
     """The reviewed sha is the API head, never the stale pull-request ref's."""
     from squadron.cli.commands.review_pr import PrTarget
     from squadron.review.rules import RulesSource
-    from tests.codehost.test_github_cli import (
-        _lagging_script,  # pyright: ignore[reportPrivateUsage]
-        _resolved_pr83,  # pyright: ignore[reportPrivateUsage]
-    )
+    from tests.codehost.lagging_support import lagging_script, resolved_pr83
 
     api_head = "b67cf55495f01bc2da843d8f96c767a11770e330"
-    runner = FakeProcessRunner(_lagging_script(fallback_returns=api_head))
-    cli, resolved = _resolved_pr83(runner)
+    runner = FakeProcessRunner(lagging_script(fallback_returns=api_head))
+    cli, resolved = resolved_pr83(runner)
 
     fetched = cli.fetch_pull_request_refs(resolved, remote_name="origin", cwd="/repo")
     target = PrTarget(resolved.record, RulesSource.NONE, qualify=False)

@@ -49,6 +49,13 @@ from squadron.core.process_runner import (
     ProcessTimedOutError,
 )
 from tests.codehost.fake_runner import FakeProcessRunner
+from tests.codehost.lagging_support import (
+    API_LOCAL,
+    HEAD_BRANCH,
+    RESOLVED_HEAD,
+    lagging_script,
+    resolved_pr83,
+)
 
 GITHUB = "github.com"
 ENTERPRISE = "ghe.corp.example"
@@ -684,74 +691,32 @@ def test_find_marked_comments_records_no_identity_call() -> None:
 
 # --- fetch_pull_request_refs: the head-branch fallback (slice 934 D6, #186) -------
 
-_RESOLVED_BASE = "4edf5f1709489da9494906b2178e27dea6a9ae10"
-_RESOLVED_HEAD = "b67cf55495f01bc2da843d8f96c767a11770e330"
-_LAGGING_PR_REF = "8888888888888888888888888888888888888888"
-_HEAD_BRANCH = "codex/issue-82-diff-review-context"
-_API_LOCAL = "refs/squadron/pr/origin/83/api-head"
-
-
-def _resolved_pr83(runner: FakeProcessRunner) -> tuple[GitHubCli, Any]:
-    cli = GitHubCli(runner, HOSTS)
-    target = parse_target("83")
-    locator = RepositoryLocator(GITHUB, "ecorkran", "squadron", "origin")
-    return cli, cli.resolve_pull_request(locator, target, cwd="/repo")
-
-
-def _lagging_script(*, fallback_returns: str) -> list[tuple[list[str], ProcessResult | Exception]]:
-    return [
-        (["gh", "api", "graphql"], _ok(_fixture("pr83-resolve.json"))),
-        (
-            ["git", "fetch", "--no-tags", "origin", "+refs/heads/main:refs/squadron/pr/origin/83/base"],
-            _ok(),
-        ),
-        (
-            ["git", "rev-parse", "--verify", "refs/squadron/pr/origin/83/base^{commit}"],
-            _ok(_RESOLVED_BASE),
-        ),
-        (
-            ["git", "rev-parse", "--verify", "refs/squadron/pr/origin/83/head^{commit}"],
-            _ok(_LAGGING_PR_REF),
-        ),
-        (["git", "cat-file", "-e"], _fail(1)),
-        (
-            ["git", "fetch", "--no-tags", "origin", f"+{_RESOLVED_HEAD}:{_API_LOCAL}"],
-            _fail(1, stderr="not our ref"),
-        ),
-        (["git", "fetch", "--no-tags", "origin", f"+refs/heads/{_HEAD_BRANCH}:{_API_LOCAL}"], _ok()),
-        (["git", "rev-parse", "--verify", f"{_API_LOCAL}^{{commit}}"], _ok(fallback_returns)),
-        (["git", "merge-base", "--is-ancestor", _LAGGING_PR_REF, _RESOLVED_HEAD], _ok()),
-        (["git", "update-ref"], _ok()),
-        (["git", "merge-base"], _ok("1" * 40)),
-        (["git", "diff", "--name-only"], _ok("src/a.py\n")),
-    ]
-
 
 def test_adapter_hands_the_head_branch_to_the_lagging_ref_fallback() -> None:
-    runner = FakeProcessRunner(_lagging_script(fallback_returns=_RESOLVED_HEAD))
-    cli, resolved = _resolved_pr83(runner)
+    runner = FakeProcessRunner(lagging_script(fallback_returns=RESOLVED_HEAD))
+    cli, resolved = resolved_pr83(runner)
 
     fetched = cli.fetch_pull_request_refs(resolved, remote_name="origin", cwd="/repo")
 
-    assert fetched.head_sha == _RESOLVED_HEAD
+    assert fetched.head_sha == RESOLVED_HEAD
     fallback_fetch = [c for c in runner.calls if c.argv[:2] == ("git", "fetch")][-1]
-    assert f"+refs/heads/{_HEAD_BRANCH}:{_API_LOCAL}" in fallback_fetch.argv
-    assert fetched.adjustments[0].source == f"fetched from refs/heads/{_HEAD_BRANCH}"
+    assert f"+refs/heads/{HEAD_BRANCH}:{API_LOCAL}" in fallback_fetch.argv
+    assert fetched.adjustments[0].source == f"fetched from refs/heads/{HEAD_BRANCH}"
 
 
 def test_a_fork_branch_that_returns_another_sha_is_rejected_by_the_sha_check() -> None:
     from squadron.codehost.errors import PullRequestHeadUnavailableError
 
     other = "9" * 40
-    script = _lagging_script(fallback_returns=other)
+    script = lagging_script(fallback_returns=other)
     # The by-sha attempt and the fallback both fail; nothing past the sha check runs.
     runner = FakeProcessRunner(script[:8])
-    cli, resolved = _resolved_pr83(runner)
+    cli, resolved = resolved_pr83(runner)
 
     with pytest.raises(PullRequestHeadUnavailableError) as excinfo:
         cli.fetch_pull_request_refs(resolved, remote_name="origin", cwd="/repo")
 
-    assert "not the API head" in dict(excinfo.value.attempts)[f"refs/heads/{_HEAD_BRANCH}"]
+    assert "not the API head" in dict(excinfo.value.attempts)[f"refs/heads/{HEAD_BRANCH}"]
 
 
 # --- Which warnings the command renders itself (slice 934 D8) -------------------
