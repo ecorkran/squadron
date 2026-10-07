@@ -6,6 +6,8 @@ Exercises the full wiring path: _run_pipeline → load_pipeline → execute_pipe
 
 from __future__ import annotations
 
+import json
+import os
 import shutil
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -13,9 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from squadron.cli.commands.run import _run_pipeline
-from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.executor import ExecutionStatus, PipelineResult
 from squadron.pipeline.models import ActionResult
-from squadron.pipeline.state import StateManager
+from squadron.pipeline.state import RUNNING_STATUS, ExecutionMode, RunState, StateManager
 from tests.pipeline.conftest import (
     FIXTURE_PIPELINES_DIR,
     artifact_writing_action,
@@ -276,3 +278,115 @@ class TestCliIntegration:
             result = test_runner.invoke(app, ["run", "--dry-run", "test", "191"])
         assert result.exit_code == 0
         assert not list(tmp_path.glob("*.json"))
+
+
+# ---------------------------------------------------------------------------
+# Slice 174: SDK runs are owned and heartbeated while the executor runs
+# ---------------------------------------------------------------------------
+
+
+class TestRunOwnership:
+    @pytest.fixture(autouse=True)
+    def _project_slice_pipeline(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.chdir(tmp_path)
+        project_pipelines = tmp_path / "project-documents" / "user" / "pipelines"
+        project_pipelines.mkdir(parents=True)
+        shutil.copy(FIXTURE_PIPELINES_DIR / "slice.yaml", project_pipelines)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("path", ["new", "resume", "item-resume"])
+    @pytest.mark.parametrize("outcome", [ExecutionStatus.COMPLETED, ExecutionStatus.FAILED])
+    async def test_running_with_owner_during_execution(
+        self, tmp_path: Path, path: str, outcome: ExecutionStatus
+    ) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id: str | None = None
+        if path != "new":
+            run_id = mgr.init_run("slice", {"slice": "191"})
+            mgr.finalize(
+                run_id,
+                PipelineResult(pipeline_name="slice", status=ExecutionStatus.PAUSED, step_results=[]),
+            )
+        seen: list[RunState] = []
+
+        async def fake_execute(*_: object, run_id: str, **__: object) -> PipelineResult:
+            seen.append(mgr.load(run_id))
+            return PipelineResult(pipeline_name="slice", status=outcome, step_results=[])
+
+        with (
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.ContextForgeClient"),
+            patch("squadron.cli.commands.run.execute_pipeline", side_effect=fake_execute),
+        ):
+            await _run_pipeline(
+                "slice",
+                {"slice": "191"},
+                runs_dir=tmp_path,
+                run_id=run_id,
+                item_rerun=MagicMock() if path == "item-resume" else None,
+            )
+
+        assert len(seen) == 1
+        during = seen[0]
+        assert during.status == RUNNING_STATUS
+        assert during.owner is not None and during.owner.pid == os.getpid()
+        after = mgr.load(during.run_id)
+        assert after.status == outcome.value
+        assert after.owner == during.owner
+
+    @pytest.mark.asyncio
+    async def test_new_run_owner_is_in_the_creating_write(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        first_writes: list[dict[str, object]] = []
+        real_write = StateManager._write_atomic  # pyright: ignore[reportPrivateUsage]
+
+        def recording_write(self: StateManager, path: Path, data: str) -> None:
+            if not path.exists():
+                first_writes.append(json.loads(data))
+            real_write(self, path, data)
+
+        monkeypatch.setattr(StateManager, "_write_atomic", recording_write)
+
+        async def fake_execute(*_: object, **__: object) -> PipelineResult:
+            return PipelineResult(
+                pipeline_name="slice", status=ExecutionStatus.COMPLETED, step_results=[]
+            )
+
+        with (
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.ContextForgeClient"),
+            patch("squadron.cli.commands.run.execute_pipeline", side_effect=fake_execute),
+        ):
+            await _run_pipeline("slice", {"slice": "191"}, runs_dir=tmp_path)
+
+        assert len(first_writes) == 1
+        assert first_writes[0]["status"] == RUNNING_STATUS
+        assert first_writes[0]["owner"] is not None
+
+    @pytest.mark.asyncio
+    async def test_prompt_only_resume_stays_unowned(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("slice", {"slice": "191"}, execution_mode=ExecutionMode.PROMPT_ONLY)
+        seen: list[RunState] = []
+
+        async def fake_execute(*_: object, run_id: str, **__: object) -> PipelineResult:
+            seen.append(mgr.load(run_id))
+            return PipelineResult(
+                pipeline_name="slice", status=ExecutionStatus.COMPLETED, step_results=[]
+            )
+
+        with (
+            patch("squadron.cli.commands.run._check_cf"),
+            patch("squadron.cli.commands.run.ContextForgeClient"),
+            patch("squadron.cli.commands.run.execute_pipeline", side_effect=fake_execute),
+        ):
+            await _run_pipeline(
+                "slice",
+                {"slice": "191"},
+                runs_dir=tmp_path,
+                run_id=run_id,
+                execution_mode=ExecutionMode.PROMPT_ONLY,
+            )
+
+        assert seen[0].owner is None

@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 from collections.abc import Coroutine
-from contextlib import ExitStack
+from contextlib import AbstractAsyncContextManager, ExitStack, nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -64,9 +64,16 @@ from squadron.pipeline.prompt_renderer import (
     render_step_instructions,
 )
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ModelResolver
+from squadron.pipeline.run_heartbeat import RunHeartbeat, heartbeat_interval_s
 from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
 from squadron.pipeline.sdk_session import SDKExecutionSession, open_pipeline_session
-from squadron.pipeline.state import ExecutionMode, RunState, SchemaVersionError, StateManager
+from squadron.pipeline.state import (
+    ExecutionMode,
+    RunOwner,
+    RunState,
+    SchemaVersionError,
+    StateManager,
+)
 from squadron.pipeline.steps.phase import PhaseStepType
 
 _logger = logging.getLogger(__name__)
@@ -223,8 +230,13 @@ async def _run_pipeline(
     _check_cf(cf_client)
 
     state_mgr = StateManager(runs_dir=runs_dir)
+    # SDK runs are owned and heartbeated (slice 174 D13); prompt-only runs stay unowned.
+    sdk_run = execution_mode == ExecutionMode.SDK
+    interval = heartbeat_interval_s() if sdk_run else None
+    resuming = run_id is not None
     if run_id is None:
-        run_id = state_mgr.init_run(pipeline_name, params, execution_mode=execution_mode)
+        owner = RunOwner.current(interval) if interval is not None else None
+        run_id = state_mgr.init_run(pipeline_name, params, execution_mode=execution_mode, owner=owner)
 
     _run_id = run_id  # capture for closure below
     if pool_backend is None:
@@ -237,32 +249,39 @@ async def _run_pipeline(
         profile_source=has_profile_param(params),
     )
 
-    try:
-        result = await execute_pipeline(
-            definition,
-            params,
-            resolver=resolver,
-            cf_client=cf_client,
-            run_id=run_id,
-            start_from=from_step,
-            start_from_iteration=from_iteration,
-            sdk_session=sdk_session,  # type: ignore[arg-type]
-            pool_policy=pool_policy,
-            observer=state_mgr.observer(run_id),
-            runs_dir=runs_dir,
-            item_rerun=item_rerun,
-            _action_registry=_action_registry,
-        )
-    except BaseException:
-        # Finalize with a synthetic failed result on any unhandled exception
-        failed = PipelineResult(
-            pipeline_name=pipeline_name,
-            status=ExecutionStatus.FAILED,
-            step_results=[],
-            error="Interrupted or unhandled exception",
-        )
-        state_mgr.finalize(run_id, failed)
-        raise
+    # A failed claim propagates before the try: the run was never ours to finalize.
+    heartbeat: AbstractAsyncContextManager[object] = (
+        RunHeartbeat(state_mgr, run_id, interval, claim=resuming)
+        if interval is not None
+        else nullcontext()
+    )
+    async with heartbeat:
+        try:
+            result = await execute_pipeline(
+                definition,
+                params,
+                resolver=resolver,
+                cf_client=cf_client,
+                run_id=run_id,
+                start_from=from_step,
+                start_from_iteration=from_iteration,
+                sdk_session=sdk_session,  # type: ignore[arg-type]
+                pool_policy=pool_policy,
+                observer=state_mgr.observer(run_id),
+                runs_dir=runs_dir,
+                item_rerun=item_rerun,
+                _action_registry=_action_registry,
+            )
+        except BaseException:
+            # Finalize with a synthetic failed result on any unhandled exception
+            failed = PipelineResult(
+                pipeline_name=pipeline_name,
+                status=ExecutionStatus.FAILED,
+                step_results=[],
+                error="Interrupted or unhandled exception",
+            )
+            state_mgr.finalize(run_id, failed)
+            raise
 
     state_mgr.finalize(run_id, result)
     return result
