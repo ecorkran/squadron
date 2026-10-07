@@ -6,7 +6,7 @@ parent: project-documents/user/architecture/180-slices.pipeline-intelligence.md
 dependencies: [197]
 interfaces: []
 dateCreated: 20261006
-dateUpdated: 20261006
+dateUpdated: 20261007
 status: not_started
 ---
 
@@ -22,7 +22,7 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 
 - **Users** see their own pipelines apart from the built-ins, and can find any resumable run along with the `sq run --resume` invocation it needs.
 - **Batch workflows (197):** a finished batch run with flagged items shows up as resumable, with its open-item count. Today the only way to find it is the run output or the runs directory.
-- **Agents:** the slash command and skill can list run-ids instead of guessing them or scraping `~/.config/squadron/runs`.
+- **Agents:** can call `sq runs list` to get run-ids instead of guessing them or scraping `~/.config/squadron/runs`.
 
 ## Technical Scope
 
@@ -32,16 +32,15 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 - `sq runs wait <run-id> [--timeout SECONDS]`: blocks until the run leaves `running`, prints its final status line, and exits with a code per outcome (D13). Lets an agent or script that started a pipeline in the background learn when it is done without polling the runs directory itself.
 - A pure run-listing layer (`squadron/pipeline/run_listing.py`) that builds row data from `StateManager` and batch reports. Rendering stays in the CLI.
 - One eligibility module (`squadron/pipeline/item_eligibility.py`) shared by the listing and item resume.
-- `sq run --list` stays as a deprecated alias for `sq pipelines list` and prints a deprecation notice on stderr.
-- Slash commands `/sq:pipelines` and `/sq:runs`, agent skills `sq-pipelines` and `sq-runs`, and drift-test entries for both.
-- Doc references to `sq run --list` are updated: README, docs/PIPELINES.md, docs/QUICKSTART.md, `commands/sq/run.md` and `commands/agents/sq-run/SKILL.md`.
+- `sq run --list` (and `-l`) is removed (D8). `sq pipelines list` replaces it.
+- Doc references to `sq run --list` are updated: README, docs/PIPELINES.md and docs/QUICKSTART.md.
 
 **Excluded**
-- Removing `sq run --list`. A GitHub issue opened during this slice tracks it.
+- Slash commands and agent skills for the new commands. Adding `/sq:pipelines` and `/sq:runs` widens the slash surface for little gain. If the CLI later inverts to `sq list {runs|pipelines|agents}`, a single `/sq:list {selector}` covers all three. That inversion is a separate decision, tracked by a GitHub issue opened during this slice.
 - Changing `sq run --status`. It behaves as today.
 - Deleting or pruning runs.
 - `--json` output. The listing's Python API serves in-process callers. An out-of-process orchestrator such as Amoeba would need `--json`, which this slice does not build because no such consumer exists yet. A GitHub issue opened during this slice (Development Approach step 6) records the follow-up.
-- An MCP surface. Squadron has no MCP server: `src/squadron/server` is the agent daemon, with `agents` and `health` routes only. Parity here means CLI, slash command and agent skill.
+- An MCP surface. Squadron has no MCP server: `src/squadron/server` is the agent daemon, with `agents` and `health` routes only.
 - Typing `RunState.status`. See D10.
 
 ## Dependencies
@@ -66,12 +65,11 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 cli/app.py
  ├─ add_typer(pipelines_app, "pipelines")   cli/commands/pipelines.py  (new)
  ├─ add_typer(runs_app, "runs")             cli/commands/runs.py       (new)
- └─ command("run")                          cli/commands/run.py
-                                            --list → stderr notice → run_views.render_pipeline_listing()
+ └─ command("run")                          cli/commands/run.py   (--list removed)
 
 cli/run_views.py          (new) STATUS_COLORS, render_pipeline_listing(), render_run_listing(),
-                          resume-problem marker text. Imported by pipelines.py, runs.py and run.py;
-                          no command module imports another.
+                          resume-problem marker text. Imported by pipelines.py, runs.py and run.py
+                          (STATUS_COLORS, status line); no command module imports another.
 
 pipeline/loader.py           PipelineSource enum, LISTING_ORDER; PipelineInfo.source typed
 pipeline/state.py            first_unfinished_step_of() pure function; method delegates
@@ -160,7 +158,7 @@ Concurrent writes cannot be torn. Both `StateManager._write_atomic` and `batch_r
 
 A `running` run is outside `RESUMABLE_STATUSES`. The listing reports exactly what the status says, and it cannot tell a live run from a crash orphan. Detecting orphans is not in scope.
 
-**D8. Deprecated alias.** `sq run --list` prints `Deprecated: use 'sq pipelines list'.` to stderr, then calls `run_views.render_pipeline_listing()`, the same function `sq pipelines list` calls. The existing mutual-exclusion check for `--list` stays.
+**D8. `sq run --list` is removed, not deprecated.** No installed slash command or skill invokes it; only docs and its own tests do. A deprecation window would protect no known caller, so the flag, its `-l` short form, its mutual-exclusion check and its tests in `tests/cli/commands/test_run.py` are deleted. Typer rejects the old flag as an unknown option, and a CHANGELOG line names `sq pipelines list` as the replacement.
 
 **D9. Normalising the pipeline filter.** `--pipeline` is lowercased, matching `pipeline_identity` and run-state names (#147).
 
@@ -202,7 +200,6 @@ Failure modes: a crashed process leaves its run at `running` forever, and `wait`
 sq pipelines list
 sq runs list [--all] [--pipeline NAME]
 sq runs wait <run-id> [--timeout SECONDS]
-sq run --list            # deprecated alias of `sq pipelines list`
 ```
 
 Both listing commands exit 0 on success, including empty results. `sq runs wait` exits per D13. Usage errors use Typer's standard non-zero code.
@@ -261,13 +258,6 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - **Resume at:** `STEP` shows the step name. `ITEMS` shows `N items in <each-step>`, with ` (K accept)` appended when K > 0. A problem shows its marker text from `run_views`.
 - **Empty result:** `No resumable runs.`, followed by ` Use --all to include completed runs.` when `--all` was not given.
 
-### Slash command and skill surfaces
-- `commands/sq/pipelines.md` and `commands/sq/runs.md` follow the `list.md` pattern. Each runs `sq pipelines list $ARGUMENTS` or `sq runs list $ARGUMENTS`, shows the results, and documents its flags under a `## Subcommand: list` section.
-- `commands/agents/sq-pipelines/SKILL.md` and `commands/agents/sq-runs/SKILL.md` carry the same content in skill form.
-- Both installers find these files by glob (`skills/targets.py`), so no registry edit is needed.
-- `commands/sq/runs.md` and the `sq-runs` skill also document `wait` under `## Subcommand: wait`, including the exit codes and that an agent running a pipeline in the background calls `sq runs wait <run-id>` to learn when it ends.
-- `tests/cli/test_command_surface.py` gains three entries: `(("pipelines", "list"), "pipelines.md", "## Subcommand: list")`, `(("runs", "list"), "runs.md", "## Subcommand: list")` and `(("runs", "wait"), "runs.md", "## Subcommand: wait")`.
-
 ## Integration Points
 
 ### Provides to Other Slices
@@ -293,7 +283,7 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - `sq runs list --pipeline P4` matches runs of `p4`.
 - For a paused run, "Resume at" equals the step `sq run --resume <id>` resumes at.
 - For a completed batch run, every item counted as open is accepted by `--item <index> --decision retry`, and every item counted toward "accept" is accepted by `--decision accept`. Here "accepted" means the run passes item resume's validation; git preconditions are separate.
-- `sq run --list` prints the deprecation notice on stderr and the same output as `sq pipelines list` on stdout.
+- `sq run --list` is no longer accepted; Typer reports it as an unknown option.
 - `sq runs wait <run-id>` returns when the run leaves `running`, with the D13 exit code for its outcome; with `--timeout` it returns exit 4 if the run is still `running` when the timeout elapses.
 
 ### Technical Requirements
@@ -314,17 +304,15 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - `run_views` has a test that every `ResumeProblem` member has marker text.
 - `wait_for_run` unit tests, with injected `clock` and `sleep` and real `StateManager` state files: a run that moves `running` → each terminal status mid-wait, one test per `WaitOutcome`; timeout while `running`; a missing run-id; one unreadable poll followed by a good one (recovers), and two in a row (`UNREADABLE`). Each non-`COMPLETED` case asserts its WARNING record. A CLI test asserts every `WaitOutcome` maps to its exit code.
 - The pipeline-grouping unit test covers all three sources plus shadowing, through the `project_dir` and `user_dir` overrides.
-- CLI tests use `CliRunner` for both commands and the deprecated alias, including the stderr notice.
+- CLI tests use `CliRunner` for the new commands. The `--list` tests in `tests/cli/commands/test_run.py` are deleted with the flag.
 - Fixtures are real:
   - run states are written by `StateManager.init_run` and its update methods;
   - reports are written by `BatchReport.write`;
   - pipelines are real YAML files in `tmp_path` directories.
 - Existing item-resume and `--resume` tests pass unchanged.
-- The drift test covers both new command files.
 - `ruff format`, `ruff check` and `pyright` pass with zero errors.
 
 ### Integration Requirements
-- After `sq install-commands`, `/sq:pipelines` and `/sq:runs` are installed, and the `sq-pipelines` and `sq-runs` skills are installed for skill-runtime targets.
 - Existing `sq run --status`, `--resume` and `--item` behaviour is unchanged.
 
 ### Verification Walkthrough
@@ -343,10 +331,9 @@ These commands do not exist yet. This is the draft demo for Phase 6.
    ```
    Expect a "Project (1)" group containing `p4`, and no `p4` under Built-in. Remove the copy afterwards.
 
-2. **Deprecated alias.**
+2. **Removed flag.**
    ```bash
-   sq run --list 2>/dev/null   # same tables as step 1
-   sq run --list >/dev/null    # stderr: Deprecated: use 'sq pipelines list'.
+   sq run --list; echo "exit $?"   # Typer: No such option: --list; non-zero exit
    ```
 
 3. **Resumable runs.** Use existing runs in `~/.config/squadron/runs`, or start a pipeline that reaches a checkpoint and let it pause.
@@ -389,8 +376,6 @@ These commands do not exist yet. This is the draft demo for Phase 6.
    ```
    Expect the final status line and `exit 0` on completion (3 if it pauses at a checkpoint). Then `sq runs wait <run-id-of-a-running-run> --timeout 5; echo $?` prints the timeout line and `4`, and `sq runs wait no-such-run; echo $?` prints `5`.
 
-9. **Slash surfaces.** After `sq install-commands`, run `/sq:runs` in Claude Code. The table should match `sq runs list`.
-
 ## Implementation Notes
 
 ### Development Approach
@@ -400,13 +385,12 @@ These commands do not exist yet. This is the draft demo for Phase 6.
    - add `PipelineSource` and `LISTING_ORDER` to the loader, and update `discover_pipelines`.
 
    The existing resume, item-resume and loader tests must pass unchanged. Add the parity test.
-2. Create `cli/run_views.py` with `STATUS_COLORS`, moved from `run.py`, and `render_pipeline_listing()`. Add `pipelines.py` and register it in `app.py`. Point `sq run --list` at `render_pipeline_listing()`, with the deprecation notice.
+2. Create `cli/run_views.py` with `STATUS_COLORS`, moved from `run.py`, and `render_pipeline_listing()`. Add `pipelines.py` and register it in `app.py`. Remove `sq run --list` and its tests (D8).
 3. Write `run_listing.py` with its unit tests.
 4. Add `render_run_listing()` and the marker text to `run_views`. Add `runs.py` and register it.
-4a. Add `wait_for_run` and `WaitOutcome` to `run_listing.py` with their tests, then `sq runs wait` in `runs.py` (D13).
-5. Add the slash commands, skills and drift-test entries.
-6. Update the docs. Open GitHub issues for:
-   - removing `sq run --list`;
+5. Add `wait_for_run` and `WaitOutcome` to `run_listing.py` with their tests, then `sq runs wait` in `runs.py` (D13).
+6. Update the docs, and add a CHANGELOG line for the `--list` removal. Open GitHub issues for:
+   - inverting listings to `sq list {runs|pipelines|agents}` with a single `/sq:list {selector}` slash command, linked from the slash-command exclusion in Technical Scope;
    - typing `RunState.status` (D10);
    - `sq runs list --json`, for out-of-process consumers such as Amoeba, linked from the `--json` exclusion in Technical Scope.
 
