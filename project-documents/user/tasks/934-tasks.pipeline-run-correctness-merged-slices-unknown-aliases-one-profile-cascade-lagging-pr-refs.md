@@ -211,15 +211,15 @@ status: in_progress
 
 ## Task 21 — Obtain the API head locally (D6 step 1)
 
-- [ ] In `refs.py` add a helper that, given the API head sha, makes it present locally. `cat-file -e <sha>^{commit}` first; if absent, try in order, each into `<api_local>` (a sibling of `head_local` in the per-PR namespace): (1) `fetch <remote> +<sha>:<api_local>`; (2) for each entry of the new argument `head_fallback_sources: tuple[str, ...]`, `fetch <remote> +<entry>:<api_local>`. The helper itself names no host refspec
-- [ ] After each attempt `rev-parse <api_local>` must equal the API head sha; a mismatch rejects that attempt
-- [ ] A `cat-file` timeout (`ProcessTimedOutError`) raises `HostCommandTimeoutError` with a tagged WARNING; a non-zero `cat-file` exit means absent (DEBUG) and goes to the fetch attempts
-- [ ] A fallback attempt catches `ProcessTimedOutError` and records `timed out after Ns`; non-zero exit records stderr. Each attempt logs DEBUG
-- [ ] No attempt yields the sha: raise `PullRequestHeadUnavailableError` naming every source with its sha or reason (WARNING tagged `RENDERED_BY_CALLER`)
-- [ ] Tests (fake runner; the API head sha **absent** locally before the fetch): sha already present → no fetch; `cat-file` timeout → `HostCommandTimeoutError`; `cat-file` non-zero → proceeds to fetch; fetch-by-sha succeeds; sha fetch `not our ref` then a fallback source succeeds; fallback returns a different sha → rejected; timeout on a fallback recorded as the reason; all fail → error naming each source
-  - [ ] Success: tests pass
-  - [ ] The helper has no caller until Task 22a wires it; that is expected
-- [ ] Commit: `feat: fetch the API head by sha or fallback source when the PR ref lags`
+- [x] In `refs.py` add a helper that, given the API head sha, makes it present locally. `cat-file -e <sha>^{commit}` first; if absent, try in order, each into `<api_local>` (a sibling of `head_local` in the per-PR namespace): (1) `fetch <remote> +<sha>:<api_local>`; (2) for each entry of the new argument `head_fallback_sources: tuple[str, ...]`, `fetch <remote> +<entry>:<api_local>`. The helper itself names no host refspec
+- [x] After each attempt `rev-parse <api_local>` must equal the API head sha; a mismatch rejects that attempt
+- [x] A `cat-file` timeout (`ProcessTimedOutError`) raises `HostCommandTimeoutError` with a tagged WARNING; a non-zero `cat-file` exit means absent (DEBUG) and goes to the fetch attempts
+- [x] A fallback attempt catches `ProcessTimedOutError` and records `timed out after Ns`; non-zero exit records stderr. Each attempt logs DEBUG
+- [x] No attempt yields the sha: raise `PullRequestHeadUnavailableError` naming every source with its sha or reason (WARNING tagged `RENDERED_BY_CALLER`)
+- [x] Tests (fake runner; the API head sha **absent** locally before the fetch): sha already present → no fetch; `cat-file` timeout → `HostCommandTimeoutError`; `cat-file` non-zero → proceeds to fetch; fetch-by-sha succeeds; sha fetch `not our ref` then a fallback source succeeds; fallback returns a different sha → rejected; timeout on a fallback recorded as the reason; all fail → error naming each source
+  - [x] Success: tests pass
+  - [x] The helper has no caller until Task 22a wires it; that is expected
+- [x] Commit: `feat: fetch the API head by sha or fallback source when the PR ref lags`
 
 ## Task 22a — Classify the PR-ref sha against the API head (D6 step 2)
 
