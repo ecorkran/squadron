@@ -5,12 +5,8 @@ from __future__ import annotations
 import typer
 
 from squadron.cli.run_views import render_run_listing, render_run_status
-from squadron.pipeline.run_listing import (
-    WAIT_EXIT_CODES,
-    WaitOutcome,
-    list_run_summaries,
-    wait_for_run,
-)
+from squadron.pipeline.run_listing import list_run_summaries
+from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, wait_for_run
 from squadron.pipeline.state import StateManager
 
 runs_app = typer.Typer(
@@ -56,9 +52,10 @@ def wait(
     ),
 ) -> None:
     state_manager = StateManager()
-    outcome = wait_for_run(state_manager, run_id, timeout=timeout)
-    if outcome in _STATUS_PANEL_OUTCOMES:
-        render_run_status(state_manager.load(run_id))
+    result = wait_for_run(state_manager, run_id, timeout=timeout)
+    outcome = result.outcome
+    if outcome in _STATUS_PANEL_OUTCOMES and result.state is not None:
+        render_run_status(result.state)
     code = WAIT_EXIT_CODES[outcome]
     if code != 0:
         typer.echo(f"sq runs wait: run {run_id} {outcome}", err=True)

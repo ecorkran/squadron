@@ -6,6 +6,9 @@ another (slice 199).
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass
+
 from rich import print as rprint
 from rich.markup import escape
 from rich.panel import Panel
@@ -40,7 +43,6 @@ RESUME_PROBLEM_MARKERS: dict[ResumeProblem, str] = {
 }
 
 _STARTED_FORMAT = "%Y-%m-%d %H:%M"
-_UNFOLDED_COLUMNS = frozenset({"Run ID", "Status", "Resume at"})
 _RESUME_HINTS = (
     "Resume a step:  sq run --resume <run-id>",
     "Resume an item: sq run --resume <run-id> --item N --decision retry",
@@ -57,18 +59,20 @@ def render_run_status(state: RunState) -> None:
     """Print a Rich panel summarising *state* (``sq run --status``, ``sq runs wait``)."""
     color = status_color(state.status)
     lines: list[str] = [
-        f"[bold]Run:[/bold]      {state.run_id}",
-        f"[bold]Pipeline:[/bold] {state.pipeline}",
-        f"[bold]Params:[/bold]   {state.params}",
-        f"[bold]Status:[/bold]   [{color}]{state.status}[/{color}]",
+        f"[bold]Run:[/bold]      {escape(state.run_id)}",
+        f"[bold]Pipeline:[/bold] {escape(state.pipeline)}",
+        f"[bold]Params:[/bold]   {escape(str(state.params))}",
+        f"[bold]Status:[/bold]   [{color}]{escape(state.status)}[/{color}]",
         f"[bold]Mode:[/bold]     {state.execution_mode.value}",
         f"[bold]Started:[/bold]  {state.started_at:%Y-%m-%d %H:%M:%S}",
         f"[bold]Updated:[/bold]  {state.updated_at:%Y-%m-%d %H:%M:%S}",
         f"[bold]Steps:[/bold]    {len(state.completed_steps)} completed",
     ]
     if state.checkpoint is not None:
+        checkpoint = state.checkpoint
         lines.append(
-            f"[bold]Checkpoint:[/bold] paused at '{state.checkpoint.step}' — {state.checkpoint.reason}"
+            f"[bold]Checkpoint:[/bold] paused at '{escape(checkpoint.step)}' — "
+            f"{escape(checkpoint.reason)}"
         )
 
     rprint(Panel("\n".join(lines), title="Run Status"))
@@ -87,7 +91,7 @@ def render_pipeline_listing(pipelines: list[PipelineInfo]) -> None:
         table.add_column("Name", style="bold")
         table.add_column("Description")
         for info in group:
-            table.add_row(info.name, info.description)
+            table.add_row(escape(info.name), escape(info.description))
         rprint(table)
 
 
@@ -110,15 +114,32 @@ def target_cell(params: dict[str, object]) -> str:
     return " ".join(f"{key}={value}" for key, value in params.items())
 
 
-def _run_row(summary: RunSummary) -> tuple[str, str, str, str, str]:
-    """The plain-text cells before Started, in column order."""
-    return (
-        summary.run_id,
-        summary.pipeline,
-        target_cell(summary.params),
-        summary.status,
-        resume_cell(summary),
-    )
+@dataclass(frozen=True)
+class _RunColumn:
+    """One ``sq runs list`` column: its header, its plain-text cell and how it wraps."""
+
+    header: str
+    text: Callable[[RunSummary], str]
+    never_fold: bool = False
+    color: Callable[[RunSummary], str] | None = None
+
+    def markup(self, summary: RunSummary) -> str:
+        cell = escape(self.text(summary))
+        if self.color is None:
+            return cell
+        color = self.color(summary)
+        return f"[{color}]{cell}[/{color}]"
+
+
+# Run ID (copied into --resume), status and resume point never fold; the rest may.
+_RUN_COLUMNS: tuple[_RunColumn, ...] = (
+    _RunColumn("Run ID", lambda s: s.run_id, never_fold=True),
+    _RunColumn("Pipeline", lambda s: s.pipeline),
+    _RunColumn("Target", lambda s: target_cell(s.params)),
+    _RunColumn("Status", lambda s: s.status, never_fold=True, color=lambda s: status_color(s.status)),
+    _RunColumn("Resume at", lambda s: resume_cell(s), never_fold=True),
+    _RunColumn("Started", lambda s: f"{s.started_at:{_STARTED_FORMAT}}"),
+)
 
 
 def render_run_listing(summaries: list[RunSummary], *, include_all: bool) -> None:
@@ -127,21 +148,15 @@ def render_run_listing(summaries: list[RunSummary], *, include_all: bool) -> Non
         hint = "" if include_all else " Use --all to include completed runs."
         rprint(f"No resumable runs.{hint}")
         return
-    rows = [_run_row(summary) for summary in summaries]
     table = Table(box=None)
-    # Run ID (copied into --resume), status and resume point never fold; the rest may.
-    for position, column in enumerate(("Run ID", "Pipeline", "Target", "Status", "Resume at")):
-        if column in _UNFOLDED_COLUMNS:
-            longest = max(len(row[position]) for row in rows)
-            table.add_column(column, no_wrap=True, min_width=longest)
+    for column in _RUN_COLUMNS:
+        if column.never_fold:
+            longest = max(len(column.text(summary)) for summary in summaries)
+            table.add_column(column.header, no_wrap=True, min_width=longest)
         else:
-            table.add_column(column, overflow="fold")
-    table.add_column("Started", overflow="fold")
-    for summary, row in zip(summaries, rows, strict=True):
-        color = status_color(summary.status)
-        run_id, pipeline, target, status, resume = (escape(cell) for cell in row)
-        started = f"{summary.started_at:{_STARTED_FORMAT}}"
-        table.add_row(run_id, pipeline, target, f"[{color}]{status}[/{color}]", resume, started)
+            table.add_column(column.header, overflow="fold")
+    for summary in summaries:
+        table.add_row(*(column.markup(summary) for column in _RUN_COLUMNS))
     rprint(table)
     rprint()
     for hint in _RESUME_HINTS:

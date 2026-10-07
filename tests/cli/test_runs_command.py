@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 from squadron.cli.app import app
 from squadron.cli.commands import runs
 from squadron.pipeline.executor import ExecutionStatus
-from squadron.pipeline.run_listing import WAIT_EXIT_CODES, WaitOutcome
+from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult
 from squadron.pipeline.state import StateManager
 from tests.pipeline.run_listing_support import (
     STEP_NAMES,
@@ -88,7 +88,12 @@ class TestRunsWait:
     ) -> None:
         run_id = begin(sm, "steps")
         end(sm, run_id, ExecutionStatus.COMPLETED)
-        monkeypatch.setattr(runs, "wait_for_run", lambda *_a, **_k: outcome)
+        state = sm.load(run_id)
+
+        def fake_wait(*_args: object, **_kwargs: object) -> WaitResult:
+            return WaitResult(outcome, state)
+
+        monkeypatch.setattr(runs, "wait_for_run", fake_wait)
 
         result = CliRunner().invoke(app, ["runs", "wait", run_id])
 

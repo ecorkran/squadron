@@ -12,12 +12,14 @@ from squadron.cli.run_views import (
     RESUME_PROBLEM_MARKERS,
     render_pipeline_listing,
     render_run_listing,
+    render_run_status,
     resume_cell,
     target_cell,
 )
 from squadron.data import data_dir
 from squadron.pipeline.loader import discover_pipelines
 from squadron.pipeline.run_listing import ResumeKind, ResumePoint, ResumeProblem, RunSummary
+from squadron.pipeline.state import CheckpointState, RunState
 
 
 def write_pipeline(directory: Path, name: str, description: str = "") -> None:
@@ -131,3 +133,25 @@ class TestRunListing:
     ) -> None:
         render_run_listing([], include_all=include_all)
         assert capsys.readouterr().out.strip() == expected
+
+
+def test_status_panel_escapes_markup_in_run_values(capsys: pytest.CaptureFixture[str]) -> None:
+    """A bracketed param or pause reason prints literally instead of breaking Rich (review F002)."""
+    state = RunState(
+        run_id="run-x",
+        pipeline="p4",
+        params={"note": "[/oops]"},
+        status="paused",
+        started_at=datetime(2026, 10, 6, tzinfo=UTC),
+        updated_at=datetime(2026, 10, 6, tzinfo=UTC),
+        checkpoint=CheckpointState(
+            reason="[bold]why[/bold]", step="[red]s", paused_at=datetime(2026, 10, 6, tzinfo=UTC)
+        ),
+    )
+
+    render_run_status(state)
+    out = capsys.readouterr().out
+
+    assert "[/oops]" in out
+    assert "[bold]why[/bold]" in out
+    assert "'[red]s'" in out

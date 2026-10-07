@@ -58,7 +58,12 @@ def report_json_path(runs_dir: Path, run_id: str, step_name: str) -> Path:
 
 
 def report_json_paths(runs_dir: Path, run_id: str) -> list[Path]:
-    """Every ``report.json`` *run_id* wrote; empty when the run wrote none."""
+    """Every ``report.json`` *run_id* wrote; empty when the run wrote none.
+
+    Assumes run ids contain no dots, which ``StateManager.init_run`` guarantees for the
+    ids it generates (its slug maps every non-alphanumeric to ``-``). A caller-supplied
+    id ``run-a`` would otherwise also match the reports of a run ``run-a.x``.
+    """
     return sorted(runs_dir.glob(f"{glob.escape(run_id)}.*{REPORT_JSON_SUFFIX}"))
 
 
