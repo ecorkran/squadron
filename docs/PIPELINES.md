@@ -973,8 +973,9 @@ Every non-zero exit also prints one line on stderr naming the run and the outcom
 | `paused` | paused runs |
 | `stale` | running runs with an overdue heartbeat |
 | `unowned` | running runs with no owner record (crash leftovers from older squadron versions, or prompt-only runs) |
+| `unsupported-schema` | state files with a schema version this squadron does not read (possibly a newer version's run) |
 
-With no `--status`, prune selects `failed`, `orphaned`, `unavailable` and `unreadable`. `--status` is repeatable and replaces that set. Run-ids select exactly those runs instead. `--pipeline` and `--older-than` (`<int><unit>`, unit `s m h d w`) narrow the selection. Paused, stale and unowned runs are pruned only when named or when their own category is given. A live run is never pruned; naming one exits 1. `sq runs prune --status unowned` clears the `running` leftovers older squadron versions could not detect.
+With no `--status`, prune selects `failed`, `orphaned`, `unavailable` and `unreadable`. `--status` is repeatable and replaces that set. Run-ids select exactly those runs instead. `--pipeline` and `--older-than` (`<int><unit>`, unit `s m h d w`) narrow the selection. Paused, stale, unowned and unsupported-schema runs are pruned only when named or when their own category is given. A live run is never pruned; naming one exits 1. `sq runs prune --status unowned` clears the `running` leftovers older squadron versions could not detect.
 
 Two config keys tune this (set with `sq config set`):
 

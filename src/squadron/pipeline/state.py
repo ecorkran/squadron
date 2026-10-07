@@ -229,6 +229,9 @@ class UnreadableRun:
     path: Path
     mtime: datetime | None  # None when even the file's metadata cannot be read
     reason: str
+    # True for a file whose schema version this build does not read: it may be a
+    # newer squadron's live run, so it is not junk.
+    unsupported_schema: bool = False
 
     @property
     def run_id(self) -> str:
@@ -246,7 +249,12 @@ def _unreadable(path: Path, exc: Exception) -> UnreadableRun:
         mtime: datetime | None = datetime.fromtimestamp(path.stat().st_mtime, UTC)
     except OSError:
         mtime = None  # the file vanished or its directory is unreadable; age is unknown
-    return UnreadableRun(path, mtime, f"{type(exc).__name__}: {exc}")
+    return UnreadableRun(
+        path,
+        mtime,
+        f"{type(exc).__name__}: {exc}",
+        unsupported_schema=isinstance(exc, SchemaVersionError),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -354,7 +362,8 @@ class StateManager:
         """Mark a resumed run ``running`` under *owner*, in one write (D13).
 
         Raises ``RuntimeError`` when the run is already ``running`` under a
-        live owner, so two processes cannot own one run.
+        live owner. The check and the write are not atomic: two simultaneous
+        resumes of one run can both succeed.
         """
         from squadron.pipeline.run_liveness import RunLiveness, assess_liveness
 
@@ -509,10 +518,7 @@ class StateManager:
                 paused_at=now,
             )
 
-        self._write_atomic(
-            self._state_path(run_id),
-            json.dumps(state.model_dump(mode="json"), indent=2),
-        )
+        self._save(state)
 
     def record_compact_summary(self, run_id: str, summary: CompactSummary) -> None:
         """Add or replace a compact summary in the run state and persist.
@@ -523,10 +529,7 @@ class StateManager:
         state = self.load(run_id)
         state.compact_summaries[summary.key] = summary
         state.updated_at = datetime.now(UTC)
-        self._write_atomic(
-            self._state_path(run_id),
-            json.dumps(state.model_dump(mode="json"), indent=2),
-        )
+        self._save(state)
 
     def log_pool_selection(self, run_id: str, selection: object) -> None:
         """Append a pool selection record to the run's state file.
@@ -547,10 +550,7 @@ class StateManager:
         }
         state.pool_selections.append(entry)
         state.updated_at = datetime.now(UTC)
-        self._write_atomic(
-            self._state_path(run_id),
-            json.dumps(state.model_dump(mode="json"), indent=2),
-        )
+        self._save(state)
 
     def finalize(self, run_id: str, result: PipelineResult) -> None:
         """Write terminal status to the run file."""
@@ -563,10 +563,7 @@ class StateManager:
         # The owner record stays as history; liveness is assessed only while running.
         state.active_step = None
         state.active_item = None
-        self._write_atomic(
-            self._state_path(run_id),
-            json.dumps(state.model_dump(mode="json"), indent=2),
-        )
+        self._save(state)
 
     def record_step_done(
         self,

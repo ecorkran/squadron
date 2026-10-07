@@ -30,6 +30,7 @@ class PruneCategory(StrEnum):
     STALE = "stale"
     UNAVAILABLE = "unavailable"
     UNREADABLE = "unreadable"
+    UNSUPPORTED_SCHEMA = "unsupported-schema"
     COMPLETED = "completed"
     PAUSED = "paused"
     UNOWNED = "unowned"
@@ -47,7 +48,9 @@ DEFAULT_CATEGORIES = frozenset(
 
 # A run in one of these is pruned only when named, or when every one of them it
 # matches was asked for by --status, even if another selected category matches too.
-PROTECTED_CATEGORIES = frozenset({PruneCategory.PAUSED, PruneCategory.UNOWNED, PruneCategory.STALE})
+PROTECTED_CATEGORIES = frozenset(
+    {PruneCategory.PAUSED, PruneCategory.UNOWNED, PruneCategory.STALE, PruneCategory.UNSUPPORTED_SCHEMA}
+)
 
 _STATUS_CATEGORIES: dict[str, PruneCategory] = {
     ExecutionStatus.FAILED.value: PruneCategory.FAILED,
@@ -190,7 +193,9 @@ def _consider_unreadable(entry: UnreadableRun, now: datetime) -> _Considered:
         run_id=entry.run_id,
         pipeline=None,
         status=None,
-        categories=frozenset({PruneCategory.UNREADABLE}),
+        categories=frozenset(
+            {PruneCategory.UNSUPPORTED_SCHEMA if entry.unsupported_schema else PruneCategory.UNREADABLE}
+        ),
         age=None if entry.mtime is None else now - entry.mtime,
         path=entry.path,
     )

@@ -51,6 +51,7 @@ class Runs:
     unowned: str
     unowned_gone: str
     junk: str
+    newer_schema: str
 
 
 @pytest.fixture
@@ -87,6 +88,7 @@ def runs(sm: StateManager) -> Runs:
     state.heartbeat_at = datetime(2020, 1, 1, tzinfo=UTC)
     sm._save(state)  # pyright: ignore[reportPrivateUsage]
     (sm.runs_dir / "run-junk.json").write_text("{not json")
+    (sm.runs_dir / "run-newer.json").write_text('{"schema_version": 99, "run_id": "run-newer"}')
     return Runs(
         failed,
         completed,
@@ -99,6 +101,7 @@ def runs(sm: StateManager) -> Runs:
         unowned,
         unowned_gone,
         "run-junk",
+        "run-newer",
     )
 
 
@@ -150,6 +153,7 @@ class TestCategories:
         assert cats[runs.unowned] == {PruneCategory.UNOWNED}
         assert cats[runs.unowned_gone] == {PruneCategory.UNOWNED, PruneCategory.UNAVAILABLE}
         assert cats[runs.junk] == {PruneCategory.UNREADABLE}
+        assert cats[runs.newer_schema] == {PruneCategory.UNSUPPORTED_SCHEMA}
         assert runs.live not in cats
 
     @pytest.mark.parametrize("category", list(PruneCategory))
@@ -186,6 +190,7 @@ class TestDefaultSelection:
             runs.stale,
             runs.completed,
             runs.live,
+            runs.newer_schema,  # a newer squadron's file is not junk
         }
         assert not _ids(_plan(sm, pipelines)) & excluded
 

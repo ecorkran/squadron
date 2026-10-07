@@ -105,3 +105,20 @@ class TestRunHeartbeat:
         assert len(errors) == 1
         assert run_id in errors[0].getMessage()
         assert errors[0].exc_info is not None
+
+
+class TestCancellation:
+    async def test_cancelling_the_enclosing_task_is_not_swallowed(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(1))
+
+        async def body() -> None:
+            async with RunHeartbeat(mgr, run_id, INTERVAL, claim=False):
+                await asyncio.sleep(60)
+
+        task = asyncio.create_task(body())
+        await asyncio.sleep(INTERVAL * 2)
+        task.cancel()
+
+        with pytest.raises(asyncio.CancelledError):
+            await task

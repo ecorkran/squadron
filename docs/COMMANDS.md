@@ -588,7 +588,7 @@ sq runs prune [RUN_ID ...] [--status CATEGORY ...] [--pipeline NAME] [--older-th
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `RUN_ID` | string | no | — | Prune exactly these runs; can't be combined with `--status` |
-| `--status` | category | no | `failed orphaned unavailable unreadable` | Repeatable: `failed`, `orphaned`, `stale`, `unavailable`, `unreadable`, `completed`, `paused`, `unowned`. Replaces the default set |
+| `--status` | category | no | `failed orphaned unavailable unreadable` | Repeatable: `failed`, `orphaned`, `stale`, `unavailable`, `unreadable`, `unsupported-schema`, `completed`, `paused`, `unowned`. Replaces the default set |
 | `--pipeline` | string | no | — | Only runs of this pipeline (case-insensitive) |
 | `--older-than` | duration | no | — | Only runs last updated longer ago than `<int><unit>`, unit `s m h d w` |
 | `--yes` | flag | no | off | Delete instead of previewing |

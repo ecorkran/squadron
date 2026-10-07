@@ -57,12 +57,9 @@ class RunHeartbeat:
         if self._task is None:
             return
         self._task.cancel()
-        try:
-            await self._task
-        except asyncio.CancelledError:
-            pass  # the cancel just issued; any other outcome was logged by _report_crash
-        except Exception:  # noqa: BLE001
-            pass  # already logged at ERROR by _report_crash; must not mask the run's own exit
+        # wait() neither raises the task's outcome (a crash was logged by _report_crash and
+        # must not mask the run's own exit) nor swallows a cancellation of this task.
+        await asyncio.wait([self._task])
 
     async def _beat(self) -> None:
         while True:
