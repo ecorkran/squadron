@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261006
 
+### Release 0.20.0
+
+- **Contents:** slice 197 (implementation batch pipeline: `implement-plan`, item resume, project run lock, `report.json`), #183 (branch enter catch-up).
+
 ### Slice 197: implementation complete (Phase 6)
 
 - **Delivered:** `implement-plan.yaml`; source `cf.slices_ready_to_implement` with `order_by_dependencies`; `existing: keep` on implement (`KeepCheck.BRANCH_WORK`, `branch_work_count`); catch-up merge on enter (#183) and `restore_target()`; `branch: { plan: }`; `FlagKind`, `ItemDecision`, `ItemOutcome.NOT_RUN`, `StepResult.exhausted`; versioned, atomic, per-item `report.json`; `control_params.py`; `run_lock.py` (`project_run_lock`, `pipeline_mutates`); `item_resume.py` and `sq run --resume … --item/--decision/--instructions` (`cli/commands/run_item.py`); P6, `implement`, P56 and P456 on the shared body with a drift test; loop `accept_decision`.

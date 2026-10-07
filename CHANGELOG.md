@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 20261006
+
 ### Added
 - `sq run implement-plan <plan>` implements every ready slice of a plan unattended, in dependency order: branch, implement, code review, revise rounds, devlog, merge. Slices it can't finish are flagged and left on their unmerged branch; their dependents are flagged too; everything else carries on.
 - Item resume: `sq run --resume <run_id> --item <index> --decision retry|accept [--instructions TEXT]` reruns one flagged item of a batch run with your decision, keeping the work already on its branch. Distinct exit codes (0 resolved, 1 flagged again, 2 refused, 3 halted).
