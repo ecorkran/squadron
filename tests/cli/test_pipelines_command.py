@@ -76,7 +76,8 @@ class TestPlainListing:
         lines = _render(self.PIPELINES)
 
         assert lines[0] == "Built-in (2)"
-        assert lines[3] == "User (1)"
+        assert lines[3] == ""  # blank line between groups
+        assert lines[4] == "User (1)"
         assert "Project (" not in "\n".join(lines)
 
     def test_name_width_is_shared_across_groups(self) -> None:

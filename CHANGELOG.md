@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `sq pipelines list` puts a blank line between the Built-in, Project and User groups.
+
 ## [0.21.1] - 20261007
 
 ### Added

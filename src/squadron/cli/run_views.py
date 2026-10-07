@@ -125,10 +125,11 @@ def render_pipeline_listing(
                 row.append(Text(params_cell(info.params)))
             rows.append(row)
     lines = iter(render_rows(columns, rows, available=available_width(target)))
-    for source, group in groups:
+    for index, (source, group) in enumerate(groups):
         label = Text(_SOURCE_TITLES[source], style=_GROUP_LABEL_STYLE)
         label.append(f" ({len(group)})", style=_GROUP_COUNT_STYLE)
-        print_lines([label, *(next(lines) for _ in group)], target)
+        blank = [Text("")] if index else []  # a blank line between groups
+        print_lines([*blank, label, *(next(lines) for _ in group)], target)
 
 
 def resume_cell(summary: RunSummary) -> str:
