@@ -39,7 +39,7 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 - Removing `sq run --list`. A GitHub issue opened during this slice tracks it.
 - Changing `sq run --status`. It behaves as today.
 - Deleting or pruning runs.
-- `--json` output. The listing's Python API serves in-process callers. An out-of-process orchestrator such as Amoeba would need `--json`, which this slice does not build because no such consumer exists yet.
+- `--json` output. The listing's Python API serves in-process callers. An out-of-process orchestrator such as Amoeba would need `--json`, which this slice does not build because no such consumer exists yet. A GitHub issue opened during this slice (Development Approach step 6) records the follow-up.
 - An MCP surface. Squadron has no MCP server: `src/squadron/server` is the agent daemon, with `agents` and `health` routes only. Parity here means CLI, slash command and agent skill.
 - Typing `RunState.status`. See D10.
 
@@ -55,7 +55,7 @@ Today pipeline discovery hides under `sq run --list`, which mixes sources in one
 - `StateManager.list_runs(pipeline=, status=)`, `StateManager.runs_dir` and `RunState` in `squadron/pipeline/state.py`.
 - The `StateManager.first_unfinished_step` logic, which decides where `--resume` restarts.
 - `BatchReport.load`, `BatchReportLoadError`, `ItemOutcome`, `FlagKind` and `ItemDecision` in `squadron/pipeline/batch_report.py`.
-- `ExecutionStatus` in `squadron/pipeline/executor.py`.
+- `ExecutionStatus` in `squadron/pipeline/executor.py`, reached through `state.py`, which already imports it.
 
 ## Architecture
 
@@ -82,7 +82,9 @@ pipeline/run_listing.py      (new) RunSummary, ResumePoint, ResumeKind, ResumePr
                              list_run_summaries()
 ```
 
-Dependency direction: `cli/commands/*` → `cli/run_views` → `pipeline/run_listing` → `pipeline/{item_eligibility, state, batch_report, loader}`. `item_resume` → `item_eligibility`. `item_eligibility` has no git or CLI imports, so the read-only listing does not pull in item resume's git machinery.
+Dependency direction: `cli/commands/*` → `cli/run_views` → `pipeline/run_listing` → `pipeline/{item_eligibility, state, batch_report, loader}`. `item_resume` → `item_eligibility`. `item_eligibility` holds pure rules with no I/O, separate from item resume's orchestration (lock, git, executor), so both callers and the parity test exercise the rules without that orchestration.
+
+**Import cost (accepted):** `run_listing` needs `StateManager`, and `state.py` already imports `ExecutionStatus` from `executor.py` at module level, which transitively imports `git_ops`, `branch_ops` and `commit_plan`. The listing therefore loads the executor's import graph. That adds no cost on the CLI path, because `cli/app.py` already imports `run.py`, which imports the executor. Moving `ExecutionStatus` to a lightweight module is a state/executor refactor outside this slice; the listing makes no claim of import isolation.
 
 ### Data Flow
 
@@ -126,7 +128,7 @@ The listing is read-only. It adds no state and writes neither run state nor repo
 
 `item_resume._validate` converts `ItemResumeUnsupportedError` to `_Stop(REJECTED, ...)`. `_check_record` rejects when `request.decision not in item_decisions(record)`, keeping its two existing messages (wrong outcome, accept without `review_unresolved`).
 
-Item resume also checks state the listing cannot see ahead of time: git state, the run lock, and the item index the user types. The claim is therefore limited to this: **every item the listing counts as open passes item resume's eligibility checks for at least one decision, and an item counted as acceptable passes them for `accept`**. Run-level resume shares `first_unfinished_step_of` (D4), and `_RESUMABLE_STATUSES` stays in `state.py`.
+Item resume also checks state the listing cannot see ahead of time: git state, the run lock, and the item index the user types. The claim is therefore limited to this: **every item the listing counts as open passes item resume's eligibility checks for at least one decision, and an item counted as acceptable passes them for `accept`**. Run-level resume shares `first_unfinished_step_of` (D4) and `RESUMABLE_STATUSES` (D11).
 
 **D4. One source for the resume step.** The body of `StateManager.first_unfinished_step` becomes a pure function, `first_unfinished_step_of(state: RunState, definition: PipelineDefinition) -> str | None`. The method loads state and delegates. The listing calls the function on the `RunState` it already holds.
 
@@ -155,13 +157,23 @@ The exceptions named in the definition row are the set that `discover_pipelines`
 
 Concurrent writes cannot be torn. Both `StateManager._write_atomic` and `batch_report._write_atomic` write a temp file and `replace` it over the target, so a reader always sees a whole file.
 
-A `running` run is outside `_RESUMABLE_STATUSES`. The listing reports exactly what the status says, and it cannot tell a live run from a crash orphan. Detecting orphans is not in scope.
+A `running` run is outside `RESUMABLE_STATUSES`. The listing reports exactly what the status says, and it cannot tell a live run from a crash orphan. Detecting orphans is not in scope.
 
 **D8. Deprecated alias.** `sq run --list` prints `Deprecated: use 'sq pipelines list'.` to stderr, then calls `run_views.render_pipeline_listing()`, the same function `sq pipelines list` calls. The existing mutual-exclusion check for `--list` stays.
 
 **D9. Normalising the pipeline filter.** `--pipeline` is lowercased, matching `pipeline_identity` and run-state names (#147).
 
-**D10. `RunSummary.status` stays `str`.** It mirrors `RunState.status`, which the persisted schema stores as a string. `init_run` writes `"running"`, which is not an `ExecutionStatus` member, so narrowing the summary to `ExecutionStatus` would fail on live runs. The listing adds no status literals: it compares only through `_RESUMABLE_STATUSES` and `ExecutionStatus.COMPLETED.value`. `STATUS_COLORS` is keyed by `ExecutionStatus` values, and a status not in it renders `dim`, as it does today. A GitHub issue opened during this slice covers typing `RunState.status` (a `RunStatus` enum that includes `RUNNING`), because that is a run-state schema change.
+**D10. `RunSummary.status` stays `str`.** It mirrors `RunState.status`, which the persisted schema stores as a string. `init_run` writes `"running"`, which is not an `ExecutionStatus` member, so narrowing the summary to `ExecutionStatus` would fail on live runs. The listing adds no status literals: it compares only through `RESUMABLE_STATUSES` and `ExecutionStatus.COMPLETED.value`. `STATUS_COLORS` is keyed by `ExecutionStatus` values, and a status not in it renders `dim`, as it does today. A GitHub issue opened during this slice covers typing `RunState.status` (a `RunStatus` enum that includes `RUNNING`), because that is a run-state schema change.
+
+**D11. `RESUMABLE_STATUSES` becomes public.** `state.py`'s `_RESUMABLE_STATUSES` is renamed `RESUMABLE_STATUSES` and becomes a `frozenset`. `first_unfinished_step_of` and `run_listing` import it; no module imports an underscore-named constant across module boundaries.
+
+**D12. I/O is local and bounded.** Every read in the listing is a local-disk file read or glob under the runs directory or a pipeline directory. There is no network call and no subprocess, so there is no timeout path. The I/O per call is bounded:
+- one state-file read per run (existing `list_runs`);
+- at most one `report_json_paths` glob per completed run;
+- at most one report read per completed run that has a report file;
+- at most one definition load per distinct pipeline name.
+
+The definition and report loaders are injected (see API Contracts), so a test asserts these bounds by counting calls.
 
 ## Implementation Details
 
@@ -192,12 +204,12 @@ def list_run_summaries(
     *,
     pipeline: str | None,
     include_all: bool,
-    project_dir: Path | None = None,  # passed through to load_pipeline
-    user_dir: Path | None = None,
+    load_definition: Callable[[str], PipelineDefinition] = load_pipeline,
+    load_report: Callable[[Path], BatchReport] = BatchReport.load,
 ) -> list[RunSummary]: ...
 ```
 
-`list_run_summaries` receives its `StateManager` as a parameter, so tests pass one with a `tmp_path` runs dir. Definitions are loaded with `load_pipeline`. `project_dir` and `user_dir` pass through to it: `None` means the same directories `--resume` searches, and tests pass `tmp_path` directories.
+`list_run_summaries` receives its `StateManager` as a parameter, so tests pass one with a `tmp_path` runs dir. Definitions and reports are read through the injected `load_definition` and `load_report`. The defaults are the same loaders `--resume` uses. Tests pass `functools.partial(load_pipeline, project_dir=..., user_dir=...)` with `tmp_path` directories, wrapped in call counters for the bounds test (D12). The D7 exception set is caught around these calls, so a wrapper changes no error handling.
 
 ### UI Specifications
 
@@ -272,8 +284,9 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
   - a completed batch run whose items all passed;
   - a completed non-batch run (no report, no definition load);
   - a `running` run;
-  - `--pipeline` filtering, ordering, and one definition load per pipeline name;
+  - `--pipeline` filtering and ordering;
   - each `ResumeProblem` case.
+- An I/O-bounds test builds 300 runs with real `StateManager` and `BatchReport.write` fixtures: 200 completed non-batch runs, 50 completed batch runs across two pipelines, 30 paused and 20 failed runs across two other pipelines. It asserts that `load_definition` is called once per distinct pipeline (4) and `load_report` once per completed batch run (50). This catches regressions in the D12 bounds without a wall-clock assertion.
 - Each `ResumeProblem` test asserts both the enum value and the WARNING record (`caplog`, logger `squadron.pipeline.run_listing`).
 - A parity test feeds the same report to `item_decisions` and to `item_resume._check_record` for every outcome and flag-kind combination. It asserts that a decision `_check_record` rejects never appears in the decision set `item_decisions` reports.
 - `run_views` has a test that every `ResumeProblem` member has marker text.
@@ -351,15 +364,22 @@ These commands do not exist yet. This is the draft demo for Phase 6.
 ## Implementation Notes
 
 ### Development Approach
-1. Add `PipelineSource` and `LISTING_ORDER` to the loader, and update `discover_pipelines` and its existing tests.
-2. Create `cli/run_views.py` with `STATUS_COLORS`, moved from `run.py`, and `render_pipeline_listing()`. Add `pipelines.py` and register it in `app.py`. Point `sq run --list` at `render_pipeline_listing()`, with the deprecation notice.
-3. Extract `first_unfinished_step_of` and `report_json_path` / `report_json_paths`. Create `item_eligibility.py` and move `item_resume` onto it. The existing resume tests must pass unchanged. Add the parity test.
-4. Write `run_listing.py` with its unit tests.
-5. Add `render_run_listing()` and the marker text to `run_views`. Add `runs.py` and register it.
-6. Add the slash commands, skills and drift-test entries.
-7. Update the docs. Open GitHub issues for removing `sq run --list` and for typing `RunState.status` (D10).
+1. Refactor the existing code first, with no behaviour change, and commit it on its own before any new surface:
+   - extract `first_unfinished_step_of`, make `RESUMABLE_STATUSES` public, and add `report_json_path` / `report_json_paths`;
+   - create `item_eligibility.py` and move `item_resume` onto it;
+   - add `PipelineSource` and `LISTING_ORDER` to the loader, and update `discover_pipelines`.
 
-Effort: 2/5.
+   The existing resume, item-resume and loader tests must pass unchanged. Add the parity test.
+2. Create `cli/run_views.py` with `STATUS_COLORS`, moved from `run.py`, and `render_pipeline_listing()`. Add `pipelines.py` and register it in `app.py`. Point `sq run --list` at `render_pipeline_listing()`, with the deprecation notice.
+3. Write `run_listing.py` with its unit tests.
+4. Add `render_run_listing()` and the marker text to `run_views`. Add `runs.py` and register it.
+5. Add the slash commands, skills and drift-test entries.
+6. Update the docs. Open GitHub issues for:
+   - removing `sq run --list`;
+   - typing `RunState.status` (D10);
+   - `sq runs list --json`, for out-of-process consumers such as Amoeba, linked from the `--json` exclusion in Technical Scope.
+
+Effort: 2/5. The refactor in step 1 touches four existing modules (`state`, `batch_report`, `item_resume`, `loader`) owned by 140 and 197. Existing tests and the parity test guard it.
 
 ### Special Considerations
 - **Performance target:** under 1 s for `sq runs list --all` with a few hundred run-state files on local disk. The cost has three parts:
@@ -367,5 +387,5 @@ Effort: 2/5.
   - one glob per completed run;
   - one report read per completed batch run.
 
-  Definitions are loaded at most once per pipeline name within a call. There is no cache across calls. Walkthrough step 7 records the measured time. If it misses the target, that is a finding for Phase 7. It is not a reason to add a cache in this slice.
-- **Hermetic tests:** tests must not read the developer's real runs directory or `~/.config/squadron/pipelines`. Pass `runs_dir`, `user_dir` and `project_dir` explicitly, following the conventions in `tests/_hermetic.py`.
+  D12 bounds the call counts, and the I/O-bounds test enforces them. Wall-clock time is measured once in walkthrough step 7 rather than asserted in a test, because timing assertions are flaky on CI runners. There is no cache across calls.
+- **Hermetic tests:** tests must not read the developer's real runs directory or `~/.config/squadron/pipelines`. Pass `runs_dir` explicitly and inject a `load_definition` bound to `tmp_path` pipeline directories, following the conventions in `tests/_hermetic.py`.
