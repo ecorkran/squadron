@@ -17,6 +17,11 @@ from typing import TYPE_CHECKING, Protocol, cast
 
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.pipeline.batch_report import FlagKind
+from squadron.pipeline.git_ops import (
+    merged_slice_branches,
+    read_integration_target,
+    slice_branch_name,
+)
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.review.models import Verdict
 from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_review_stem
@@ -257,6 +262,29 @@ def _flag(item: dict[str, object], reason: str, kind: FlagKind) -> None:
     item[FLAG_KIND_KEY] = kind
 
 
+def _merged_open_slices(entries: list[SliceEntry], cf_client: ContextForgeClient, cwd: str) -> set[int]:
+    """Open-per-cf slices whose branch git shows merged (#188); each is warned about once.
+
+    Git is the record of a merged slice. cf marks a slice complete from its task
+    checkboxes, so a slice merged with unchecked tasks reads as open and would be
+    reimplemented, and its dependents flagged. A git failure propagates
+    (``GitStateUnknownError``) and fails the step before any item runs.
+    """
+    candidates = [e for e in entries if e.status not in _EXCLUDED_STATUSES and e.design_file]
+    target = read_integration_target(cf_client)
+    merged = merged_slice_branches(candidates, target, cwd=cwd)
+    for entry in sorted((e for e in candidates if e.index in merged), key=lambda e: e.index):
+        _logger.warning(
+            "slice %d: branch %s is merged into %s but cf reports %s; treating it as complete. "
+            "Check off its tasks to close it in cf.",
+            entry.index,
+            slice_branch_name(entry.index, entry.design_file),
+            target,
+            entry.status,
+        )
+    return merged
+
+
 async def _cf_slices_ready_to_implement(
     args: list[str],
     cf_client: ContextForgeClient,
@@ -273,11 +301,14 @@ async def _cf_slices_ready_to_implement(
     accept = _accept_arg(args)
     tasks = {task.index: task for task in cf_client.list_tasks(plan)}
     entries = cf_client.list_slices(plan)
+    merged = _merged_open_slices(entries, cf_client, cwd)
     in_plan = {entry.index for entry in entries}
-    open_in_plan = {e.index for e in entries if e.status not in _EXCLUDED_STATUSES}
+    open_in_plan = {
+        e.index for e in entries if e.status not in _EXCLUDED_STATUSES and e.index not in merged
+    }
     items: list[dict[str, object]] = []
     for entry in entries:
-        if entry.status in _EXCLUDED_STATUSES or not entry.design_file:
+        if entry.status in _EXCLUDED_STATUSES or not entry.design_file or entry.index in merged:
             continue
         item = _slice_item(entry)
         reason = _not_ready_reason(entry, tasks.get(entry.index), accept)

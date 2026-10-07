@@ -5,6 +5,7 @@ evaluate_condition, retry loops, and core executor logic.
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -1744,7 +1745,7 @@ class TestCfUnfinishedSlices:
             SliceEntry(index=3, name="slice-c", design_file=None, status="not_started"),
         ]
 
-        result = await _cf_unfinished_slices([], cf_client, {})
+        result = await _cf_unfinished_slices([], cf_client, {}, cwd=os.getcwd())
         assert len(result) == 2
         names = [r["name"] for r in result]
         assert "slice-a" not in names
