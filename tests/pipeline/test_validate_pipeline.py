@@ -37,6 +37,15 @@ class TestValidateBuiltIns:
         errors = validate_pipeline(defn)
         assert errors == []
 
+    def test_design_and_tasks_valid(self) -> None:
+        defn = load_pipeline(
+            "P45",
+            project_dir=Path("/nonexistent"),
+            user_dir=Path("/nonexistent"),
+        )
+        errors = validate_pipeline(defn)
+        assert errors == []
+
     def test_review_only_valid(self) -> None:
         defn = load_pipeline(
             "review",

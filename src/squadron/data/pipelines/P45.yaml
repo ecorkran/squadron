@@ -1,0 +1,52 @@
+name: P45
+description: Design and tasks (phases 4-5) — each revised until its review passes; checkpoint if it never does
+
+params:
+  slice: required
+  summary-model: sonnet
+  design-model: opus
+  model: sonnet
+  review-model: deepseek4-flash
+  max-revisions: "2"
+  pass-threshold: review.pass
+  accept-threshold: review.concerns_or_better
+
+steps:
+  - design:
+      phase: 4
+      model: "{design-model}"
+      review: { template: slice, model: "{review-model}" }
+      checkpoint: never
+  - loop:
+      name: revise-design
+      max: "{max-revisions}"
+      until: "{pass-threshold}"
+      accept_if: "{accept-threshold}"
+      skip_if_met: true
+      commit_each_iteration: true
+      on_exhaust: checkpoint
+      steps:
+        - dispatch: { name: revise, model: "{design-model}", feedback: review }
+        - review: { template: slice, model: "{review-model}", slice: "{slice}" }
+
+  - tasks:
+      phase: 5
+      model: "{model}"
+      review: { template: tasks, model: "{review-model}" }
+      checkpoint: never
+  - loop:
+      name: revise-tasks
+      max: "{max-revisions}"
+      until: "{pass-threshold}"
+      accept_if: "{accept-threshold}"
+      skip_if_met: true
+      commit_each_iteration: true
+      on_exhaust: checkpoint
+      steps:
+        - dispatch: { name: revise, model: "{model}", feedback: review }
+        - review: { template: tasks, model: "{review-model}", slice: "{slice}" }
+
+  - summary:
+      template: minimal-sdk
+      model: "{summary-model}"
+      emit: [stdout, clipboard, file]

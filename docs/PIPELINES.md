@@ -760,6 +760,7 @@ sq pipelines list    # shows all available pipelines with descriptions
 | `P2` | Phase 2 (architecture) for an initiative, with arch review | `plan`, `model`, `review-model`, `summary-model` |
 | `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P45` | Design and tasks (each revised like `P4`/`P5`) → summary; stops before implementation | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P6` | Phase 6: `branch enter` → implement with code review → `revise-code` loop → devlog → `branch merge` → summary | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold`, `summary-model` |
 | `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P56` | Tasks (revised like `P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
