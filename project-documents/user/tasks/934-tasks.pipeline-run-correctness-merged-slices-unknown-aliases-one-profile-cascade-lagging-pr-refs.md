@@ -279,10 +279,10 @@ status: in_progress
 
 ## Task 25c — Wire `sq pr show` and `sq pr create` (D8)
 
-- [ ] Both call `code_host_logging(0)`; no new flags
-- [ ] Tests: `tests/cli/test_pr_show.py` and `tests/cli/test_pr_create_failures.py` each assert a `CodeHostError` appears on stderr exactly once and an untagged codehost WARNING still shows
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: print code host failures once in sq pr show and create`
+- [x] Both call `code_host_logging(0)`; no new flags
+- [x] Tests: `tests/cli/test_pr_show.py` and `tests/cli/test_pr_create_failures.py` each assert a `CodeHostError` appears on stderr exactly once and an untagged codehost WARNING still shows
+  - [x] Success: tests pass
+- [x] Commit: `fix: print code host failures once in sq pr show and create`
 
 ## Task 26 — Part C validation
 
