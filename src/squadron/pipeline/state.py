@@ -222,6 +222,33 @@ class RunState(BaseModel):
         return max(applicable, key=lambda s: s.source_step_index)
 
 
+@dataclasses.dataclass(frozen=True)
+class UnreadableRun:
+    """A run-state file that could not be read (slice 174 D9)."""
+
+    path: Path
+    mtime: datetime | None  # None when even the file's metadata cannot be read
+    reason: str
+
+    @property
+    def run_id(self) -> str:
+        return self.path.stem
+
+
+@dataclasses.dataclass(frozen=True)
+class RunScan:
+    states: list[RunState]
+    unreadable: list[UnreadableRun]
+
+
+def _unreadable(path: Path, exc: Exception) -> UnreadableRun:
+    try:
+        mtime: datetime | None = datetime.fromtimestamp(path.stat().st_mtime, UTC)
+    except OSError:
+        mtime = None  # the file vanished or its directory is unreadable; age is unknown
+    return UnreadableRun(path, mtime, f"{type(exc).__name__}: {exc}")
+
+
 # ---------------------------------------------------------------------------
 # StateManager
 # ---------------------------------------------------------------------------
@@ -627,18 +654,39 @@ class StateManager:
                 iteration = step_state.iteration
         return iteration
 
+    def scan_runs(self) -> RunScan:
+        """Every run-state file: the readable states and the unreadable files (174 D9).
+
+        Unlike ``list_runs``, an unreadable file is returned, not logged, so a
+        caller can act on it (``sq runs prune``).
+        """
+        states: list[RunState] = []
+        unreadable: list[UnreadableRun] = []
+        for path in self._state_files():
+            try:
+                states.append(self._load_raw(path))
+            except STATE_READ_ERRORS as exc:
+                unreadable.append(_unreadable(path, exc))
+        return RunScan(states, unreadable)
+
+    def _state_files(self) -> list[Path]:
+        """Run-state files in the runs dir; batch reports beside them are not runs."""
+        from squadron.pipeline.batch_report import REPORT_JSON_SUFFIX
+
+        return [
+            path
+            for path in self._runs_dir.glob("*.json")
+            if not path.name.endswith(REPORT_JSON_SUFFIX)  # slice 197 D7
+        ]
+
     def list_runs(
         self,
         pipeline: str | None = None,
         status: str | None = None,
     ) -> list[RunState]:
         """List all run states, optionally filtered, sorted by started_at desc."""
-        from squadron.pipeline.batch_report import REPORT_JSON_SUFFIX
-
         runs: list[RunState] = []
-        for path in self._runs_dir.glob("*.json"):
-            if path.name.endswith(REPORT_JSON_SUFFIX):
-                continue  # a batch report beside the run state (slice 197 D7), not a run
+        for path in self._state_files():
             try:
                 run = self._load_raw(path)
             except STATE_READ_ERRORS:

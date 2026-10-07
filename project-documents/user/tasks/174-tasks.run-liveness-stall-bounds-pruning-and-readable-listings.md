@@ -355,21 +355,21 @@ status: in_progress
 
 ## Task 27 — `PipelineInfo.params` and the plain `sq pipelines list`
 
-- [ ] Add `PipelineInfo.params` (name, default or `required`, declaration order) populated by
+- [x] Add `PipelineInfo.params` (name, default or `required`, declaration order) populated by
       `discover_pipelines`
-- [ ] Replace the pipelines table in `run_views.py` with a plain list on `columns`: group
+- [x] Replace the pipelines table in `run_views.py` with a plain list on `columns`: group
       label bold with dim count, groups in `LISTING_ORDER`, empty groups omitted, Name width
       shared across groups, no box drawing; `-v` adds up to three params as
       `slice=required model=sonnet`, with ` +N` when more
-  - [ ] Success: no colour other than the label and count styles
+  - [x] Success: no colour other than the label and count styles
 
 ## Task 28 — Pipelines listing tests; commit
 
-- [ ] In `tests/cli/test_pipelines_command.py` and `tests/pipeline/test_loader.py`: params
+- [x] In `tests/cli/test_pipelines_command.py` and `tests/pipeline/test_loader.py`: params
       order and defaults; counts per group; shared Name width across groups; `-v` ` +N`
       suffix; no box-drawing characters
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: plain aligned sq pipelines list with params`
+  - [x] Success: tests pass
+- [x] Commit: `feat: plain aligned sq pipelines list with params`
 
 ---
 

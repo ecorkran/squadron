@@ -1467,3 +1467,23 @@ class TestProgressWriteFailures:
 
         with pytest.raises(TypeError):
             mgr.observer(run_id).step_started("slices")
+
+
+class TestScanRuns:
+    def test_returns_readable_states_and_unreadable_files(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        good = mgr.init_run("p", {})
+        (tmp_path / "run-junk.json").write_text("{not json", encoding="utf-8")
+        (tmp_path / "run-old.json").write_text(
+            json.dumps({"schema_version": 1, "run_id": "run-old"}), encoding="utf-8"
+        )
+        (tmp_path / f"{good}.slices.report.json").write_text("{}", encoding="utf-8")
+
+        scan = mgr.scan_runs()
+
+        assert [s.run_id for s in scan.states] == [good]
+        by_id = {u.run_id: u for u in scan.unreadable}
+        assert set(by_id) == {"run-junk", "run-old"}
+        assert "JSONDecodeError" in by_id["run-junk"].reason
+        assert "SchemaVersionError" in by_id["run-old"].reason
+        assert all(u.mtime is not None for u in scan.unreadable)

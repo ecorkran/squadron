@@ -19,6 +19,7 @@ from squadron.pipeline.batch_report import (
     ItemOutcome,
     report_json_path,
     report_json_paths,
+    report_sibling_paths,
 )
 from squadron.pipeline.executor import ExecutionStatus, StepResult
 from squadron.pipeline.models import ActionResult
@@ -371,3 +372,15 @@ class TestReportJsonPaths:
         BatchReport("p", "run-a-2", "slices").write(tmp_path)
 
         assert report_json_paths(tmp_path, "run-a") == [report_json_path(tmp_path, "run-a", "slices")]
+
+
+class TestReportSiblingPaths:
+    def test_matches_both_report_files_of_one_run_only(self, tmp_path: Path) -> None:
+        for run_id in ("run-a", "run-ab"):
+            report = BatchReport("p", run_id, "slices", records=[])
+            report.write(tmp_path)
+        (tmp_path / "run-a.json").write_text("{}")
+
+        paths = report_sibling_paths(tmp_path, "run-a")
+
+        assert [p.name for p in paths] == ["run-a.slices.report.json", "run-a.slices.report.md"]

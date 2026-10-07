@@ -32,8 +32,10 @@ _logger = logging.getLogger(__name__)
 # Goes up whenever the record shape or the FlagKind set changes (slice 197 D7).
 REPORT_SCHEMA_VERSION = 1
 REPORT_DOC_TYPE = "batch-report"
-# ``{run_id}.{step}.report.json`` sits in the runs dir beside run state files.
+# ``{run_id}.{step}.report.json`` and ``.report.md`` sit in the runs dir beside run
+# state files.
 REPORT_JSON_SUFFIX = ".report.json"
+REPORT_MD_SUFFIX = ".report.md"
 
 # BatchItemRecord attribute → report.json key (camelCase, as review frontmatter).
 _JSON_KEYS: dict[str, str] = {
@@ -65,6 +67,20 @@ def report_json_paths(runs_dir: Path, run_id: str) -> list[Path]:
     id ``run-a`` would otherwise also match the reports of a run ``run-a.x``.
     """
     return sorted(runs_dir.glob(f"{glob.escape(run_id)}.*{REPORT_JSON_SUFFIX}"))
+
+
+def report_sibling_paths(runs_dir: Path, run_id: str) -> list[Path]:
+    """Every report file, JSON and Markdown, *run_id* wrote (pruned with it; slice 174 D9).
+
+    The same no-dots assumption as ``report_json_paths`` keeps ``run-a`` from
+    matching the reports of ``run-ab``: the id is always followed by a dot.
+    """
+    prefix = glob.escape(run_id)
+    return sorted(
+        path
+        for suffix in (REPORT_JSON_SUFFIX, REPORT_MD_SUFFIX)
+        for path in runs_dir.glob(f"{prefix}.*{suffix}")
+    )
 
 
 class BatchReportLoadError(ValueError):
@@ -310,7 +326,7 @@ class BatchReport:
         }
 
     def path(self, runs_dir: Path) -> Path:
-        return runs_dir / f"{self.run_id}.{self.step_name}.report.md"
+        return runs_dir / f"{self.run_id}.{self.step_name}{REPORT_MD_SUFFIX}"
 
     def json_path(self, runs_dir: Path) -> Path:
         return report_json_path(runs_dir, self.run_id, self.step_name)
