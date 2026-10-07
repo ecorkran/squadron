@@ -1,4 +1,4 @@
-"""list command — display active agents in a rich table."""
+"""agents command group — ``sq agents list`` displays active agents in a rich table."""
 
 from __future__ import annotations
 
@@ -21,7 +21,14 @@ _STATE_COLORS: dict[str, str] = {
     AgentState.restarting: "cyan",
 }
 
+agents_app = typer.Typer(
+    name="agents",
+    help="Inspect agents managed by the squadron daemon.",
+    no_args_is_help=True,
+)
 
+
+@agents_app.command("list")
 def list_agents(
     state: str | None = typer.Option(None, "--state", help="Filter by agent state"),
     provider: str | None = typer.Option(None, "--provider", help="Filter by provider"),

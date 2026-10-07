@@ -64,7 +64,7 @@ def test_spawn_list_task_shutdown_sequence() -> None:
         assert "test-agent" in result.output
 
         # 2. List: agent appears
-        result = runner.invoke(app, ["list"])
+        result = runner.invoke(app, ["agents", "list"])
         assert result.exit_code == 0, f"list failed:\n{result.output}"
         assert "test-agent" in result.output
 
@@ -80,7 +80,7 @@ def test_spawn_list_task_shutdown_sequence() -> None:
 
         # After shutdown, list returns empty
         mock_client.list_agents.return_value = []
-        result = runner.invoke(app, ["list"])
+        result = runner.invoke(app, ["agents", "list"])
         assert result.exit_code == 0
         assert "No agents running" in result.output
     finally:

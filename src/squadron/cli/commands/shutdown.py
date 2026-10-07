@@ -38,7 +38,7 @@ async def _shutdown_one(name: str) -> None:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
         raise typer.Exit(code=1) from None
     except AgentNotFoundError:
-        rprint(f"[red]Error: No agent named '{name}'. Use 'sq list' to see active agents.[/red]")
+        rprint(f"[red]Error: No agent named '{name}'. Use 'sq agents list' to see active agents.[/red]")
         raise typer.Exit(code=1) from None
     finally:
         await client.close()

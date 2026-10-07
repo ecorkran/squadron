@@ -160,7 +160,7 @@ EXPECTED_COMMANDS = {
     "analysis.md": "/sq:analysis",
     "spawn.md": "sq spawn",
     "task.md": "sq task",
-    "list.md": "sq list",
+    "list.md": "sq agents list",
     "shutdown.md": "sq shutdown",
     "review.md": "sq review",
     "auth.md": "sq auth",

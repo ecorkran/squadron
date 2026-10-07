@@ -17,7 +17,7 @@ from squadron.cli.commands.doctor import doctor
 from squadron.cli.commands.events import events_app
 from squadron.cli.commands.history import history
 from squadron.cli.commands.install import install_commands, uninstall_commands
-from squadron.cli.commands.list import list_agents
+from squadron.cli.commands.list import agents_app
 from squadron.cli.commands.message import message
 from squadron.cli.commands.metrology import metrology_app
 from squadron.cli.commands.models import models_app
@@ -49,7 +49,7 @@ app = typer.Typer(
 
 app.command("serve")(serve)
 app.command("spawn")(spawn)
-app.command("list")(list_agents)
+app.add_typer(agents_app, name="agents")
 app.command("task")(task)
 app.command("message")(message)
 app.command("history")(history)
