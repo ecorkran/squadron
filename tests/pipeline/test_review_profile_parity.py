@@ -86,9 +86,11 @@ async def test_same_profile_from_both_paths(
     source: ReviewProfileSource, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     explicit, model, template_profile, config_profile = _SCENARIOS[source]
-    monkeypatch.setattr(
-        _CONFIG_PATH, lambda key: config_profile if key == "default_review_profile" else None
-    )
+
+    def fake_get_config(key: str) -> str | None:
+        return config_profile if key == "default_review_profile" else None
+
+    monkeypatch.setattr(_CONFIG_PATH, fake_get_config)
     template = _template(template_profile)
 
     _, cli_profile = _resolve_model_and_profile(model, explicit, template, "code")

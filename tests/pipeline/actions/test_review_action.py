@@ -1706,10 +1706,11 @@ class TestReviewProfileCascade:
     ) -> tuple[ActionContext, str]:
         template = _mock_template()
         template.profile = template_profile
-        monkeypatch.setattr(
-            "squadron.review.profile_resolution.get_config",
-            lambda key: config_profile if key == "default_review_profile" else None,
-        )
+
+        def fake_get_config(key: str) -> str | None:
+            return config_profile if key == "default_review_profile" else None
+
+        monkeypatch.setattr("squadron.review.profile_resolution.get_config", fake_get_config)
         ctx = _make_context(params={"template": "code", **params})
         ctx.resolver.resolve_full.return_value = ResolvedModel("sonnet", None)
         with (
