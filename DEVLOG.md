@@ -12,6 +12,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Slice 934: Pipeline Run Correctness — Implementation Complete (Phase 6)
+
+- **Delivered:** the four fixes, all on the slice branch. #184/#175: `review/profile_resolution.py` is the one review-profile cascade, used by `sq review` and the pipeline review step; the alias check takes each review step's own profile source; unknown review templates fail before the run; `--dry-run` classifies. #188: `merged_slice_branches` makes git the record of a merged slice, for `cf.slices_ready_to_implement` and item resume. #186: a lagging `refs/pull/N/head` reviews the API head (fetched by sha, then the head branch), with `RefAdjustment` data, source-naming errors, and `code_host_logging` so each failure prints once.
+- **Choices the design left open:**
+  - `SourceFn` became a `Protocol` so `cwd` can be a keyword; `evaluate_each_source(..., *, cwd)`.
+  - `_action_profile_source` reads the template through the never-raising `_review_template`; the unknown-template error is collected separately, so a bad template is not also reported as a bad alias.
+  - Ancestry timeouts raise `HostCommandTimeoutError` (D10's table) rather than being answered "no" (task 22a's wording); a non-0/1 exit is still answered "no".
+  - `code_host_logging` is entered through `ctx.with_resource` in `review pr`, `pr show` and `pr create`. In `review pr` the fetch ran before `_resolve_verbosity`, so verbosity moved up and wrapping "the body after it" would have missed the failures.
+  - `RefAdjustment.source` is a phrase (`fetched by sha`, `fetched from refs/heads/main`) and `describe()` is the printed line.
+  - `_execute_review` lost its `"sdk"` default; the parameter is required.
+- **Existing tests changed:** `tests/cli/test_review_profile.py` called the deleted `_resolve_profile`, so it calls the shared module and patches its config read; dry-run tests that built model-less pipelines now give them a model (a real run would fail them too); the error-table test counts 20 classes.
+- **Walkthrough (design file has the commands):** step 1 exit 1 with the alias error; step 2 ran both halves live (`OPENROUTER_API_KEY` configured), both on openrouter, and both failed with the same message once the config key was unset (key restored); step 3 against a scratch cf project (created, then removed): A absent, B unflagged, WARNING naming A's branch; step 4 five `lagging` tests pass. Not run live: the item-resume half of step 3 (needs model calls; covered by `tests/pipeline/test_item_resume_source.py`) and a real lagging PR (needs GHE).
+- **Filed:** #193, the pipeline review step's verbose line does not name the profile (the design expected `profile=openrouter` in both headers).
+
 ### Slice 934: Pipeline Run Correctness — Tasks Complete
 
 - **Delivered:** `user/tasks/934-tasks.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs.md` (29 tasks, 287 lines): Part A #184/#175 (Tasks 2–12), Part B #188 (13–17), Part C #186 (18–26), Part D docs/walkthrough/close-out (27–29). Test-with ordering; a commit per task or pair.

@@ -344,32 +344,35 @@ The fallback adds no new runner method. Tests drive each row through the fake `P
 
 ### Verification Walkthrough
 
-Draft. Refined after Phase 6.
+Run from the worktree with `CLAUDECODE` unset (`env -u CLAUDECODE`) and `uv run`. Verified at implementation (20261007).
 
 1. **#175 dry run (safe):**
    ```bash
-   uv run sq run review 931 --model glm-flash-low. --dry-run; echo "exit=$?"
+   env -u CLAUDECODE uv run sq run review 931 --model glm-flash-low. --dry-run; echo "exit=$?"
    ```
-   Expected: `unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low? If this is a literal model ID, set a profile.` and `exit=1`. (Today: the step list and `exit=0`.)
+   Observed: `Error: Pipeline classification failed — unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low, glm-flash, gemini-flash? If this is a literal model ID, set a profile.` and `exit=1`. The close matches depend on the aliases installed (built-in plus `~/.config/squadron/models.toml`). Before this slice: the step list and `exit=0`.
 
-2. **#184 parity:** set `default_review_profile` to a non-SDK profile with credentials (e.g. `uv run sq config set default_review_profile openrouter`). Then:
+2. **#184 parity:** needs a non-SDK profile with credentials; `OPENROUTER_API_KEY` in `.env` is enough. Use a literal model id that no alias resolves to, so the unknown-alias guard is what is being tested (a model id some alias maps to passes without a profile).
    ```bash
-   uv run sq review slice 934 --model <literal-openrouter-model-id> -v --no-save
-   uv run sq run review 934 --model <literal-openrouter-model-id> -v
+   uv run sq config set default_review_profile openrouter
+   uv run sq review slice 934 --model meta-llama/llama-3.1-8b-instruct -v --no-save
+   uv run sq run review 934 --model meta-llama/llama-3.1-8b-instruct -v
+   uv run sq config unset default_review_profile
    ```
-   Both run, and both verbose headers show `profile=openrouter`. Unset the config key, rerun either one, and both fail with the same unknown-alias message.
+   Observed: both run on openrouter. `sq review` prints `Review via openrouter (provider=openai, model=meta-llama/llama-3.1-8b-instruct)`. `sq run review` prints `action 1/2: review template=code, model=meta-llama/llama-3.1-8b-instruct` and dispatches through the OpenAI-compatible provider (its traceback is in `providers/openai/agent.py`); the pipeline's verbose line names no profile (filed as #193). The `sq run review` code review of this slice's whole diff can fail with the small model (`OpenAI agent ended without a final response after 0 turn(s)`) and leaves an untracked failure artifact under `project-documents/user/reviews/`; delete it. After `config unset`, both fail with the same message: `unknown model alias 'meta-llama/llama-3.1-8b-instruct' If this is a literal model ID, set a profile.` (the pipeline's carries the prefix `Pipeline classification failed —`).
 
-3. **#188 (scratch project):** in a scratch cf project with a two-slice plan where B depends on A, run `sq run implement-plan <plan>` so that A merges. Then uncheck all of A's tasks, so cf reports A `not_started`.
+3. **#188 (scratch project):** a scratch git repo with a cf project (`project_create` through the MCP tool; `cf project rm <id> -y` afterwards) and a two-slice plan, B depending on A (designs with `dependencies:`, passing slice and tasks reviews, unchecked task files). Merge A's branch into `main` with `--no-ff` and leave its tasks unchecked, so cf reports it `not_started`.
    ```bash
-   uv run sq run implement-plan <plan> --dry-run
+   cd <scratch> && env -u CLAUDECODE sq run implement-plan 100 --model sonnet --dry-run
    ```
-   Expected: A is absent from the item list, B is not flagged `dependency A not designed`, and stderr shows the WARNING naming A's branch and the target. Then `uv run sq run --resume <run-id> --item <B>` runs B without `dependency A not complete`.
+   Observed: before the merge both `101 Slice A` and `102 Slice B` are listed. After it, only `102 Slice B` is listed, with no `dependency 101 not designed` flag, and stderr carries `slice 101: branch 101-slice.a is merged into main but cf reports not_started; treating it as complete. Check off its tasks to close it in cf.`
+   The resume half (`sq run --resume <run-id> --item <B>` runs without `dependency A not complete`) needs a real batch run, which calls models, so it was not run live. `tests/pipeline/test_item_resume_source.py` covers it against a real git repo: a merged dependency does not block, a merged slice reconciles to PASSED whatever cf reports, and a git failure halts without changing `report.json`.
 
-4. **#186:** a lagging PR ref cannot be produced on demand on github.com, so the live check uses the unit fixture. Run:
+4. **#186:** a lagging PR ref cannot be produced on demand on github.com, so the live check uses the unit fixtures:
    ```bash
    uv run pytest tests/codehost -k lagging -v
    ```
-   For a live confirmation on a host that lags (GHE, per the issue), run `uv run sq review pr <n> --model sonnet`. Expected: one dim adjustment line naming `refs/pull/<n>/head` and the sha reviewed, and no "head moved" error. Force the failure case by pointing at a PR whose head sha the remote cannot serve. Expected: the error appears once, with every source named, followed by the hint.
+   Observed: 5 passed (the range is built on the API head with one adjustment; the issue's fixture, where the API head is absent locally and refused by sha, is fetched from the head branch; `update-ref` failure and timeout are rendered errors; the GitHub adapter passes the head branch). For a live confirmation on a host that lags (GHE, per the issue), run `uv run sq review pr <n> --model sonnet`. Expected: one dim adjustment line such as `head: refs/pull/<n>/head lags; reviewed ae1cbf2… fetched by sha`, and no "head moved" error. For the failure case, point at a PR whose head sha the remote cannot serve. Expected: the error appears once, with every source named, followed by the hint. `-vv` also shows the tagged WARNING.
 
 ## Implementation Notes
 
