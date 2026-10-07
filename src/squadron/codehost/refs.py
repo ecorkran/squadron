@@ -13,6 +13,7 @@ Everything is read-only against the working tree. Refs land under
 from __future__ import annotations
 
 import logging
+from enum import StrEnum
 
 from squadron.codehost.errors import (
     RENDERED_BY_CALLER,
@@ -65,10 +66,14 @@ def fetch_and_range(
     head_refspec_source: str,
     expected_base_sha: str,
     expected_head_sha: str,
+    head_fallback_sources: tuple[str, ...] = (),
 ) -> FetchedRange:
     """Fetch base and head, verify they are what the host reported, describe the range.
 
     ``namespace`` is the pull-request number the local refs are filed under.
+    ``head_fallback_sources`` are host-supplied refspec sources to try, after
+    fetching by sha, when the pull-request ref and the API disagree about the
+    head (a host's convention, so the caller names them).
     """
     base_local = local_ref(remote_name, namespace, RefRole.BASE)
     head_local = local_ref(remote_name, namespace, RefRole.HEAD)
@@ -90,16 +95,16 @@ def fetch_and_range(
         role=RefRole.BASE,
         expected=expected_base_sha,
         source=base_refspec_source,
-        accept_fast_forward=True,
     )
-    head_sha, _ = _verify(
+    head_sha = _resolve_head(
         runner,
         cwd=cwd,
-        ref=head_local,
-        role=RefRole.HEAD,
+        remote_name=remote_name,
+        namespace=namespace,
+        head_local=head_local,
+        head_source=head_refspec_source,
         expected=expected_head_sha,
-        source=head_refspec_source,
-        accept_fast_forward=False,
+        head_fallback_sources=head_fallback_sources,
     )
 
     merge_base = _merge_base(runner, cwd=cwd, base=base_local, head=head_local)
@@ -264,6 +269,33 @@ def _fetch_api_head(
     return f"fetched {fetched or 'nothing'}, not the API head {api_sha}"
 
 
+def _read_ref(runner: ProcessRunner, *, cwd: str, ref: str, role: RefRole) -> str:
+    """Resolve a fetched ref to its sha; a ref that is missing after a fetch is an error."""
+    actual = _rev_parse(runner, cwd=cwd, ref=ref)
+    if actual is None:
+        _logger.warning(
+            "%s ref %s is missing after fetch", role.value, ref, extra={RENDERED_BY_CALLER: True}
+        )
+        raise RefNotFetchableError(role, f"{role.value} ref {ref} is missing after fetch")
+    return actual
+
+
+def _moved_since_resolution(
+    role: RefRole, expected: str, actual: str, source: str
+) -> RefMovedSinceResolutionError:
+    """Log (tagged: the command renders it) and build the error for a ref that moved."""
+    _logger.warning(
+        "%s moved since resolution: expected %s, found %s",
+        role.value,
+        expected,
+        actual,
+        extra={RENDERED_BY_CALLER: True},
+    )
+    return RefMovedSinceResolutionError(
+        role, expected, actual, expected_source="host API", actual_source=source
+    )
+
+
 def _verify(
     runner: ProcessRunner,
     *,
@@ -272,27 +304,22 @@ def _verify(
     role: RefRole,
     expected: str,
     source: str,
-    accept_fast_forward: bool,
 ) -> tuple[str, RefAdjustment | None]:
-    """Resolve ``ref`` and confirm it is the sha the host reported.
+    """Resolve the base ref and confirm it is the sha the host reported.
 
     Returns the sha to use and, when it differs from the reported one, the
     ``RefAdjustment`` that says so.
 
-    With ``accept_fast_forward``, a fetched sha that descends from ``expected``
-    passes and is returned in its place. GitHub's ``baseRefOid`` can trail the
-    base branch's real tip after a merge, while ``git fetch`` already serves the
-    new tip (#131). A base that only moved forward still yields the same
-    three-dot range, so the fetched tip is the right one to review against. Any
-    other movement (rewind, force-push) still fails.
+    A fetched sha that descends from ``expected`` passes and is returned in its
+    place. GitHub's ``baseRefOid`` can trail the base branch's real tip after a
+    merge, while ``git fetch`` already serves the new tip (#131). A base that only
+    moved forward still yields the same three-dot range, so the fetched tip is the
+    right one to review against. Any other movement (rewind, force-push) fails.
     """
-    actual = _rev_parse(runner, cwd=cwd, ref=ref)
-    if actual is None:
-        _logger.warning("%s ref %s is missing after fetch", role.value, ref)
-        raise RefNotFetchableError(role, f"{role.value} ref {ref} is missing after fetch")
+    actual = _read_ref(runner, cwd=cwd, ref=ref, role=role)
     if actual == expected:
         return actual, None
-    if accept_fast_forward and _is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
+    if _is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
         _logger.warning(
             "%s advanced since resolution: host reported %s, fetched %s (a descendant); "
             "using the fetched tip",
@@ -308,16 +335,60 @@ def _verify(
             reason=f"{role.value} advanced since resolution",
         )
         return actual, adjustment
-    _logger.warning(
-        "%s moved since resolution: expected %s, found %s",
-        role.value,
-        expected,
-        actual,
-        extra={RENDERED_BY_CALLER: True},
+    raise _moved_since_resolution(role, expected, actual, source)
+
+
+class _HeadRelation(StrEnum):
+    """How the pull-request ref's sha relates to the API head."""
+
+    LAGS = "lags"  # the PR ref is an ancestor of the API head
+    MOVED = "moved"  # the PR ref descends from the API head: pushed after resolution
+    UNRELATED = "unrelated"  # a force-push or rewrite
+
+
+def _head_relation(runner: ProcessRunner, *, cwd: str, pr_ref_sha: str, api_sha: str) -> _HeadRelation:
+    """Classify ``pr_ref_sha`` against ``api_sha``; both commits must be local."""
+    if _is_ancestor(runner, cwd=cwd, ancestor=pr_ref_sha, descendant=api_sha):
+        return _HeadRelation.LAGS
+    if _is_ancestor(runner, cwd=cwd, ancestor=api_sha, descendant=pr_ref_sha):
+        return _HeadRelation.MOVED
+    return _HeadRelation.UNRELATED
+
+
+def _resolve_head(
+    runner: ProcessRunner,
+    *,
+    cwd: str,
+    remote_name: str,
+    namespace: int,
+    head_local: str,
+    head_source: str,
+    expected: str,
+    head_fallback_sources: tuple[str, ...],
+) -> str:
+    """The head sha to review: the API head, or an error when the PR ref disagrees.
+
+    When the fetched pull-request ref differs from the API head, the API head is
+    made local first (``ensure_api_head``): ancestry cannot be answered for a
+    commit that is absent, and ``_is_ancestor`` fails closed on one.
+    """
+    actual = _read_ref(runner, cwd=cwd, ref=head_local, role=RefRole.HEAD)
+    if actual == expected:
+        return actual
+    ensure_api_head(
+        runner,
+        cwd=cwd,
+        remote_name=remote_name,
+        api_sha=expected,
+        api_local=api_head_ref(remote_name, namespace),
+        pr_ref=head_source,
+        pr_ref_sha=actual,
+        head_fallback_sources=head_fallback_sources,
     )
-    raise RefMovedSinceResolutionError(
-        role, expected, actual, expected_source="host API", actual_source=source
-    )
+    relation = _head_relation(runner, cwd=cwd, pr_ref_sha=actual, api_sha=expected)
+    # LAGS raises too for now; Task 22b replaces this with review of the API head.
+    _logger.debug("pull request head ref %s is %s the API head", head_source, relation.value)
+    raise _moved_since_resolution(RefRole.HEAD, expected, actual, head_source)
 
 
 def _is_ancestor(runner: ProcessRunner, *, cwd: str, ancestor: str, descendant: str) -> bool:
@@ -327,11 +398,14 @@ def _is_ancestor(runner: ProcessRunner, *, cwd: str, ancestor: str, descendant: 
     (e.g. ``ancestor`` absent locally) is logged and answered no, so the caller
     fails closed.
     """
-    result = runner.run(
-        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
-        cwd=cwd,
-        timeout=GIT_QUERY_TIMEOUT_SECONDS,
-    )
+    argv = ["git", "merge-base", "--is-ancestor", ancestor, descendant]
+    try:
+        result = runner.run(argv, cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
+    except ProcessTimedOutError as exc:
+        _logger.warning(
+            "git merge-base --is-ancestor exceeded %ss", exc.timeout, extra={RENDERED_BY_CALLER: True}
+        )
+        raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
     if result.returncode not in (0, 1):
         _logger.warning(
             "could not test ancestry of %s in %s: %s", ancestor, descendant, result.stderr.strip()

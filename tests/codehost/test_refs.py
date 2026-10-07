@@ -76,7 +76,7 @@ def _script(
     ]
 
 
-def _run(runner: FakeProcessRunner):
+def _run(runner: FakeProcessRunner, *, head_fallback_sources: tuple[str, ...] = ()):
     return fetch_and_range(
         runner,
         cwd="/repo",
@@ -86,6 +86,7 @@ def _run(runner: FakeProcessRunner):
         head_refspec_source=f"refs/pull/{NUMBER}/head",
         expected_base_sha=BASE_SHA,
         expected_head_sha=HEAD_SHA,
+        head_fallback_sources=head_fallback_sources,
     )
 
 
@@ -247,16 +248,97 @@ def test_moved_base_reports_expected_and_actual(caplog: pytest.LogCaptureFixture
     assert any(r.levelno == logging.WARNING for r in caplog.records)
 
 
-def test_moved_head_reports_expected_and_actual() -> None:
-    """Head gets no fast-forward allowance — new commits are different code to
-    review. The fake raises on an unscripted ancestry probe, so none ran."""
-    moved = "8888888888888888888888888888888888888888"
-    runner = FakeProcessRunner(_script(head_rev=_ok(moved)))
-    with pytest.raises(RefMovedSinceResolutionError) as excinfo:
-        _run(runner)
+PR_REF_SHA = "8888888888888888888888888888888888888888"
+_API_PRESENT = (["git", "cat-file", "-e", f"{HEAD_SHA}^{{commit}}"], _ok())
+_PR_BEHIND_API = ["git", "merge-base", "--is-ancestor", PR_REF_SHA, HEAD_SHA]
+_API_BEHIND_PR = ["git", "merge-base", "--is-ancestor", HEAD_SHA, PR_REF_SHA]
+
+
+def _script_with_head_disagreement(*steps: tuple[list[str], ProcessResult | Exception]):
+    """The PR ref reads PR_REF_SHA while the API says HEAD_SHA.
+
+    The ancestry probes precede the generic merge-base entry: the fake answers the
+    first matching prefix."""
+    script = _script(head_rev=_ok(PR_REF_SHA))
+    script[3:3] = list(steps)
+    return script
+
+
+def test_head_pushed_after_resolution_is_a_moved_error(caplog: pytest.LogCaptureFixture) -> None:
+    """The PR ref descends from the API head: new commits are different code to review."""
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, _fail("")), (_API_BEHIND_PR, _ok())
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError) as excinfo:
+            _run(runner)
 
     assert excinfo.value.role is RefRole.HEAD
-    assert excinfo.value.actual == moved
+    assert excinfo.value.expected == HEAD_SHA
+    assert excinfo.value.actual == PR_REF_SHA
+    assert excinfo.value.actual_source == f"refs/pull/{NUMBER}/head"
+
+
+def test_head_unrelated_to_the_api_head_is_a_moved_error() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, _fail("")), (_API_BEHIND_PR, _fail(""))
+        )
+    )
+    with pytest.raises(RefMovedSinceResolutionError):
+        _run(runner)
+
+
+def test_head_ancestry_probe_error_is_answered_no_with_a_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    probe_error = ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object")
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, probe_error), (_API_BEHIND_PR, probe_error)
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError):
+            _run(runner)
+
+    assert any("could not test ancestry" in r.getMessage() for r in caplog.records)
+
+
+def test_head_ancestry_timeout_is_a_code_host_error() -> None:
+    timeout = ProcessTimedOutError(_PR_BEHIND_API, 30.0)
+    runner = FakeProcessRunner(_script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, timeout)))
+    with pytest.raises(HostCommandTimeoutError):
+        _run(runner)
+
+
+def test_a_lagging_ref_still_raises_until_the_api_head_is_used() -> None:
+    """Replaced by the lag-success test when the API head is reviewed (Task 22b)."""
+    runner = FakeProcessRunner(_script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok())))
+    with pytest.raises(RefMovedSinceResolutionError):
+        _run(runner)
+
+
+def test_the_api_head_is_fetched_from_a_fallback_before_ancestry_is_asked() -> None:
+    """The issue's fixture: the API head is absent locally, the PR ref lags it."""
+    api_local = api_head_ref(REMOTE, NUMBER)
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            (["git", "cat-file", "-e", f"{HEAD_SHA}^{{commit}}"], _fail("")),
+            (["git", "fetch", "--no-tags", REMOTE, f"+{HEAD_SHA}:{api_local}"], _fail("not our ref")),
+            (["git", "fetch", "--no-tags", REMOTE, f"+refs/heads/dev/jane:{api_local}"], _ok()),
+            (["git", "rev-parse", "--verify", f"{api_local}^{{commit}}"], _ok(HEAD_SHA)),
+            (_PR_BEHIND_API, _ok()),
+        )
+    )
+    with pytest.raises(RefMovedSinceResolutionError):
+        _run(runner, head_fallback_sources=("refs/heads/dev/jane",))
+
+    assert [call.argv[1] for call in runner.calls].index("cat-file") < [
+        call.argv[1] for call in runner.calls
+    ].index("merge-base")
 
 
 def test_unrelated_histories_raise_no_merge_base(caplog: pytest.LogCaptureFixture) -> None:
