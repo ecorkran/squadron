@@ -16,12 +16,13 @@ import logging
 
 from squadron.codehost.errors import (
     RENDERED_BY_CALLER,
+    HostCommandTimeoutError,
     NoMergeBaseError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
 )
 from squadron.codehost.models import FetchedRange, RefAdjustment, RefRole
-from squadron.core.process_runner import ProcessRunner
+from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
 
 _logger = logging.getLogger(__name__)
 
@@ -120,7 +121,17 @@ def _fetch(
     """
     argv = ["git", "fetch", "--no-tags", remote_name]
     argv += [f"+{source}:{destination}" for source, destination in specs]
-    result = runner.run(argv, cwd=cwd, timeout=GIT_FETCH_TIMEOUT_SECONDS)
+    try:
+        result = runner.run(argv, cwd=cwd, timeout=GIT_FETCH_TIMEOUT_SECONDS)
+    except ProcessTimedOutError as exc:
+        # Rendered by the command as a code host error, never a traceback.
+        _logger.warning(
+            "git fetch from %s exceeded %ss",
+            remote_name,
+            exc.timeout,
+            extra={RENDERED_BY_CALLER: True},
+        )
+        raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
     if result.returncode == 0:
         return
 

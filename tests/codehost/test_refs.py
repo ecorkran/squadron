@@ -20,6 +20,7 @@ import pytest
 
 from squadron.codehost.errors import (
     RENDERED_BY_CALLER,
+    HostCommandTimeoutError,
     NoMergeBaseError,
     PullRequestHeadUnavailableError,
     RefMovedSinceResolutionError,
@@ -32,7 +33,7 @@ from squadron.codehost.refs import (
     fetch_and_range,
     local_ref,
 )
-from squadron.core.process_runner import ProcessResult, SubprocessRunner
+from squadron.core.process_runner import ProcessResult, ProcessTimedOutError, SubprocessRunner
 from tests.codehost.fake_runner import FakeProcessRunner
 
 BASE_SHA = "4edf5f1709489da9494906b2178e27dea6a9ae10"
@@ -417,3 +418,20 @@ def test_base_fast_forward_is_recorded_as_one_adjustment() -> None:
     assert adjustment.role is RefRole.BASE
     assert (adjustment.reported_sha, adjustment.used_sha) == (BASE_SHA, advanced)
     assert adjustment.source == "refs/heads/main"
+
+
+def test_primary_fetch_timeout_raises_a_code_host_error_not_a_traceback(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    argv = ["git", "fetch", "--no-tags", REMOTE]
+    runner = FakeProcessRunner([(["git", "fetch"], ProcessTimedOutError(argv, 300.0))])
+
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(HostCommandTimeoutError) as excinfo:
+            _run(runner)
+
+    assert excinfo.value.seconds == 300.0
+    timeout_records = [r for r in caplog.records if "exceeded" in r.getMessage()]
+    assert len(timeout_records) == 1
+    assert timeout_records[0].levelno == logging.WARNING
+    assert getattr(timeout_records[0], RENDERED_BY_CALLER) is True
