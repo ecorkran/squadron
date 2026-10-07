@@ -44,12 +44,16 @@ from squadron.pipeline.git_ops import (
     slice_branch_name,
     verify_git_state,
 )
+from squadron.pipeline.item_eligibility import (
+    ItemResumeUnsupportedError,
+    item_decisions,
+    single_each_step,
+)
 from squadron.pipeline.loader import load_pipeline
-from squadron.pipeline.models import PipelineDefinition, StepConfig
+from squadron.pipeline.models import StepConfig
 from squadron.pipeline.run_lock import RunLockError, project_run_lock
 from squadron.pipeline.sources import CfSliceStatus
 from squadron.pipeline.state import SchemaVersionError, StateManager
-from squadron.pipeline.steps import StepTypeName
 from squadron.pr.branch import parse_slice_branch
 from squadron.review.git_utils import run_git
 
@@ -186,7 +190,10 @@ def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
         raise _Stop(ResumeExit.REJECTED, f"run {request.run_id} not found") from None
     except SchemaVersionError as exc:
         raise _Stop(ResumeExit.REJECTED, str(exc)) from None
-    each = _single_each_step(load_pipeline(state.pipeline), request.run_id)
+    try:
+        each = single_each_step(load_pipeline(state.pipeline))
+    except ItemResumeUnsupportedError as exc:
+        raise _Stop(ResumeExit.REJECTED, f"run {request.run_id}'s {exc}") from None
     path = report_json_path(state_manager.runs_dir, request.run_id, each.name)
     try:
         report = BatchReport.load(path)
@@ -197,27 +204,17 @@ def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
     return _Run(state.pipeline, dict(state.params), each, report, path)
 
 
-def _single_each_step(definition: PipelineDefinition, run_id: str) -> StepConfig:
-    each = [s for s in definition.steps if s.step_type == StepTypeName.EACH]
-    if len(each) != 1:
-        raise _Stop(
-            ResumeExit.REJECTED,
-            f"run {run_id}'s pipeline {definition.name} has {len(each)} each steps; "
-            "--item needs exactly one",
-        )
-    return each[0]
-
-
 def _check_record(report: BatchReport, request: ResumeRequest, path: Path) -> None:
     record = next((r for r in report.records if r.index == request.index), None)
     if record is None:
         raise _Stop(ResumeExit.REJECTED, f"no record for item {request.index} in {path}")
-    if record.outcome not in (ItemOutcome.FLAGGED, ItemOutcome.NOT_RUN):
+    decisions = item_decisions(record)
+    if not decisions:
         raise _Stop(
             ResumeExit.REJECTED,
             f"item {request.index} is {record.outcome}; only flagged or not_run items resume",
         )
-    if request.decision is ItemDecision.ACCEPT and record.flag_kind is not FlagKind.REVIEW_UNRESOLVED:
+    if request.decision not in decisions:
         kind = record.flag_kind or record.outcome
         raise _Stop(
             ResumeExit.REJECTED,
