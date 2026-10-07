@@ -8,9 +8,11 @@ first_unfinished_step, list_runs, find_matching_run, prune.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -31,6 +33,7 @@ from squadron.pipeline.state import (
     StepState,
     first_unfinished_step_of,
 )
+from tests.pipeline.liveness_support import exited_pid
 
 # ---------------------------------------------------------------------------
 # T1: ExecutionMode enum tests
@@ -1294,3 +1297,173 @@ class TestSchemaV5Fields:
         assert owner.pid == os.getpid()
         assert owner.hostname == socket.gethostname()
         assert owner.heartbeat_interval_s == 30
+
+
+# ---------------------------------------------------------------------------
+# Owner, claim, heartbeat and progress writes (slice 174 D6, D13)
+# ---------------------------------------------------------------------------
+
+
+def _raw(tmp_path: Path, run_id: str) -> dict[str, object]:
+    return json.loads((tmp_path / f"{run_id}.json").read_text(encoding="utf-8"))
+
+
+class TestOwnershipWrites:
+    def test_init_run_writes_owner_in_the_creating_write(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        owner = RunOwner.current(30)
+
+        run_id = mgr.init_run("p", {}, owner=owner)
+
+        raw = _raw(tmp_path, run_id)
+        assert raw["status"] == RUNNING_STATUS
+        assert raw["owner"] == owner.model_dump(mode="json")
+        assert raw["heartbeat_at"] is not None
+        assert raw["progress_at"] is not None
+
+    def test_init_run_without_owner_stays_unowned(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        state = mgr.load(mgr.init_run("p", {}))
+        assert state.owner is None
+        assert state.heartbeat_at is None
+
+    @pytest.mark.parametrize("status", [ExecutionStatus.PAUSED, ExecutionStatus.FAILED])
+    def test_claim_marks_a_resumed_run_running(self, tmp_path: Path, status: ExecutionStatus) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {})
+        mgr.finalize(run_id, PipelineResult(pipeline_name="p", status=status, step_results=[]))
+        owner = RunOwner.current(30)
+
+        mgr.claim(run_id, owner)
+
+        state = mgr.load(run_id)
+        assert state.status == RUNNING_STATUS
+        assert state.owner == owner
+        assert state.heartbeat_at is not None
+
+    def test_claim_refuses_a_live_owned_run(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(30))
+
+        with pytest.raises(RuntimeError, match="already running"):
+            mgr.claim(run_id, RunOwner.current(30))
+
+    def test_claim_takes_over_an_orphaned_run(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        dead = RunOwner.current(30).model_copy(update={"pid": exited_pid()})
+        run_id = mgr.init_run("p", {}, owner=dead)
+        owner = RunOwner.current(30)
+
+        mgr.claim(run_id, owner)
+
+        assert mgr.load(run_id).owner == owner
+
+    def test_heartbeat_changes_only_heartbeat_at(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(30))
+        before = _raw(tmp_path, run_id)
+
+        mgr.heartbeat(run_id)
+
+        after = _raw(tmp_path, run_id)
+        assert after["heartbeat_at"] != before["heartbeat_at"]
+        assert {k: v for k, v in after.items() if k != "heartbeat_at"} == {
+            k: v for k, v in before.items() if k != "heartbeat_at"
+        }
+
+
+class TestProgressWrites:
+    def test_recorder_sets_and_clears_active_fields(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(30))
+        observer = mgr.observer(run_id)
+        item = ActiveItem(position=1, total=3, index="181")
+
+        observer.step_started("slices")
+        started = mgr.load(run_id)
+        observer.item_started("slices", item)
+        item_running = mgr.load(run_id)
+        observer.step_completed(_make_step_result("slices"))
+        completed = mgr.load(run_id)
+
+        assert started.active_step == "slices"
+        assert started.active_item is None
+        assert item_running.active_item == item
+        assert completed.active_item is None
+        assert started.progress_at is not None and item_running.progress_at is not None
+        assert completed.progress_at is not None
+        assert started.progress_at <= item_running.progress_at <= completed.progress_at
+
+    def test_finalize_clears_active_fields_and_keeps_owner(self, tmp_path: Path) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        owner = RunOwner.current(30)
+        run_id = mgr.init_run("p", {}, owner=owner)
+        mgr.record_step_started(run_id, "slices")
+        mgr.record_item_started(run_id, ActiveItem(position=0, total=1, index=None))
+
+        mgr.finalize(
+            run_id,
+            PipelineResult(pipeline_name="p", status=ExecutionStatus.COMPLETED, step_results=[]),
+        )
+
+        state = mgr.load(run_id)
+        assert state.active_step is None
+        assert state.active_item is None
+        assert state.owner == owner
+
+
+class TestProgressWriteFailures:
+    @pytest.fixture
+    def failing_write(self, monkeypatch: pytest.MonkeyPatch) -> Callable[[Exception], None]:
+        def install(exc: Exception) -> None:
+            def fail(self: StateManager, path: Path, data: str) -> None:
+                raise exc
+
+            monkeypatch.setattr(StateManager, "_write_atomic", fail)
+
+        return install
+
+    @pytest.mark.parametrize("write", ["heartbeat", "step_started"])
+    def test_io_error_logs_warning_and_continues(
+        self,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+        failing_write: Callable[[Exception], None],
+        write: str,
+    ) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(30))
+        failing_write(OSError("disk full"))
+
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.state"):
+            if write == "heartbeat":
+                mgr.heartbeat(run_id)
+            else:
+                mgr.observer(run_id).step_started("slices")
+
+        assert any(
+            r.levelno == logging.WARNING and run_id in r.getMessage() and "disk full" in r.getMessage()
+            for r in caplog.records
+        )
+
+    def test_unreadable_state_logs_warning_and_continues(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(30))
+        (tmp_path / f"{run_id}.json").write_text("{not json", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.state"):
+            mgr.observer(run_id).item_started("slices", ActiveItem(position=0, total=1, index=None))
+
+        assert any(r.levelno == logging.WARNING and run_id in r.getMessage() for r in caplog.records)
+
+    def test_non_io_error_propagates(
+        self, tmp_path: Path, failing_write: Callable[[Exception], None]
+    ) -> None:
+        mgr = StateManager(runs_dir=tmp_path)
+        run_id = mgr.init_run("p", {}, owner=RunOwner.current(30))
+        failing_write(TypeError("not serializable"))
+
+        with pytest.raises(TypeError):
+            mgr.observer(run_id).step_started("slices")

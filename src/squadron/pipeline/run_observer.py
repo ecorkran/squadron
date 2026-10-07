@@ -35,10 +35,12 @@ class RunStateRecorder:
         self._run_id = run_id
 
     def step_started(self, step_name: str) -> None:
-        """No-op until progress fields exist."""
+        """Record the running step; clears the active item."""
+        self._state_mgr.record_step_started(self._run_id, step_name)
 
     def item_started(self, step_name: str, item: ActiveItem) -> None:
-        """No-op until progress fields exist."""
+        """Record the running ``each`` item."""
+        self._state_mgr.record_item_started(self._run_id, item)
 
     def step_completed(self, result: StepResult) -> None:
         """Append the step and record any compact summaries it produced."""

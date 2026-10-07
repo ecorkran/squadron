@@ -16,6 +16,7 @@ import os
 import re
 import socket
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -275,8 +276,14 @@ class StateManager:
         params: dict[str, object],
         run_id: str | None = None,
         execution_mode: ExecutionMode = ExecutionMode.SDK,
+        *,
+        owner: RunOwner | None = None,
     ) -> str:
-        """Create an initial state file and return the run_id."""
+        """Create an initial state file and return the run_id.
+
+        With *owner*, the write that creates the ``running`` file also records
+        the owner, so no v5 ``running`` file is ever ownerless (slice 174 D13).
+        """
         pipeline_name = pipeline_name.lower()
         now = datetime.now(UTC)
         if run_id is None:
@@ -292,11 +299,11 @@ class StateManager:
             started_at=now,
             updated_at=now,
             status=RUNNING_STATUS,
+            owner=owner,
+            heartbeat_at=now if owner is not None else None,
+            progress_at=now if owner is not None else None,
         )
-        self._write_atomic(
-            self._state_path(run_id),
-            json.dumps(state.model_dump(mode="json"), indent=2),
-        )
+        self._save(state)
         self.prune(pipeline_name)
         return run_id
 
@@ -310,6 +317,77 @@ class StateManager:
         """Append a completed step and record any compact summaries it produced."""
         self._append_step(run_id, step_result)
         self._maybe_record_compact_summaries(run_id, step_result)
+
+    def claim(self, run_id: str, owner: RunOwner) -> None:
+        """Mark a resumed run ``running`` under *owner*, in one write (D13).
+
+        Raises ``RuntimeError`` when the run is already ``running`` under a
+        live owner, so two processes cannot own one run.
+        """
+        from squadron.pipeline.run_liveness import RunLiveness, assess_liveness
+
+        state = self.load(run_id)
+        now = datetime.now(UTC)
+        current = assess_liveness(state, now=now, hostname=owner.hostname)
+        if state.owner is not None and current is not None and current.liveness is RunLiveness.LIVE:
+            raise RuntimeError(
+                f"run {run_id} is already running under pid {state.owner.pid} on {state.owner.hostname}"
+            )
+        state.status = RUNNING_STATUS
+        state.owner = owner
+        state.heartbeat_at = now
+        state.progress_at = now
+        state.updated_at = now
+        self._save(state)
+
+    def heartbeat(self, run_id: str) -> None:
+        """Rewrite ``heartbeat_at`` only; an I/O or read failure logs a WARNING (D6)."""
+
+        def beat(state: RunState, now: datetime) -> None:
+            state.heartbeat_at = now
+
+        self._write_progress(run_id, beat, "heartbeat")
+
+    def record_step_started(self, run_id: str, step_name: str) -> None:
+        """Record *step_name* as the active step; I/O failure logs a WARNING (D6)."""
+
+        def start(state: RunState, now: datetime) -> None:
+            state.active_step = step_name
+            state.active_item = None
+            state.progress_at = now
+
+        self._write_progress(run_id, start, "step start")
+
+    def record_item_started(self, run_id: str, item: ActiveItem) -> None:
+        """Record *item* as the active ``each`` item; I/O failure logs a WARNING (D6)."""
+
+        def start(state: RunState, now: datetime) -> None:
+            state.active_item = item
+            state.progress_at = now
+
+        self._write_progress(run_id, start, "item start")
+
+    def _write_progress(
+        self, run_id: str, change: Callable[[RunState, datetime], None], what: str
+    ) -> None:
+        """Load, *change* and rewrite the run's state; expected failures are not fatal.
+
+        A run is not killed because its bookkeeping failed: an I/O or read
+        error is logged and the run continues, turning stale if it persists
+        (D6). Any other exception is a defect and propagates.
+        """
+        try:
+            state = self.load(run_id)
+            change(state, datetime.now(UTC))
+            self._save(state)
+        except STATE_READ_ERRORS as exc:
+            _logger.warning("run %s: %s write failed: %s", run_id, what, exc)
+
+    def _save(self, state: RunState) -> None:
+        self._write_atomic(
+            self._state_path(state.run_id),
+            json.dumps(state.model_dump(mode="json"), indent=2),
+        )
 
     def _maybe_record_compact_summaries(self, run_id: str, step_result: StepResult) -> None:
         """Inspect action results for compact summaries and persist them."""
@@ -387,6 +465,8 @@ class StateManager:
         state.completed_steps.append(step_state)
         state.updated_at = now
         state.current_step = step_result.step_name
+        state.active_item = None
+        state.progress_at = now
 
         if step_result.status == ExecutionStatus.PAUSED:
             state.status = ExecutionStatus.PAUSED.value
@@ -448,6 +528,9 @@ class StateManager:
         # Clear current_step for terminal statuses
         if result.status in (ExecutionStatus.COMPLETED, ExecutionStatus.FAILED):
             state.current_step = None
+        # The owner record stays as history; liveness is assessed only while running.
+        state.active_step = None
+        state.active_item = None
         self._write_atomic(
             self._state_path(run_id),
             json.dumps(state.model_dump(mode="json"), indent=2),
