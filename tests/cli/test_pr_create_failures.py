@@ -127,3 +127,34 @@ def test_pull_request_creation_rejected_is_reported_and_not_retried(
 
     assert result.exit_code == 1, result.output
     assert len(pr_create_host.runner.write_calls()) == 1, "a rejected create must not be retried"
+
+
+def test_pr_create_enters_the_code_host_logging_scope_and_renders_a_failure_once(
+    cli_runner: CliRunner,
+    pr_create_host: HostHarness,
+    pr_create_repo: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from collections.abc import Iterator
+    from contextlib import contextmanager
+
+    entered: list[int] = []
+
+    @contextmanager
+    def spy(verbosity: int) -> Iterator[None]:
+        entered.append(verbosity)
+        yield
+
+    monkeypatch.setattr("squadron.cli.commands.pr.code_host_logging", spy)
+    failing_call = failing_call_of("identify_operator")
+    prefix = script_before("identify_operator", local_sha=local_head_sha(pr_create_repo))
+    pr_create_host.script = [
+        *prefix,
+        (failing_call, ProcessTimedOutError(failing_call, float(HOST_COMMAND_TIMEOUT_SECONDS))),
+    ]
+
+    result = _invoke(cli_runner, pr_create_repo)
+
+    assert result.exit_code == 1, result.output
+    assert entered == [0]
+    assert result.stderr.count("host command exceeded") == 1

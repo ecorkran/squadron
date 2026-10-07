@@ -174,6 +174,7 @@ def code_host_logging(verbosity: int) -> Iterator[None]:
 
 @pr_app.command("show")
 def show(
+    ctx: typer.Context,
     target: str | None = typer.Argument(
         None,
         help=(
@@ -186,6 +187,8 @@ def show(
 ) -> None:
     """Resolve a pull request, fetch its endpoints, and report the range."""
     repo_cwd = resolve_repo_cwd(cwd)
+    # No -v here: render each failure once, and keep untagged diagnostics visible (#186).
+    ctx.with_resource(code_host_logging(0))
 
     try:
         _host, resolved, fetched = resolve_and_fetch_pull_request(target, repo_cwd)
@@ -290,6 +293,7 @@ async def _compose_title_and_body(
 
 @pr_app.command("create")
 def create(
+    ctx: typer.Context,
     base: str | None = typer.Option(None, "--base", help="Base branch."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print title and body without creating."),
     model: str | None = typer.Option(None, "--model", help="Model for the one-shot composer."),
@@ -306,6 +310,7 @@ def create(
     selection, all before input gathering, assembly, and composition.
     """
     repo_cwd = resolve_repo_cwd(cwd)
+    ctx.with_resource(code_host_logging(0))  # as ``show``: no -v, render each failure once
     errors = Console(stderr=True)
 
     try:

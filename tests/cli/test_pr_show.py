@@ -454,3 +454,62 @@ def test_a_base_fast_forward_prints_exactly_one_adjustment_line(
     assert result.exit_code == 0, result.output
     line = "base: advanced since resolution; reviewed 7777777… fetched from refs/heads/main"
     assert " ".join(result.output.split()).count(line) == 1
+
+
+# --- One line per failure; untagged diagnostics stay visible (slice 934 D8) --------
+
+
+def test_pr_show_enters_the_code_host_logging_scope_without_a_verbosity_flag(
+    cli_runner: CliRunner, patched_host: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from contextlib import contextmanager
+
+    entered: list[int] = []
+
+    @contextmanager
+    def spy(verbosity: int) -> Iterator[None]:
+        entered.append(verbosity)
+        yield
+
+    monkeypatch.setattr("squadron.cli.commands.pr.code_host_logging", spy)
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], _read_script(GITHUB))
+
+    assert result.exit_code == 0, result.output
+    assert entered == [0]
+
+
+def test_a_pr_show_failure_appears_once_on_stderr(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    script = _read_script(GITHUB)
+    script[3] = (["git", "fetch"], ProcessResult(argv=(), returncode=1, stdout="", stderr="no route"))
+    script[4] = (
+        ["git", "rev-parse", "--verify"],
+        ProcessResult(argv=(), returncode=1, stdout="", stderr=""),
+    )
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
+
+    assert result.exit_code == 1
+    assert result.stderr.count("could not fetch base from origin: no route") == 1
+    assert "WARNING squadron.codehost.refs: fetch of base" not in result.stderr
+
+
+def test_an_untagged_codehost_warning_still_shows_in_pr_show(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    script = _read_script(GITHUB)
+    script[4] = (["git", "rev-parse", "--verify"], _ok("7" * 40))
+    script.insert(
+        5,
+        (
+            ["git", "merge-base", "--is-ancestor", BASE_SHA],
+            ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object"),
+        ),
+    )
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
+
+    assert result.exit_code == 1
+    assert "WARNING squadron.codehost.refs: could not test ancestry" in result.stderr
