@@ -12,6 +12,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261006
 
+### Slice 199: design complete (Phase 4)
+
+- **Design:** `user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md` (#185, #187). `sq pipelines list` groups effective pipelines by `PipelineSource`; `sq runs list` (pure `run_listing.py` layer) lists runs `--resume` can act on: paused/failed at their first unfinished step, plus completed batch runs with flagged/not-run items (197). `sq run --list` becomes a deprecated alias.
+- **Decisions:** single sources for the resume step (`first_unfinished_step_of`), item resumability (`RESUMABLE_OUTCOMES`), and report paths (`report_json_paths`), shared with item resume; failure cases show explicit row markers plus WARNING. No MCP surface exists in squadron, so parity is CLI + slash command + skill.
+- **Next:** Phase 5 task breakdown.
+
 ### Release 0.20.1
 
 - **Contents:** 0.20.0 (unpublished: CI failed on two CLI tests that matched Rich output without stripping ANSI codes, which Typer forces on when `GITHUB_ACTIONS` is set) plus that test fix.
