@@ -57,11 +57,11 @@ status: in_progress
 
 ## Task 3 — `sq review` delegates to the module
 
-- [ ] In `cli/commands/review.py`, delete `_resolve_profile` and make its call site use `resolve_review_profile`
-- [ ] `_reject_unknown_alias` computes its profile-source test with `review_profile_source`; no second copy of the "is a profile set" logic remains in the file
-- [ ] Tests: existing `tests/cli/test_review_profile.py` and `test_review_resolve.py` pass unchanged; add one case where `default_review_profile` makes a literal id acceptable
-  - [ ] Success: tests pass; `grep -n "_resolve_profile" src/` finds no definition
-- [ ] Commit: `refactor: route sq review profile cascade through shared module`
+- [x] In `cli/commands/review.py`, delete `_resolve_profile` and make its call site use `resolve_review_profile`
+- [x] `_reject_unknown_alias` computes its profile-source test with `review_profile_source`; no second copy of the "is a profile set" logic remains in the file
+- [x] Tests: existing `tests/cli/test_review_profile.py` and `test_review_resolve.py` pass unchanged; add one case where `default_review_profile` makes a literal id acceptable
+  - [x] Success: tests pass; `grep -n "_resolve_profile" src/` finds no definition
+- [x] Commit: `refactor: route sq review profile cascade through shared module`
 
 ## Task 4 — `ModelResolver.resolve_full(profile_source=)` (D4)
 
