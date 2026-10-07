@@ -1,4 +1,4 @@
-"""Tests for _resolve_profile() resolution chain."""
+"""Tests for the review profile resolution chain as ``sq review`` uses it."""
 
 from __future__ import annotations
 
@@ -6,8 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from squadron.cli.commands.review import _resolve_profile
+from squadron.review.profile_resolution import resolve_review_profile
 from squadron.review.templates import ReviewTemplate
+
+
+def _resolve_profile(flag: str | None, template: ReviewTemplate | None = None) -> str:
+    return resolve_review_profile(flag, None, template).name
 
 
 def _make_template(profile: str | None = None, model: str | None = None) -> ReviewTemplate:
@@ -41,7 +45,7 @@ class TestResolveProfile:
     def test_cli_flag_takes_precedence(self, monkeypatch: pytest.MonkeyPatch) -> None:
         template = _make_template(profile="openrouter")
         monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config",
+            "squadron.review.profile_resolution.get_config",
             lambda k: "local" if k == "default_review_profile" else None,
         )
         result = _resolve_profile("openai", template)
@@ -52,7 +56,7 @@ class TestResolveProfile:
     ) -> None:
         template = _make_template(profile="openrouter")
         monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config",
+            "squadron.review.profile_resolution.get_config",
             lambda k: "local" if k == "default_review_profile" else None,
         )
         result = _resolve_profile(None, template)
@@ -61,7 +65,7 @@ class TestResolveProfile:
     def test_config_used_when_no_flag_or_template(self, monkeypatch: pytest.MonkeyPatch) -> None:
         template = _make_template(profile=None)
         monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config",
+            "squadron.review.profile_resolution.get_config",
             lambda k: "local" if k == "default_review_profile" else None,
         )
         result = _resolve_profile(None, template)
@@ -69,7 +73,7 @@ class TestResolveProfile:
 
     def test_fallback_to_sdk(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config",
+            "squadron.review.profile_resolution.get_config",
             lambda k: None,
         )
         result = _resolve_profile(None)
@@ -481,7 +485,7 @@ class TestUnknownAliasGuard:
             lambda name: _make_template(),
         )
         monkeypatch.setattr(
-            "squadron.cli.commands.review.get_config",
+            "squadron.review.profile_resolution.get_config",
             lambda k: "openrouter" if k == "default_review_profile" else None,
         )
 
