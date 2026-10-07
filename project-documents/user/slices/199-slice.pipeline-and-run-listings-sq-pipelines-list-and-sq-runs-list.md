@@ -14,42 +14,47 @@ status: not_started
 
 ## Overview
 
-Two listing commands as noun groups: `sq pipelines list` (what can I run?) and `sq runs list` (what can I resume?). Fixes [#185](https://github.com/ecorkran/squadron/issues/185) and [#187](https://github.com/ecorkran/squadron/issues/187).
+This slice adds two listing commands as noun groups: `sq pipelines list` ("what can I run?") and `sq runs list` ("what can I resume?"). It fixes [#185](https://github.com/ecorkran/squadron/issues/185) and [#187](https://github.com/ecorkran/squadron/issues/187).
 
-Today pipeline discovery hides under `sq run --list` and mixes sources in one name-sorted table. Nothing lists runs: `sq run --status latest` shows one run, so resuming an older paused run, or an item of a finished batch (slice 197), means already knowing its run-id.
+Today pipeline discovery hides under `sq run --list`, which mixes sources in one name-sorted table. Nothing lists runs. `sq run --status latest` shows only one run, so resuming an older paused run, or an item of a finished batch (slice 197), means already knowing its run-id.
 
 ## Value
 
-- **Users:** see their own pipelines apart from the built-ins, and find any resumable run with the exact `sq run --resume` invocation it needs.
-- **Batch workflows (197):** a finished batch run with flagged items shows up as resumable, with its open-item count. Without this, the only way to find it is the run output or the runs directory.
-- **Agents:** the slash command and skill can list run-ids instead of guessing or scraping `~/.config/squadron/runs`.
+- **Users** see their own pipelines apart from the built-ins, and can find any resumable run along with the `sq run --resume` invocation it needs.
+- **Batch workflows (197):** a finished batch run with flagged items shows up as resumable, with its open-item count. Today the only way to find it is the run output or the runs directory.
+- **Agents:** the slash command and skill can list run-ids instead of guessing them or scraping `~/.config/squadron/runs`.
 
 ## Technical Scope
 
 **Included**
 - `sq pipelines list`: effective pipelines grouped by source (built-in, project, user), alphabetical within each group.
-- `sq runs list`: one row per run, newest first. Shows resumable runs by default. `--all` includes every run and `--pipeline NAME` filters by pipeline.
+- `sq runs list`: one row per run, newest first. The default shows resumable runs and runs whose resumability could not be determined. `--all` shows every run. `--pipeline NAME` filters by pipeline.
 - A pure run-listing layer (`squadron/pipeline/run_listing.py`) that builds row data from `StateManager` and batch reports. Rendering stays in the CLI.
+- One eligibility module (`squadron/pipeline/item_eligibility.py`) shared by the listing and item resume.
 - `sq run --list` stays as a deprecated alias for `sq pipelines list` and prints a deprecation notice on stderr.
 - Slash commands `/sq:pipelines` and `/sq:runs`, agent skills `sq-pipelines` and `sq-runs`, and drift-test entries for both.
-- Doc references to `sq run --list` updated (README, docs/PIPELINES.md, docs/QUICKSTART.md, `commands/sq/run.md`, `commands/agents/sq-run/SKILL.md`).
+- Doc references to `sq run --list` are updated: README, docs/PIPELINES.md, docs/QUICKSTART.md, `commands/sq/run.md` and `commands/agents/sq-run/SKILL.md`.
 
 **Excluded**
-- Removing `sq run --list`. That is tracked by a GitHub issue opened during this slice.
-- Changes to `sq run --status`, which keeps its current behaviour.
-- Deleting or pruning runs, and `--json` output. No consumer needs JSON yet.
-- An MCP surface. Squadron has no MCP server (`src/squadron/server` is the agent daemon, with `agents` and `health` routes only), so parity means CLI, slash command and agent skill.
+- Removing `sq run --list`. A GitHub issue opened during this slice tracks it.
+- Changing `sq run --status`. It behaves as today.
+- Deleting or pruning runs.
+- `--json` output. The listing's Python API serves in-process callers. An out-of-process orchestrator such as Amoeba would need `--json`, which this slice does not build because no such consumer exists yet.
+- An MCP surface. Squadron has no MCP server: `src/squadron/server` is the agent daemon, with `agents` and `health` routes only. Parity here means CLI, slash command and agent skill.
+- Typing `RunState.status`. See D10.
 
 ## Dependencies
 
 ### Prerequisites
-- **197 (complete):** batch reports (`BatchReport`, `ItemOutcome`, `<run_id>.<step>.report.json` beside the run state) and item resume (`sq run --resume <id> --item N --decision ...`).
+- **197 (complete):** batch reports and item resume.
+  - Batch reports: `BatchReport`, `ItemOutcome` and `FlagKind`, with `<run_id>.<step>.report.json` written beside the run state on every exit of an `each` step.
+  - Item resume: `sq run --resume <id> --item N --decision ...`.
 
 ### Interfaces Required
-- `discover_pipelines()` and `PipelineInfo` in `squadron/pipeline/loader.py`.
+- `discover_pipelines()`, `load_pipeline()` and `PipelineInfo` in `squadron/pipeline/loader.py`.
 - `StateManager.list_runs(pipeline=, status=)`, `StateManager.runs_dir` and `RunState` in `squadron/pipeline/state.py`.
-- `StateManager.first_unfinished_step` logic, which decides where `--resume` restarts.
-- `BatchReport.load`, `BatchReport.json_path`, `ItemOutcome` in `squadron/pipeline/batch_report.py`.
+- The `StateManager.first_unfinished_step` logic, which decides where `--resume` restarts.
+- `BatchReport.load`, `BatchReportLoadError`, `ItemOutcome`, `FlagKind` and `ItemDecision` in `squadron/pipeline/batch_report.py`.
 - `ExecutionStatus` in `squadron/pipeline/executor.py`.
 
 ## Architecture
@@ -61,63 +66,102 @@ cli/app.py
  ├─ add_typer(pipelines_app, "pipelines")   cli/commands/pipelines.py  (new)
  ├─ add_typer(runs_app, "runs")             cli/commands/runs.py       (new)
  └─ command("run")                          cli/commands/run.py
-       --list → warn on stderr → pipelines.render_pipeline_listing()
+                                            --list → stderr notice → run_views.render_pipeline_listing()
 
-pipeline/loader.py        PipelineSource enum, LISTING_ORDER; PipelineInfo.source typed
-pipeline/run_listing.py   (new) RunSummary, ResumePoint, list_run_summaries()
-pipeline/state.py         first_unfinished_step logic extracted to a pure function
-pipeline/batch_report.py  RESUMABLE_OUTCOMES, report_json_paths()
-pipeline/item_resume.py   uses RESUMABLE_OUTCOMES and the shared path helper
+cli/run_views.py          (new) STATUS_COLORS, render_pipeline_listing(), render_run_listing(),
+                          resume-problem marker text. Imported by pipelines.py, runs.py and run.py;
+                          no command module imports another.
+
+pipeline/loader.py           PipelineSource enum, LISTING_ORDER; PipelineInfo.source typed
+pipeline/state.py            first_unfinished_step_of() pure function; method delegates
+pipeline/batch_report.py     report_json_path(), report_json_paths(); BatchReport.json_path delegates
+pipeline/item_eligibility.py (new) RESUMABLE_OUTCOMES, item_decisions(), single_each_step(),
+                             ItemResumeUnsupportedError
+pipeline/item_resume.py      _validate/_check_record use item_eligibility and report_json_path
+pipeline/run_listing.py      (new) RunSummary, ResumePoint, ResumeKind, ResumeProblem,
+                             list_run_summaries()
 ```
+
+Dependency direction: `cli/commands/*` → `cli/run_views` → `pipeline/run_listing` → `pipeline/{item_eligibility, state, batch_report, loader}`. `item_resume` → `item_eligibility`. `item_eligibility` has no git or CLI imports, so the read-only listing does not pull in item resume's git machinery.
 
 ### Data Flow
 
-**`sq pipelines list`:** `discover_pipelines()` returns the effective set, where a later source shadows an earlier one by name, so a pipeline is listed once, under the source `sq run <name>` would load. The CLI groups the set by `PipelineSource` in `LISTING_ORDER`, keeps the name sort within each group, and renders one table per non-empty group.
+**`sq pipelines list`:** `discover_pipelines()` returns the effective set: a later source shadows an earlier one by name, so each pipeline is listed once, under the source `sq run <name>` would load. `render_pipeline_listing()` groups the set by `PipelineSource` in `LISTING_ORDER`, keeps the name sort within each group, and renders one table per non-empty group.
 
-**`sq runs list`:**
-1. `list_run_summaries(state_mgr, pipeline=..., include_all=...)` calls `state_mgr.list_runs(pipeline=)`, which is already sorted newest first.
-2. It builds the resume point for each run:
-   - status `paused` or `failed`: load the pipeline definition and take the first unfinished step (the same function `--resume` uses) → `ResumePoint.step(name)`.
-   - status `completed`: load each batch report for the run (`report_json_paths(runs_dir, run_id)`) and count records whose outcome is in `RESUMABLE_OUTCOMES` → `ResumePoint.items(count, step_name)` when the count is above 0, else none.
-3. It keeps a run when the run has a resume point, or when `include_all` is set.
-4. The CLI renders the `RunSummary` rows as one table and prints a hint line with the resume command shape.
+**`sq runs list`:** `list_run_summaries(state_mgr, pipeline=..., include_all=...)` calls `state_mgr.list_runs(pipeline=)`, which already sorts newest first. Pipeline definitions are loaded at most once per pipeline name in one call, through a dict local to the call. For each run:
+
+- **Status `paused` or `failed`**:
+  1. Load the definition. If that fails → `ResumeProblem.PIPELINE_UNAVAILABLE`.
+  2. Call `first_unfinished_step_of(state, definition)`. `None` → `ResumeProblem.NO_UNFINISHED_STEP`. `--resume` would print "Nothing to resume" for that run.
+  3. Otherwise → `ResumePoint(STEP, step_name)`.
+- **Status `completed`**:
+  1. `report_json_paths(runs_dir, run_id)` is empty → no resume point. The `each` step never ran, so there is nothing to resume, and no definition is loaded.
+  2. Otherwise load the definition. If that fails → `PIPELINE_UNAVAILABLE`.
+  3. Call `single_each_step(definition)`. `ItemResumeUnsupportedError` → `ResumeProblem.ITEM_RESUME_UNSUPPORTED`. This applies when the pipeline does not have exactly one `each` step, either by design or because it was edited after the run. `--item` would reject this run for the same reason.
+  4. Call `BatchReport.load(report_json_path(runs_dir, run_id, each.name))`. `BatchReportLoadError` → `ResumeProblem.REPORT_UNREADABLE`.
+  5. Compute `item_decisions(record)` for each record. Records with a non-empty set count toward `open_items`. Records whose set includes `ACCEPT` count toward `acceptable_items`. `open_items > 0` → `ResumePoint(ITEMS, each.name, open_items, acceptable_items)`. Otherwise there is no resume point.
+- **Any other status** (`running`): no resume point and no problem.
+
+The default view keeps a run when it has a resume point or a problem. A problem means resumability could not be determined, and that is never hidden. `include_all` keeps every run. The CLI renders the rows with `render_run_listing()`.
 
 ### State Management
-Read-only. The slice adds no new state and does not write run state or reports.
+The listing is read-only. It adds no state and writes neither run state nor reports. It takes no lock: a live run is read as a snapshot (see D7).
 
 ## Technical Decisions
 
 ### Technology Choices
-- **Typer noun groups** (`pipelines_app`, `runs_app`, `no_args_is_help=True`), following `pools_app` and `models_app`. `sq list` already lists agents. A `list` subcommand under `sq run` would collide with the pipeline-name positional.
-- **Rich tables**, as in the current `--list` and `sq pools`.
+- **Typer noun groups** (`pipelines_app` and `runs_app`, with `no_args_is_help=True`), following `pools_app` and `models_app`. `sq list` already lists agents. A `list` subcommand under `sq run` would collide with the pipeline-name positional.
+- **Rich tables**, as in the current `--list` and in `sq pools`.
 
 ### Patterns and Conventions
 
-**D1. `PipelineSource(StrEnum)`** with `BUILT_IN = "built-in"`, `PROJECT = "project"` and `USER = "user"` in `loader.py`. `discover_pipelines` and `PipelineInfo.source` use it, so the values are no longer bare strings. `LISTING_ORDER: tuple[PipelineSource, ...] = (BUILT_IN, PROJECT, USER)` is the single display-order definition. It is separate from the scan order (built-in → user → project), which decides shadowing.
+**D1. `PipelineSource(StrEnum)`** in `loader.py`, with `BUILT_IN = "built-in"`, `PROJECT = "project"` and `USER = "user"`. `discover_pipelines` and `PipelineInfo.source` use it, so the source is no longer a bare string. `LISTING_ORDER: tuple[PipelineSource, ...] = (BUILT_IN, PROJECT, USER)` is the single definition of display order. It is separate from the scan order (built-in → user → project), which decides shadowing.
 
-**D2. Effective pipelines only.** A built-in shadowed by a project copy appears under `project` and not under `built-in`. The listing answers "what does `sq run <name>` load". README already documents shadowing.
+**D2. Effective pipelines only.** A built-in shadowed by a project copy appears under `project` and not under `built-in`, because the listing answers "what does `sq run <name>` load". README already documents shadowing.
 
-**D3. Resumable means `--resume` would do something.** That is either a run-level resume (status in `_RESUMABLE_STATUSES`: paused, failed) or an item resume (completed run with batch-report records in `RESUMABLE_OUTCOMES`). `RESUMABLE_OUTCOMES = frozenset({ItemOutcome.FLAGGED, ItemOutcome.NOT_RUN})` moves into `batch_report.py`, and `item_resume._check_record` uses it, so the listing and the resume path cannot disagree.
+**D3. The listing and item resume share eligibility.** The listing shows a run as resumable only on the same grounds that `--resume` uses to accept it. `pipeline/item_eligibility.py` owns every rule item resume applies before it touches git:
+- `RESUMABLE_OUTCOMES = frozenset({ItemOutcome.FLAGGED, ItemOutcome.NOT_RUN})`.
+- `item_decisions(record) -> frozenset[ItemDecision]`. The set is empty when the outcome is not in `RESUMABLE_OUTCOMES`. Otherwise it is `{RETRY}`, plus `ACCEPT` when `record.flag_kind is FlagKind.REVIEW_UNRESOLVED`.
+- `single_each_step(definition) -> StepConfig`, which raises `ItemResumeUnsupportedError` unless the definition has exactly one `each` step. This is today's `item_resume._single_each_step` rule, moved.
 
-**D4. One source for the resume step.** The body of `StateManager.first_unfinished_step` becomes a pure function `first_unfinished_step_of(state: RunState, definition: PipelineDefinition) -> str | None`. The method loads state and delegates. The listing calls the pure function on the `RunState` it already holds, so it does not load each run twice.
+`item_resume._validate` converts `ItemResumeUnsupportedError` to `_Stop(REJECTED, ...)`. `_check_record` rejects when `request.decision not in item_decisions(record)`, keeping its two existing messages (wrong outcome, accept without `review_unresolved`).
 
-**D5. One owner for report file names.** `report_json_paths(runs_dir, run_id) -> list[Path]` sits beside `BatchReport.json_path` in `batch_report.py`. It globs `f"{run_id}.*{REPORT_JSON_SUFFIX}"` and returns the paths sorted. `item_resume._validate` builds its path through `BatchReport.json_path` (or a shared static form of it) instead of the inline `".report.json"` literal.
+Item resume also checks state the listing cannot see ahead of time: git state, the run lock, and the item index the user types. The claim is therefore limited to this: **every item the listing counts as open passes item resume's eligibility checks for at least one decision, and an item counted as acceptable passes them for `accept`**. Run-level resume shares `first_unfinished_step_of` (D4), and `_RESUMABLE_STATUSES` stays in `state.py`.
 
-**D6. `ResumePoint` is a small frozen dataclass:** `kind: ResumeKind` (`STEP` | `ITEMS`), `step_name: str`, `open_items: int` (0 for `STEP`). A run without a resume point holds `None`. Rendering dispatches on `ResumeKind`, not on strings.
+**D4. One source for the resume step.** The body of `StateManager.first_unfinished_step` becomes a pure function, `first_unfinished_step_of(state: RunState, definition: PipelineDefinition) -> str | None`. The method loads state and delegates. The listing calls the function on the `RunState` it already holds.
 
-**D7. Failure modes are visible in the row.** No fallback value is invented. Every case logs a WARNING and puts an explicit marker in the "Resume at" column:
+**D5. One owner for report file names.** `batch_report.py` gains two module functions:
+- `report_json_path(runs_dir, run_id, step_name) -> Path`. `BatchReport.json_path` and `item_resume._validate` both use it, replacing the inline `".report.json"` literal in `_validate`.
+- `report_json_paths(runs_dir, run_id) -> list[Path]`, which globs `f"{run_id}.*{REPORT_JSON_SUFFIX}"`. It only answers "did this run write any report", which lets the listing skip loading definitions for ordinary completed runs.
 
-| Failure | Cause | Row shows | Log |
-|---|---|---|---|
-| Unreadable or invalid run-state file | corrupt or old schema | (row skipped, as `list_runs` already does) | WARNING (existing) |
-| Pipeline definition not found or invalid for a paused or failed run | pipeline renamed or deleted | `<pipeline unavailable>` | WARNING with run-id and pipeline |
-| Batch report unreadable (`BatchReportLoadError`) | corrupt or wrong schema | `<report unreadable>` | WARNING with path |
+**D6. Typed row data.** All three types live in `run_listing.py`. The marker text a user sees is defined only in `cli/run_views.py`, as a dict keyed by `ResumeProblem`, and no logic reads it. Rendering and inclusion dispatch on the enums.
+- `ResumeKind(StrEnum)`: `STEP`, `ITEMS`.
+- `ResumeProblem(StrEnum)`: `PIPELINE_UNAVAILABLE`, `NO_UNFINISHED_STEP`, `ITEM_RESUME_UNSUPPORTED`, `REPORT_UNREADABLE`.
+- `ResumePoint`, a frozen dataclass: `kind`, `step_name`, `open_items` (0 for `STEP`), `acceptable_items` (0 for `STEP`).
 
-A row with a marker counts as resumable for a paused or failed run, because its status says so. For a completed run it is shown only under `--all`.
+**D7. Failure modes.** No fallback value is ever invented. Each case below is observable, either as a row marker or in the log.
 
-**D8. Deprecated alias.** `sq run --list` calls the same `render_pipeline_listing()` used by `sq pipelines list`, after printing `Deprecated: use 'sq pipelines list'.` to stderr. The existing mutual-exclusion check for `--list` stays.
+| Case | Cause | Row | Default view | Log |
+|---|---|---|---|---|
+| Run-state file unreadable or invalid | corrupt file, old schema | skipped (existing `list_runs` behaviour) | n/a | WARNING (existing) |
+| Definition not loadable (`FileNotFoundError`, `OSError`, `yaml.YAMLError`, pydantic `ValidationError`) | pipeline renamed, deleted or broken | `PIPELINE_UNAVAILABLE` marker | shown | WARNING with run-id, pipeline and exception |
+| Paused or failed run with no unfinished step | definition edited after the run | `NO_UNFINISHED_STEP` marker | shown | WARNING with run-id |
+| Pipeline does not have exactly one `each` step, but reports exist | multi-`each` pipeline, or pipeline edited | `ITEM_RESUME_UNSUPPORTED` marker | shown | WARNING with run-id and `each` count |
+| Report unreadable (`BatchReportLoadError`, including not found at the `each` step's path) | corrupt file, wrong schema, `each` step renamed | `REPORT_UNREADABLE` marker | shown | WARNING with path |
+| Run in status `running` | live run, or a process that crashed without recording a final status | no resume point | `--all` only | none |
+| Concurrent writer | a run updates state or report during the listing | snapshot of the old or new file | as computed | none |
 
-**D9. Pipeline filter normalisation.** `--pipeline` is lowercased, matching `pipeline_identity` and run-state names (#147).
+The exceptions named in the definition row are the set that `discover_pipelines` already narrows to for the same loader. Any other exception propagates: the listing fails loudly instead of misreporting.
+
+Concurrent writes cannot be torn. Both `StateManager._write_atomic` and `batch_report._write_atomic` write a temp file and `replace` it over the target, so a reader always sees a whole file.
+
+A `running` run is outside `_RESUMABLE_STATUSES`. The listing reports exactly what the status says, and it cannot tell a live run from a crash orphan. Detecting orphans is not in scope.
+
+**D8. Deprecated alias.** `sq run --list` prints `Deprecated: use 'sq pipelines list'.` to stderr, then calls `run_views.render_pipeline_listing()`, the same function `sq pipelines list` calls. The existing mutual-exclusion check for `--list` stays.
+
+**D9. Normalising the pipeline filter.** `--pipeline` is lowercased, matching `pipeline_identity` and run-state names (#147).
+
+**D10. `RunSummary.status` stays `str`.** It mirrors `RunState.status`, which the persisted schema stores as a string. `init_run` writes `"running"`, which is not an `ExecutionStatus` member, so narrowing the summary to `ExecutionStatus` would fail on live runs. The listing adds no status literals: it compares only through `_RESUMABLE_STATUSES` and `ExecutionStatus.COMPLETED.value`. `STATUS_COLORS` is keyed by `ExecutionStatus` values, and a status not in it renders `dim`, as it does today. A GitHub issue opened during this slice covers typing `RunState.status` (a `RunStatus` enum that includes `RUNNING`), because that is a run-state schema change.
 
 ## Implementation Details
 
@@ -129,7 +173,7 @@ sq runs list [--all] [--pipeline NAME]
 sq run --list            # deprecated alias of `sq pipelines list`
 ```
 
-Exit codes: 0 for success, including empty results. Usage errors use Typer's standard non-zero code.
+Both commands exit 0 on success, including empty results. Usage errors use Typer's standard non-zero code.
 
 ```python
 # squadron/pipeline/run_listing.py
@@ -138,23 +182,28 @@ class RunSummary:
     run_id: str
     pipeline: str
     params: dict[str, object]
-    status: str                 # ExecutionStatus value
+    status: str                    # RunState.status (D10)
     resume: ResumePoint | None
-    resume_problem: str | None  # D7 marker text, else None
+    problem: ResumeProblem | None  # D7; set only when resume is None
     started_at: datetime
 
 def list_run_summaries(
-    state_manager: StateManager, *, pipeline: str | None, include_all: bool,
+    state_manager: StateManager,
+    *,
+    pipeline: str | None,
+    include_all: bool,
+    project_dir: Path | None = None,  # passed through to load_pipeline
+    user_dir: Path | None = None,
 ) -> list[RunSummary]: ...
 ```
 
-`list_run_summaries` receives its `StateManager` as a parameter, so tests pass one with a `tmp_path` runs dir.
+`list_run_summaries` receives its `StateManager` as a parameter, so tests pass one with a `tmp_path` runs dir. Definitions are loaded with `load_pipeline`. `project_dir` and `user_dir` pass through to it: `None` means the same directories `--resume` searches, and tests pass `tmp_path` directories.
 
 ### UI Specifications
 
 `sq pipelines list`:
 ```
-Built-in (14)
+Built-in (15)
  Name          Description
  p4            Slice design with review loop
  ...
@@ -162,67 +211,91 @@ Project (2)
  Name          Description
  my-loop       ...
 ```
-Empty groups are omitted. If there are no pipelines at all, the command prints `No pipelines found.`
+Empty groups are omitted. With no pipelines at all, the command prints `No pipelines found.`
 
 `sq runs list`:
 ```
- Run ID              Pipeline     Target            Status     Resume at                Started
- run-20261006-...    p4           slice=199         paused     review-design            2026-10-06 14:02
- run-20261005-...    implement-plan plan=180        completed  3 items (implement-each) 2026-10-05 09:40
- run-20261004-...    p5           slice=196         failed     <pipeline unavailable>   2026-10-04 17:11
+ Run ID              Pipeline        Target       Status     Resume at                       Started
+ run-20261006-...    p4              slice=199    paused     review-design                   2026-10-06 14:02
+ run-20261005-...    implement-plan  plan=180     completed  3 items in slices (1 accept)    2026-10-05 09:40
+ run-20261004-...    p5              slice=196    failed     <pipeline unavailable>          2026-10-04 17:11
 
-Resume: sq run --resume <run-id>   Item: sq run --resume <run-id> --item N --decision retry|accept
+Resume a step:  sq run --resume <run-id>
+Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: only items counted as "accept")
 ```
-- **Target:** params as `key=value` pairs joined by spaces.
-- **Started:** `started_at` formatted as `%Y-%m-%d %H:%M`.
-- **Status:** coloured with the existing `_STATUS_COLORS` map, moved from `run.py` to a shared location the new module imports.
-- **Empty result:** `No resumable runs.`, plus ` Use --all to include completed runs.` when `--all` was not given.
+- **Target:** the run's params as `key=value` pairs, joined by spaces.
+- **Started:** `started_at`, formatted `%Y-%m-%d %H:%M`.
+- **Status:** coloured with `run_views.STATUS_COLORS`, moved from `run.py`'s `_STATUS_COLORS`. `run.py`'s `_display_run_status` and result display import it from there.
+- **Resume at:** `STEP` shows the step name. `ITEMS` shows `N items in <each-step>`, with ` (K accept)` appended when K > 0. A problem shows its marker text from `run_views`.
+- **Empty result:** `No resumable runs.`, followed by ` Use --all to include completed runs.` when `--all` was not given.
 
 ### Slash command and skill surfaces
-- `commands/sq/pipelines.md` and `commands/sq/runs.md` follow the `list.md` pattern: run `sq pipelines list $ARGUMENTS` or `sq runs list $ARGUMENTS`, show the results, and document the flags under a `## Subcommand: list` section.
-- `commands/agents/sq-pipelines/SKILL.md` and `commands/agents/sq-runs/SKILL.md` use the same content in skill form.
-- Both installers enumerate these directories by glob (`skills/targets.py`), so no registry edit is needed.
-- `tests/cli/test_command_surface.py` gains entries `(("pipelines", "list"), "pipelines.md", "## Subcommand: list")` and `(("runs", "list"), "runs.md", "## Subcommand: list")`.
+- `commands/sq/pipelines.md` and `commands/sq/runs.md` follow the `list.md` pattern. Each runs `sq pipelines list $ARGUMENTS` or `sq runs list $ARGUMENTS`, shows the results, and documents its flags under a `## Subcommand: list` section.
+- `commands/agents/sq-pipelines/SKILL.md` and `commands/agents/sq-runs/SKILL.md` carry the same content in skill form.
+- Both installers find these files by glob (`skills/targets.py`), so no registry edit is needed.
+- `tests/cli/test_command_surface.py` gains two entries: `(("pipelines", "list"), "pipelines.md", "## Subcommand: list")` and `(("runs", "list"), "runs.md", "## Subcommand: list")`.
 
 ## Integration Points
 
 ### Provides to Other Slices
-- `list_run_summaries` / `RunSummary`, which an orchestrator such as Amoeba can use to find runs needing a decision without parsing CLI output.
-- `PipelineSource` and `LISTING_ORDER` for any later pipeline-catalogue surface.
-- `RESUMABLE_OUTCOMES` and `report_json_paths`, which remove duplication between the listing and item resume.
+- **`list_run_summaries` and `RunSummary`** for in-process callers. An out-of-process orchestrator needs `--json`, which is excluded until such a consumer exists.
+- **`item_eligibility`**: the single statement of which batch items can be resumed and with which decisions.
+- **`PipelineSource` and `LISTING_ORDER`**, for any later pipeline-catalogue surface.
 
 ### Consumes from Other Slices
-- From 197: the report file layout and `ItemOutcome`. A schema change there surfaces as `BatchReportLoadError`, which D7 makes visible. It is never silently treated as "no open items".
+- **From 197:** the report file layout, `ItemOutcome`, `FlagKind` and `ItemDecision`.
+  - A schema change surfaces as `BatchReportLoadError`, which shows the `REPORT_UNREADABLE` marker. It is never treated as "no open items".
+  - Moving the eligibility rules into `item_eligibility` changes no item-resume behaviour. 197's existing tests guard that.
 
 ## Success Criteria
 
 ### Functional Requirements
-- `sq pipelines list` prints groups in the order built-in, project, user. Names are alphabetical within each group, empty groups are omitted, and a project pipeline that shadows a built-in appears only under project.
-- `sq runs list` shows paused and failed runs, plus completed runs with flagged or not-run batch items, newest first. Completed runs with no open items are hidden.
-- `sq runs list --all` also shows completed runs with nothing to resume, with an empty "Resume at" cell.
+- `sq pipelines list` prints its groups in the order built-in, project, user. Names are alphabetical within each group and empty groups are omitted. A project pipeline that shadows a built-in appears only under project.
+- `sq runs list` shows, newest first:
+  - paused and failed runs;
+  - completed batch runs with at least one open item;
+  - every run with a D7 problem.
+- `sq runs list` hides completed runs with no open items, and `running` runs.
+- `sq runs list --all` shows every readable run. Runs with nothing to resume have an empty "Resume at" cell.
 - `sq runs list --pipeline P4` matches runs of `p4`.
-- For a paused run, "Resume at" equals the step `sq run --resume <id>` actually resumes at, because both use the same function.
-- A completed batch run shows `N items (<each-step>)`, where N counts the `flagged` plus `not_run` records in its report.
-- Every D7 failure case shows its marker and logs a WARNING. None crashes the listing.
+- For a paused run, "Resume at" equals the step `sq run --resume <id>` resumes at.
+- For a completed batch run, every item counted as open is accepted by `--item <index> --decision retry`, and every item counted toward "accept" is accepted by `--decision accept`. Here "accepted" means the run passes item resume's validation; git preconditions are separate.
 - `sq run --list` prints the deprecation notice on stderr and the same output as `sq pipelines list` on stdout.
 
 ### Technical Requirements
-- `PipelineSource` replaces the bare source strings. `RESUMABLE_OUTCOMES`, `first_unfinished_step_of` and `report_json_paths` each have a single definition and are used by both the listing and resume paths.
-- Unit tests for `list_run_summaries` cover: a paused run (step), a failed run (step), a completed batch run with flagged items, a completed batch run with all items passed, a completed non-batch run, a missing pipeline definition, an unreadable report, `--pipeline` filtering, and ordering.
-- The unit test for pipeline grouping covers all three sources plus shadowing, using the `project_dir` and `user_dir` overrides.
+- `PipelineSource` replaces the bare source strings.
+- `RESUMABLE_OUTCOMES`, `item_decisions`, `single_each_step`, `first_unfinished_step_of` and `report_json_path` each have a single definition, used by both the listing and the resume paths.
+- No command module imports another command module.
+- Unit tests for `list_run_summaries` cover:
+  - a paused run and a failed run, resolved to a step;
+  - a completed batch run with flagged items, mixing `review_unresolved` and other flag kinds, to check the counts;
+  - a completed batch run whose items all passed;
+  - a completed non-batch run (no report, no definition load);
+  - a `running` run;
+  - `--pipeline` filtering, ordering, and one definition load per pipeline name;
+  - each `ResumeProblem` case.
+- Each `ResumeProblem` test asserts both the enum value and the WARNING record (`caplog`, logger `squadron.pipeline.run_listing`).
+- A parity test feeds the same report to `item_decisions` and to `item_resume._check_record` for every outcome and flag-kind combination. It asserts that a decision `_check_record` rejects never appears in the decision set `item_decisions` reports.
+- `run_views` has a test that every `ResumeProblem` member has marker text.
+- The pipeline-grouping unit test covers all three sources plus shadowing, through the `project_dir` and `user_dir` overrides.
 - CLI tests use `CliRunner` for both commands and the deprecated alias, including the stderr notice.
-- The run-state fixtures in the tests are real `RunState` JSON written by `StateManager.init_run` and its update methods. The report fixtures are written by `BatchReport.write`, not hand-built JSON.
-- The drift test covers both new command files. `ruff format`, `ruff check` and `pyright` pass with zero errors.
+- Fixtures are real:
+  - run states are written by `StateManager.init_run` and its update methods;
+  - reports are written by `BatchReport.write`;
+  - pipelines are real YAML files in `tmp_path` directories.
+- Existing item-resume and `--resume` tests pass unchanged.
+- The drift test covers both new command files.
+- `ruff format`, `ruff check` and `pyright` pass with zero errors.
 
 ### Integration Requirements
 - After `sq install-commands`, `/sq:pipelines` and `/sq:runs` are installed, and the `sq-pipelines` and `sq-runs` skills are installed for skill-runtime targets.
-- Existing `sq run --status`, `--resume` and `--item` behaviour is unchanged, and the existing tests pass.
+- Existing `sq run --status`, `--resume` and `--item` behaviour is unchanged.
 
 ### Verification Walkthrough
 
-These commands do not exist yet. The walkthrough is the draft demo for Phase 6.
+These commands do not exist yet. This is the draft demo for Phase 6.
 
-1. **Pipeline listing**
+1. **Pipeline listing.**
    ```bash
    sq pipelines list
    ```
@@ -234,13 +307,13 @@ These commands do not exist yet. The walkthrough is the draft demo for Phase 6.
    ```
    Expect a "Project (1)" group containing `p4`, and no `p4` under Built-in. Remove the copy afterwards.
 
-2. **Deprecated alias**
+2. **Deprecated alias.**
    ```bash
    sq run --list 2>/dev/null   # same tables as step 1
    sq run --list >/dev/null    # stderr: Deprecated: use 'sq pipelines list'.
    ```
 
-3. **Resumable runs.** Use the existing runs in `~/.config/squadron/runs`, or create one by starting a pipeline that hits a checkpoint and lets it pause.
+3. **Resumable runs.** Use existing runs in `~/.config/squadron/runs`, or start a pipeline that reaches a checkpoint and let it pause.
    ```bash
    sq runs list
    ```
@@ -251,36 +324,48 @@ These commands do not exist yet. The walkthrough is the draft demo for Phase 6.
    ```
    Confirm that the step it resumes at matches the "Resume at" column.
 
-4. **Batch items (197).** If a completed `implement-plan` batch run with flagged items exists, `sq runs list` shows it as `N items (<each-step>)`. Then run:
+4. **Batch items (197).** `~/.config/squadron/runs` holds `implement-plan` runs with `*.slices.report.json` reports. If one of them is a completed run with open items, `sq runs list` shows it as `N items in slices`. Pick an index from its report's flagged section, then run:
    ```bash
-   sq run --resume <run-id> --item <index> --decision accept
+   sq run --resume <run-id> --item <index> --decision retry
    sq runs list
    ```
-   The count drops by one, and the run disappears from the list when the count reaches zero.
+   The count drops by one when the item resolves. The run leaves the default view when the count reaches zero.
 
-5. **Filters**
+5. **Filters.**
    ```bash
-   sq runs list --all             # completed runs appear, Resume at empty
+   sq runs list --all             # completed and running runs appear; Resume at empty
    sq runs list --pipeline P4     # only p4 runs
    ```
 
-6. **Failure visibility.** Rename the pipeline YAML of a paused project-pipeline run, then run `sq runs list`. Expect `<pipeline unavailable>` in its row and a WARNING on stderr. Restore the file afterwards.
+6. **Failure visibility.** Rename the YAML file of a paused project-pipeline run, then run `sq runs list`. Expect `<pipeline unavailable>` in its row and a WARNING on stderr. Restore the file afterwards.
 
-7. **Slash surfaces.** After `sq install-commands`, run `/sq:runs` in Claude Code. The table should match `sq runs list`.
+7. **Listing cost.**
+   ```bash
+   ls ~/.config/squadron/runs/*.json | wc -l
+   time sq runs list --all
+   ```
+   Record the run count and the elapsed time in the walkthrough. The target is under 1 s for a few hundred runs (see Special Considerations).
+
+8. **Slash surfaces.** After `sq install-commands`, run `/sq:runs` in Claude Code. The table should match `sq runs list`.
 
 ## Implementation Notes
 
 ### Development Approach
-1. `PipelineSource` and `LISTING_ORDER` in the loader; update `discover_pipelines` and its existing tests.
-2. `pipelines.py` with `render_pipeline_listing()`; register it in `app.py`; point `sq run --list` at it with the deprecation notice.
-3. Extract `first_unfinished_step_of`, `RESUMABLE_OUTCOMES` and `report_json_paths`; move `item_resume` onto them. Existing resume tests must pass unchanged.
+1. Add `PipelineSource` and `LISTING_ORDER` to the loader, and update `discover_pipelines` and its existing tests.
+2. Create `cli/run_views.py` with `STATUS_COLORS`, moved from `run.py`, and `render_pipeline_listing()`. Add `pipelines.py` and register it in `app.py`. Point `sq run --list` at `render_pipeline_listing()`, with the deprecation notice.
+3. Extract `first_unfinished_step_of` and `report_json_path` / `report_json_paths`. Create `item_eligibility.py` and move `item_resume` onto it. The existing resume tests must pass unchanged. Add the parity test.
 4. Write `run_listing.py` with its unit tests.
-5. Add `runs.py` and register it; move `_STATUS_COLORS` to the shared location.
+5. Add `render_run_listing()` and the marker text to `run_views`. Add `runs.py` and register it.
 6. Add the slash commands, skills and drift-test entries.
-7. Update the docs, and open the GitHub issue for removing `sq run --list`.
+7. Update the docs. Open GitHub issues for removing `sq run --list` and for typing `RunState.status` (D10).
 
 Effort: 2/5.
 
 ### Special Considerations
-- `list_runs` reads every state file in the runs directory, and this slice adds one pipeline load per paused or failed run plus one report read per completed run. That is acceptable at current run counts. The slice adds no cache.
-- Tests must not read the developer's real runs directory or `~/.config/squadron/pipelines`. Pass `runs_dir`, `user_dir` and `project_dir` explicitly, in line with the hermetic-test conventions in `tests/_hermetic.py`.
+- **Performance target:** under 1 s for `sq runs list --all` with a few hundred run-state files on local disk. The cost has three parts:
+  - one JSON read per run (existing `list_runs`);
+  - one glob per completed run;
+  - one report read per completed batch run.
+
+  Definitions are loaded at most once per pipeline name within a call. There is no cache across calls. Walkthrough step 7 records the measured time. If it misses the target, that is a finding for Phase 7. It is not a reason to add a cache in this slice.
+- **Hermetic tests:** tests must not read the developer's real runs directory or `~/.config/squadron/pipelines`. Pass `runs_dir`, `user_dir` and `project_dir` explicitly, following the conventions in `tests/_hermetic.py`.
