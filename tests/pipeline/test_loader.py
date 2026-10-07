@@ -8,7 +8,13 @@ import pytest
 import yaml
 
 from squadron.data import data_dir
-from squadron.pipeline.loader import discover_pipelines, load_pipeline, pipeline_identity
+from squadron.pipeline.loader import (
+    LISTING_ORDER,
+    PipelineSource,
+    discover_pipelines,
+    load_pipeline,
+    pipeline_identity,
+)
 from squadron.pipeline.models import PipelineDefinition
 
 
@@ -123,6 +129,35 @@ class TestDiscoverPipelines:
         )
         by_name = {p.name: p for p in pipelines}
         assert by_name["slice"].source == "project"
+
+    def test_sources_are_tagged_with_the_enum(self, tmp_path: Path) -> None:
+        _write_pipeline_yaml(tmp_path / "project", "proj-only")
+        _write_pipeline_yaml(tmp_path / "user", "user-only")
+        _write_pipeline_yaml(tmp_path / "project", "p4")  # shadows the built-in p4
+
+        by_name = {
+            p.name: p
+            for p in discover_pipelines(project_dir=tmp_path / "project", user_dir=tmp_path / "user")
+        }
+
+        assert by_name["proj-only"].source is PipelineSource.PROJECT
+        assert by_name["user-only"].source is PipelineSource.USER
+        assert by_name["p456"].source is PipelineSource.BUILT_IN
+        assert by_name["p4"].source is PipelineSource.PROJECT
+
+    def test_shadowed_builtin_appears_once(self, tmp_path: Path) -> None:
+        _write_pipeline_yaml(tmp_path, "p4")
+
+        pipelines = discover_pipelines(project_dir=tmp_path, user_dir=Path("/nonexistent"))
+
+        assert [p.source for p in pipelines if p.name == "p4"] == [PipelineSource.PROJECT]
+
+    def test_listing_order(self) -> None:
+        assert LISTING_ORDER == (
+            PipelineSource.BUILT_IN,
+            PipelineSource.PROJECT,
+            PipelineSource.USER,
+        )
 
     def test_nonexistent_dirs_no_error(self) -> None:
         pipelines = discover_pipelines(

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
 
@@ -30,13 +31,30 @@ def _user_dir() -> Path:
     return Path.home() / ".config" / "squadron" / "pipelines"
 
 
+class PipelineSource(StrEnum):
+    """Where a discovered pipeline was loaded from (slice 199 D1)."""
+
+    BUILT_IN = "built-in"
+    PROJECT = "project"
+    USER = "user"
+
+
+# Display order for listings. Separate from the scan order in discover_pipelines
+# (built-in → user → project), which decides shadowing.
+LISTING_ORDER: tuple[PipelineSource, ...] = (
+    PipelineSource.BUILT_IN,
+    PipelineSource.PROJECT,
+    PipelineSource.USER,
+)
+
+
 @dataclass
 class PipelineInfo:
     """Metadata about a discovered pipeline."""
 
     name: str
     description: str
-    source: str  # "built-in" | "user" | "project"
+    source: PipelineSource
     path: Path
 
 
@@ -135,15 +153,15 @@ def discover_pipelines(
     Later sources overwrite earlier ones by pipeline name (project wins).
     Returns a sorted list of PipelineInfo.
     """
-    source_dirs: list[tuple[Path, str]] = [
-        (_BUILTIN_DIR, "built-in"),
+    source_dirs: list[tuple[Path, PipelineSource]] = [
+        (_BUILTIN_DIR, PipelineSource.BUILT_IN),
     ]
 
     user = user_dir if user_dir is not None else _user_dir()
-    source_dirs.append((user, "user"))
+    source_dirs.append((user, PipelineSource.USER))
 
     proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
-    source_dirs.append((proj, "project"))
+    source_dirs.append((proj, PipelineSource.PROJECT))
 
     found: dict[str, PipelineInfo] = {}
 
