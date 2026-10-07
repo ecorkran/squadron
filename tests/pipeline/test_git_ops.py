@@ -319,5 +319,36 @@ def test_git_failure_raises_and_logs_error(
 
 
 def test_missing_target_raises_from_rev_list(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)  # a candidate, so the target's history is read
     with pytest.raises(GitStateUnknownError, match="rev-list"):
         merged_slice_branches([_ENTRY], "no-such-target", cwd=str(temp_git_repo))
+
+
+def test_fast_forward_counts_recognises_a_fast_forwarded_branch(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    run_test_git(temp_git_repo, "merge", "-q", "--ff-only", _BRANCH)
+    cwd = str(temp_git_repo)
+
+    assert merged_slice_branches([_ENTRY], "main", cwd=cwd) == set()
+    assert merged_slice_branches([_ENTRY], "main", cwd=cwd, fast_forward_counts=True) == {105}
+
+
+def test_fast_forward_counts_still_excludes_an_unmerged_branch(temp_git_repo: Path) -> None:
+    _slice_branch_with_work(temp_git_repo)
+    assert (
+        merged_slice_branches([_ENTRY], "main", cwd=str(temp_git_repo), fast_forward_counts=True)
+        == set()
+    )
+
+
+def test_target_history_is_not_read_when_no_slice_has_a_branch() -> None:
+    calls: list[str] = []
+
+    def fake(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str]:
+        calls.append(args[0])
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    with patch("squadron.pipeline.git_ops.run_git", fake):
+        assert merged_slice_branches([_ENTRY], "main", cwd="/unused") == set()
+
+    assert calls == ["for-each-ref"]

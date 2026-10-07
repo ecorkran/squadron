@@ -154,7 +154,13 @@ def branch_behind_count(branch: str, target: str, *, cwd: str) -> int:
     )
 
 
-def merged_slice_branches(entries: Sequence[SliceEntry], target: str, *, cwd: str) -> set[int]:
+def merged_slice_branches(
+    entries: Sequence[SliceEntry],
+    target: str,
+    *,
+    cwd: str,
+    fast_forward_counts: bool = False,
+) -> set[int]:
     """Indexes of slices whose branch was merged into ``target`` with a merge commit (#188).
 
     Git, not cf, is the record of a merged slice. The merge step always uses
@@ -163,24 +169,32 @@ def merged_slice_branches(entries: Sequence[SliceEntry], target: str, *, cwd: st
     first-parent chain. That second test excludes a branch with no work of its own,
     whose tip is the target's own commit, and a fast-forwarded one.
 
-    A slice with no design file or no branch reads as not merged. Any git read that
-    times out or exits unexpectedly raises ``GitStateUnknownError``: an empty answer
-    would reopen a merged slice and reimplement it.
+    ``fast_forward_counts`` drops that second test, so any branch whose tip the
+    target contains counts. Pass it only where cf already says the slice is
+    complete, so a hand-merged or fast-forwarded branch is recognised without the
+    same shape reading as "merged" for a slice cf still shows open.
+
+    A slice with no design file or no branch reads as not merged. When no slice has
+    a branch, the target's history is not read at all. Any git read that times out
+    or exits unexpectedly raises ``GitStateUnknownError``: an empty answer would
+    reopen a merged slice and reimplement it.
     """
     tips = _branch_tips(cwd)
-    first_parent = _first_parent_chain(target, cwd)
-    merged: set[int] = set()
+    candidates: list[tuple[int, str]] = []
     for entry in entries:
         try:
             branch = slice_branch_name(entry.index, entry.design_file)
         except NoDesignFileError:
             continue  # no design file means no branch was ever entered for it
         tip = tips.get(branch)
-        if tip is None or tip in first_parent:
-            continue
-        if _is_ancestor(tip, target, cwd):
-            merged.add(entry.index)
-    return merged
+        if tip is not None:
+            candidates.append((entry.index, tip))
+    if not candidates:
+        return set()
+    first_parent: set[str] = set() if fast_forward_counts else _first_parent_chain(target, cwd)
+    return {
+        index for index, tip in candidates if tip not in first_parent and _is_ancestor(tip, target, cwd)
+    }
 
 
 def _branch_tips(cwd: str) -> dict[str, str]:

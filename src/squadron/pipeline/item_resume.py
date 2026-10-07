@@ -297,7 +297,12 @@ async def _select_item(
     # Git is the record of a merged slice, whatever cf says (#188): an item the source
     # no longer selects because it was merged is reconciled, never rejected.
     if entry is not None and entry.design_file:
-        if entry.index in merged_slice_branches([entry], target, cwd=cwd):
+        # cf already calls a COMPLETE slice done, so a fast-forwarded or hand-merged
+        # branch counts too; for a slice cf shows open, only the pipeline's own
+        # --no-ff merge shape does.
+        complete = status == CfSliceStatus.COMPLETE
+        merged = merged_slice_branches([entry], target, cwd=cwd, fast_forward_counts=complete)
+        if entry.index in merged:
             _reconcile(request, run, entry.name)
             return None
         if status == CfSliceStatus.COMPLETE:

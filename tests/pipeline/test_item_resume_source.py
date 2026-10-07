@@ -186,3 +186,19 @@ async def test_a_predicate_failure_halts_and_leaves_the_report_unchanged(
     assert "cannot read the history of main" in outcome.message
     assert project.report_path.read_bytes() == before
     assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_a_complete_slice_fast_forwarded_into_the_target_still_reconciles(
+    project: Project,
+) -> None:
+    """cf calls it complete, so a hand-merged or fast-forwarded branch is recognised."""
+    run_test_git(project.repo, "merge", "-q", "--ff-only", branch(401))
+    project.status[401] = "complete"
+    body = AsyncMock()
+
+    outcome = await _resume(project, "401", body)
+
+    assert outcome.exit is ResumeExit.RESOLVED
+    body.assert_not_awaited()
+    assert project.record("401").reason == RECONCILED_REASON
