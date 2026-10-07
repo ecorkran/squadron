@@ -29,7 +29,7 @@ status: not_started
   before its commit. Tests are hermetic (`tests/_hermetic.py`): `tmp_path` runs dir, real
   `StateManager`, dead PIDs from a subprocess that has already exited.
 - Traceability (design → tasks): spike/D5 → 2; D12 → 4–7; D2/D13 → 8–13; D3 → 9–10; D6 →
-  11–12; D1 → 8; D7 → 15–18; D8 → 19–20; D10 → 21–22; listing-time NFR → 22a; D11 → 23–26; pipelines list →
+  11–12; D1 → 8; D7 → 15–18; D8 → 19–20; D10 → 21–22; listing-time NFR → 22 (I/O counts) and 42 (walkthrough step 8, timed by hand; the design puts no time assertion in tests); D11 → 23–26; pipelines list →
   27–28; show → 29–31; D9 prune → 32–39; docs → 40; issues → 41; walkthrough → 42.
 - Effort: 3/5. Next planned slice: per `cf next` after 174 closes.
 
@@ -52,18 +52,17 @@ status: not_started
   - [ ] Record: does a `ResultMessage` for the interrupted turn arrive, is `is_error` set,
         and does a following `query()` on the same client succeed
   - [ ] Success: findings recorded under the design's "Interrupting a live turn" risk; if no
-        `ResultMessage` arrives, stop and ask the Project Manager, since D7 narrows to "always
-        mark unusable"
+        `ResultMessage` arrives, apply the design's fallback (D7 narrows to "always mark
+        unusable"), update D7 to say so, and carry it into Task 16
 - [ ] Confirm no `StateManager` write runs off the event-loop thread (D5): grep
       `to_thread` and `run_in_executor` in `src/squadron/pipeline` and `cli/commands/run.py`
-  - [ ] Success: each hit is listed with whether it touches the state file; if any does, stop
-        and ask the Project Manager (D5 then requires a per-run lock)
+  - [ ] Success: each hit is listed with whether it touches the state file; if any does, add
+        D5's per-run `threading.Lock` around load, modify and write in Task 11
 
 ## Task 3 — Baseline the existing tests
 
 - [ ] Run `pytest tests -q` and record pass/fail counts
-  - [ ] Success: failures (if any) are noted as pre-existing before any edit. Known: 3
-        schema-drift failures in squadron-pr are cf issue #88, not squadron bugs
+  - [ ] Success: failures (if any) are noted as pre-existing before any edit
 
 ---
 
@@ -305,20 +304,6 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `feat: show running runs and liveness in run listings`
 
-## Task 22a — Load test for the listing-time NFR (Success Criteria; `.claude/rules/python.md` load tier)
-
-- [ ] Add `tests/load/test_run_listing_scale.py`, modelled on `tests/load/test_usage_reader_loop.py`
-      (module docstring naming the slice and NFR; bounds as named constants)
-  - [ ] Seed a few hundred run-state files in `tmp_path` through `StateManager` (mix of
-        completed, failed, paused, and running with live and dead PIDs; a few unreadable
-        files), then time `list_run_summaries(..., include_all=True)` with the real
-        `process_alive`
-  - [ ] Assert wall-clock under `MAX_LISTING_S = 1.0` (the design's target; generous enough
-        for CI jitter), and that the row count equals the seeded readable count
-  - [ ] Success: test passes locally; no new CI wiring is needed because `testpaths = ["tests"]`
-        already collects `tests/load/`
-- [ ] Commit: `test: add run listing scale load test`
-
 ---
 
 ## Part E — Renderer and listings (D11, UI Specifications)
@@ -516,7 +501,7 @@ status: not_started
 
 ## Task 42 — Full validation and walkthrough
 
-- [ ] Run `ruff format`, `ruff check`, `pyright` and `pytest tests -q` with an empty `HOME`
+- [ ] Run `ruff format`, `ruff check`, `pyright` and `pytest tests -q`
   - [ ] Success: zero pyright errors; results match the Task 3 baseline plus new tests
 - [ ] Run Verification Walkthrough steps 1–5 and 8 from the slice design in a scratch HOME
       (add a seed helper under `tests/pipeline/` that writes the orphan, stale, unowned,
