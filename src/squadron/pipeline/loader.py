@@ -61,6 +61,15 @@ class PipelineInfo:
     params: dict[str, str] = dataclasses.field(default_factory=dict[str, str])
 
 
+@dataclass(frozen=True)
+class PipelineLocation:
+    """Where a pipeline name resolves, found without reading the file (slice 174)."""
+
+    name: str
+    source: PipelineSource
+    path: Path
+
+
 def pipeline_identity(path: Path) -> str:
     """A pipeline's name: its file stem, lowercased as lookup and run state do (#147)."""
     return path.stem.lower()
@@ -110,20 +119,32 @@ def load_pipeline(
     candidate = Path(name_or_path)
     if candidate.is_file():
         return _load_yaml(candidate)
+    return _load_yaml(resolve_pipeline(name_or_path, project_dir=project_dir, user_dir=user_dir).path)
 
-    # Normalise name to lowercase for case-insensitive lookup
-    name_or_path = name_or_path.lower()
 
-    # Search directories: project (highest priority) → user → built-in
+def resolve_pipeline(
+    name: str,
+    *,
+    project_dir: Path | None = None,
+    user_dir: Path | None = None,
+) -> PipelineLocation:
+    """Find the file a pipeline *name* runs, by the search ``load_pipeline`` uses.
+
+    Searches project → user → built-in, case-insensitively, without reading the
+    file, so a pipeline that fails validation can still be located. A path is
+    not a name and is not found.
+
+    Raises FileNotFoundError naming the searched directories.
+    """
+    identity = name.lower()
     search_dirs = _search_dirs(project_dir=project_dir, user_dir=user_dir)
-    for search_dir in search_dirs:
-        yaml_path = _find_by_identity(search_dir, name_or_path)
+    for directory, source in search_dirs:
+        yaml_path = _find_by_identity(directory, identity)
         if yaml_path is not None:
-            return _load_yaml(yaml_path)
-
+            return PipelineLocation(identity, source, yaml_path)
     raise FileNotFoundError(
-        f"Pipeline '{name_or_path}' not found in any pipeline directory. "
-        f"Searched: {[str(d) for d in search_dirs]}"
+        f"Pipeline '{identity}' not found in any pipeline directory. "
+        f"Searched: {[str(directory) for directory, _ in search_dirs]}"
     )
 
 
@@ -131,18 +152,15 @@ def _search_dirs(
     *,
     project_dir: Path | None = None,
     user_dir: Path | None = None,
-) -> list[Path]:
+) -> list[tuple[Path, PipelineSource]]:
     """Return pipeline directories in search order (highest priority first)."""
-    dirs: list[Path] = []
-
     proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
-    dirs.append(proj)
-
     user = user_dir if user_dir is not None else _user_dir()
-    dirs.append(user)
-
-    dirs.append(_BUILTIN_DIR)
-    return dirs
+    return [
+        (proj, PipelineSource.PROJECT),
+        (user, PipelineSource.USER),
+        (_BUILTIN_DIR, PipelineSource.BUILT_IN),
+    ]
 
 
 def discover_pipelines(

@@ -390,7 +390,8 @@ sq pipelines show <name> [--path]
 
 - **`sq runs list`:** the default view now also includes `running` runs, live and orphaned, as well as 199's resumable and problem rows. A running run is the thing a user most wants to check on, and an orphan is something they need to act on. `--all` still adds completed runs that have nothing to resume.
 - **`sq runs prune`:** without `--yes` it prints the preview and `N run(s) would be removed. Re-run with --yes to delete.`, then exits 0. With `--yes` it prints `Removed N run(s).`
-- **`sq pipelines show`:** resolves `<name>` through `loader.resolve_pipeline(name) -> PipelineInfo`, the same search `load_pipeline` uses. `load_pipeline` is refactored to call it, so resolution has one definition.
+- **`sq pipelines show`:** resolves `<name>` through `loader.resolve_pipeline(name) -> PipelineLocation`, the same search `load_pipeline` uses. `load_pipeline` is refactored to call it, so resolution has one definition.
+  - *Phase 6 change:* the return type is `PipelineLocation(name, source, path)`, not `PipelineInfo`. `PipelineInfo` carries a description, which needs a validated parse, and a pipeline that fails validation is exactly the one a user wants to `show`. Resolution therefore never reads the file.
   - **Output:** a `# source: <source>` line and a `# path: <path>` line, then the file text byte for byte. The output is still valid YAML, so `> copy.yaml` works.
   - **`--path`:** prints only the path.
   - **Not found:** exits 1 with the loader's message. Paths are not names, so a path argument is reported as not found.

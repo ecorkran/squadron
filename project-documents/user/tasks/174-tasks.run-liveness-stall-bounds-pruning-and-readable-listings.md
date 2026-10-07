@@ -222,46 +222,46 @@ status: in_progress
 
 ## Task 15 — `DispatchStalledError` and the foreground timer in `sdk_session.py`
 
-- [ ] Add `INTERRUPT_DRAIN_TIMEOUT_S = 60` and public `DispatchStalledError(ProviderError)`
+- [x] Add `INTERRUPT_DRAIN_TIMEOUT_S = 60` and public `DispatchStalledError(ProviderError)`
       carrying `idle_s` and `session_usable`
-- [ ] Add private `_ForegroundIdleTimeout`; in `_collect_turns` pass
+- [x] Add private `_ForegroundIdleTimeout`; in `_collect_turns` pass
       `idle_s=foreground_idle_timeout_s` for foreground reads (today `idle_s=None`, `:218`),
       leaving background reads on 932's key
-  - [ ] Success: background-wait behaviour untouched
+  - [x] Success: background-wait behaviour untouched
 
 ## Task 16 — Interrupt and drain
 
-- [ ] On `_ForegroundIdleTimeout`: log WARNING `dispatch: foreground turn silent for %ds;
+- [x] On `_ForegroundIdleTimeout`: log WARNING `dispatch: foreground turn silent for %ds;
       interrupting`; `await client.interrupt()` inside `asyncio.timeout(INTERRUPT_DRAIN_TIMEOUT_S)`;
       drain with `_read_turn(idle_s=INTERRUPT_DRAIN_TIMEOUT_S)` until the dispatch's own
       `ResultMessage`; an `is_error` result is not re-raised as `ProviderAPIError`
-  - [ ] Interrupt and drain both complete → session stays usable
-  - [ ] Interrupt raises, drain times out, or the stream ends → set `unusable_reason` to
+  - [x] Interrupt and drain both complete → session stays usable
+  - [x] Interrupt raises, drain times out, or the stream ends → set `unusable_reason` to
         `foreground stall: interrupt did not complete (<detail>)`, log ERROR; later calls
         fail fast through `_require_usable`
-  - [ ] Raise `DispatchStalledError(idle_s, session_usable)` in both cases
-  - [ ] Success: adjust to the Task 2 spike findings if they differ from the design
+  - [x] Raise `DispatchStalledError(idle_s, session_usable)` in both cases
+  - [x] Success: adjust to the Task 2 spike findings if they differ from the design
 
 ## Task 17 — `sdk_session` stall tests
 
-- [ ] In `tests/pipeline/test_sdk_session.py` add a fake client whose stream goes silent:
+- [x] In `tests/pipeline/test_sdk_session.py` add a fake client whose stream goes silent:
       interrupt sent; drain reaches the result; session stays usable; the next dispatch
       succeeds; `DispatchStalledError` raised
-  - [ ] Second fake whose `interrupt()` raises: session unusable, ERROR record, next call
+  - [x] Second fake whose `interrupt()` raises: session unusable, ERROR record, next call
         fails fast; a third whose drain never ends: same, via the drain bound (patch the
         constant small)
-  - [ ] Success: tests pass; 932 background-wait tests unchanged
+  - [x] Success: tests pass; 932 background-wait tests unchanged
 
 ## Task 18 — Dispatch action mapping; commit
 
-- [ ] In `actions/dispatch.py` `execute()`, catch `DispatchStalledError` ahead of the generic
+- [x] In `actions/dispatch.py` `execute()`, catch `DispatchStalledError` ahead of the generic
       `Exception` handler: WARNING without traceback; return `ActionResult(success=False,
       error="dispatch stalled: no output for <N>s; turn interrupted",
       metadata={"stalled": True, "session_usable": ...})`
-- [ ] Test in `tests/pipeline/actions/test_dispatch_session.py`: failed result, error text
+- [x] Test in `tests/pipeline/actions/test_dispatch_session.py`: failed result, error text
       prefix `dispatch stalled:`, metadata, one WARNING, no `exc_info` on the record
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: bound foreground dispatch silence with interrupt`
+  - [x] Success: tests pass
+- [x] Commit: `feat: bound foreground dispatch silence with interrupt`
 
 ---
 
@@ -269,41 +269,41 @@ status: in_progress
 
 ## Task 19 — `WaitOutcome.ORPHANED` and the STALE policy in `run_wait.py`
 
-- [ ] Add `WaitOutcome.ORPHANED` and exit code 8 to `WAIT_EXIT_CODES`; `wait_for_run` gains
+- [x] Add `WaitOutcome.ORPHANED` and exit code 8 to `WAIT_EXIT_CODES`; `wait_for_run` gains
       injected `now`, `hostname`, `process_alive` beside `clock` and `sleep`
-- [ ] On each poll that sees `running`, assess liveness: `ORPHANED` ends the wait with a
+- [x] On each poll that sees `running`, assess liveness: `ORPHANED` ends the wait with a
       WARNING and stderr `sq runs wait: run <id> orphaned (process <pid> gone)`; the first
       `STALE` logs one WARNING `run <id> heartbeat overdue by <age>; still waiting`; a later
       `LIVE` after `STALE` logs one INFO; `UNOWNED` and `LIVE` behave as today
-  - [ ] Success: the exit-code mapping is defined once
+  - [x] Success: the exit-code mapping is defined once
 
 ## Task 20 — Wait tests; commit
 
-- [ ] In `tests/pipeline/test_run_wait.py`: `ORPHANED` ends the wait (exit 8, WARNING); `STALE`
+- [x] In `tests/pipeline/test_run_wait.py`: `ORPHANED` ends the wait (exit 8, WARNING); `STALE`
       logs one WARNING, continues, and ends on terminal status or `--timeout`; stale→live logs
       one INFO; unowned keeps waiting; CLI exit-code mapping covers 8 in `test_runs_command.py`
-  - [ ] Success: tests pass; existing wait tests unchanged
-- [ ] Commit: `feat: sq runs wait exits 8 for orphaned runs`
+  - [x] Success: tests pass; existing wait tests unchanged
+- [x] Commit: `feat: sq runs wait exits 8 for orphaned runs`
 
 ## Task 21 — `run_listing`: liveness, `RunListing`, unavailable reasons (D10)
 
-- [ ] `RunSummary` gains `liveness`, `active_step`, `active_item` (set only for `running`);
+- [x] `RunSummary` gains `liveness`, `active_step`, `active_item` (set only for `running`);
       add `RunListing(rows, unavailable)`; `list_run_summaries` returns it
-- [ ] `_Definitions` keeps the per-pipeline load cache but stops logging per run; it collects
+- [x] `_Definitions` keeps the per-pipeline load cache but stops logging per run; it collects
       pipeline → loader message; one DEBUG record per unavailable pipeline
-- [ ] Running runs enter the default view (loading no definition or report); `--all` still
+- [x] Running runs enter the default view (loading no definition or report); `--all` still
       adds completed runs with nothing to resume; the unreadable-file WARNING is unchanged
-  - [ ] Success: no per-run WARNING for an unavailable pipeline remains
+  - [x] Success: no per-run WARNING for an unavailable pipeline remains
 
 ## Task 22 — Listing tests; commit
 
-- [ ] In `tests/pipeline/test_run_listing.py` (seed via `run_listing_support.py`): live,
+- [x] In `tests/pipeline/test_run_listing.py` (seed via `run_listing_support.py`): live,
       stale, orphaned and unowned rows; `unavailable` maps pipeline → message with one entry
       per pipeline; no WARNING per run; update 199 tests that assert running runs are hidden
-  - [ ] Extend the I/O-bounds test with 20 running runs (10 live PID, 10 dead): definition and
+  - [x] Extend the I/O-bounds test with 20 running runs (10 live PID, 10 dead): definition and
         report load counts unchanged, `process_alive` called exactly 20 times
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: show running runs and liveness in run listings`
+  - [x] Success: tests pass
+- [x] Commit: `feat: show running runs and liveness in run listings`
 
 ---
 
@@ -311,47 +311,47 @@ status: in_progress
 
 ## Task 23 — `cli/columns.py`
 
-- [ ] Create `src/squadron/cli/columns.py` with `Column(header, shrinkable)`,
+- [x] Create `src/squadron/cli/columns.py` with `Column(header, shrinkable)`,
       `fit_widths(natural, shrinkable, available)`, `render_rows(columns, rows, *, available)`
       and `available_width(console)` per D11
-  - [ ] `fit_widths`: shrink the widest shrinkable column one cell at a time; never below
+  - [x] `fit_widths`: shrink the widest shrinkable column one cell at a time; never below
         `MIN_TRUNCATED_COLUMN_WIDTH = 8` or a narrower natural width; stop when nothing can
         shrink; `available=None` means no truncation
-  - [ ] Cells are `rich.text.Text`; measure with `cell_len`, truncate with
+  - [x] Cells are `rich.text.Text`; measure with `cell_len`, truncate with
         `Text.truncate(width, overflow="ellipsis")`; gap 2, indent 2
-  - [ ] Success: module imports no pipeline code
+  - [x] Success: module imports no pipeline code
 
 ## Task 24 — `columns` tests
 
-- [ ] `tests/cli/test_columns.py`: already fits; one column shrinks; several shrink; the
+- [x] `tests/cli/test_columns.py`: already fits; one column shrinks; several shrink; the
       floor of 8; a non-shrinkable column is never cut; `available=None`; wide characters
       measured by cell width; `render_rows` on a non-TTY console emits no ANSI and no `…`
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add terminal-fitting column renderer`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add terminal-fitting column renderer`
 
 ## Task 25 — Move the runs listing onto `columns`; summary line; `-v`
 
-- [ ] In `cli/run_views.py` replace the rich table with `render_rows`: columns Run ID, Status
+- [x] In `cli/run_views.py` replace the rich table with `render_rows`: columns Run ID, Status
       (never shrink), Pipeline, Target, At, Started, Activity per the UI spec; a single dict
       keyed by `RunLiveness` maps to display statuses `orphaned` (red) and `stale` (yellow);
       `running` is cyan; unowned running runs show an empty Activity cell
-  - [ ] At = 199 "Resume at" text for resumable runs, else `active_step` plus
+  - [x] At = 199 "Resume at" text for resumable runs, else `active_step` plus
         `[item P/T · index]`; Activity = `elapsed · progress-age ago`, with
         ` · heartbeat <age> ago` for stale
-- [ ] In `cli/commands/runs.py` add `list -v`; print the stderr summary line
+- [x] In `cli/commands/runs.py` add `list -v`; print the stderr summary line
       `<R> runs reference <P> unavailable pipelines (-v for details; sq runs prune --status
       unavailable removes them).` when `unavailable` is non-empty, and under `-v` one
       `  <pipeline>: <message>` line per pipeline
-  - [ ] Success: no per-run warnings print; the summary line text is defined once
+  - [x] Success: no per-run warnings print; the summary line text is defined once
 
 ## Task 26 — Runs listing view and CLI tests; commit
 
-- [ ] `tests/cli/test_run_views.py` / `test_runs_command.py`: each status and colour; At and
+- [x] `tests/cli/test_run_views.py` / `test_runs_command.py`: each status and colour; At and
       Activity text for running, stale, orphaned; width-limited console truncates Target with
       `…` and keeps Run ID intact; piped output has no `…`; the summary line and `-v` detail
       lines (once per pipeline) are asserted; update 199 view tests that expect the old table
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: render sq runs list with column fitting and liveness`
+  - [x] Success: tests pass
+- [x] Commit: `feat: render sq runs list with column fitting and liveness`
 
 ## Task 27 — `PipelineInfo.params` and the plain `sq pipelines list`
 
