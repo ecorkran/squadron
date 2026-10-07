@@ -104,10 +104,10 @@ status: in_progress
 
 ## Task 9 — Review profile source in the alias check (D4, #175)
 
-- [ ] `_collect_unknown_alias` takes `profile_source: bool` from its caller. For each `review` action the caller loads the template via `_require_review_template` and passes `review_profile_source(...)`; other action types keep `has_profile_param`
-- [ ] Tests: a literal non-alias id with `default_review_profile` set passes classification for a review step; the same id with no profile source fails with the same message and close matches `sq review` gives; a template-declared `profile:` makes a literal id acceptable; non-review actions unchanged
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: alias check uses the review step's real profile source (#175, #184)`
+- [x] `_collect_unknown_alias` takes `profile_source: bool` from its caller. For each `review` action the caller loads the template via `_require_review_template` and passes `review_profile_source(...)`; other action types keep `has_profile_param`
+- [x] Tests: a literal non-alias id with `default_review_profile` set passes classification for a review step; the same id with no profile source fails with the same message and close matches `sq review` gives; a template-declared `profile:` makes a literal id acceptable; non-review actions unchanged
+  - [x] Success: tests pass
+- [x] Commit: `fix: alias check uses the review step's real profile source (#175, #184)`
 
 ## Task 10 — `_classify_for_run` in `cli/commands/run.py` (D5)
 
