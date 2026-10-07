@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import dataclasses
+import io
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 import yaml
+from rich.console import Console
 
 from squadron.cli.run_views import (
     RESUME_PROBLEM_MARKERS,
+    activity_cell,
+    at_cell,
+    display_status,
+    format_duration,
     render_pipeline_listing,
     render_run_listing,
     render_run_status,
@@ -19,7 +26,8 @@ from squadron.cli.run_views import (
 from squadron.data import data_dir
 from squadron.pipeline.loader import discover_pipelines
 from squadron.pipeline.run_listing import ResumeKind, ResumePoint, ResumeProblem, RunSummary
-from squadron.pipeline.state import CheckpointState, RunState
+from squadron.pipeline.run_liveness import LivenessAssessment, RunLiveness
+from squadron.pipeline.state import RUNNING_STATUS, ActiveItem, CheckpointState, RunState
 
 
 def write_pipeline(directory: Path, name: str, description: str = "") -> None:
@@ -124,8 +132,8 @@ class TestRunListing:
     @pytest.mark.parametrize(
         ("include_all", "expected"),
         [
-            (False, "No resumable runs. Use --all to include completed runs."),
-            (True, "No resumable runs."),
+            (False, "No running or resumable runs. Use --all to include completed runs."),
+            (True, "No running or resumable runs."),
         ],
     )
     def test_empty_result(
@@ -155,3 +163,112 @@ def test_status_panel_escapes_markup_in_run_values(capsys: pytest.CaptureFixture
     assert "[/oops]" in out
     assert "[bold]why[/bold]" in out
     assert "'[red]s'" in out
+
+
+# ---------------------------------------------------------------------------
+# Running rows, liveness statuses and column fitting (slice 174)
+# ---------------------------------------------------------------------------
+
+
+def _running(
+    liveness: RunLiveness,
+    *,
+    owned: bool = True,
+    active_step: str | None = "slices",
+    active_item: ActiveItem | None = None,
+    params: dict[str, object] | None = None,
+) -> RunSummary:
+    assessment = LivenessAssessment(
+        liveness,
+        elapsed=timedelta(hours=1, minutes=4) if owned else None,
+        progress_age=timedelta(seconds=40),
+        heartbeat_age=timedelta(minutes=12),
+    )
+    return dataclasses.replace(
+        _summary(status=RUNNING_STATUS, params=params),
+        liveness=assessment,
+        active_step=active_step,
+        active_item=active_item,
+    )
+
+
+def _render(summaries: list[RunSummary], *, width: int, terminal: bool) -> str:
+    buffer = io.StringIO()
+    # Off a terminal rich picks no colour system, as it does for a real pipe.
+    console = (
+        Console(file=buffer, width=width, force_terminal=True, color_system="truecolor")
+        if terminal
+        else Console(file=buffer, width=width)
+    )
+    render_run_listing(summaries, include_all=False, console=console)
+    return buffer.getvalue()
+
+
+class TestRunningRows:
+    @pytest.mark.parametrize(
+        ("liveness", "text", "color"),
+        [
+            (RunLiveness.LIVE, "running", "cyan"),
+            (RunLiveness.UNOWNED, "running", "cyan"),
+            (RunLiveness.STALE, "stale", "yellow"),
+            (RunLiveness.ORPHANED, "orphaned", "red"),
+        ],
+    )
+    def test_display_status_and_colour(self, liveness: RunLiveness, text: str, color: str) -> None:
+        assert display_status(_running(liveness)) == (text, color)
+
+    def test_stored_statuses_keep_their_colours(self) -> None:
+        assert display_status(_summary(status="paused")) == ("paused", "yellow")
+        assert display_status(_summary(status="failed")) == ("failed", "red")
+
+    def test_at_shows_step_and_item(self) -> None:
+        item = ActiveItem(position=2, total=12, index="182")
+        assert at_cell(_running(RunLiveness.LIVE, active_item=item)) == "slices [item 3/12 · 182]"
+        no_index = ActiveItem(position=0, total=4, index=None)
+        assert at_cell(_running(RunLiveness.LIVE, active_item=no_index)) == "slices [item 1/4]"
+        assert at_cell(_running(RunLiveness.ORPHANED)) == "slices"
+
+    @pytest.mark.parametrize(
+        ("liveness", "expected"),
+        [
+            (RunLiveness.LIVE, "1h04m · 40s ago"),
+            (RunLiveness.ORPHANED, "1h04m · 40s ago"),
+            (RunLiveness.STALE, "1h04m · 40s ago · heartbeat 12m00s ago"),
+        ],
+    )
+    def test_activity(self, liveness: RunLiveness, expected: str) -> None:
+        assert activity_cell(_running(liveness)) == expected
+
+    def test_unowned_activity_is_empty(self) -> None:
+        assert activity_cell(_running(RunLiveness.UNOWNED, owned=False)) == ""
+
+    @pytest.mark.parametrize(
+        ("delta", "text"),
+        [
+            (timedelta(seconds=40), "40s"),
+            (timedelta(minutes=12, seconds=5), "12m05s"),
+            (timedelta(hours=1, minutes=4), "1h04m"),
+            (timedelta(days=3, hours=2), "3d02h"),
+        ],
+    )
+    def test_format_duration(self, delta: timedelta, text: str) -> None:
+        assert format_duration(delta) == text
+
+
+class TestRunListingWidth:
+    LONG = {"plan": "180", "model": "opus", "max-revisions": "2", "note": "x" * 60}
+
+    def test_terminal_truncates_target_and_keeps_run_id(self) -> None:
+        out = _render([_running(RunLiveness.LIVE, params=self.LONG)], width=90, terminal=True)
+        lines = [line for line in out.splitlines() if "run-20261006-p4-abc" in line]
+
+        assert len(lines) == 1
+        assert "…" in lines[0]
+        assert "\x1b[36mrunning" in lines[0]  # cyan
+
+    def test_piped_output_is_never_truncated(self) -> None:
+        out = _render([_running(RunLiveness.LIVE, params=self.LONG)], width=90, terminal=False)
+
+        assert "…" not in out
+        assert "x" * 60 in out
+        assert "\x1b[" not in out

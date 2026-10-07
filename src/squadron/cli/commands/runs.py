@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import typer
 
-from squadron.cli.run_views import render_run_listing, render_run_status
+from squadron.cli.run_views import (
+    render_run_listing,
+    render_run_status,
+    unavailable_details,
+    unavailable_summary,
+)
 from squadron.pipeline.run_listing import list_run_summaries
 from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, orphaned_message, wait_for_run
 from squadron.pipeline.state import StateManager
@@ -19,13 +24,21 @@ runs_app = typer.Typer(
 @runs_app.command("list")
 def list_runs(
     include_all: bool = typer.Option(
-        False, "--all", help="Include runs with nothing to resume (completed, running)."
+        False, "--all", help="Include completed runs with nothing to resume."
     ),
     pipeline: str | None = typer.Option(None, "--pipeline", help="Only runs of this pipeline."),
+    verbose: bool = typer.Option(
+        False, "-v", "--verbose", help="Name each unavailable pipeline and why it failed to load."
+    ),
 ) -> None:
-    """List resumable runs, newest first, with where each one resumes."""
+    """List running and resumable runs, newest first: where each is, or where it resumes."""
     listing = list_run_summaries(StateManager(), pipeline=pipeline, include_all=include_all)
     render_run_listing(listing.rows, include_all=include_all)
+    if listing.unavailable:
+        typer.echo(unavailable_summary(listing), err=True)
+        if verbose:
+            for line in unavailable_details(listing):
+                typer.echo(line, err=True)
 
 
 # Outcomes where the run left `running` and its state is readable, so its panel prints.

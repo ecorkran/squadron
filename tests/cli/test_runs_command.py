@@ -57,7 +57,7 @@ class TestRunsList:
         assert "Resume a step:" in out
 
     def test_empty_result_exits_zero(self, sm: StateManager) -> None:
-        assert "No resumable runs. Use --all to include completed runs." in _invoke("list")
+        assert "No running or resumable runs. Use --all to include completed runs." in _invoke("list")
 
     def test_running_is_default_and_all_adds_completed(self, sm: StateManager) -> None:
         running = begin(sm, "steps")
@@ -68,6 +68,31 @@ class TestRunsList:
         assert running in out and done not in out
         out = _invoke("list", "--all")
         assert running in out and done in out
+
+    def test_unavailable_pipelines_summarised_once_and_detailed_under_v(self, sm: StateManager) -> None:
+        for name in ("gone-a", "gone-a", "gone-b"):
+            pause_at(sm, begin(sm, name), "design-0")
+
+        quiet = CliRunner().invoke(app, ["runs", "list"])
+        verbose = CliRunner().invoke(app, ["runs", "list", "-v"])
+
+        summary = (
+            "3 runs reference 2 unavailable pipelines "
+            "(-v for details; sq runs prune --status unavailable removes them)."
+        )
+        assert quiet.exit_code == 0
+        assert quiet.stderr.splitlines() == [summary]
+        assert "unavailable:" not in quiet.output
+        details = verbose.stderr.splitlines()
+        assert details[0] == summary
+        assert [line.split(":")[0] for line in details[1:]] == ["  gone-a", "  gone-b"]
+
+    def test_no_summary_line_when_every_pipeline_loads(self, sm: StateManager) -> None:
+        pause_at(sm, begin(sm, "steps"), STEP_NAMES[0])
+
+        result = CliRunner().invoke(app, ["runs", "list"])
+
+        assert result.stderr == ""
 
     def test_pipeline_filter(self, sm: StateManager) -> None:
         paused = begin(sm, "steps")

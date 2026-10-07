@@ -8,22 +8,29 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import timedelta
 
+from rich import get_console
 from rich import print as rprint
+from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
+from rich.text import Text
 
+from squadron.cli.columns import Column, available_width, render_rows
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loader import LISTING_ORDER, PipelineInfo, PipelineSource
-from squadron.pipeline.run_listing import ResumeKind, ResumeProblem, RunSummary
-from squadron.pipeline.state import RunState
+from squadron.pipeline.run_listing import ResumeKind, ResumeProblem, RunListing, RunSummary
+from squadron.pipeline.run_liveness import RunLiveness
+from squadron.pipeline.state import RUNNING_STATUS, RunState
 
 # Keyed by ExecutionStatus values; a status not listed renders UNKNOWN_STATUS_COLOR.
 STATUS_COLORS: dict[str, str] = {
     ExecutionStatus.COMPLETED.value: "bright_green",
     ExecutionStatus.FAILED.value: "red",
     ExecutionStatus.PAUSED.value: "yellow",
+    RUNNING_STATUS: "cyan",
 }
 UNKNOWN_STATUS_COLOR = "dim"
 
@@ -114,50 +121,121 @@ def target_cell(params: dict[str, object]) -> str:
     return " ".join(f"{key}={value}" for key, value in params.items())
 
 
+# Display statuses for running runs whose liveness is in doubt. Derived on every
+# read and never persisted (174 D4); live and unowned runs show their stored status.
+LIVENESS_STATUSES: dict[RunLiveness, tuple[str, str]] = {
+    RunLiveness.ORPHANED: ("orphaned", "red"),
+    RunLiveness.STALE: ("stale", "yellow"),
+}
+
+
+def display_status(summary: RunSummary) -> tuple[str, str]:
+    """The status text and colour a row shows: a liveness status, else the stored one."""
+    if summary.liveness is not None and summary.liveness.liveness in LIVENESS_STATUSES:
+        return LIVENESS_STATUSES[summary.liveness.liveness]
+    return summary.status, status_color(summary.status)
+
+
+def format_duration(delta: timedelta) -> str:
+    """A compact two-unit duration: ``40s``, ``12m05s``, ``1h04m``, ``3d02h``."""
+    seconds = max(0, int(delta.total_seconds()))
+    minutes, secs = divmod(seconds, 60)
+    hours, mins = divmod(minutes, 60)
+    days, hrs = divmod(hours, 24)
+    if days:
+        return f"{days}d{hrs:02d}h"
+    if hours:
+        return f"{hours}h{mins:02d}m"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
+
+
+def at_cell(summary: RunSummary) -> str:
+    """Where a run is: the running step and item, or where it resumes (199)."""
+    if summary.liveness is None:
+        return resume_cell(summary)
+    if summary.active_step is None:
+        return ""
+    item = summary.active_item
+    if item is None:
+        return summary.active_step
+    where = f"item {item.position + 1}/{item.total}"
+    if item.index is not None:
+        where += f" · {item.index}"
+    return f"{summary.active_step} [{where}]"
+
+
+def activity_cell(summary: RunSummary) -> str:
+    """How long a running run has run and when it last moved; empty when unowned."""
+    assessment = summary.liveness
+    if assessment is None or assessment.elapsed is None:
+        return ""
+    parts = [format_duration(assessment.elapsed)]
+    if assessment.progress_age is not None:
+        parts.append(f"{format_duration(assessment.progress_age)} ago")
+    if assessment.liveness is RunLiveness.STALE and assessment.heartbeat_age is not None:
+        parts.append(f"heartbeat {format_duration(assessment.heartbeat_age)} ago")
+    return " · ".join(parts)
+
+
+def _status_text(summary: RunSummary) -> Text:
+    text, color = display_status(summary)
+    return Text(text, style=color)
+
+
 @dataclass(frozen=True)
 class _RunColumn:
-    """One ``sq runs list`` column: its header, its plain-text cell and how it wraps."""
+    """One ``sq runs list`` column: its layout and its cell."""
 
-    header: str
-    text: Callable[[RunSummary], str]
-    never_fold: bool = False
-    color: Callable[[RunSummary], str] | None = None
-
-    def markup(self, summary: RunSummary) -> str:
-        cell = escape(self.text(summary))
-        if self.color is None:
-            return cell
-        color = self.color(summary)
-        return f"[{color}]{cell}[/{color}]"
+    column: Column
+    cell: Callable[[RunSummary], Text]
 
 
-# Run ID (copied into --resume), status and resume point never fold; the rest may.
+# Run ID (copied into --resume) and Status never shrink; the rest may (174 D11).
 _RUN_COLUMNS: tuple[_RunColumn, ...] = (
-    _RunColumn("Run ID", lambda s: s.run_id, never_fold=True),
-    _RunColumn("Pipeline", lambda s: s.pipeline),
-    _RunColumn("Target", lambda s: target_cell(s.params)),
-    _RunColumn("Status", lambda s: s.status, never_fold=True, color=lambda s: status_color(s.status)),
-    _RunColumn("Resume at", lambda s: resume_cell(s), never_fold=True),
-    _RunColumn("Started", lambda s: f"{s.started_at:{_STARTED_FORMAT}}"),
+    _RunColumn(Column("Run ID", shrinkable=False), lambda s: Text(s.run_id)),
+    _RunColumn(Column("Pipeline", shrinkable=True), lambda s: Text(s.pipeline)),
+    _RunColumn(Column("Target", shrinkable=True), lambda s: Text(target_cell(s.params))),
+    _RunColumn(Column("Status", shrinkable=False), _status_text),
+    _RunColumn(Column("At", shrinkable=True), lambda s: Text(at_cell(s))),
+    _RunColumn(Column("Started", shrinkable=True), lambda s: Text(f"{s.started_at:{_STARTED_FORMAT}}")),
+    _RunColumn(Column("Activity", shrinkable=True), lambda s: Text(activity_cell(s))),
 )
 
 
-def render_run_listing(summaries: list[RunSummary], *, include_all: bool) -> None:
-    """Print the run table and the resume hints (``sq runs list``)."""
+def print_lines(lines: list[Text], console: Console | None = None) -> None:
+    """Print pre-fitted lines; never re-wrapped by rich, so piped output stays whole."""
+    target = console or get_console()
+    for line in lines:
+        target.print(line, soft_wrap=True)
+
+
+def render_run_listing(
+    summaries: list[RunSummary], *, include_all: bool, console: Console | None = None
+) -> None:
+    """Print the run rows and the resume hints (``sq runs list``)."""
+    target = console or get_console()
     if not summaries:
         hint = "" if include_all else " Use --all to include completed runs."
-        rprint(f"No resumable runs.{hint}")
+        target.print(f"No running or resumable runs.{hint}")
         return
-    table = Table(box=None)
-    for column in _RUN_COLUMNS:
-        if column.never_fold:
-            longest = max(len(column.text(summary)) for summary in summaries)
-            table.add_column(column.header, no_wrap=True, min_width=longest)
-        else:
-            table.add_column(column.header, overflow="fold")
-    for summary in summaries:
-        table.add_row(*(column.markup(summary) for column in _RUN_COLUMNS))
-    rprint(table)
-    rprint()
+    columns = [run_column.column for run_column in _RUN_COLUMNS]
+    rows = [[run_column.cell(summary) for run_column in _RUN_COLUMNS] for summary in summaries]
+    print_lines(render_rows(columns, rows, available=available_width(target)), target)
+    target.print()
     for hint in _RESUME_HINTS:
-        rprint(escape(hint))
+        target.print(Text(hint))
+
+
+def unavailable_summary(listing: RunListing) -> str:
+    """The one stderr line naming how many runs reference unavailable pipelines (D10)."""
+    return (
+        f"{listing.unavailable_runs} runs reference {len(listing.unavailable)} unavailable "
+        "pipelines (-v for details; sq runs prune --status unavailable removes them)."
+    )
+
+
+def unavailable_details(listing: RunListing) -> list[str]:
+    """One ``  <pipeline>: <message>`` line per unavailable pipeline, for ``-v``."""
+    return [f"  {name}: {message}" for name, message in sorted(listing.unavailable.items())]
