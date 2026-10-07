@@ -148,12 +148,12 @@ status: in_progress
 
 ## Task 14 — Sources take `cwd` (D1)
 
-- [ ] `SourceFn` gains keyword `cwd: str`; all four registered sources accept it (only `slices_ready_to_implement` uses it)
-- [ ] `evaluate_each_source(source, params, cf_client, *, cwd)` passes it on
-- [ ] Callers pass the cwd they already hold: executor `effective_cwd`, item resume `cwd`, the dry-run renderer (`run_dry_run.py`, from `run()`)
-- [ ] Tests: each caller hands the source its cwd (fake source records it); existing source and executor tests updated for the new keyword
-  - [ ] Success: tests pass; pyright clean
-- [ ] Commit: `refactor: pass the run cwd to each-sources`
+- [x] `SourceFn` gains keyword `cwd: str`; all four registered sources accept it (only `slices_ready_to_implement` uses it)
+- [x] `evaluate_each_source(source, params, cf_client, *, cwd)` passes it on
+- [x] Callers pass the cwd they already hold: executor `effective_cwd`, item resume `cwd`, the dry-run renderer (`run_dry_run.py`, from `run()`)
+- [x] Tests: each caller hands the source its cwd (fake source records it); existing source and executor tests updated for the new keyword
+  - [x] Success: tests pass; pyright clean
+- [x] Commit: `refactor: pass the run cwd to each-sources`
 
 ## Task 15 — `slices_ready_to_implement` treats merged slices as closed (D1)
 
