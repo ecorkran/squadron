@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
 
 from rich import get_console
 from rich import print as rprint
@@ -21,7 +20,7 @@ from squadron.cli.columns import Column, available_width, render_rows
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loader import LISTING_ORDER, PipelineInfo, PipelineSource
 from squadron.pipeline.run_listing import ResumeKind, ResumeProblem, RunListing, RunSummary
-from squadron.pipeline.run_liveness import RunLiveness
+from squadron.pipeline.run_liveness import RunLiveness, format_duration
 from squadron.pipeline.run_prune import PruneCandidate, PruneCategory
 from squadron.pipeline.state import RUNNING_STATUS, RunState
 
@@ -164,21 +163,6 @@ def display_status(summary: RunSummary) -> tuple[str, str]:
     if summary.liveness is not None and summary.liveness.liveness in LIVENESS_STATUSES:
         return LIVENESS_STATUSES[summary.liveness.liveness]
     return summary.status, status_color(summary.status)
-
-
-def format_duration(delta: timedelta) -> str:
-    """A compact two-unit duration: ``40s``, ``12m05s``, ``1h04m``, ``3d02h``."""
-    seconds = max(0, int(delta.total_seconds()))
-    minutes, secs = divmod(seconds, 60)
-    hours, mins = divmod(minutes, 60)
-    days, hrs = divmod(hours, 24)
-    if days:
-        return f"{days}d{hrs:02d}h"
-    if hours:
-        return f"{hours}h{mins:02d}m"
-    if minutes:
-        return f"{minutes}m{secs:02d}s"
-    return f"{secs}s"
 
 
 def at_cell(summary: RunSummary) -> str:

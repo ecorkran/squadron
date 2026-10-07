@@ -16,7 +16,6 @@ from squadron.cli.run_views import (
     activity_cell,
     at_cell,
     display_status,
-    format_duration,
     render_pipeline_listing,
     render_run_listing,
     render_run_status,
@@ -26,7 +25,7 @@ from squadron.cli.run_views import (
 from squadron.data import data_dir
 from squadron.pipeline.loader import discover_pipelines
 from squadron.pipeline.run_listing import ResumeKind, ResumePoint, ResumeProblem, RunSummary
-from squadron.pipeline.run_liveness import LivenessAssessment, RunLiveness
+from squadron.pipeline.run_liveness import LivenessAssessment, RunLiveness, format_duration
 from squadron.pipeline.state import RUNNING_STATUS, ActiveItem, CheckpointState, RunState
 
 

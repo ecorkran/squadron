@@ -96,6 +96,21 @@ def assess_liveness(
     return LivenessAssessment(liveness, elapsed, progress_age, heartbeat_age)
 
 
+def format_duration(delta: timedelta) -> str:
+    """A compact two-unit duration: ``40s``, ``12m05s``, ``1h04m``, ``3d02h``."""
+    seconds = max(0, int(delta.total_seconds()))
+    minutes, secs = divmod(seconds, 60)
+    hours, mins = divmod(minutes, 60)
+    days, hrs = divmod(hours, 24)
+    if days:
+        return f"{days}d{hrs:02d}h"
+    if hours:
+        return f"{hours}h{mins:02d}m"
+    if minutes:
+        return f"{minutes}m{secs:02d}s"
+    return f"{secs}s"
+
+
 def _stale_after(heartbeat_interval_s: int) -> timedelta:
     return timedelta(seconds=STALE_HEARTBEAT_INTERVALS * heartbeat_interval_s)
 

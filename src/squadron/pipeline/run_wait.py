@@ -21,6 +21,7 @@ from squadron.pipeline.run_liveness import (
     ProcessCheck,
     RunLiveness,
     assess_liveness,
+    format_duration,
     process_alive,
 )
 from squadron.pipeline.state import RUNNING_STATUS, STATE_READ_ERRORS, RunState, StateManager
@@ -131,10 +132,11 @@ class _LivenessWatch:
                 return WaitOutcome.ORPHANED
             case RunLiveness.STALE if not self.stale:
                 self.stale = True
+                overdue = assessment.heartbeat_age
                 _logger.warning(
                     "run %s heartbeat overdue by %s; still waiting",
                     self.run_id,
-                    assessment.heartbeat_age,
+                    "unknown" if overdue is None else format_duration(overdue),
                 )
             case RunLiveness.LIVE if self.stale:
                 self.stale = False
