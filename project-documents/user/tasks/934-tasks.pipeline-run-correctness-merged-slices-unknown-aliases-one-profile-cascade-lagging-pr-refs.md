@@ -73,11 +73,11 @@ status: in_progress
 
 ## Task 5 — Pipeline review action uses the shared helper (D3, D4)
 
-- [ ] In `pipeline/actions/review.py`, replace the inline cascade with `resolve_review_profile(param, alias_profile, template)`, and pass `review_profile_source(param is not None, template)` to `resolver.resolve_full(..., profile_source=...)`
-- [ ] No `"sdk"` review-profile literal remains in the file
-- [ ] Tests (find the action's existing test file by grep): no `profile` param on a template declaring `profile:` runs on that profile; neither set and `default_review_profile` set runs on it; neither set and no config runs on sdk; explicit param still wins
-  - [ ] Success: tests pass; `grep -rn '"sdk"' src/squadron/pipeline/actions/review.py src/squadron/cli/commands/review.py` finds nothing used as a profile default
-- [ ] Commit: `fix: pipeline review step resolves profile like sq review (#184)`
+- [x] In `pipeline/actions/review.py`, replace the inline cascade with `resolve_review_profile(param, alias_profile, template)`, and pass `review_profile_source(param is not None, template)` to `resolver.resolve_full(..., profile_source=...)`
+- [x] No `"sdk"` review-profile literal remains in the file
+- [x] Tests (find the action's existing test file by grep): no `profile` param on a template declaring `profile:` runs on that profile; neither set and `default_review_profile` set runs on it; neither set and no config runs on sdk; explicit param still wins
+  - [x] Success: tests pass; `grep -rn '"sdk"' src/squadron/pipeline/actions/review.py src/squadron/cli/commands/review.py` finds nothing used as a profile default
+- [x] Commit: `fix: pipeline review step resolves profile like sq review (#184)`
 
 ## Task 6 — Parity test across both paths
 
