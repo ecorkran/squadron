@@ -140,6 +140,14 @@ def get_typed_config(
     return float(value)
 
 
+def get_positive_int_config(key: str, cwd: str = ".") -> int:
+    """Get an integer config value that must be ``> 0``; raise ``ValueError`` naming *key*."""
+    value = get_typed_config(key, int, cwd=cwd)
+    if value <= 0:
+        raise ValueError(f"{key} must be a positive integer, got {value!r}")
+    return value
+
+
 def set_config(
     key: str,
     value: str,

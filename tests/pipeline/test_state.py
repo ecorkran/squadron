@@ -8,6 +8,8 @@ first_unfinished_step, list_runs, find_matching_run, prune.
 from __future__ import annotations
 
 import json
+import os
+import socket
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,9 +20,11 @@ from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResu
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import (
     RUNNING_STATUS,
+    ActiveItem,
     CheckpointState,
     CompactSummary,
     ExecutionMode,
+    RunOwner,
     RunState,
     SchemaVersionError,
     StateManager,
@@ -1203,20 +1207,20 @@ class TestPoolSelectionLogging:
         state = mgr.load("run-20260101-old-abc12345")
         assert state.pool_selections == []
 
-    def test_schema_v4_round_trips(self, tmp_path: Path) -> None:
-        """State file written at v4 loads correctly."""
+    def test_schema_v5_round_trips(self, tmp_path: Path) -> None:
+        """State file written at v5 loads correctly."""
         mgr = StateManager(runs_dir=tmp_path)
         run_id = mgr.init_run("test-pipe", {})
         mgr.log_pool_selection(run_id, _make_pool_selection())
 
         state = mgr.load(run_id)
-        assert state.schema_version == 4
+        assert state.schema_version == 5
         assert len(state.pool_selections) == 1
 
     def test_unsupported_schema_raises(self, tmp_path: Path) -> None:
-        """Schema version 2 and 5 must raise SchemaVersionError."""
+        """Schema version 2 and 6 must raise SchemaVersionError."""
         mgr = StateManager(runs_dir=tmp_path)
-        for bad_version in (2, 5):
+        for bad_version in (2, 6):
             state_data = {
                 "schema_version": bad_version,
                 "run_id": f"run-bad-{bad_version}",
@@ -1231,3 +1235,62 @@ class TestPoolSelectionLogging:
             path.write_text(json.dumps(state_data), encoding="utf-8")
             with pytest.raises(SchemaVersionError):
                 mgr.load(f"run-bad-{bad_version}")
+
+
+# ---------------------------------------------------------------------------
+# Schema v5: owner and progress fields (slice 174 D2)
+# ---------------------------------------------------------------------------
+
+
+def _v4_running_state(run_id: str) -> dict[str, object]:
+    return {
+        "schema_version": 4,
+        "run_id": run_id,
+        "pipeline": "p",
+        "params": {},
+        "execution_mode": "sdk",
+        "started_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "status": "running",
+        "pool_selections": [],
+    }
+
+
+class TestSchemaV5Fields:
+    @pytest.mark.parametrize("version", [3, 4])
+    def test_older_file_loads_with_new_fields_none(self, tmp_path: Path, version: int) -> None:
+        data = _v4_running_state("run-old") | {"schema_version": version}
+        (tmp_path / "run-old.json").write_text(json.dumps(data), encoding="utf-8")
+
+        state = StateManager(runs_dir=tmp_path).load("run-old")
+
+        assert state.owner is None
+        assert state.heartbeat_at is None
+        assert state.active_step is None
+        assert state.progress_at is None
+        assert state.active_item is None
+
+    def test_v5_owner_and_progress_round_trip(self, tmp_path: Path) -> None:
+        owner = RunOwner.current(30)
+        data = _v4_running_state("run-v5") | {
+            "schema_version": 5,
+            "owner": owner.model_dump(mode="json"),
+            "heartbeat_at": "2026-01-01T00:00:05+00:00",
+            "active_step": "slices",
+            "progress_at": "2026-01-01T00:00:04+00:00",
+            "active_item": {"position": 2, "total": 12, "index": "182"},
+        }
+        (tmp_path / "run-v5.json").write_text(json.dumps(data), encoding="utf-8")
+
+        state = StateManager(runs_dir=tmp_path).load("run-v5")
+
+        assert state.owner == owner
+        assert state.active_step == "slices"
+        assert state.active_item == ActiveItem(position=2, total=12, index="182")
+
+    def test_current_owner_is_this_process(self) -> None:
+        owner = RunOwner.current(30)
+
+        assert owner.pid == os.getpid()
+        assert owner.hostname == socket.gethostname()
+        assert owner.heartbeat_interval_s == 30

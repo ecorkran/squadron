@@ -12,7 +12,9 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
+import os
 import re
+import socket
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -40,8 +42,8 @@ __all__ = [
     "SchemaVersionError",
 ]
 
-_SCHEMA_VERSION = 4
-_SUPPORTED_SCHEMA_VERSIONS = {3, 4}
+_SCHEMA_VERSION = 5
+_SUPPORTED_SCHEMA_VERSIONS = {3, 4, 5}
 
 # Statuses that mean "not actually done" despite being recorded in
 # completed_steps. FAILED is included because the top-level walk appends the
@@ -152,6 +154,25 @@ class CompactSummary(BaseModel):
     created_at: datetime
 
 
+class RunOwner(BaseModel):
+    """The process that owns a running run (slice 174 D2)."""
+
+    pid: int
+    hostname: str
+    claimed_at: datetime
+    heartbeat_interval_s: int  # the writer's interval; readers judge staleness by it
+
+    @classmethod
+    def current(cls, heartbeat_interval_s: int) -> RunOwner:
+        """An owner record for this process, claimed now."""
+        return cls(
+            pid=os.getpid(),
+            hostname=socket.gethostname(),
+            claimed_at=datetime.now(UTC),
+            heartbeat_interval_s=heartbeat_interval_s,
+        )
+
+
 class ActiveItem(BaseModel):
     """The ``each`` item a run is working on now (slice 174 D2)."""
 
@@ -177,6 +198,13 @@ class RunState(BaseModel):
     compact_summaries: dict[str, CompactSummary] = {}
 
     pool_selections: list[dict[str, object]] = []
+
+    # Liveness and progress (schema v5, slice 174 D2). None in v3/v4 files.
+    owner: RunOwner | None = None
+    heartbeat_at: datetime | None = None
+    active_step: str | None = None  # the step running now; current_step keeps its meaning
+    progress_at: datetime | None = None  # last step start, item start or step completion
+    active_item: ActiveItem | None = None
 
     def active_compact_summary_for_resume(self, resume_step_index: int) -> CompactSummary | None:
         """Return the most recent applicable compact summary for resume.

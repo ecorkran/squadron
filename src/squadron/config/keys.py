@@ -15,6 +15,10 @@ class ConfigKey:
     description: str
 
 
+# Keys read through squadron.config.manager.get_positive_int_config (slice 174 D1).
+FOREGROUND_IDLE_TIMEOUT_KEY = "pipeline.foreground_idle_timeout_s"
+RUN_HEARTBEAT_INTERVAL_KEY = "pipeline.run_heartbeat_interval_s"
+
 CONFIG_KEYS: dict[str, ConfigKey] = {
     "cwd": ConfigKey(
         name="cwd",
@@ -122,7 +126,27 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         description=(
             "Seconds of silence a pipeline dispatch tolerates while waiting for "
             "background agents it started. After that, the agents are stopped "
-            "and the dispatch returns what it has. Foreground turns get no timer."
+            "and the dispatch returns what it has. Foreground turns use "
+            "pipeline.foreground_idle_timeout_s."
+        ),
+    ),
+    FOREGROUND_IDLE_TIMEOUT_KEY: ConfigKey(
+        name=FOREGROUND_IDLE_TIMEOUT_KEY,
+        type_=int,
+        default=1800,
+        description=(
+            "Seconds of silence a pipeline dispatch tolerates on a foreground turn. "
+            "After that, the turn is interrupted and the step fails as stalled. "
+            "Silence, not total time; must be positive."
+        ),
+    ),
+    RUN_HEARTBEAT_INTERVAL_KEY: ConfigKey(
+        name=RUN_HEARTBEAT_INTERVAL_KEY,
+        type_=int,
+        default=30,
+        description=(
+            "Seconds between a running pipeline's heartbeat writes to its run state. "
+            "A run is listed as stale after ten missed intervals; must be positive."
         ),
     ),
     "review.max_file_size_bytes": ConfigKey(

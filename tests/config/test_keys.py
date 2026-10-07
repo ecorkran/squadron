@@ -6,8 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from squadron.config.keys import CONFIG_KEYS, get_default
-from squadron.config.manager import get_config, get_typed_config, set_config
+from squadron.config.keys import (
+    CONFIG_KEYS,
+    FOREGROUND_IDLE_TIMEOUT_KEY,
+    RUN_HEARTBEAT_INTERVAL_KEY,
+    get_default,
+)
+from squadron.config.manager import (
+    get_config,
+    get_positive_int_config,
+    get_typed_config,
+    set_config,
+)
 
 
 class TestCompactConfigKeys:
@@ -175,3 +185,26 @@ class TestPipelineConfigKeys:
         key = CONFIG_KEYS["pipeline.user_settings"]
         assert key.type_ is bool
         assert key.default is False
+
+
+class TestLivenessConfigKeys:
+    """Keys added by slice 174 (D1): positive integers, read with names in errors."""
+
+    @pytest.mark.parametrize(
+        ("key_name", "default"),
+        [(FOREGROUND_IDLE_TIMEOUT_KEY, 1800), (RUN_HEARTBEAT_INTERVAL_KEY, 30)],
+    )
+    def test_resolves_to_default(
+        self, patch_config_paths: dict[str, Path], key_name: str, default: int
+    ) -> None:
+        assert CONFIG_KEYS[key_name].type_ is int
+        assert get_positive_int_config(key_name) == default
+
+    @pytest.mark.parametrize("key_name", [FOREGROUND_IDLE_TIMEOUT_KEY, RUN_HEARTBEAT_INTERVAL_KEY])
+    @pytest.mark.parametrize("value", ["0", "-5"])
+    def test_non_positive_raises_naming_the_key(
+        self, patch_config_paths: dict[str, Path], key_name: str, value: str
+    ) -> None:
+        set_config(key_name, value)
+        with pytest.raises(ValueError, match=key_name):
+            get_positive_int_config(key_name)
