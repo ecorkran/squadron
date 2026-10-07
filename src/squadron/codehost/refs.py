@@ -96,7 +96,7 @@ def fetch_and_range(
         expected=expected_base_sha,
         source=base_refspec_source,
     )
-    head_sha = _resolve_head(
+    head_sha, head_adjustment = _resolve_head(
         runner,
         cwd=cwd,
         remote_name=remote_name,
@@ -121,7 +121,7 @@ def fetch_and_range(
         merge_base=merge_base,
         diff_range=diff_range,
         changed_paths=_changed_paths(runner, cwd=cwd, diff_range=diff_range),
-        adjustments=(base_adjustment,) if base_adjustment is not None else (),
+        adjustments=tuple(a for a in (base_adjustment, head_adjustment) if a is not None),
     )
 
 
@@ -365,17 +365,19 @@ def _resolve_head(
     head_source: str,
     expected: str,
     head_fallback_sources: tuple[str, ...],
-) -> str:
-    """The head sha to review: the API head, or an error when the PR ref disagrees.
+) -> tuple[str, RefAdjustment | None]:
+    """The head sha to review and, when it is not the PR ref's, the adjustment saying so.
 
     When the fetched pull-request ref differs from the API head, the API head is
     made local first (``ensure_api_head``): ancestry cannot be answered for a
-    commit that is absent, and ``_is_ancestor`` fails closed on one.
+    commit that is absent, and ``_is_ancestor`` fails closed on one. A ref that
+    merely lags is repointed at the API head; a ref that moved or was rewritten is
+    an error. Only the exact API head sha is ever reviewed.
     """
     actual = _read_ref(runner, cwd=cwd, ref=head_local, role=RefRole.HEAD)
     if actual == expected:
-        return actual
-    ensure_api_head(
+        return actual, None
+    how = ensure_api_head(
         runner,
         cwd=cwd,
         remote_name=remote_name,
@@ -386,9 +388,45 @@ def _resolve_head(
         head_fallback_sources=head_fallback_sources,
     )
     relation = _head_relation(runner, cwd=cwd, pr_ref_sha=actual, api_sha=expected)
-    # LAGS raises too for now; Task 22b replaces this with review of the API head.
-    _logger.debug("pull request head ref %s is %s the API head", head_source, relation.value)
-    raise _moved_since_resolution(RefRole.HEAD, expected, actual, head_source)
+    if relation is not _HeadRelation.LAGS:
+        raise _moved_since_resolution(RefRole.HEAD, expected, actual, head_source)
+    _point_ref_at(runner, cwd=cwd, ref=head_local, sha=expected)
+    _logger.warning(
+        "%s lags the host API head: reviewing %s (%s) instead of %s",
+        head_source,
+        expected,
+        how,
+        actual,
+    )
+    return expected, RefAdjustment(
+        role=RefRole.HEAD,
+        reported_sha=actual,
+        used_sha=expected,
+        source=how,
+        reason=f"{head_source} lags",
+    )
+
+
+def _point_ref_at(runner: ProcessRunner, *, cwd: str, ref: str, sha: str) -> None:
+    """``update-ref``: failure or timeout is rendered, never silent."""
+    argv = ["git", "update-ref", ref, sha]
+    try:
+        result = runner.run(argv, cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
+    except ProcessTimedOutError as exc:
+        _logger.warning("git update-ref exceeded %ss", exc.timeout, extra={RENDERED_BY_CALLER: True})
+        raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
+    if result.returncode != 0:
+        _logger.warning(
+            "could not point %s at %s: %s",
+            ref,
+            sha,
+            result.stderr.strip(),
+            extra={RENDERED_BY_CALLER: True},
+        )
+        raise RefNotFetchableError(
+            RefRole.HEAD,
+            f"could not point {ref} at the API head {sha}: {result.stderr.strip() or '(no stderr)'}",
+        )
 
 
 def _is_ancestor(runner: ProcessRunner, *, cwd: str, ancestor: str, descendant: str) -> bool:

@@ -314,15 +314,27 @@ def test_head_ancestry_timeout_is_a_code_host_error() -> None:
         _run(runner)
 
 
-def test_a_lagging_ref_still_raises_until_the_api_head_is_used() -> None:
-    """Replaced by the lag-success test when the API head is reviewed (Task 22b)."""
-    runner = FakeProcessRunner(_script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok())))
-    with pytest.raises(RefMovedSinceResolutionError):
-        _run(runner)
+_UPDATE_REF = ["git", "update-ref", HEAD_LOCAL, HEAD_SHA]
 
 
-def test_the_api_head_is_fetched_from_a_fallback_before_ancestry_is_asked() -> None:
-    """The issue's fixture: the API head is absent locally, the PR ref lags it."""
+def test_lagging_ref_builds_the_range_on_the_api_head() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _ok()))
+    )
+
+    fetched = _run(runner)
+
+    assert fetched.head_sha == HEAD_SHA
+    assert len(fetched.adjustments) == 1
+    adjustment = fetched.adjustments[0]
+    assert adjustment.role is RefRole.HEAD
+    assert (adjustment.reported_sha, adjustment.used_sha) == (PR_REF_SHA, HEAD_SHA)
+    assert adjustment.source == HEAD_PRESENT_LOCALLY
+    assert any(call.argv[:2] == ("git", "update-ref") for call in runner.calls)
+
+
+def test_lagging_ref_from_the_issue_fetches_the_api_head_from_the_fallback() -> None:
+    """The API head is absent locally and refused by sha; the head branch has it."""
     api_local = api_head_ref(REMOTE, NUMBER)
     runner = FakeProcessRunner(
         _script_with_head_disagreement(
@@ -331,14 +343,45 @@ def test_the_api_head_is_fetched_from_a_fallback_before_ancestry_is_asked() -> N
             (["git", "fetch", "--no-tags", REMOTE, f"+refs/heads/dev/jane:{api_local}"], _ok()),
             (["git", "rev-parse", "--verify", f"{api_local}^{{commit}}"], _ok(HEAD_SHA)),
             (_PR_BEHIND_API, _ok()),
+            (_UPDATE_REF, _ok()),
         )
     )
-    with pytest.raises(RefMovedSinceResolutionError):
-        _run(runner, head_fallback_sources=("refs/heads/dev/jane",))
 
-    assert [call.argv[1] for call in runner.calls].index("cat-file") < [
-        call.argv[1] for call in runner.calls
-    ].index("merge-base")
+    fetched = _run(runner, head_fallback_sources=("refs/heads/dev/jane",))
+
+    assert fetched.head_sha == HEAD_SHA
+    assert fetched.adjustments[0].source == "refs/heads/dev/jane"
+    kinds = [call.argv[1] for call in runner.calls]
+    assert kinds.index("cat-file") < kinds.index("merge-base")
+
+
+def test_lagging_ref_update_failure_is_a_rendered_ref_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _fail("cannot lock ref"))
+        )
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError) as excinfo:
+            _run(runner)
+
+    assert excinfo.value.role is RefRole.HEAD
+    tagged = [r for r in caplog.records if getattr(r, RENDERED_BY_CALLER, False)]
+    assert any("could not point" in r.getMessage() for r in tagged)
+
+
+def test_lagging_ref_update_timeout_is_a_code_host_error() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(
+            _API_PRESENT,
+            (_PR_BEHIND_API, _ok()),
+            (_UPDATE_REF, ProcessTimedOutError(_UPDATE_REF, 30.0)),
+        )
+    )
+    with pytest.raises(HostCommandTimeoutError):
+        _run(runner)
 
 
 def test_unrelated_histories_raise_no_merge_base(caplog: pytest.LogCaptureFixture) -> None:
