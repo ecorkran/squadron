@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,7 +14,8 @@ import pytest
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult, wait_for_run
 from squadron.pipeline.state import StateManager
-from tests.pipeline.run_listing_support import begin, end, warned
+from tests.pipeline.liveness_support import exited_pid
+from tests.pipeline.run_listing_support import begin, begin_owned, end, warned
 
 _LOGGER = "squadron.pipeline.run_wait"
 
@@ -145,3 +148,90 @@ class TestWaitForRun:
         assert WAIT_EXIT_CODES[WaitOutcome.COMPLETED] == 0
         assert 2 not in WAIT_EXIT_CODES.values()
         assert len(set(WAIT_EXIT_CODES.values())) == len(WaitOutcome)
+
+
+# ---------------------------------------------------------------------------
+# Liveness while waiting (slice 174 D8)
+# ---------------------------------------------------------------------------
+
+_OVERDUE = timedelta(hours=1)  # far past 10 x the 30 s heartbeat interval
+
+
+def _wait_live(
+    sm: StateManager,
+    run_id: str,
+    fake: _FakeTime,
+    timeout: float | None,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+) -> WaitResult:
+    return wait_for_run(
+        sm,
+        run_id,
+        timeout=timeout,
+        poll_interval=2.0,
+        clock=fake.clock,
+        sleep=fake.sleep,
+        now=now,
+    )
+
+
+class TestWaitLiveness:
+    def test_orphaned_run_ends_the_wait(
+        self, sm: StateManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        run_id = begin_owned(sm, "p", exited_pid())
+
+        with caplog.at_level(logging.WARNING, logger=_LOGGER):
+            result = _wait_live(sm, run_id, _FakeTime(), timeout=None)
+
+        assert result.outcome is WaitOutcome.ORPHANED
+        assert WAIT_EXIT_CODES[WaitOutcome.ORPHANED] == 8
+        assert warned(caplog, _LOGGER, run_id, "orphaned")
+
+    def test_stale_run_warns_once_and_waits_to_timeout(
+        self, sm: StateManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        run_id = begin_owned(sm, "p", os.getpid())
+        later = datetime.now(UTC) + _OVERDUE
+
+        with caplog.at_level(logging.WARNING, logger=_LOGGER):
+            result = _wait_live(sm, run_id, _FakeTime(), timeout=10.0, now=lambda: later)
+
+        assert result.outcome is WaitOutcome.TIMED_OUT
+        overdue = [r for r in caplog.records if "heartbeat overdue" in r.getMessage()]
+        assert len(overdue) == 1 and overdue[0].levelno == logging.WARNING
+
+    def test_stale_run_ends_on_its_terminal_status(self, sm: StateManager) -> None:
+        run_id = begin_owned(sm, "p", os.getpid())
+        later = datetime.now(UTC) + _OVERDUE
+        fake = _FakeTime(
+            on_sleep=lambda n: end(sm, run_id, ExecutionStatus.COMPLETED) if n == 2 else None
+        )
+
+        result = _wait_live(sm, run_id, fake, timeout=None, now=lambda: later)
+
+        assert result.outcome is WaitOutcome.COMPLETED
+
+    def test_stale_then_live_logs_one_info(
+        self, sm: StateManager, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        run_id = begin_owned(sm, "p", os.getpid())
+        polls = iter([_OVERDUE, _OVERDUE, timedelta(0), timedelta(0)])
+        start = datetime.now(UTC)
+        fake = _FakeTime(
+            on_sleep=lambda n: end(sm, run_id, ExecutionStatus.COMPLETED) if n == 4 else None
+        )
+
+        with caplog.at_level(logging.INFO, logger=_LOGGER):
+            _wait_live(sm, run_id, fake, timeout=None, now=lambda: start + next(polls))
+
+        resumed = [r for r in caplog.records if "heartbeat resumed" in r.getMessage()]
+        assert len(resumed) == 1 and resumed[0].levelno == logging.INFO
+        assert sum("heartbeat overdue" in r.getMessage() for r in caplog.records) == 1
+
+    def test_unowned_run_keeps_waiting(self, sm: StateManager) -> None:
+        run_id = begin(sm, "p")
+
+        result = _wait_live(sm, run_id, _FakeTime(), timeout=6.0)
+
+        assert result.outcome is WaitOutcome.TIMED_OUT

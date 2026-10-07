@@ -6,7 +6,7 @@ import typer
 
 from squadron.cli.run_views import render_run_listing, render_run_status
 from squadron.pipeline.run_listing import list_run_summaries
-from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, wait_for_run
+from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, orphaned_message, wait_for_run
 from squadron.pipeline.state import StateManager
 
 runs_app = typer.Typer(
@@ -47,8 +47,8 @@ def wait(
         "--timeout",
         min=0.0,
         help=f"Give up after SECONDS (exit {WAIT_EXIT_CODES[WaitOutcome.TIMED_OUT]}). "
-        "A crashed run stays 'running' forever, so this is the only bound; "
-        "without it the wait never ends on its own.",
+        "An orphaned run ends the wait; a stale one (heartbeat overdue, process "
+        "not provably gone) keeps waiting, so this is the bound for that case.",
     ),
 ) -> None:
     state_manager = StateManager()
@@ -57,6 +57,8 @@ def wait(
     if outcome in _STATUS_PANEL_OUTCOMES and result.state is not None:
         render_run_status(result.state)
     code = WAIT_EXIT_CODES[outcome]
-    if code != 0:
+    if outcome is WaitOutcome.ORPHANED:
+        typer.echo(orphaned_message(run_id, result.state), err=True)
+    elif code != 0:
         typer.echo(f"sq runs wait: run {run_id} {outcome}", err=True)
     raise typer.Exit(code)

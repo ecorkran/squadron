@@ -14,11 +14,13 @@ from typer.testing import CliRunner
 from squadron.cli.app import app
 from squadron.cli.commands import runs
 from squadron.pipeline.executor import ExecutionStatus
-from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult
+from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult, orphaned_message
 from squadron.pipeline.state import StateManager
+from tests.pipeline.liveness_support import exited_pid
 from tests.pipeline.run_listing_support import (
     STEP_NAMES,
     begin,
+    begin_owned,
     completed_batch_run,
     end,
     pause_at,
@@ -99,7 +101,18 @@ class TestRunsWait:
 
         assert result.exit_code == WAIT_EXIT_CODES[outcome]
         stderr_line = f"sq runs wait: run {run_id} {outcome}"
+        if outcome is WaitOutcome.ORPHANED:
+            stderr_line = orphaned_message(run_id, state)
         assert (stderr_line in result.stderr) is (outcome is not WaitOutcome.COMPLETED)
+
+    def test_orphaned_run_exits_8_naming_the_process(self, sm: StateManager) -> None:
+        pid = exited_pid()
+        run_id = begin_owned(sm, "steps", pid)
+
+        result = CliRunner().invoke(app, ["runs", "wait", run_id])
+
+        assert result.exit_code == 8
+        assert f"sq runs wait: run {run_id} orphaned (process {pid} gone)" in result.stderr
 
     def test_completed_run_prints_status_and_exits_zero(self, sm: StateManager) -> None:
         run_id = begin(sm, "steps")

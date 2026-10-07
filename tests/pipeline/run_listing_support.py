@@ -19,7 +19,7 @@ from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, FlagKin
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import PipelineDefinition
-from squadron.pipeline.state import StateManager
+from squadron.pipeline.state import RunOwner, StateManager
 
 EACH_STEP = "slices"
 SECOND_EACH_STEP = "fixes"
@@ -83,6 +83,14 @@ def _step(name: str, status: ExecutionStatus) -> StepResult:
 def begin(sm: StateManager, pipeline: str, params: dict[str, object] | None = None) -> str:
     """A run in status ``running``."""
     return sm.init_run(pipeline, params if params is not None else {"slice": "199"})
+
+
+def begin_owned(
+    sm: StateManager, pipeline: str, pid: int, params: dict[str, object] | None = None
+) -> str:
+    """A ``running`` SDK run owned by *pid* on this host (slice 174); 30 s heartbeat."""
+    owner = RunOwner.current(30).model_copy(update={"pid": pid})
+    return sm.init_run(pipeline, params if params is not None else {"slice": "199"}, owner=owner)
 
 
 def end(sm: StateManager, run_id: str, status: ExecutionStatus) -> None:
