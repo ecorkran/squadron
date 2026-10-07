@@ -176,7 +176,7 @@ A `running` run is outside `RESUMABLE_STATUSES`. The listing reports exactly wha
 
 The definition and report loaders are injected (see API Contracts), so a test asserts these bounds by counting calls.
 
-**D13. `sq runs wait`.** A pure helper in `run_listing.py`, `wait_for_run(state_manager, run_id, *, timeout, poll_interval, clock, sleep) -> WaitOutcome`, re-reads the run's state file every `poll_interval` until its status is not `running`, or until `timeout` elapses. `clock` and `sleep` are injected so tests run without real time. `WAIT_POLL_INTERVAL_SECONDS` is a module constant in `run_listing.py`, the single definition. `--timeout` has no default: without it the command waits indefinitely, which is the right behaviour for a long batch, and a caller that needs a bound passes one.
+**D13. `sq runs wait`.** A pure helper in `run_listing.py` (moved to `run_wait.py` and returning `WaitResult(outcome, state)` after code review F003/F005), `wait_for_run(state_manager, run_id, *, timeout, poll_interval, clock, sleep) -> WaitOutcome`, re-reads the run's state file every `poll_interval` until its status is not `running`, or until `timeout` elapses. `clock` and `sleep` are injected so tests run without real time. `WAIT_POLL_INTERVAL_SECONDS` is a module constant in `run_listing.py`, the single definition. `--timeout` has no default: without it the command waits indefinitely, which is the right behaviour for a long batch, and a caller that needs a bound passes one.
 
 `WaitOutcome(StrEnum)` and its exit codes are defined once, in `run_listing.py`:
 
