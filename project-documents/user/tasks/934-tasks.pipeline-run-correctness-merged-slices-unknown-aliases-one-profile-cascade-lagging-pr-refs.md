@@ -167,12 +167,12 @@ status: in_progress
 
 ## Task 16 — Item resume uses the predicate (D1)
 
-- [ ] `_open_dependencies` counts a dependency complete if cf says so or the predicate reports it merged
-- [ ] `_select_item` reconcile path: an item no longer selected reconciles to PASSED when the predicate reports it merged, whatever cf's status
-- [ ] A predicate failure surfaces as the resume's error and changes no report record
-- [ ] Tests (`tests/pipeline/test_item_resume_*.py`): resume of B runs with no `dependency A not complete`; resume of merged A reconciles to PASSED; unmerged open dependency still blocks; predicate failure leaves `report.json` unchanged
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: item resume trusts git for merged slices (#188)`
+- [x] `_open_dependencies` counts a dependency complete if cf says so or the predicate reports it merged
+- [x] `_select_item` reconcile path: an item no longer selected reconciles to PASSED when the predicate reports it merged, whatever cf's status
+- [x] A predicate failure surfaces as the resume's error and changes no report record
+- [x] Tests (`tests/pipeline/test_item_resume_*.py`): resume of B runs with no `dependency A not complete`; resume of merged A reconciles to PASSED; unmerged open dependency still blocks; predicate failure leaves `report.json` unchanged
+  - [x] Success: tests pass
+- [x] Commit: `fix: item resume trusts git for merged slices (#188)`
 
 ## Task 17 — Part B validation
 
