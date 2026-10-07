@@ -294,7 +294,7 @@ active_item: ActiveItem | None
 **Protection rules,** applied after selection:
 - **Paused:** a paused run is dropped unless it was named by run-id or `PAUSED` is in `--status`. This holds even when it also matches `unavailable`.
 - **Live:** a `LIVE` run is never a candidate. Naming one is refused: a stderr line, and exit 1 after the rest of the preview or deletion.
-- **Unowned:** liveness cannot be judged, so an `UNOWNED` `running` run is never in the default selection, even when it also matches `unavailable`. It is a candidate only when named by run-id or when `UNOWNED` is in `--status`, and the preview labels it `unowned`. This is how pre-174 crash leftovers are cleared: they are v4 `running` files with no owner (34 of 188 in one real runs directory), which the default listing now shows. `--status unowned --older-than 1d` is the expected form.
+- **Unowned:** liveness cannot be judged, so an `UNOWNED` `running` run is never in the default selection, even when it also matches `unavailable`. It is a candidate only when named by run-id or when `UNOWNED` is in `--status`, and the preview labels it `unowned`. This is how pre-174 crash leftovers are cleared: they are v4 `running` files with no owner (34 of 188 in one real runs directory), which the default listing now shows. `sq runs prune --status unowned` clears them; `--older-than` is optional, with no default, as for every category. The preview's Age column is what tells a crash leftover from a prompt-only run still in progress.
 
 **`--older-than`** takes `<int><unit>`, with unit `s`, `m`, `h`, `d` or `w`. The parse is lenient about surrounding whitespace and case. An invalid value is a usage error naming the accepted form.
 
