@@ -532,12 +532,28 @@ sq agents list [OPTIONS]
 List the pipelines `sq run` can load, grouped by source (built-in, project, user), names sorted within each group. A project or user pipeline that shadows a built-in is listed only under its own source.
 
 ```
-sq pipelines list
+sq pipelines list [-v]
 ```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `-v`, `--verbose` | flag | no | off | Add up to three params per pipeline (`name=default`, `required` when there is none), then `+N` for the rest |
+
+## pipelines show
+
+Print the YAML a pipeline name runs, byte for byte, after a `# source:` and a `# path:` comment line, so the output is still valid YAML. Resolution is the same search `sq run` uses: project, then user, then built-in. Exits 1 with the searched directories when the name is not found (a path is not a name), and 1 with `Error: cannot read <path>: <reason>` when the file can't be read.
+
+```
+sq pipelines show <NAME> [--path]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--path` | flag | no | off | Print only the file's path |
 
 ## runs list
 
-List runs, newest first, with where each one resumes. See [Pipelines § Finding and waiting on runs](PIPELINES.md#finding-and-waiting-on-runs).
+List running runs and runs you can resume, newest first, with where each one is or resumes. Running runs show `running`, `stale` or `orphaned`. See [Pipelines § Finding, waiting on and pruning runs](PIPELINES.md#finding-waiting-on-and-pruning-runs).
 
 ```
 sq runs list [OPTIONS]
@@ -545,12 +561,13 @@ sq runs list [OPTIONS]
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--all` | flag | no | off | Include runs with nothing to resume (completed, running) |
+| `--all` | flag | no | off | Include completed runs with nothing to resume |
 | `--pipeline` | string | no | — | Only runs of this pipeline (case-insensitive) |
+| `-v`, `--verbose` | flag | no | off | Name each unavailable pipeline and why it failed to load |
 
 ## runs wait
 
-Block until a run leaves `running`, print its status, and exit with a code per outcome: 0 completed, 1 failed, 3 paused, 4 timed out, 5 run not found, 6 state file unreadable, 7 unknown status.
+Block until a run leaves `running`, print its status, and exit with a code per outcome: 0 completed, 1 failed, 3 paused, 4 timed out, 5 run not found, 6 state file unreadable, 7 unknown status, 8 orphaned (the run's process is gone).
 
 ```
 sq runs wait <RUN_ID> [--timeout SECONDS]
@@ -558,7 +575,32 @@ sq runs wait <RUN_ID> [--timeout SECONDS]
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--timeout` | float | no | none (wait forever) | Give up after SECONDS. A crashed run stays `running`, so this is the only bound |
+| `--timeout` | float | no | none (wait forever) | Give up after SECONDS. A `stale` run keeps the wait going, so this is its bound |
+
+## runs prune
+
+Remove run-state files and their batch reports. Previews unless `--yes`. Categories and protection rules: [Pipelines § Finding, waiting on and pruning runs](PIPELINES.md#finding-waiting-on-and-pruning-runs).
+
+```
+sq runs prune [RUN_ID ...] [--status CATEGORY ...] [--pipeline NAME] [--older-than DURATION] [--yes]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `RUN_ID` | string | no | — | Prune exactly these runs; can't be combined with `--status` |
+| `--status` | category | no | `failed orphaned unavailable unreadable` | Repeatable: `failed`, `orphaned`, `stale`, `unavailable`, `unreadable`, `completed`, `paused`, `unowned`. Replaces the default set |
+| `--pipeline` | string | no | — | Only runs of this pipeline (case-insensitive) |
+| `--older-than` | duration | no | — | Only runs last updated longer ago than `<int><unit>`, unit `s m h d w` |
+| `--yes` | flag | no | off | Delete instead of previewing |
+
+Exits 0 on success, 1 when a named run is live or missing or a file could not be deleted (after the rest are done), 2 on a usage error.
+
+### Pipeline run config keys
+
+| Key | Default | Meaning |
+|---|---|---|
+| `pipeline.foreground_idle_timeout_s` | 1800 | Longest silence on a dispatch's foreground turn before it is interrupted and the step fails as stalled |
+| `pipeline.run_heartbeat_interval_s` | 30 | Seconds between a running pipeline's heartbeat writes; `stale` after 10 missed |
 
 ## task
 

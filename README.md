@@ -189,8 +189,10 @@ sq run P4 152                                  # design slice 152, revise until 
 sq run P456 152 --model {model-alias}          # design → tasks → implement → devlog
 sq run P4 152 -p review-model={model-alias}    # override any pipeline param
 sq run P4 152 --dry-run                        # show the plan without running it
-sq runs list                                   # paused, failed and batch runs you can resume
+sq pipelines show P4                           # the YAML a pipeline name runs, and where it lives
+sq runs list                                   # running runs, and paused, failed and batch runs you can resume
 sq runs wait <run-id> --timeout 3600           # block until a run finishes; exit code says how
+sq runs prune                                  # preview failed, orphaned and broken runs; --yes deletes
 ```
 
 A pipeline is plain YAML. Here's the built-in `P4`, lightly trimmed:

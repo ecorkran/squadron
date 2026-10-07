@@ -21,7 +21,7 @@ sq pipelines list         # list all available pipelines
 Three commands to verify the system works before reading further:
 
 ```bash
-sq pipelines list                     # show all available pipelines, grouped by source
+sq pipelines list                     # show all available pipelines, grouped by source (-v: params)
 sq run P456 152                       # run the full slice lifecycle for slice 152
 sq run example 152 --dry-run          # show the step plan, and the items each "each" step would select, without executing
 ```
@@ -842,7 +842,7 @@ Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: 
 
 ### Item resume
 
-A flagged item is fixed by a decision, applied to that item of that run. `sq runs list` finds runs with open items (see [Finding and waiting on runs](#finding-and-waiting-on-runs)):
+A flagged item is fixed by a decision, applied to that item of that run. `sq runs list` finds runs with open items (see [Finding, waiting on and pruning runs](#finding-waiting-on-and-pruning-runs)):
 
 ```bash
 sq run --resume <run_id> --item 196 --decision retry --instructions "Use the existing CommitPlan."
@@ -911,17 +911,31 @@ This is squadron's half of the contract with an unattended caller (Amoeba, amoeb
 - **Concurrency.** One item resume per checkout at a time.
 - **Not covered by squadron:** abandoning or deferring a slice (a cf status change), and fixing `not_ready` or `dependency` flags, which are fixed upstream (design, tasks, or the dependency) before the item is retried or the batch rerun.
 
-## Finding and waiting on runs
+## Finding, waiting on and pruning runs
 
 ```bash
-sq runs list                       # runs you can resume, newest first
-sq runs list --all                 # every run, including completed and running ones
+sq runs list                       # running runs and runs you can resume, newest first
+sq runs list --all                 # also completed runs with nothing to resume
 sq runs list --pipeline P4         # only runs of one pipeline (case-insensitive)
+sq runs list -v                    # also name each unavailable pipeline and why
 sq runs wait <run-id>              # block until the run leaves "running"
 sq runs wait <run-id> --timeout 600
+sq runs prune                      # preview dead runs; add --yes to delete them
+sq pipelines show P4               # the YAML a pipeline name runs, with its source and path
+sq pipelines show P4 --path        # just the path, e.g. for $EDITOR
 ```
 
-`sq runs list` shows paused and failed runs with the step `sq run --resume <run-id>` restarts at, and completed batch runs that still have flagged or not-run items, as `N items in <each-step>` (plus `(K accept)` for items `--decision accept` can take). When it cannot tell whether a run is resumable, it shows the run anyway with a marker and logs a WARNING:
+`sq runs list` shows running runs, paused and failed runs with the step `sq run --resume <run-id>` restarts at, and completed batch runs that still have flagged or not-run items, as `N items in <each-step>` (plus `(K accept)` for items `--decision accept` can take). On a terminal the columns fit its width, cutting the widest with `…`; piped output is never cut.
+
+A running run shows where it is (the step, and `[item P/T · index]` inside an `each` step) and its activity: how long it has run and when it last moved. Every SDK run records its process and writes a heartbeat to its state file while it runs, so the listing can tell what happened to it:
+
+| Status | Meaning |
+|---|---|
+| `running` | alive: its process is there and its heartbeat is current. A run with no Activity has no owner record: it was started by an older squadron or by `--prompt-only`, so its liveness is unknown |
+| `stale` | its heartbeat is more than 10 intervals overdue but its process can't be proven gone (another host, a blocked process, or a reused PID). It may still finish |
+| `orphaned` | its process on this host is gone; nothing will ever finish it |
+
+When it cannot tell whether a run is resumable, it shows the run anyway with a marker:
 
 | Marker | Cause |
 |---|---|
@@ -930,7 +944,9 @@ sq runs wait <run-id> --timeout 600
 | `<item resume unsupported>` | a batch run whose pipeline no longer has exactly one `each` step |
 | `<report unreadable>` | the batch report is corrupt, or the `each` step was renamed |
 
-`sq runs wait` prints the run's status panel (as `sq run --status <run-id>` does) when it finishes, and exits with a code per outcome. A crashed run stays `running` forever and can't be told apart from a live one, so pass `--timeout` when you need a bound; there is no default.
+Unavailable pipelines are summed up in one stderr line; `-v` names each one with the loader's message.
+
+`sq runs wait` prints the run's status panel (as `sq run --status <run-id>` does) when it finishes, and exits with a code per outcome. An orphaned run ends the wait with exit 8. A stale run logs one WARNING and the wait goes on, so pass `--timeout` when you need a bound; there is no default.
 
 | Exit | Meaning |
 |---|---|
@@ -941,8 +957,31 @@ sq runs wait <run-id> --timeout 600
 | 5 | no run with that id |
 | 6 | the run's state file is unreadable or invalid |
 | 7 | the run has a status `wait` doesn't know |
+| 8 | orphaned: the run's process is gone |
 
 Every non-zero exit also prints one line on stderr naming the run and the outcome.
+
+`sq runs prune` removes run-state files and their batch reports. It previews unless you pass `--yes`.
+
+| Category (`--status`) | Selects |
+|---|---|
+| `failed` | failed runs |
+| `orphaned` | running runs whose process is gone |
+| `unavailable` | runs whose pipeline no longer loads |
+| `unreadable` | state files that can't be read, including older schemas |
+| `completed` | completed runs |
+| `paused` | paused runs |
+| `stale` | running runs with an overdue heartbeat |
+| `unowned` | running runs with no owner record (crash leftovers from older squadron versions, or prompt-only runs) |
+
+With no `--status`, prune selects `failed`, `orphaned`, `unavailable` and `unreadable`. `--status` is repeatable and replaces that set. Run-ids select exactly those runs instead. `--pipeline` and `--older-than` (`<int><unit>`, unit `s m h d w`) narrow the selection. Paused, stale and unowned runs are pruned only when named or when their own category is given. A live run is never pruned; naming one exits 1. `sq runs prune --status unowned` clears the `running` leftovers older squadron versions could not detect.
+
+Two config keys tune this (set with `sq config set`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `pipeline.foreground_idle_timeout_s` | 1800 | Longest silence on a dispatch's foreground turn. After it the turn is interrupted and the step fails with `dispatch stalled: …` |
+| `pipeline.run_heartbeat_interval_s` | 30 | Seconds between heartbeat writes; a run is `stale` after 10 missed intervals |
 
 ## Writing a Custom Pipeline
 

@@ -5,7 +5,7 @@ project: squadron
 archIndex: 140
 component: pipeline-foundation
 dateCreated: 20260221
-dateUpdated: 20260811
+dateUpdated: 20261007
 status: complete
 ---
 
@@ -548,6 +548,8 @@ Slice 125 (Conversation Persistence) remains deferred to initiative 160. That wo
 │  (via CF Client)│            │  Registry        │
 └─────────────────┘            └─────────────────┘
 ```
+
+**Two notification paths (174).** The executor reports to two separate things. The events dispatcher (173) is the *user* extension point: bindings come from `events.yaml`, run user code asynchronously, and can fail the action. `RunObserver` (`pipeline/run_observer.py`) is *internal* and fixed: `execute_pipeline(observer=...)` calls `step_started`, `item_started` (each `each` item) and `step_completed`, synchronously on the event-loop thread, and `StateManager.observer(run_id)` records them in the run's state file (active step, active item, progress time). Run-state bookkeeping does not go through events because it must always happen, must never fail a step, and fires too often for a manifest load per call. Alongside it, `RunHeartbeat` writes the run's owner and a periodic heartbeat, which `run_liveness.assess_liveness` reads to classify a `running` run as live, stale, orphaned or unowned. A step-start event for users could later fire from the same call sites without changing the observer. See `174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md` (D12).
 
 ### Package Structure
 

@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq runs list` shows running runs: which step and item each is on, how long it has run and when it last moved. A run whose process died shows `orphaned`; one whose heartbeat is overdue shows `stale` (#190).
+- `sq runs wait` exits 8 when the run's process is gone, instead of waiting forever (#190).
+- `sq runs prune` removes failed, orphaned and unloadable runs and their reports, with a preview first; `--status`, `--pipeline` and `--older-than` choose what goes, `--yes` deletes.
+- `sq pipelines show <name>` prints the YAML a pipeline name runs, with its source and path; `--path` prints only the path.
+- `sq pipelines list -v` and `sq runs list -v`.
+- Config keys `pipeline.foreground_idle_timeout_s` (default 1800) and `pipeline.run_heartbeat_interval_s` (default 30).
+
+### Changed
+- `sq runs list` and `sq pipelines list` fit the terminal width and never cut piped output. `sq pipelines list` is a plain aligned list.
+- `sq runs list` prints one line about unavailable pipelines instead of one warning per run.
+- A resumed run reads `running` while it runs.
+
+### Fixed
+- A dispatch whose foreground turn goes silent is interrupted after `pipeline.foreground_idle_timeout_s` and its step fails as `dispatch stalled`, instead of hanging the run (#165).
+
 ## [0.21.0] - 20261007
 
 ### Added

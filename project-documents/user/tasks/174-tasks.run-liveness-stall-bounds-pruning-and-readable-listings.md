@@ -377,97 +377,99 @@ status: in_progress
 
 ## Task 29 — `loader.resolve_pipeline`
 
-- [ ] Add `resolve_pipeline(name) -> PipelineInfo` using the same search as `load_pipeline`
+- [x] Add `resolve_pipeline(name) -> PipelineInfo` using the same search as `load_pipeline`
       (`_search_dirs`, `_find_by_identity`); refactor `load_pipeline` to call it
-  - [ ] A path argument is reported as not found, with the loader's message
-  - [ ] Success: `load_pipeline` behaviour and error text unchanged
+  - [x] A path argument is reported as not found, with the loader's message
+    Returns `PipelineLocation(name, source, path)`, not `PipelineInfo`: resolution must not need a valid parse (recorded in the slice design, API Contracts).
+  - [x] Success: `load_pipeline` behaviour and error text unchanged
 
 ## Task 30 — `sq pipelines show <name> [--path]`
 
-- [ ] In `cli/commands/pipelines.py` add `show`: read the whole file with `Path.read_bytes()`
+- [x] In `cli/commands/pipelines.py` add `show`: read the whole file with `Path.read_bytes()`
       first; print `# source: <source>` and `# path: <path>` then the bytes to
       `sys.stdout.buffer`; `--path` prints only the path and does not read the file
-  - [ ] Not found → stderr loader message, exit 1
-  - [ ] `OSError` on read → ERROR log with path, stderr `Error: cannot read <path>:
+  - [x] Not found → stderr loader message, exit 1
+  - [x] `OSError` on read → ERROR log with path, stderr `Error: cannot read <path>:
         <reason>`, exit 1, empty stdout
 
 ## Task 31 — `show` tests; commit
 
-- [ ] CLI tests: a built-in; a project shadow of a built-in (shadow's path and source shown);
+- [x] CLI tests: a built-in; a project shadow of a built-in (shadow's path and source shown);
       `--path`; not found (exit 1); unreadable file (mode `000`): exit 1, ERROR record, empty
       stdout; non-UTF-8 bytes pass through unchanged; `resolve_pipeline` unit tests
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add sq pipelines show and resolve_pipeline`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add sq pipelines show and resolve_pipeline`
 
 ## Task 32 — State scan and report-file pattern
 
-- [ ] Add `StateManager.scan_runs()` returning readable `RunState`s and unreadable files
+- [x] Add `StateManager.scan_runs()` returning readable `RunState`s and unreadable files
       (path, mtime, reason) using `STATE_READ_ERRORS`; `list_runs` keeps its behaviour
-- [ ] In `batch_report.py` define the report-sibling glob once (`.report.json` and
+- [x] In `batch_report.py` define the report-sibling glob once (`.report.json` and
       `.report.md`) beside `report_json_paths`
-  - [ ] Success: `grep -rn "report\.md" src` shows one definition of the pattern
-- [ ] Tests: `scan_runs` returns an unreadable file for invalid JSON and for an obsolete
+  - [x] Success: `grep -rn "report\.md" src` shows one definition of the pattern
+- [x] Tests: `scan_runs` returns an unreadable file for invalid JSON and for an obsolete
       schema; the report helper does not match another run's files, including a prefix run-id
-  - [ ] Success: tests pass
+  - [x] Success: tests pass
 
 ## Task 33 — `run_prune.py`: selection
 
-- [ ] Create `src/squadron/pipeline/run_prune.py` with `PruneCategory(StrEnum)` (D9 table),
+- [x] Create `src/squadron/pipeline/run_prune.py` with `PruneCategory(StrEnum)` (D9 table),
       `PruneCandidate`, `PrunePlan` (candidates + refusals) and `plan_prune(scan, *,
       statuses, run_ids, pipeline, older_than, now, load_definition, assess)`
-  - [ ] Default set `failed`, `orphaned`, `unavailable`, `unreadable`; `--status` replaces
+  - [x] Default set `failed`, `orphaned`, `unavailable`, `unreadable`; `--status` replaces
         it; run-ids select exactly those runs; run-ids with statuses raises a usage error
         type the CLI maps to exit 2
-  - [ ] `--pipeline` lowercased, excludes unreadable files; age is `now - updated_at` or file
+  - [x] `--pipeline` lowercased, excludes unreadable files; age is `now - updated_at` or file
         mtime for unreadable
-  - [ ] Success: candidates carry every matched category; no category string literals outside
+  - [x] Success: candidates carry every matched category; no category string literals outside
         the enum
 
 ## Task 34 — `run_prune.py`: protection rules
 
-- [ ] Apply after selection: drop `PAUSED` runs unless named or `PAUSED` selected (also when
+- [x] Apply after selection: drop `PAUSED` runs unless named or `PAUSED` selected (also when
       they match `unavailable`); never include a `LIVE` run, and a named live run becomes a
       refusal; drop `UNOWNED` running runs unless named or `UNOWNED` selected; `STALE` only
       via `--status stale` or run-id
-  - [ ] Success: each rule has one implementation point
+  - [x] Success: each rule has one implementation point
 
 ## Task 35 — `plan_prune` tests
 
-- [ ] `tests/pipeline/test_run_prune.py`: each category; default set excludes paused, stale,
+- [x] `tests/pipeline/test_run_prune.py`: each category; default set excludes paused, stale,
       unowned and completed; each protection rule (including paused/unowned also matching
       unavailable); named live run refused; `--status` replacement; run-id selection;
       run-id + `--status` usage error; `--pipeline` and `--older-than` filters and their
       combinations; unreadable file age from mtime
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add plan_prune selection and protection`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add plan_prune selection and protection`
 
 ## Task 36 — `apply_prune`
 
-- [ ] Add `apply_prune(plan, runs_dir) -> PruneResult`: delete `{run_id}.json` and its
+- [x] Add `apply_prune(plan, runs_dir) -> PruneResult`: delete `{run_id}.json` and its
       report siblings (pattern from Task 32); `FileNotFoundError` counts as already gone;
       any other `OSError` logs ERROR with the path, continues, and is counted as failed
-  - [ ] Success: only paths under `runs_dir` are touched; the result has removed and failed
+  - [x] Success: only paths under `runs_dir` are touched; the result has removed and failed
         counts
 
 ## Task 37 — `apply_prune` tests
 
-- [ ] Real files in `tmp_path`: run file + `.report.json` + `.report.md` removed, another
+- [x] Real files in `tmp_path`: run file + `.report.json` + `.report.md` removed, another
       run's files kept; a missing file is not a failure; an unwritable directory yields an
       ERROR record, a failed count, and continues with the rest
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add apply_prune`
+  - [x] Success: tests pass
+    The undeletable case uses a directory where the state file should be (unlink raises OSError) rather than an unwritable directory, which would also block the other run's deletes.
+- [x] Commit: `feat: add apply_prune`
 
 ## Task 38 — `sq runs prune` command
 
-- [ ] In `cli/commands/runs.py` add `prune [RUN_ID ...] [--status CATEGORY ...] [--pipeline]
+- [x] In `cli/commands/runs.py` add `prune [RUN_ID ...] [--status CATEGORY ...] [--pipeline]
       [--older-than DURATION] [--yes]`; `--status` values validated against `PruneCategory`
       (a non-category is a usage error); `--older-than` parses `<int><unit>` (`s m h d w`)
       leniently on case and whitespace, invalid values are a usage error naming the form
-  - [ ] Preview (columns renderer, UI spec) then `N run(s) would be removed. Re-run with
+  - [x] Preview (columns renderer, UI spec) then `N run(s) would be removed. Re-run with
         --yes to delete.`, exit 0; with `--yes` delete and print `Removed N run(s).`
-  - [ ] Exit 1 for any refusal or failed deletion, after finishing the rest; exit 2 for
+  - [x] Exit 1 for any refusal or failed deletion, after finishing the rest; exit 2 for
         usage errors
-  - [ ] Success: `--yes` is never implied by another flag; prune touches only the runs dir
+  - [x] Success: `--yes` is never implied by another flag; prune touches only the runs dir
 
 ## Task 39 — Prune CLI tests; commit
 
