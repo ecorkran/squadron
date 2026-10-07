@@ -302,17 +302,17 @@ status: complete
 
 ## Task 28 — Live walkthrough
 
-- [ ] Run Verification Walkthrough steps 1, 3 and 4 from the slice design (step 4: the unit fixture via `uv run pytest tests/codehost -k lagging -v`) with `CLAUDECODE` unset and `uv run`; always pass `--model`
-- [ ] Step 2: needs a non-SDK profile with credentials already configured. With one, run both commands and show `profile=…` in both headers; restore the config key afterwards. Without one, run only the unset half (both fail with the same message) and say so in the DEVLOG
-- [ ] Record each step's command and key output line in the DEVLOG entry
-  - [ ] Success: each step matches the design; any divergence is fixed (with a test) or filed as a GitHub issue linked from the DEVLOG
-- [ ] Commit: `docs: add slice 934 implementation DEVLOG entry`
+- [x] Run Verification Walkthrough steps 1, 3 and 4 from the slice design (step 4: the unit fixture via `uv run pytest tests/codehost -k lagging -v`) with `CLAUDECODE` unset and `uv run`; always pass `--model`
+- [x] Step 2: needs a non-SDK profile with credentials already configured. With one, run both commands and show `profile=…` in both headers; restore the config key afterwards. Without one, run only the unset half (both fail with the same message) and say so in the DEVLOG
+- [x] Record each step's command and key output line in the DEVLOG entry
+  - [x] Success: each step matches the design; any divergence is fixed (with a test) or filed as a GitHub issue linked from the DEVLOG
+- [x] Commit: `docs: add slice 934 implementation DEVLOG entry`
 
 ## Task 29 — Close out
 
-- [ ] Set this file's `status: complete`; slice design `status: complete`; check off 934 in `900-slices.maintenance-and-refactoring.md`
-- [ ] Commit: `docs: mark slice 934 complete`
-  - [ ] Success: commit on the slice branch; tree clean
+- [x] Set this file's `status: complete`; slice design `status: complete`; check off 934 in `900-slices.maintenance-and-refactoring.md`
+- [x] Commit: `docs: mark slice 934 complete`
+  - [x] Success: commit on the slice branch; tree clean
 
 ---
 
