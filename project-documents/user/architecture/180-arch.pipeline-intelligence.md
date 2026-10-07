@@ -46,7 +46,7 @@ Every capability in this initiative plugs into extension points defined in 140:
   - It adds a dependency-ordered selection source, `existing: keep` on implement, and `branch: { plan: }`.
   - Every flag gets a structured record with a closed `FlagKind`, and the report is also written as versioned `report.json`.
   - `sq run --resume <run_id> --item N --decision retry|accept` reruns one flagged item of a finished batch. This is the interface Amoeba, or a human, uses to apply a decision. Squadron reports flags and applies decisions; it never makes them.
-  - Slice 199 makes those runs findable: `sq runs list` (built on `pipeline/run_listing.py`) lists runs `--resume` can act on, including finished batches with open items, and `sq pipelines list` replaces `sq run --list` for pipeline discovery.
+  - Slice 199 makes those runs findable: `sq runs list` (built on `pipeline/run_listing.py`) lists runs `--resume` can act on, including finished batches with open items, and `sq pipelines list` replaces `sq run --list` for pipeline discovery. `sq runs wait <run-id>` blocks until a background run ends and exits with a code per outcome, so a caller that started a run learns its result without polling the runs directory. Listings follow one grammar, `sq <noun> list`, so `sq list` becomes `sq agents list`.
   - A per-checkout run lock allows one git- or cf-mutating run at a time.
   - The single-slice code pipelines (P6, `implement`, P56, P456) move onto the batch's implement → code-review loop → merge steps, so one slice and a whole plan are implemented the same way.
 

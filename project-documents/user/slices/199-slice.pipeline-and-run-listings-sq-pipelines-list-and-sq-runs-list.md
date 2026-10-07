@@ -192,9 +192,9 @@ The definition and report loaders are injected (see API Contracts), so a test as
 
 Exit 2 is left to Typer's usage errors. Every non-zero outcome prints one line on stderr naming the run-id and the outcome, and every outcome except `COMPLETED` is logged at WARNING. On a terminal status the command prints the same status line `sq run --status <run-id>` prints, through the shared `run_views` renderer.
 
-Failure modes: a crashed process leaves its run at `running` forever, and `wait` cannot tell that from a live run (D7). `--timeout` is the bound, and the help text says so. A run-state file mid-replace is never torn (`_write_atomic`); a single failed read on one poll is retried on the next poll, and only a second consecutive failure ends with `UNREADABLE`. `running` and the other status literals are compared through `ExecutionStatus` and the `running` constant that `init_run` writes, which becomes a named module constant in `state.py` (`RUNNING_STATUS`) if it is not one already; the D10 typing issue covers replacing it with an enum member.
+Failure modes: a crashed process leaves its run at `running` forever, and `wait` cannot tell that from a live run (D7). `--timeout` is the bound, and the help text says so. No default timeout is set because no single bound fits both a one-step review and a whole-plan batch, and any default would be a guessed magic number. An agent caller is already bounded by its own tool timeout. The run lock cannot serve as an orphan signal: it is per checkout, not per run, and only git- or cf-mutating runs take it, so a free lock with status `running` does not mean a crash. Real orphan detection needs the run's PID recorded in run state, which is a schema change tracked by a GitHub issue (Development Approach step 6). A run-state file is never torn mid-replace (`_write_atomic`), so a failed read is a real fault, not a race: the first unreadable poll ends with `UNREADABLE`, with no retry. `running` and the other status literals are compared through `ExecutionStatus` and the `running` constant that `init_run` writes, which becomes a named module constant in `state.py` (`RUNNING_STATUS`) if it is not one already; the D10 typing issue covers replacing it with an enum member.
 
-**D14. `sq list` becomes `sq agents list`.** Every listing then reads `sq <noun> list`, and a bare `sq list` no longer implies agents. The agent lifecycle commands are moving to Amoeba and have no known users, so, like D8, this is a clean break with no alias:
+**D14. `sq list` becomes `sq agents list`.** Every listing then reads `sq <noun> list`, and a bare `sq list` no longer implies agents. The agent lifecycle commands are moving to Amoeba and have no known users. A search of the Amoeba repo found no call to `sq list` or `sq run --list`. So, like D8, this is a clean break with no alias:
 - `cli/commands/list.py` exposes an `agents_app` Typer group (`no_args_is_help=True`) with `list_agents` as its `list` subcommand; `app.py` registers the group and drops `app.command("list")`. Flags (`--state`, `--provider`) are unchanged.
 - The three "Use 'sq list' to see active agents" errors in `task.py`, `shutdown.py` and `message.py` name `sq agents list`.
 - `commands/sq/list.md` and `commands/agents/sq-list/SKILL.md` keep their names, so `/sq:list` and `$sq-list` still exist, and run `sq agents list $ARGUMENTS`. Renaming them would leave stale copies in installed targets for no gain.
@@ -311,7 +311,7 @@ Resume an item: sq run --resume <run-id> --item N --decision retry   (accept: on
 - Each `ResumeProblem` test asserts both the enum value and the WARNING record (`caplog`, logger `squadron.pipeline.run_listing`).
 - A parity test feeds the same report to `item_decisions` and to `item_resume._check_record` for every outcome and flag-kind combination. It asserts that a decision `_check_record` rejects never appears in the decision set `item_decisions` reports.
 - `run_views` has a test that every `ResumeProblem` member has marker text.
-- `wait_for_run` unit tests, with injected `clock` and `sleep` and real `StateManager` state files: a run that moves `running` → each terminal status mid-wait, one test per `WaitOutcome`; timeout while `running`; a missing run-id; one unreadable poll followed by a good one (recovers), and two in a row (`UNREADABLE`). Each non-`COMPLETED` case asserts its WARNING record. A CLI test asserts every `WaitOutcome` maps to its exit code.
+- `wait_for_run` unit tests, with injected `clock` and `sleep` and real `StateManager` state files: a run that moves `running` → each terminal status mid-wait, one test per `WaitOutcome`; timeout while `running`; a missing run-id; an unreadable state file (`UNREADABLE` on the first poll). Each non-`COMPLETED` case asserts its WARNING record. A CLI test asserts every `WaitOutcome` maps to its exit code.
 - The pipeline-grouping unit test covers all three sources plus shadowing, through the `project_dir` and `user_dir` overrides.
 - CLI tests use `CliRunner` for the new commands. The `--list` tests in `tests/cli/commands/test_run.py` are deleted with the flag.
 - Fixtures are real:
@@ -402,9 +402,10 @@ These commands do not exist yet. This is the draft demo for Phase 6.
 5. Add `wait_for_run` and `WaitOutcome` to `run_listing.py` with their tests, then `sq runs wait` in `runs.py` (D13).
 6. Update the docs, and add CHANGELOG lines for the `--list` removal and the `sq agents list` rename. Open GitHub issues for:
    - typing `RunState.status` (D10);
+   - recording the run's PID in run state so `sq runs list` and `sq runs wait` can tell a crashed run from a live one (D13);
    - `sq runs list --json`, for out-of-process consumers such as Amoeba, linked from the `--json` exclusion in Technical Scope.
 
-Effort: 2/5. The refactor in step 1 touches four existing modules (`state`, `batch_report`, `item_resume`, `loader`) owned by 140 and 197. Existing tests and the parity test guard it.
+Effort: 3/5, covering two listings, `wait`, two command-surface breaks and the refactor. The refactor in step 1 touches four existing modules (`state`, `batch_report`, `item_resume`, `loader`) owned by 140 and 197. Existing tests and the parity test guard it.
 
 ### Special Considerations
 - **Performance target:** under 1 s for `sq runs list --all` with a few hundred run-state files on local disk. The cost has three parts:
@@ -412,5 +413,5 @@ Effort: 2/5. The refactor in step 1 touches four existing modules (`state`, `bat
   - one glob per completed run;
   - one report read per completed batch run.
 
-  D12 bounds the call counts, and the I/O-bounds test enforces them. Wall-clock time is measured once in walkthrough step 7 rather than asserted in a test, because timing assertions are flaky on CI runners. There is no cache across calls.
+  D12 bounds the call counts, and the I/O-bounds test enforces them. Wall-clock time is measured once in walkthrough step 7 rather than asserted in a test, because timing assertions are flaky on CI runners. The target is advisory; the architecture sets no NFR for this path. There is no cache across calls, and `list_runs` parses every state file, so cost grows linearly with run history. Pruning runs is out of scope.
 - **Hermetic tests:** tests must not read the developer's real runs directory or `~/.config/squadron/pipelines`. Pass `runs_dir` explicitly and inject a `load_definition` bound to `tmp_path` pipeline directories, following the conventions in `tests/_hermetic.py`.

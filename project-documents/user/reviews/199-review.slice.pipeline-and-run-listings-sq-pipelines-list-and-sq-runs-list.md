@@ -3,102 +3,112 @@ docType: review
 layer: project
 reviewType: slice
 slice: pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list
+targetKind: slice
+rulesSource: project
 project: squadron
-verdict: PASS
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md
 aiModel: claude-sonnet-5-5
 status: complete
-dateCreated: 20261006
-dateUpdated: 20261006
-reviewedSha: 941703f1b306818e27e2ee8eac032b26bedce5ff
-revision_number: 2
+dateCreated: 20261007
+dateUpdated: 20261007
+reviewedSha: a0e745be023c248ecb8a51b3d0dc4a5d7bb26c87
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 30.0
-runId: run-20261007-p4-08b6c078
+toolCallsMade: 2
+durationSeconds: 29.7
 squadronVersion: 0.20.1
 findings:
   - id: F001
     severity: pass
-    category: architecture-alignment
-    summary: "Scope and layering match the parent architecture"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Architecture"
+    category: alignment
+    summary: "Slice matches the architecture's stated role for 199"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Overview"
   - id: F002
-    severity: pass
-    category: error-handling
-    summary: "Failure modes are enumerated, observable and testable"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D7. Failure modes"
+    severity: concern
+    category: scope-creep
+    summary: "Scope beyond the architecture: `sq runs wait` and `sq agents list`"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:32"
   - id: F003
-    severity: note
-    category: integration
-    summary: "Runs are global to the user, not scoped to a checkout"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Data Flow"
+    severity: concern
+    category: error-handling
+    summary: "`sq runs wait` has no timeout default and cannot detect crashed runs"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:179"
   - id: F004
-    severity: note
-    category: scope
-    summary: "Refactor of 140 and 197 modules is justified but carries risk"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Development Approach"
+    severity: concern
+    category: nfr
+    summary: "The 1 s listing target is not an architecture NFR and is not enforced"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Special Considerations"
   - id: F005
-    severity: note
-    category: integration
-    summary: "`--json` exclusion leaves out-of-process consumers without a listing"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Technical Scope"
+    severity: concern
+    category: boundaries
+    summary: "Heavy refactor of 140/197-owned modules inside a listing slice"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Development Approach"
   - id: F006
     severity: note
-    category: nfr
-    summary: "No NFR in the parent architecture applies to this path"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Special Considerations"
+    category: compatibility
+    summary: "Removing `sq run --list` and the `sq list` rename are clean breaks"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:163"
+  - id: F007
+    severity: note
+    category: integration
+    summary: "Parent field and `--json` deferral"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:43"
 ---
 
 # Review: slice — slice 199
 
-**Verdict:** PASS
+**Verdict:** CONCERNS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [PASS] Scope and layering match the parent architecture
+### [PASS] Slice matches the architecture's stated role for 199
 
-The architecture describes this slice as making 197's batch runs findable. It lists runs `--resume` can act on, including finished batches with open items, and it replaces `sq run --list` for pipeline discovery. The slice delivers exactly that.
-- It adds no grammar and no review-model change, so it stays inside the "Out of Scope" boundary.
-- Dependencies run one way: `cli/commands/*` → `cli/run_views` → `pipeline/run_listing` → pipeline modules. No command imports another command.
-- The listing is read-only. It cannot violate the architecture's rules for git-mutating steps or its run-lock rule.
+The architecture (180-arch lines 49–50) says 199 makes batch runs findable through `sq runs list`, built on `pipeline/run_listing.py`. It also says `sq pipelines list` replaces `sq run --list`. The slice delivers both with the same module name. It consumes 197's `BatchReport`, `ItemOutcome` and `FlagKind`, as the architecture describes. Squadron still only reports state and applies no decisions, so the listing stays read-only.
 
-### [PASS] Failure modes are enumerated, observable and testable
+### [CONCERN] Scope beyond the architecture: `sq runs wait` and `sq agents list`
 
-D7 covers unreadable state, an unloadable definition, no unfinished step, an unsupported `each` count, an unreadable report, `running` runs and concurrent writers. Each case has a row marker and a WARNING log, and the success criteria require tests asserting both. D12 states that all I/O is local and bounded, so there is no timeout or hang path. I checked `BatchReport.load`: it already converts `OSError` and decode errors into `BatchReportLoadError`, so the single exception named for the report row is sufficient.
+The architecture describes 199 as two listings. The slice also adds `sq runs wait` with a seven-value `WaitOutcome` exit-code contract (D13). It also renames `sq list` to `sq agents list` (D14), which changes three error messages and the slash command and skill bodies, with no alias.
+- Neither is covered by the architecture's 199 paragraph or its Scope Boundaries.
+- D14 breaks a user-facing command for a reason unrelated to pipeline intelligence.
+- `wait` is a new blocking-poll I/O path and a new public exit-code interface.
 
-### [NOTE] Runs are global to the user, not scoped to a checkout
+The listing slice stays coherent, but the architecture should either record both additions or the slice should justify them as 199 scope. Update the architecture's 199 description (the 180-arch bullet at line 49) to name them. That would also settle whether Amoeba or other consumers rely on the `wait` exit codes.
 
-The architecture describes a per-checkout run lock. `RunState` has no project or checkout field, and the runs directory is `~/.config/squadron/runs`. So `sq runs list` shows runs from every repository. Two consequences follow:
-- Pipeline definitions load relative to the current project. A run from another repository can therefore show `PIPELINE_UNAVAILABLE` or resolve to a different pipeline of the same name.
-- The slice does not say whether this is accepted.
+### [CONCERN] `sq runs wait` has no timeout default and cannot detect crashed runs
 
-Add one sentence saying the listing is user-global and that a `PIPELINE_UNAVAILABLE` row may mean "run from another project".
+Failure modes are enumerated well: timeout, not found, unreadable and unknown status each have an exit code and a WARNING log. Two cases are accepted rather than handled:
+- A crashed process leaves the run at `running`, so an unbounded `wait` blocks forever. The only mitigation is help text.
+- A caller such as an agent or script that omits `--timeout` hangs indefinitely.
 
-### [NOTE] Refactor of 140 and 197 modules is justified but carries risk
+For a command aimed at agents, "wait indefinitely" is a hang-by-default risk. The slice should state explicitly why this is acceptable. It could also add a cheap orphan signal, such as the run lock being free while the status is `running`, or a configured default bound. The unreadable retry policy (one retry, then `UNREADABLE`) is also unmotivated beyond the atomic-write argument.
 
-Step 1 touches `state`, `batch_report`, `item_resume` and `loader`. These are the interface the architecture designates for Amoeba to apply decisions. The slice mitigates the risk well:
-- The refactor lands as its own commit.
-- The existing tests must pass unchanged.
-- A parity test guards the eligibility rules.
+### [CONCERN] The 1 s listing target is not an architecture NFR and is not enforced
 
-I treat this as necessary scope, because it prevents the listing and `--resume` from disagreeing.
+The architecture states no NFR for this path, so nothing here needs restating. The slice sets its own target (under 1 s for a few hundred runs) but verifies it only by a manual walkthrough measurement. The call-count bounds test (D12) is a reasonable proxy. The slice should say plainly that the target is advisory. It should also note that `list_runs` still parses every state file with no cache, so cost grows linearly with run history.
 
-### [NOTE] `--json` exclusion leaves out-of-process consumers without a listing
+### [CONCERN] Heavy refactor of 140/197-owned modules inside a listing slice
 
-The architecture frames item resume as the interface Amoeba, or a human, uses. Amoeba therefore needs to discover run-ids. The slice defers `--json` and tracks it with a GitHub issue. That is a reasonable deferral, but it makes the interface incomplete for that consumer until the issue lands. The frontmatter also lists `interfaces: []` even though the slice provides `list_run_summaries`, `item_eligibility` and `PipelineSource`. Consider listing them there.
+Step 1 modifies `state`, `batch_report`, `item_resume` and `loader`, owned by 140 and 197. The changes include a new `item_eligibility` module, a public `RESUMABLE_STATUSES`, a `PipelineSource` enum and a `first_unfinished_step_of` extraction. The motivation (no duplicated eligibility logic between the listing and resume) is sound and aligns with the DRY and single-source principles. The dependency direction is correct (`cli` → `run_views` → `run_listing` → pipeline modules, and `item_resume` → `item_eligibility`).
+- The refactor is bundled with the new surface and rated effort 2/5, which looks low for four modules plus a command removal and rename.
+- The slice does mitigate it by committing the refactor on its own and adding a parity test.
 
-### [NOTE] No NFR in the parent architecture applies to this path
+Consider whether the refactor should be split into its own slice or sub-task so the listing's risk does not depend on it.
 
-The architecture states no latency or throughput target for listings. The slice sets its own target (under 1 s for a few hundred runs). It enforces the target through call-count bounds in the tests and verifies wall-clock time once in the walkthrough, which is appropriate.
+### [NOTE] Removing `sq run --list` and the `sq list` rename are clean breaks
+
+D8 and D14 justify skipping deprecation by pointing to the absence of known callers. This is consistent with the project's no-complexity principle, and the CHANGELOG entries record the change. Confirm that Amoeba and other out-of-process consumers do not call `sq list`. The slice states "no known users" for the agent lifecycle but cites no verification.
+
+### [NOTE] Parent field and `--json` deferral
+
+The architecture names Amoeba as the consumer of the resume interface (arch line 48). The slice defers `--json` for it and tracks the follow-up as a GitHub issue. That is acceptable, but the architecture's statement that `sq runs list` makes runs findable is satisfied for human and in-process callers only. An out-of-process Amoeba would have to scrape the table. The deferral is explicit and has a tracking step, so no action is needed beyond keeping that issue open.
 
 ### Run Digest
 
-- Response length: 4582 chars
+- Response length: 5740 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -108,10 +118,22 @@ The architecture states no latency or throughput target for listings. The slice 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 30.0 s
+- Duration: 29.7 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
+
+## Response
+
+- **F002 (scope):** accepted. The 180 architecture's 199 bullet now names `sq runs wait` and the `sq <noun> list` grammar that motivates `sq agents list`.
+- **F003 (`wait`):** partly accepted.
+  - The retry was unmotivated, so it is dropped: atomic writes rule out torn reads, and the first unreadable poll now ends with `UNREADABLE`.
+  - No default timeout: any value would be a guessed magic number, and agent callers are bounded by their own tool timeout. D13 now states this.
+  - The run-lock orphan signal is unsound because the lock is per checkout and only mutating runs take it. Orphan detection needs a PID in run state, so it gets a follow-up issue.
+- **F004 (perf target):** accepted. The target is marked advisory, and the linear growth in cost is stated.
+- **F005 (refactor):** not split. The refactor is already its own behaviour-neutral commit, guarded by existing tests and the parity test. Effort is raised to 3/5.
+- **F006:** verified. The Amoeba repo has no `sq list` or `sq run --list` calls, and D14 now cites this.
+- **F007:** no action. The `--json` issue stays tracked.

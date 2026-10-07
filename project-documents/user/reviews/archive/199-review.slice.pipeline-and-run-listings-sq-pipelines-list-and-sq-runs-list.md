@@ -4,111 +4,99 @@ layer: project
 reviewType: slice
 slice: pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md
 aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261006
 dateUpdated: 20261006
-reviewedSha: 817adb82ae79bec1966109609dad374a6d9660a2
-revision_number: 1
+reviewedSha: 941703f1b306818e27e2ee8eac032b26bedce5ff
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 4
-durationSeconds: 25.9
+durationSeconds: 30.0
 runId: run-20261007-p4-08b6c078
 squadronVersion: 0.20.1
 findings:
   - id: F001
     severity: pass
     category: architecture-alignment
-    summary: "Alignment with the parent architecture's 199 description"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Overview"
+    summary: "Scope and layering match the parent architecture"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Architecture"
   - id: F002
     severity: pass
     category: error-handling
-    summary: "Failure modes enumerated with observable signals"
+    summary: "Failure modes are enumerated, observable and testable"
     location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D7. Failure modes"
   - id: F003
-    severity: concern
-    category: dependency-direction
-    summary: "`run_listing` pulls the executor's heavy import graph through `ExecutionStatus` and a private constant"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:85"
-  - id: F004
-    severity: concern
-    category: nfr
-    summary: "The performance target is verified manually, not by a test"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Special Considerations"
-  - id: F005
-    severity: note
-    category: scope
-    summary: "Refactoring of 197-owned code widens the slice's footprint"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#D3"
-  - id: F006
     severity: note
     category: integration
-    summary: "`--json` deferral and the architecture's Amoeba framing"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Technical Scope"
-  - id: F007
+    summary: "Runs are global to the user, not scoped to a checkout"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Data Flow"
+  - id: F004
     severity: note
-    category: documentation
-    summary: "Architecture overview was already updated for 199"
-    location: "project-documents/user/architecture/180-arch.pipeline-intelligence.md:49"
+    category: scope
+    summary: "Refactor of 140 and 197 modules is justified but carries risk"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Development Approach"
+  - id: F005
+    severity: note
+    category: integration
+    summary: "`--json` exclusion leaves out-of-process consumers without a listing"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Technical Scope"
+  - id: F006
+    severity: note
+    category: nfr
+    summary: "No NFR in the parent architecture applies to this path"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md#Special Considerations"
 ---
 
 # Review: slice — slice 199
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [PASS] Alignment with the parent architecture's 199 description
+### [PASS] Scope and layering match the parent architecture
 
-The slice implements what 180-arch §Relationship to 140 attributes to it: runs `--resume` can act on, including finished batches with open items, listed via `pipeline/run_listing.py`, and `sq pipelines list` replacing `sq run --list`. It is read-only. It adds no grammar and no review-model changes, so the architecture's "Out of Scope" limits on 140 grammar and review models hold. The slice reads 197's `BatchReport`, `ItemOutcome`, `FlagKind` and `ItemDecision` as the interface for flag handoff.
+The architecture describes this slice as making 197's batch runs findable. It lists runs `--resume` can act on, including finished batches with open items, and it replaces `sq run --list` for pipeline discovery. The slice delivers exactly that.
+- It adds no grammar and no review-model change, so it stays inside the "Out of Scope" boundary.
+- Dependencies run one way: `cli/commands/*` → `cli/run_views` → `pipeline/run_listing` → pipeline modules. No command imports another command.
+- The listing is read-only. It cannot violate the architecture's rules for git-mutating steps or its run-lock rule.
 
-### [PASS] Failure modes enumerated with observable signals
+### [PASS] Failure modes are enumerated, observable and testable
 
-D7 covers the cases on this slice's I/O paths:
-- corrupt run state;
-- unloadable definition;
-- missing unfinished step;
-- unsupported `each` count;
-- unreadable report;
-- `running` runs;
-- concurrent writers, with the atomic-replace argument.
+D7 covers unreadable state, an unloadable definition, no unfinished step, an unsupported `each` count, an unreadable report, `running` runs and concurrent writers. Each case has a row marker and a WARNING log, and the success criteria require tests asserting both. D12 states that all I/O is local and bounded, so there is no timeout or hang path. I checked `BatchReport.load`: it already converts `OSError` and decode errors into `BatchReportLoadError`, so the single exception named for the report row is sufficient.
 
-Each case has a row marker or a WARNING log, and unlisted exceptions propagate. Hang and timeout are not discussed. That is reasonable because everything is local-disk reads, but the slice does not say so. A one-line statement would close the gap.
+### [NOTE] Runs are global to the user, not scoped to a checkout
 
-### [CONCERN] `run_listing` pulls the executor's heavy import graph through `ExecutionStatus` and a private constant
+The architecture describes a per-checkout run lock. `RunState` has no project or checkout field, and the runs directory is `~/.config/squadron/runs`. So `sq runs list` shows runs from every repository. Two consequences follow:
+- Pipeline definitions load relative to the current project. A run from another repository can therefore show `PIPELINE_UNAVAILABLE` or resolve to a different pipeline of the same name.
+- The slice does not say whether this is accepted.
 
-The slice justifies `item_eligibility` by saying it keeps the read-only listing from pulling in git machinery. But the listing still depends on `ExecutionStatus` (Interfaces Required, line 58) and `_RESUMABLE_STATUSES`. `state.py` already imports `ExecutionStatus` from `executor.py` (state.py:25), and `executor.py` imports `git_ops`, `branch_ops`, `commit_plan` and `loop_commit` at module level. So `run_listing` reaches git-related modules transitively, and the stated isolation claim does not hold.
+Add one sentence saying the listing is user-global and that a `PIPELINE_UNAVAILABLE` row may mean "run from another project".
 
-D10 also has the listing import a private, underscore-named constant (`_RESUMABLE_STATUSES`) across modules. Two options:
-- Expose a public `RESUMABLE_STATUSES` from `state.py`.
-- Move the status enum to a lightweight module.
+### [NOTE] Refactor of 140 and 197 modules is justified but carries risk
 
-Either one, or an explicit acknowledgement that the import cost is accepted, would remove the inconsistency.
+Step 1 touches `state`, `batch_report`, `item_resume` and `loader`. These are the interface the architecture designates for Amoeba to apply decisions. The slice mitigates the risk well:
+- The refactor lands as its own commit.
+- The existing tests must pass unchanged.
+- A parity test guards the eligibility rules.
 
-### [CONCERN] The performance target is verified manually, not by a test
+I treat this as necessary scope, because it prevents the listing and `--resume` from disagreeing.
 
-The architecture states no NFR for this path, so the slice correctly sets its own: under 1 s for a few hundred runs. The only check is the walkthrough timing in step 7, and a miss is deferred to "a finding for Phase 7". Two parts of the path are not bounded: one glob per completed run, and one report read per completed batch run. A cheap automated check would be a test with a few hundred synthetic runs that asserts the number of definition loads and report reads. The slice already specifies one-definition-load-per-pipeline, but not a bound on globs or reads. Adding one would make the target regress-detectable.
+### [NOTE] `--json` exclusion leaves out-of-process consumers without a listing
 
-### [NOTE] Refactoring of 197-owned code widens the slice's footprint
+The architecture frames item resume as the interface Amoeba, or a human, uses. Amoeba therefore needs to discover run-ids. The slice defers `--json` and tracks it with a GitHub issue. That is a reasonable deferral, but it makes the interface incomplete for that consumer until the issue lands. The frontmatter also lists `interfaces: []` even though the slice provides `list_run_summaries`, `item_eligibility` and `PipelineSource`. Consider listing them there.
 
-The slice moves eligibility rules out of `item_resume`, extracts `first_unfinished_step_of`, adds `report_json_path`, and retypes `PipelineInfo.source`. This touches 197 and 140 code. It is justified by DRY and a no-drift guarantee, and it is protected by the parity test and by "existing tests pass unchanged". The slice is rated effort 2/5 but carries a refactor across four modules. Keep it as the first implementation step, as the development approach already does.
+### [NOTE] No NFR in the parent architecture applies to this path
 
-### [NOTE] `--json` deferral and the architecture's Amoeba framing
-
-180-arch names Amoeba as an intended consumer of the item-resume interface. The slice defers `--json`, so an out-of-process consumer cannot enumerate runs programmatically. The slice states this openly and Python callers are served. No change is needed. The slice or the architecture should record the follow-up if Amoeba starts consuming runs.
-
-### [NOTE] Architecture overview was already updated for 199
-
-The architecture already names slice 199, `sq runs list` and `run_listing.py`, so the parent document and the slice agree. No update is required.
+The architecture states no latency or throughput target for listings. The slice sets its own target (under 1 s for a few hundred runs). It enforces the target through call-count bounds in the tests and verifies wall-clock time once in the walkthrough, which is appropriate.
 
 ### Run Digest
 
-- Response length: 5352 chars
+- Response length: 4582 chars
 - Response is newline-free: no
 - Tool calls made: 4
 - Tool calls failed: 0
@@ -120,10 +108,10 @@ The architecture already names slice 199, `sq runs list` and `run_listing.py`, s
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 25.9 s
+- Duration: 30.0 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
