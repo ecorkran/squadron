@@ -278,6 +278,10 @@ class GitHubCli:
             head_refspec_source=f"refs/pull/{record.number}/head",
             expected_base_sha=resolved.base_sha,
             expected_head_sha=record.head_sha,
+            # When refs/pull/N/head lags the API, the head branch may already
+            # have the commit; refs.py verifies the sha, so a fork's same-named
+            # base branch is rejected there.
+            head_fallback_sources=(f"refs/heads/{record.head_ref}",),
         )
 
     def find_marked_comments(self, record: PullRequestRecord, *, marker: str) -> list[HostComment]:
