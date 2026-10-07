@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.1] - 20261007
+
 ### Added
 - `sq runs list` shows running runs: which step and item each is on, how long it has run and when it last moved. A run whose process died shows `orphaned`; one whose heartbeat is overdue shows `stale` (#190).
 - `sq runs wait` exits 8 when the run's process is gone, instead of waiting forever (#190).

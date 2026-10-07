@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261007
 
+### Release 0.21.1
+
+- **Contents:** slice 174 (run liveness, foreground stall bound, `sq runs prune`, `sq pipelines show`, readable listings; #190, #165) with code-review fixes: unsupported-schema runs protected from prune, heartbeat teardown no longer swallows cancellation.
+
 ### Slice 174: implementation complete (Phase 6)
 
 - **Delivered:** RunState schema v5 (`RunOwner`, `heartbeat_at`, `active_step`, `active_item`, `progress_at`); `run_liveness` (`assess_liveness`, `process_alive`, LIVE/STALE/ORPHANED/UNOWNED); `RunObserver` replaces `on_step_complete`; `RunHeartbeat` around every SDK run (owner in the creating write, `claim` on resume); foreground idle bound with interrupt and drain (`DispatchStalledError`, dispatch maps it to `dispatch stalled: …`); `sq runs wait` exit 8; `cli/columns.py`; both listings rebuilt on it; `sq runs list -v` and one unavailable-pipeline summary line; `sq pipelines list -v`; `sq pipelines show [--path]`; `StateManager.scan_runs`; `run_prune` and `sq runs prune`. Config keys `pipeline.foreground_idle_timeout_s`, `pipeline.run_heartbeat_interval_s`. Issue #195 (resume an orphaned run).
