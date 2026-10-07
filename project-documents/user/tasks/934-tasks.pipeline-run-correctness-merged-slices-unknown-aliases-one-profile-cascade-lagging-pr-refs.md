@@ -81,9 +81,9 @@ status: in_progress
 
 ## Task 6 — Parity test across both paths
 
-- [ ] Add one parametrized test, over every `ReviewProfileSource`, that sets up the same template, model and config and asserts `sq review` and the pipeline review action select the same profile name
-  - [ ] Success: test passes for all five sources
-- [ ] Commit: `test: assert review profile parity between sq review and pipeline`
+- [x] Add one parametrized test, over every `ReviewProfileSource`, that sets up the same template, model and config and asserts `sq review` and the pipeline review action select the same profile name
+  - [x] Success: test passes for all five sources
+- [x] Commit: `test: assert review profile parity between sq review and pipeline`
 
 ## Task 7 — One template lookup in classification (D4)
 
