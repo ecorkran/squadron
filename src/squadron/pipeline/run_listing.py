@@ -114,7 +114,7 @@ _Resolution = tuple[ResumePoint | None, ResumeProblem | None]
 _NOTHING_TO_RESUME: _Resolution = (None, None)
 
 
-class _Definitions:
+class DefinitionCache:
     """Loads each pipeline at most once per listing call (D12); failures are remembered."""
 
     def __init__(self, load_definition: DefinitionLoader) -> None:
@@ -160,7 +160,7 @@ def list_run_summaries(
     problem are kept: a problem means resumability could not be determined, which
     is never hidden, and a running run is the one a user most wants to check on.
     """
-    definitions = _Definitions(load_definition)
+    definitions = DefinitionCache(load_definition)
     runs = state_manager.list_runs(pipeline=pipeline.lower() if pipeline else None)
     assessed_at = datetime.now(UTC) if now is None else now
     host = socket.gethostname() if hostname is None else hostname
@@ -200,7 +200,7 @@ def _summary(
 
 
 def _resolve(
-    state: RunState, runs_dir: Path, definitions: _Definitions, load_report: ReportLoader
+    state: RunState, runs_dir: Path, definitions: DefinitionCache, load_report: ReportLoader
 ) -> _Resolution:
     if state.status in RESUMABLE_STATUSES:
         return _resolve_step(state, definitions)
@@ -209,7 +209,7 @@ def _resolve(
     return _NOTHING_TO_RESUME  # an unknown status has no resume point
 
 
-def _resolve_step(state: RunState, definitions: _Definitions) -> _Resolution:
+def _resolve_step(state: RunState, definitions: DefinitionCache) -> _Resolution:
     """A paused or failed run resumes at the step ``--resume`` would pick (D4)."""
     definition = definitions.get(state)
     if definition is None:
@@ -222,7 +222,7 @@ def _resolve_step(state: RunState, definitions: _Definitions) -> _Resolution:
 
 
 def _resolve_items(
-    state: RunState, runs_dir: Path, definitions: _Definitions, load_report: ReportLoader
+    state: RunState, runs_dir: Path, definitions: DefinitionCache, load_report: ReportLoader
 ) -> _Resolution:
     """A completed batch run resumes at its open items (slice 197 item resume)."""
     if not report_json_paths(runs_dir, state.run_id):

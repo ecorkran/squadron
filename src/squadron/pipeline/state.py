@@ -256,6 +256,11 @@ def _unreadable(path: Path, exc: Exception) -> UnreadableRun:
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
 
 
+def state_file_name(run_id: str) -> str:
+    """The run-state file name for *run_id*; reports beside it share the prefix."""
+    return f"{run_id}.json"
+
+
 def _default_runs_dir() -> Path:
     return Path.home() / ".config" / "squadron" / "runs"
 
@@ -277,7 +282,7 @@ class StateManager:
     # ------------------------------------------------------------------
 
     def _state_path(self, run_id: str) -> Path:
-        return self._runs_dir / f"{run_id}.json"
+        return self._runs_dir / state_file_name(run_id)
 
     def _write_atomic(self, path: Path, data: str) -> None:
         """Write *data* to *path* atomically via a sibling .tmp file."""
