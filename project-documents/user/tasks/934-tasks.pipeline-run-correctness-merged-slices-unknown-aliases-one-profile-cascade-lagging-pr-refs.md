@@ -95,12 +95,12 @@ status: in_progress
 
 ## Task 8 — Unknown review template fails before the run (D4)
 
-- [ ] Add `UnknownReviewTemplateError(name, close_matches)` as a `ValueError` subclass (next to `UnknownModelAliasError`). Message: `unknown review template 'cod'; did you mean: code?`
-- [ ] Add `_require_review_template(action_type, resolved_cfg) -> ReviewTemplate | None`: calls `_review_template`, raises the error when a fully resolved name returns `None`; skips a name still holding an unresolved placeholder
-- [ ] `classify_pipeline` catches the error and collects it with the alias errors into the single `ClassificationError`; it never escapes classification
-- [ ] Tests: unknown literal template fails before step 1; unknown template plus unknown alias reported in one message; placeholder name skipped; a review step whose template resolves only at run time to an unknown name fails through the review action's `KeyError` path with verbose labelling on, not from `action_model_label`; every built-in pipeline in `src/squadron/data/pipelines` classifies cleanly
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: reject unknown review templates before the run`
+- [x] Add `UnknownReviewTemplateError(name, close_matches)` as a `ValueError` subclass (next to `UnknownModelAliasError`). Message: `unknown review template 'cod'; did you mean: code?`
+- [x] Add `_require_review_template(action_type, resolved_cfg) -> ReviewTemplate | None`: calls `_review_template`, raises the error when a fully resolved name returns `None`; skips a name still holding an unresolved placeholder
+- [x] `classify_pipeline` catches the error and collects it with the alias errors into the single `ClassificationError`; it never escapes classification
+- [x] Tests: unknown literal template fails before step 1; unknown template plus unknown alias reported in one message; placeholder name skipped; a review step whose template resolves only at run time to an unknown name fails through the review action's `KeyError` path with verbose labelling on, not from `action_model_label`; every built-in pipeline in `src/squadron/data/pipelines` classifies cleanly
+  - [x] Success: tests pass
+- [x] Commit: `feat: reject unknown review templates before the run`
 
 ## Task 9 — Review profile source in the alias check (D4, #175)
 
