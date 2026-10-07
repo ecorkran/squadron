@@ -126,9 +126,9 @@ status: in_progress
 
 ## Task 12 — Part A validation
 
-- [ ] Run the full test suite once, plus `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all pass; zero pyright errors
-- [ ] Commit any formatter changes: `style: format part A`  (skip if none)
+- [x] Run the full test suite once, plus `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all pass; zero pyright errors
+- [x] Commit any formatter changes: `style: format part A`  (skip if none)
 
 ---
 
@@ -157,13 +157,13 @@ status: in_progress
 
 ## Task 15 — `slices_ready_to_implement` treats merged slices as closed (D1)
 
-- [ ] Call `merged_slice_branches(entries, target, cwd)` once. Target comes from `read_integration_target`
-- [ ] Item loop skips `entry.index in merged`; `open_in_plan` excludes merged indexes; `in_plan` unchanged
-- [ ] One WARNING per merged slice: `slice N: branch B is merged into T but cf reports S; treating it as complete. Check off its tasks to close it in cf.`
-- [ ] A `GitStateUnknownError` from the predicate propagates, so the `each` step fails before any item runs, logged and reported as a cf failure in a source is today
-- [ ] Tests (`tests/pipeline/test_sources.py`, temp repo + fake cf): merged unchecked slice A absent from items; dependent B carries no `flag_reason`; WARNING record asserted; open-per-cf, unmerged dependency still flagged exactly as before; source run with a `cwd` different from the process cwd gets that repo's answer; predicate failure fails the step before any item
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: batch selection treats merged slices as complete (#188)`
+- [x] Call `merged_slice_branches(entries, target, cwd)` once. Target comes from `read_integration_target`
+- [x] Item loop skips `entry.index in merged`; `open_in_plan` excludes merged indexes; `in_plan` unchanged
+- [x] One WARNING per merged slice: `slice N: branch B is merged into T but cf reports S; treating it as complete. Check off its tasks to close it in cf.`
+- [x] A `GitStateUnknownError` from the predicate propagates, so the `each` step fails before any item runs, logged and reported as a cf failure in a source is today
+- [x] Tests (`tests/pipeline/test_sources.py`, temp repo + fake cf): merged unchecked slice A absent from items; dependent B carries no `flag_reason`; WARNING record asserted; open-per-cf, unmerged dependency still flagged exactly as before; source run with a `cwd` different from the process cwd gets that repo's answer; predicate failure fails the step before any item
+  - [x] Success: tests pass
+- [x] Commit: `fix: batch selection treats merged slices as complete (#188)`
 
 ## Task 16 — Item resume uses the predicate (D1)
 
