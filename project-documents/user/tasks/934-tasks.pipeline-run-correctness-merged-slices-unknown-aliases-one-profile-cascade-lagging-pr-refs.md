@@ -176,9 +176,9 @@ status: in_progress
 
 ## Task 17 — Part B validation
 
-- [ ] Run the full test suite once, plus `ruff format`, `ruff check`, `pyright`
-  - [ ] Success: all pass; zero pyright errors
-- [ ] Commit any formatter changes: `style: format part B`  (skip if none)
+- [x] Run the full test suite once, plus `ruff format`, `ruff check`, `pyright`
+  - [x] Success: all pass; zero pyright errors
+- [x] Commit any formatter changes: `style: format part B`  (skip if none)
 
 ---
 
