@@ -673,3 +673,65 @@ def test_when_every_source_fails_the_error_names_each_one(
     assert str(excinfo.value).count(FALLBACK) == 1
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1 and getattr(warnings[0], RENDERED_BY_CALLER) is True
+
+
+# --- Which warnings the command renders itself (slice 934 D8) -------------------
+
+
+def _tagged(caplog: pytest.LogCaptureFixture, fragment: str) -> bool:
+    """Whether the one record containing ``fragment`` carries the rendered-by-caller tag."""
+    matches = [r for r in caplog.records if fragment in r.getMessage()]
+    assert len(matches) == 1, f"expected one record containing {fragment!r}"
+    return bool(getattr(matches[0], RENDERED_BY_CALLER, False))
+
+
+def test_per_endpoint_fetch_failure_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    runner = FakeProcessRunner(
+        [(["git", "fetch"], _fail("no route")), (["git", "rev-parse"], _fail(""))]
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError):
+            _run(runner)
+    assert _tagged(caplog, "fetch of base from")
+
+
+def test_fetch_exit_with_both_refs_present_warning_is_tagged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    runner = FakeProcessRunner(
+        [
+            (["git", "fetch"], _fail("odd")),
+            (["git", "rev-parse"], _ok(BASE_SHA)),
+            (["git", "rev-parse"], _ok(HEAD_SHA)),
+        ]
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError):
+            _run(runner)
+    assert _tagged(caplog, "git fetch exited")
+
+
+def test_ref_missing_after_fetch_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    runner = FakeProcessRunner(_script(base_rev=_fail("")))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefNotFetchableError):
+            _run(runner)
+    assert _tagged(caplog, "is missing after fetch")
+
+
+def test_no_merge_base_warning_is_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    runner = FakeProcessRunner(_script(merge_base=_fail("none")))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(NoMergeBaseError):
+            _run(runner)
+    assert _tagged(caplog, "no merge base between")
+
+
+def test_the_ancestry_answered_no_warning_is_not_tagged(caplog: pytest.LogCaptureFixture) -> None:
+    """Nothing renders this one: it is a diagnostic, so it must stay visible."""
+    probe_error = ProcessResult(argv=(), returncode=128, stdout="", stderr="fatal: bad object")
+    runner = FakeProcessRunner(_script_with_moved_base("7" * 40, probe_error))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        with pytest.raises(RefMovedSinceResolutionError):
+            _run(runner)
+    assert not _tagged(caplog, "could not test ancestry")

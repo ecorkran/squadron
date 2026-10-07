@@ -162,6 +162,7 @@ def _fetch(
                 role.value,
                 remote_name,
                 result.stderr.strip(),
+                extra={RENDERED_BY_CALLER: True},
             )
             raise RefNotFetchableError(
                 role,
@@ -172,7 +173,12 @@ def _fetch(
 
     # Both refs are present despite the non-zero exit; treat it as a base-side
     # failure rather than continuing with an unexplained error.
-    _logger.warning("git fetch exited %s: %s", result.returncode, result.stderr.strip())
+    _logger.warning(
+        "git fetch exited %s: %s",
+        result.returncode,
+        result.stderr.strip(),
+        extra={RENDERED_BY_CALLER: True},
+    )
     raise RefNotFetchableError(
         RefRole.BASE,
         f"git fetch failed: {result.stderr.strip() or '(no stderr)'}",
@@ -468,7 +474,13 @@ def _merge_base(runner: ProcessRunner, *, cwd: str, base: str, head: str) -> str
     result = runner.run(["git", "merge-base", base, head], cwd=cwd, timeout=GIT_QUERY_TIMEOUT_SECONDS)
     merge_base = result.stdout.strip()
     if result.returncode != 0 or not merge_base:
-        _logger.warning("no merge base between %s and %s: %s", base, head, result.stderr.strip())
+        _logger.warning(
+            "no merge base between %s and %s: %s",
+            base,
+            head,
+            result.stderr.strip(),
+            extra={RENDERED_BY_CALLER: True},
+        )
         raise NoMergeBaseError(
             f"{base} and {head} share no common ancestor, so there is no range to review"
         )

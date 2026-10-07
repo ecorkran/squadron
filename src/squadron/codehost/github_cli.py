@@ -15,6 +15,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, NoReturn, cast
 
 from squadron.codehost.errors import (
+    RENDERED_BY_CALLER,
     AmbiguousBranchPullRequestsError,
     CodeHostError,
     GitHubCliMissingError,
@@ -127,7 +128,7 @@ def _log_and_raise(error: CodeHostError) -> NoReturn:
 
     Every failure path is observable before it propagates; no silent path.
     """
-    _logger.warning("%s: %s", type(error).__name__, error)
+    _logger.warning("%s: %s", type(error).__name__, error, extra={RENDERED_BY_CALLER: True})
     raise error
 
 
@@ -500,13 +501,18 @@ class GitHubCli:
             _logger.warning("gh invoked with a nonexistent cwd: %s", cwd)
             raise
         except ProcessNotFoundError as exc:
-            _logger.warning("gh is not on PATH")
+            _logger.warning("gh is not on PATH", extra={RENDERED_BY_CALLER: True})
             raise GitHubCliMissingError(
                 "the GitHub CLI (gh) is not on PATH",
                 fix_hint="brew install gh — or see https://cli.github.com",
             ) from exc
         except ProcessTimedOutError as exc:
-            _logger.warning("gh exceeded %ss: %s", exc.timeout, " ".join(exc.argv))
+            _logger.warning(
+                "gh exceeded %ss: %s",
+                exc.timeout,
+                " ".join(exc.argv),
+                extra={RENDERED_BY_CALLER: True},
+            )
             raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
 
 
