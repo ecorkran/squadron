@@ -184,11 +184,13 @@ The default output shows the verdict and finding headings. `-v` adds full findin
 ## Pipelines (`sq run`)
 
 ```bash
-sq run --list                                  # every pipeline, with its source
+sq pipelines list                              # every pipeline, grouped by source
 sq run P4 152                                  # design slice 152, revise until the review passes
 sq run P456 152 --model {model-alias}          # design → tasks → implement → devlog
 sq run P4 152 -p review-model={model-alias}    # override any pipeline param
 sq run P4 152 --dry-run                        # show the plan without running it
+sq runs list                                   # paused, failed and batch runs you can resume
+sq runs wait <run-id> --timeout 3600           # block until a run finishes; exit code says how
 ```
 
 A pipeline is plain YAML. Here's the built-in `P4`, lightly trimmed:
@@ -230,7 +232,7 @@ The building blocks are phase steps (`design`, `tasks`, `implement`), `dispatch`
 2. `~/.config/squadron/pipelines/` for every project
 3. The built-ins
 
-To change a built-in, copy it into either directory under the same name. Your copy shadows the original. Give it a new name to keep both. `sq run --list` shows which source each pipeline came from. `sq run my-pipeline --validate` checks a file before you run it.
+To change a built-in, copy it into either directory under the same name. Your copy shadows the original. Give it a new name to keep both. `sq pipelines list` shows which source each pipeline came from. `sq run my-pipeline --validate` checks a file before you run it.
 
 **Inside an agent session,** `/sq:run P4 152` (Claude Code) or `$sq-run P4 152` (Codex) drives the pipeline step by step from the session itself.
 
@@ -341,7 +343,7 @@ CONCERNS exits 0, so CI can gate on FAIL without failing on warnings. A review w
 
 ## Agent management (experimental)
 
-Squadron still has agent lifecycle commands (`sq serve`, `sq spawn`, `sq task`, `sq list`, `sq shutdown`). They're no longer a main feature and are moving to the Amoeba project. They need the daemon: `sq serve`.
+Squadron still has agent lifecycle commands (`sq serve`, `sq spawn`, `sq task`, `sq agents list`, `sq shutdown`). They're no longer a main feature and are moving to the Amoeba project. They need the daemon: `sq serve`.
 
 ## Other install options
 

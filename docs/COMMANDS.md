@@ -514,18 +514,51 @@ sq spawn --name <NAME> [OPTIONS]
 | `--permission-mode` | string | no | `acceptEdits` | Permission mode |
 | `--model` | string | no | config `default_model` | Model override (e.g. `opus`, `sonnet`) |
 
-## list
+## agents list
 
 List running agents.
 
 ```
-sq list [OPTIONS]
+sq agents list [OPTIONS]
 ```
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--state` | string | no | — | Filter by agent state |
 | `--provider` | string | no | — | Filter by provider |
+
+## pipelines list
+
+List the pipelines `sq run` can load, grouped by source (built-in, project, user), names sorted within each group. A project or user pipeline that shadows a built-in is listed only under its own source.
+
+```
+sq pipelines list
+```
+
+## runs list
+
+List runs, newest first, with where each one resumes. See [Pipelines § Finding and waiting on runs](PIPELINES.md#finding-and-waiting-on-runs).
+
+```
+sq runs list [OPTIONS]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--all` | flag | no | off | Include runs with nothing to resume (completed, running) |
+| `--pipeline` | string | no | — | Only runs of this pipeline (case-insensitive) |
+
+## runs wait
+
+Block until a run leaves `running`, print its status, and exit with a code per outcome: 0 completed, 1 failed, 3 paused, 4 timed out, 5 run not found, 6 state file unreadable, 7 unknown status.
+
+```
+sq runs wait <RUN_ID> [--timeout SECONDS]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--timeout` | float | no | none (wait forever) | Give up after SECONDS. A crashed run stays `running`, so this is the only bound |
 
 ## task
 

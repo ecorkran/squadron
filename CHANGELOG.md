@@ -15,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq pipelines list` lists the pipelines `sq run` can load, grouped into built-in, project and user (#185).
+- `sq runs list` lists runs you can resume, newest first, with the step `--resume` restarts at, or the open item count of a finished batch run. `--all` shows every run; `--pipeline NAME` filters (#187).
+- `sq runs wait <run-id> [--timeout SECONDS]` blocks until a run finishes and exits with a code per outcome (0 completed, 1 failed, 3 paused, 4 timed out, 5 not found, 6 unreadable, 7 unknown status).
+
+### Changed
+- `sq list` is now `sq agents list`, same flags. `/sq:list` and `$sq-list` run the new command.
+
+### Removed
+- `sq run --list` (and `-l`). Use `sq pipelines list`.
+
 ## [0.20.1] - 20261006
 
 ### Fixed

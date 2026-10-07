@@ -168,7 +168,7 @@ See [README.md § Reviews](../README.md#reviews) for running your first `sq revi
 See [README.md § Pipelines](../README.md#pipelines-sq-run) and [docs/PIPELINES.md](PIPELINES.md) for the full pipeline-authoring guide. Quick start:
 
 ```bash
-sq run --list              # see available pipelines
+sq pipelines list          # see available pipelines
 sq run P456 152            # design → tasks → implement → devlog for slice 152
 ```
 

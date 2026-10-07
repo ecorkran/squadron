@@ -21,7 +21,7 @@ sq run example --list     # list all available pipelines
 Three commands to verify the system works before reading further:
 
 ```bash
-sq run --list                         # show all available pipelines with descriptions
+sq pipelines list                     # show all available pipelines, grouped by source
 sq run P456 152                       # run the full slice lifecycle for slice 152
 sq run example 152 --dry-run          # show the step plan, and the items each "each" step would select, without executing
 ```
@@ -30,12 +30,12 @@ sq run example 152 --dry-run          # show the step plan, and the items each "
 
 ## YAML Grammar Reference
 
-Each pipeline is a YAML file with a fixed top-level structure. The pipeline's name is its file name: `sq run my-loop` runs `my-loop.yaml` (case-insensitive), and that name is what `sq run --list`, commit messages, DEVLOG entries, batch reports and summary files use.
+Each pipeline is a YAML file with a fixed top-level structure. The pipeline's name is its file name: `sq run my-loop` runs `my-loop.yaml` (case-insensitive), and that name is what `sq pipelines list`, commit messages, DEVLOG entries, batch reports and summary files use.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | no | A label for people reading the file. Ignored by squadron; the file name is the pipeline's name |
-| `description` | string | yes | One-line description shown in `sq run --list` |
+| `description` | string | yes | One-line description shown in `sq pipelines list` |
 | `params` | map | no | Parameter declarations (`name: required` or `name: default-value`) |
 | `model` | string | no | Pipeline-level default model alias |
 | `steps` | list | yes | Ordered list of step definitions |
@@ -747,7 +747,7 @@ Built-in and user files use **identical formats** — copy any built-in file to 
 ## Built-in Pipelines
 
 ```bash
-sq run --list    # shows all available pipelines with descriptions
+sq pipelines list    # shows all available pipelines with descriptions
 ```
 
 | Name | Description | Key params |
@@ -835,7 +835,7 @@ Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: 
 
 ### Item resume
 
-A flagged item is fixed by a decision, applied to that item of that run:
+A flagged item is fixed by a decision, applied to that item of that run. `sq runs list` finds runs with open items (see [Finding and waiting on runs](#finding-and-waiting-on-runs)):
 
 ```bash
 sq run --resume <run_id> --item 196 --decision retry --instructions "Use the existing CommitPlan."
@@ -903,6 +903,39 @@ This is squadron's half of the contract with an unattended caller (Amoeba, amoeb
 - **Result.** Exit 0 resolved (merged), 1 flagged again — the rewritten record says why — 2 rejected and nothing ran (bad request, git precondition, or the lock is busy: try again later), 3 halted on the environment or an unknown git state, which needs a human.
 - **Concurrency.** One item resume per checkout at a time.
 - **Not covered by squadron:** abandoning or deferring a slice (a cf status change), and fixing `not_ready` or `dependency` flags, which are fixed upstream (design, tasks, or the dependency) before the item is retried or the batch rerun.
+
+## Finding and waiting on runs
+
+```bash
+sq runs list                       # runs you can resume, newest first
+sq runs list --all                 # every run, including completed and running ones
+sq runs list --pipeline P4         # only runs of one pipeline (case-insensitive)
+sq runs wait <run-id>              # block until the run leaves "running"
+sq runs wait <run-id> --timeout 600
+```
+
+`sq runs list` shows paused and failed runs with the step `sq run --resume <run-id>` restarts at, and completed batch runs that still have flagged or not-run items, as `N items in <each-step>` (plus `(K accept)` for items `--decision accept` can take). When it cannot tell whether a run is resumable, it shows the run anyway with a marker and logs a WARNING:
+
+| Marker | Cause |
+|---|---|
+| `<pipeline unavailable>` | the run's pipeline file was renamed, deleted or no longer loads |
+| `<no unfinished step>` | a paused or failed run whose pipeline was edited so no step is left |
+| `<item resume unsupported>` | a batch run whose pipeline no longer has exactly one `each` step |
+| `<report unreadable>` | the batch report is corrupt, or the `each` step was renamed |
+
+`sq runs wait` prints the run's status panel (as `sq run --status <run-id>` does) when it finishes, and exits with a code per outcome. A crashed run stays `running` forever and can't be told apart from a live one, so pass `--timeout` when you need a bound; there is no default.
+
+| Exit | Meaning |
+|---|---|
+| 0 | completed |
+| 1 | failed |
+| 3 | paused (checkpoint or flag) |
+| 4 | `--timeout` elapsed while still running |
+| 5 | no run with that id |
+| 6 | the run's state file is unreadable or invalid |
+| 7 | the run has a status `wait` doesn't know |
+
+Every non-zero exit also prints one line on stderr naming the run and the outcome.
 
 ## Writing a Custom Pipeline
 
