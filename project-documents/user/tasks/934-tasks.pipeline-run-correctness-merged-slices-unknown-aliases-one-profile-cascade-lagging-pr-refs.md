@@ -296,10 +296,10 @@ status: in_progress
 
 ## Task 27 — Documentation
 
-- [ ] `docs/PIPELINES.md`: merged slices count as complete in `implement-plan` and item resume (git is the record); review profile cascade shared with `sq review`; unknown review template and alias rejected pre-run, including `--dry-run`
-- [ ] `CHANGELOG.md`: short user-facing bullets for the four fixes; technical detail stays in DEVLOG
-  - [ ] Success: docs match behavior
-- [ ] Commit: `docs: document pipeline run correctness fixes`
+- [x] `docs/PIPELINES.md`: merged slices count as complete in `implement-plan` and item resume (git is the record); review profile cascade shared with `sq review`; unknown review template and alias rejected pre-run, including `--dry-run`
+- [x] `CHANGELOG.md`: short user-facing bullets for the four fixes; technical detail stays in DEVLOG
+  - [x] Success: docs match behavior
+- [x] Commit: `docs: document pipeline run correctness fixes`
 
 ## Task 28 — Live walkthrough
 
