@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import click
 import pytest
 from typer.testing import CliRunner
 
@@ -23,7 +24,8 @@ def test_a_reserved_p_key_is_rejected_before_anything_runs(key: str, message: st
     result = runner.invoke(app, ["run", "P6", "105", "-p", f"{key}=x", "--model", "haiku"])
 
     assert result.exit_code == 2
-    assert message in " ".join(result.output.split())
+    # Typer forces colour when GITHUB_ACTIONS is set, so strip styling before matching.
+    assert message in " ".join(click.unstyle(result.output).split())
 
 
 @pytest.mark.parametrize("key", ["accept_decision", "override_instructions"])
