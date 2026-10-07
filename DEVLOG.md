@@ -2,13 +2,21 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261006
+dateUpdated: 20261007
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261007
+
+### Slice 199: task breakdown complete (Phase 5)
+
+- **Tasks:** `user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md` (36 tasks, 402 lines, one file). Six parts: no-behaviour-change refactor (state, batch_report, item_eligibility, loader enum); `sq pipelines list` plus `--list` removal and `sq agents list`; `run_listing.py`; `sq runs list`; `sq runs wait`; docs, CHANGELOG and three follow-up issues (RunState.status enum, run PID, `--json`).
+- **Notes:** the design now removes `sq run --list` outright (D8) and moves `sq list` to `sq agents list` (D14); no merge task, per the Phase 5 guide.
+- **Next:** PM approval, then Phase 6 on branch `199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list`.
 
 ## 20261006
 
