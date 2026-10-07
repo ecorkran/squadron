@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
 from squadron.review.git_utils import DEFAULT_DIFF_BASE, INTEGRATION_BRANCH_KEY, run_git
+
+if TYPE_CHECKING:
+    from squadron.integrations.context_forge import SliceEntry
 
 _logger = logging.getLogger(__name__)
 
@@ -150,12 +154,85 @@ def branch_behind_count(branch: str, target: str, *, cwd: str) -> int:
     )
 
 
-def _rev_count(args: list[str], cwd: str, failure: str) -> int:
+def merged_slice_branches(entries: Sequence[SliceEntry], target: str, *, cwd: str) -> set[int]:
+    """Indexes of slices whose branch was merged into ``target`` with a merge commit (#188).
+
+    Git, not cf, is the record of a merged slice. The merge step always uses
+    ``--no-ff`` (asserted at ``tests/pipeline/test_branch_merge.py:88``), so a merged
+    branch's tip is an ancestor of the target yet absent from the target's
+    first-parent chain. That second test excludes a branch with no work of its own,
+    whose tip is the target's own commit, and a fast-forwarded one.
+
+    A slice with no design file or no branch reads as not merged. Any git read that
+    times out or exits unexpectedly raises ``GitStateUnknownError``: an empty answer
+    would reopen a merged slice and reimplement it.
+    """
+    tips = _branch_tips(cwd)
+    first_parent = _first_parent_chain(target, cwd)
+    merged: set[int] = set()
+    for entry in entries:
+        try:
+            branch = slice_branch_name(entry.index, entry.design_file)
+        except NoDesignFileError:
+            continue  # no design file means no branch was ever entered for it
+        tip = tips.get(branch)
+        if tip is None or tip in first_parent:
+            continue
+        if _is_ancestor(tip, target, cwd):
+            merged.add(entry.index)
+    return merged
+
+
+def _branch_tips(cwd: str) -> dict[str, str]:
+    """Local branch name to tip sha, from one ``for-each-ref`` call."""
+    result = _checked_git(
+        ["for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads"],
+        cwd,
+        "cannot list local branches (git for-each-ref)",
+    )
+    tips: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        name, _, sha = line.rpartition(" ")
+        if name:
+            tips[name] = sha
+    return tips
+
+
+def _first_parent_chain(target: str, cwd: str) -> set[str]:
+    """Every commit on the target's first-parent chain."""
+    result = _checked_git(
+        ["rev-list", "--first-parent", target],
+        cwd,
+        f"cannot read the history of {target} (git rev-list)",
+    )
+    return set(result.stdout.split())
+
+
+def _is_ancestor(tip: str, target: str, cwd: str) -> bool:
+    """``merge-base --is-ancestor``: exit 0 is yes, 1 is no, anything else is a failure."""
+    result = _checked_git(
+        ["merge-base", "--is-ancestor", tip, target],
+        cwd,
+        f"cannot compare {tip} with {target} (git merge-base)",
+        accepted=(0, 1),
+    )
+    return result.returncode == 0
+
+
+def _checked_git(
+    args: list[str], cwd: str, failure: str, accepted: tuple[int, ...] = (0,)
+) -> subprocess.CompletedProcess[str]:
+    """Run git; log at ERROR and raise ``GitStateUnknownError`` unless it exits as accepted."""
     result = run_git(args, cwd=cwd)
-    if result is None or result.returncode != 0:
+    if result is None or result.returncode not in accepted:
         message = f"{failure}: {_failure_text(result)}"
         _logger.error(message)
         raise GitStateUnknownError(message)
+    return result
+
+
+def _rev_count(args: list[str], cwd: str, failure: str) -> int:
+    result = _checked_git(args, cwd, failure)
     return int(result.stdout.strip())
 
 
