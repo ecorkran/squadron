@@ -238,10 +238,10 @@ status: in_progress
 
 ## Task 23 — GitHub adapter passes the head refspec (D6)
 
-- [ ] `fetch_pull_request_refs` passes `("refs/heads/<head_ref>",)` as `head_fallback_sources` to `fetch_and_range`; `refs.py` stays host-neutral (`test_import_boundaries.py` passes)
-- [ ] Tests (`tests/codehost/test_github_cli.py`): the adapter passes the expected sources; a fork PR whose same-named base branch returns another sha is rejected by the sha check
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: github adapter supplies head branch fallback refspec`
+- [x] `fetch_pull_request_refs` passes `("refs/heads/<head_ref>",)` as `head_fallback_sources` to `fetch_and_range`; `refs.py` stays host-neutral (`test_import_boundaries.py` passes)
+- [x] Tests (`tests/codehost/test_github_cli.py`): the adapter passes the expected sources; a fork PR whose same-named base branch returns another sha is rejected by the sha check
+  - [x] Success: tests pass
+- [x] Commit: `feat: github adapter supplies head branch fallback refspec`
 
 ## Task 24a — `code_host_logging` context manager (D8)
 
