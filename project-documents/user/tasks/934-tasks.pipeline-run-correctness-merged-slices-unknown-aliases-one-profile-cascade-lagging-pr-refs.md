@@ -223,10 +223,10 @@ status: in_progress
 
 ## Task 22a — Classify the PR-ref sha against the API head (D6 step 2)
 
-- [ ] In `fetch_and_range`, when the PR-ref sha differs from the API head: call Task 21's helper first, then test whether the PR-ref sha is an ancestor of the API head (`merge-base --is-ancestor`). Express the answer as a private `HeadRelation` StrEnum (`LAGS`, `MOVED`, `UNRELATED`). `MOVED` and `UNRELATED` raise `RefMovedSinceResolutionError` naming both sources, hint rerun. `LAGS` keeps today's behavior in this task: it raises the same `RefMovedSinceResolutionError`. Task 22b replaces that one branch
-- [ ] Tests (lagging fixture from the issue, API sha absent locally until a fallback fetch): pushed after resolution → `RefMovedSinceResolutionError`; unrelated → same; ancestry timeout and non-0/1 exit answer "no" with the existing WARNING, giving the same error; `LAGS` currently raises (the test is rewritten in 22b)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: classify lagging, moved and rewritten PR refs`
+- [x] In `fetch_and_range`, when the PR-ref sha differs from the API head: call Task 21's helper first, then test whether the PR-ref sha is an ancestor of the API head (`merge-base --is-ancestor`). Express the answer as a private `HeadRelation` StrEnum (`LAGS`, `MOVED`, `UNRELATED`). `MOVED` and `UNRELATED` raise `RefMovedSinceResolutionError` naming both sources, hint rerun. `LAGS` keeps today's behavior in this task: it raises the same `RefMovedSinceResolutionError`. Task 22b replaces that one branch
+- [x] Tests (lagging fixture from the issue, API sha absent locally until a fallback fetch): pushed after resolution → `RefMovedSinceResolutionError`; unrelated → same; ancestry timeout and non-0/1 exit answer "no" with the existing WARNING, giving the same error; `LAGS` currently raises (the test is rewritten in 22b)
+  - [x] Success: tests pass
+- [x] Commit: `feat: classify lagging, moved and rewritten PR refs`
 
 ## Task 22b — Use the API head on a lagging ref (D6, D9, D10)
 
