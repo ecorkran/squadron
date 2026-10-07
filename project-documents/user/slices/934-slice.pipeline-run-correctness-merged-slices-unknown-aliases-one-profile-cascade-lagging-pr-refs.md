@@ -3,7 +3,7 @@ docType: slice-design
 slice: pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs
 project: squadron
 parent: user/architecture/900-slices.maintenance-and-refactoring.md
-dependencies: [197]
+dependencies: [196, 197]
 interfaces: []
 dateCreated: 20261006
 dateUpdated: 20261006
@@ -48,6 +48,12 @@ Four bugs where a run does the wrong thing instead of failing or finishing clean
 - one classification helper shared by run, dry-run and explain (D5)
 - `FetchedRange.adjustments` and the code-host log filter (D8, D9)
 
+**Why one slice, not four.** The plan entry bundled the four fixes, and the design keeps them together, because #175 and #184 share one change (the profile-source helper and the classifier wiring). The other two pieces share nothing with them or each other:
+- #188 (`git_ops`, `sources`, `item_resume`)
+- #186 (`codehost`, `cli/commands/pr*`)
+
+So each lands as its own task group with its own commits, in the order given under Implementation Notes, and none waits on another. If the PM prefers separate slices, the split falls along exactly these lines and the decisions carry over unchanged.
+
 Revised: **Effort 4/5, Risk Low.** Each piece is local and has its own test, and every ambiguous case fails closed (D1, D6) or fails before the run (D4, D5). The plan entry is updated to match.
 
 ## Dependencies
@@ -78,14 +84,20 @@ pipeline/resolver.py           CHANGED  resolve_full(..., profile_source=) per-c
 pipeline/classification.py     CHANGED  one template lookup; review profile source; unknown template pre-run (#175/#184)
 cli/commands/run.py            CHANGED  _classify_for_run shared by run, --explain, --dry-run (#175)
 codehost/refs.py               CHANGED  head fallback, source-naming errors, adjustments (#186)
-codehost/errors.py             CHANGED  PullRequestRefLaggingError; RefMoved message names sources (#186)
+codehost/errors.py             CHANGED  PullRequestHeadUnavailableError; RefMoved message names sources (#186)
 codehost/models.py             CHANGED  RefAdjustment; FetchedRange.adjustments (#186)
 cli/commands/pr.py             CHANGED  configure_code_host_logging; adjustments printed once (#186)
 ```
 
 ### Data Flow
 
-**#188 selection.** `cf.slices_ready_to_implement` reads the plan's slices from cf, then calls `merged_slice_branches(entries, target, cwd)` once. A slice in that set is treated as `complete`. It is skipped as an item and counts as closed for dependency flagging. Each one is logged at WARNING: `slice 108: branch 108-slice.x is merged into dev/erik but cf reports not_started; treating it as complete. Check off its tasks to close it in cf.`
+**#188 selection.** `cf.slices_ready_to_implement` reads the plan's slices from cf, then calls `merged_slice_branches(entries, target, cwd)` once. A slice in that set (`merged`) is treated as `complete` at the two places the source reads status ([sources.py:256-276](../../../src/squadron/pipeline/sources.py#L256)):
+- **Item loop:** `if entry.status in _EXCLUDED_STATUSES or entry.index in merged: continue`. A merged slice is never returned as an item.
+- **Dependency flag:** the source flags `dependency D not designed` only when `D in open_in_plan and D not in returned`. `open_in_plan` becomes `{e.index for e in entries if e.status not in _EXCLUDED_STATUSES and e.index not in merged}`. A merged dependency is therefore never flagged. A dependency that is open per cf, not merged, and not returned is flagged exactly as today.
+
+`in_plan` (the "outside plan" warning) is unchanged. A test asserts both points: the merged slice is absent from the items, and its dependent carries no `flag_reason`.
+
+Each merged slice is logged at WARNING: `slice 108: branch 108-slice.x is merged into dev/erik but cf reports not_started; treating it as complete. Check off its tasks to close it in cf.`
 
 **#188 resume.** `_open_dependencies` asks cf for statuses and asks the predicate which in-plan dependencies are merged. A dependency counts as complete if either answer says so. `_select_item`'s reconcile path, for an item that is no longer selected, reconciles to PASSED when the predicate reports it merged, whatever cf's status is.
 
@@ -104,22 +116,26 @@ alias check:   review_profile_source(explicit_present, template)
 
 The pipeline review action computes `review_profile_source(...)` for its template and passes it to `resolver.resolve_full(..., profile_source=...)`. Classification does the same for every `review` action, after resolving its `template` placeholder. Other action types keep `has_profile_param`.
 
-**#186 fetch.**
+**#186 fetch.** The API head sha is usually not in the local clone when `refs/pull/N/head` lags: nothing has fetched it. Ancestry can only be tested once both commits are local, so the fetch comes first and the classification second.
 
 ```
-fetch base + refs/pull/N/head ──► head sha == API head? ── yes ─► range
+fetch base + refs/pull/N/head ──► PR-ref sha == API head? ── yes ─► range
                                         │ no
                                         ▼
-                     fetched is ancestor of API head? (PR ref lags)
-                          │ yes                         │ no
-                          ▼                             ▼
-          fetch API head sha by sha;              RefMovedSinceResolutionError
-          else refs/heads/<head_ref>;             (names both sources + hint)
-          verify == API head
-             │ ok                   │ fails
-             ▼                      ▼
-   range + RefAdjustment     PullRequestRefLaggingError
-                             (names every source and sha + hint)
+            API head present locally? (cat-file -e <sha>^{commit})
+                 │ no                                   │ yes
+                 ▼                                      │
+   fetch <sha> by sha → <api_local>;                    │
+   else refs/heads/<head_ref> → <api_local>;            │
+   each verified == API head                            │
+     │ none yields it        │ one does                 │
+     ▼                       └──────────┬───────────────┘
+ PullRequestHeadUnavailableError         ▼
+ (names every source + reason)   PR-ref sha ancestor of API head?
+                                   │ yes (lag)          │ no (descends or unrelated)
+                                   ▼                    ▼
+                         head_local := API head   RefMovedSinceResolutionError
+                         range + RefAdjustment    (names both sources + hint)
 ```
 
 ### State Management
@@ -198,28 +214,29 @@ On `ClassificationError`, dry-run prints the run path's message (`Error: Pipelin
 
 ### D6: #186, the head fallback
 
-When the fetched `refs/pull/N/head` sha differs from the API head sha:
+When the fetched `refs/pull/N/head` sha (the PR-ref sha) differs from the API head sha:
 
-| fetched vs API head | Meaning | Action |
+1. **Obtain the API head locally.** If `git cat-file -e <api-sha>^{commit}` succeeds, it is already present. Otherwise try, in order, each fetching into `<api_local>`, a sibling of `head_local` in the same per-PR namespace:
+   1. `git fetch <remote> +<api-sha>:<api_local>`. This works for same-repo and fork PRs when the host serves the commit by sha.
+   2. `git fetch <remote> +refs/heads/<head_ref>:<api_local>`.
+
+   After each attempt, `rev-parse <api_local>` must equal the API head sha. On a fork PR, attempt 2 may fetch a same-named branch of the base repo, and this check rejects it. If no attempt yields the sha, raise `PullRequestHeadUnavailableError` (a `CodeHostError`, role HEAD). It cannot say "lags", because without the commit the relationship is unknown.
+2. **Classify, now that both commits are local.** `refs._is_ancestor` answers "no" when a commit is absent (it fails closed). That is why this step must come after step 1 and never before.
+
+| PR-ref sha vs API head | Meaning | Action |
 |---|---|---|
-| fetched is an ancestor | PR ref lags | Fall back (below) |
-| fetched descends from it | pushed after resolution | `RefMovedSinceResolutionError`, hint: rerun |
+| PR-ref sha is an ancestor | PR ref lags | `update-ref head_local <api-sha>`, record a `RefAdjustment`, build the range |
+| PR-ref sha descends from it | pushed after resolution | `RefMovedSinceResolutionError`, hint: rerun |
 | unrelated | force-push or rewrite | `RefMovedSinceResolutionError`, hint: rerun |
-
-Fallback order:
-1. `git fetch <remote> +<api-head-sha>:<head_local>`. This works for same-repo and fork PRs when the commit is reachable on the host.
-2. `git fetch <remote> +refs/heads/<head_ref>:<head_local>`.
-
-After either fetch, `head_local` must equal the API head sha. On a fork PR the second fetch may pull a same-named branch from the base repo, and verification rejects it. When both fail, `PullRequestRefLaggingError` (a `CodeHostError`, role HEAD) is raised.
 
 The guard against reviewing a stale commit is unchanged. Only the exact API head sha is ever reviewed.
 
-The refspec strings are GitHub conventions. `fetch_pull_request_refs` passes them in as a `head_fallback_sources: tuple[str, ...]` argument to `fetch_and_range`, so `refs.py` stays host-neutral.
+The refspec strings are GitHub conventions. `fetch_pull_request_refs` passes the attempt-2 refspec in as a `head_fallback_sources: tuple[str, ...]` argument (attempt 1 uses the sha, which is host-neutral) to `fetch_and_range`, so `refs.py` stays host-neutral.
 
 ### D7: #186, error text names sources
 
 - `RefMovedSinceResolutionError` gains `expected_source` and `actual_source` labels. Message: `head moved since resolution: host API reported ae1cbf2…, refs/pull/49/head fetched d3008a6…`. Fix hint: `Rerun to resolve the pull request again.`
-- `PullRequestRefLaggingError` message: `refs/pull/49/head on origin is behind the pull request head: host API reports ae1cbf2…, refs/pull/49/head is d3008a6…; fetching ae1cbf2… by sha failed: <reason>; refs/heads/dev/jane is <sha | not fetchable: reason>`. Fix hint: `The host has not updated its pull-request ref yet. Rerun later, or push the head branch to a remote this checkout can fetch.`
+- `PullRequestHeadUnavailableError` message: `pull request head ae1cbf2… (host API) could not be fetched; refs/pull/49/head on origin is d3008a6…; fetch by sha: <reason>; refs/heads/dev/jane: <sha that did not match | reason>`. Fix hint: `The host's pull-request ref and its API disagree, and the API head is not fetchable from origin yet. Rerun later, or push the head branch to a remote this checkout can fetch.`
 
 ### D8: #186, one line per failure
 
@@ -230,9 +247,15 @@ The adapter keeps logging every failure at WARNING (Failure-Mode Enumeration). T
   - a WARNING describing a `RefAdjustment` (printed by D9's adjustment line)
 
   Nothing else is tagged: other WARNINGs from `remotes`, `worktree`, `metadata_lock`, and so on.
-- **Handler.** `configure_code_host_logging(verbosity)`, next to `render_code_host_error`, attaches one stderr handler to `squadron.codehost`, with format `%(levelname)s %(name)s: %(message)s` and `propagate = False`. It is idempotent like `_configure_agent_logging`. Level: WARNING by default, INFO at `-v`, DEBUG at `-vv`.
-- **Filter.** Below `-vv`, it drops tagged records. At `-vv` it keeps them, so the full diagnostic trail is there when asked for.
-- **Callers.** Every command that renders `CodeHostError` (`sq pr show`, `sq review pr`, and the other `sq pr` subcommands) calls it once, before its first host call.
+- **Handler, scoped to the command.** `code_host_logging(verbosity: int)` is a context manager next to `render_code_host_error`. The `squadron.codehost` logger is process-global, so the helper must not leave anything behind for tests or other commands in the same process.
+  - **On entry** it records the logger's current level, then adds one stderr handler with the format `%(levelname)s %(name)s: %(message)s` and the filter below. It sets the logger's level to WARNING at verbosity 0, INFO at 1, DEBUG at 2 or more.
+  - **On exit** (`finally`, so a raised `typer.Exit` also cleans up) it removes exactly that handler and restores the level.
+  - `propagate` is not touched. Records still reach root handlers such as pytest's `caplog`. `lastResort` is not used, because Python falls back to it only when no handler is found anywhere in the logger's hierarchy, and this handler is one.
+  - **Nesting:** an inner call that finds its handler already attached is a no-op on entry and on exit. It adds no second handler and does not remove the outer one. A test enters the helper twice and asserts one handler while inside and zero after.
+- **Filter.** Below verbosity 2 it drops tagged records. At 2 or more it keeps them, so the full diagnostic trail is there when asked for.
+- **Callers and their verbosity source.** Only two commands render `CodeHostError` today (`grep render_code_host_error`):
+  - `sq review pr` already resolves verbosity (`_resolve_verbosity(verbose)`, [review_pr.py:378](../../../src/squadron/cli/commands/review_pr.py#L378)). It wraps its body after that line in `with code_host_logging(verbosity):`.
+  - `sq pr show` and `sq pr create` have no `-v` option. They call `code_host_logging(0)`: render-once, with untagged warnings shown. This slice adds no flag to them. The `-vv` diagnostic trail for a failing fetch is reachable through `sq review pr -vv`, which shares the fetch path (`resolve_and_fetch_pull_request`).
 
 Effect: at default and `-v`, a failure prints exactly once (the render). An untagged codehost warning prints once with its level and logger prefix, as it already does via `lastResort` but now prefixed. Nothing that is visible today disappears. A test asserts that an untagged WARNING still reaches stderr at default verbosity, and that a tagged one does not.
 
@@ -263,10 +286,13 @@ When the source raises, the `each` step fails before any item runs. That failure
 
 | Call | Hangs / times out | Peer disconnects or host refuses | Observable signal | Result |
 |---|---|---|---|---|
-| `fetch <remote> +<sha>:<head_local>` | `ProcessTimedOutError` caught for this attempt; recorded as `timed out after Ns` | non-zero exit (e.g. `not our ref`, `upload-pack: not our ref`); stderr recorded | DEBUG per attempt; reason carried into the next step | next fallback |
-| `fetch <remote> +refs/heads/<head_ref>:<head_local>` | same | same | same | verify, or raise |
-| `head_local` after a partial or failed fetch | — | ref left at the stale sha | verification against the API head sha | stale sha never reviewed |
-| all attempts fail | — | — | WARNING (tagged, D8) plus a single rendered `PullRequestRefLaggingError` naming each attempt and its reason | exit 1 |
+| `cat-file -e <api-sha>^{commit}` | `ProcessTimedOutError` → `HostCommandTimeoutError` | exit non-zero = absent (a normal answer) | DEBUG | go to the fetch attempts |
+| `fetch <remote> +<sha>:<api_local>` | `ProcessTimedOutError` caught for this attempt; recorded as `timed out after Ns` | non-zero exit (e.g. `not our ref`, `upload-pack: not our ref`); stderr recorded | DEBUG per attempt; reason carried into the next step | next fallback |
+| `fetch <remote> +refs/heads/<head_ref>:<api_local>` | same | same | same | verify, or raise |
+| `<api_local>` after a partial or failed fetch | — | ref absent or at another sha | verification against the API head sha | that attempt fails; the stale PR-ref sha is never reviewed |
+| `merge-base --is-ancestor` (classification) | `ProcessTimedOutError` → `HostCommandTimeoutError` | exit not in (0, 1) → answered no (existing fail-closed) | WARNING (existing) | `RefMovedSinceResolutionError` |
+| `update-ref head_local <api-sha>` | `ProcessTimedOutError` → `HostCommandTimeoutError` | non-zero | WARNING (tagged) + rendered `RefNotFetchableError` | exit 1 |
+| all attempts fail | — | — | WARNING (tagged, D8) plus a single rendered `PullRequestHeadUnavailableError` naming each attempt and its reason | exit 1 |
 | fallback succeeds | — | — | dim adjustment line (D9) plus a tagged WARNING | review proceeds |
 
 `ProcessRunner.run` raises `ProcessTimedOutError` on timeout. `refs.py` catches it nowhere today, so even the primary `_fetch` timing out escapes `sq review pr` as a traceback instead of a rendered `CodeHostError`. The slice handles both cases:
@@ -300,12 +326,13 @@ The fallback adds no new runner method. Tests drive each row through the fake `P
 - **#175:** `--dry-run`, `--explain` and a real run all classify through `_classify_for_run`; `--dry-run --strict` applies the strict policy.
 - **#175:** `sq run review 931 --model glm-flash-low. --dry-run` exits 1 with `unknown model alias 'glm-flash-low.'; did you mean: glm-flash-low?…`. A real run fails before step 1, and the slot's existing review artifact is byte-identical afterwards.
 - **#186:** When `refs/pull/N/head` lags and the API head sha is fetchable, the review runs on the API head sha and prints one adjustment line.
-- **#186:** When nothing yields the API head sha, `PullRequestRefLaggingError` names every source tried with its sha or failure, and gives the hint. A head that truly moved raises `RefMovedSinceResolutionError` naming both sources.
+- **#186:** The fixture for the lag case has the API head sha **absent** from the local clone before the fetch, as in the issue. A fixture where it is already present does not count as covering the case.
+- **#186:** When nothing yields the API head sha, `PullRequestHeadUnavailableError` names every source tried with its sha or failure, and gives the hint. A head that truly moved raises `RefMovedSinceResolutionError` naming both sources.
 - **#186:** At default verbosity and `-v`, a `CodeHostError` appears on stderr exactly once. At `-vv` the tagged WARNING record also appears, prefixed with level and logger name. An untagged codehost WARNING appears at every verbosity.
 - **#186:** A fetch timeout, primary or fallback, never escapes as a traceback: the primary raises `HostCommandTimeoutError`; a fallback timeout is a recorded attempt reason (D10).
 
 ### Technical Requirements
-- Tests for each item above. The #188 predicate is tested against real temporary git repositories (merged `--no-ff`, fast-forward, empty branch, missing branch, git failure). The #186 cases use a fake `ProcessRunner` with a lagging `refs/pull` fixture shaped like the issue (PR ref one commit behind, branch and API at head).
+- Tests for each item above. The #188 predicate is tested against real temporary git repositories (merged `--no-ff`, fast-forward, empty branch, missing branch, git failure). The #186 cases use a fake `ProcessRunner` with a lagging `refs/pull` fixture shaped like the issue: PR ref one commit behind, branch and API at head, and the API head sha absent locally until a fallback fetch brings it in.
 - No remaining copy of the review profile cascade: `_resolve_profile` and the inline cascade in `pipeline/actions/review.py` are gone, and `"sdk"` as a review-profile literal is gone.
 - `ruff format`, `ruff check`, and `pyright` all clean.
 - Issues #175, #184, #186, #188 are closed by the merge commit or by a closing comment that links the slice.
