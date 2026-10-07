@@ -254,13 +254,13 @@ status: in_progress
 
 ## Task 24b — Tag the remaining pre-raise WARNINGs (D8)
 
-- [ ] Tasks 18, 20, 21 and 22b tagged their own records; the adjustment WARNINGs are tagged in 25a. Tag exactly these remaining sites with `extra={RENDERED_BY_CALLER: True}`, each of which logs and then raises a `CodeHostError`:
-  - [ ] `codehost/refs.py`: the `_fetch` failure WARNING per endpoint, the `git fetch exited` WARNING, the `ref … is missing after fetch` WARNING in `_verify`, and the `no merge base` WARNING
-  - [ ] `codehost/github_cli.py`: `_log_and_raise`, the `gh is not on PATH` WARNING, and the `gh exceeded …s` WARNING
-- [ ] Leave untagged: the nonexistent-cwd WARNING (re-raises a non-`CodeHostError`), the review-thread page-limit WARNING, the ancestry-answered-no WARNING, and every WARNING in `remotes`, `worktree`, `metadata_lock`
-- [ ] Tests: for each tagged site, drive the failure through the fake runner or fake `gh` and assert the record carries the tag; assert the untagged sites listed above do not
-  - [ ] Success: tests pass
-- [ ] Commit: `fix: tag code host warnings the command prints itself`
+- [x] Tasks 18, 20, 21 and 22b tagged their own records; the adjustment WARNINGs are tagged in 25a. Tag exactly these remaining sites with `extra={RENDERED_BY_CALLER: True}`, each of which logs and then raises a `CodeHostError`:
+  - [x] `codehost/refs.py`: the `_fetch` failure WARNING per endpoint, the `git fetch exited` WARNING, the `ref … is missing after fetch` WARNING in `_verify`, and the `no merge base` WARNING
+  - [x] `codehost/github_cli.py`: `_log_and_raise`, the `gh is not on PATH` WARNING, and the `gh exceeded …s` WARNING
+- [x] Leave untagged: the nonexistent-cwd WARNING (re-raises a non-`CodeHostError`), the review-thread page-limit WARNING, the ancestry-answered-no WARNING, and every WARNING in `remotes`, `worktree`, `metadata_lock`
+- [x] Tests: for each tagged site, drive the failure through the fake runner or fake `gh` and assert the record carries the tag; assert the untagged sites listed above do not
+  - [x] Success: tests pass
+- [x] Commit: `fix: tag code host warnings the command prints itself`
 
 ## Task 25a — Print adjustments and record the reviewed head (D9)
 
