@@ -11,59 +11,59 @@ aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261007
 dateUpdated: 20261007
-reviewedSha: 4c997ba56244211bd57f1382dc5908c7dd324bdd
-revision_number: 1
+reviewedSha: e4682938999636a2c22135d7923ae81cc5968bc3
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 35.6
+toolCallsMade: 2
+durationSeconds: 59.4
 runId: run-20261007-p5-f492c43d
 squadronVersion: 0.20.1
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Shared status-line renderer is never created"
-    location: "src/squadron/cli/commands/run.py:555"
-  - id: F002
-    severity: concern
-    category: scope
-    summary: "Task 36 opens an issue that already exists"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:195"
-  - id: F003
-    severity: concern
-    category: sequencing
-    summary: "Task 36's design edit is not committed in its own step"
-    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:410-418"
-  - id: F004
-    severity: note
-    category: test-with
-    summary: "Tasks 27–29 delay tests across two implementation tasks"
-    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:312-344"
-  - id: F005
-    severity: note
-    category: clarity
-    summary: "`wait_for_run` does not say how it distinguishes NOT_FOUND from UNREADABLE"
-    location: "src/squadron/pipeline/state.py:421-429"
-  - id: F006
-    severity: note
-    category: scope
-    summary: "`RUNNING_STATUS` change is untested and missing from the commit message"
-    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:63-72"
-  - id: F007
-    severity: pass
-    category: nfr
-    summary: "Load test and CI gating not required"
-    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:415"
-  - id: F008
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage and traceability"
+    summary: "Success criteria coverage is complete"
     location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:30-32"
-  - id: F009
+  - id: F002
     severity: pass
     category: sequencing
-    summary: "Sequencing, sizing and commit distribution"
-    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md"
+    summary: "Sequencing and dependencies are sound"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:53-454"
+  - id: F003
+    severity: pass
+    category: nfr
+    summary: "No load-test or CI-gating task is required"
+    location: "project-documents/user/slices/199-slice.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:415"
+  - id: F004
+    severity: concern
+    category: task-sizing
+    summary: "Task 24 is too large for one junior-completable unit"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:272-289"
+  - id: F005
+    severity: concern
+    category: commit-checkpoints
+    summary: "The Task 12 refactor has no commit checkpoint and lands in a `feat:` commit"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:149-186"
+  - id: F006
+    severity: concern
+    category: testing
+    summary: "The CLI tests' hermetic runs-dir injection is unspecified"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:337-347"
+  - id: F007
+    severity: note
+    category: test-with-pattern
+    summary: "Some tests trail their implementation by several tasks"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:161-185"
+  - id: F008
+    severity: note
+    category: process
+    summary: "Task 35 runs `gh issue create` and edits the design on the slice branch"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:416-426"
+  - id: F009
+    severity: note
+    category: task-sizing
+    summary: "Task 36 is broad, and Task 31 uses different wording from the design"
+    location: "project-documents/user/tasks/199-tasks.pipeline-and-run-listings-sq-pipelines-list-and-sq-runs-list.md:430-454"
 ---
 
 # Review: tasks — slice 199
@@ -73,60 +73,83 @@ findings:
 
 ## Findings
 
-### [CONCERN] Shared status-line renderer is never created
+### [PASS] Success criteria coverage is complete
 
-Task 32 says `sq runs wait` prints its status line "through the shared `run_views` renderer (same as `sq run --status <run-id>`)" and "not duplicated". No earlier task creates that renderer. Task 12 moves only `STATUS_COLORS`, and `_display_run_status` stays in `run.py` (line 555). The design rule that no command module imports another means `runs.py` cannot import it from `run.py`. A junior implementer would either duplicate the function or break the rule. Fix: add a sub-item to Task 12 that moves `_display_run_status`, and the status line it prints, into `run_views`, with `run.py` importing it. Task 12 should also add a regression test that the `sq run --status` output is unchanged. As written, Task 12 asserts "output unchanged" with no test behind it.
+- **Functional requirements:**
+  - Pipeline grouping and shadowing: Tasks 13 and 15.
+  - Run listing, `--all` and `--pipeline`: Tasks 25, 27 and 28.
+  - Resume-at equals the `--resume` step: Tasks 3 and 23.
+  - Item-resume equivalence for open and accept counts: Tasks 9 and 26.
+  - `--list` removal: Tasks 16 and 17.
+  - `sq agents list` and slash commands: Tasks 18 to 20.
+  - `wait` exit codes: Tasks 29 to 32.
+- **Technical requirements:**
+  - I/O-bounds test with the 300-run mix: Task 26.
+  - `caplog` assertions per `ResumeProblem`: Tasks 23 and 24.
+  - Marker-text test: Task 27.
+  - Parity test: Task 9.
+  - Real fixtures and the `tmp_path` hermetic rule: stated in the Context Summary and applied in each test task.
+- **Process steps:** the Verification Walkthrough is Task 36, and docs, CHANGELOG and follow-up issues are Tasks 33 to 35.
 
-### [CONCERN] Task 36 opens an issue that already exists
+I found no scope creep. The `RUNNING_STATUS` constant in Task 3 traces to D13 and is called out there.
 
-D13 already links the PID-in-run-state follow-up to #190, and the recent commit "link slice 199 orphan-run follow-up to #190" confirms this. Task 36 item (2) still tells the implementer to `gh issue create` for the same thing. That would produce a duplicate issue. The design's Development Approach step 6 lists only two issues to open, the `RunState.status` typing and `--json`. Fix: reduce Task 36 to two issues and reference #190 for the PID item. Also change the success line "three issue numbers recorded" to match. The D13 link no longer needs adding.
+### [PASS] Sequencing and dependencies are sound
 
-### [CONCERN] Task 36's design edit is not committed in its own step
+- Part A (refactor) comes first and ends in commits at Tasks 4, 6, 9 and 11, before any new surface.
+- `run_views` (Task 12) exists before its consumers in Tasks 13, 27 and 31.
+- `run_listing` types (Task 21) come before the resolvers (22 to 24), then `list_run_summaries` (25), then the renderer (27) and the command (28).
+- There are no circular dependencies.
+- Commits are spread across the file rather than batched at the end.
+- Merging is correctly left to Phase 7, and Task 36 says so.
 
-Task 36 edits the slice design and creates outward-facing GitHub issues, but it has no commit step. The changes would sit uncommitted until Task 37's catch-all "finalize" commit. Also, Task 35's commit lands before Task 36. Fix: add a commit (`docs: link slice 199 follow-up issues`) at the end of Task 36. Task 37's final commit would then only cover leftovers.
+### [PASS] No load-test or CI-gating task is required
 
-### [NOTE] Tasks 27–29 delay tests across two implementation tasks
+The slice states that "the architecture sets no NFR for this path" and that the under-1-second target is advisory. The count-based I/O-bounds test (Task 26) stands in for a load test. A `tests/load/` task and a CI wiring task are therefore not required.
 
-Task 27 (marker text and renderer) and Task 28 (command) are both implemented before Task 29 holds any tests. Tasks 13–15 follow the same pattern for the pipeline listing. This is acceptable because the units are small and share one commit. Splitting the rendering tests into Task 27 would match the test-with pattern more closely.
+### [CONCERN] Task 24 is too large for one junior-completable unit
 
-### [NOTE] `wait_for_run` does not say how it distinguishes NOT_FOUND from UNREADABLE
+Task 24 bundles three things:
+- The completed-run resolver, which is two or more helpers: `report_json_paths`, `single_each_step`, `load_report` and counting `open_items` and `acceptable_items`.
+- The dispatch for `running` and other statuses.
+- A test list of about eight scenarios, each with enum and `caplog` assertions.
 
-`StateManager.load` raises `FileNotFoundError` for a missing run and `SchemaVersionError` (line 71, raised at line 199) for a bad schema. A corrupt JSON file may raise other exception types. Task 30 states the outcome mapping but not which exceptions map to `UNREADABLE`. Fix: name the exact exception set, in the style of Task 22. Task 31's "unreadable state file" test should cover both a corrupt file and a schema-version mismatch.
+Split it into:
+- 24a: the resolver plus the `running` dispatch.
+- 24b: its tests.
 
-### [NOTE] `RUNNING_STATUS` change is untested and missing from the commit message
+Keep the commit after 24b. Task 23 shows the right size, with its implementation and tests as separate bullets.
 
-Task 3 adds the `RUNNING_STATUS` constant to the Part A refactor, but Task 4's tests and its commit message cover only `first_unfinished_step_of` and `RESUMABLE_STATUSES`. The change is trivial and the grep success check is enough. It is, though, an unlisted change in a commit labelled as a pure extraction.
+### [CONCERN] The Task 12 refactor has no commit checkpoint and lands in a `feat:` commit
 
-### [PASS] Load test and CI gating not required
+Task 12 moves `_STATUS_COLORS` and `_display_run_status` out of `run.py`. That is a behaviour-preserving refactor of existing code. It sits uncommitted through Tasks 13 and 14 and is committed with Task 15 as `feat: add sq pipelines list`. The design's Development Approach calls for refactors to be committed on their own. Add a verification step to Task 12 (`ruff`, `pyright`, and the `tests/cli` run for the `--status` tests) and a `refactor: move STATUS_COLORS and render_run_status to run_views` commit.
 
-The slice states that the architecture sets no NFR for this path. The under-1s target is advisory and is measured once in the walkthrough, not asserted in a test. Task 26's I/O-bounds test enforces the call counts without wall-clock timing. No `tests/load/` task or CI wiring task is required.
+### [CONCERN] The CLI tests' hermetic runs-dir injection is unspecified
 
-### [PASS] Success-criteria coverage and traceability
+Task 28 says "hermetic runs dir", and Task 32 injects "poll/clock via the helper's parameters or a monkeypatched `wait_for_run`". Neither says how a `CliRunner` test points the command at a `tmp_path` runs directory. That depends on how `run.py --status` builds its `StateManager`: a config path, an env var, or a patched factory. Without this, a junior could write tests that read `~/.config/squadron/runs`. Task 36's `HOME=$(mktemp -d)` check would catch that only afterwards. Name the exact mechanism in Task 28 and reuse it in Task 32. The design points only to `tests/_hermetic.py`.
 
-Every functional and technical requirement maps to a task:
-- **Pipeline listing and ordering:** Tasks 10–15.
-- **Run listing filters and hidden runs:** Tasks 25 and 29.
-- **Resume equivalence:** parity tests in Tasks 9 and 26.
-- **Flag removal:** Tasks 16–17.
-- **`sq agents list`:** Tasks 18–20.
-- **`wait` exit codes:** Tasks 30–33.
-- **I/O bounds, marker-text test, hermeticity:** Tasks 26, 29 and 37.
+### [NOTE] Some tests trail their implementation by several tasks
 
-No scope creep beyond the Task 36 duplicate issue. The traceability line in the Context Summary matches the design sections.
+- **Part B:** Tasks 13 and 14 (renderer, command) have their tests in Task 15, with Task 12 before them.
+- **Tasks 18 to 20:** Tasks 18 and 19 (`agents list` and its references) are tested together in Task 20.
+- **Task 27:** it bundles its tests with the implementation, which is fine.
 
-### [PASS] Sequencing, sizing and commit distribution
+Test-with is mostly honoured, and each group is small enough to be acceptable. Consider moving the render tests of Task 15 into Task 13.
 
-- **Dependencies:** `first_unfinished_step_of` (Task 3), the report helpers (Task 5) and `item_eligibility` (Task 7) all land before `run_listing` (Tasks 21–26). There are no circular dependencies.
-- **Test-with:** tests follow the implementation in nearly every pair.
-- **Commit cadence:** about a dozen semantic commits are spread across Parts A–F rather than batched at the end.
-- **Merge:** merging is correctly deferred to Phase 7.
-- **Size:** tasks are appropriately sized, and Tasks 23 and 24 are split to stay under the ~50-line function limit.
+### [NOTE] Task 35 runs `gh issue create` and edits the design on the slice branch
+
+- **External action:** creating GitHub issues publishes content externally. The design (Development Approach step 6) authorises opening them. The implementer should still show the Project Manager the issue titles and bodies before creating them.
+- **Planning artifact edited on the slice branch:** the task edits the slice design, and CLAUDE.md says planning artifacts commit to the target. The edit is only link additions, so this is minor. State explicitly that it is intended.
+
+### [NOTE] Task 36 is broad, and Task 31 uses different wording from the design
+
+- **Task 36:** it combines the walkthrough, the hermeticity check and the full gate. It is acceptable because the sub-items are independent and each has its own success line.
+- **Task 31:** it says "status panel", while D13 and the design say "status line". Task 12 resolves this by moving the Rich "Run Status" panel into `render_run_status`. Use one term in Tasks 31 and 36 to avoid confusion.
 
 ### Run Digest
 
-- Response length: 6070 chars
+- Response length: 6797 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -136,7 +159,7 @@ No scope creep beyond the Task 36 duplicate issue. The traceability line in the 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 35.6 s
+- Duration: 59.4 s
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 9
