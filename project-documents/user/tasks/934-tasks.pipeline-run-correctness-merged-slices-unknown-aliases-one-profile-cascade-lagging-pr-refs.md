@@ -187,9 +187,12 @@ status: not_started
 ## Task 18 — Models and errors (D7, D8, D9)
 
 - [ ] `codehost/models.py`: add `RefAdjustment(role, reported_sha, used_sha, source, reason)` and `FetchedRange.adjustments: tuple[RefAdjustment, ...]` (default empty)
-- [ ] `codehost/errors.py`: add `RENDERED_BY_CALLER` (the `extra` key constant); `RefMovedSinceResolutionError` gains `expected_source`/`actual_source` with the D7 message and hint `Rerun to resolve the pull request again.`; add `PullRequestHeadUnavailableError` (a `CodeHostError`, role HEAD) with the D7 message and hint
-- [ ] Tests (`tests/codehost/`): message text names each source and sha; hints present; `adjustments` defaults to `()`
-  - [ ] Success: tests pass
+- [ ] `codehost/errors.py`: add `RENDERED_BY_CALLER` (the `extra` key constant) and `PullRequestHeadUnavailableError` (a `CodeHostError`, role HEAD) with the D7 message and hint
+- [ ] `RefMovedSinceResolutionError` gains required keyword-only `expected_source` and `actual_source` (no defaults, so no silent label), the D7 message, and hint `Rerun to resolve the pull request again.`
+  - [ ] Update its one existing call site, `refs._verify` (it serves both base and head): `expected_source="host API"`, `actual_source` the ref that was read (e.g. `refs/pull/49/head`, or the base ref). The `_verify` WARNING is tagged `extra={RENDERED_BY_CALLER: True}`
+  - [ ] Update the existing constructions and message assertions in `tests/codehost/test_refs.py` (grep `RefMovedSinceResolutionError`) to the new signature and message
+- [ ] Tests (`tests/codehost/`): message text names each source and sha; hints present; `adjustments` defaults to `()`; a base-side move through `_verify` names its sources
+  - [ ] Success: tests pass; existing `test_refs.py` cases updated, none deleted
 - [ ] Commit: `feat: add RefAdjustment and source-naming code host errors`
 
 ## Task 19 — Base fast-forward onto `adjustments` (D9)
@@ -208,46 +211,72 @@ status: not_started
 
 ## Task 21 — Obtain the API head locally (D6 step 1)
 
-- [ ] In `refs.py` add a helper that, given the API head sha, returns it as present locally: `cat-file -e <sha>^{commit}`; if absent, fetch `+<sha>:<api_local>` then `+<head_fallback_source>:<api_local>` (the second source is an argument, `head_fallback_sources: tuple[str, ...]`). `<api_local>` is a sibling of `head_local` in the per-PR namespace
+- [ ] In `refs.py` add a helper that, given the API head sha, makes it present locally. `cat-file -e <sha>^{commit}` first; if absent, try in order, each into `<api_local>` (a sibling of `head_local` in the per-PR namespace): (1) `fetch <remote> +<sha>:<api_local>`; (2) for each entry of the new argument `head_fallback_sources: tuple[str, ...]`, `fetch <remote> +<entry>:<api_local>`. The helper itself names no host refspec
 - [ ] After each attempt `rev-parse <api_local>` must equal the API head sha; a mismatch rejects that attempt
 - [ ] A fallback attempt catches `ProcessTimedOutError` and records `timed out after Ns`; non-zero exit records stderr. Each attempt logs DEBUG
 - [ ] No attempt yields the sha: raise `PullRequestHeadUnavailableError` naming every source with its sha or reason (WARNING tagged `RENDERED_BY_CALLER`)
-- [ ] Tests (fake runner; the API head sha **absent** locally before the fetch): sha already present → no fetch; fetch-by-sha succeeds; sha fetch `not our ref` then branch fetch succeeds; branch fetch returns a different sha → rejected; timeout on a fallback recorded as the reason; all fail → error naming each source
+- [ ] Tests (fake runner; the API head sha **absent** locally before the fetch): sha already present → no fetch; fetch-by-sha succeeds; sha fetch `not our ref` then a fallback source succeeds; fallback returns a different sha → rejected; timeout on a fallback recorded as the reason; all fail → error naming each source
   - [ ] Success: tests pass
-- [ ] Commit: `feat: fetch the API head by sha or head branch when the PR ref lags`
+- [ ] Commit: `feat: fetch the API head by sha or fallback source when the PR ref lags`
 
-## Task 22 — Classify and use the API head (D6 step 2, D10)
+## Task 22a — Classify the PR-ref sha against the API head (D6 step 2)
 
-- [ ] In `fetch_and_range`, when the PR-ref sha differs from the API head: call Task 21's helper first, then test whether the PR-ref sha is an ancestor of the API head (`merge-base --is-ancestor`). Ancestor → `update-ref head_local <api-sha>`, record a head `RefAdjustment`, build the range. Descends or unrelated → `RefMovedSinceResolutionError` naming both sources
-- [ ] Only the exact API head sha is ever reviewed. `update-ref` failure or timeout renders `RefNotFetchableError`/`HostCommandTimeoutError`
-- [ ] Tests, using the lagging fixture from the issue (PR ref one commit behind, branch and API at head, API sha absent locally until a fallback fetch): lag → range built on the API head with one adjustment; pushed after resolution → `RefMovedSinceResolutionError` hinting rerun; unrelated → same; ancestry timeout and non-0/1 exit answer "no" with the existing WARNING; `update-ref` failure and timeout
-  - [ ] Success: tests pass; `uv run pytest tests/codehost -k lagging -v` selects the lag cases
+- [ ] In `fetch_and_range`, when the PR-ref sha differs from the API head: call Task 21's helper first, then test whether the PR-ref sha is an ancestor of the API head (`merge-base --is-ancestor`). Ancestor → lag (handled in 22b). Descends or unrelated → `RefMovedSinceResolutionError` naming both sources, hint rerun
+- [ ] Tests (lagging fixture from the issue, API sha absent locally until a fallback fetch): pushed after resolution → `RefMovedSinceResolutionError`; unrelated → same; ancestry timeout and non-0/1 exit answer "no" with the existing WARNING, giving the same error
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: classify lagging, moved and rewritten PR refs`
+
+## Task 22b — Use the API head on a lagging ref (D6, D9, D10)
+
+- [ ] Lag case: `update-ref head_local <api-sha>`, record a head `RefAdjustment` (WARNING tagged), build the range on the API head. Only the exact API head sha is ever reviewed
+- [ ] `update-ref` failure renders `RefNotFetchableError`; timeout renders `HostCommandTimeoutError`; both log a tagged WARNING
+- [ ] Tests: lag → range built on the API head with one adjustment; `update-ref` non-zero and timeout. `uv run pytest tests/codehost -k lagging -v` selects the lag cases (name them accordingly)
+  - [ ] Success: tests pass
 - [ ] Commit: `fix: review the API head when refs/pull/N/head lags (#186)`
 
 ## Task 23 — GitHub adapter passes the head refspec (D6)
 
-- [ ] `fetch_pull_request_refs` passes `refs/heads/<head_ref>` as `head_fallback_sources` to `fetch_and_range`; `refs.py` stays host-neutral (`test_import_boundaries.py` passes)
+- [ ] `fetch_pull_request_refs` passes `("refs/heads/<head_ref>",)` as `head_fallback_sources` to `fetch_and_range`; `refs.py` stays host-neutral (`test_import_boundaries.py` passes)
 - [ ] Tests (`tests/codehost/test_github_cli.py`): the adapter passes the expected sources; a fork PR whose same-named base branch returns another sha is rejected by the sha check
   - [ ] Success: tests pass
 - [ ] Commit: `feat: github adapter supplies head branch fallback refspec`
 
-## Task 24 — `code_host_logging` context manager (D8)
+## Task 24a — `code_host_logging` context manager (D8)
 
 - [ ] Add `code_host_logging(verbosity: int)` next to `render_code_host_error`. On entry: record the `squadron.codehost` logger level, add one stderr handler (format `%(levelname)s %(name)s: %(message)s`) with the tag filter, set level WARNING/INFO/DEBUG for verbosity 0/1/2+. On exit (`finally`): remove exactly that handler, restore the level. `propagate` untouched
-- [ ] Filter drops `RENDERED_BY_CALLER` records below verbosity 2 and keeps them at 2+
+- [ ] Filter drops records carrying `RENDERED_BY_CALLER` below verbosity 2 and keeps them at 2+
 - [ ] Nested entry is a no-op on entry and exit
-- [ ] Tag the WARNINGs that precede a raised `CodeHostError` in the adapter and `refs.py` (and adjustment WARNINGs); tag nothing else
-- [ ] Tests: tagged WARNING absent at verbosity 0 and 1, present at 2 with prefix; untagged WARNING reaches stderr at every verbosity; entering twice shows one handler inside and zero after, level restored; a raised `typer.Exit` inside still cleans up; records still reach `caplog`
+- [ ] Tests (log records emitted directly in the test, with and without the tag): tagged absent at verbosity 0 and 1, present at 2 with prefix; untagged reaches stderr at every verbosity; entering twice shows one handler inside and zero after, level restored; a raised `typer.Exit` inside still cleans up; records still reach `caplog`
   - [ ] Success: tests pass
 - [ ] Commit: `feat: code host logging scope that prints each failure once`
 
-## Task 25 — Wire the commands (D8, D9)
+## Task 24b — Tag the remaining pre-raise WARNINGs (D8)
 
-- [ ] `sq review pr`: wrap the body after `_resolve_verbosity(verbose)` in `with code_host_logging(verbosity):`. `sq pr show` and `sq pr create` use `code_host_logging(0)`; no new flags
-- [ ] Print each `RefAdjustment` once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`. The PR review artifact's provenance records the head sha actually reviewed
-- [ ] Tests (`tests/cli/test_review_pr.py`, `test_pr_show.py`): a `CodeHostError` appears on stderr exactly once at default and `-v`; at `-vv` the tagged WARNING also appears; lag success prints one adjustment line and the artifact carries the API head sha; an untagged codehost WARNING still shows at default verbosity; a fetch timeout never produces a traceback
+- [ ] Tasks 18, 19, 21 and 22b tagged their own records. Sweep the rest: every WARNING logged immediately before raising a `CodeHostError` in `codehost/refs.py` (e.g. the `_fetch` failure records) and in the GitHub adapter gets `extra={RENDERED_BY_CALLER: True}`. Tag nothing else (`remotes`, `worktree`, `metadata_lock` and other warnings stay untagged)
+- [ ] Tests: for each tagged site, drive the failure through the fake runner and assert the record carries the tag; assert one untagged warning from another module (e.g. `remotes`) does not
+  - [ ] Success: tests pass; `grep -rn RENDERED_BY_CALLER src/` sites each precede a raise or describe a `RefAdjustment`
+- [ ] Commit: `fix: tag code host warnings the command prints itself`
+
+## Task 25a — Wire `sq review pr` (D8)
+
+- [ ] Wrap the body after `_resolve_verbosity(verbose)` in `with code_host_logging(verbosity):`
+- [ ] Tests (`tests/cli/test_review_pr.py`): a `CodeHostError` appears on stderr exactly once at default and `-v`; at `-vv` the tagged WARNING also appears; an untagged codehost WARNING shows at default verbosity; a fetch timeout never produces a traceback
   - [ ] Success: tests pass
-- [ ] Commit: `fix: print code host failures and ref adjustments once (#186)`
+- [ ] Commit: `fix: print code host failures once in sq review pr (#186)`
+
+## Task 25b — Wire `sq pr show` and `sq pr create` (D8)
+
+- [ ] Both call `code_host_logging(0)`; no new flags
+- [ ] Tests: `tests/cli/test_pr_show.py` and `tests/cli/test_pr_create_failures.py` each assert a `CodeHostError` appears on stderr exactly once and an untagged codehost WARNING still shows
+  - [ ] Success: tests pass
+- [ ] Commit: `fix: print code host failures once in sq pr show and create`
+
+## Task 25c — Print adjustments and record the reviewed head (D9)
+
+- [ ] Print each `RefAdjustment` once, dim, on stderr: `head: refs/pull/49/head lags; reviewed ae1cbf2… fetched by sha`; both `sq review pr` and `sq pr show` share the fetch path, so both print it. The PR review artifact's provenance records the head sha actually reviewed
+- [ ] Tests: lag success prints exactly one adjustment line (no duplicate from a log record at default verbosity) and the artifact carries the API head sha; a base fast-forward adjustment prints once too
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: print ref adjustments and record the reviewed head sha`
 
 ## Task 26 — Part C validation
 
@@ -285,3 +314,4 @@ status: not_started
 ## Notes
 
 - No merge task is listed: Phase 7 merges the slice branch into the target after the code review. The merge or a closing comment linking the slice closes #175, #184, #186, #188.
+- Tasks 22, 24 and 25 were split into lettered sub-tasks (22a–b, 24a–b, 25a–c) after the tasks review; other numbers are unchanged.
