@@ -111,10 +111,10 @@ status: in_progress
 
 ## Task 10 — `_classify_for_run` in `cli/commands/run.py` (D5)
 
-- [ ] Add `_classify_for_run(definition, *, model_override, params, strict) -> PipelineClassification` owning policy (YAML `auth_policy` < `--strict`), `DefaultPoolBackend()`, the `ModelResolver(... profile_source=has_profile_param(params))`, and the `classify_pipeline` call; it raises `ClassificationError`
-- [ ] `_run_pipeline_sdk` uses it in place of its inline block (its own pool backend for the authoritative resolver is unchanged); `--explain` uses it with `explain_params`; the second inline copy is deleted
-  - [ ] Success: existing run and explain tests pass unchanged
-- [ ] Commit: `refactor: share one classification helper between run and explain`
+- [x] Add `_classify_for_run(definition, *, model_override, params, strict) -> PipelineClassification` owning policy (YAML `auth_policy` < `--strict`), `DefaultPoolBackend()`, the `ModelResolver(... profile_source=has_profile_param(params))`, and the `classify_pipeline` call; it raises `ClassificationError`
+- [x] `_run_pipeline_sdk` uses it in place of its inline block (its own pool backend for the authoritative resolver is unchanged); `--explain` uses it with `explain_params`; the second inline copy is deleted
+  - [x] Success: existing run and explain tests pass unchanged
+- [x] Commit: `refactor: share one classification helper between run and explain`
 
 ## Task 11 — `--dry-run` classifies (D5, #175)
 
