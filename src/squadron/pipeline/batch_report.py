@@ -7,6 +7,7 @@ leaves one document that says which items need a human.
 
 from __future__ import annotations
 
+import glob
 import json
 import logging
 import tempfile
@@ -49,6 +50,16 @@ _JSON_KEYS: dict[str, str] = {
     "decision": "decision",
     "resumed_at": "resumedAt",
 }
+
+
+def report_json_path(runs_dir: Path, run_id: str, step_name: str) -> Path:
+    """Where the ``report.json`` of *run_id*'s ``each`` step *step_name* lives."""
+    return runs_dir / f"{run_id}.{step_name}{REPORT_JSON_SUFFIX}"
+
+
+def report_json_paths(runs_dir: Path, run_id: str) -> list[Path]:
+    """Every ``report.json`` *run_id* wrote; empty when the run wrote none."""
+    return sorted(runs_dir.glob(f"{glob.escape(run_id)}.*{REPORT_JSON_SUFFIX}"))
 
 
 class BatchReportLoadError(ValueError):
@@ -297,7 +308,7 @@ class BatchReport:
         return runs_dir / f"{self.run_id}.{self.step_name}.report.md"
 
     def json_path(self, runs_dir: Path) -> Path:
-        return runs_dir / f"{self.run_id}.{self.step_name}{REPORT_JSON_SUFFIX}"
+        return report_json_path(runs_dir, self.run_id, self.step_name)
 
     def write(self, runs_dir: Path) -> Path:
         """Write the Markdown and JSON reports beside the run state file; return the

@@ -17,6 +17,8 @@ from squadron.pipeline.batch_report import (
     FlagKind,
     ItemDecision,
     ItemOutcome,
+    report_json_path,
+    report_json_paths,
 )
 from squadron.pipeline.executor import ExecutionStatus, StepResult
 from squadron.pipeline.models import ActionResult
@@ -337,3 +339,35 @@ class TestReportJson:
 
         with pytest.raises(BatchReportLoadError, match=f"batch report {path} not found"):
             BatchReport.load(path)
+
+
+class TestReportJsonPaths:
+    """Report file naming owned by batch_report (slice 199 D5)."""
+
+    def test_report_json_path_is_where_write_put_it(self, tmp_path: Path) -> None:
+        report = _json_report()
+        report.write(tmp_path)
+
+        path = report_json_path(tmp_path, report.run_id, report.step_name)
+
+        assert path == report.json_path(tmp_path)
+        assert path.is_file()
+
+    def test_no_report_yields_empty_list(self, tmp_path: Path) -> None:
+        assert report_json_paths(tmp_path, "run-a") == []
+
+    def test_one_path_per_written_report(self, tmp_path: Path) -> None:
+        for step in ("slices", "fixes"):
+            BatchReport("p", "run-a", step).write(tmp_path)
+
+        assert report_json_paths(tmp_path, "run-a") == [
+            report_json_path(tmp_path, "run-a", "fixes"),
+            report_json_path(tmp_path, "run-a", "slices"),
+        ]
+
+    def test_another_runs_reports_do_not_match(self, tmp_path: Path) -> None:
+        BatchReport("p", "run-a", "slices").write(tmp_path)
+        BatchReport("p", "run-ab", "slices").write(tmp_path)
+        BatchReport("p", "run-a-2", "slices").write(tmp_path)
+
+        assert report_json_paths(tmp_path, "run-a") == [report_json_path(tmp_path, "run-a", "slices")]

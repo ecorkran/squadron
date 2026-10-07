@@ -27,6 +27,7 @@ from squadron.pipeline.batch_report import (
     ItemDecision,
     ItemOutcome,
     ItemRerun,
+    report_json_path,
 )
 from squadron.pipeline.branch_ops import dirty_paths, restore_target
 from squadron.pipeline.control_params import (
@@ -186,7 +187,7 @@ def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
     except SchemaVersionError as exc:
         raise _Stop(ResumeExit.REJECTED, str(exc)) from None
     each = _single_each_step(load_pipeline(state.pipeline), request.run_id)
-    path = state_manager.runs_dir / f"{request.run_id}.{each.name}.report.json"
+    path = report_json_path(state_manager.runs_dir, request.run_id, each.name)
     try:
         report = BatchReport.load(path)
     except BatchReportLoadError as exc:
