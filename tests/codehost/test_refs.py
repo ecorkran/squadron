@@ -350,7 +350,7 @@ def test_lagging_ref_from_the_issue_fetches_the_api_head_from_the_fallback() -> 
     fetched = _run(runner, head_fallback_sources=("refs/heads/dev/jane",))
 
     assert fetched.head_sha == HEAD_SHA
-    assert fetched.adjustments[0].source == "refs/heads/dev/jane"
+    assert fetched.adjustments[0].source == "fetched from refs/heads/dev/jane"
     kinds = [call.argv[1] for call in runner.calls]
     assert kinds.index("cat-file") < kinds.index("merge-base")
 
@@ -546,7 +546,7 @@ def test_base_fast_forward_is_recorded_as_one_adjustment() -> None:
     adjustment = fetched.adjustments[0]
     assert adjustment.role is RefRole.BASE
     assert (adjustment.reported_sha, adjustment.used_sha) == (BASE_SHA, advanced)
-    assert adjustment.source == "refs/heads/main"
+    assert adjustment.source == "fetched from refs/heads/main"
 
 
 def test_primary_fetch_timeout_raises_a_code_host_error_not_a_traceback(
@@ -735,3 +735,30 @@ def test_the_ancestry_answered_no_warning_is_not_tagged(caplog: pytest.LogCaptur
         with pytest.raises(RefMovedSinceResolutionError):
             _run(runner)
     assert not _tagged(caplog, "could not test ancestry")
+
+
+def test_adjustment_warnings_are_tagged_because_the_command_prints_the_line(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    lag = FakeProcessRunner(
+        _script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _ok()))
+    )
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        _run(lag)
+    assert _tagged(caplog, "lags the host API head")
+
+    caplog.clear()
+    forward = FakeProcessRunner(_script_with_moved_base("7" * 40, _ok()))
+    with caplog.at_level(logging.WARNING, logger="squadron.codehost.refs"):
+        _run(forward)
+    assert _tagged(caplog, "advanced since resolution")
+
+
+def test_adjustment_describes_itself_as_the_line_the_command_prints() -> None:
+    runner = FakeProcessRunner(
+        _script_with_head_disagreement(_API_PRESENT, (_PR_BEHIND_API, _ok()), (_UPDATE_REF, _ok()))
+    )
+    [adjustment] = _run(runner).adjustments
+    assert adjustment.describe() == (
+        f"head: refs/pull/{NUMBER}/head lags; reviewed {HEAD_SHA[:7]}… present locally"
+    )

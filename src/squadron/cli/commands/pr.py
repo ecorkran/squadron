@@ -16,6 +16,7 @@ from contextlib import contextmanager
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -93,7 +94,15 @@ def resolve_and_fetch_pull_request(
     host, locator, parsed = resolve_locator(target, repo_cwd)
     resolved = host.resolve_pull_request(locator, parsed, cwd=repo_cwd)
     fetched = host.fetch_pull_request_refs(resolved, remote_name=locator.remote_name, cwd=repo_cwd)
+    _print_adjustments(fetched)
     return host, resolved, fetched
+
+
+def _print_adjustments(fetched: FetchedRange) -> None:
+    """Say, once each, where the range reviewed differs from what the host first reported."""
+    errors = Console(stderr=True)
+    for adjustment in fetched.adjustments:
+        errors.print(f"[dim]{escape(adjustment.describe())}[/dim]")
 
 
 def render_code_host_error(exc: CodeHostError) -> None:

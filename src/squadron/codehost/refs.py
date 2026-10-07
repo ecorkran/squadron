@@ -326,19 +326,21 @@ def _verify(
     if actual == expected:
         return actual, None
     if _is_ancestor(runner, cwd=cwd, ancestor=expected, descendant=actual):
+        # Tagged: the command prints the matching adjustment line.
         _logger.warning(
             "%s advanced since resolution: host reported %s, fetched %s (a descendant); "
             "using the fetched tip",
             role.value,
             expected,
             actual,
+            extra={RENDERED_BY_CALLER: True},
         )
         adjustment = RefAdjustment(
             role=role,
             reported_sha=expected,
             used_sha=actual,
-            source=source,
-            reason=f"{role.value} advanced since resolution",
+            source=f"fetched from {source}",
+            reason="advanced since resolution",
         )
         return actual, adjustment
     raise _moved_since_resolution(role, expected, actual, source)
@@ -397,20 +399,29 @@ def _resolve_head(
     if relation is not _HeadRelation.LAGS:
         raise _moved_since_resolution(RefRole.HEAD, expected, actual, head_source)
     _point_ref_at(runner, cwd=cwd, ref=head_local, sha=expected)
+    # Tagged: the command prints the matching adjustment line.
     _logger.warning(
         "%s lags the host API head: reviewing %s (%s) instead of %s",
         head_source,
         expected,
         how,
         actual,
+        extra={RENDERED_BY_CALLER: True},
     )
     return expected, RefAdjustment(
         role=RefRole.HEAD,
         reported_sha=actual,
         used_sha=expected,
-        source=how,
+        source=_how_obtained(how),
         reason=f"{head_source} lags",
     )
+
+
+def _how_obtained(how: str) -> str:
+    """``ensure_api_head``'s label as a phrase: a fallback source reads ``fetched from <it>``."""
+    if how in (HEAD_PRESENT_LOCALLY, HEAD_FETCHED_BY_SHA):
+        return how
+    return f"fetched from {how}"
 
 
 def _point_ref_at(runner: ProcessRunner, *, cwd: str, ref: str, sha: str) -> None:

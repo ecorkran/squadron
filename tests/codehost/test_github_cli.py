@@ -736,7 +736,7 @@ def test_adapter_hands_the_head_branch_to_the_lagging_ref_fallback() -> None:
     assert fetched.head_sha == _RESOLVED_HEAD
     fallback_fetch = [c for c in runner.calls if c.argv[:2] == ("git", "fetch")][-1]
     assert f"+refs/heads/{_HEAD_BRANCH}:{_API_LOCAL}" in fallback_fetch.argv
-    assert fetched.adjustments[0].source == f"refs/heads/{_HEAD_BRANCH}"
+    assert fetched.adjustments[0].source == f"fetched from refs/heads/{_HEAD_BRANCH}"
 
 
 def test_a_fork_branch_that_returns_another_sha_is_rejected_by_the_sha_check() -> None:

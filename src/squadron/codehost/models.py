@@ -117,8 +117,8 @@ class RefAdjustment:
     """A place where the sha reviewed differs from the sha the host first reported.
 
     Recorded as data so the command prints it once, and the review artifact can
-    name the sha actually reviewed. ``source`` is where ``used_sha`` was obtained
-    (a ref name, or a description such as ``fetched by sha``).
+    name the sha actually reviewed. ``source`` is a phrase for how ``used_sha`` was
+    obtained (``fetched by sha``, ``fetched from refs/heads/main``).
     """
 
     role: RefRole
@@ -126,6 +126,10 @@ class RefAdjustment:
     used_sha: str
     source: str
     reason: str
+
+    def describe(self) -> str:
+        """The one line a command prints for this adjustment."""
+        return f"{self.role.value}: {self.reason}; reviewed {self.used_sha[:7]}… {self.source}"
 
 
 @dataclass(frozen=True)

@@ -412,3 +412,45 @@ def test_error_message_and_hint_go_to_stderr_not_stdout(
 
     assert result.exit_code == 1
     assert "no supported remote" not in result.stdout
+
+
+# --- Adjustments print once, on stderr (slice 934 D9) ------------------------------
+
+_PR_REF_SHA = "8888888888888888888888888888888888888888"
+
+
+def _lagging_read_script() -> list[tuple[list[str], ProcessResult | Exception]]:
+    script = _read_script(GITHUB)
+    # The PR ref reads a stale sha; the API head (HEAD_SHA) is already local.
+    script[5] = (["git", "rev-parse", "--verify"], _ok(_PR_REF_SHA))
+    script[6:6] = [
+        (["git", "cat-file", "-e"], _ok()),
+        (["git", "merge-base", "--is-ancestor", _PR_REF_SHA, HEAD_SHA], _ok()),
+        (["git", "update-ref"], _ok()),
+    ]
+    return script
+
+
+def test_a_lagging_pr_ref_prints_exactly_one_adjustment_line(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], _lagging_read_script())
+
+    assert result.exit_code == 0, result.output
+    line = f"head: refs/pull/83/head lags; reviewed {HEAD_SHA[:7]}… present locally"
+    assert " ".join(result.output.split()).count(line) == 1
+
+
+def test_a_base_fast_forward_prints_exactly_one_adjustment_line(
+    cli_runner: CliRunner, patched_host: dict[str, object]
+) -> None:
+    advanced = "7" * 40
+    script = _read_script(GITHUB)
+    script[4] = (["git", "rev-parse", "--verify"], _ok(advanced))
+    script.insert(5, (["git", "merge-base", "--is-ancestor", BASE_SHA], _ok()))
+
+    result = _run(cli_runner, patched_host, ["pr", "show", "83"], script)
+
+    assert result.exit_code == 0, result.output
+    line = "base: advanced since resolution; reviewed 7777777… fetched from refs/heads/main"
+    assert " ".join(result.output.split()).count(line) == 1
