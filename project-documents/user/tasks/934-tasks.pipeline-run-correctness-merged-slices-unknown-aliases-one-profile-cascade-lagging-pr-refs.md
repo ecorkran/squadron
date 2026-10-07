@@ -87,11 +87,11 @@ status: in_progress
 
 ## Task 7 — One template lookup in classification (D4)
 
-- [ ] In `pipeline/classification.py` add `_review_template(action_type, resolved_cfg) -> ReviewTemplate | None`. It **never raises**; an unknown name returns `None`
-- [ ] `_review_template_model_fallback` uses it, so the labelling path (`action_model_candidate` → `action_model_label` → `_summarize_action_config`) behaves exactly as before
-- [ ] Tests (`tests/pipeline/test_classification.py`): known template returned; unknown name returns `None` without raising; model fallback unchanged for known and unknown names
-  - [ ] Success: tests pass; existing classification tests unchanged
-- [ ] Commit: `refactor: single review template lookup in classification`
+- [x] In `pipeline/classification.py` add `_review_template(action_type, resolved_cfg) -> ReviewTemplate | None`. It **never raises**; an unknown name returns `None`
+- [x] `_review_template_model_fallback` uses it, so the labelling path (`action_model_candidate` → `action_model_label` → `_summarize_action_config`) behaves exactly as before
+- [x] Tests (`tests/pipeline/test_classification.py`): known template returned; unknown name returns `None` without raising; model fallback unchanged for known and unknown names
+  - [x] Success: tests pass; existing classification tests unchanged
+- [x] Commit: `refactor: single review template lookup in classification`
 
 ## Task 8 — Unknown review template fails before the run (D4)
 
