@@ -473,12 +473,12 @@ status: in_progress
 
 ## Task 39 — Prune CLI tests; commit
 
-- [ ] In `tests/cli/test_runs_command.py`: preview deletes nothing; `--yes` deletes exactly
+- [x] In `tests/cli/test_runs_command.py`: preview deletes nothing; `--yes` deletes exactly
       the previewed runs and their reports; preview labels (`stale`, `unowned`); paused only
       by name or `--status paused`; live run named → refusal, exit 1; usage errors exit 2
       (run-id with `--status`, non-category status, bad `--older-than`); duration parse cases
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add sq runs prune`
+  - [x] Success: tests pass
+- [x] Commit: `feat: add sq runs prune`
 
 ---
 

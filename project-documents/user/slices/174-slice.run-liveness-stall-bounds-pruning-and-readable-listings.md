@@ -62,7 +62,7 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
 - **(f) `sq pipelines show <name> [--path]`.**
 
 **Excluded**
-- Resuming an orphaned run. `RESUMABLE_STATUSES` stays `{paused, failed}`. An orphaned run is visible and prunable but not resumable. That needs a rule for the step that was in flight, which is beyond this slice. A GitHub issue records it (Implementation Notes, step 8).
+- Resuming an orphaned run. `RESUMABLE_STATUSES` stays `{paused, failed}`. An orphaned run is visible and prunable but not resumable. That needs a rule for the step that was in flight, which is beyond this slice. Tracked in [#195](https://github.com/ecorkran/squadron/issues/195).
 - Fixing #169 (`sq run <path>` records the path as the pipeline name). Prune removes the rows it produces, but the cause stays.
 - Liveness for prompt-only runs. No squadron process owns a prompt-only run between `--next` and `--step-done` calls, so these runs are `UNOWNED` (D3).
 - Changing the automatic keep-10 `StateManager.prune()` that `init_run` calls.
