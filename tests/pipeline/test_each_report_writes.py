@@ -25,7 +25,7 @@ def _read_reports(runs_dir: Path) -> list[dict[str, object]]:
 async def _run(
     monkeypatch: pytest.MonkeyPatch, runs_dir: Path, seen_at_item_2: list[dict[str, object]]
 ) -> None:
-    async def source(*_: object) -> list[dict[str, object]]:
+    async def source(*_: object, **__: object) -> list[dict[str, object]]:
         return [{"index": str(i), "name": f"s{i}"} for i in (1, 2, 3, 4)]
 
     monkeypatch.setitem(SOURCE_REGISTRY, ("test", "halting"), source)

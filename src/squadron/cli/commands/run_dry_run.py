@@ -33,6 +33,8 @@ def render_steps(
     params: dict[str, object],
     cf_client: ContextForgeClient,
     depth: int = 1,
+    *,
+    cwd: str,
 ) -> None:
     """Print *steps*, expanding ``loop`` and ``each`` bodies.
 
@@ -48,10 +50,10 @@ def render_steps(
         if step.step_type == _LOOP:
             rprint(f"{pad}{_INDENT}{escape(_loop_line(shown))}")
         elif step.step_type == _EACH:
-            _render_each_header(shown, params, cf_client, pad + _INDENT)
+            _render_each_header(shown, params, cf_client, pad + _INDENT, cwd)
         else:
             continue
-        render_steps(_body(step.config), params, cf_client, depth + 1)
+        render_steps(_body(step.config), params, cf_client, depth + 1, cwd=cwd)
 
 
 def _loop_line(config: dict[str, object]) -> str:
@@ -67,6 +69,7 @@ def _render_each_header(
     params: dict[str, object],
     cf_client: ContextForgeClient,
     pad: str,
+    cwd: str,
 ) -> None:
     source = str(config.get("source", ""))
     rprint(
@@ -74,7 +77,7 @@ def _render_each_header(
         f"on_item_failure: {config.get('on_item_failure')}"
     )
     try:
-        _, items = asyncio.run(evaluate_each_source(source, params, cf_client))
+        _, items = asyncio.run(evaluate_each_source(source, params, cf_client, cwd=cwd))
     except (ContextForgeError, ValueError, KeyError) as exc:
         # CLI boundary: a source that can't be evaluated is reported and fails the
         # preview, because the run itself would stop at the same point.

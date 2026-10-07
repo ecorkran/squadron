@@ -90,7 +90,7 @@ async def test_a_failed_set_arch_fails_the_item_before_the_branch_action(
     from squadron.pipeline.executor import execute_pipeline
     from squadron.pipeline.sources import SOURCE_REGISTRY
 
-    async def source(*_: object) -> list[dict[str, object]]:
+    async def source(*_: object, **__: object) -> list[dict[str, object]]:
         return [{"index": "7", "name": "Seven"}]
 
     monkeypatch.setitem(SOURCE_REGISTRY, ("test", "slices"), source)

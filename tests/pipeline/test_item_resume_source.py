@@ -119,3 +119,21 @@ async def test_a_dependency_still_open_on_the_target_flags_without_running(
         "dependency 401 not complete",
         "retry",
     )
+
+
+@pytest.mark.asyncio
+async def test_resume_hands_the_source_the_run_cwd(
+    project: Project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from squadron.pipeline import item_resume
+
+    real = item_resume.evaluate_each_source
+    seen: list[str] = []
+
+    async def recording(*args: object, cwd: str, **kwargs: object):  # type: ignore[no-untyped-def]
+        seen.append(cwd)
+        return await real(*args, cwd=cwd, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(item_resume, "evaluate_each_source", recording)
+    await _resume(project, "401", AsyncMock())
+    assert seen == [str(project.repo)]

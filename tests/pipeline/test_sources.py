@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -115,7 +116,7 @@ class TestUnfinishedSlices:
         from squadron.pipeline.sources import _cf_unfinished_slices
 
         client = StubCfClient()
-        items = await _cf_unfinished_slices(["900"], client, {})
+        items = await _cf_unfinished_slices(["900"], client, {}, cwd=os.getcwd())
 
         assert client.calls == [["list", "slices", "900", "--json"]]
         assert _indices(items) == ["907", "914", "923", "924", "928", "929"]
@@ -125,7 +126,7 @@ class TestUnfinishedSlices:
         from squadron.pipeline.sources import _cf_unfinished_slices
 
         client = StubCfClient()
-        await _cf_unfinished_slices([], client, {})
+        await _cf_unfinished_slices([], client, {}, cwd=os.getcwd())
 
         assert client.calls == [["list", "slices", "--json"]]
 
@@ -135,7 +136,7 @@ class TestUnfinishedSlices:
         from squadron.pipeline.sources import _cf_unfinished_slices
 
         with pytest.raises(ValueError, match="plan must be an architecture index, got"):
-            await _cf_unfinished_slices([plan], StubCfClient(), {})
+            await _cf_unfinished_slices([plan], StubCfClient(), {}, cwd=os.getcwd())
 
 
 class TestUndesignedSlices:
@@ -144,7 +145,7 @@ class TestUndesignedSlices:
         from squadron.pipeline.sources import _cf_undesigned_slices
 
         client = StubCfClient()
-        items = await _cf_undesigned_slices(["900"], client, {})
+        items = await _cf_undesigned_slices(["900"], client, {}, cwd=os.getcwd())
 
         # 907 is deferred, 914 is designed, 901 is complete.
         assert _indices(items) == ["923", "924", "928", "929"]
@@ -154,7 +155,7 @@ class TestUndesignedSlices:
     async def test_item_shape(self) -> None:
         from squadron.pipeline.sources import _cf_undesigned_slices
 
-        items = await _cf_undesigned_slices(["900"], StubCfClient(), {})
+        items = await _cf_undesigned_slices(["900"], StubCfClient(), {}, cwd=os.getcwd())
 
         assert items[0] == {
             "index": "923",
@@ -218,7 +219,7 @@ class TestSlicesNeedingTasks:
     async def _run(self, accept: str = "review.concerns_or_better") -> list[dict[str, object]]:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
-        return await _cf_slices_needing_tasks(["900", accept], StubCfClient(), {})
+        return await _cf_slices_needing_tasks(["900", accept], StubCfClient(), {}, cwd=os.getcwd())
 
     @pytest.mark.asyncio
     async def test_900_plan_selects_only_914_flagged_missing_review(self) -> None:
@@ -289,7 +290,7 @@ class TestSlicesNeedingTasks:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         client = StubCfClient(tasks=self._TASKED)
-        return await _cf_slices_needing_tasks(["900", accept], client, {})
+        return await _cf_slices_needing_tasks(["900", accept], client, {}, cwd=os.getcwd())
 
     @pytest.mark.asyncio
     async def test_tasked_slice_with_no_tasks_review_is_selected(self) -> None:
@@ -364,7 +365,7 @@ class TestSlicesNeedingTasks:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         client = StubCfClient()
-        await _cf_slices_needing_tasks(["900", "review.pass"], client, {})
+        await _cf_slices_needing_tasks(["900", "review.pass"], client, {}, cwd=os.getcwd())
 
         assert ["list", "tasks", "900", "--json"] in client.calls
         assert ["list", "slices", "900", "--json"] in client.calls
@@ -382,7 +383,7 @@ class TestSlicesNeedingTasks:
         from squadron.pipeline.sources import _cf_slices_needing_tasks
 
         with pytest.raises(ValueError, match=match):
-            await _cf_slices_needing_tasks(args, StubCfClient(), {})
+            await _cf_slices_needing_tasks(args, StubCfClient(), {}, cwd=os.getcwd())
 
 
 class TestSliceDependencies:
@@ -563,7 +564,9 @@ class TestSlicesReadyToImplement:
         from squadron.pipeline.sources import SOURCE_REGISTRY
 
         client = StubCfClient(slices={"entries": self.slices}, tasks=self.tasks)
-        return await SOURCE_REGISTRY[("cf", "slices_ready_to_implement")](["300", accept], client, {})
+        return await SOURCE_REGISTRY[("cf", "slices_ready_to_implement")](
+            ["300", accept], client, {}, cwd=os.getcwd()
+        )
 
     async def _only(self) -> dict[str, object]:
         items = await self._run()

@@ -286,7 +286,7 @@ async def _select_item(
 ) -> dict[str, object] | None:
     """The item, freshly selected; ``None`` when it was reconciled to PASSED."""
     source = str(run.each.config.get("source", ""))
-    _, items = await evaluate_each_source(source, params, cf_client)
+    _, items = await evaluate_each_source(source, params, cf_client, cwd=cwd)
     item = next((i for i in items if str(i.get("index")) == request.index), None)
     if item is not None:
         return item

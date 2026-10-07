@@ -40,7 +40,7 @@ async def _run(
 ) -> tuple[PipelineResult, list[str]]:
     """Run an ``each`` over *items*; return the result and the indices whose body ran."""
 
-    async def source(*_: object) -> list[dict[str, object]]:
+    async def source(*_: object, **__: object) -> list[dict[str, object]]:
         return items
 
     monkeypatch.setitem(SOURCE_REGISTRY, ("test", "items"), source)
@@ -257,7 +257,7 @@ class TestUnusableSessionInBatch:
 
         caplog.set_level(logging.WARNING, logger="squadron.pipeline.executor")
 
-        async def source(*_: object) -> list[dict[str, object]]:
+        async def source(*_: object, **__: object) -> list[dict[str, object]]:
             return _items("1", "2", "3")
 
         monkeypatch.setitem(SOURCE_REGISTRY, ("test", "items"), source)
@@ -323,7 +323,7 @@ class TestFinalTextInBatchFlags:
 
         caplog.set_level(logging.WARNING, logger="squadron.pipeline.executor")
 
-        async def source(*_: object) -> list[dict[str, object]]:
+        async def source(*_: object, **__: object) -> list[dict[str, object]]:
             return _items("204")
 
         monkeypatch.setitem(SOURCE_REGISTRY, ("test", "items"), source)
@@ -620,3 +620,38 @@ def test_flag_kind_classifies_the_final_step(final: StepResult, kind: str) -> No
     from squadron.pipeline.executor import _flag_kind  # pyright: ignore[reportPrivateUsage]
 
     assert _flag_kind(final) == kind
+
+
+class TestSourceReceivesCwd:
+    @pytest.mark.asyncio
+    async def test_executor_hands_the_source_its_effective_cwd(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        seen: list[str] = []
+
+        async def source(*_: object, cwd: str) -> list[dict[str, object]]:
+            seen.append(cwd)
+            return []
+
+        monkeypatch.setitem(SOURCE_REGISTRY, ("test", "cwd"), source)
+        definition = PipelineDefinition(
+            name="each-cwd",
+            description="test",
+            params={},
+            steps=[
+                StepConfig(
+                    step_type="each",
+                    name="slices",
+                    config={"source": "test.cwd()", "as": "item", "steps": []},
+                )
+            ],
+        )
+        await execute_pipeline(
+            definition,
+            {"_project": "test"},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            cwd=str(tmp_path),
+            _action_registry={},
+        )
+        assert seen == [str(tmp_path)]

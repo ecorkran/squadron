@@ -1203,7 +1203,7 @@ def run(
         rprint(f"[bold]Description:[/bold] {definition.description}")
         rprint(f"[bold]Params:[/bold] {params}")
         rprint("\n[bold]Steps:[/bold]")
-        render_steps(definition.steps, params, ContextForgeClient())
+        render_steps(definition.steps, params, ContextForgeClient(), cwd=os.getcwd())
         raise typer.Exit(0)
 
     # ---- --resume --item (slice 197 D8) ----

@@ -10,10 +10,10 @@ from __future__ import annotations
 import heapq
 import logging
 import re
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.pipeline.batch_report import FlagKind
@@ -27,10 +27,22 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
-SourceFn = Callable[
-    [list[str], "ContextForgeClient", dict[str, object]],
-    Awaitable[list[dict[str, object]]],
-]
+
+class SourceFn(Protocol):
+    """An ``each`` source: selects the items a batch runs over.
+
+    ``cwd`` is the repository the run works in, for sources that read git state.
+    """
+
+    def __call__(
+        self,
+        args: list[str],
+        cf_client: ContextForgeClient,
+        params: dict[str, object],
+        *,
+        cwd: str,
+    ) -> Awaitable[list[dict[str, object]]]: ...
+
 
 SOURCE_REGISTRY: dict[tuple[str, str], SourceFn] = {}
 
@@ -123,6 +135,8 @@ async def _cf_unfinished_slices(
     args: list[str],
     cf_client: ContextForgeClient,
     params: dict[str, object],
+    *,
+    cwd: str,
 ) -> list[dict[str, object]]:
     """Return slices of the plan whose status is not 'complete'."""
     slices = cf_client.list_slices(_plan_arg(args))
@@ -133,6 +147,8 @@ async def _cf_undesigned_slices(
     args: list[str],
     cf_client: ContextForgeClient,
     params: dict[str, object],
+    *,
+    cwd: str,
 ) -> list[dict[str, object]]:
     """Return open slices of the plan that have no design file yet."""
     slices = cf_client.list_slices(_plan_arg(args))
@@ -189,6 +205,8 @@ async def _cf_slices_needing_tasks(
     args: list[str],
     cf_client: ContextForgeClient,
     params: dict[str, object],
+    *,
+    cwd: str,
 ) -> list[dict[str, object]]:
     """Return open, designed slices of the plan whose tasks still need work.
 
@@ -243,6 +261,8 @@ async def _cf_slices_ready_to_implement(
     args: list[str],
     cf_client: ContextForgeClient,
     params: dict[str, object],
+    *,
+    cwd: str,
 ) -> list[dict[str, object]]:
     """Open, designed slices of the plan, in dependency order (slice 197 D2, D3).
 

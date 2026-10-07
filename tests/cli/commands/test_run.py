@@ -576,6 +576,13 @@ class TestRunPipeline:
         assert mock.await_args is not None
         assert mock.await_args.args[0] == 'cf.undesigned_slices("900")'
 
+    def test_dry_run_hands_the_source_the_process_cwd(self) -> None:
+        import os
+
+        _, mock = self._dry_run_each((["900"], []))
+        assert mock.await_args is not None
+        assert mock.await_args.kwargs["cwd"] == os.getcwd()
+
     def test_dry_run_each_with_no_items_says_so(self) -> None:
         result, _ = self._dry_run_each((["900"], []))
         assert result.exit_code == 0, result.output

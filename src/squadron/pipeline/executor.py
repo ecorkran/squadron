@@ -1439,7 +1439,7 @@ async def _execute_loop_body(
 
 
 async def evaluate_each_source(
-    source: str, params: dict[str, object], cf_client: Any
+    source: str, params: dict[str, object], cf_client: Any, *, cwd: str
 ) -> tuple[list[str], list[dict[str, object]]]:
     """Resolve an ``each`` source's placeholders, parse it, and run it.
 
@@ -1447,7 +1447,7 @@ async def evaluate_each_source(
     ``sq run --dry-run``, so a preview selects exactly what a run would.
     """
     namespace, function, args = parse_source(_resolve_str(source, params))
-    items = await SOURCE_REGISTRY[(namespace, function)](args, cf_client, params)
+    items = await SOURCE_REGISTRY[(namespace, function)](args, cf_client, params, cwd=cwd)
     return args, items
 
 
@@ -1533,7 +1533,7 @@ async def _execute_each_step(
         items, report = [item_rerun.item], item_rerun.report
     else:
         args, items = await evaluate_each_source(
-            str(resolved_config.get("source", "")), merged_params, cf_client
+            str(resolved_config.get("source", "")), merged_params, cf_client, cwd=cwd
         )
         report = BatchReport(pipeline_name, run_id, step.name, plan=args[0] if args else None)
 
