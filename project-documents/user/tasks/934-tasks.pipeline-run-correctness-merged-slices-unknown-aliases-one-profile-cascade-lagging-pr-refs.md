@@ -10,7 +10,7 @@ projectState: >
   (`squadron-issues`), so the slice branch forks from it.
 dateCreated: 20261007
 dateUpdated: 20261007
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -36,9 +36,9 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Run `cf config get git.integration_branch`; call its value the target. Confirm `git status` is clean and the current branch is the target
-- [ ] `git checkout -b 934-slice.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs {target}`
-  - [ ] Success: `git branch --show-current` prints the new branch name
+- [x] Run `cf config get git.integration_branch`; call its value the target. Confirm `git status` is clean and the current branch is the target
+- [x] `git checkout -b 934-slice.pipeline-run-correctness-merged-slices-unknown-aliases-one-profile-cascade-lagging-pr-refs {target}`
+  - [x] Success: `git branch --show-current` prints the new branch name
 
 ---
 
@@ -46,14 +46,14 @@ status: not_started
 
 ## Task 2 — `review/profile_resolution.py` (D3)
 
-- [ ] Create the module with `ReviewProfileSource` (StrEnum: `explicit`, `alias`, `template`, `config`, `default`) and `ReviewProfileChoice(name, source)`
-- [ ] `resolve_review_profile(explicit, alias_profile, template)` returns the choice in this order: explicit → alias profile → `template.profile` → `default_review_profile` → `ProfileName.SDK`
-  - [ ] The sdk fallback is `ProfileName.SDK`, never a `"sdk"` literal
-- [ ] `review_profile_source(explicit_present, template) -> bool` is True when explicit, `template.profile`, or `default_review_profile` is set; never for the alias profile or the sdk default
-- [ ] Both functions read `default_review_profile` through one private reader (find how `cli/commands/review.py:_resolve_profile` reads it today and move that read here)
-- [ ] Tests (`tests/review/`): one case per `ReviewProfileSource`, order precedence (explicit beats all, alias beats template, and so on), template `None`, and `review_profile_source` agreeing with `resolve_review_profile` (source is never `alias`/`default` when it returns True; True exactly when the source is `explicit`, `template` or `config`)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add shared review profile resolution module`
+- [x] Create the module with `ReviewProfileSource` (StrEnum: `explicit`, `alias`, `template`, `config`, `default`) and `ReviewProfileChoice(name, source)`
+- [x] `resolve_review_profile(explicit, alias_profile, template)` returns the choice in this order: explicit → alias profile → `template.profile` → `default_review_profile` → `ProfileName.SDK`
+  - [x] The sdk fallback is `ProfileName.SDK`, never a `"sdk"` literal
+- [x] `review_profile_source(explicit_present, template) -> bool` is True when explicit, `template.profile`, or `default_review_profile` is set; never for the alias profile or the sdk default
+- [x] Both functions read `default_review_profile` through one private reader (find how `cli/commands/review.py:_resolve_profile` reads it today and move that read here)
+- [x] Tests (`tests/review/`): one case per `ReviewProfileSource`, order precedence (explicit beats all, alias beats template, and so on), template `None`, and `review_profile_source` agreeing with `resolve_review_profile` (source is never `alias`/`default` when it returns True; True exactly when the source is `explicit`, `template` or `config`)
+  - [x] Success: tests pass
+- [x] Commit: `feat: add shared review profile resolution module`
 
 ## Task 3 — `sq review` delegates to the module
 
