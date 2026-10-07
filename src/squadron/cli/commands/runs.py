@@ -24,8 +24,8 @@ def list_runs(
     pipeline: str | None = typer.Option(None, "--pipeline", help="Only runs of this pipeline."),
 ) -> None:
     """List resumable runs, newest first, with where each one resumes."""
-    summaries = list_run_summaries(StateManager(), pipeline=pipeline, include_all=include_all)
-    render_run_listing(summaries, include_all=include_all)
+    listing = list_run_summaries(StateManager(), pipeline=pipeline, include_all=include_all)
+    render_run_listing(listing.rows, include_all=include_all)
 
 
 # Outcomes where the run left `running` and its state is readable, so its panel prints.

@@ -59,12 +59,13 @@ class TestRunsList:
     def test_empty_result_exits_zero(self, sm: StateManager) -> None:
         assert "No resumable runs. Use --all to include completed runs." in _invoke("list")
 
-    def test_all_includes_completed_and_running(self, sm: StateManager) -> None:
+    def test_running_is_default_and_all_adds_completed(self, sm: StateManager) -> None:
         running = begin(sm, "steps")
         done = begin(sm, "steps")
         end(sm, done, ExecutionStatus.COMPLETED)
 
-        assert running not in _invoke("list")
+        out = _invoke("list")
+        assert running in out and done not in out
         out = _invoke("list", "--all")
         assert running in out and done in out
 
