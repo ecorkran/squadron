@@ -8,9 +8,12 @@ pipeline calls ``init_run`` for all of them before finalizing any (``begin`` / `
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from functools import partial
 from pathlib import Path
+
+import pytest
 
 from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, FlagKind, ItemOutcome
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
@@ -139,3 +142,13 @@ def completed_batch_run(
     write_report(sm, pipeline, run_id, records if records is not None else mixed_records())
     end(sm, run_id, ExecutionStatus.COMPLETED)
     return run_id
+
+
+def warned(caplog: pytest.LogCaptureFixture, logger: str, *fragments: str) -> bool:
+    """True when *logger* logged a WARNING whose message contains every fragment."""
+    return any(
+        r.name == logger
+        and r.levelno == logging.WARNING
+        and all(f in r.getMessage() for f in fragments)
+        for r in caplog.records
+    )

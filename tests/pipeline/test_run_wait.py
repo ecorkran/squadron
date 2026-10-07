@@ -12,7 +12,7 @@ import pytest
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.run_wait import WAIT_EXIT_CODES, WaitOutcome, WaitResult, wait_for_run
 from squadron.pipeline.state import StateManager
-from tests.pipeline.run_listing_support import begin, end
+from tests.pipeline.run_listing_support import begin, end, warned
 
 _LOGGER = "squadron.pipeline.run_wait"
 
@@ -20,15 +20,6 @@ _LOGGER = "squadron.pipeline.run_wait"
 @pytest.fixture
 def sm(tmp_path: Path) -> StateManager:
     return StateManager(runs_dir=tmp_path / "runs")
-
-
-def _warned(caplog: pytest.LogCaptureFixture, *fragments: str) -> bool:
-    return any(
-        r.name == _LOGGER
-        and r.levelno == logging.WARNING
-        and all(f in r.getMessage() for f in fragments)
-        for r in caplog.records
-    )
 
 
 class _FakeTime:
@@ -100,7 +91,7 @@ class TestWaitForRun:
         assert result.state is not None and result.state.status == status.value
 
         assert fake.sleeps == 2
-        assert _warned(caplog, run_id, str(outcome)) is (outcome is not WaitOutcome.COMPLETED)
+        assert warned(caplog, _LOGGER, run_id, str(outcome)) is (outcome is not WaitOutcome.COMPLETED)
 
     def test_timeout_while_running(self, sm: StateManager, caplog: pytest.LogCaptureFixture) -> None:
         run_id = begin(sm, "steps")
@@ -110,12 +101,12 @@ class TestWaitForRun:
             assert _wait(sm, run_id, fake, timeout=5).outcome is WaitOutcome.TIMED_OUT
 
         assert fake.now == 5  # the last sleep is cut to the deadline
-        assert _warned(caplog, run_id, "timed_out")
+        assert warned(caplog, _LOGGER, run_id, "timed_out")
 
     def test_missing_run(self, sm: StateManager, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger=_LOGGER):
             assert _wait(sm, "no-such-run", _FakeTime(), timeout=None).outcome is WaitOutcome.NOT_FOUND
-        assert _warned(caplog, "no-such-run", "not_found")
+        assert warned(caplog, _LOGGER, "no-such-run", "not_found")
 
     @pytest.mark.parametrize(
         "corrupt",
@@ -138,7 +129,7 @@ class TestWaitForRun:
         assert (result.outcome, result.state) == (WaitOutcome.UNREADABLE, None)
 
         assert fake.sleeps == 0  # no retry
-        assert _warned(caplog, run_id, "unreadable")
+        assert warned(caplog, _LOGGER, run_id, "unreadable")
 
     def test_unknown_status(self, sm: StateManager, caplog: pytest.LogCaptureFixture) -> None:
         run_id = begin(sm, "steps")
@@ -147,7 +138,7 @@ class TestWaitForRun:
         with caplog.at_level(logging.WARNING, logger=_LOGGER):
             assert _wait(sm, run_id, _FakeTime(), timeout=None).outcome is WaitOutcome.UNKNOWN_STATUS
 
-        assert _warned(caplog, run_id, "unknown_status")
+        assert warned(caplog, _LOGGER, run_id, "unknown_status")
 
     def test_exit_codes(self) -> None:
         assert set(WAIT_EXIT_CODES) == set(WaitOutcome)

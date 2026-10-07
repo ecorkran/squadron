@@ -92,21 +92,24 @@ class _Definitions:
 
     def __init__(self, load_definition: DefinitionLoader) -> None:
         self._load = load_definition
-        self._loaded: dict[str, PipelineDefinition | Exception] = {}
+        self._definitions: dict[str, PipelineDefinition] = {}
+        self._failures: dict[str, str] = {}  # pipeline -> why it could not be loaded
 
     def get(self, state: RunState) -> PipelineDefinition | None:
         """The run's definition, or ``None`` (logged) when it cannot be loaded."""
-        if state.pipeline not in self._loaded:
+        name = state.pipeline
+        if name not in self._definitions and name not in self._failures:
             try:
-                self._loaded[state.pipeline] = self._load(state.pipeline)
+                self._definitions[name] = self._load(name)
             except _DEFINITION_ERRORS as exc:
                 # Renamed, deleted or broken pipeline: the row shows a marker (D7).
-                self._loaded[state.pipeline] = exc
-        loaded = self._loaded[state.pipeline]
-        if isinstance(loaded, Exception):
-            _logger.warning("run %s: pipeline %s unavailable: %s", state.run_id, state.pipeline, loaded)
+                self._failures[name] = str(exc)
+        if name in self._failures:
+            _logger.warning(
+                "run %s: pipeline %s unavailable: %s", state.run_id, name, self._failures[name]
+            )
             return None
-        return loaded
+        return self._definitions[name]
 
 
 def list_run_summaries(

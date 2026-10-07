@@ -11,7 +11,7 @@ Pipelines let you compose multi-step AI workflows and run them with a single com
 
 ```bash
 sq run P456 152           # run the built-in slice lifecycle pipeline
-sq run example --list     # list all available pipelines
+sq pipelines list         # list all available pipelines
 ```
 
 ---

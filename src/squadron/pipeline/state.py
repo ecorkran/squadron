@@ -94,6 +94,18 @@ class SchemaVersionError(Exception):
         self.version = version
 
 
+# What reading a present run-state file can raise (StateManager._load_raw): unreadable
+# file, undecodable text, corrupt JSON, unsupported schema version, or a shape that
+# fails RunState validation.
+STATE_READ_ERRORS: tuple[type[Exception], ...] = (
+    OSError,
+    UnicodeDecodeError,
+    json.JSONDecodeError,
+    SchemaVersionError,
+    ValidationError,
+)
+
+
 # ---------------------------------------------------------------------------
 # Pydantic models (external boundary: file I/O)
 # ---------------------------------------------------------------------------
@@ -508,17 +520,8 @@ class StateManager:
                 continue  # a batch report beside the run state (slice 197 D7), not a run
             try:
                 run = self._load_raw(path)
-            except (
-                OSError,
-                UnicodeDecodeError,
-                json.JSONDecodeError,
-                SchemaVersionError,
-                ValidationError,
-            ):
-                # Narrowed to _load_raw's actual raisable set: unreadable file,
-                # corrupt JSON, unsupported schema version, or a state shape
-                # that fails RunState validation. One bad run-state file must
-                # not stop the rest of the listing from loading.
+            except STATE_READ_ERRORS:
+                # One bad run-state file must not stop the rest of the listing.
                 _logger.warning("Skipping unreadable state file: %s", path, exc_info=True)
                 continue
             if pipeline is not None and run.pipeline != pipeline:

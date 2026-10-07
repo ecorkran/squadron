@@ -41,6 +41,7 @@ from tests.pipeline.run_listing_support import (
     fail_at,
     mixed_records,
     pause_at,
+    warned,
     write_batch_pipeline,
     write_step_pipeline,
 )
@@ -82,15 +83,6 @@ def _list(
 def _only(summaries: list[RunSummary]) -> RunSummary:
     assert len(summaries) == 1, summaries
     return summaries[0]
-
-
-def _warned(caplog: pytest.LogCaptureFixture, *fragments: str) -> bool:
-    return any(
-        r.name == _LOGGER
-        and r.levelno == logging.WARNING
-        and all(f in r.getMessage() for f in fragments)
-        for r in caplog.records
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -157,7 +149,7 @@ class TestDefinitionLoading:
         assert loader.calls == ["gone"]
         assert [s.problem for s in summaries] == [ResumeProblem.PIPELINE_UNAVAILABLE] * 2
         assert all(s.resume is None for s in summaries)
-        assert _warned(caplog, summaries[0].run_id, "gone", "unavailable")
+        assert warned(caplog, _LOGGER, summaries[0].run_id, "gone", "unavailable")
 
     def test_other_loader_errors_propagate(self, sm: StateManager, pipelines: Path) -> None:
         pause_at(sm, begin(sm, "steps"), STEP_NAMES[0])
@@ -209,7 +201,7 @@ class TestStepResume:
 
         assert summary.resume is None
         assert summary.problem is ResumeProblem.NO_UNFINISHED_STEP
-        assert _warned(caplog, run_id, "no unfinished step")
+        assert warned(caplog, _LOGGER, run_id, "no unfinished step")
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +256,7 @@ class TestItemResume:
             summary = _only(_list(sm, pipelines))
 
         assert summary.problem is ResumeProblem.ITEM_RESUME_UNSUPPORTED
-        assert _warned(caplog, run_id, "has 2 each steps")
+        assert warned(caplog, _LOGGER, run_id, "has 2 each steps")
 
     def test_corrupt_report_is_unreadable(
         self, sm: StateManager, pipelines: Path, caplog: pytest.LogCaptureFixture
@@ -277,7 +269,7 @@ class TestItemResume:
             summary = _only(_list(sm, pipelines))
 
         assert summary.problem is ResumeProblem.REPORT_UNREADABLE
-        assert _warned(caplog, run_id, str(path))
+        assert warned(caplog, _LOGGER, run_id, str(path))
 
     def test_renamed_each_step_is_unreadable(
         self, sm: StateManager, pipelines: Path, caplog: pytest.LogCaptureFixture
@@ -290,7 +282,7 @@ class TestItemResume:
             summary = _only(_list(sm, pipelines))
 
         assert summary.problem is ResumeProblem.REPORT_UNREADABLE
-        assert _warned(caplog, run_id, str(expected))
+        assert warned(caplog, _LOGGER, run_id, str(expected))
 
     def test_completed_batch_run_of_a_deleted_pipeline(
         self, sm: StateManager, pipelines: Path, caplog: pytest.LogCaptureFixture
@@ -302,7 +294,7 @@ class TestItemResume:
             summary = _only(_list(sm, pipelines))
 
         assert summary.problem is ResumeProblem.PIPELINE_UNAVAILABLE
-        assert _warned(caplog, run_id, "batch", "unavailable")
+        assert warned(caplog, _LOGGER, run_id, "batch", "unavailable")
 
 
 # ---------------------------------------------------------------------------

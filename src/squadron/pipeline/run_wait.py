@@ -6,17 +6,14 @@ and cannot be told from a live one (#190), so callers bound the wait with a time
 
 from __future__ import annotations
 
-import json
 import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from pydantic import ValidationError
-
 from squadron.pipeline.executor import ExecutionStatus
-from squadron.pipeline.state import RUNNING_STATUS, RunState, SchemaVersionError, StateManager
+from squadron.pipeline.state import RUNNING_STATUS, STATE_READ_ERRORS, RunState, StateManager
 
 _logger = logging.getLogger(__name__)
 
@@ -49,16 +46,6 @@ _TERMINAL_OUTCOMES: dict[str, WaitOutcome] = {
     ExecutionStatus.FAILED.value: WaitOutcome.FAILED,
     ExecutionStatus.PAUSED.value: WaitOutcome.PAUSED,
 }
-
-# _load_raw's raisable set for a present file (as in StateManager.list_runs). A state
-# file is replaced atomically, so a failed read is a real fault, not a race.
-_STATE_READ_ERRORS = (
-    OSError,
-    UnicodeDecodeError,
-    json.JSONDecodeError,
-    SchemaVersionError,
-    ValidationError,
-)
 
 
 @dataclass(frozen=True)
@@ -99,7 +86,8 @@ def _poll(state_manager: StateManager, run_id: str) -> tuple[WaitOutcome | None,
         state = state_manager.load(run_id)
     except FileNotFoundError:
         return WaitOutcome.NOT_FOUND, None
-    except _STATE_READ_ERRORS as exc:
+    except STATE_READ_ERRORS as exc:
+        # Files are replaced atomically, so a failed read is a real fault, not a race.
         _logger.warning("run %s state unreadable: %s", run_id, exc)
         return WaitOutcome.UNREADABLE, None
     if state.status == RUNNING_STATUS:
