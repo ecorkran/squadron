@@ -99,3 +99,15 @@ The slice restates the "`sq runs list --all` under 1 s … measured at 0.67 s fo
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 5
 - Finding-shaped matches — surviving validation: 5
+
+## Response, round 2 (20261007)
+
+- **`sq pipelines show` read failure, fixed.** The API contract now says the file is read with `read_bytes()` and written to `stdout.buffer`, with no decoding, and is read completely before anything is printed. An `OSError` (permissions, a file deleted between resolution and the read) is logged at ERROR, reported on stderr and exits 1 with empty stdout. Two rows were added to the error-handling table, and the CLI tests cover the unreadable case.
+- **173 in Prerequisites, fixed.** 173 is context, not a prerequisite, so it moved to a new "Related, Not Required" subsection. The frontmatter stays `[150, 156, 199, 932]`.
+- **`RunObserver` and the architecture, fixed.** D12 now records that the executor has two notification paths: events, which users can bind, and the internal `RunObserver`. Implementation step 8 adds that paragraph to `140-arch.pipeline-foundation.md`.
+- **Non-`OSError` write failures, fixed.** D6 now splits failures into two classes:
+  - Expected errors (`OSError` and `STATE_READ_ERRORS`) log a WARNING and the run continues.
+  - Any other exception in a progress write fails the run through the existing handler. In the detached heartbeat task, a done-callback logs it at ERROR, the heartbeat stops and the run turns `STALE`.
+
+  Table rows and a test were added.
+- **Performance NFR, noted.** Special Considerations now says that 140 has no NFR for this path, so the target carried forward is 199's.

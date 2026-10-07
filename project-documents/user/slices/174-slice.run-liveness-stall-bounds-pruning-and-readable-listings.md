@@ -74,7 +74,6 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
 ### Prerequisites
 - **150 (complete):** `RunState`, `StateManager`, the schema-version gate and `--resume`.
 - **156 (complete):** executor hardening. This slice replaces `on_step_complete` with a `RunObserver` (D12).
-- **173 (complete):** the events dispatcher (`squadron.events`, `run_event`). This slice does not use it for run-state bookkeeping; D12 says why.
 - **199 (complete):**
   - `sq runs list` and `sq runs wait`
   - `run_listing.py`, `run_wait.py`, `run_views.py`
@@ -98,6 +97,9 @@ This slice fixes [#190](https://github.com/ecorkran/squadron/issues/190) (livene
   - `PipelineInfo`, `PipelineSource`
 - `batch_report.py` `report_json_paths`. Prune also needs the `.report.md` sibling (D9).
 - `claude_agent_sdk.ClaudeSDKClient.interrupt()`, which sends an `interrupt` control request. The SDK bounds the request with its own 60 s timeout (`_internal/query.py:_send_control_request`).
+
+### Related, Not Required
+- **173 (complete):** the events dispatcher (`squadron.events`, `run_event`). This slice neither calls nor changes it. It is listed because D12 places `RunObserver` beside it and explains why run-state bookkeeping does not use it.
 
 ## Architecture
 
@@ -241,7 +243,13 @@ active_item: ActiveItem | None
 - The one `to_thread` near state writes, `executor.py:1459`, writes the batch report, not the state file.
 - Task 1 confirms no state write runs off the loop thread. If one does, `StateManager` gains a per-run `threading.Lock` around load, modify and write.
 
-**D6. Heartbeat failure.** An `OSError` from a heartbeat write is logged at WARNING with the run-id, and the run continues. A run is not killed because its bookkeeping failed. If writes keep failing, the run turns `STALE` after the stale window. That is the observable signal, and the WARNINGs explain it. A failed `observer.step_started` or `item_started` write is handled the same way (WARNING, run continues); `step_completed` keeps today's `_append_step` behaviour and raises. `init_run` or `claim` failing at start is fatal: it raises, the way `init_run` does today.
+**D6. Heartbeat and progress write failure.** Each heartbeat and progress write loads the state file, changes fields and rewrites it. Its failures fall into two classes:
+- **Expected I/O and read errors:** `OSError`, or anything in `STATE_READ_ERRORS` (`UnicodeDecodeError`, `JSONDecodeError`, `SchemaVersionError`, pydantic `ValidationError`) raised while reloading the file. These are caught by name, logged at WARNING with the run-id and the exception, and the run continues. A run is not killed because its bookkeeping failed. If writes keep failing, the run turns `STALE` after the stale window. That is the observable signal, and the WARNINGs explain it.
+- **Anything else** (a defect, such as a serialization error on a field this slice added) is not caught as expected:
+  - **In `observer.step_started` or `item_started`**, it propagates. The run fails through `_run_pipeline_sdk`'s existing `BaseException` handler, which finalizes it as `failed`.
+  - **In the heartbeat task**, it cannot propagate to the run, because the task is detached. A done-callback on the task logs any exception other than `CancelledError` with `logger.exception` (ERROR). The heartbeat then stops, so the run turns `STALE` after the stale window. The ERROR record names the cause.
+
+`step_completed` keeps today's `_append_step` behaviour and raises on any failure. `init_run` or `claim` failing at start is fatal: it raises, the way `init_run` does today.
 
 **D7. Foreground stall.**
 - `_read_turn` already applies `idle_s` to each read with its own `_IdleTimer`. Today `_collect_turns` passes `idle_s=None` for foreground reads (`:217`) and will pass `foreground_idle_timeout_s` instead.
@@ -334,6 +342,8 @@ The 173 events dispatcher (`run_event`) is not used for this, because the two se
 - **Events cost a manifest load and plugin discovery per fire** (`run_event`). That is acceptable once per action, but not once per `each` item and per heartbeat-adjacent write.
 - **Events are async and run user code.** The observer is synchronous and in-process, which keeps D5's single-writer rule.
 
+**Architecture record.** The 140 architecture describes the events dispatcher as the executor's extension mechanism, at the action-execution site, and has no observer protocol. After this slice the executor has two notification paths: events, which users can bind, and `RunObserver`, which is internal, fixed and used only for run-state bookkeeping. Implementation step 8 adds a short paragraph saying so to the architecture's Component Architecture section.
+
 `EventType` gains no `step-start` or `item-start` member in this slice. If users later want to bind actions to those moments, a step-start event can be fired from the same call sites the observer uses, without changing the observer.
 
 **D13. No ownerless `running` window.** A run must never be `running` without an owner, or it is a crash orphan that cannot be detected.
@@ -346,7 +356,9 @@ The 173 events dispatcher (`run_event`) is not used for this, because the two se
 
 | Failure | Observable signal | Outcome |
 |---|---|---|
-| Heartbeat or progress write `OSError` | WARNING per failure | run continues; turns `STALE` after stale window |
+| Heartbeat or progress write: `OSError` or `STATE_READ_ERRORS` | WARNING per failure | run continues; turns `STALE` after stale window |
+| Progress write (`step_started`, `item_started`): any other exception | ERROR via existing handler | run finalized `failed` |
+| Heartbeat task: any other exception | ERROR (`logger.exception` in the done-callback) | heartbeat stops; run turns `STALE` |
 | `init_run` or `claim` fails | exception | run does not start (as `init_run` today) |
 | Process dies, at any point after `init_run` | `orphaned` in list; wait exit 8 | — |
 | Event loop blocked > stale window | `stale` in list; one WARNING from wait | wait continues; clears on next heartbeat |
@@ -356,6 +368,8 @@ The 173 events dispatcher (`run_event`) is not used for this, because the two se
 | Prune delete `OSError` | ERROR with path | continues; exit 1 |
 | Prune names a live/unowned running run | stderr refusal | not deleted; exit 1 |
 | Pipeline unavailable in listing | stderr summary line; `-v` detail | row marker as in 199 |
+| `pipelines show`: name not found | stderr loader message | exit 1 |
+| `pipelines show`: file resolved but unreadable (permissions, deleted before the read) | ERROR naming the path; stderr `Error: cannot read <path>: <reason>` | exit 1, nothing on stdout |
 
 ## Implementation Details
 
@@ -376,6 +390,7 @@ sq pipelines show <name> [--path]
   - **Output:** a `# source: <source>` line and a `# path: <path>` line, then the file text byte for byte. The output is still valid YAML, so `> copy.yaml` works.
   - **`--path`:** prints only the path.
   - **Not found:** exits 1 with the loader's message. Paths are not names, so a path argument is reported as not found.
+  - **Read:** the file is read with `Path.read_bytes()`, and the bytes go to `sys.stdout.buffer` after the two header lines. Nothing is decoded, so non-UTF-8 content cannot fail. The whole file is read before anything is printed, so a failed read leaves stdout empty. An `OSError` from the read is logged at ERROR with the path and reported on stderr as `Error: cannot read <path>: <reason>`, with exit 1. That covers a file that was deleted between resolution and the read, or one whose permissions block it. `--path` does not read the file.
 
 ```python
 # pipeline/run_listing.py
@@ -495,7 +510,9 @@ User (1)
   - the claim is written;
   - at least two heartbeats are written;
   - the task is cancelled on exit;
-  - an `OSError` on write logs a WARNING and does not raise.
+  - an `OSError` on write logs a WARNING and does not raise;
+  - an unexpected exception in the task is logged at ERROR by the done-callback, and the heartbeat stops.
+- `sq pipelines show` CLI tests: a built-in, a project shadow, `--path`, not found, and an unreadable file (mode `000`): exit 1, an ERROR record, and empty stdout.
 - Executor tests assert the `RunObserver` call order for a plain step and for an `each` step (`step_started`, one `item_started` per item, `step_completed`). The existing `on_step_complete` tests move to the observer unchanged in substance.
 - `sdk_session` tests use a fake client whose stream goes silent:
   - the interrupt is sent;
@@ -609,13 +626,13 @@ cd $S/proj && export HOME=$S/home
 5. **Wait and listing:** `WaitOutcome.ORPHANED` and the `STALE` wait policy; `RunSummary` liveness, `RunListing` and the unavailable summary; running runs in the default view.
 6. **Renderer and listings:** `cli/columns.py`, then move the runs and pipelines renderers onto it (`PipelineInfo.params`, `-v`).
 7. **`resolve_pipeline`, show and prune:** `resolve_pipeline` (refactor `load_pipeline` onto it) and `sq pipelines show`. `scan_runs`, `run_prune.py` and `sq runs prune`.
-8. **Docs and issues:** update README, docs/PIPELINES.md and docs/COMMANDS.md, add the CHANGELOG lines, and close #190 and #165. Open an issue for resuming orphaned runs (Technical Scope, Excluded).
+8. **Docs and issues:** update README, docs/PIPELINES.md and docs/COMMANDS.md, add the CHANGELOG lines, add the D12 paragraph to `140-arch.pipeline-foundation.md`, and close #190 and #165. Open an issue for resuming orphaned runs (Technical Scope, Excluded).
 
 Effort: 3/5. The parts are independent apart from the shared liveness definition. Steps 3–5 carry the risk; 2, 6 and 7 are mechanical.
 
 ### Special Considerations
 - **Write volume:** one extra state write per heartbeat (30 s), one per step start and one per `each` item start. Each is a small atomic rewrite of a single JSON file.
-- **Listing performance.** 199's advisory target stands: `sq runs list --all` under 1 s with a few hundred run-state files on local disk (measured at 0.67 s for 188 runs). 174 changes the cost as follows:
+- **Listing performance.** The 140 architecture states no NFR for the listing path, so the target carried forward is 199's advisory one: `sq runs list --all` under 1 s with a few hundred run-state files on local disk (measured at 0.67 s for 188 runs). 174 changes the cost as follows:
   - **No new file reads.** The v5 fields live in the state file `list_runs` already parses.
   - **One `os.kill(pid, 0)` per running run** with a same-host owner, and nothing per other run. `hostname` is read once per call.
   - **Running runs now appear in the default view** but load no definition and no report, since they have no resume point.
