@@ -12,6 +12,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261006
 
+### Release 0.20.1
+
+- **Contents:** 0.20.0 (unpublished: CI failed on two CLI tests that matched Rich output without stripping ANSI codes, which Typer forces on when `GITHUB_ACTIONS` is set) plus that test fix.
+
 ### Release 0.20.0
 
 - **Contents:** slice 197 (implementation batch pipeline: `implement-plan`, item resume, project run lock, `report.json`), #183 (branch enter catch-up).

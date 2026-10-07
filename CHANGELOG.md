@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.1] - 20261006
+
+### Fixed
+- 0.20.0 was tagged but never published (a CI-only test failure); 0.20.1 ships its changes.
+
 ## [0.20.0] - 20261006
 
 ### Added
