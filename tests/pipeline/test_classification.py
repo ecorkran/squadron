@@ -733,7 +733,7 @@ def test_top_level_steps_still_classified_alongside_containers() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _make_template(model: str | None) -> object:
+def _make_template(model: str | None, profile: str | None = None) -> object:
     from squadron.review.templates import ReviewTemplate
 
     return ReviewTemplate(
@@ -746,6 +746,7 @@ def _make_template(model: str | None) -> object:
         required_inputs=[],
         optional_inputs=[],
         model=model,
+        profile=profile,
         prompt_template="Review all.",
     )
 
@@ -1051,3 +1052,65 @@ def test_every_builtin_pipeline_names_only_known_review_templates() -> None:
             # Other classification errors (e.g. required params with no value here) are not
             # this test's concern; only an unknown template name fails it.
             assert "unknown review template" not in str(exc), f"{path.name}: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# The alias check uses the review step's own profile source (slice 934 D4, #175/#184)
+# ---------------------------------------------------------------------------
+
+_LITERAL_ID = "my-literal-model-id"
+
+
+def _config_stub(monkeypatch: pytest.MonkeyPatch, profile: str | None) -> None:
+    def fake_get_config(key: str) -> str | None:
+        return profile if key == "default_review_profile" else None
+
+    monkeypatch.setattr("squadron.review.profile_resolution.get_config", fake_get_config)
+
+
+def _classify_review_with_template(template: object, model: str) -> object:
+    with patch("squadron.review.templates.get_template", return_value=template):
+        return classify_pipeline(_review_pipeline("code", model=model), make_resolver())
+
+
+def test_literal_id_passes_for_a_review_step_when_default_review_profile_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config_stub(monkeypatch, "openrouter")
+    result = _classify_review_with_template(_make_template(model=None), _LITERAL_ID)
+    assert isinstance(result, PipelineClassification)
+    assert len(result.steps) == 1
+
+
+def test_literal_id_without_a_profile_source_fails_with_the_sq_review_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from squadron.models.aliases import UnknownModelAliasError, require_known_model
+
+    _config_stub(monkeypatch, None)
+    with pytest.raises(UnknownModelAliasError) as expected:
+        require_known_model(_LITERAL_ID, profile_source=False)
+    with pytest.raises(ClassificationError) as raised:
+        _classify_review_with_template(_make_template(model=None), _LITERAL_ID)
+    assert str(expected.value) in str(raised.value)
+
+
+def test_template_declared_profile_makes_a_literal_id_acceptable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config_stub(monkeypatch, None)
+    result = _classify_review_with_template(
+        _make_template(model=None, profile="openrouter"), _LITERAL_ID
+    )
+    assert isinstance(result, PipelineClassification)
+
+
+def test_non_review_actions_keep_the_run_level_profile_param(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config_stub(monkeypatch, "openrouter")  # must not rescue a dispatch step
+    pipeline = make_pipeline([make_step("dispatch", "dispatch-0", {"model": _LITERAL_ID})])
+    with pytest.raises(ClassificationError, match="unknown model alias"):
+        classify_pipeline(pipeline, make_resolver())
+    result = classify_pipeline(pipeline, make_resolver(), params={"profile": "openrouter"})
+    assert len(result.steps) == 1

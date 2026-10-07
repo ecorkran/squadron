@@ -31,6 +31,7 @@ from squadron.models.aliases import (
     resolve_model_alias,
 )
 from squadron.providers.profiles import is_sdk_profile
+from squadron.review.profile_resolution import review_profile_source
 
 if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
@@ -370,9 +371,29 @@ def action_model_label(
     return "model=unresolved"
 
 
+def _action_profile_source(
+    action_type: str,
+    resolved_cfg: dict[str, object],
+    classify_params: dict[str, object],
+) -> bool:
+    """Whether this action has a profile that justifies a literal model id (#175, #184).
+
+    A review step asks the same question ``sq review`` does: an explicit profile
+    (the run's ``--param profile=…`` or the step's own), its template's
+    ``profile:``, or ``default_review_profile``. Any other action keeps the
+    run-level param test. An unknown template reads as no template profile here;
+    ``_collect_unknown_template`` reports that name separately.
+    """
+    explicit = has_profile_param(classify_params)
+    if action_type != "review":
+        return explicit
+    template = _review_template(action_type, resolved_cfg)
+    return review_profile_source(explicit or PROFILE_PARAM in resolved_cfg, template)
+
+
 def _collect_unknown_alias(
     candidate: str,
-    classify_params: dict[str, object],
+    profile_source: bool,
     alias_errors: list[PreRunNameError],
 ) -> None:
     """Record ``candidate`` when it is an unknown alias with no profile source (#175).
@@ -380,7 +401,7 @@ def _collect_unknown_alias(
     Collected rather than raised so one pre-run error can list every bad alias.
     """
     try:
-        require_known_model(candidate, profile_source=has_profile_param(classify_params))
+        require_known_model(candidate, profile_source=profile_source)
     except UnknownModelAliasError as exc:
         alias_errors.append(exc)
 
@@ -497,7 +518,11 @@ def _classify_container_inner(
             )
             continue
 
-        _collect_unknown_alias(candidate, classify_params, alias_errors)
+        _collect_unknown_alias(
+            candidate,
+            _action_profile_source(action_type, resolved_cfg, classify_params),
+            alias_errors,
+        )
         model_id, profile = resolve_model_alias(candidate)
         classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
         rationale = (
@@ -664,7 +689,11 @@ def classify_pipeline(
                 )
                 continue
 
-            _collect_unknown_alias(candidate, classify_params, alias_errors)
+            _collect_unknown_alias(
+                candidate,
+                _action_profile_source(action_type, resolved_cfg, classify_params),
+                alias_errors,
+            )
             model_id, profile = resolve_model_alias(candidate)
             classification = StepClass.SDK_REQUIRED if is_sdk_profile(profile) else StepClass.NON_SDK
             rationale = (
