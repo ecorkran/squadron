@@ -2,13 +2,19 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261007
+dateUpdated: 20261008
 
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261008
+
+### Release 0.21.2
+
+- **Contents:** fixes only. Split task files: `tasks-plan` selection and `implement-plan` readiness read every `.part-N` tasks review and judge by the worst part, and step commits stage all parts (previously split slices were redone every run and their reviews left uncommitted). Clearer dispatch post-condition message when the agent writes no artifact. Blank line between groups in `sq pipelines list`. Logged #196 (review line citations are model-counted).
 
 ## 20261007
 

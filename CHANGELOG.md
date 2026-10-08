@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.2] - 20261008
+
 ### Changed
 - `sq pipelines list` puts a blank line between the Built-in, Project and User groups.
 - A dispatch that writes no artifact now says so ("agent wrote no tasks artifact for slice N") instead of "no artifact path registered".
