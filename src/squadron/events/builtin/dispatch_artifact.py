@@ -34,7 +34,10 @@ def _resolve_paths(kind: ArtifactKind, scope: str, resolve: Callable[[], list[st
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
     if not paths:
-        msg = f"no {kind.value} artifact path registered for {scope}"
+        msg = (
+            f"agent wrote no {kind.value} artifact for {scope} "
+            f"(Context Forge lists no {kind.value} files for it)"
+        )
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
     return paths
