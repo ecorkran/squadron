@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `sq pipelines list` puts a blank line between the Built-in, Project and User groups.
+- A dispatch that writes no artifact now says so ("agent wrote no tasks artifact for slice N") instead of "no artifact path registered".
+
+### Fixed
+- `tasks-plan` no longer redoes slices whose tasks are split across files. Their per-part reviews (`.part-1`, `.part-2`, …) are now found and judged by the worst part. `implement-plan` no longer reports those slices as not ready.
+- Pipeline commits stage every per-part tasks review instead of leaving them out as dirty files.
 
 ## [0.21.1] - 20261007
 

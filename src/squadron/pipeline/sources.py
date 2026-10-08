@@ -24,6 +24,7 @@ from squadron.pipeline.git_ops import (
 )
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.review.models import Verdict
+from squadron.review.parts import review_stems, worst_verdict
 from squadron.review.persistence import REVIEWS_DIR, slice_name_for, slice_review_stem
 from squadron.review.templates import BuiltinReviewTemplate
 
@@ -184,23 +185,30 @@ _TASKS_REVIEW_TEMPLATE = BuiltinReviewTemplate.TASKS
 _REVIEW_LABELS: dict[str, str] = {_DESIGN_REVIEW_TEMPLATE: "design"}
 
 
-def _review_flag(entry: SliceEntry, template: str, accept: LoopCondition) -> str | None:
+def _review_flag(
+    entry: SliceEntry, template: str, accept: LoopCondition, inputs: list[str]
+) -> str | None:
     """Why *entry*'s review of *template* is not settled at *accept*, or None if it is.
 
-    The path is computed exactly as the save path names it — never searched —
-    so an archived predecessor is never read (195 D1). The reason names the review,
-    for example ``tasks review below threshold (CONCERNS < PASS)``.
+    *inputs* are the reviewed files; a split review has one artifact per input
+    (``.part-1`` .. ``.part-N``) and is judged by the worst part, as the review
+    action folds it. Paths are computed exactly as the save path names them —
+    never searched — so an archived predecessor is never read (195 D1). The reason
+    names the review, for example ``tasks review below threshold (CONCERNS < PASS)``.
     """
     label = _REVIEW_LABELS.get(template, template)
-    slice_name = slice_name_for(entry.design_file, entry.name)
-    path = REVIEWS_DIR / f"{slice_review_stem(entry.index, template, slice_name)}.md"
-    if not path.is_file():
-        return f"no {label} review found"
-    frontmatter = read_frontmatter(path)
-    raw_verdict = frontmatter.get("verdict") if frontmatter is not None else None
-    if raw_verdict not in {v.value for v in Verdict}:
-        return f"{label} review verdict unreadable"
-    verdict = Verdict(raw_verdict)
+    stem = slice_review_stem(entry.index, template, slice_name_for(entry.design_file, entry.name))
+    verdicts: list[str] = []
+    for part in review_stems(stem, inputs):
+        path = REVIEWS_DIR / f"{part}.md"
+        if not path.is_file():
+            return f"no {label} review found"
+        frontmatter = read_frontmatter(path)
+        raw_verdict = frontmatter.get("verdict") if frontmatter is not None else None
+        if raw_verdict not in {v.value for v in Verdict}:
+            return f"{label} review verdict unreadable"
+        verdicts.append(str(raw_verdict))
+    verdict = Verdict(worst_verdict(verdicts))
     if not accept.met_by_verdict(verdict):
         return f"{label} review below threshold ({verdict} < {accept.minimum_verdict})"
     return None
@@ -222,16 +230,17 @@ async def _cf_slices_needing_tasks(
     """
     plan = _plan_arg(args)
     accept = _accept_arg(args)
-    tasked = {task.index for task in cf_client.list_tasks(plan)}
+    task_files = {task.index: task.files for task in cf_client.list_tasks(plan)}
     items: list[dict[str, object]] = []
     for entry in cf_client.list_slices(plan):
         if entry.status in _EXCLUDED_STATUSES or not entry.design_file:
             continue
         # For selection a non-None tasks result means "selected", not "flagged".
-        if entry.index in tasked and _review_flag(entry, _TASKS_REVIEW_TEMPLATE, accept) is None:
+        files = task_files.get(entry.index)
+        if files and _review_flag(entry, _TASKS_REVIEW_TEMPLATE, accept, files) is None:
             continue
         item = _slice_item(entry)
-        flag_reason = _review_flag(entry, _DESIGN_REVIEW_TEMPLATE, accept)
+        flag_reason = _review_flag(entry, _DESIGN_REVIEW_TEMPLATE, accept, [entry.design_file])
         if flag_reason is not None:
             item["flag_reason"] = flag_reason
         items.append(item)
@@ -245,11 +254,15 @@ FLAG_KIND_KEY = "flag_kind"
 
 def _not_ready_reason(entry: SliceEntry, task: TaskEntry | None, accept: LoopCondition) -> str | None:
     """Why a designed, open slice is not ready to implement (197 D2); first hit wins."""
-    if (reason := _review_flag(entry, _DESIGN_REVIEW_TEMPLATE, accept)) is not None:
+    if not entry.design_file:
+        return "no design file"
+    if (
+        reason := _review_flag(entry, _DESIGN_REVIEW_TEMPLATE, accept, [entry.design_file])
+    ) is not None:
         return reason
     if task is None or not task.files:
         return "no task file"
-    if (reason := _review_flag(entry, _TASKS_REVIEW_TEMPLATE, accept)) is not None:
+    if (reason := _review_flag(entry, _TASKS_REVIEW_TEMPLATE, accept, task.files)) is not None:
         return reason
     if task.total > 0 and task.completed == task.total:
         # Implemented and merged but not closed out; rerunning would reimplement it.

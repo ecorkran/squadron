@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from squadron.review.git_utils import resolve_slice_diff_range
-from squadron.review.persistence import TASKS_DIR, SliceInfo
+from squadron.review.parts import review_stems
+from squadron.review.persistence import TASKS_DIR, SliceInfo, slice_review_stem
 
 #: Review input keys whose values are document paths that must exist on disk
 #: for the review to be grounded. Other keys (diff refs, file globs, cwd)
@@ -98,6 +99,19 @@ def missing_input_files(inputs: dict[str, str]) -> list[tuple[str, str]]:
             continue
         missing.append((key, value))
     return missing
+
+
+def review_artifact_stems(template_name: str, info: SliceInfo, cwd: str) -> list[str]:
+    """The artifact stem of every part a slice-derived review of ``template_name`` saves.
+
+    One stem, or ``.part-1`` .. ``.part-N`` when the template's fan-out input has
+    two or more values — exactly the files ``resolve_template_input_parts`` makes
+    the review write.
+    """
+    stem = slice_review_stem(info["index"], template_name, info["slice_name"])
+    fan_out = next((spec for spec in TEMPLATE_INPUTS.get(template_name, []) if spec.fans_out), None)
+    values = fan_out.source(info, cwd) if fan_out is not None else []
+    return review_stems(stem, values) if values else [stem]
 
 
 def resolve_template_input_parts(

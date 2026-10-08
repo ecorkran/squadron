@@ -165,6 +165,24 @@ def test_tasks_candidates_and_message(repo: Path) -> None:
     assert plan.message == "docs: add slice 105 tasks (review: PASS)"
 
 
+def test_split_tasks_stage_every_part_review_and_report_the_worst(repo: Path) -> None:
+    """Split task files get one review per part; all are staged, the worst is reported."""
+    client = _cf()
+    client.list_tasks.return_value = [
+        TaskEntry(index=SLICE, files=["105-tasks.batch-foo-1.md", "105-tasks.batch-foo-2.md"])
+    ]
+    part_1 = TASKS_REVIEW.replace(".md", ".part-1.md")
+    part_2 = TASKS_REVIEW.replace(".md", ".part-2.md")
+    _write(repo, part_1, _review("PASS"))
+    _write(repo, part_2, _review("CONCERNS"))
+
+    plan = build_commit_plan(_target(CommitSubject.TASKS, template="tasks"), repo, client)
+
+    assert set(plan.paths) == {part_1, part_2}
+    assert plan.left_out == ()
+    assert plan.message == "review: add slice 105 tasks review (CONCERNS)"
+
+
 # ---------------------------------------------------------------------------
 # ARCHITECTURE
 # ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ from squadron.integrations.context_forge import ARCHITECTURE_DIR
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
+from squadron.review.parts import part_stem
 from squadron.review.run_cost import NOT_COMPUTED, RunCost
 from squadron.review.turn_capture import describe_budget, describe_effort, ended_mid_task
 
@@ -891,8 +892,7 @@ def save_review_result(
     # The caller's concern, not the target's: a split tasks review writes each
     # part to its own slot, and the target answers what it is called rather
     # than which part of a split this happens to be.
-    if name_suffix:
-        base = f"{base}.{name_suffix}"
+    base = part_stem(base, name_suffix)
 
     if as_json:
         path = directory / f"{base}.json"

@@ -17,6 +17,7 @@ from squadron.documents.frontmatter import read_frontmatter
 from squadron.integrations.context_forge import ARCHITECTURE_DIR
 from squadron.pipeline.git_ops import GitEnvironmentError, SliceNotInPlanError
 from squadron.review.git_utils import run_git
+from squadron.review.parts import worst_verdict
 from squadron.review.persistence import (
     ARCHIVE_SUBDIR,
     REVIEWS_DIR,
@@ -24,9 +25,9 @@ from squadron.review.persistence import (
     SliceInfo,
     resolve_arch_file,
     resolve_slice_info,
-    slice_review_stem,
 )
 from squadron.review.save_target import ArchTarget
+from squadron.review.template_inputs import review_artifact_stems
 from squadron.review.templates import BuiltinReviewTemplate
 
 _logger = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
         left_out = tuple(sorted(dirty.keys() - {c.repo_path for c in present}))
 
     artifact = next((c for c in present if c.is_artifact), None)
-    review = next((c for c in present if c.is_review), None)
+    reviews = [c for c in present if c.is_review]
     facts = StagedFacts(
         artifact=(
             None
@@ -161,8 +162,8 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
             if dirty[artifact.repo_path] is _Dirty.NEW
             else ArtifactChange.REVISE
         ),
-        review_staged=review is not None,
-        review_verdict=read_review_verdict(cwd / review.path) if review is not None else None,
+        review_staged=bool(reviews),
+        review_verdict=_staged_verdict(reviews, cwd),
     )
     return CommitPlan(
         paths=paths,
@@ -170,6 +171,25 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
         message=compose_message(target, facts),
         left_out=left_out,
     )
+
+
+def _staged_verdict(reviews: list[_Candidate], cwd: Path) -> str | None:
+    """The worst verdict across the staged review parts, or None if any is unreadable.
+
+    A split review is judged by its worst part, as the review action folds it; a
+    part with no readable verdict leaves the message without one (each is logged).
+    """
+    verdicts = [read_review_verdict(cwd / review.path) for review in reviews]
+    readable = [v for v in verdicts if v is not None]
+    if not readable or len(readable) < len(verdicts):
+        return None
+    try:
+        return worst_verdict(readable)
+    except ValueError:
+        # A verdict outside Verdict is written by hand or by an older squadron;
+        # the message still commits, it just omits the verdict.
+        _logger.warning("commit: unrecognized review verdict in %s; message omits it", readable)
+        return None
 
 
 def _archived_reviews(
@@ -221,7 +241,7 @@ def _candidates(
             paths = _architecture_candidates(target, cwd, root)
         case CommitSubject.CODE:
             # Only the review is read; the staged set is everything dirty.
-            paths = _review_candidates(target, _slice_name(target, cf_client), cwd, root)
+            paths = _review_candidates(target, _slice_info(target, cf_client), cwd, root)
             return paths
         case CommitSubject.DESIGN | CommitSubject.TASKS:
             paths = _slice_candidates(target, cwd, root, cf_client)
@@ -238,7 +258,7 @@ def _slice_candidates(
     info = _slice_info(target, cf_client)
     kind = ArtifactKind.DESIGN if target.subject is CommitSubject.DESIGN else ArtifactKind.TASKS
     found = [_candidate(p, cwd, root, is_artifact=True) for p in artifact_paths(kind, info)]
-    found += _review_candidates(target, info["slice_name"], cwd, root)
+    found += _review_candidates(target, info, cwd, root)
     slice_plan = str(cf_client.get_project().slice_plan)
     if slice_plan:
         # cf reports the plan as a bare stem; tolerate one that already has its suffix.
@@ -266,17 +286,14 @@ def _architecture_candidates(target: CommitTarget, cwd: Path, root: Path) -> lis
 
 
 def _review_candidates(
-    target: CommitTarget, slice_name: str, cwd: Path, root: Path
+    target: CommitTarget, info: SliceInfo, cwd: Path, root: Path
 ) -> list[_Candidate]:
-    """The review file for ``target``'s template, named exactly as the save path names it."""
+    """Every review file for ``target``'s template — one per part of a split review —
+    named exactly as the save path names it."""
     if target.review_template is None:
         return []
-    stem = slice_review_stem(_require_slice(target), target.review_template, slice_name)
-    return [_candidate(str(REVIEWS_DIR / f"{stem}.md"), cwd, root, is_review=True)]
-
-
-def _slice_name(target: CommitTarget, cf_client: CfClientProtocol) -> str:
-    return _slice_info(target, cf_client)["slice_name"]
+    stems = review_artifact_stems(target.review_template, info, str(cwd))
+    return [_candidate(str(REVIEWS_DIR / f"{stem}.md"), cwd, root, is_review=True) for stem in stems]
 
 
 def _slice_info(target: CommitTarget, cf_client: CfClientProtocol) -> SliceInfo:

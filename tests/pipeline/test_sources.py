@@ -365,9 +365,56 @@ class TestSlicesNeedingTasks:
         )
         self._write_tasks_review(_REVIEW_TEMPLATE.format(verdict="CONCERNS"))
 
-        assert _review_flag(entry, "tasks", LoopCondition.REVIEW_PASS) == (
+        assert _review_flag(entry, "tasks", LoopCondition.REVIEW_PASS, ["914-tasks.strict.md"]) == (
             "tasks review below threshold (CONCERNS < PASS)"
         )
+
+    # --- split task files: one review per part, judged by the worst part ---
+
+    _SPLIT = [
+        *_TASKS_900,
+        {
+            "index": 914,
+            "files": ["914-tasks.strict-1.md", "914-tasks.strict-2.md"],
+            "completed": 0,
+            "total": 9,
+        },
+    ]
+
+    def _write_part_review(self, part: int, verdict: str) -> None:
+        name = _REVIEW_914.replace("review.slice.", "review.tasks.").replace(".md", f".part-{part}.md")
+        (Path("project-documents/user/reviews") / name).write_text(
+            _REVIEW_TEMPLATE.format(verdict=verdict), encoding="utf-8"
+        )
+
+    async def _run_split(self, accept: str = "review.concerns_or_better") -> list[dict[str, object]]:
+        from squadron.pipeline.sources import _cf_slices_needing_tasks
+
+        client = StubCfClient(tasks=self._SPLIT)
+        return await _cf_slices_needing_tasks(["900", accept], client, {}, cwd=os.getcwd())
+
+    @pytest.mark.asyncio
+    async def test_split_tasks_with_settled_part_reviews_are_not_selected(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_part_review(1, "PASS")
+        self._write_part_review(2, "CONCERNS")
+
+        assert await self._run_split() == []
+
+    @pytest.mark.asyncio
+    async def test_split_tasks_are_judged_by_the_worst_part(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_part_review(1, "PASS")
+        self._write_part_review(2, "FAIL")
+
+        assert _indices(await self._run_split()) == ["914"]
+
+    @pytest.mark.asyncio
+    async def test_split_tasks_missing_a_part_review_are_selected(self) -> None:
+        self._write_review(_REVIEW_TEMPLATE.format(verdict="PASS"))
+        self._write_part_review(1, "PASS")
+
+        assert _indices(await self._run_split()) == ["914"]
 
     @pytest.mark.asyncio
     async def test_reads_the_requested_plan(self) -> None:

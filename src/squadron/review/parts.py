@@ -46,6 +46,23 @@ def review_parts(input_paths: list[str]) -> list[ReviewPart]:
     return [ReviewPart(path, f"part-{index}") for index, path in enumerate(input_paths, 1)]
 
 
+def part_stem(stem: str, name_suffix: str | None) -> str:
+    """The artifact stem one part saves under: ``stem`` or ``stem.part-N``."""
+    return f"{stem}.{name_suffix}" if name_suffix else stem
+
+
+def review_stems(stem: str, input_paths: list[str]) -> list[str]:
+    """The artifact stem of every part of a review over ``input_paths``.
+
+    Readers of saved reviews use this, so they look for exactly the files the
+    review wrote: one unsuffixed file, or ``.part-1`` .. ``.part-N``.
+
+    Raises:
+        ValueError: If ``input_paths`` is empty.
+    """
+    return [part_stem(stem, part.name_suffix) for part in review_parts(input_paths)]
+
+
 def worst_verdict(verdicts: Iterable[str]) -> str:
     """The worst of ``verdicts`` by PASS < CONCERNS < UNKNOWN < FAIL.
 
