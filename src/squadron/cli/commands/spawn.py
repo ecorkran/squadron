@@ -8,6 +8,7 @@ from typing import Any
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 from squadron.config.manager import get_config
@@ -80,7 +81,7 @@ def spawn(
         try:
             profile_data = _resolve_profile(profile, provider, base_url)
         except KeyError as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from None
         request_data.update(profile_data)
 
@@ -105,7 +106,7 @@ async def _spawn(request_data: dict[str, Any]) -> None:
         # response, daemon-side error) are not enumerable here. Rendered as
         # a clean CLI exit.
         _logger.exception("spawn: daemon request failed")
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
     finally:
         await client.close()

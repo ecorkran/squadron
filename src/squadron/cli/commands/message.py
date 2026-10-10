@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 from squadron.core.agent_registry import AgentNotFoundError
@@ -42,4 +43,4 @@ def _display_messages(messages: list[dict[str, Any]]) -> None:
     for msg in messages:
         sender = msg.get("sender", "unknown")
         content = msg.get("content", "")
-        rprint(f"[dim]\\[{sender}][/dim] {content}")
+        rprint(f"[dim]\\[{escape(str(sender))}][/dim] {escape(str(content))}")

@@ -88,23 +88,11 @@ def _flagged_sites() -> dict[str, list[int]]:
     return flagged
 
 
-# Files not yet swept; shrinks as Tasks 3-8 proceed and is deleted at the end.
-_UNSWEPT: set[str] = {
-    "src/squadron/cli/commands/spawn.py",
-}
-
-
-def test_no_unescaped_exception_text_outside_unswept_files() -> None:
-    offenders = {rel: lines for rel, lines in _flagged_sites().items() if rel not in _UNSWEPT}
+def test_no_unescaped_exception_text_in_cli() -> None:
+    offenders = _flagged_sites()
     assert not offenders, "Unescaped exception text in Rich output (wrap in escape()): " + "; ".join(
         f"{rel}:{line}" for rel, lines in offenders.items() for line in lines
     )
-
-
-def test_unswept_files_still_have_flagged_sites() -> None:
-    flagged = _flagged_sites()
-    clean = sorted(rel for rel in _UNSWEPT if rel not in flagged)
-    assert not clean, f"Remove from _UNSWEPT (no flagged sites left): {clean}"
 
 
 @pytest.mark.parametrize(
