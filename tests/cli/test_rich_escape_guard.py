@@ -97,8 +97,6 @@ _UNSWEPT: set[str] = {
     "src/squadron/cli/commands/pr.py",
     "src/squadron/cli/commands/review.py",
     "src/squadron/cli/commands/review_pr.py",
-    "src/squadron/cli/commands/run.py",
-    "src/squadron/cli/commands/run_item.py",
     "src/squadron/cli/commands/skills.py",
     "src/squadron/cli/commands/spawn.py",
 }

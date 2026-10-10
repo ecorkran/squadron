@@ -44,7 +44,7 @@ def render_steps(
     """
     pad = _INDENT * depth
     for step in steps:
-        rprint(f"{pad}{step.name} ({step.step_type})")
+        rprint(f"{pad}{escape(str(step.name))} ({step.step_type})")
         # Run-level params resolve; per-item ones such as {slice.index} stay visible.
         shown = resolve_placeholders(step.config, params)
         if step.step_type == _LOOP:

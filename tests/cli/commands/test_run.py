@@ -331,6 +331,15 @@ class TestCheckCf:
             _check_cf(client)
         assert exc_info.value.exit_code == 1
 
+    def test_cf_error_keeps_bracketed_text(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Rich must not swallow ``[codex]`` in an interpolated exception (#177)."""
+        client = MagicMock()
+        client.get_project.side_effect = ContextForgeError("bad profile [codex] rejected")
+        with pytest.raises(typer.Exit) as exc_info:
+            _check_cf(client)
+        assert exc_info.value.exit_code == 1
+        assert "bad profile [codex] rejected" in capsys.readouterr().out
+
 
 # ---------------------------------------------------------------------------
 # T11: _run_pipeline unit tests

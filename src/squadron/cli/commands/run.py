@@ -179,7 +179,7 @@ def _check_cf(cf_client: ContextForgeClient) -> None:
         )
         raise typer.Exit(1) from None
     except ContextForgeError as exc:
-        rprint(f"[red]Error: Context Forge pre-flight check failed — {exc}[/red]")
+        rprint(f"[red]Error: Context Forge pre-flight check failed — {escape(str(exc))}[/red]")
         raise typer.Exit(1) from None
 
 
@@ -359,7 +359,7 @@ async def _run_pipeline_sdk(
             definition, model_override=model_override, params=params, strict=strict
         )
     except ClassificationError as exc:
-        rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
+        rprint(f"[red]Error: Pipeline classification failed — {escape(str(exc))}[/red]")
         raise typer.Exit(1) from None
 
     # The authoritative resolver built inside _run_pipeline shares this backend
@@ -409,7 +409,7 @@ async def _run_pipeline_sdk(
         _run_id = run_id or "unknown"
         rprint(
             f"[red]Error: Claude auth required — connection failed mid-run"
-            f" at step '{exc.step_name}'.[/red]\n"
+            f" at step '{escape(str(exc.step_name))}'.[/red]\n"
             f"Run state saved. Resume with: sq run --resume {_run_id}"
         )
         raise typer.Exit(1) from exc
@@ -524,13 +524,13 @@ def _handle_explain(
     try:
         definition = load_pipeline(pipeline_name)
     except FileNotFoundError:
-        rprint(f"[red]Error: Pipeline '{pipeline_name}' not found.[/red]")
+        rprint(f"[red]Error: Pipeline '{escape(str(pipeline_name))}' not found.[/red]")
         raise typer.Exit(1) from None
 
     errors = validate_pipeline(definition)
     if errors:
         for err in errors:
-            rprint(f"[red]{err.field}: {err.message}[/red]")
+            rprint(f"[red]{escape(str(err.field))}: {escape(str(err.message))}[/red]")
         raise typer.Exit(1)
 
     cli_override = _extract_model_override(model_override, param)
@@ -546,7 +546,7 @@ def _handle_explain(
             definition, model_override=cli_override, params=explain_params, strict=strict
         )
     except ClassificationError as exc:
-        rprint(f"[red]Error: Classification failed — {exc}[/red]")
+        rprint(f"[red]Error: Classification failed — {escape(str(exc))}[/red]")
         raise typer.Exit(1) from None
 
     _render_explain(classification)
@@ -570,7 +570,7 @@ def _display_result(result: PipelineResult) -> None:
     """Print a brief final summary of a completed pipeline run."""
     color = status_color(result.status.value)
     name = result.pipeline_name
-    rprint(f"\n[{color}]Pipeline '{name}' — {result.status.value}[/{color}]")
+    rprint(f"\n[{color}]Pipeline '{escape(str(name))}' — {result.status.value}[/{color}]")
     rprint(f"  Steps: {len(result.step_results)}")
 
     for sr in result.step_results:
@@ -582,9 +582,9 @@ def _display_result(result: PipelineResult) -> None:
             if ar.error and not error_msg:
                 error_msg = ar.error
         verdict_str = f" ({', '.join(verdict_parts)})" if verdict_parts else ""
-        rprint(f"    {sr.step_name}: {sr.status.value}{verdict_str}")
+        rprint(f"    {escape(str(sr.step_name))}: {sr.status.value}{verdict_str}")
         if error_msg:
-            rprint(f"      [red]Error: {error_msg}[/red]")
+            rprint(f"      [red]Error: {escape(str(error_msg))}[/red]")
 
     for sr in result.step_results:
         if sr.batch_report is not None:
@@ -598,7 +598,7 @@ def _display_batch_report(report: BatchReport) -> None:
         rprint(f"  [yellow]FLAGGED[/yellow] {escape(record.render_line()[2:])}")
     if report.written_to is not None:
         json_path = report.json_path(report.written_to.parent)
-        rprint(f"  Report: {report.written_to}  JSON: {json_path}")
+        rprint(f"  Report: {escape(str(report.written_to))}  JSON: {escape(str(json_path))}")
 
 
 # ---------------------------------------------------------------------------
@@ -636,7 +636,7 @@ def _render_prompt_only_step(
         )
     except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError) as exc:
         _logger.exception("prompt-only: model resolution failed for step %r", step.name)
-        rprint(f"[red]Error: model resolution failed — {exc}[/red]", file=sys.stderr)
+        rprint(f"[red]Error: model resolution failed — {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
 
@@ -664,13 +664,13 @@ def _handle_prompt_only_init(
             file=sys.stderr,
         )
         for err in errors:
-            rprint(f"  {err.field}: {err.message}", file=sys.stderr)
+            rprint(f"  {escape(str(err.field))}: {escape(str(err.message))}", file=sys.stderr)
         raise typer.Exit(1)
 
     params = _assemble_params(definition, target, model_override, param_list)
     state_mgr = StateManager()
     run_id = state_mgr.init_run(pipeline_name, params, execution_mode=ExecutionMode.PROMPT_ONLY)
-    rprint(f"run_id={run_id}", file=sys.stderr)
+    rprint(f"run_id={escape(str(run_id))}", file=sys.stderr)
 
     pool_backend = DefaultPoolBackend()
     resolver = ModelResolver(
@@ -711,7 +711,7 @@ def _handle_prompt_only_next(
         )
         raise typer.Exit(1) from None
     except SchemaVersionError as exc:
-        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+        rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
     try:
@@ -858,7 +858,7 @@ def _handle_step_done(
         )
         raise typer.Exit(1) from None
     except SchemaVersionError as exc:
-        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+        rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
     try:
@@ -890,15 +890,15 @@ def _handle_step_done(
                 _run_post_action_bindings_for_step_done(run_id=run_id, state=state, step=step_config)
             )
         except (PluginLoadError, ManifestError) as exc:
-            rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+            rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
             raise typer.Exit(1) from exc
 
         if failure is not None:
-            rprint(f"[red]Error: {failure}[/red]", file=sys.stderr)
+            rprint(f"[red]Error: {escape(str(failure))}[/red]", file=sys.stderr)
             raise typer.Exit(1)
 
     state_mgr.record_step_done(run_id, next_name, step_type, verdict=verdict)
-    rprint(f"Step '{next_name}' marked complete.", file=sys.stderr)
+    rprint(f"Step '{escape(str(next_name))}' marked complete.", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -1092,10 +1092,10 @@ def run(
             try:
                 state = state_mgr.load(status)
             except FileNotFoundError:
-                rprint(f"[red]Error: Run '{status}' not found.[/red]")
+                rprint(f"[red]Error: Run '{escape(str(status))}' not found.[/red]")
                 raise typer.Exit(1) from None
             except SchemaVersionError as exc:
-                rprint(f"[red]Error: {exc}[/red]")
+                rprint(f"[red]Error: {escape(str(exc))}[/red]")
                 raise typer.Exit(1) from None
             render_run_status(state)
         raise typer.Exit(0)
@@ -1107,15 +1107,15 @@ def run(
         try:
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
-            rprint(f"[red]Error: Pipeline '{pipeline}' not found.[/red]")
+            rprint(f"[red]Error: Pipeline '{escape(str(pipeline))}' not found.[/red]")
             raise typer.Exit(1) from None
         errors = validate_pipeline(definition)
         if not errors:
-            rprint(f"[bright_green]Pipeline '{definition.name}' is valid.[/bright_green]")
+            rprint(f"[bright_green]Pipeline '{escape(str(definition.name))}' is valid.[/bright_green]")
             raise typer.Exit(0)
-        rprint(f"[red]Validation errors for '{definition.name}':[/red]")
+        rprint(f"[red]Validation errors for '{escape(str(definition.name))}':[/red]")
         for err in errors:
-            rprint(f"  {err.field}: {err.message}")
+            rprint(f"  {escape(str(err.field))}: {escape(str(err.message))}")
         raise typer.Exit(1)
 
     # ---- --explain ----
@@ -1133,14 +1133,14 @@ def run(
         try:
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
-            rprint(f"[red]Error: Pipeline '{pipeline}' not found.[/red]")
+            rprint(f"[red]Error: Pipeline '{escape(str(pipeline))}' not found.[/red]")
             raise typer.Exit(1) from None
 
         errors = validate_pipeline(definition)
         if errors:
-            rprint(f"[red]Validation errors for '{definition.name}':[/red]")
+            rprint(f"[red]Validation errors for '{escape(str(definition.name))}':[/red]")
             for err in errors:
-                rprint(f"  {err.field}: {err.message}")
+                rprint(f"  {escape(str(err.field))}: {escape(str(err.message))}")
             raise typer.Exit(1)
 
         params = _assemble_params(definition, target, model, param)
@@ -1154,11 +1154,11 @@ def run(
                 strict=strict,
             )
         except ClassificationError as exc:
-            rprint(f"[red]Error: Pipeline classification failed — {exc}[/red]")
+            rprint(f"[red]Error: Pipeline classification failed — {escape(str(exc))}[/red]")
             raise typer.Exit(1) from None
-        rprint(f"\n[bold]Pipeline:[/bold] {definition.name}")
-        rprint(f"[bold]Description:[/bold] {definition.description}")
-        rprint(f"[bold]Params:[/bold] {params}")
+        rprint(f"\n[bold]Pipeline:[/bold] {escape(str(definition.name))}")
+        rprint(f"[bold]Description:[/bold] {escape(str(definition.description))}")
+        rprint(f"[bold]Params:[/bold] {escape(str(params))}")
         rprint("\n[bold]Steps:[/bold]")
         render_steps(definition.steps, params, ContextForgeClient(), cwd=os.getcwd())
         raise typer.Exit(0)
@@ -1178,16 +1178,16 @@ def run(
         try:
             state = state_mgr.load(resume)
         except FileNotFoundError:
-            rprint(f"[red]Error: Run '{resume}' not found.[/red]")
+            rprint(f"[red]Error: Run '{escape(str(resume))}' not found.[/red]")
             raise typer.Exit(1) from None
         except SchemaVersionError as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(1) from None
 
         try:
             definition = load_pipeline(state.pipeline)
         except FileNotFoundError:
-            rprint(f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]")
+            rprint(f"[red]Error: Pipeline '{escape(str(state.pipeline))}' not found.[/red]")
             raise typer.Exit(1) from None
 
         resume_from = state_mgr.first_unfinished_step(resume, definition)
@@ -1228,7 +1228,7 @@ def run(
                     )
         except KeyboardInterrupt:
             rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
-            rprint(f"Resume with: [bold]sq run --resume {run_id}[/bold]")
+            rprint(f"Resume with: [bold]sq run --resume {escape(str(run_id))}[/bold]")
             raise typer.Exit(1) from None
 
         _display_result(result)
@@ -1241,7 +1241,7 @@ def run(
     try:
         definition = load_pipeline(pipeline)
     except FileNotFoundError:
-        rprint(f"[red]Error: Pipeline '{pipeline}' not found.[/red]")
+        rprint(f"[red]Error: Pipeline '{escape(str(pipeline))}' not found.[/red]")
         raise typer.Exit(1) from None
 
     params = _assemble_params(definition, target, model, param)
@@ -1286,7 +1286,7 @@ def run(
                                 )
                     except KeyboardInterrupt:
                         rprint("\n[yellow]Interrupted. Run state saved.[/yellow]")
-                        rprint(f"Resume with: [bold]sq run --resume {match.run_id}[/bold]")
+                        rprint(f"Resume with: [bold]sq run --resume {escape(str(match.run_id))}[/bold]")
                         raise typer.Exit(1) from None
 
                     _display_result(result)
@@ -1308,7 +1308,7 @@ def run(
         # Already printed by _run_pipeline
         raise typer.Exit(1) from None
     except ValueError as exc:
-        rprint(f"[red]Error: {exc}[/red]", file=sys.stderr)
+        rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
     except KeyboardInterrupt:
         rprint("\n[yellow]Interrupted. Run state saved as failed.[/yellow]")
