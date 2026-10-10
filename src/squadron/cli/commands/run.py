@@ -196,7 +196,8 @@ def _load_run_definition(state: RunState, *, file: TextIO) -> PipelineDefinition
         return load_pipeline(target)
     except FileNotFoundError:
         rprint(f"[red]Error: Pipeline '{escape(target)}' not found.[/red]", file=file)
-    except (ValidationError, yaml.YAMLError) as exc:
+    except (ValidationError, yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
+        # An existing but unreadable or non-UTF-8 recorded path (940 D8).
         rprint(
             f"[red]Error: Pipeline '{escape(target)}' failed to load: {escape(str(exc))}[/red]",
             file=file,
@@ -695,7 +696,7 @@ def _handle_prompt_only_init(
         definition = load_pipeline(pipeline_name)
     except FileNotFoundError:
         rprint(
-            f"[red]Error: Pipeline '{pipeline_name}' not found.[/red]",
+            f"[red]Error: Pipeline '{escape(pipeline_name)}' not found.[/red]",
             file=sys.stderr,
         )
         raise typer.Exit(1) from None
@@ -703,7 +704,7 @@ def _handle_prompt_only_init(
     errors = validate_pipeline(definition)
     if errors:
         rprint(
-            f"[red]Validation errors for '{definition.name}':[/red]",
+            f"[red]Validation errors for '{escape(str(definition.name))}':[/red]",
             file=sys.stderr,
         )
         for err in errors:
@@ -752,7 +753,7 @@ def _handle_prompt_only_next(
         state = state_mgr.load(run_id)
     except FileNotFoundError:
         rprint(
-            f"[red]Error: Run '{run_id}' not found.[/red]",
+            f"[red]Error: Run '{escape(run_id)}' not found.[/red]",
             file=sys.stderr,
         )
         raise typer.Exit(1) from None
@@ -892,7 +893,7 @@ def _handle_step_done(
         state = state_mgr.load(run_id)
     except FileNotFoundError:
         rprint(
-            f"[red]Error: Run '{run_id}' not found.[/red]",
+            f"[red]Error: Run '{escape(run_id)}' not found.[/red]",
             file=sys.stderr,
         )
         raise typer.Exit(1) from None
@@ -1108,7 +1109,9 @@ def run(
         if pipeline is None:
             rprint("[red]Error: pipeline argument is required for --prompt-only.[/red]")
             raise typer.Exit(1)
-        _handle_prompt_only_init(pipeline.lower(), target, model, param, verbosity=verbose)
+        _handle_prompt_only_init(
+            _normalize_pipeline_arg(pipeline), target, model, param, verbosity=verbose
+        )
         raise typer.Exit(0)
 
     # ---- --status ----
@@ -1155,7 +1158,7 @@ def run(
         if pipeline is None:
             rprint("[red]Error: pipeline argument is required for --explain.[/red]")
             raise typer.Exit(1)
-        _handle_explain(pipeline.lower(), model, param, strict)
+        _handle_explain(_normalize_pipeline_arg(pipeline), model, param, strict)
         raise typer.Exit(0)
 
     # ---- --dry-run ----
