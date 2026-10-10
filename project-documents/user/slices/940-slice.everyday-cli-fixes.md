@@ -16,6 +16,8 @@ status: not_started
 
 Five small, independent fixes to commands users run every day. They are grouped on purpose: each is too small to justify its own design, review and task cycle (see #194).
 
+These fall under the 900 initiative's "developer experience" and "configuration improvements" scope. Two of them are new commands (`sq pipelines copy` and `sq models init`), but each is a thin convenience over files and paths squadron already owns. Neither is a feature area. Each fix is committed on its own and can be reverted on its own, so if one stalls the others still ship. The list color (D7) is a sixth, cosmetic change that rides along with D1.
+
 1. **`sq pipelines copy`** ([#198](https://github.com/ecorkran/squadron/issues/198)). To customize a pipeline today, you run `show`, paste the output into a new file, and find the right directory by hand.
 2. **Starter `models.toml`** ([#197](https://github.com/ecorkran/squadron/issues/197)). The only format reference for model aliases is the built-in `data/models.toml`, which sits inside the installed package at a path that depends on platform and install method.
 3. **Path runs record the path as the name** ([#169](https://github.com/ecorkran/squadron/issues/169)). `sq run path/to/foo.yaml` stores the lowercased path as the run's pipeline name ([run.py:239](../../../src/squadron/cli/commands/run.py#L239), [run.py:672](../../../src/squadron/cli/commands/run.py#L672)). Listing or resuming by name doesn't find the run, and lowercasing corrupts case-sensitive paths.
@@ -76,25 +78,26 @@ None new.
 
 ### D3: One create-file helper
 
-`write_new_file(path, content, *, force) -> Path` creates parent directories, refuses an existing file unless `force` is set, and raises `FileExistsError` naming the path. Both commands catch that error and turn it into a one-line message and exit code 1. They also catch `OSError` on write, log it at ERROR with the path, and exit 1.
+`write_new_file(path, content, *, force) -> Path` creates parent directories, then opens the target in exclusive-create mode (`x`). Because the existence check and the create are a single operation, two concurrent runs can't both win. With `force`, it writes to a temporary file in the same directory and replaces the target, so a failed write never leaves a truncated file. Without `force`, a write that fails after the create unlinks the partial file before re-raising. It raises `FileExistsError` naming the path. Both commands catch that error and turn it into a one-line message and exit code 1. They also catch `OSError` on write, log it at ERROR with the path, and exit 1.
 
 ### D4: Run names and source paths
 
 - `init_run` receives `pipeline_identity(<loaded file path>)` (the file stem, lowercased, matching what lookup uses), not the CLI argument.
 - When the argument was a file path, run state also stores the absolute `pipeline_path`. This is a new optional field. Old state files without it load unchanged.
 - Resume, `--status` and item resume call `load_pipeline(state.pipeline_path or state.pipeline)`. The path is never lowercased.
+- `pipeline_path` is optional, so `schema_version` stays 5. Old state files load unchanged. `RunState` ignores unknown fields (pydantic's default), so an older squadron reading a new state file ignores the path and loads by name. Runs already recorded under a lowercased path keep that name. They are not migrated: they still resume through the path itself, as they do today.
 - A recorded path that no longer exists fails with an error naming the path, rather than falling back to a same-named pipeline. A silent fallback could run a different file.
 
 ### D5: Escaping CLI output
 
 - Every CLI print that interpolates exception text or user-supplied text into Rich markup passes it through `rich.markup.escape`. The issue's grep finds 77 sites. Five modules already import `escape`.
-- **Guard test:** a test scans `src/squadron/cli` for `print(f"...{exc}...")`-style interpolation of `exc`/`e`/`err`/`error` that isn't wrapped in `escape(...)`, and fails if it finds any, naming file and line. This keeps the fix from regressing, which a helper alone can't do.
+- **Guard test:** an AST check over `src/squadron/cli`. It finds every f-string passed to a Rich print (`rprint`, `console.print`, `Console(...).print`) and flags any interpolated expression that refers to a name bound by an enclosing `except ... as <name>` and isn't wrapped in `escape(...)`. The variable's name doesn't matter, and multi-line calls are handled. Its limit: it can't tell user-supplied text that never passed through an exception. Those sites get escaped as part of the sweep, but the guard won't catch a future one. A failure names the file and line.
 - `typer.echo` doesn't parse markup and is left alone.
 
 ### D6: The review profile is visible
 
 - After `resolve_review_profile` returns, the review action logs at INFO `review: step <step> profile=<profile> model=<model>`. `-v` sets the pipeline logger to INFO ([run.py:1050](../../../src/squadron/cli/commands/run.py#L1050)), so the line appears under `-v`. The executor's pre-action label is unchanged. The action is where the profile is actually known.
-- Review artifact frontmatter gains `aiProfile: <profile>`, written next to `aiModel` ([persistence.py:443](../../../src/squadron/review/persistence.py#L443)). Implementation confirms that success and failure artifacts share that writer. If they don't, both get the field.
+- Review artifact frontmatter gains `aiProfile: <profile>`, written next to `aiModel` ([persistence.py:443](../../../src/squadron/review/persistence.py#L443)). Success and failure artifacts both build their frontmatter in `_review_frontmatter_lines` ([persistence.py:373](../../../src/squadron/review/persistence.py#L373)), so one change covers both. Squadron's readers of review frontmatter (metrology, findings parsing) look up the keys they need. `cf validate frontmatter` accepts the extra key (checked 20261009 against a probe review).
 
 ### D7: Colored `pipelines list`
 
@@ -107,8 +110,14 @@ Pipeline names are printed bold, descriptions dim, and the D1 `shadows <source>`
 | copy / init write | target exists | one-line error naming the path, exit 1 |
 | copy / init write | permission or disk error | ERROR log with path, one-line error, exit 1 |
 | copy | unknown pipeline name | `resolve_pipeline`'s existing error, exit 1 |
+| copy | source unreadable, or gone between resolve and read | ERROR log with path, one-line error, exit 1 (the same handling `show` has) |
+| copy / init | write fails after create | partial file removed, ERROR log, exit 1 |
+| init | built-in `data/models.toml` unreadable | ERROR log with path, one-line error, exit 1 |
 | init | built-in reference block empty | test failure (D2) |
 | resume | recorded `pipeline_path` missing | error naming the path, exit 1 |
+| resume | recorded `pipeline_path` exists but fails to load or validate | `load_pipeline`'s existing error, naming the path, exit 1 |
+
+Each row has a test that asserts its signal: the exit code, plus the message or log record.
 
 ## Success Criteria
 
@@ -125,6 +134,7 @@ Pipeline names are printed bold, descriptions dim, and the D1 `shadows <source>`
 ### Technical Requirements
 - ruff format, ruff check and pyright are clean. The full suite passes.
 - The D5 guard test passes, and fails if an unescaped site is added.
+- A state file written before this slice (no `pipeline_path`) loads and resumes unchanged (test).
 - Tests use a temporary home and project directory and never touch the real `~/.config/squadron`.
 
 ## Verification Walkthrough
