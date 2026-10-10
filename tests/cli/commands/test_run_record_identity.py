@@ -81,3 +81,37 @@ def test_prompt_only_path_run_records_identity_and_path(
     (run,) = manager.list_runs()
     assert run.pipeline == "bar"
     assert run.pipeline_path == str(source.resolve())
+
+
+@pytest.mark.parametrize(
+    ("flag", "handler"),
+    [("--prompt-only", "_handle_prompt_only_init"), ("--explain", "_handle_explain")],
+)
+def test_path_argument_keeps_its_case_on_every_entry_point(
+    tmp_path: Path, flag: str, handler: str
+) -> None:
+    from typer.testing import CliRunner
+
+    from squadron.cli.app import app
+
+    source = tmp_path / "X" / "Foo.yaml"
+    source.parent.mkdir()
+    source.write_text("name: foo\n", encoding="utf-8")
+
+    with patch(f"squadron.cli.commands.run.{handler}") as called:
+        CliRunner().invoke(app, ["run", str(source), flag])
+
+    assert called.call_args.args[0] == str(source)
+
+
+@pytest.mark.parametrize("flag", ["--prompt-only", "--explain"])
+def test_name_argument_is_lowercased_on_every_entry_point(flag: str) -> None:
+    from typer.testing import CliRunner
+
+    from squadron.cli.app import app
+
+    handler = "_handle_prompt_only_init" if flag == "--prompt-only" else "_handle_explain"
+    with patch(f"squadron.cli.commands.run.{handler}") as called:
+        CliRunner().invoke(app, ["run", "Slices-Plan", flag])
+
+    assert called.call_args.args[0] == "slices-plan"

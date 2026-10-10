@@ -117,9 +117,9 @@ def render_code_host_error(exc: CodeHostError) -> None:
     reports adapter failures identically to ``sq pr show`` (Task G.7).
     """
     errors = Console(stderr=True)
-    errors.print(f"[red]{exc}[/red]")
+    errors.print(f"[red]{escape(str(exc))}[/red]")
     if exc.fix_hint:
-        errors.print(f"[dim]{exc.fix_hint}[/dim]")
+        errors.print(f"[dim]{escape(str(exc.fix_hint))}[/dim]")
 
 
 _CODE_HOST_LOGGER = "squadron.codehost"

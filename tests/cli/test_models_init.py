@@ -17,14 +17,19 @@ from squadron.data import data_dir
 from squadron.models.aliases import ModelAlias
 
 _BUILTIN = data_dir() / "models.toml"
+_TARGET = Path("/home/someone/.config/squadron/models.toml")
 
 
 def _starter() -> str:
-    return build_starter_text(_BUILTIN.read_text(encoding="utf-8"), source=_BUILTIN)
+    return build_starter_text(_BUILTIN.read_text(encoding="utf-8"), source=_BUILTIN, target=_TARGET)
 
 
 def test_starter_parses_as_toml_and_defines_no_aliases() -> None:
     assert tomllib.loads(_starter()) == {}
+
+
+def test_header_names_the_target_path() -> None:
+    assert _starter().splitlines()[0].endswith(f"{_TARGET}.")
 
 
 def test_every_line_is_a_comment_or_blank() -> None:
@@ -43,7 +48,7 @@ def test_reference_block_names_every_field_the_alias_loader_accepts() -> None:
 @pytest.mark.parametrize("text", ["\n# late comment\n", "[aliases.x]\n# not a header\n", ""])
 def test_text_without_a_leading_comment_block_is_an_error_naming_the_file(text: str) -> None:
     with pytest.raises(ValueError, match=str(Path("some/models.toml"))):
-        build_starter_text(text, source=Path("some/models.toml"))
+        build_starter_text(text, source=Path("some/models.toml"), target=_TARGET)
 
 
 # --- the command ---
@@ -77,7 +82,9 @@ def test_second_run_needs_force(home: Path) -> None:
     assert refused.exit_code == 1
     assert str(home) in refused.stderr.replace("\n", "")
     assert forced.exit_code == 0
-    assert home.read_text(encoding="utf-8") == _starter()
+    assert home.read_text(encoding="utf-8") == build_starter_text(
+        _BUILTIN.read_text(encoding="utf-8"), source=_BUILTIN, target=home
+    )
 
 
 def test_unreadable_builtin_logs_and_exits_1(home: Path, caplog: pytest.LogCaptureFixture) -> None:

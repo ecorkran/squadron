@@ -147,3 +147,15 @@ The tests assert the recorded `pipeline`/`pipeline_path` pair for both fresh pat
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 9
 - Finding-shaped matches — surviving validation: 9
+
+## Response
+
+All findings fixed after the merge, in follow-up commits 3bd4f483..11dfaad0 on `940-slice.everyday-cli-fixes`:
+
+- **Unescaped user-supplied text:** the sites listed (task, message, install, review save, run, history timestamp, metrology ground truth) are escaped. The guard still covers only exception text, which is its stated limit.
+- **Code-host errors:** `render_code_host_error` escapes the message and its fix hint. A test covers a bracketed repository name.
+- **`--prompt-only` and `--explain` lowercasing a path:** both now go through `_normalize_pipeline_arg`. Tests cover a path keeping its case and a name being lowercased on both entry points.
+- **`_load_run_definition` read errors:** it now also catches `OSError` and `UnicodeDecodeError`. Tests cover a directory path and a non-UTF-8 file.
+- **`aiProfile` missing from JSON:** `to_dict` always emits `profile`, null when unknown. A test checks that JSON and frontmatter agree.
+- **Starter header path:** the header is formatted from `models_toml_path()`.
+- **Padding broken by escaping:** the text is padded before it is escaped, in both `config` and `review list`.

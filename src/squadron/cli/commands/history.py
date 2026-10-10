@@ -41,4 +41,7 @@ def _display_history(messages: list[dict[str, Any]]) -> None:
         sender = msg.get("sender", "unknown")
         content = msg.get("content", "")
         timestamp = msg.get("timestamp", "")
-        rprint(f"[dim]{timestamp}[/dim] [bold]\\[{escape(str(sender))}][/bold] {escape(str(content))}")
+        rprint(
+            f"[dim]{escape(str(timestamp))}[/dim] "
+            f"[bold]\\[{escape(str(sender))}][/bold] {escape(str(content))}"
+        )

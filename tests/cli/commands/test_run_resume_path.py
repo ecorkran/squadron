@@ -173,3 +173,32 @@ def test_resume_executes_the_recorded_file_not_a_same_named_pipeline(
         CliRunner().invoke(app, ["run", "--resume", state.run_id])
 
     assert execute.call_args.args[0] == str(source.resolve())
+
+
+def test_unreadable_recorded_path_exits_1_naming_the_path(
+    tmp_path: Path, manager: StateManager, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A directory where the file should be: open() raises IsADirectoryError.
+    not_a_file = tmp_path / "Dir.yaml"
+    not_a_file.mkdir()
+    state = _state(manager, "dir", str(not_a_file))
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _load_run_definition(state, file=sys.stderr)
+
+    assert exc_info.value.exit_code == 1
+    assert str(not_a_file) in capsys.readouterr().err.replace("\n", "")
+
+
+def test_non_utf8_recorded_path_exits_1_naming_the_path(
+    tmp_path: Path, manager: StateManager, capsys: pytest.CaptureFixture[str]
+) -> None:
+    latin1 = tmp_path / "Latin.yaml"
+    latin1.write_bytes(b"name: caf\xe9\n")
+    state = _state(manager, "latin", str(latin1))
+
+    with pytest.raises(typer.Exit) as exc_info:
+        _load_run_definition(state, file=sys.stderr)
+
+    assert exc_info.value.exit_code == 1
+    assert str(latin1) in capsys.readouterr().err.replace("\n", "")

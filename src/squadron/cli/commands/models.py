@@ -226,13 +226,13 @@ def models_init(
 ) -> None:
     """Write a commented starter models.toml you can edit to add your own aliases."""
     builtin = data_dir() / "models.toml"
+    target = models_toml_path()
     try:
-        starter = build_starter_text(builtin.read_text(encoding="utf-8"), source=builtin)
+        starter = build_starter_text(builtin.read_text(encoding="utf-8"), source=builtin, target=target)
     except (OSError, ValueError) as exc:
         _logger.error("models init: cannot build the starter from %s: %s", builtin, exc)
         typer.echo(f"Error: cannot read the built-in {builtin}: {exc}", err=True)
         raise typer.Exit(1) from None
-    target = models_toml_path()
     try:
         write_new_file(target, starter.encode("utf-8"), force=force)
     except FileExistsError:
