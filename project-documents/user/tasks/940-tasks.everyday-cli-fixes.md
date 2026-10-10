@@ -272,5 +272,5 @@ status: not_started
 - [ ] Delegate checking off this task file to the `task-checker` agent; mark any dropped item `[x]` with a note before closing
 - [ ] Mark slice 940 complete in the slice design (`status`) and in the slice plan entry if one exists
 - [ ] Write the DEVLOG entry at repo-root `DEVLOG.md` (newest first), following Session State Summary in `prompt.ai-project.system.md`
-- [ ] Commit: `docs: complete slice 940 tasks, changelog and devlog`
+- [ ] Commit: `docs: complete slice 940 tasks and devlog`
   - [ ] Success: `git status` clean; branch holds all commits; no merge performed
