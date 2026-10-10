@@ -21,7 +21,7 @@ A prose rule a model can ignore is not a gate. The scan is plain code that runs 
 ## Technical Scope
 In scope:
 - A scanner over task-file text that returns merge-step lines (number and text).
-- Calling it before the first model call in both code paths that run a tasks review: `sq review tasks` (CLI) and the pipeline `review:` action. The `/sq:review tasks` slash command shells out to the CLI, and squadron's server has no review tool today, so those two paths cover every interface.
+- Calling it before the first model call in both code paths that run a tasks review: `sq review tasks` (CLI) and the pipeline `review:` action. The `/sq:review tasks` slash command shells out to the CLI, and squadron's server has no review tool today, so those two paths cover every interface. A future MCP review tool must call the same gate.
 - A FAIL `ReviewResult` built from the scan, saved and reported like any other tasks review.
 
 Out of scope:
@@ -34,18 +34,21 @@ Out of scope:
 - Slice 930 (complete): the tasks review covers every split task file, so the gate scans every part.
 
 ### Interfaces Required
-- `review_parts` / `resolve_slice_inputs` give the list of part files for a slice.
+- The resolved part paths each path already holds before its first model call (`review_tasks`' part list; the parts `ReviewAction._review` has validated). The gate takes paths; it depends on no resolver method.
 - `ReviewResult`, `ReviewFinding`, `Verdict` from `squadron.review.models`.
 - `missing_input_files` pattern: the existing pre-model input check the gate sits next to.
 
 ## Architecture
 ### Component Structure
-- `squadron/review/task_gate.py` (new): `scan_merge_steps(text) -> list[MergeStepLine]` and `merge_gate_result(scans) -> ReviewResult | None`. Pure functions, no I/O.
-- CLI: `review_tasks` calls the gate once over all parts before its per-part loop.
+- `squadron/review/task_gate.py` (new): `scan_merge_steps(text) -> list[MergeStepLine]` and `merge_gate_results(scans: Mapping[Path, list[MergeStepLine]]) -> dict[Path, ReviewResult]` (empty when every part is clean). Pure functions, no I/O.
+- CLI: `review_tasks` reads every part and calls the gate once before its per-part loop.
+- File reads are small synchronous reads done inline, next to the existing `missing_input_files` check; in the pipeline they sit beside that same synchronous validation.
 - Pipeline: `ReviewAction._review` calls the same gate after parts are resolved and validated, before the first model call, when `template_name` is `tasks`.
 
 ### Data Flow
-Task file paths → read each file → `scan_merge_steps` per file → if any hits, build a FAIL `ReviewResult` per offending part (findings carry file, line and text) and skip the model; otherwise continue to the normal review. A multi-part review saves the FAIL under that part's own `part-N` slot, as a normal part verdict does.
+Task file paths → read each file → `scan_merge_steps` per file → `merge_gate_results`.
+
+**Any hit in any part stops the whole review: no model call for any part.** A FAIL `ReviewResult` is built and saved for each offending part only (its own `part-N` slot for a split breakdown, the normal slot for a single file); clean parts are not reviewed and get no artifact. The CLI's worst-verdict exit code sees FAIL and exits non-zero; the pipeline passes the FAIL results through `fold_review_parts`, so the step's verdict is FAIL. If there are no hits, the normal review runs unchanged.
 
 ### State Management
 None. The scanner is stateless and the FAIL result persists through the existing save path.
@@ -55,15 +58,15 @@ None. The scanner is stateless and the FAIL result persists through the existing
 A line is flagged when it is a checklist item (`- [ ]` or `- [x]` at any indent) or a heading, and its text names merging a branch. Prose, frontmatter and notes are never flagged.
 
 Patterns live in one table in `task_gate.py`, each with a name. A line is flagged if any pattern matches its text, case-insensitive:
-- starts with `merge` (as the item's first word, ignoring bold markers and an `T14 —` style label);
+- starts with `merge` (as the item's first word, ignoring bold markers and a `T14 —` style label) **and** is immediately followed by `to`/`into` (`Merge to main`; `Merge defaults … into profile` does not match), or by a git object below, or is the whole item (`Merge`);
 - `merge` joined to a commit/release verb: `commit and merge`, `then merge`, `merge and release`, `merge, tag`;
-- `merge` followed within a few words by a git object: `branch`, `main`, `target`, `slice`, `integration`;
+- `merge` followed within a few words by a git object: `branch`, `main`, `target`, `slice branch`, `integration branch` (bare `slice` is not one, so `Merge slice config overrides` passes);
 - `branch merged` / `slice merged` as a success criterion.
 
-Not flagged (these are the negative fixtures): `merge defaults`, `merge blocker`, `zero errors is the merge gate`, `mergeFixResults`, `merges built-in and user profiles`, `merge-base`, `--no-merges`, and any `merged`/`merge` in frontmatter or plain prose such as "Slice 183 complete and merged to main".
+Not flagged (these are the negative fixtures, written as checklist items since that is the format the scanner reads): `- [ ] Merge defaults from config into profile`, `- [ ] Merge slice config overrides`, `- [ ] Fix merge blocker`, `- [ ] Zero errors is the merge gate`, `- [ ] Call mergeFixResults`, `- [ ] Merges built-in and user profiles`, `- [ ] Compute merge-base`, `- [ ] Run git log --no-merges`. Also not flagged: any `merged`/`merge` in frontmatter or plain prose such as "Slice 183 complete and merged to main".
 
 ### Failure mode
-If a task file cannot be read, the gate raises; the review does not skip the scan. A missing file already fails earlier in `missing_input_files`, so this path is an I/O error only.
+If a task file cannot be read or decoded (`OSError`, `UnicodeDecodeError`), the gate raises with the file path; the review does not skip the scan. A missing file already fails earlier in `missing_input_files`, so this path is an I/O or encoding error only.
 
 ### Alternatives considered
 - Asking the review model to check: rejected, that is the same prose-rule failure.
@@ -88,13 +91,13 @@ If a task file cannot be read, the gate raises; the review does not skip the sca
 - Same behavior from `sq review tasks <n>`, `sq review tasks <file> --against …`, the slash command, and a pipeline tasks review.
 
 ### Technical Requirements
-- Fixtures are the real lines from trading-data 184 (`T14 — Commit and merge`, `Merge to main`), 185 (`Commit the doc update, then merge`, `Success: branch merged…`), 908 (`4.1 Merge, tag, and publish`), 909 (`5.1 Merge and release`), and trading-ui 124/125 where present, plus real negatives from squadron's own task files.
-- A test runs the gate over each real file from the list and expects FAIL.
+- Fixtures are excerpts of the real task files, vendored under `tests/review/fixtures/task_gate/` with their original line numbers noted, so the suite never reads a sibling repo. The list is fixed: trading-data 184 (`T14 — Commit and merge`, `Merge to main`), 185 (`Commit the doc update, then merge`, `Success: branch merged…`), 908 (`4.1 Merge, tag, and publish`), 909 (`5.1 Merge and release`), plus real negatives from squadron's own task files.
+- A test runs the gate over each vendored excerpt and expects FAIL at the noted lines.
 - A test asserts the model is never called when the gate fails.
 - ruff, pyright zero errors.
 
 ### Integration Requirements
-- The FAIL artifact is saved and readable by existing review readers.
+- The FAIL artifact is saved and readable by existing review readers. No model ran, so its fields are explicit, never left for the implementer to invent: `model` is a constant `TASK_GATE_MODEL` (`squadron-task-gate`) defined once in `task_gate.py`, no profile, `verdict_source: imposed` (a measured fact, not a model opinion), `tools_given: []`, `tool_calls_made: 0`, no cost or token telemetry. A test reads the saved artifact back through the existing readers.
 
 ### Verification Walkthrough
 1. `sq review tasks <slice>` on a slice whose task file has a line like `- [ ] Merge to main`: prints verdict FAIL, lists the line number and text, exits non-zero, and the run shows no model call or cost.
