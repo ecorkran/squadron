@@ -193,12 +193,12 @@ def install_for_target(
 
     rprint(f"[green]Installed {len(installed)} command(s) to {escape(str(target_dir))}:[/green]")
     for name in installed:
-        rprint(f"  {name}")
+        rprint(f"  {escape(name)}")
 
     if removed:
         rprint(f"[yellow]Removed {len(removed)} stale command(s):[/yellow]")
         for name in removed:
-            rprint(f"  {name}")
+            rprint(f"  {escape(name)}")
 
     if command_target is CommandTarget.AGENTS:
         _ensure_codex_rules()

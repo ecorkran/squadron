@@ -100,7 +100,8 @@ def config_list(
             continue
         display_val = _display_value(val)
         rprint(
-            f"  {escape(key_name):<{max_key_len}}  {escape(display_val):<40}  ({escape(str(source))})"
+            f"  {escape(key_name.ljust(max_key_len))}  {escape(display_val.ljust(40))}"
+            f"  ({escape(str(source))})"
         )
 
 

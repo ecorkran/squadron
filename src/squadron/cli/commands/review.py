@@ -416,7 +416,7 @@ def _save_and_report(
     except OSError as exc:
         _report_console(json_stdout).print(f"[red]Review not saved: {escape(str(exc))}[/red]")
         return False
-    _report_console(json_stdout).print(f"[green]Saved review to {path}[/green]")
+    _report_console(json_stdout).print(f"[green]Saved review to {escape(str(path))}[/green]")
     return True
 
 
@@ -1275,7 +1275,7 @@ def review_list() -> None:
     rprint("[bold]Available review templates:[/bold]")
     max_name_len = max(len(t.name) for t in templates)
     for t in templates:
-        rprint(f"  {escape(t.name):<{max_name_len}}  {escape(str(t.description))}")
+        rprint(f"  {escape(t.name.ljust(max_name_len))}  {escape(str(t.description))}")
 
 
 def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tuple[str | None, str]:

@@ -34,7 +34,7 @@ async def _task(agent_name: str, prompt: str) -> None:
         raise typer.Exit(code=1) from None
     except AgentNotFoundError:
         rprint(
-            f"[red]Error: No agent named '{agent_name}'. "
+            f"[red]Error: No agent named '{escape(agent_name)}'. "
             "Use 'sq agents list' to see active agents.[/red]"
         )
         raise typer.Exit(code=1) from None

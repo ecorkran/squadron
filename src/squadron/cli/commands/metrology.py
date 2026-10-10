@@ -169,7 +169,7 @@ def sample(
     rprint(f"[bold]Artifact:[/bold] {escape(str(payload.artifact_path or '(unknown)'))}")
     if payload.ground_truth_text is not None:
         rprint("[bold]Ground truth:[/bold]")
-        rprint(payload.ground_truth_text)
+        rprint(escape(payload.ground_truth_text))
     else:
         rprint("[yellow](ground-truth source not found on disk)[/yellow]")
 
