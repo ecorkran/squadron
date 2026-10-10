@@ -150,3 +150,26 @@ def test_definition_cache_loads_a_path_run_through_its_recorded_path(manager: St
     cache = DefinitionCache(loader)  # pyright: ignore[reportArgumentType]
     assert cache.get(state) is None
     assert requested == ["/work/x/Foo.yaml"]
+
+
+def test_resume_executes_the_recorded_file_not_a_same_named_pipeline(
+    tmp_path: Path, manager: StateManager
+) -> None:
+    """Planning and execution must load the same definition (review finding)."""
+    from unittest.mock import MagicMock
+
+    from squadron.pipeline.executor import ExecutionStatus, PipelineResult
+
+    source = _write_pipeline(tmp_path / "x" / "Foo.yaml", "mine")
+    state = _state(manager, "foo", str(source.resolve()))
+    done = PipelineResult(pipeline_name="foo", status=ExecutionStatus.COMPLETED, step_results=[])
+
+    with (
+        patch("squadron.cli.commands.run.StateManager", return_value=manager),
+        patch("squadron.cli.commands.run._resolve_resume_iteration", return_value=0),
+        patch("squadron.cli.commands.run._locked", return_value=done),
+        patch("squadron.cli.commands.run._run_pipeline_sdk", new=MagicMock()) as execute,
+    ):
+        CliRunner().invoke(app, ["run", "--resume", state.run_id])
+
+    assert execute.call_args.args[0] == str(source.resolve())

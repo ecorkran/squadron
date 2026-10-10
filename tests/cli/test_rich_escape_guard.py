@@ -15,6 +15,7 @@ _CLI_DIR = _REPO_ROOT / "src" / "squadron" / "cli"
 _PRINT_FUNCTION_NAME = "rprint"
 _PRINT_METHOD_NAME = "print"
 _ESCAPE_NAME = "escape"
+_ESCAPE_MODULE_NAME = "markup"
 
 
 def _is_print_call(node: ast.Call) -> bool:
@@ -30,7 +31,13 @@ def _is_escape_call(node: ast.expr) -> bool:
     func = node.func
     if isinstance(func, ast.Name):
         return func.id == _ESCAPE_NAME
-    return isinstance(func, ast.Attribute) and func.attr == _ESCAPE_NAME
+    # Only ``markup.escape``: ``re.escape`` / ``html.escape`` do not neutralise Rich tags.
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == _ESCAPE_NAME
+        and isinstance(func.value, ast.Name)
+        and func.value.id == _ESCAPE_MODULE_NAME
+    )
 
 
 def _references(node: ast.expr, names: set[str]) -> bool:
@@ -107,6 +114,14 @@ def test_no_unescaped_exception_text_in_cli() -> None:
             [],
         ),
         (
+            "try:\n    pass\nexcept ValueError as exc:\n    rprint(f'bad: {re.escape(str(exc))}')\n",
+            [4],
+        ),
+        (
+            "try:\n    pass\nexcept ValueError as exc:\n    rprint(f'bad: {markup.escape(exc)}')\n",
+            [],
+        ),
+        (
             "try:\n    pass\nexcept OSError as problem:\n    console.print(f'bad: {problem}')\n",
             [4],
         ),
@@ -124,7 +139,16 @@ def test_no_unescaped_exception_text_in_cli() -> None:
             [],
         ),
     ],
-    ids=["unescaped", "escaped", "other-name", "multi-line", "typer-echo", "no-except"],
+    ids=[
+        "unescaped",
+        "escaped",
+        "other-escape",
+        "markup-escape",
+        "other-name",
+        "multi-line",
+        "typer-echo",
+        "no-except",
+    ],
 )
 def test_checker_flags_exactly_unescaped_sites(source: str, expected: list[int]) -> None:
     assert find_unescaped_sites(source) == expected

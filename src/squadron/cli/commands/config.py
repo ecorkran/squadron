@@ -83,7 +83,7 @@ def config_get(
         rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
-    rprint(f"{escape(str(key))} = {_display_value(val)}  ({escape(str(source))})")
+    rprint(f"{escape(str(key))} = {escape(_display_value(val))}  ({escape(str(source))})")
 
 
 @config_app.command("list")
@@ -118,5 +118,5 @@ def config_path(
     user_status = "[green]exists[/green]" if user_exists else "[dim]not found[/dim]"
     proj_status = "[green]exists[/green]" if proj_exists else "[dim]not found[/dim]"
 
-    rprint(f"  User:    {escape(str(user_path))}  {escape(str(user_status))}")
-    rprint(f"  Project: {escape(str(proj_path))}  {escape(str(proj_status))}")
+    rprint(f"  User:    {escape(str(user_path))}  {user_status}")
+    rprint(f"  Project: {escape(str(proj_path))}  {proj_status}")

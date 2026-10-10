@@ -7,6 +7,7 @@ project: squadron
 verdict: CONCERNS
 sourceDocument: project-documents/user/tasks/194-tasks.loop-step-type-for-multi-step-bodies.md
 aiModel: claude-sonnet-4-20250514
+aiProfile: sdk
 status: complete
 dateCreated: 20260929
 dateUpdated: 20260929

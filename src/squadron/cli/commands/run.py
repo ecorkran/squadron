@@ -168,6 +168,11 @@ def _resolve_execution_mode(prompt_only: bool) -> ExecutionMode:
     return ExecutionMode.SDK
 
 
+def _normalize_pipeline_arg(pipeline_arg: str) -> str:
+    """A pipeline name is case-insensitive; a file path is not, so it is left as typed."""
+    return pipeline_arg if pipeline_file_path(pipeline_arg) is not None else pipeline_arg.lower()
+
+
 def _run_record_identity(pipeline_arg: str) -> tuple[str, str | None]:
     """The (name, absolute source path) a new run is recorded under (slice 940 D4).
 
@@ -1130,7 +1135,7 @@ def run(
     # ---- --validate ----
     if validate_only:
         assert pipeline is not None  # guarded above
-        pipeline = pipeline.lower()
+        pipeline = _normalize_pipeline_arg(pipeline)
         try:
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
@@ -1156,7 +1161,7 @@ def run(
     # ---- --dry-run ----
     if dry_run:
         assert pipeline is not None  # guarded above
-        pipeline = pipeline.lower()
+        pipeline = _normalize_pipeline_arg(pipeline)
         try:
             definition = load_pipeline(pipeline)
         except FileNotFoundError:
@@ -1211,7 +1216,7 @@ def run(
             rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(1) from None
 
-        definition = _load_run_definition(state, file=sys.stdout)
+        definition = _load_run_definition(state, file=sys.stderr)
 
         resume_from = state_mgr.first_unfinished_step(resume, definition)
         if resume_from is None:
@@ -1228,7 +1233,7 @@ def run(
                     result = _locked(
                         definition,
                         _run_pipeline_sdk(
-                            state.pipeline,
+                            state.load_target,
                             dict(state.params),
                             model_override=resume_model,
                             run_id=run_id,
@@ -1241,7 +1246,7 @@ def run(
                     result = _locked(
                         definition,
                         _run_pipeline(
-                            state.pipeline,
+                            state.load_target,
                             dict(state.params),
                             model_override=resume_model,
                             run_id=run_id,
@@ -1259,7 +1264,7 @@ def run(
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
-    pipeline = pipeline.lower()
+    pipeline = _normalize_pipeline_arg(pipeline)
 
     try:
         definition = load_pipeline(pipeline)
@@ -1272,7 +1277,7 @@ def run(
     # Implicit resume detection
     state_mgr = StateManager()
     if sys.stdin.isatty():
-        match = state_mgr.find_matching_run(pipeline, params, status="paused")
+        match = state_mgr.find_matching_run(_run_record_identity(pipeline)[0], params, status="paused")
         if match is not None:
             if typer.confirm(f"Found a paused run ({match.run_id}). Resume?", default=True):
                 implicit_from = state_mgr.first_unfinished_step(match.run_id, definition)
@@ -1286,7 +1291,7 @@ def run(
                                 result = _locked(
                                     definition,
                                     _run_pipeline_sdk(
-                                        match.pipeline,
+                                        match.load_target,
                                         dict(match.params),
                                         model_override=model,
                                         run_id=match.run_id,
@@ -1299,7 +1304,7 @@ def run(
                                 result = _locked(
                                     definition,
                                     _run_pipeline(
-                                        match.pipeline,
+                                        match.load_target,
                                         dict(match.params),
                                         model_override=model,
                                         run_id=match.run_id,
