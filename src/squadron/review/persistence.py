@@ -393,6 +393,7 @@ def _review_frontmatter_lines(
     provider_failure: bool = False,
     run_cost: RunCost | None = None,
     effort: Effort | None = None,
+    profile: str | None = None,
 ) -> list[str]:
     """The frontmatter block every review artifact opens with.
 
@@ -448,6 +449,10 @@ def _review_frontmatter_lines(
     # for" with no need to reimplement the D9 equivalence rule.
     if requested_model is not None:
         lines.append(f"requestedModel: {requested_model}")
+    # Slice 940 D6 (#193): the provider profile the review ran through, absent when
+    # unknown. Never a placeholder: a gate must be able to trust a present value.
+    if profile is not None:
+        lines.append(f"aiProfile: {profile}")
     lines.extend(
         [
             f"status: {DocumentStatus.COMPLETE}",
@@ -596,6 +601,7 @@ def format_review_markdown(
         squadron_version=squadron_version,
         run_cost=RunCost(result.turns, result.usage, result.duration_seconds),
         effort=result.effort,
+        profile=result.profile,
     )
 
     if result.score is not None:
@@ -938,6 +944,7 @@ def format_provider_failure_markdown(
     tools_given: list[str] | None = None,
     reviewed_sha: str | None = None,
     run_id: str | None = None,
+    profile: str | None = None,
     squadron_version: str = __version__,
 ) -> str:
     """Render an artifact recording that the provider failed to deliver a review.
@@ -984,6 +991,7 @@ def format_provider_failure_markdown(
         squadron_version=squadron_version,
         provider_failure=True,
         run_cost=run_cost,
+        profile=profile,
     )
     lines.append("---")
     lines.append("")
@@ -1030,6 +1038,7 @@ def save_provider_failure(
     slice_index: int | None = None,
     name_suffix: str | None = None,
     run_id: str | None = None,
+    profile: str | None = None,
 ) -> Path | None:
     """Write a provider-failure artifact into the review's own slot.
 
@@ -1059,6 +1068,7 @@ def save_provider_failure(
         tools_given=tools_given,
         reviewed_sha=reviewed_sha,
         run_id=run_id,
+        profile=profile,
     )
     resolved_name = slice_info["slice_name"] if slice_info else slice_name
     if resolved_name is not None and name_suffix:

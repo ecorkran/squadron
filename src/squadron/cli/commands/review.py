@@ -729,6 +729,7 @@ def _run_review_command(
                 reviewed_sha=resolve_reviewed_sha(inputs.get("cwd") or "."),
                 cwd=inputs.get("cwd"),
                 name_suffix=failure_name_suffix,
+                profile=resolved_profile,
             )
             if saved is not None:
                 rprint(f"[yellow]Provider failure recorded: {escape(str(saved))}[/yellow]")

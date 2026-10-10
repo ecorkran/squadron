@@ -246,6 +246,9 @@ class ReviewResult:
     # that did not reach the model.
     effort: Effort | None = None
     duration_seconds: float | None = None
+    # The provider profile the review ran through (slice 940 D6). None on a hand-built
+    # result: the artifact omits aiProfile rather than naming a profile nobody chose.
+    profile: str | None = None
 
     @property
     def model_substituted(self) -> bool:
