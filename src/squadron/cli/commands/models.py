@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from enum import StrEnum
 
 import httpx
@@ -12,7 +13,15 @@ from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from squadron.models.aliases import ModelAlias, get_all_aliases, load_builtin_aliases
+from squadron.cli.commands.models_init import build_starter_text
+from squadron.core.file_write import write_new_file
+from squadron.data import data_dir
+from squadron.models.aliases import (
+    ModelAlias,
+    get_all_aliases,
+    load_builtin_aliases,
+    models_toml_path,
+)
 from squadron.providers.profiles import get_profile
 
 # cost_tier display mapping
@@ -56,6 +65,8 @@ def _profile_rank(profile: str) -> int:
         # end, grouped with its peers, never silently omitted.
         return len(_PROFILE_ORDER)
 
+
+_logger = logging.getLogger(__name__)
 
 models_app = typer.Typer(
     name="models",
@@ -207,6 +218,31 @@ def models_list(
 ) -> None:
     """List available model aliases."""
     _show_aliases(verbose=verbose, sort=sort)
+
+
+@models_app.command("init")
+def models_init(
+    force: bool = typer.Option(False, "--force", help="Replace an existing models.toml."),
+) -> None:
+    """Write a commented starter models.toml you can edit to add your own aliases."""
+    builtin = data_dir() / "models.toml"
+    try:
+        starter = build_starter_text(builtin.read_text(encoding="utf-8"), source=builtin)
+    except (OSError, ValueError) as exc:
+        _logger.error("models init: cannot build the starter from %s: %s", builtin, exc)
+        typer.echo(f"Error: cannot read the built-in {builtin}: {exc}", err=True)
+        raise typer.Exit(1) from None
+    target = models_toml_path()
+    try:
+        write_new_file(target, starter.encode("utf-8"), force=force)
+    except FileExistsError:
+        typer.echo(f"Error: {target} already exists; use --force to replace it.", err=True)
+        raise typer.Exit(1) from None
+    except OSError as exc:
+        _logger.error("models init: cannot write %s: %s", target, exc)
+        typer.echo(f"Error: cannot write {target}: {exc.strerror or exc}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(str(target))
 
 
 async def _fetch_models(base_url: str) -> None:
