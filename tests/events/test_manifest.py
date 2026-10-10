@@ -189,4 +189,8 @@ def test_bindings_preserve_file_order_after_defaults(tmp_path: Path) -> None:
 
 def test_default_bindings_order_is_909_before_911() -> None:
     post_action_names = [b.action for b in DEFAULT_BINDINGS if b.event is EventType.POST_ACTION]
-    assert post_action_names == ["squadron.dispatch-artifact", "squadron.revision-stamp"]
+    assert post_action_names == [
+        "squadron.dispatch-artifact",
+        "squadron.dispatch-branch-work",
+        "squadron.revision-stamp",
+    ]
