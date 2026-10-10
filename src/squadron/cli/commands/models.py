@@ -9,6 +9,7 @@ import httpx
 import typer
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from squadron.models.aliases import ModelAlias, get_all_aliases, load_builtin_aliases
@@ -180,7 +181,7 @@ def models_default(
             p = get_profile(profile)  # type: ignore[arg-type]
             resolved_url = p.base_url
         except KeyError as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
     if resolved_url is None:
@@ -216,10 +217,10 @@ async def _fetch_models(base_url: str) -> None:
             response.raise_for_status()
             data = response.json()
     except httpx.ConnectError:
-        rprint(f"[red]Error: could not connect to {base_url}[/red]")
+        rprint(f"[red]Error: could not connect to {escape(str(base_url))}[/red]")
         raise typer.Exit(code=1) from None
     except Exception as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     model_list = data.get("data", [])
@@ -227,6 +228,6 @@ async def _fetch_models(base_url: str) -> None:
         rprint("[yellow]No models found.[/yellow]")
         return
 
-    rprint(f"[bold]Models at {base_url}:[/bold]")
+    rprint(f"[bold]Models at {escape(str(base_url))}:[/bold]")
     for entry in model_list:
-        rprint(f"  {entry['id']}")
+        rprint(f"  {escape(str(entry['id']))}")

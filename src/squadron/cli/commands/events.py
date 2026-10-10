@@ -6,6 +6,7 @@ import asyncio
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.events import EventType
 from squadron.events.contexts import CommitContext
@@ -38,7 +39,10 @@ def events_fire(
         event_type = EventType(event)
     except ValueError:
         valid = [member.value for member in EventType]
-        rprint(f"[red]Error: unknown event '{event}'. Valid events: {valid}[/red]")
+        rprint(
+            f"[red]Error: unknown event '{escape(str(event))}'. "
+            f"Valid events: {escape(str(valid))}[/red]"
+        )
         raise typer.Exit(code=2) from None
 
     context = CommitContext(event=event_type, cwd=cwd, params={}, staged_paths=tuple(paths or []))
@@ -46,22 +50,24 @@ def events_fire(
     try:
         outcomes = asyncio.run(run_event(context))
     except (PluginLoadError, ManifestError) as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=2) from exc
 
     any_failed = False
     for outcome in outcomes:
         if outcome.error_kind is OutcomeErrorKind.TIMEOUT:
-            rprint(f"[red]{outcome.action_name}: timed out[/red]")
+            rprint(f"[red]{escape(str(outcome.action_name))}: timed out[/red]")
             any_failed = True
         elif outcome.error_kind is OutcomeErrorKind.RAISED:
-            rprint(f"[red]{outcome.action_name}: raised an exception[/red]")
+            rprint(f"[red]{escape(str(outcome.action_name))}: raised an exception[/red]")
             any_failed = True
         elif outcome.result is not None and not outcome.result.success:
-            rprint(f"[red]{outcome.action_name}: {outcome.result.error}[/red]")
+            rprint(
+                f"[red]{escape(str(outcome.action_name))}: {escape(str(outcome.result.error))}[/red]"
+            )
             any_failed = True
         else:
-            rprint(f"[green]{outcome.action_name}: ok[/green]")
+            rprint(f"[green]{escape(str(outcome.action_name))}: ok[/green]")
 
     raise typer.Exit(code=1 if any_failed else 0)
 
@@ -74,18 +80,18 @@ def events_list(
     try:
         manifest = load_manifest(cwd=cwd)
     except ManifestError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=2) from exc
 
     for member in EventType:
-        rprint(f"[bold]{member.value}[/bold]")
+        rprint(f"[bold]{escape(str(member.value))}[/bold]")
         bindings = [b for b in manifest.bindings if b.event is member]
         if not bindings:
             rprint("  (no bindings)")
         for binding in bindings:
-            rprint(f"  {binding.action}  ({binding.source})")
+            rprint(f"  {escape(str(binding.action))}  ({escape(str(binding.source))})")
 
     if manifest.disabled:
         rprint("[bold]disabled[/bold]")
         for name in sorted(manifest.disabled):
-            rprint(f"  {name}  (disabled)")
+            rprint(f"  {escape(str(name))}  (disabled)")
