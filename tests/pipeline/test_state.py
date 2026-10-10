@@ -230,6 +230,53 @@ class TestInitRun:
         assert state.pipeline == "test-pipeline"
 
 
+class TestPipelinePath:
+    """RunState.pipeline_path records a path run's source file (slice 940 D4)."""
+
+    def test_round_trips_through_write_and_read(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("foo", {}, pipeline_path="/work/x/Foo.yaml")
+        assert state_manager.load(run_id).pipeline_path == "/work/x/Foo.yaml"
+
+    def test_path_is_not_lowercased(self, state_manager: StateManager) -> None:
+        run_id = state_manager.init_run("Foo", {}, pipeline_path="/work/X/Foo.yaml")
+        state = state_manager.load(run_id)
+        assert state.pipeline == "foo"
+        assert state.pipeline_path == "/work/X/Foo.yaml"
+
+    def test_state_without_field_loads_as_none(
+        self, state_manager: StateManager, tmp_path: Path
+    ) -> None:
+        now = datetime.now(UTC).isoformat()
+        legacy: dict[str, object] = {
+            "schema_version": 5,
+            "run_id": "run-legacy",
+            "pipeline": "slices-plan",
+            "params": {},
+            "started_at": now,
+            "updated_at": now,
+            "status": "paused",
+        }
+        (tmp_path / "run-legacy.json").write_text(json.dumps(legacy), encoding="utf-8")
+        state = state_manager.load("run-legacy")
+        assert state.pipeline_path is None
+        assert state.pipeline == "slices-plan"
+
+    def test_unknown_extra_field_still_loads(self, state_manager: StateManager, tmp_path: Path) -> None:
+        now = datetime.now(UTC).isoformat()
+        data: dict[str, object] = {
+            "schema_version": 5,
+            "run_id": "run-extra",
+            "pipeline": "p",
+            "params": {},
+            "started_at": now,
+            "updated_at": now,
+            "status": "running",
+            "field_from_a_newer_squadron": 1,
+        }
+        (tmp_path / "run-extra.json").write_text(json.dumps(data), encoding="utf-8")
+        assert state_manager.load("run-extra").run_id == "run-extra"
+
+
 # ---------------------------------------------------------------------------
 # T8: observer().step_completed / _append_step tests
 # ---------------------------------------------------------------------------
@@ -361,7 +408,7 @@ class TestStepCallbackScore:
 
     def test_old_run_state_without_score_loads(self) -> None:
         """A StepState JSON written before slice 300 deserializes with score None."""
-        legacy = {
+        legacy: dict[str, object] = {
             "step_name": "review",
             "step_type": "review",
             "status": "completed",

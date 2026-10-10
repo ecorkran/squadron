@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20261009
 dateUpdated: 20261009
-status: not_started
+status: complete
 ---
 
 # Slice Design: Everyday CLI Fixes
@@ -139,15 +139,31 @@ Each row has a test that asserts its signal: the exit code, plus the message or 
 
 ## Verification Walkthrough
 
-Run in a scratch project with `HOME` pointed at a temporary directory:
+Run in a scratch project with `HOME` pointed at a temporary directory (verified 20261009; paths below are under that `HOME`):
 
 ```bash
-sq pipelines copy slices-plan            # path printed, shadow notice on stderr
-sq pipelines list                        # slices-plan under user, marked as shadowing built-in
-sq pipelines copy slices-plan            # refused: exists
-sq models init && python -c "import tomllib,sys;tomllib.load(open(sys.argv[1],'rb'))" ~/.config/squadron/models.toml
-sq doctor                                # models.toml row: loaded from <path>
+S=$(mktemp -d); mkdir $S/home $S/proj; cd $S/proj; export HOME=$S/home
+sq pipelines copy slices-plan
+# stdout: $HOME/.config/squadron/pipelines/slices-plan.yaml
+# stderr: Note: this copy now shadows the built-in pipeline 'slices-plan'.
+sq pipelines list
+# User (1)
+#   slices-plan   shadows built-in   Design and review every undesigned slice ...
+sq pipelines copy slices-plan
+# exit 1: "Error: <path> is the pipeline's own file; nothing to copy."
+sq pipelines copy slices-plan my-plan && sq pipelines copy slices-plan my-plan
+# first prints the path; second exit 1: "Error: <path>/my-plan.yaml already exists; use --force to replace it."
+sq models init && python3 -I -c "import tomllib,sys;print(tomllib.load(open(sys.argv[1],'rb')))" ~/.config/squadron/models.toml
+# prints the path, then {}
+sq doctor | grep models.toml
+# models.toml   loaded from <HOME>/.config/squadron/models.toml
 ```
+
+Caveats found while verifying:
+
+- After an unnamed copy, the name resolves to the copy itself, so repeating `sq pipelines copy slices-plan` hits the own-file refusal rather than the "already exists" one. The `--force` path is exercised with a named copy (`my-plan`).
+- With no `models.toml`, `sq doctor` reads `using defaults (no file at <path>); sq models init writes a commented starter`.
+- Other `sq` processes on the machine write to the real `~/.config/squadron/runs`; the suite and this walkthrough write only under the temporary `HOME`.
 
 ## Implementation Notes
 

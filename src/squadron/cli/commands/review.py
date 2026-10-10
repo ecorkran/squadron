@@ -139,7 +139,7 @@ def display_result(
         case OutputMode.FILE:
             _write_file(result, output_path)
         case _:
-            rprint(f"[red]Unknown output mode: {output_mode}[/red]")
+            rprint(f"[red]Unknown output mode: {escape(str(output_mode))}[/red]")
             raise typer.Exit(code=1)
 
 
@@ -170,7 +170,7 @@ def _display_tool_telemetry(console: Console, result: ReviewResult) -> None:
             style="bold yellow",
         )
     else:
-        console.print(f"  Tools: {names} — {calls} calls", style="dim")
+        console.print(f"  Tools: {escape(str(names))} — {calls} calls", style="dim")
 
 
 def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
@@ -259,7 +259,7 @@ def _write_file(result: ReviewResult, output_path: str | None) -> None:
         raise typer.Exit(code=1)
     path = Path(output_path)
     path.write_text(json.dumps(result.to_dict(), indent=2))
-    rprint(f"[green]Review result written to {path}[/green]")
+    rprint(f"[green]Review result written to {escape(str(path))}[/green]")
 
 
 # ---------------------------------------------------------------------------
@@ -414,7 +414,7 @@ def _save_and_report(
             project_name=project_name,
         )
     except OSError as exc:
-        _report_console(json_stdout).print(f"[red]Review not saved: {exc}[/red]")
+        _report_console(json_stdout).print(f"[red]Review not saved: {escape(str(exc))}[/red]")
         return False
     _report_console(json_stdout).print(f"[green]Saved review to {path}[/green]")
     return True
@@ -490,7 +490,7 @@ def _resolve_rules_content(rules_path: str | None) -> str | None:
         return None
     path = Path(rules_path)
     if not path.is_file():
-        rprint(f"[red]Error: Rules file not found: {rules_path}[/red]")
+        rprint(f"[red]Error: Rules file not found: {escape(str(rules_path))}[/red]")
         raise typer.Exit(code=1)
     return path.read_text()
 
@@ -504,7 +504,7 @@ def _resolve_arch_file(num: str) -> str:
     try:
         return resolve_arch_file(int(num))
     except FileNotFoundError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
 
 
@@ -525,7 +525,7 @@ def _resolve_slice_number(num: str) -> SliceInfo:
         )
         raise typer.Exit(code=1) from None
     except (ContextForgeError, ValueError) as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
 
@@ -645,7 +645,10 @@ def _run_review_command(
     template = get_template(template_name)
     if template is None:
         available = [t.name for t in list_templates()]
-        rprint(f"[red]Error: Unknown template '{template_name}'. Available: {available}[/red]")
+        rprint(
+            f"[red]Error: Unknown template '{escape(str(template_name))}'. "
+            f"Available: {escape(str(available))}[/red]"
+        )
         raise typer.Exit(code=1)
 
     # Validate required inputs
@@ -660,7 +663,7 @@ def _run_review_command(
     # otherwise reach the model with its content silently absent, and the
     # model reviews a document it never saw (issue #18).
     for key, value in missing_input_files(inputs):
-        rprint(f"[red]Error: {key} file not found: {value}[/red]")
+        rprint(f"[red]Error: {escape(str(key))} file not found: {escape(str(value))}[/red]")
         raise typer.Exit(code=1)
 
     # Prepend template-specific rules (review.md / review-{template}.md).
@@ -726,9 +729,10 @@ def _run_review_command(
                 reviewed_sha=resolve_reviewed_sha(inputs.get("cwd") or "."),
                 cwd=inputs.get("cwd"),
                 name_suffix=failure_name_suffix,
+                profile=resolved_profile,
             )
             if saved is not None:
-                rprint(f"[yellow]Provider failure recorded: {saved}[/yellow]")
+                rprint(f"[yellow]Provider failure recorded: {escape(str(saved))}[/yellow]")
         raise typer.Exit(code=1) from exc
     except Exception as exc:
         # Escaped: provider messages can carry brackets that are not Rich tags.
@@ -1033,7 +1037,10 @@ def review_tasks(
     for part_idx, part in enumerate(parts, start=1):
         task_path, suffix = part.input_path, part.name_suffix
         if len(parts) > 1:
-            rprint(f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: {task_path}[/bold]")
+            rprint(
+                f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: "
+                f"{escape(str(task_path))}[/bold]"
+            )
         inputs = {
             "input": task_path,
             "against": against,
@@ -1144,7 +1151,7 @@ def review_code(
             diff = normalize_diff_spec(diff, review_cwd)
         except DiffSpecError as exc:
             _logger.error("review code: %s", exc)
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
     slice_info: SliceInfo | None = None
@@ -1156,7 +1163,7 @@ def review_code(
             try:
                 diff = resolve_slice_diff_range(int(slice_number), review_cwd)
             except DiffRangeUnresolvedError as exc:
-                rprint(f"[red]Error: {exc}[/red]")
+                rprint(f"[red]Error: {escape(str(exc))}[/red]")
                 raise typer.Exit(code=1) from exc
 
     if not slice_info and not diff and not files:
@@ -1179,7 +1186,7 @@ def review_code(
         try:
             assert_reviewable_scope(diff, review_cwd, exclude_patterns)
         except EmptyScopeError as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
     verbosity = _resolve_verbosity(verbose)
@@ -1268,7 +1275,7 @@ def review_list() -> None:
     rprint("[bold]Available review templates:[/bold]")
     max_name_len = max(len(t.name) for t in templates)
     for t in templates:
-        rprint(f"  {t.name:<{max_name_len}}  {t.description}")
+        rprint(f"  {escape(t.name):<{max_name_len}}  {escape(str(t.description))}")
 
 
 def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tuple[str | None, str]:
@@ -1311,9 +1318,9 @@ def _display_resolution(result: ResolutionResult, verbosity: int) -> None:
 
     base = result.base or "unresolved"
     source = result.base_source.value if result.base_source is not None else "not needed"
-    console.print(f"  measured against {base} ({source})", style="dim")
-    rprint(f"[green]Wrote resolution to {result.artifact_path}[/green]")
-    rprint(f"resolution: {result.resolution.value}")
+    console.print(f"  measured against {escape(str(base))} ({escape(str(source))})", style="dim")
+    rprint(f"[green]Wrote resolution to {escape(str(result.artifact_path))}[/green]")
+    rprint(f"resolution: {escape(str(result.resolution.value))}")
 
 
 @review_app.command("resolve")
@@ -1361,7 +1368,7 @@ def review_resolve(
             )
         )
     except (ResolutionError, OSError) as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     _display_resolution(result, verbosity)

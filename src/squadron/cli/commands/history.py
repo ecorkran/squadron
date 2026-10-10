@@ -7,6 +7,7 @@ from typing import Any
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 
@@ -40,4 +41,4 @@ def _display_history(messages: list[dict[str, Any]]) -> None:
         sender = msg.get("sender", "unknown")
         content = msg.get("content", "")
         timestamp = msg.get("timestamp", "")
-        rprint(f"[dim]{timestamp}[/dim] [bold]\\[{sender}][/bold] {content}")
+        rprint(f"[dim]{timestamp}[/dim] [bold]\\[{escape(str(sender))}][/bold] {escape(str(content))}")

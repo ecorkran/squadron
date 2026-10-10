@@ -8,6 +8,7 @@ import signal
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.server.daemon import start_server
 from squadron.server.engine import SquadronEngine
@@ -63,5 +64,8 @@ def _start_daemon(config: DaemonConfig) -> None:
         raise typer.Exit(code=1)
 
     engine = SquadronEngine()
-    rprint(f"[green]Starting daemon on 127.0.0.1:{config.port} and {config.socket_path}[/green]")
+    rprint(
+        f"[green]Starting daemon on 127.0.0.1:{config.port} and "
+        f"{escape(str(config.socket_path))}[/green]"
+    )
     asyncio.run(start_server(engine, config))

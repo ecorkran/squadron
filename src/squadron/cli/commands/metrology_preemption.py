@@ -18,6 +18,7 @@ from pathlib import Path
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.config.manager import get_config
 from squadron.metrology.audit import (
@@ -142,7 +143,7 @@ def preempt_generate(
             if as_json:
                 typer.echo(result.model_dump_json())
             elif result.is_current:
-                rprint(f"[green]Current[/green] — {path}")
+                rprint(f"[green]Current[/green] — {escape(str(path))}")
             else:
                 rprint(f"[yellow]{result.note}[/yellow]")
             if not result.is_current:
@@ -152,10 +153,10 @@ def preempt_generate(
         fragment = render_fragment(baseline)
         path = write_fragment(fragment, directory=directory)
     except MetrologyIdentityError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if as_json:
@@ -163,7 +164,7 @@ def preempt_generate(
         return
 
     named = sum(1 for line in fragment.text.splitlines() if line.startswith("- "))
-    rprint(f"[green]Wrote[/green] {path}")
+    rprint(f"[green]Wrote[/green] {escape(str(path))}")
     rprint(
         f"[dim]{named} issue class(es) named, from baseline "
         f"{fragment.audit_prompt_hash[:12]} measured {fragment.measured_at.isoformat()}[/dim]"
@@ -211,14 +212,16 @@ def register_delta_command(audit_app: typer.Typer) -> None:
             store = MetrologyStore()
             baseline = _load_baseline(resolved_project, store=store, cwd=resolved_cwd)
         except MetrologyIdentityError as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
         except MetrologyStoreError as exc:
-            rprint(f"[red]Store error: {exc}[/red]")
+            rprint(f"[red]Store error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
         if not as_json:
-            rprint(f"[dim]Auditing {resolved_project.name}… (5-20 min, no output until done)[/dim]")
+            rprint(
+                f"[dim]Auditing {escape(resolved_project.name)}… (5-20 min, no output until done)[/dim]"
+            )
 
         try:
             outcome = asyncio.run(
@@ -232,10 +235,10 @@ def register_delta_command(audit_app: typer.Typer) -> None:
                 )
             )
         except (AuditPreflightError, AuditSkillError, MetrologyIdentityError) as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
         except MetrologyStoreError as exc:
-            rprint(f"[red]Store error: {exc}[/red]")
+            rprint(f"[red]Store error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
         if not outcome.succeeded or outcome.run is None:
@@ -274,4 +277,4 @@ def register_delta_command(audit_app: typer.Typer) -> None:
                 f"  {cell.category.value:<32} {cell.baseline_count:>3} → "
                 f"{cell.new_count:>3}  {cell.delta:>+4}  {_cell_interpretation(cell)}"
             )
-        rprint(f"\n[dim]{report.disclaimer}[/dim]")
+        rprint(f"\n[dim]{escape(report.disclaimer)}[/dim]")

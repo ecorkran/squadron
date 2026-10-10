@@ -314,6 +314,7 @@ async def run_review_with_profile(
     result.output_budget_exhausted = budget_exhausted(capture.stop_reason)
     result.max_output_tokens = sent_budget
     result.effort = sent_effort
+    result.profile = profile
     result.tools_given = capture.tools_given
     result.tool_calls_made = capture.tool_calls_made
     # Slice 266: the gate's own result is authoritative — SDK providers do not stamp it.

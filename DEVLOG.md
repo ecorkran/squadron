@@ -2,8 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261008
-
+dateUpdated: '20261009'
 ---
 
 # Development Log
@@ -11,6 +10,30 @@ dateUpdated: 20261008
 A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261009
+
+
+**p6: devlog-3**
+- branch-0: PASS
+- cf-op-0: PASS
+- cf-op-1: PASS
+- cf-op-2: PASS
+- dispatch-3: PASS
+- review-4: PASS (verdict: FAIL)
+- checkpoint-5: PASS
+- commit-6: PASS
+- dispatch-0: FAIL
+- review-1: PASS (verdict: CONCERNS)
+- commit-2: PASS
+
+### Slice 940: implementation complete (Phase 6)
+
+- **Delivered:** D5 guard test (`tests/cli/test_rich_escape_guard.py`, AST, no allowlist) plus the escape sweep over `src/squadron/cli`; D4 `RunState.pipeline_path`, `RunState.load_target`, run.py `_run_record_identity` / `_load_run_definition` (resume, `--step-done`, prompt-only next, item resume, implicit resume and `DefinitionCache` reload the recorded file; path args are no longer lowercased); D6 INFO log in the review action and `aiProfile` (`ReviewResult.profile`, failure writer parameter); D3 `core/file_write.write_new_file`; D1 `PipelineScope` / `pipeline_target_dir`, `sq pipelines copy`, `PipelineInfo.shadows` and a conditional marker column; D2 `models_init.build_starter_text`, `sq models init`, doctor wording; D7 styled list cells.
+- **Choices the tasks left open:** `aiProfile` for success artifacts rides on the result (one stamp, every caller covered) instead of a parameter on both writers. The review's FAIL/concern findings were fixed in the same pass: resume executed `state.pipeline` after planning with `load_target`; a deliberate markup string had been escaped; dry-run step types and each-config values escaped; resume errors go to stderr; the guard only trusts `escape` / `markup.escape`. The `-v` test asserts handler wiring, not captured text (the stream handler binds stderr once per process).
+- **Spec conflict:** after an unnamed `copy`, the name resolves to the copy, so repeating it is the own-file refusal; the "exists / --force" cases use a named copy.
+- **Verification:** 6329 passed, 4 skipped; ruff and pyright clean. Walkthrough run in a scratch HOME (recorded in the slice). The real `~/.config/squadron` gained only `runs/` entries from a live `sq run p6 940 -v` in another session; no pipelines, models.toml or config.toml changes.
+- **Not done:** no merge (Phase 7). `cf check` follows.
+- **Next:** Phase 7 code review and merge into `main`.
+
 
 ### Slice 940: task breakdown complete (Phase 5)
 

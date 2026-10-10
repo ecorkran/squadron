@@ -10,10 +10,13 @@ import yaml
 from squadron.data import data_dir
 from squadron.pipeline.loader import (
     LISTING_ORDER,
+    PipelineScope,
     PipelineSource,
     discover_pipelines,
     load_pipeline,
     pipeline_identity,
+    pipeline_target_dir,
+    resolve_pipeline,
 )
 from squadron.pipeline.models import PipelineDefinition
 
@@ -396,3 +399,73 @@ class TestPipelineInfoParams:
         info = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=tmp_path / "u")}
 
         assert info["bare"].params == {}
+
+
+class TestPipelineTargetDir:
+    """The copy target of each scope is the directory the search reads for that source."""
+
+    @pytest.mark.parametrize(
+        ("scope", "source"),
+        [(PipelineScope.USER, PipelineSource.USER), (PipelineScope.PROJECT, PipelineSource.PROJECT)],
+    )
+    def test_a_file_written_to_the_target_is_found_under_that_source(
+        self,
+        scope: PipelineScope,
+        source: PipelineSource,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.chdir(tmp_path)
+        _write_pipeline_yaml(pipeline_target_dir(scope), "copied-pipe")
+
+        location = resolve_pipeline("copied-pipe")
+
+        assert location.source is source
+        assert location.path.parent == pipeline_target_dir(scope)
+
+    def test_project_target_is_the_project_documents_pipelines_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        target = pipeline_target_dir(PipelineScope.PROJECT)
+
+        assert target.resolve() == (tmp_path / "project-documents/user/pipelines").resolve()
+
+
+class TestShadowing:
+    """discover_pipelines records which source a winning pipeline hides (slice 940 D1)."""
+
+    def test_user_copy_of_a_builtin_shadows_built_in(self, tmp_path: Path) -> None:
+        user = tmp_path / "user"
+        _write_pipeline_yaml(user, "p4")
+
+        by_name = {
+            p.name: p for p in discover_pipelines(project_dir=Path("/nonexistent"), user_dir=user)
+        }
+
+        assert by_name["p4"].source is PipelineSource.USER
+        assert by_name["p4"].shadows is PipelineSource.BUILT_IN
+        assert [p.name for p in by_name.values()].count("p4") == 1
+
+    def test_a_pipeline_that_hides_nothing_has_no_marker(self, tmp_path: Path) -> None:
+        user = tmp_path / "user"
+        _write_pipeline_yaml(user, "only-mine")
+
+        by_name = {
+            p.name: p for p in discover_pipelines(project_dir=Path("/nonexistent"), user_dir=user)
+        }
+
+        assert by_name["only-mine"].shadows is None
+        assert all(p.shadows is None for p in by_name.values() if p.name != "only-mine")
+
+    def test_project_over_user_names_user(self, tmp_path: Path) -> None:
+        user, proj = tmp_path / "user", tmp_path / "proj"
+        _write_pipeline_yaml(user, "dual")
+        _write_pipeline_yaml(proj, "dual")
+
+        by_name = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=user)}
+
+        assert by_name["dual"].source is PipelineSource.PROJECT
+        assert by_name["dual"].shadows is PipelineSource.USER

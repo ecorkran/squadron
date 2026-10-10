@@ -48,7 +48,7 @@ def check_item_flags(
     elif item is not None and decision is None:
         problem = "--item requires --decision retry|accept"
     if problem is not None:
-        rprint(f"[red]Error: {problem}.[/red]", file=sys.stderr)
+        rprint(f"[red]Error: {escape(str(problem))}.[/red]", file=sys.stderr)
         raise typer.Exit(USAGE_EXIT)
 
 
@@ -103,7 +103,7 @@ def handle_item_resume(
         _logger.error(
             "item resume %s item %s halted: pipeline runner exited %s", run_id, item, exc.exit_code
         )
-        rprint(f"[red]Item {escape(item)} did not finish (exit {exc.exit_code}).[/red]")
+        rprint(f"[red]Item {escape(item)} did not finish (exit {escape(str(exc.exit_code))}).[/red]")
         raise typer.Exit(int(ResumeExit.HALTED)) from None
     _print(outcome)
     raise typer.Exit(int(outcome.exit))
@@ -115,4 +115,4 @@ def _print(outcome: ResumeOutcome) -> None:
         color = "red"
     rprint(f"[{color}]{outcome.exit.name}[/{color}] {escape(outcome.message)}")
     if outcome.report_path is not None:
-        rprint(f"  Report: {outcome.report_path}")
+        rprint(f"  Report: {escape(str(outcome.report_path))}")

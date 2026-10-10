@@ -44,7 +44,7 @@ def render_steps(
     """
     pad = _INDENT * depth
     for step in steps:
-        rprint(f"{pad}{step.name} ({step.step_type})")
+        rprint(f"{pad}{escape(str(step.name))} ({escape(str(step.step_type))})")
         # Run-level params resolve; per-item ones such as {slice.index} stay visible.
         shown = resolve_placeholders(step.config, params)
         if step.step_type == _LOOP:
@@ -73,8 +73,8 @@ def _render_each_header(
 ) -> None:
     source = str(config.get("source", ""))
     rprint(
-        f"{pad}source: {escape(source)}, as: {config.get('as')}, "
-        f"on_item_failure: {config.get('on_item_failure')}"
+        f"{pad}source: {escape(source)}, as: {escape(str(config.get('as')))}, "
+        f"on_item_failure: {escape(str(config.get('on_item_failure')))}"
     )
     try:
         _, items = asyncio.run(evaluate_each_source(source, params, cf_client, cwd=cwd))

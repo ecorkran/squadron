@@ -8,6 +8,7 @@ from typing import Any
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 from squadron.core.agent_registry import AgentNotFoundError
@@ -46,7 +47,7 @@ def _display_messages(messages: list[dict[str, Any]]) -> None:
     for msg in messages:
         metadata = msg.get("metadata", {})
         if multi:
-            rprint(f"[dim]\\[{msg['sender']}][/dim]", end=" ")
+            rprint(f"[dim]\\[{escape(str(msg['sender']))}][/dim]", end=" ")
         if metadata.get("type") == "tool_use":
             tool_name = metadata.get("tool_name", "tool")
             raw_input = metadata.get("tool_input", {})

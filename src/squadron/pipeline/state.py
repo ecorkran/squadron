@@ -207,6 +207,18 @@ class RunState(BaseModel):
     progress_at: datetime | None = None  # last step start, item start or step completion
     active_item: ActiveItem | None = None
 
+    # Absolute source path when the run started from a pipeline file; None for
+    # named runs and for states written before slice 940 (D4).
+    pipeline_path: str | None = None
+
+    @property
+    def load_target(self) -> str:
+        """What ``load_pipeline`` is given to reload this run's pipeline (D4).
+
+        The recorded source path when there is one (never lowercased), else the name.
+        """
+        return self.pipeline_path or self.pipeline
+
     def active_compact_summary_for_resume(self, resume_step_index: int) -> CompactSummary | None:
         """Return the most recent applicable compact summary for resume.
 
@@ -318,11 +330,14 @@ class StateManager:
         execution_mode: ExecutionMode = ExecutionMode.SDK,
         *,
         owner: RunOwner | None = None,
+        pipeline_path: str | None = None,
     ) -> str:
         """Create an initial state file and return the run_id.
 
         With *owner*, the write that creates the ``running`` file also records
         the owner, so no v5 ``running`` file is ever ownerless (slice 174 D13).
+        With *pipeline_path*, the absolute source file of a path run is kept so
+        resume reloads that file rather than a same-named pipeline (slice 940 D4).
         """
         pipeline_name = pipeline_name.lower()
         now = datetime.now(UTC)
@@ -342,6 +357,7 @@ class StateManager:
             owner=owner,
             heartbeat_at=now if owner is not None else None,
             progress_at=now if owner is not None else None,
+            pipeline_path=pipeline_path,
         )
         self._save(state)
         self.prune(pipeline_name)

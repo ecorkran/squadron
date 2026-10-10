@@ -608,7 +608,7 @@ def check_models_toml() -> CheckResult:
         return CheckResult(
             name="models.toml",
             status=CheckStatus.OK,
-            detail=f"using defaults (no file at {path})",
+            detail=f"using defaults (no file at {path}); sq models init writes a commented starter",
             section=SECTION_CONFIG,
             required=True,
         )

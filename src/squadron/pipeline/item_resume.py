@@ -191,7 +191,7 @@ def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
     except SchemaVersionError as exc:
         raise _Stop(ResumeExit.REJECTED, str(exc)) from None
     try:
-        each = single_each_step(load_pipeline(state.pipeline))
+        each = single_each_step(load_pipeline(state.load_target))
     except ItemResumeUnsupportedError as exc:
         raise _Stop(ResumeExit.REJECTED, f"run {request.run_id}'s {exc}") from None
     path = report_json_path(state_manager.runs_dir, request.run_id, each.name)
@@ -201,7 +201,7 @@ def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
         _logger.error("item resume: %s", exc)
         raise _Stop(ResumeExit.REJECTED, str(exc)) from None
     _check_record(report, request, path)
-    return _Run(state.pipeline, dict(state.params), each, report, path)
+    return _Run(state.load_target, dict(state.params), each, report, path)
 
 
 def _check_record(report: BatchReport, request: ResumeRequest, path: Path) -> None:

@@ -6,6 +6,7 @@ import logging
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from squadron.pipeline.intelligence.pools import (
@@ -99,12 +100,12 @@ def _show_pool_detail(name: str) -> None:
     pool = _get_pool_or_exit(name)
 
     console = Console()
-    console.print(f"[bold cyan]{pool.name}[/bold cyan]")
+    console.print(f"[bold cyan]{escape(str(pool.name))}[/bold cyan]")
     if pool.description:
-        console.print(f"  {pool.description}")
-    console.print(f"  Strategy: {pool.strategy}")
+        console.print(f"  {escape(str(pool.description))}")
+    console.print(f"  Strategy: {escape(str(pool.strategy))}")
     if pool.weights:
-        console.print(f"  Weights: {pool.weights}")
+        console.print(f"  Weights: {escape(str(pool.weights))}")
 
     console.print("\n[bold]Members:[/bold]")
     from squadron.models.aliases import get_all_aliases

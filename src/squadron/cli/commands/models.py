@@ -3,15 +3,25 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from enum import StrEnum
 
 import httpx
 import typer
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
-from squadron.models.aliases import ModelAlias, get_all_aliases, load_builtin_aliases
+from squadron.cli.commands.models_init import build_starter_text
+from squadron.core.file_write import write_new_file
+from squadron.data import data_dir
+from squadron.models.aliases import (
+    ModelAlias,
+    get_all_aliases,
+    load_builtin_aliases,
+    models_toml_path,
+)
 from squadron.providers.profiles import get_profile
 
 # cost_tier display mapping
@@ -55,6 +65,8 @@ def _profile_rank(profile: str) -> int:
         # end, grouped with its peers, never silently omitted.
         return len(_PROFILE_ORDER)
 
+
+_logger = logging.getLogger(__name__)
 
 models_app = typer.Typer(
     name="models",
@@ -180,7 +192,7 @@ def models_default(
             p = get_profile(profile)  # type: ignore[arg-type]
             resolved_url = p.base_url
         except KeyError as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
     if resolved_url is None:
@@ -208,6 +220,31 @@ def models_list(
     _show_aliases(verbose=verbose, sort=sort)
 
 
+@models_app.command("init")
+def models_init(
+    force: bool = typer.Option(False, "--force", help="Replace an existing models.toml."),
+) -> None:
+    """Write a commented starter models.toml you can edit to add your own aliases."""
+    builtin = data_dir() / "models.toml"
+    try:
+        starter = build_starter_text(builtin.read_text(encoding="utf-8"), source=builtin)
+    except (OSError, ValueError) as exc:
+        _logger.error("models init: cannot build the starter from %s: %s", builtin, exc)
+        typer.echo(f"Error: cannot read the built-in {builtin}: {exc}", err=True)
+        raise typer.Exit(1) from None
+    target = models_toml_path()
+    try:
+        write_new_file(target, starter.encode("utf-8"), force=force)
+    except FileExistsError:
+        typer.echo(f"Error: {target} already exists; use --force to replace it.", err=True)
+        raise typer.Exit(1) from None
+    except OSError as exc:
+        _logger.error("models init: cannot write %s: %s", target, exc)
+        typer.echo(f"Error: cannot write {target}: {exc.strerror or exc}", err=True)
+        raise typer.Exit(1) from None
+    typer.echo(str(target))
+
+
 async def _fetch_models(base_url: str) -> None:
     url = base_url.rstrip("/") + "/models"
     try:
@@ -216,10 +253,10 @@ async def _fetch_models(base_url: str) -> None:
             response.raise_for_status()
             data = response.json()
     except httpx.ConnectError:
-        rprint(f"[red]Error: could not connect to {base_url}[/red]")
+        rprint(f"[red]Error: could not connect to {escape(str(base_url))}[/red]")
         raise typer.Exit(code=1) from None
     except Exception as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     model_list = data.get("data", [])
@@ -227,6 +264,6 @@ async def _fetch_models(base_url: str) -> None:
         rprint("[yellow]No models found.[/yellow]")
         return
 
-    rprint(f"[bold]Models at {base_url}:[/bold]")
+    rprint(f"[bold]Models at {escape(str(base_url))}:[/bold]")
     for entry in model_list:
-        rprint(f"  {entry['id']}")
+        rprint(f"  {escape(str(entry['id']))}")

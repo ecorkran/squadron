@@ -32,12 +32,43 @@ def _user_dir() -> Path:
     return Path.home() / ".config" / "squadron" / "pipelines"
 
 
+def _project_dir() -> Path:
+    return Path.cwd() / _PROJECT_PIPELINES_REL
+
+
 class PipelineSource(StrEnum):
     """Where a discovered pipeline was loaded from (slice 199 D1)."""
 
     BUILT_IN = "built-in"
     PROJECT = "project"
     USER = "user"
+
+
+class PipelineScope(StrEnum):
+    """Where a copied pipeline is written: the places a user can own pipelines (slice 940 D1)."""
+
+    USER = "user"
+    PROJECT = "project"
+
+
+_SCOPE_SOURCE = {
+    PipelineScope.USER: PipelineSource.USER,
+    PipelineScope.PROJECT: PipelineSource.PROJECT,
+}
+
+
+def pipeline_target_dir(
+    scope: PipelineScope,
+    *,
+    project_dir: Path | None = None,
+    user_dir: Path | None = None,
+) -> Path:
+    """The directory ``_search_dirs`` searches for *scope*, where a copy must land to be found."""
+    wanted = _SCOPE_SOURCE[scope]
+    for directory, source in _search_dirs(project_dir=project_dir, user_dir=user_dir):
+        if source is wanted:
+            return directory
+    raise ValueError(f"no pipeline directory for scope {scope!r}")
 
 
 # Display order for listings. Separate from the scan order in discover_pipelines
@@ -59,6 +90,8 @@ class PipelineInfo:
     path: Path
     # Declared params in declaration order: name -> default, or "required" (174).
     params: dict[str, str] = dataclasses.field(default_factory=dict[str, str])
+    # The source of the same-named pipeline this one hides, if any (slice 940 D1).
+    shadows: PipelineSource | None = None
 
 
 @dataclass(frozen=True)
@@ -102,6 +135,16 @@ def _load_yaml(path: Path) -> PipelineDefinition:
     return schema.to_definition(pipeline_identity(path))
 
 
+def pipeline_file_path(name_or_path: str) -> Path | None:
+    """The file *name_or_path* names when it is an existing file, else ``None``.
+
+    The single decision ``load_pipeline`` and run recording use to tell a file
+    path from a pipeline name.
+    """
+    candidate = Path(name_or_path)
+    return candidate if candidate.is_file() else None
+
+
 def load_pipeline(
     name_or_path: str,
     *,
@@ -116,9 +159,9 @@ def load_pipeline(
 
     Raises FileNotFoundError if the pipeline cannot be found.
     """
-    candidate = Path(name_or_path)
-    if candidate.is_file():
-        return _load_yaml(candidate)
+    source_file = pipeline_file_path(name_or_path)
+    if source_file is not None:
+        return _load_yaml(source_file)
     return _load_yaml(resolve_pipeline(name_or_path, project_dir=project_dir, user_dir=user_dir).path)
 
 
@@ -154,7 +197,7 @@ def _search_dirs(
     user_dir: Path | None = None,
 ) -> list[tuple[Path, PipelineSource]]:
     """Return pipeline directories in search order (highest priority first)."""
-    proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
+    proj = project_dir if project_dir is not None else _project_dir()
     user = user_dir if user_dir is not None else _user_dir()
     return [
         (proj, PipelineSource.PROJECT),
@@ -181,7 +224,7 @@ def discover_pipelines(
     user = user_dir if user_dir is not None else _user_dir()
     source_dirs.append((user, PipelineSource.USER))
 
-    proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
+    proj = project_dir if project_dir is not None else _project_dir()
     source_dirs.append((proj, PipelineSource.PROJECT))
 
     found: dict[str, PipelineInfo] = {}
@@ -195,12 +238,14 @@ def discover_pipelines(
                     raw = yaml.safe_load(f)
                 schema = PipelineSchema.model_validate(raw)
                 pipeline_name = pipeline_identity(yaml_path)
+                hidden = found.get(pipeline_name)
                 found[pipeline_name] = PipelineInfo(
                     name=pipeline_name,
                     description=schema.description,
                     source=source,
                     path=yaml_path,
                     params=dict(schema.params),
+                    shadows=hidden.source if hidden is not None else None,
                 )
             except (OSError, yaml.YAMLError, PydanticValidationError):
                 # Narrowed to: unreadable file, malformed YAML, or a document

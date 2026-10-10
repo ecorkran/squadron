@@ -364,7 +364,9 @@ def test_check_models_toml_absent(tmp_path: Path) -> None:
     with patch("squadron.cli.commands.doctor_checks.models_toml_path", return_value=missing):
         result = check_models_toml()
     assert result.status == CheckStatus.OK
-    assert "using defaults" in result.detail
+    assert result.detail == (
+        f"using defaults (no file at {missing}); sq models init writes a commented starter"
+    )
 
 
 def test_check_models_toml_valid(tmp_path: Path) -> None:

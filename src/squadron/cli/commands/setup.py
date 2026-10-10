@@ -6,6 +6,7 @@ import logging
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.text import Text
 
 from squadron.cli.commands.doctor import resolve_git_hooks_path
@@ -74,9 +75,9 @@ def _render_step_block(console: Console, step: SetupStep, n: int, total: int, ve
         console.print(Text(f"  $ {step.command}", style="bold"))
     if verbose and step.explanation:
         console.print()
-        console.print(f"  [dim]{step.explanation}[/dim]")
+        console.print(f"  [dim]{escape(str(step.explanation))}[/dim]")
     if step.docs_anchor:
-        console.print(f"  [dim]see: {step.docs_anchor}[/dim]")
+        console.print(f"  [dim]see: {escape(str(step.docs_anchor))}[/dim]")
 
 
 def _render_non_interactive(steps: list[SetupStep], verbose: bool) -> int:
@@ -117,7 +118,7 @@ def _run_interactive(steps: list[SetupStep], verbose: bool, ide: CommandTarget |
             if step.check_name in AUTO_INSTALL_CHECKS and installer_for(step.check_name):
                 outcome = run_install(step.check_name)
                 style = "green" if outcome.succeeded else "yellow"
-                console.print(f"  [{style}]{outcome.message}[/{style}]")
+                console.print(f"  [{style}]{escape(str(outcome.message))}[/{style}]")
             continue
 
         _render_step_block(console, step, n, total, verbose)
@@ -159,11 +160,11 @@ def _run_interactive(steps: list[SetupStep], verbose: bool, ide: CommandTarget |
                 console.print("  [dim]installing…[/dim]")
                 outcome = run_install(step.check_name)
                 if outcome.succeeded:
-                    console.print(f"  [green]✓ {outcome.message}[/green]")
+                    console.print(f"  [green]✓ {escape(str(outcome.message))}[/green]")
                 else:
                     # Fall through to the recheck below rather than looping on
                     # a failure the user may have just fixed in another shell.
-                    console.print(f"  [yellow]{outcome.message}[/yellow]")
+                    console.print(f"  [yellow]{escape(str(outcome.message))}[/yellow]")
 
             # Empty → recheck
             if step.recheck is not None:

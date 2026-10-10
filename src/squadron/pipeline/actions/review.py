@@ -79,6 +79,7 @@ def _save_failure_artifact(
     step_name: str,
     step_index: int,
     run_id: str,
+    profile: str,
     name_suffix: str | None = None,
 ) -> Path | None:
     """Resolve the sha and write the failure artifact — all blocking work.
@@ -100,6 +101,7 @@ def _save_failure_artifact(
         slice_name=step_name,
         slice_index=step_index,
         run_id=run_id,
+        profile=profile,
         name_suffix=name_suffix,
     )
 
@@ -200,6 +202,9 @@ class ReviewAction:
         profile_name = resolve_review_profile(
             self._explicit_profile(context), resolved.profile, template
         ).name
+        _logger.info(
+            "review: step %s profile=%s model=%s", context.step_name, profile_name, resolved.model_id
+        )
 
         inputs = self._base_inputs(context)
 
@@ -436,6 +441,7 @@ class ReviewAction:
                 step_name=context.step_name,
                 step_index=context.step_index,
                 run_id=context.run_id,
+                profile=settings.profile_name,
                 name_suffix=name_suffix,
             )
             artifact = saved if saved is not None else "not written"
@@ -456,6 +462,8 @@ class ReviewAction:
 
         # Traceability (slice 195 D12, #139): the run that wrote this review.
         result.run_id = context.run_id
+        # Slice 940 D6: the profile this step resolved, recorded as aiProfile.
+        result.profile = settings.profile_name
         verdict, provenance, verdict_override = self._enforce_verdict(settings, context, result)
         review_file_path = await self._save_part(
             settings, context, result, inputs, verdict_override, name_suffix, position

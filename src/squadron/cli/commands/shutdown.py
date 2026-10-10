@@ -6,6 +6,7 @@ import asyncio
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.client.http import DaemonClient, DaemonNotRunningError
 from squadron.core.agent_registry import AgentNotFoundError
@@ -33,12 +34,15 @@ async def _shutdown_one(name: str) -> None:
     client = DaemonClient()
     try:
         await client.shutdown_agent(name)
-        rprint(f"[green]Agent '{name}' shut down.[/green]")
+        rprint(f"[green]Agent '{escape(str(name))}' shut down.[/green]")
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
         raise typer.Exit(code=1) from None
     except AgentNotFoundError:
-        rprint(f"[red]Error: No agent named '{name}'. Use 'sq agents list' to see active agents.[/red]")
+        rprint(
+            f"[red]Error: No agent named '{escape(str(name))}'. "
+            f"Use 'sq agents list' to see active agents.[/red]"
+        )
         raise typer.Exit(code=1) from None
     finally:
         await client.close()
@@ -53,7 +57,7 @@ async def _shutdown_all() -> None:
         total = len(succeeded) + len(failed)
         rprint(f"Shut down {total} agents. {len(succeeded)} succeeded, {len(failed)} failed.")
         for name, error in failed.items():
-            rprint(f"  [red]✗ {name}: {error}[/red]")
+            rprint(f"  [red]✗ {escape(str(name))}: {escape(str(error))}[/red]")
     except DaemonNotRunningError:
         rprint("[red]Error: Daemon is not running. Start it with: sq serve[/red]")
         raise typer.Exit(code=1) from None
