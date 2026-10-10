@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.3] - 20261009
+
 ### Added
 - `sq pipelines copy <name> [new-name] [--project] [--force]` copies a pipeline into your user (or project) pipelines directory to edit. `sq pipelines list` marks a pipeline that shadows another source.
 - `sq models init [--force]` writes a commented starter `models.toml`. `sq doctor` points to it when the file is missing.
@@ -26,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Error messages containing text like `[codex]` are no longer partly swallowed by terminal markup.
 - `sq run ./Foo.yaml` records the run as `foo` (not the path) and resumes from the same file.
+- An implement step that makes no commits now fails, and an empty slice branch is reported as such.
+- `sq review --json` output includes the review's `profile`.
 
 ## [0.21.2] - 20261008
 

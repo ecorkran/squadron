@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261009
 
+### Release 0.21.3
+
+- **Contents:** slice 940 Everyday CLI Fixes (#198 `sq pipelines copy`, #197 `sq models init`, #169 run names and path resume, #177 escaped CLI output, #193 review profile in `-v` and artifacts) and its code-review follow-ups; empty slice branch reporting and failing implement dispatch with no commits (sq-bug fix).
+
 
 **p6: devlog-3**
 - branch-0: PASS
