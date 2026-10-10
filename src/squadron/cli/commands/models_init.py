@@ -7,7 +7,7 @@ from pathlib import Path
 _COMMENT_PREFIX = "#"
 
 _HEADER = """\
-# Squadron model aliases — your file, ~/.config/squadron/models.toml.
+# Squadron model aliases — your file, {target}.
 # Everything below is commented out, so this file defines nothing yet.
 # Uncomment and edit an entry to add an alias; your aliases extend and
 # override the built-in ones.
@@ -43,8 +43,8 @@ def leading_comment_block(text: str) -> str:
     return "\n".join(block)
 
 
-def build_starter_text(builtin_text: str, *, source: Path) -> str:
-    """The commented-out starter file: a header, the built-in reference, two examples.
+def build_starter_text(builtin_text: str, *, source: Path, target: Path) -> str:
+    """The commented-out starter file for *target*: a header, the built-in reference, two examples.
 
     Raises ``ValueError`` naming *source* when its leading comment block is empty:
     a starter without the reference would be a file that teaches nothing.
@@ -52,4 +52,4 @@ def build_starter_text(builtin_text: str, *, source: Path) -> str:
     reference = leading_comment_block(builtin_text)
     if not reference:
         raise ValueError(f"{source} does not open with a comment block; no reference to copy")
-    return f"{_HEADER}{reference}\n{_EXAMPLES}"
+    return f"{_HEADER.format(target=target)}{reference}\n{_EXAMPLES}"
