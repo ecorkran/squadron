@@ -10,6 +10,13 @@ dateUpdated: 20261008
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20261009
+
+### Slice 940: task breakdown complete (Phase 5)
+
+- **Delivered:** `user/tasks/940-tasks.everyday-cli-fixes.md`, 17 tasks in five parts: D5 escape sweep with AST guard test, D4 run names and `pipeline_path`, D6 review profile log and `aiProfile`, D3/D1/D2/D7 helper, `pipelines copy`, `models init`, list color, then validation and close-out.
+- **Next:** Phase 6 implementation on branch `940-slice.everyday-cli-fixes`.
+
 ## 20261008
 
 ### Release 0.21.2
