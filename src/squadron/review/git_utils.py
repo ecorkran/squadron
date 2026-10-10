@@ -553,6 +553,7 @@ def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = Non
     if base is None:
         base = resolve_diff_base(cwd)
 
+    empty_branch: str | None = None
     branch = _find_slice_branch(slice_number, cwd)
     if branch is not None:
         # Compute merge-base for three-dot diff. Using `base` rather than a
@@ -591,11 +592,22 @@ def resolve_slice_diff_range(slice_number: int, cwd: str, base: str | None = Non
                     branch,
                 )
                 return f"{fork_point}..{branch_tip}"
+            # Reflog says the branch was created at its current tip: it has
+            # never had a commit of its own (nothing to merge or review).
+            if fork_point is not None:
+                empty_branch = branch
         # merge-base failed or branch is merged — fall through
 
     merge_commit = _find_merge_commit(slice_number, cwd, base)
     if merge_commit is not None:
         return f"{merge_commit}^1..{merge_commit}^2"
+
+    if empty_branch is not None:
+        raise DiffRangeUnresolvedError(
+            f"Could not resolve diff range for slice {slice_number}: branch "
+            f"'{empty_branch}' exists but has no commits of its own beyond "
+            f"{base}. Nothing to review yet."
+        )
 
     searched = base if base == DEFAULT_DIFF_BASE else f"{base} or {DEFAULT_DIFF_BASE}"
     raise DiffRangeUnresolvedError(

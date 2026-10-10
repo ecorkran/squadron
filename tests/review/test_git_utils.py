@@ -184,6 +184,22 @@ class TestResolveForkPoint:
         ).stdout.split()
         assert changed == ["b.txt"]
 
+    def test_empty_slice_branch_error_says_no_commits(self, tmp_path: Path) -> None:
+        """A branch with no commits of its own is not reported as a missing branch."""
+        self._git(tmp_path, "init", "-q", "-b", "main")
+        self._git(tmp_path, "config", "user.email", "t@t.co")
+        self._git(tmp_path, "config", "user.name", "T")
+        (tmp_path / "a.txt").write_text("base\n")
+        self._git(tmp_path, "add", "-A")
+        self._git(tmp_path, "commit", "-qm", "base")
+        self._git(tmp_path, "checkout", "-q", "-b", "127-slice.empty")
+        with pytest.raises(DiffRangeUnresolvedError) as exc_info:
+            resolve_slice_diff_range(127, str(tmp_path), base="main")
+        message = str(exc_info.value)
+        assert "127-slice.empty" in message
+        assert "no commits" in message
+        assert "no local branch" not in message
+
 
 class TestResolveSliceDiffRange:
     """Tests for resolve_slice_diff_range()."""

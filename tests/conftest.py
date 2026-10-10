@@ -120,6 +120,21 @@ def test_settings() -> Settings:
 
 
 @pytest.fixture(autouse=True)
+def implement_dispatch_left_commits() -> Iterator[None]:
+    """Stand in for git: an implement dispatch in a test repo-less run left commits.
+
+    squadron.dispatch-branch-work counts real commits on the slice branch; pipeline
+    tests with mocked dispatch have no such branch. Its own tests override this
+    fixture by name.
+    """
+    with patch(
+        "squadron.events.builtin.dispatch_branch_work.DispatchBranchWorkAction._count_work",
+        return_value=("slice-branch", 1, "main"),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def restore_agent_logger_state() -> Iterator[None]:
     """Undo the global logger mutation ``sq review -v`` performs.
 

@@ -96,12 +96,14 @@ def bootstrap_event_actions() -> None:
         return
 
     import squadron.events.builtin.dispatch_artifact as _b_dispatch_artifact
+    import squadron.events.builtin.dispatch_branch_work as _b_dispatch_branch_work
     import squadron.events.builtin.frontmatter_gate as _b_frontmatter_gate
     import squadron.events.builtin.review_verdict_gate as _b_review_verdict_gate
     import squadron.events.builtin.revision_stamp as _b_revision_stamp
 
     _ = (
         _b_dispatch_artifact,
+        _b_dispatch_branch_work,
         _b_frontmatter_gate,
         _b_review_verdict_gate,
         _b_revision_stamp,

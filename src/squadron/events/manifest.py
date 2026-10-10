@@ -67,6 +67,12 @@ DEFAULT_BINDINGS: tuple[Binding, ...] = (
         event=EventType.POST_ACTION, action="squadron.dispatch-artifact", params={}, source="built-in"
     ),
     Binding(
+        event=EventType.POST_ACTION,
+        action="squadron.dispatch-branch-work",
+        params={},
+        source="built-in",
+    ),
+    Binding(
         event=EventType.POST_ACTION, action="squadron.revision-stamp", params={}, source="built-in"
     ),
 )
