@@ -263,11 +263,11 @@ def _gather_facts(locator: RepositoryLocator, *, base: str, head: str, cwd: str)
             repository=locator.repository,
         )
     except GitRangeUnavailableError as exc:
-        errors.print(f"[red]{exc}[/red]")
+        errors.print(f"[red]{escape(str(exc))}[/red]")
         errors.print(f"[dim]Fetch {base} into this clone, or pass --base.[/dim]")
         raise typer.Exit(code=1) from exc
     except EmptyCommitRangeError as exc:
-        errors.print(f"[red]{exc}[/red]")
+        errors.print(f"[red]{escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     return assemble_facts(inputs, review)
 
@@ -340,7 +340,7 @@ def create(
         )
         check_body_complete(body, facts)
     except (CompositionError, BodyIncompleteError) as exc:
-        errors.print(f"[red]{exc}[/red]")
+        errors.print(f"[red]{escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if dry_run:
@@ -357,7 +357,7 @@ def create(
         raise typer.Exit(code=1) from exc
 
     console = Console()
-    console.print(f"[green]{record.url}[/green]")
+    console.print(f"[green]{escape(str(record.url))}[/green]")
 
 
 def _render_json(resolved: ResolvedPullRequest, fetched: FetchedRange) -> None:
@@ -436,4 +436,4 @@ def _render_terminal(resolved: ResolvedPullRequest, fetched: FetchedRange) -> No
         return
     console.print(f"  {len(fetched.changed_paths)} changed paths:", style="dim")
     for path in fetched.changed_paths:
-        console.print(f"    {path}")
+        console.print(f"    {escape(str(path))}")

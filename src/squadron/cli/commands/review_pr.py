@@ -16,6 +16,7 @@ from pathlib import Path
 import typer
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
 from squadron.cli.commands.pr import (
@@ -262,7 +263,10 @@ def _post_review(
         # never reads as a blank, mid-sentence gap.
         author = comment.author_login or "an unknown author"
         _logger.info("marked comment by %s left untouched: %s", author, comment.url)
-        console.print(f"[dim]Marked comment by {author}, left untouched: {comment.url}[/dim]")
+        console.print(
+            f"[dim]Marked comment by {escape(str(author))}, "
+            f"left untouched: {escape(str(comment.url))}[/dim]"
+        )
 
     try:
         live_head_sha = _resolve_live_head(host, record, cwd=cwd)
@@ -275,7 +279,9 @@ def _post_review(
     if dry_run:
         action = "would update" if mine else "would create"
         target_url = mine[0].url if mine else None
-        console.print(f"[dim]{action}{f' {target_url}' if target_url else ''}[/dim]")
+        console.print(
+            f"[dim]{escape(str(action))}{f' {escape(str(target_url))}' if target_url else ''}[/dim]"
+        )
         print(body)
         return
 
@@ -288,7 +294,7 @@ def _post_review(
         render_code_host_error(exc)
         raise typer.Exit(code=1) from exc
 
-    console.print(f"[green]{comment.url}[/green]")
+    console.print(f"[green]{escape(str(comment.url))}[/green]")
 
 
 @review_app.command("pr")
@@ -380,7 +386,7 @@ def review_pr(
     try:
         assert_reviewable_scope(diff, checkout_cwd, exclude_patterns)
     except EmptyScopeError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if use_json:
@@ -487,9 +493,14 @@ def review_pr(
             # Never a fall-through to the next precedence rule: writing
             # somewhere the operator did not ask for, and reporting success,
             # is the failure this names the path to avoid (D5).
-            console.print(f"[red]Review not saved to {reviews_dir} ({rule}): {exc}[/red]")
+            console.print(
+                f"[red]Review not saved to {escape(str(reviews_dir))} "
+                f"({escape(str(rule))}): {escape(str(exc))}[/red]"
+            )
             return False
-        console.print(f"[green]Saved review to {path}[/green] [dim]({rule})[/dim]")
+        console.print(
+            f"[green]Saved review to {escape(str(path))}[/green] [dim]({escape(str(rule))})[/dim]"
+        )
         return True
 
     outcome = _resolve_save_outcome(
