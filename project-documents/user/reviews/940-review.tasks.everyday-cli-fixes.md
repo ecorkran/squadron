@@ -4,112 +4,126 @@ layer: project
 reviewType: tasks
 slice: everyday-cli-fixes
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/940-tasks.everyday-cli-fixes.md
 aiModel: claude-sonnet-5-5
 status: complete
 dateCreated: 20261009
 dateUpdated: 20261009
-reviewedSha: aea4e817e386e9a1fea35a35c04c2e15351bf7c0
-revision_number: 1
+reviewedSha: 5d9adb9b3bcfc8bd809fa6b28f747c26128389ec
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 29.9
+durationSeconds: 14.8
 runId: run-20261010-p5-4e5bc315
 squadronVersion: 0.21.2
 findings:
   - id: F001
     severity: pass
     category: coverage
-    summary: "Success criteria coverage"
+    summary: "Functional success criteria are all covered"
     location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md"
   - id: F002
     severity: pass
-    category: sequencing
-    summary: "Sequencing, test-with pattern and commit cadence"
-    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md"
+    category: error-handling
+    summary: "Every D8 failure-mode row has a test"
+    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:206-216"
   - id: F003
-    severity: concern
+    severity: pass
     category: sequencing
-    summary: "Task 20 lists the baseline marker after the step it must precede"
-    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:261-266"
+    summary: "Sequencing and test-with pattern are sound"
+    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:35-290"
   - id: F004
-    severity: concern
-    category: scope
-    summary: "Task 17 changes the built-in `models.toml` and departs from the D2 design"
-    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:223"
+    severity: pass
+    category: nfr
+    summary: "No load-test or CI-gating obligation"
+    location: "project-documents/user/slices/940-slice.everyday-cli-fixes.md:122-138"
   - id: F005
     severity: note
-    category: task-sizing
-    summary: "Task 17 is on the large side"
-    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:220-237"
+    category: scope
+    summary: "Guard test cannot catch user text that never passed through an exception"
+    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:63"
   - id: F006
     severity: note
-    category: clarity
-    summary: "Allowlist removal instructions assume every swept file is in `_UNSWEPT`"
-    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:64"
+    category: testing
+    summary: "Task 8 hand-check of the guard"
+    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:103"
   - id: F007
     severity: note
-    category: task-sizing
-    summary: "Task 7 covers many files in one commit"
-    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:91-97"
+    category: task-size
+    summary: "Task 13 is large but cohesive"
+    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:158-168"
+  - id: F008
+    severity: note
+    category: scope
+    summary: "Tasks 22 and 23 are verification and close-out, not design criteria"
+    location: "project-documents/user/tasks/940-tasks.everyday-cli-fixes.md:273-290"
 ---
 
 # Review: tasks — slice 940
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [PASS] Success criteria coverage
+### [PASS] Functional success criteria are all covered
 
-Every functional and technical requirement in the slice design maps to at least one task.
-- **Copy and list:** the copy criteria are covered by Tasks 13-16, and the list-marking criterion by Task 16.
-- **Models init:** the `models init` criteria are covered by Tasks 13 and 17, with the doctor pointer in Task 18.
-- **Path runs:** the path-run criteria are covered by Tasks 8-10.
-- **Rich escaping:** the `[codex]` criterion is covered by Task 4, and the guard test by Tasks 2-7.
-- **Review profile:** the `-v` profile and `aiProfile` criteria are covered by Tasks 11-12.
-- **D7:** the list-color decision is covered by Task 19.
-- **D8 failure modes:** every row of the failure-mode table has a matching test bullet in Tasks 10, 15 and 17.
-- **Technical requirements:** the lint, pyright, full-suite, pre-slice-state and temp-home requirements are covered by Tasks 8, 10 and 20.
+Every functional criterion maps to a task:
+- `pipelines copy` byte-identical output, shadow notice, `load_pipeline` loading the copy, and `--project` scope: Tasks 15-16.
+- Second copy refused without `--force`: Task 16.
+- `list` marks a shadowing copy: Task 17.
+- `models init` parses as TOML, defines no aliases, and a second run is refused: Tasks 18-19.
+- Path runs record `foo` plus the absolute path, and `--resume` reloads the same file: Tasks 9-11.
+- `[codex]` prints intact: Tasks 2-8, with the behavior test in Task 4.
+- `-v` shows the profile and `aiProfile` appears in the artifact: Tasks 12-13.
 
-No tasks trace to nothing, apart from the Task 17 point below.
+The technical requirements (guard test, pre-slice state loads, temp-home tests, lint/type/test cleanliness) are covered by Tasks 2/8, 9/11, the Context Summary, and Task 22.
 
-### [PASS] Sequencing, test-with pattern and commit cadence
+### [PASS] Every D8 failure-mode row has a test
 
-Dependencies run in one direction, with no cycles.
-- Task 13 (the helper) comes before its users, Tasks 15 and 17.
-- Task 14 (the loader) comes before Task 15.
-- Task 16 (shadow marking) comes before Task 19 (coloring the marker).
-- Task 11 comes before Task 12, which threads its profile through.
+Each D8 row has a test asserting both the exit code and the message or log record:
+- Target exists: Tasks 16 and 19.
+- Write `OSError`: Tasks 14, 16 and 19.
+- Unknown name: Task 16.
+- Source unreadable or gone between resolve and read: Task 16.
+- Partial file removed after a failed write: Tasks 14, 16 and 19.
+- Unreadable built-in `models.toml`: Task 19.
+- Empty reference block: Task 18.
+- Recorded `pipeline_path` missing, or present but invalid: Task 11.
 
-Each implementation task carries its own tests and its own semantic commit, so commits are spread across the work and not batched at the end. The Task 2-7 allowlist shrinks as each module is swept, which keeps the guard test green throughout. No merge task exists, which matches the git rules. No performance NFR is restated in the slice, so no load test or CI-gating task is required.
+### [PASS] Sequencing and test-with pattern are sound
 
-### [CONCERN] Task 20 lists the baseline marker after the step it must precede
+Order follows the design's Implementation Notes (D5, D4, D6, then D3, D1, D2, D7).
+- Dependencies run forward only. Task 14 (helper) comes before Tasks 16 and 19. Task 15 (loader dirs) comes before Task 16. Task 17 (shadow field) comes before Task 21 (color). Task 18 comes before Task 19. Task 12 comes before Task 13.
+- Each implementation task carries its own tests, and there is a commit after each task, not batched at the end.
+- Task 2's shrinking `_UNSWEPT` allowlist keeps the tree green while the sweep proceeds across Tasks 3-8.
+- No merge task appears, which is consistent with the project's Git rules.
 
-The first bullet runs the full test suite. The second bullet says "Before running the full suite, create a marker" and records the `~/.config/squadron` baseline. A junior agent working top to bottom will run the suite first, so the baseline is taken after any writes and the check that the real config was untouched becomes meaningless. Move the marker and baseline bullet above the suite run. The marker must also exist before the walkthrough, which is also meant to be covered by the final check.
+### [PASS] No load-test or CI-gating obligation
 
-### [CONCERN] Task 17 changes the built-in `models.toml` and departs from the D2 design
+The slice design restates no NFR (no performance, throughput or latency targets), so no `tests/load/` task or CI wiring task is required.
 
-D2 says the field reference is "the leading comment block of the built-in `data/models.toml`" and that `init` reads it at write time. Task 17 instead edits the built-in file. It adds `BEGIN`/`END` marker comments and moves the "Deprecated" and "Renamed" notes below the END marker. It also adds marker constants and a marker-validation error path. This is a reasonable hardening, since it avoids fragile header parsing, and it adds tests for the missing, reversed and empty-block cases. However, the slice design neither mentions nor authorizes it. Either update D2 to describe the marker approach, or confirm with the PM that the built-in file edit is intended. Moving the notes could also affect anything that reads the file, so the task should say to check for other consumers of those comments.
+### [NOTE] Guard test cannot catch user text that never passed through an exception
 
-### [NOTE] Task 17 is on the large side
+This is a known limit, acknowledged in the slice's D5. Task 3's "inspect every site" instruction plus Task 21's manual-escape note cover it for now. No change is needed.
 
-Task 17 bundles the built-in file edit, the extraction function with marker validation, the `init` command, and seven test groups. It could be split into "extract reference block" (with its tests) and "`sq models init` command" (with its tests). That would give two commits and a smaller unit per junior agent. This is optional, since the task is still completable as written.
+### [NOTE] Task 8 hand-check of the guard
 
-### [NOTE] Allowlist removal instructions assume every swept file is in `_UNSWEPT`
+The "add an unescaped print, see it fail, revert" step is manual. Task 2's self-test already proves the checker flags unescaped sites, so the manual step is a harmless extra check and not a gap.
 
-Tasks 3-6 say "Remove the swept files from `_UNSWEPT`". `_UNSWEPT` only holds files that had flagged sites when Task 2 built it. A listed file with no flagged sites will not be in the set, so there is nothing to remove. Add "if present" to those steps. Task 7 should also say that its file list is whatever the grep returns, which it already does.
+### [NOTE] Task 13 is large but cohesive
 
-### [NOTE] Task 7 covers many files in one commit
+This task threads the profile through two writers and an unspecified number of callers, then validates frontmatter. A junior AI can complete it because the steps are explicit (grep for callers, list them in the commit body). If the caller count turns out to be large, split it into the writer change and a caller-wiring task.
 
-Task 7 sweeps roughly eleven modules and retires the allowlist in a single commit. It is mechanical and low risk, and the guard test bounds the work. If the actual flagged set is large, split it by module group so a revert stays small.
+### [NOTE] Tasks 22 and 23 are verification and close-out, not design criteria
+
+These do not trace to a specific success criterion, but they implement the Technical Requirements (clean lint/type/test, no writes to the real config) and the Verification Walkthrough. They are not scope creep. Task 22's baseline-before-tests step is a good safeguard for the temp-home requirement.
 
 ### Run Digest
 
-- Response length: 5028 chars
+- Response length: 4234 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -121,10 +135,10 @@ Task 7 sweeps roughly eleven modules and retires the allowlist in a single commi
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 29.9 s
+- Duration: 14.8 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
