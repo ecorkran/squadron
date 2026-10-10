@@ -51,7 +51,7 @@ status: not_started
   - [ ] `typer.echo` calls are ignored
 - [ ] A failure message names the file and line of each unescaped site
 - [ ] Add a module-level `_UNSWEPT` set holding the repo-relative path of every file that currently has a flagged site (run the checker once to build it). Flags in an `_UNSWEPT` file are tolerated; flags anywhere else fail the test
-  - [ ] A second test fails if an `_UNSWEPT` file has no flagged sites, with a message to remove it from the set. This keeps the set shrinking as Tasks 3-7 proceed
+  - [ ] A second test fails if an `_UNSWEPT` file has no flagged sites, with a message to remove it from the set. This keeps the set shrinking as Tasks 3-8 proceed
 - [ ] Add a self-test in the same file: feed the checker small source snippets (unescaped site, escaped site, differently named variable, multi-line call) and assert it flags exactly the unescaped ones
   - [ ] Success: all three tests pass on the current tree
 - [ ] Commit: `test: add Rich escape guard with unswept-file allowlist`
@@ -61,7 +61,7 @@ status: not_started
 - [ ] Files: `cli/commands/metrology.py`, `cli/commands/metrology_preemption.py`
 - [ ] Run `grep -n "rprint\|console.print" <file>` and inspect every site that interpolates exception text or user-supplied text (paths, names, values from args or files) into Rich markup. Wrap each such interpolated expression in `rich.markup.escape(...)`, adding `from rich.markup import escape` where missing
   - [ ] Do not rewrite message wording; `typer.echo` sites stay as they are
-- [ ] Remove both files from `_UNSWEPT`
+- [ ] Remove each of these files from `_UNSWEPT` if it is listed (a file with no flagged site was never listed; the second guard test enforces the rest)
   - [ ] Success: the guard tests pass; `pytest tests/cli` passes
 - [ ] Commit: `fix: escape exception and user text in metrology CLI output`
 
@@ -70,27 +70,34 @@ status: not_started
 - [ ] Files: `cli/commands/run.py`, `run_item.py`, `run_dry_run.py`, `cli/run_views.py`
 - [ ] Same procedure as Task 3
 - [ ] Add one behavior test: an error path in one of these modules that interpolates an exception message containing `[codex]` prints it intact (use `CliRunner`; reuse the setup of an existing error-path test)
-- [ ] Remove the swept files from `_UNSWEPT`
+- [ ] Remove each swept file from `_UNSWEPT` if it is listed
   - [ ] Success: guard tests pass; the `[codex]` test passes; `pytest tests/cli` passes
 - [ ] Commit: `fix: escape exception and user text in run CLI output`
 
 ## Task 5 — Sweep review and PR modules (D5)
 
 - [ ] Files: `cli/commands/review.py`, `review_pr.py`, `pr.py`
-- [ ] Same procedure as Task 3; remove the swept files from `_UNSWEPT`
+- [ ] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
   - [ ] Success: guard tests pass; `pytest tests/cli` passes
 - [ ] Commit: `fix: escape exception and user text in review and PR CLI output`
 
 ## Task 6 — Sweep setup and install modules (D5)
 
 - [ ] Files: `cli/commands/setup.py`, `install.py`, `install_options.py`, `doctor.py`, `skills.py`, `config.py`
-- [ ] Same procedure as Task 3; remove the swept files from `_UNSWEPT`
+- [ ] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
   - [ ] Success: guard tests pass; `pytest tests/cli` passes
 - [ ] Commit: `fix: escape exception and user text in setup and install CLI output`
 
-## Task 7 — Sweep remaining modules and retire the allowlist (D5)
+## Task 7 — Sweep event, pool, shutdown, models and auth modules (D5)
 
-- [ ] Files: every other file under `src/squadron/cli` that `grep -rnE "rprint|console\.print" src/squadron/cli` lists and that is not covered by Tasks 3-6 (events, pools, shutdown, models, auth, serve, spawn, task, message, list, history at the time of writing)
+- [ ] Files: `cli/commands/events.py`, `pools.py`, `shutdown.py`, `models.py`, `auth.py`
+- [ ] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
+  - [ ] Success: guard tests pass; `pytest tests/cli` passes
+- [ ] Commit: `fix: escape exception and user text in event, pool, models and auth CLI output`
+
+## Task 8 — Sweep remaining modules and retire the allowlist (D5)
+
+- [ ] Files: `serve.py`, `spawn.py`, `task.py`, `message.py`, `list.py`, `history.py`, plus any other file under `src/squadron/cli` that `grep -rnE "rprint|console\.print" src/squadron/cli` lists and Tasks 3-7 did not cover
 - [ ] Same procedure as Task 3
 - [ ] Delete `_UNSWEPT` and its second test, so the guard now applies to the whole tree
   - [ ] Success: the guard test passes with no allowlist; adding an unescaped `except ... as e` f-string print to any CLI file makes it fail (check once by hand, then revert); `pytest tests/cli` passes
@@ -100,7 +107,7 @@ status: not_started
 
 ## Part B — D4 (#169): run names and source paths
 
-## Task 8 — `RunState.pipeline_path` and `init_run` (D4)
+## Task 9 — `RunState.pipeline_path` and `init_run` (D4)
 
 - [ ] In `pipeline/state.py`, add optional `pipeline_path: str | None = None` to `RunState`; leave `_SCHEMA_VERSION` at 5
 - [ ] Add a keyword parameter to `StateManager.init_run` for the path and store it on the new state; the name continues to be lowercased inside `init_run`
@@ -111,7 +118,7 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `feat: record optional pipeline_path in run state`
 
-## Task 9 — Record identity and path at run start (D4)
+## Task 10 — Record identity and path at run start (D4)
 
 - [ ] In `cli/commands/run.py`, at both `init_run` call sites (around lines 239 and 672), pass `pipeline_identity(<loaded file path>)` as the name instead of the CLI argument
 - [ ] When the CLI argument was a file path, also pass its absolute path as `pipeline_path`. Find how `load_pipeline` decides that an argument is a path and reuse that decision; do not add a second path-detection rule
@@ -119,7 +126,7 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `fix: record pipeline identity, not the path argument, as the run name`
 
-## Task 10 — Resume, `--status` and item resume use the recorded path (D4)
+## Task 11 — Resume, `--status` and item resume use the recorded path (D4)
 
 - [ ] Add one small helper next to the other run helpers that returns the load target for a state: `state.pipeline_path` when set, otherwise `state.pipeline`. The path is never lowercased
 - [ ] Replace `load_pipeline(state.pipeline)` at the resume, `--status` and item-resume sites (around `run.py` lines 718, 865, 1188) with `load_pipeline(<helper>)`
@@ -140,7 +147,7 @@ status: not_started
 
 ## Part C — D6 (#193): the review profile is visible
 
-## Task 11 — Review action logs its resolved profile (D6)
+## Task 12 — Review action logs its resolved profile (D6)
 
 - [ ] In `pipeline/actions/review.py`, immediately after `resolve_review_profile` returns (around line 200), log at INFO: `review: step <step> profile=<profile> model=<model>`; leave the executor's pre-action label unchanged
 - [ ] Tests (`tests/pipeline/`, next to the existing review action tests): with `caplog` at INFO, a review step logs the line with the resolved profile and model; the profile shown matches an alias profile, a template profile, and the sdk default in one case each
@@ -148,11 +155,11 @@ status: not_started
 - [ ] Verify the line reaches the terminal under `-v`: confirm `run.py` sets the pipeline logger to INFO under `-v` (around line 1050) and add one `CliRunner` test asserting `-v` output contains `profile=`
 - [ ] Commit: `feat: log resolved review profile in pipeline review action`
 
-## Task 12 — `aiProfile` in review artifacts (D6)
+## Task 13 — `aiProfile` in review artifacts (D6)
 
 - [ ] In `review/persistence.py`, add optional keyword `profile: str | None = None` to `_review_frontmatter_lines` (like `requested_model` and `run_id`, which are also optional) and emit `aiProfile: <profile>` next to `aiModel` only when it is not `None`. No placeholder value is ever written
 - [ ] Thread `profile` through both writers that call it (the success writer near line 573 and the provider-failure writer near line 967) as an optional parameter
-- [ ] Find every caller of those two writers with `grep -rn` and pass the profile that caller has already resolved: the pipeline review action (Task 11) and `sq review` / `sq review pr`, which resolve a profile through `resolve_review_profile`. A caller that genuinely has none at that point (for example a failure raised before resolution) passes nothing and the key is omitted
+- [ ] Find every caller of those two writers with `grep -rn` and pass the profile that caller has already resolved: the pipeline review action (Task 12) and `sq review` / `sq review pr`, which resolve a profile through `resolve_review_profile`. A caller that genuinely has none at that point (for example a failure raised before resolution) passes nothing and the key is omitted
   - [ ] List in the commit body which callers pass a profile and which do not
 - [ ] Tests (`tests/review/`): success artifact and failure artifact each contain `aiProfile` when a profile is passed and contain no `aiProfile` line when it is not; the pipeline review action's artifact carries the resolved profile; existing frontmatter readers (metrology, findings parsing) parse an artifact that has the extra key and one that lacks it
   - [ ] Success: tests pass; existing persistence tests pass unchanged except where they assert exact frontmatter text
@@ -164,7 +171,7 @@ status: not_started
 
 ## Part D — D3, D1, D2, D7: copy, init, list color
 
-## Task 13 — `write_new_file` helper (D3)
+## Task 14 — `write_new_file` helper (D3)
 
 - [ ] Create the helper in a small shared module under `src/squadron/` (choose the location by checking where other file-writing utilities live; one module, no new package): `write_new_file(path, content, *, force) -> Path`
 - [ ] Without `force`: create parent directories, then open in exclusive-create mode (`x`). If the path exists, raise `FileExistsError` naming the path. If the write fails after the create, unlink the partial file and re-raise
@@ -180,7 +187,7 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add write_new_file exclusive-create helper`
 
-## Task 14 — Loader exposes the copy target directories (D1)
+## Task 15 — Loader exposes the copy target directories (D1)
 
 - [ ] In `pipeline/loader.py`, add one public function returning the target directory for a scope (user or project), built from `_user_dir()` and `_PROJECT_PIPELINES_REL`. The project directory is `<project root>/project-documents/user/pipelines/`; find how `_search_dirs` obtains the project root and reuse that, do not recompute it
   - [ ] Use an enum for the scope (user, project); no string comparison
@@ -188,7 +195,7 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `refactor: expose pipeline target directories from the loader`
 
-## Task 15 — `sq pipelines copy` (D1)
+## Task 16 — `sq pipelines copy` (D1)
 
 - [ ] In `cli/commands/pipelines.py`, add `copy` with arguments `name`, optional `new_name`, and options `--project`, `--force`
 - [ ] Resolve the source with `resolve_pipeline(name)`; an unknown name surfaces its existing error, exit 1 (as `show` does)
@@ -209,7 +216,7 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add sq pipelines copy`
 
-## Task 16 — `list` marks shadowing pipelines (D1)
+## Task 17 — `list` marks shadowing pipelines (D1)
 
 - [ ] In `discover_pipelines` / its result type, carry what a row needs to say it shadows another source: for each winning pipeline, the source it shadows, if any. Add the field to the existing listing type rather than a parallel structure
 - [ ] In `render_pipeline_listing` (`cli/run_views.py`), print `shadows <source>` on a shadowing row
@@ -217,26 +224,33 @@ status: not_started
   - [ ] Success: tests pass; existing listing tests pass unchanged except where they assert exact text
 - [ ] Commit: `feat: mark shadowing pipelines in sq pipelines list`
 
-## Task 17 — `sq models init` (D2)
+## Task 18 — Starter text builder for `models init` (D2)
 
-- [ ] In `cli/commands/models.py`, add `init` with option `--force`
-- [ ] Mark the reference explicitly in the built-in `src/squadron/data/models.toml`: put a `# BEGIN field reference` line before the "Fields:" block and a `# END field reference` line right after the `[aliases.<name>.pricing]` entry. Move the "Deprecated" and "Renamed" notes below the END marker so they are not part of the reference. Define the two marker strings once, as constants next to the extraction function; comments do not change how the file parses
-- [ ] Build the starter content: a short header; the text between the two markers (exclusive) from the built-in file; then one commented-out example alias and one commented-out `effort` variant, using placeholder names `my-alias` and `provider/model-id`. Every line is a comment, so the file defines nothing
-  - [ ] Put the extraction in one function that reads the built-in file at write time; an unreadable built-in file → ERROR log with the path, one-line message, exit 1
-  - [ ] A missing marker, markers in the wrong order, or an empty block between them raises an error naming the built-in path; `init` never writes a starter without the reference
-- [ ] Write to `models_toml_path()` with `write_new_file(..., force=force)`. Print the written path. Error handling for `FileExistsError` and `OSError` is the same as Task 15
+- [ ] Add one module-level function in `cli/commands/models.py` (or a small sibling module if that file would pass ~300 lines) that takes the built-in `data/models.toml` text and returns the starter text
+  - [ ] Reference block: the file's leading comment block, meaning the lines from line 1 up to the first line that does not start with `#` (a blank line ends it). No edit to `data/models.toml`; D2 defines the reference this way
+  - [ ] Starter = a short header, the reference block, then one commented-out example alias and one commented-out `effort` variant, using placeholder names `my-alias` and `provider/model-id`. Every line is a comment, so the file defines nothing
+  - [ ] An empty reference block raises an error naming the built-in file; no starter is built without the reference
+- [ ] Tests (`tests/cli/test_models.py`):
+  - [ ] The starter parses with `tomllib` and defines no aliases
+  - [ ] The real built-in file yields a non-empty reference block that contains every field name the alias loader accepts (derive the field list from the loader's accepted keys, not a second literal list). This is the D2 guard against a reworded or split header silently producing a truncated starter
+  - [ ] Text that starts with a blank line or with a non-comment line raises the empty-block error
+  - [ ] Success: tests pass
+- [ ] Commit: `feat: build commented models.toml starter from the built-in reference`
+
+## Task 19 — `sq models init` command (D2)
+
+- [ ] In `cli/commands/models.py`, add `init` with option `--force`. It reads the built-in `data/models.toml` at write time, builds the starter with Task 18's function, and writes it to `models_toml_path()` with `write_new_file(..., force=force)`. Print the written path
+  - [ ] Unreadable built-in file → ERROR log with the path, one-line message, exit 1
+  - [ ] `FileExistsError` and `OSError` handling is the same as Task 16
 - [ ] Tests (`tests/cli/test_models.py`, temporary home):
-  - [ ] The written file parses with `tomllib` and defines no aliases
-  - [ ] The reference block is non-empty and contains every field name the alias loader accepts (derive the field list from the loader's accepted keys, not a second literal list)
-  - [ ] Extraction on a built-in text with a missing BEGIN marker, a missing END marker, reversed markers, and an empty block each raises the error (pass the text in, so no file edit is needed)
-  - [ ] The real built-in file extracts a block that contains no "Deprecated" or "Renamed" text
+  - [ ] `sq models init` writes the starter at the temporary home's `models_toml_path()`; the file parses as TOML and defines no aliases
   - [ ] Second run without `--force` exits 1 with the path in the message; `--force` rewrites
   - [ ] Unreadable built-in file: exit 1, ERROR log record with the path
   - [ ] Write `OSError`: exit 1, ERROR log record, no partial file
   - [ ] Success: tests pass
 - [ ] Commit: `feat: add sq models init`
 
-## Task 18 — Doctor and setup point to `models init` (D2)
+## Task 20 — Doctor and setup point to `models init` (D2)
 
 - [ ] In `cli/commands/doctor_checks.py` `check_models_toml`, change only the missing-file detail to `using defaults (no file at <path>); sq models init writes a commented starter`. Status stays OK
 - [ ] Check `cli/commands/setup*.py` for a `models.toml` row or its own wording; if it renders `check_models_toml`'s detail, nothing more to change; if it has separate text, apply the same wording
@@ -244,7 +258,7 @@ status: not_started
   - [ ] Success: tests pass
 - [ ] Commit: `feat: point doctor models.toml row at sq models init`
 
-## Task 19 — Colored `sq pipelines list` (D7)
+## Task 21 — Colored `sq pipelines list` (D7)
 
 - [ ] In `render_pipeline_listing`, print names bold, descriptions dim, and the `shadows <source>` marker yellow, using Rich markup through the existing rendering (not a table). Group headers keep their current style
   - [ ] Escape every interpolated name, description and source with `escape` (Part A rule; the guard test covers exception text only, so check these by hand)
@@ -256,18 +270,18 @@ status: not_started
 
 ## Part E — Validation and close-out
 
-## Task 20 — Full validation and walkthrough
+## Task 22 — Full validation and walkthrough
 
+- [ ] Create the baseline first, before any test or walkthrough command: `marker=$(mktemp)` and `ls -la ~/.config/squadron > "$marker.before" 2>&1` (the directory may not exist; that output is the baseline). Use the same shell session for every later step in this task
 - [ ] Run `ruff format`, `ruff check`, `pyright`, and the full test suite once each
   - [ ] Success: all clean; zero pyright errors; full suite passes
-- [ ] Before running the full suite, create a marker: `marker=$(mktemp)`, and record `ls -la ~/.config/squadron > "$marker.before" 2>&1` (the directory may not exist; that output is the baseline)
 - [ ] Run the design's Verification Walkthrough in a scratch project with `HOME` pointed at a temporary directory, and record the outcome of each line
   - [ ] Success: path printed with shadow notice on stderr; list marks the shadowing copy; second copy refused; `models init` output parses as TOML; `sq doctor` models.toml row reads `loaded from <path>`
 - [ ] After the suite and the walkthrough, confirm the real `~/.config/squadron` was not modified: `find ~/.config/squadron -newer "$marker" 2>/dev/null` prints nothing, and `ls -la ~/.config/squadron` matches `"$marker.before"`
   - [ ] Success: both checks show no change; if either shows one, find the test or step that wrote there and fix it before committing
 - [ ] Commit any fixes found: `fix: <summary>` (skip if none)
 
-## Task 21 — Close-out
+## Task 23 — Close-out
 
 - [ ] Delegate checking off this task file to the `task-checker` agent; mark any dropped item `[x]` with a note before closing
 - [ ] Mark slice 940 complete in the slice design (`status`) and in the slice plan entry if one exists
