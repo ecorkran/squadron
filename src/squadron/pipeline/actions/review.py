@@ -200,6 +200,9 @@ class ReviewAction:
         profile_name = resolve_review_profile(
             self._explicit_profile(context), resolved.profile, template
         ).name
+        _logger.info(
+            "review: step %s profile=%s model=%s", context.step_name, profile_name, resolved.model_id
+        )
 
         inputs = self._base_inputs(context)
 

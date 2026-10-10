@@ -97,3 +97,25 @@ async def test_same_profile_from_both_paths(
     pipeline_profile = await _pipeline_profile(explicit, model, template)
 
     assert cli_profile == pipeline_profile
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "source",
+    [ReviewProfileSource.ALIAS, ReviewProfileSource.TEMPLATE, ReviewProfileSource.DEFAULT],
+)
+async def test_review_step_logs_its_resolved_profile_and_model(
+    source: ReviewProfileSource, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    explicit, model, template_profile, config_profile = _SCENARIOS[source]
+
+    def fake_get_config(key: str) -> str | None:
+        return config_profile if key == "default_review_profile" else None
+
+    monkeypatch.setattr(_CONFIG_PATH, fake_get_config)
+
+    with caplog.at_level("INFO", logger=_P):
+        profile = await _pipeline_profile(explicit, model, _template(template_profile))
+
+    expected = f"review: step review-step profile={profile} model={model or 'unused'}"
+    assert expected in [record.getMessage() for record in caplog.records]
