@@ -42,6 +42,8 @@ Six small, independent fixes to commands users run every day. They are grouped o
 - Run state records the pipeline name and, for path runs, the source path. Resume reloads from that path (D5).
 - Escape exception and user-supplied text at every CLI print site, plus a guard test (D6).
 - The review action logs its resolved profile, and review artifacts gain `aiProfile` (D7).
+- `existing:` takes a param; P4 and P5 expose it, so `--existing=keep` turns them into review-and-revise loops (D9).
+- Color in `sq pipelines list` (D10).
 
 **Excluded**
 - `sq review <file>` inferring slice and name from the file name (#142). It's useful, but used less often.
@@ -106,6 +108,18 @@ None new.
 - After `resolve_review_profile` returns, the review action logs at INFO `review: step <step> profile=<profile> model=<model>`. `-v` sets the pipeline logger to INFO ([run.py:1050](../../../src/squadron/cli/commands/run.py#L1050)), so the line appears under `-v`. The executor's pre-action label is unchanged. The action is where the profile is actually known.
 - Review artifact frontmatter gains `aiProfile: <profile>`, written next to `aiModel` ([persistence.py:443](../../../src/squadron/review/persistence.py#L443)). Implementation confirms that success and failure artifacts share that writer. If they don't, both get the field.
 
+### D9: Review-and-revise an existing design or task file
+
+`existing: keep` on a design or tasks step skips the dispatch but still runs that step's review. P4 and P5 with `keep` are therefore exactly a "review this, revise up to N times" loop. Today that requires a hand-edited copy of the pipeline.
+
+- `existing:` accepts a `{param}` placeholder, like `max:` already does. Validation checks the policy value after substitution. A literal value is still validated where it is checked today. Implementation confirms when step validation runs relative to param substitution, and moves the policy check to the substituted value if needed.
+- P4 and P5 declare `existing: create`, the current behavior, and pass it to their design or tasks step. `sq run P4 940 --existing=keep --review-model=<pool> --max-revisions=3` then reviews the existing design and revises it until it passes or the limit is reached.
+- If `keep` is requested and no artifact exists, the step dispatches normally. This is the existing `keep` behavior and is unchanged.
+
+### D10: Colored `pipelines list`
+
+Pipeline names are printed bold, descriptions dim, and the D1 `shadows <source>` marker yellow. Group headers keep their current style. Formatting goes through the existing Rich rendering in `render_pipeline_listing`. It is not a table.
+
 ### D8: Failure modes
 
 | Path | Failure | Observable signal |
@@ -129,6 +143,7 @@ None new.
 - `sq run ./x/Foo.yaml` records pipeline `foo` plus the absolute path, and `--resume` reloads the same file.
 - An exception message containing `[codex]` prints intact on the CLI.
 - `sq run -v` on a review step prints the profile. The review artifact has `aiProfile`.
+- `sq run P4 <slice> --existing=keep` on a slice with a design makes no design dispatch. It reviews the existing design and runs the revise loop. `--existing=bogus` fails validation, naming the valid policies.
 
 ### Technical Requirements
 - ruff format, ruff check and pyright are clean. The full suite passes.
