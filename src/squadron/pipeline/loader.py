@@ -102,6 +102,16 @@ def _load_yaml(path: Path) -> PipelineDefinition:
     return schema.to_definition(pipeline_identity(path))
 
 
+def pipeline_file_path(name_or_path: str) -> Path | None:
+    """The file *name_or_path* names when it is an existing file, else ``None``.
+
+    The single decision ``load_pipeline`` and run recording use to tell a file
+    path from a pipeline name.
+    """
+    candidate = Path(name_or_path)
+    return candidate if candidate.is_file() else None
+
+
 def load_pipeline(
     name_or_path: str,
     *,
@@ -116,9 +126,9 @@ def load_pipeline(
 
     Raises FileNotFoundError if the pipeline cannot be found.
     """
-    candidate = Path(name_or_path)
-    if candidate.is_file():
-        return _load_yaml(candidate)
+    source_file = pipeline_file_path(name_or_path)
+    if source_file is not None:
+        return _load_yaml(source_file)
     return _load_yaml(resolve_pipeline(name_or_path, project_dir=project_dir, user_dir=user_dir).path)
 
 

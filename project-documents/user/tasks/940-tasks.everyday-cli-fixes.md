@@ -44,64 +44,64 @@ status: in_progress
 
 ## Task 2 — Guard test with a shrinking allowlist (D5)
 
-- [ ] Create `tests/cli/test_rich_escape_guard.py`: parse every `.py` under `src/squadron/cli` with `ast`
-- [ ] Find each f-string passed to `rprint`, `console.print`, or a `Console(...).print` call, including multi-line calls
-- [ ] For each, collect names bound by an enclosing `except ... as <name>`; flag any interpolated expression that references such a name and is not wrapped in `escape(...)`
-  - [ ] The variable's name does not matter (`exc`, `e`, `err`, anything)
-  - [ ] `typer.echo` calls are ignored
-- [ ] A failure message names the file and line of each unescaped site
-- [ ] Add a module-level `_UNSWEPT` set holding the repo-relative path of every file that currently has a flagged site (run the checker once to build it). Flags in an `_UNSWEPT` file are tolerated; flags anywhere else fail the test
-  - [ ] A second test fails if an `_UNSWEPT` file has no flagged sites, with a message to remove it from the set. This keeps the set shrinking as Tasks 3-8 proceed
-- [ ] Add a self-test in the same file: feed the checker small source snippets (unescaped site, escaped site, differently named variable, multi-line call) and assert it flags exactly the unescaped ones
-  - [ ] Success: all three tests pass on the current tree
-- [ ] Commit: `test: add Rich escape guard with unswept-file allowlist`
+- [x] Create `tests/cli/test_rich_escape_guard.py`: parse every `.py` under `src/squadron/cli` with `ast`
+- [x] Find each f-string passed to `rprint`, `console.print`, or a `Console(...).print` call, including multi-line calls
+- [x] For each, collect names bound by an enclosing `except ... as <name>`; flag any interpolated expression that references such a name and is not wrapped in `escape(...)`
+  - [x] The variable's name does not matter (`exc`, `e`, `err`, anything)
+  - [x] `typer.echo` calls are ignored
+- [x] A failure message names the file and line of each unescaped site
+- [x] Add a module-level `_UNSWEPT` set holding the repo-relative path of every file that currently has a flagged site (run the checker once to build it). Flags in an `_UNSWEPT` file are tolerated; flags anywhere else fail the test
+  - [x] A second test fails if an `_UNSWEPT` file has no flagged sites, with a message to remove it from the set. This keeps the set shrinking as Tasks 3-8 proceed
+- [x] Add a self-test in the same file: feed the checker small source snippets (unescaped site, escaped site, differently named variable, multi-line call) and assert it flags exactly the unescaped ones
+  - [x] Success: all three tests pass on the current tree
+- [x] Commit: `test: add Rich escape guard with unswept-file allowlist`
 
 ## Task 3 — Sweep metrology modules (D5)
 
-- [ ] Files: `cli/commands/metrology.py`, `cli/commands/metrology_preemption.py`
-- [ ] Run `grep -n "rprint\|console.print" <file>` and inspect every site that interpolates exception text or user-supplied text (paths, names, values from args or files) into Rich markup. Wrap each such interpolated expression in `rich.markup.escape(...)`, adding `from rich.markup import escape` where missing
-  - [ ] Do not rewrite message wording; `typer.echo` sites stay as they are
-- [ ] Remove each of these files from `_UNSWEPT` if it is listed (a file with no flagged site was never listed; the second guard test enforces the rest)
-  - [ ] Success: the guard tests pass; `pytest tests/cli` passes
-- [ ] Commit: `fix: escape exception and user text in metrology CLI output`
+- [x] Files: `cli/commands/metrology.py`, `cli/commands/metrology_preemption.py`
+- [x] Run `grep -n "rprint\|console.print" <file>` and inspect every site that interpolates exception text or user-supplied text (paths, names, values from args or files) into Rich markup. Wrap each such interpolated expression in `rich.markup.escape(...)`, adding `from rich.markup import escape` where missing
+  - [x] Do not rewrite message wording; `typer.echo` sites stay as they are
+- [x] Remove each of these files from `_UNSWEPT` if it is listed (a file with no flagged site was never listed; the second guard test enforces the rest)
+  - [x] Success: the guard tests pass; `pytest tests/cli` passes
+- [x] Commit: `fix: escape exception and user text in metrology CLI output`
 
 ## Task 4 — Sweep run modules (D5)
 
-- [ ] Files: `cli/commands/run.py`, `run_item.py`, `run_dry_run.py`, `cli/run_views.py`
-- [ ] Same procedure as Task 3
-- [ ] Add one behavior test: an error path in one of these modules that interpolates an exception message containing `[codex]` prints it intact (use `CliRunner`; reuse the setup of an existing error-path test)
-- [ ] Remove each swept file from `_UNSWEPT` if it is listed
-  - [ ] Success: guard tests pass; the `[codex]` test passes; `pytest tests/cli` passes
-- [ ] Commit: `fix: escape exception and user text in run CLI output`
+- [x] Files: `cli/commands/run.py`, `run_item.py`, `run_dry_run.py`, `cli/run_views.py`
+- [x] Same procedure as Task 3
+- [x] Add one behavior test: an error path in one of these modules that interpolates an exception message containing `[codex]` prints it intact (use `CliRunner`; reuse the setup of an existing error-path test)
+- [x] Remove each swept file from `_UNSWEPT` if it is listed
+  - [x] Success: guard tests pass; the `[codex]` test passes; `pytest tests/cli` passes
+- [x] Commit: `fix: escape exception and user text in run CLI output`
 
 ## Task 5 — Sweep review and PR modules (D5)
 
-- [ ] Files: `cli/commands/review.py`, `review_pr.py`, `pr.py`
-- [ ] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
-  - [ ] Success: guard tests pass; `pytest tests/cli` passes
-- [ ] Commit: `fix: escape exception and user text in review and PR CLI output`
+- [x] Files: `cli/commands/review.py`, `review_pr.py`, `pr.py`
+- [x] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
+  - [x] Success: guard tests pass; `pytest tests/cli` passes
+- [x] Commit: `fix: escape exception and user text in review and PR CLI output`
 
 ## Task 6 — Sweep setup and install modules (D5)
 
-- [ ] Files: `cli/commands/setup.py`, `install.py`, `install_options.py`, `doctor.py`, `skills.py`, `config.py`
-- [ ] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
-  - [ ] Success: guard tests pass; `pytest tests/cli` passes
-- [ ] Commit: `fix: escape exception and user text in setup and install CLI output`
+- [x] Files: `cli/commands/setup.py`, `install.py`, `install_options.py`, `doctor.py`, `skills.py`, `config.py`
+- [x] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
+  - [x] Success: guard tests pass; `pytest tests/cli` passes
+- [x] Commit: `fix: escape exception and user text in setup and install CLI output`
 
 ## Task 7 — Sweep event, pool, shutdown, models and auth modules (D5)
 
-- [ ] Files: `cli/commands/events.py`, `pools.py`, `shutdown.py`, `models.py`, `auth.py`
-- [ ] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
-  - [ ] Success: guard tests pass; `pytest tests/cli` passes
-- [ ] Commit: `fix: escape exception and user text in event, pool, models and auth CLI output`
+- [x] Files: `cli/commands/events.py`, `pools.py`, `shutdown.py`, `models.py`, `auth.py`
+- [x] Same procedure as Task 3; remove each swept file from `_UNSWEPT` if it is listed
+  - [x] Success: guard tests pass; `pytest tests/cli` passes
+- [x] Commit: `fix: escape exception and user text in event, pool, models and auth CLI output`
 
 ## Task 8 — Sweep remaining modules and retire the allowlist (D5)
 
-- [ ] Files: `serve.py`, `spawn.py`, `task.py`, `message.py`, `list.py`, `history.py`, plus any other file under `src/squadron/cli` that `grep -rnE "rprint|console\.print" src/squadron/cli` lists and Tasks 3-7 did not cover
-- [ ] Same procedure as Task 3
-- [ ] Delete `_UNSWEPT` and its second test, so the guard now applies to the whole tree
-  - [ ] Success: the guard test passes with no allowlist; adding an unescaped `except ... as e` f-string print to any CLI file makes it fail (check once by hand, then revert); `pytest tests/cli` passes
-- [ ] Commit: `fix: escape remaining CLI output and retire guard allowlist`
+- [x] Files: `serve.py`, `spawn.py`, `task.py`, `message.py`, `list.py`, `history.py`, plus any other file under `src/squadron/cli` that `grep -rnE "rprint|console\.print" src/squadron/cli` lists and Tasks 3-7 did not cover
+- [x] Same procedure as Task 3
+- [x] Delete `_UNSWEPT` and its second test, so the guard now applies to the whole tree
+  - [x] Success: the guard test passes with no allowlist; adding an unescaped `except ... as e` f-string print to any CLI file makes it fail (check once by hand, then revert); `pytest tests/cli` passes
+- [x] Commit: `fix: escape remaining CLI output and retire guard allowlist`
 
 ---
 

@@ -55,6 +55,8 @@ from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loader import (
     load_pipeline,
+    pipeline_file_path,
+    pipeline_identity,
     validate_pipeline,
 )
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
@@ -164,6 +166,18 @@ def _resolve_execution_mode(prompt_only: bool) -> ExecutionMode:
     return ExecutionMode.SDK
 
 
+def _run_record_identity(pipeline_arg: str) -> tuple[str, str | None]:
+    """The (name, absolute source path) a new run is recorded under (slice 940 D4).
+
+    A file-path argument records the file's identity as the name and its
+    absolute path; a pipeline name records itself and no path.
+    """
+    source_file = pipeline_file_path(pipeline_arg)
+    if source_file is None:
+        return pipeline_arg, None
+    return pipeline_identity(source_file), str(source_file.resolve())
+
+
 def _check_cf(cf_client: ContextForgeClient) -> None:
     """Verify that Context Forge is available before execution.
 
@@ -236,7 +250,10 @@ async def _run_pipeline(
     resuming = run_id is not None
     if run_id is None:
         owner = RunOwner.current(interval) if interval is not None else None
-        run_id = state_mgr.init_run(pipeline_name, params, execution_mode=execution_mode, owner=owner)
+        run_name, run_path = _run_record_identity(pipeline_name)
+        run_id = state_mgr.init_run(
+            run_name, params, execution_mode=execution_mode, owner=owner, pipeline_path=run_path
+        )
 
     _run_id = run_id  # capture for closure below
     if pool_backend is None:
@@ -669,7 +686,10 @@ def _handle_prompt_only_init(
 
     params = _assemble_params(definition, target, model_override, param_list)
     state_mgr = StateManager()
-    run_id = state_mgr.init_run(pipeline_name, params, execution_mode=ExecutionMode.PROMPT_ONLY)
+    run_name, run_path = _run_record_identity(pipeline_name)
+    run_id = state_mgr.init_run(
+        run_name, params, execution_mode=ExecutionMode.PROMPT_ONLY, pipeline_path=run_path
+    )
     rprint(f"run_id={escape(str(run_id))}", file=sys.stderr)
 
     pool_backend = DefaultPoolBackend()
