@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.config.keys import CONFIG_KEYS
 from squadron.config.manager import (
@@ -42,11 +43,11 @@ def config_set(
     try:
         set_config(key, value, project=project, cwd=cwd)
     except (KeyError, ValueError) as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     source = "project" if project else "user"
-    rprint(f"Set {key} = {value} ({source} config)")
+    rprint(f"Set {escape(str(key))} = {escape(str(value))} ({escape(str(source))} config)")
 
 
 @config_app.command("unset")
@@ -59,14 +60,14 @@ def config_unset(
     try:
         removed = unset_config(key, project=project, cwd=cwd)
     except KeyError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     source = "project" if project else "user"
     if removed:
-        rprint(f"Removed {key} from {source} config")
+        rprint(f"Removed {escape(str(key))} from {escape(str(source))} config")
     else:
-        rprint(f"{key} is not set in {source} config")
+        rprint(f"{escape(str(key))} is not set in {escape(str(source))} config")
 
 
 @config_app.command("get")
@@ -79,10 +80,10 @@ def config_get(
         val = get_config(key, cwd=cwd)
         source = resolve_config_source(key, cwd=cwd)
     except KeyError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
-    rprint(f"{key} = {_display_value(val)}  ({source})")
+    rprint(f"{escape(str(key))} = {_display_value(val)}  ({escape(str(source))})")
 
 
 @config_app.command("list")
@@ -98,7 +99,9 @@ def config_list(
         except KeyError:
             continue
         display_val = _display_value(val)
-        rprint(f"  {key_name:<{max_key_len}}  {display_val:<40}  ({source})")
+        rprint(
+            f"  {escape(key_name):<{max_key_len}}  {escape(display_val):<40}  ({escape(str(source))})"
+        )
 
 
 @config_app.command("path")
@@ -115,5 +118,5 @@ def config_path(
     user_status = "[green]exists[/green]" if user_exists else "[dim]not found[/dim]"
     proj_status = "[green]exists[/green]" if proj_exists else "[dim]not found[/dim]"
 
-    rprint(f"  User:    {user_path}  {user_status}")
-    rprint(f"  Project: {proj_path}  {proj_status}")
+    rprint(f"  User:    {escape(str(user_path))}  {escape(str(user_status))}")
+    rprint(f"  Project: {escape(str(proj_path))}  {escape(str(proj_status))}")

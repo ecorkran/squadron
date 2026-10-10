@@ -90,11 +90,8 @@ def _flagged_sites() -> dict[str, list[int]]:
 
 # Files not yet swept; shrinks as Tasks 3-8 proceed and is deleted at the end.
 _UNSWEPT: set[str] = {
-    "src/squadron/cli/commands/config.py",
     "src/squadron/cli/commands/events.py",
-    "src/squadron/cli/commands/install.py",
     "src/squadron/cli/commands/models.py",
-    "src/squadron/cli/commands/skills.py",
     "src/squadron/cli/commands/spawn.py",
 }
 

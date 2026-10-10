@@ -8,6 +8,7 @@ from typing import NoReturn
 import typer
 from rich import print as rprint
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from squadron.cli.commands.install_options import parse_ide_option, report_skipped_entries
@@ -44,7 +45,7 @@ def _load_manifest() -> SkillsManifest:
     try:
         manifest = load_effective(cwd=Path.cwd())
     except ValueError as exc:
-        rprint(f"[red]Error loading skills.toml: {exc}[/red]")
+        rprint(f"[red]Error loading skills.toml: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
     if manifest is None:
         _require_manifest()
@@ -61,7 +62,10 @@ def _resolve_root(
     """
     if commands_dir is not None:
         if local:
-            rprint(f"[yellow]--local ignored: --commands-dir {commands_dir} takes precedence.[/yellow]")
+            rprint(
+                f"[yellow]--local ignored: --commands-dir "
+                f"{escape(str(commands_dir))} takes precedence.[/yellow]"
+            )
         return commands_dir, False
     return DELIVERIES[target].resolve_root(local=local), local
 
@@ -87,7 +91,10 @@ def install(
     manifest = _load_manifest()
     if pack_name not in manifest.packs:
         available = ", ".join(sorted(manifest.packs)) or "(none)"
-        rprint(f"[red]Pack '{pack_name}' not found in skills.toml. Available: {available}[/red]")
+        rprint(
+            f"[red]Pack '{escape(str(pack_name))}' not found in skills.toml. "
+            f"Available: {escape(str(available))}[/red]"
+        )
         raise typer.Exit(code=1)
 
     root, local_honored = _resolve_root(target, commands_dir, local=local)
@@ -97,11 +104,14 @@ def install(
             pack_name, entry, root, receipts_dir=receipts_dir, target=target, local=local_honored
         )
     except SkillSourceError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
 
     count = len(result.files_written)
-    rprint(f"[green]Installed pack '{pack_name}': {count} file(s) → {result.destination}[/green]")
+    rprint(
+        f"[green]Installed pack '{escape(str(pack_name))}': {count} file(s) → "
+        f"{escape(str(result.destination))}[/green]"
+    )
 
 
 @skills_app.command()
@@ -128,7 +138,7 @@ def uninstall(
     try:
         receipt = read_receipt(receipt_key, receipts_dir)
     except ValueError as exc:
-        rprint(f"[red]Error reading receipt for '{pack_name}': {exc}[/red]")
+        rprint(f"[red]Error reading receipt for '{escape(str(pack_name))}': {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
 
     if receipt is None:

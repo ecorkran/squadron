@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.skills.receipts import RemovalResult
 from squadron.skills.targets import CommandTarget, normalize_target
@@ -25,4 +26,7 @@ def parse_ide_option(ide: str) -> CommandTarget:
 def report_skipped_entries(result: RemovalResult) -> None:
     """Print the receipt entries ``remove_receipt_files`` refused to follow."""
     for relative in result.skipped_outside:
-        rprint(f"[yellow]Skipping receipt entry outside the install destination: {relative!r}[/yellow]")
+        rprint(
+            f"[yellow]Skipping receipt entry outside the install destination: "
+            f"{escape(repr(relative))}[/yellow]"
+        )

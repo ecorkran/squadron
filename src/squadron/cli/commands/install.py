@@ -12,6 +12,7 @@ from pathlib import Path
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.cli.commands.install_options import parse_ide_option, report_skipped_entries
 from squadron.skills.codex_rules import codex_home, remove_sq_rules, write_sq_rules
@@ -125,7 +126,9 @@ def install_for_target(
     source = get_commands_source()
     target_dir, local_honored = _resolve_destination(delivery, target, local=local)
     if local and not local_honored:
-        rprint(f"[yellow]--local ignored: --target {target_dir} takes precedence.[/yellow]")
+        rprint(
+            f"[yellow]--local ignored: --target {escape(str(target_dir))} takes precedence.[/yellow]"
+        )
     pack_name = receipt_name(BUNDLED_RECEIPT_BASE, command_target, local=local_honored)
 
     # What the *previous* install wrote, or None on a first install (or one predating
@@ -135,7 +138,7 @@ def install_for_target(
     try:
         previous = read_receipt(pack_name, receipts_dir)
     except ValueError as exc:
-        rprint(f"[red]Error reading install receipt: {exc}[/red]")
+        rprint(f"[red]Error reading install receipt: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
     # Stale-removal only applies where the previous install actually wrote. A receipt
     # records its destination, and `--target` can move it between runs under the same
@@ -188,7 +191,7 @@ def install_for_target(
         receipts_dir,
     )
 
-    rprint(f"[green]Installed {len(installed)} command(s) to {target_dir}:[/green]")
+    rprint(f"[green]Installed {len(installed)} command(s) to {escape(str(target_dir))}:[/green]")
     for name in installed:
         rprint(f"  {name}")
 
@@ -217,10 +220,10 @@ def _ensure_codex_rules() -> None:
         # not turn that into a failed install. Say what to fix instead.
         rprint(
             f"[yellow]Installed, but could not write the Codex sandbox rules under {home}: "
-            f"{exc}. Fix the permissions and re-run the install.[/yellow]"
+            f"{escape(str(exc))}. Fix the permissions and re-run the install.[/yellow]"
         )
         return
-    rprint(f"[green]Wrote Codex sandbox rules to {rules_path}[/green]")
+    rprint(f"[green]Wrote Codex sandbox rules to {escape(str(rules_path))}[/green]")
 
 
 def uninstall_commands(
@@ -261,7 +264,7 @@ def uninstall_commands(
     try:
         receipt = read_receipt(pack_name, receipts_dir)
     except ValueError as exc:
-        rprint(f"[red]Error reading install receipt: {exc}[/red]")
+        rprint(f"[red]Error reading install receipt: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from None
 
     if receipt is None:
@@ -301,7 +304,7 @@ def uninstall_commands(
 
     (receipts_dir / f"{pack_name}.toml").unlink(missing_ok=True)
 
-    rprint(f"[green]Removed {removed} command(s) from {destination}.[/green]")
+    rprint(f"[green]Removed {removed} command(s) from {escape(str(destination))}.[/green]")
 
     # The rules file is machine-wide. Only an uninstall of the default machine install
     # removes it; a --local or --target uninstall leaves it for the machine install
@@ -309,4 +312,4 @@ def uninstall_commands(
     if command_target is CommandTarget.AGENTS and not local and target is None:
         rules_path = remove_sq_rules(codex_home())
         if rules_path is not None:
-            rprint(f"[green]Removed Codex sandbox rules {rules_path}.[/green]")
+            rprint(f"[green]Removed Codex sandbox rules {escape(str(rules_path))}.[/green]")

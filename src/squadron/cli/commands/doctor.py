@@ -8,6 +8,7 @@ from importlib.metadata import PackageNotFoundError
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.text import Text
 
 from squadron.cli.commands.doctor_checks import (
@@ -59,7 +60,7 @@ def _render_table(results: list[CheckResult], verbose: bool) -> None:
         rows = sections.get(section_name, [])
         if not rows:
             continue
-        console.print(f"\n[bold]{section_name}[/bold]")
+        console.print(f"\n[bold]{escape(section_name)}[/bold]")
         for row in rows:
             if row.status == CheckStatus.WARN and not verbose:
                 continue
