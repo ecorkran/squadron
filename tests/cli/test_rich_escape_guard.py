@@ -93,8 +93,6 @@ _UNSWEPT: set[str] = {
     "src/squadron/cli/commands/config.py",
     "src/squadron/cli/commands/events.py",
     "src/squadron/cli/commands/install.py",
-    "src/squadron/cli/commands/metrology.py",
-    "src/squadron/cli/commands/metrology_preemption.py",
     "src/squadron/cli/commands/models.py",
     "src/squadron/cli/commands/pr.py",
     "src/squadron/cli/commands/review.py",

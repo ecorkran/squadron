@@ -17,6 +17,7 @@ from pathlib import Path
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.cli.commands.metrology_preemption import preempt_app, register_delta_command
 from squadron.config.manager import get_config, get_typed_config
@@ -161,11 +162,11 @@ def sample(
         review_file = resolve_target(target, review_type, resolved_cwd)
         payload = build_capture_payload(review_file, resolved_cwd)
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     # Blind presentation: artifact + ground truth only, never judge output.
-    rprint(f"[bold]Artifact:[/bold] {payload.artifact_path or '(unknown)'}")
+    rprint(f"[bold]Artifact:[/bold] {escape(str(payload.artifact_path or '(unknown)'))}")
     if payload.ground_truth_text is not None:
         rprint("[bold]Ground truth:[/bold]")
         rprint(payload.ground_truth_text)
@@ -186,13 +187,13 @@ def sample(
             sample_budget=_sample_budget(resolved_cwd),
         )
     except MetrologyIdentityError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if outcome.budget_reached:
@@ -202,7 +203,7 @@ def sample(
         )
         return  # a ceiling, not an error — exit 0
 
-    rprint(f"[green]Recorded[/green] {outcome.sample_id}")
+    rprint(f"[green]Recorded[/green] {escape(str(outcome.sample_id))}")
     _offer_reveal(review_file)
 
 
@@ -259,7 +260,7 @@ def _offer_reveal(review_file: Path) -> None:
     judge = reveal(review_file)
     rprint("[bold]Judge output (post-commit):[/bold]")
     for key, value in judge.items():
-        rprint(f"  {key}: {value}")
+        rprint(f"  {escape(str(key))}: {escape(str(value))}")
 
 
 @metrology_app.command("list")
@@ -284,7 +285,7 @@ def list_samples(
         store = _build_store(resolved_cwd)
         samples = store.list_samples(project_id=project, judge_config=config_filter)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     if not samples:
         rprint("[dim]No samples recorded.[/dim]")
@@ -305,7 +306,7 @@ def _parse_level_filter(raw: str | None) -> ArtifactLevel | None:
         return ArtifactLevel(raw.strip().lower())
     except ValueError as exc:
         choices = "/".join(level.value for level in ArtifactLevel)
-        rprint(f"[red]Error: invalid --level {raw!r} (expected one of {choices}).[/red]")
+        rprint(f"[red]Error: invalid --level {escape(repr(raw))} (expected one of {choices}).[/red]")
         raise typer.Exit(code=1) from exc
 
 
@@ -332,10 +333,10 @@ def report_agreement(
         samples = store.list_samples(project_id=project)
         report: AgreementReport = agreement_report(samples, resolved_cwd)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     cells = [c for c in report.cells if level_filter is None or c.group.artifact_level == level_filter]
@@ -372,10 +373,10 @@ def report_dispersion(
         samples = store.list_samples(project_id=project)
         report: DispersionReport = dispersion_report(samples, resolved_cwd)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     cells = [
@@ -414,10 +415,10 @@ def report_trend(
         samples = store.list_samples(project_id=project)
         report: TrendReport = trend_report(samples, resolved_cwd, bucket=bucket)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if as_json:
@@ -438,7 +439,7 @@ def report_trend(
             for c in entry.dispersion.cells
             if level_filter is None or c.artifact.artifact_level == level_filter
         ]
-        rprint(f"[bold]{entry.bucket_label}[/bold]")
+        rprint(f"[bold]{escape(entry.bucket_label)}[/bold]")
         for cell in agreement_cells:
             marker = " [yellow](low-n)[/yellow]" if cell.below_floor else ""
             rprint(
@@ -501,10 +502,10 @@ def recommend(
     try:
         report = _build_recommendation_report(resolved_cwd, project)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     cells = [c for c in report.cells if level_filter is None or c.group.artifact_level == level_filter]
@@ -551,10 +552,10 @@ def graduate(
     try:
         report = _build_recommendation_report(resolved_cwd, None)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     # Graduation acts on the template as currently configured on disk, never
@@ -605,15 +606,19 @@ def graduate(
         store = _build_store(resolved_cwd)
         _record_id, was_update = write_graduation_record(store, graduated_config)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if was_update:
         rprint(
-            f"[green]Updated existing graduation[/green] for {template}/{model} at {level_filter.value}"
+            "[green]Updated existing graduation[/green] for "
+            f"{escape(str(template))}/{escape(str(model))} at {level_filter.value}"
         )
     else:
-        rprint(f"[green]Graduated[/green] {template}/{model} at {level_filter.value}")
+        rprint(
+            "[green]Graduated[/green] "
+            f"{escape(str(template))}/{escape(str(model))} at {level_filter.value}"
+        )
 
 
 @metrology_app.command("offers")
@@ -632,10 +637,10 @@ def offers(
         rate = _read_float_config("metrology.residual_sample_rate", resolved_cwd)
         offer_targets = select_residual_offers(store, graduated_configs, rate=rate, cwd=resolved_cwd)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
     except MetrologyTargetError as exc:
-        rprint(f"[red]Error: {exc}[/red]")
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if as_json:
@@ -669,7 +674,8 @@ def offers(
         count = offered_by_config.get(key, 0)
         if count > 0:
             rprint(
-                f"{jc.template_name}/{jc.model} ({config.artifact_level.value}): {count} offer(s) due"
+                f"{escape(jc.template_name)}/{escape(str(jc.model))} "
+                f"({config.artifact_level.value}): {count} offer(s) due"
             )
             continue
         still_current = (
@@ -679,16 +685,20 @@ def offers(
             config.artifact_level,
         ) in current_identities
         if still_current:
-            rprint(f"{jc.template_name}/{jc.model} ({config.artifact_level.value}): no offers due")
+            rprint(
+                f"{escape(jc.template_name)}/{escape(str(jc.model))} "
+                f"({config.artifact_level.value}): no offers due"
+            )
         else:
             rprint(
-                f"[yellow]{jc.template_name}/{jc.model} ({config.artifact_level.value}): "
+                f"[yellow]{escape(jc.template_name)}/{escape(str(jc.model))} "
+                f"({config.artifact_level.value}): "
                 "graduation has lapsed — the judge configuration has changed "
                 "since this graduation was recorded[/yellow]"
             )
 
     for target in offer_targets:
-        rprint(f"  offer: {target.review_path}")
+        rprint(f"  offer: {escape(str(target.review_path))}")
 
 
 def _derive_judge_config_and_level(
@@ -802,7 +812,7 @@ def audit_run(
     for raw_path in project_paths:
         project_path = Path(raw_path).expanduser().resolve()
         if not as_json:
-            rprint(f"[dim]Auditing {project_path.name}… (5-20 min, no output until done)[/dim]")
+            rprint(f"[dim]Auditing {escape(project_path.name)}… (5-20 min, no output until done)[/dim]")
         try:
             outcome = asyncio.run(
                 run_audit(
@@ -815,11 +825,11 @@ def audit_run(
                 )
             )
         except (AuditPreflightError, AuditSkillError, MetrologyIdentityError) as exc:
-            rprint(f"[red]Error: {exc}[/red]")
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
             failed += 1
             continue
         except MetrologyStoreError as exc:
-            rprint(f"[red]Store error: {exc}[/red]")
+            rprint(f"[red]Store error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
         if not as_json:
@@ -879,7 +889,7 @@ def audit_variance(
         # Pinned from run 1 so later runs assert HEAD has not moved rather
         # than silently measuring a different commit.
         pinned_sha: str | None = None
-        rprint(f"[bold]{project_path}[/bold]  ({n_runs} runs)")
+        rprint(f"[bold]{escape(str(project_path))}[/bold]  ({n_runs} runs)")
 
         for index in range(n_runs):
             # Spacing between runs lowers the request rate the series presents,
@@ -905,11 +915,11 @@ def audit_variance(
                     )
                 )
             except (AuditPreflightError, AuditSkillError, MetrologyIdentityError) as exc:
-                rprint(f"[red]Error: {exc}[/red]")
+                rprint(f"[red]Error: {escape(str(exc))}[/red]")
                 total_failed += n_runs - index
                 break
             except MetrologyStoreError as exc:
-                rprint(f"[red]Store error: {exc}[/red]")
+                rprint(f"[red]Store error: {escape(str(exc))}[/red]")
                 raise typer.Exit(code=1) from exc
 
             _report_run_outcome(outcome, prefix=f"  run {index + 1}/{n_runs}  ")
@@ -933,7 +943,8 @@ def audit_variance(
         if len(series) < MIN_USABLE_RUNS:
             if series:
                 rprint(
-                    f"[yellow]No floor for {project_path}: only {len(series)} usable run(s); "
+                    f"[yellow]No floor for {escape(str(project_path))}: "
+                    f"only {len(series)} usable run(s); "
                     f"{MIN_USABLE_RUNS} are required. The runs are persisted and can be "
                     "reduced later once more land.[/yellow]"
                 )
@@ -942,7 +953,7 @@ def audit_variance(
         try:
             floor = reduce_noise_floor(series)
         except AuditVarianceError as exc:
-            rprint(f"[yellow]No floor for {project_path}: {exc}[/yellow]")
+            rprint(f"[yellow]No floor for {escape(str(project_path))}: {escape(str(exc))}[/yellow]")
             continue
 
         store.write_noise_floor(floor)
@@ -982,7 +993,7 @@ def report_baseline(
         store = _build_store(resolved_cwd)
         report = baseline_report(store, project_filter=project, category_filter=category_filter)
     except MetrologyStoreError as exc:
-        rprint(f"[red]Store error: {exc}[/red]")
+        rprint(f"[red]Store error: {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
     if as_json:
