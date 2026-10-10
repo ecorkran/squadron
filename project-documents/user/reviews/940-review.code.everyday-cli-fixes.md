@@ -11,55 +11,65 @@ aiModel: deepseek/deepseek-v4.1-flash
 status: complete
 dateCreated: 20261009
 dateUpdated: 20261009
-reviewedSha: b307ddf765c3d90809b4abdf4db88699257b7997
-revision_number: 1
+reviewedSha: 13f58ace56daed23e2cdc95be79a5f4b90e70a4e
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 38
+toolCallsMade: 55
 diffTruncated: false
 turns: 20
-promptTokens: 2922713
-cachedTokens: 2510464
-completionTokens: 136841
-reasoningTokens: 132181
-durationSeconds: 734.2
+promptTokens: 3370880
+cachedTokens: 2977280
+completionTokens: 171394
+reasoningTokens: 164915
+durationSeconds: 923.3
 runId: run-20261010-p6-71f18cf9
 squadronVersion: 0.21.2
 findings:
   - id: F001
     severity: concern
     category: error-handling
-    summary: "D5 escape sweep left live sites the guard cannot see"
-    location: "src/squadron/cli/commands/pr.py:120"
+    summary: "The escape sweep leaves user-supplied CLI arguments unescaped, and the guard test cannot flag them"
+    location: "src/squadron/cli/commands/task.py:37"
   - id: F002
     severity: concern
-    category: correctness
-    summary: "`--prompt-only` still lowercases a path argument, so D4's fix misses that entry point"
-    location: "src/squadron/cli/commands/run.py:1111"
+    category: error-handling
+    summary: "Code-host errors interpolate user-typed targets into unescaped Rich markup"
+    location: "src/squadron/cli/commands/pr.py:120"
   - id: F003
     severity: concern
-    category: error-handling
-    summary: "`_load_run_definition` does not catch an unreadable recorded path"
-    location: "src/squadron/cli/commands/run.py:189-205"
+    category: correctness
+    summary: "`_normalize_pipeline_arg` is bypassed by `--prompt-only` and `--explain`, which still lowercase a path argument"
+    location: "src/squadron/cli/commands/run.py:1111"
   - id: F004
     severity: concern
-    category: correctness
-    summary: "`--force` writes a file with different permissions than the same command without it"
-    location: "src/squadron/core/file_write.py:41-47"
+    category: error-handling
+    summary: "`_load_run_definition` misses `OSError` and `UnicodeDecodeError` from an existing-but-unreadable recorded path"
+    location: "src/squadron/cli/commands/run.py:194-203"
   - id: F005
-    severity: note
+    severity: concern
     category: consistency
-    summary: "JSON review artifacts still record no profile"
-    location: "src/squadron/review/models.py:250"
+    summary: "`aiProfile` reaches markdown frontmatter but never JSON, unlike every field beside it"
+    location: "src/squadron/review/models.py#ReviewResult.to_dict"
   - id: F006
     severity: note
-    category: correctness
-    summary: "The shadow marker names only the immediately-hidden source"
-    location: "src/squadron/pipeline/loader.py#discover_pipelines"
+    category: maintainability
+    summary: "The starter header hardcodes a path that `models_toml_path()` already owns"
+    location: "src/squadron/cli/commands/models_init.py#_HEADER"
   - id: F007
+    severity: note
+    category: style
+    summary: "`escape()` inside a width format spec can overrun the column and break alignment"
+    location: "src/squadron/cli/commands/config.py#config_list"
+  - id: F008
     severity: pass
     category: error-handling
-    summary: "`write_new_file`'s exclusive-create and atomic-replace design is correct and tested against its failure modes"
-    location: "src/squadron/core/file_write.py:12-23"
+    summary: "`write_new_file` handles both write modes' failure modes deliberately"
+    location: "src/squadron/core/file_write.py"
+  - id: F009
+    severity: pass
+    category: testing
+    summary: "Run-record identity is covered at every entry point that matters"
+    location: "tests/cli/commands/test_run_record_identity.py"
 ---
 
 # Review: code — slice 940
@@ -69,68 +79,71 @@ findings:
 
 ## Findings
 
-### [CONCERN] D5 escape sweep left live sites the guard cannot see
+### [CONCERN] The escape sweep leaves user-supplied CLI arguments unescaped, and the guard test cannot flag them
 
-`render_code_host_error` is the shared renderer for every code-host command, and it interpolates a `CodeHostError` straight into Rich markup:
+D5 states "Every CLI print that interpolates exception text **or user-supplied text**" is escaped. The parameter-bound sites were not swept, and the new guard deliberately only flags names bound by `except ... as <name>`, so `tests/cli/test_rich_escape_guard.py` passes while these remain:
 
-- `pr.py:120` — `errors.print(f"[red]{exc}[/red]")`
-- `pr.py:122` — `errors.print(f"[dim]{exc.fix_hint}[/dim]")`
-- `pr.py:333` — `errors.print(f"[dim]base: {selection.base} (source: {selection.source})[/dim]")` (user-supplied branch name)
+- `src/squadron/cli/commands/task.py:37` and `src/squadron/cli/commands/message.py:34` interpolate `agent_name` — a **required CLI argument** — into a Rich print. The identical message in `src/squadron/cli/commands/shutdown.py:43` *was* escaped in this same diff, so the inconsistency is introduced here, not pre-existing.
+- `src/squadron/cli/commands/install.py:196` — `rprint(f"  {name}")` for installed command names.
+- `src/squadron/cli/commands/review.py:419` — `Saved review to {path}`; `src/squadron/cli/commands/review_pr.py:502` escapes the same value, so the two save paths now render differently.
+- `src/squadron/cli/commands/run.py:698,706,755,895` — pipeline/run names and `definition.name`, the remaining unescaped siblings of the sites this diff did fix (e.g. `run.py:1142,1148`).
+- `src/squadron/cli/commands/history.py:44` — `sender` and `content` are escaped, `timestamp` is not.
+- `src/squadron/cli/commands/metrology.py:172` — `rprint(payload.ground_truth_text)` prints a document read from disk as markup, directly under the `Artifact:` line this diff fixed at `metrology.py:169`. Document text containing `[` is silently altered or raises `MarkupError`.
 
-The same gap exists in the new prompt-only init path: `run.py:698` and `run.py:706` interpolate `pipeline_name` and `definition.name` unescaped. Design D5 requires escaping "exception text **or user-supplied text**" at every CLI print site, and this slice touched `pr.py` (lines 266, 270, 343, 360, 439) without fixing its own error renderer.
+A guard whose stated limit is "it can't tell user-supplied text that never passed through an exception" is fine as a design; the gap is that the acknowledged follow-up (those sites "get escaped as part of the sweep") was not completed, so the guard's green result now reads as broader assurance than it delivers.
 
-The new `tests/cli/test_rich_escape_guard.py:test_no_unescaped_exception_text_in_cli` passes anyway, because `_UnescapedSiteFinder` only flags expressions referring to names bound by an `except ... as <name>`. In `render_code_host_error` the exception arrives as a *parameter*, and in the two `run.py` sites the text is user input. That is the guard's documented limit (design D5), but the sweep was the thing that was supposed to cover the gap, and it did not — so the "77 sites" claim is not fully discharged and the guard now gives false assurance for exactly this class of site.
+### [CONCERN] Code-host errors interpolate user-typed targets into unescaped Rich markup
 
-### [CONCERN] `--prompt-only` still lowercases a path argument, so D4's fix misses that entry point
+`render_code_host_error` prints `errors.print(f"[red]{exc}[/red]")` with no `escape`, and the diff touched this file (lines 266, 270, 343, 360, 439 were fixed) without fixing it. This is reachable with user input: `_OWNER_REPO_NUMBER` and `_REPO_NUMBER` in `src/squadron/codehost/targets.py` use `[^/\s#]+` for owner/repository, so a bracket survives parsing, and `_select_explicit` in `src/squadron/codehost/remotes.py` embeds it in the message (`no remote points at {named}; ...`). Remote URLs from `git remote get-url` reach `_describe` the same way via `_URL_REMOTE`/`_SCP_REMOTE`. Since Rich treats `[codex]`-shaped text as markup and drops it, the operator sees a refusal with a mangled repository name — precisely the #177 symptom.
 
-`_normalize_pipeline_arg` was introduced and applied to `--validate` (line 1138), `--dry-run` (1164), and standard execution (1267). `--prompt-only` init was not converted — it still calls `_handle_prompt_only_init(pipeline.lower(), target, model, param, verbosity=verbose)`, and `--explain` still lowercases at `run.py:1158`.
+### [CONCERN] `_normalize_pipeline_arg` is bypassed by `--prompt-only` and `--explain`, which still lowercase a path argument
 
-The consequence is specific: `sq run ./x/Foo.yaml --prompt-only` passes `./x/foo.yaml` down, `pipeline_file_path()` then finds no existing file (on a case-sensitive filesystem), `_run_record_identity` returns `(lowered_path, None)`, and the run is recorded with a lowercased *path* as its name and **no `pipeline_path` at all** — the exact defect #169/D4 exists to eliminate. `init_run` lowercases again on top. `_handle_explain` (`run.py:1158`) has the same mismatch for a path argument.
+`_normalize_pipeline_arg` (run.py:171) documents itself as the single decision — "A pipeline name is case-insensitive; a file path is not, so it is left as typed" — and is applied at `run.py:1138, 1164, 1267`. But `run.py:1111` calls `_handle_prompt_only_init(pipeline.lower(), ...)` and `run.py:1158` calls `_handle_explain(pipeline.lower(), ...)`.
 
-Compounding this, `tests/cli/commands/test_run_record_identity.py:66-83` passes the raw path directly to `_handle_prompt_only_init`, bypassing the `.lower()` call the command performs. The test asserts `run.pipeline == "bar"` and a populated `pipeline_path` and passes, while the CLI path it is meant to cover still records neither correctly. A test that calls the helper below the call site cannot detect a call-site normalisation bug.
+For `--prompt-only`, `_handle_prompt_only_init` then calls `_run_record_identity(pipeline_name)`, where `pipeline_file_path` tests the *lowercased* string. On a case-sensitive filesystem, `sq run --prompt-only ./X/Foo.yaml` therefore fails to find the file, `load_pipeline` raises `FileNotFoundError`, and — if it did resolve — the run would be recorded as a *name* rather than a path, defeating D4 on the very entry point the `/sq:run` slash command drives. `--explain` has the same shape. The helper's stated purpose is contradicted by two of its four call sites.
 
-### [CONCERN] `_load_run_definition` does not catch an unreadable recorded path
+### [CONCERN] `_load_run_definition` misses `OSError` and `UnicodeDecodeError` from an existing-but-unreadable recorded path
 
-The helper narrows to `FileNotFoundError` and `(ValidationError, yaml.YAMLError)`. `load_pipeline` → `_load_yaml` opens the file with `with open(path, encoding="utf-8")` (`pipeline/loader.py`), so a `PermissionError` or other `OSError` propagates out of `_load_run_definition` as an unhandled traceback — from `--resume`, `--next`, and `--step-done` alike.
+D8's row for resume is "recorded `pipeline_path` exists but fails to load or validate → `load_pipeline`'s existing error, naming the path, exit 1". `_load_run_definition` catches `FileNotFoundError` and `(ValidationError, yaml.YAMLError)` only. `_load_yaml` opens the file with `open(path, encoding="utf-8")`, so a recorded path that exists but is unreadable (permission denied, or a directory) raises `PermissionError`/`IsADirectoryError`, and a non-UTF-8 file raises `UnicodeDecodeError` — none of which is caught. Those escape as a traceback rather than the one-line error and exit 1 the design specifies. `_DEFINITION_ERRORS` in `src/squadron/pipeline/run_listing.py` already includes `OSError` for the same class of read; the CLI boundary is the weaker of the two.
 
-Design D8 enumerates "resume | recorded `pipeline_path` exists but fails to load or validate | `load_pipeline`'s existing error, naming the path, exit 1", and the project's failure-mode rule requires each enumerated failure to produce its own observable signal. `test_recorded_path_that_fails_validation_exits_1_naming_the_path` covers only the validation branch; the unreadable-file row of D8 has no test and no handler.
+### [CONCERN] `aiProfile` reaches markdown frontmatter but never JSON, unlike every field beside it
 
-### [CONCERN] `--force` writes a file with different permissions than the same command without it
+`result.profile` is set in `src/squadron/review/review_client.py:317` and rendered by `_review_frontmatter_lines`, but `ReviewResult.to_dict` emits no `profile` key. Its neighbours in the same file establish the opposite convention explicitly — `effort`, `verdictSource`, `requested_model`, and the diff-coverage trio are all "always present, null when not reported", with comments stating that frontmatter and JSON must agree (SC6). A consumer reading `sq review --json`, or a pipeline step's JSON outputs, has no way to see which profile the review ran through, which is the whole point of D6/#193. `tests/review/test_ai_profile_frontmatter.py` only asserts on frontmatter, so the divergence is untested.
 
-`_replace_file` uses `tempfile.mkstemp`, which creates the temporary file with mode `0o600`, then `os.replace`s it over the target. `os.replace` preserves the source's mode, so `sq models init --force` / `sq pipelines copy --force` leave the target at `0600`, whereas the non-force path (`path.open("xb")`, mode `0o666 & ~umask`, typically `0644`) does not. The same command therefore yields different file permissions depending on a flag, and a pre-existing target's own mode is discarded on replace.
+### [NOTE] The starter header hardcodes a path that `models_toml_path()` already owns
 
-The behaviour is otherwise sound and well tested — `test_force_replaces_the_content` asserts content and temp-file cleanup but never checks the mode, which is why this surfaced only on inspection. Fix by `os.chmod`-ing the temp file to the target's existing mode (or `0o666 & ~umask` for a new file) before `os.replace`.
+`_HEADER` writes `~/.config/squadron/models.toml` as a literal, while `models_toml_path()` (used by the command itself for the write target) returns `Path.home() / ".config" / "squadron" / "models.toml"`. If the path ever changes, the command writes to the new location and the file's own first line points at the old one. Formatting the path in from the single source would keep the two from disagreeing.
 
-### [NOTE] JSON review artifacts still record no profile
+### [NOTE] `escape()` inside a width format spec can overrun the column and break alignment
 
-`ReviewResult.profile` is now stamped by `review_client` and by `ReviewAction`, and `_review_frontmatter_lines` emits `aiProfile` for both success and failure markdown. `ReviewResult.to_dict()` does not include `profile`, so an artifact saved through the `--json` path (`save_review_result(as_json=True)`) records no profile at all — the very omission #193 describes, in the sibling artifact format. Every comparable field added in recent slices (`effort`, `run_id`, `requested_model`) is present in `to_dict()`; D6's wording ("one change covers both") is true only of the frontmatter pair.
+`rprint(f"  {escape(key_name):<{max_key_len}}  {escape(display_val):<40}  ...")` pads to a width computed from the *unescaped* key lengths, but the value being padded is the escaped string. `escape` inserts backslashes, so any key or value containing `[` pads to nothing and pushes the following column right. The same pattern appears at `src/squadron/cli/commands/review.py:1278` (`{escape(t.name):<{max_name_len}}`). Cosmetic only — the current keys and template names carry no brackets — but the padding silently stops working the first time one does.
 
-### [NOTE] The shadow marker names only the immediately-hidden source
+### [PASS] `write_new_file` handles both write modes' failure modes deliberately
 
-`shadows=hidden.source if hidden is not None else None` records only the source that the winning file displaced last in scan order. With all three sources defining a name, a project copy of a user copy of a built-in renders `shadows user`, and the built-in's disappearance from the listing is no longer visible on the row. Design D1's stated purpose for the mark is "Without that mark, the built-in silently drops out of the listing". The single-source form under-delivers on that for the three-way case; the tests cover only the two-source cases (`test_user_copy_of_a_builtin_shadows_built_in`, `test_project_over_user_names_user`).
+The exclusive-create path opens the handle outside the `try` (so a `FileExistsError` never triggers cleanup of a file this call did not create) and unlinks a partial write in `finally`; the `force` path writes to a same-directory temp and `os.replace`s, cleaning the temp on failure. `tests/core/test_file_write.py` asserts the observable outcome for each — including the two-writer barrier race asserting exactly one winner — which is the right level for this helper. The `.` prefix on the temp name also keeps it out of the `*.yaml` scans the pipelines directory uses.
 
-### [PASS] `write_new_file`'s exclusive-create and atomic-replace design is correct and tested against its failure modes
+### [PASS] Run-record identity is covered at every entry point that matters
 
-The helper gets the hard parts right. Without `force`, the existence check and the create are one `open("xb")` call, so two writers cannot both win — `test_two_writers_racing_exactly_one_wins` exercises that with a barrier rather than asserting it in prose. The `FileExistsError` is deliberately raised outside the `try` (with a comment saying why), so a failure that is not ours never unlinks someone else's file, and `test_write_failure_after_create_leaves_no_partial_file` covers the unlink. With `force`, the write goes to a sibling temp file and is moved with `os.replace`, so a failed write leaves the original intact — `test_write_failure_with_force_keeps_the_original_and_no_temp_file` asserts both the content and the absence of a stray temp. Every path cleans up in a `finally` and the single suppress is scoped to `FileNotFoundError` with a justifying comment, consistent with the project's exception-handling rule.
+The tests assert the recorded `pipeline`/`pipeline_path` pair for both fresh paths (SDK and prompt-only) and the absence of a path for named runs, and `tests/cli/commands/test_run_resume_path.py::test_resume_executes_the_recorded_file_not_a_same_named_pipeline` guards the one case that matters most — planning and execution loading the *same* definition rather than a same-named pipeline. `tests/pipeline/test_state.py::TestPipelinePath` covering a legacy v5 file without the field is the right backward-compatibility assertion for an optional schema addition.
 
 ### Run Digest
 
-- Response length: 8018 chars
+- Response length: 9098 chars
 - Response is newline-free: no
-- Tool calls made: 38
+- Tool calls made: 55
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 384000 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 509785
+- Reasoning characters: 626189
 - Effort: backend default
 - Turns: 20
-- Tokens — prompt / cached / completion / reasoning: 2922713 / 2510464 / 136841 / 132181
-- Duration: 734.2 s
+- Tokens — prompt / cached / completion / reasoning: 3370880 / 2977280 / 171394 / 164915
+- Duration: 923.3 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
