@@ -219,6 +219,37 @@ class TestResolvePipeline:
             resolve_pipeline("nope", project_dir=tmp_path / "p", user_dir=tmp_path / "u")
 
 
+class TestListingShadowMarker:
+    def test_shadowing_row_carries_the_marker_and_others_do_not(self) -> None:
+        shadowing = PipelineInfo(
+            "p4", "p4 description", PipelineSource.USER, Path("/u/p4.yaml"), {}, PipelineSource.BUILT_IN
+        )
+        plain = _info("other", PipelineSource.BUILT_IN)
+
+        lines = _render([shadowing, plain])
+
+        assert [line for line in lines if "shadows built-in" in line] == [
+            next(line for line in lines if line.lstrip().startswith("p4"))
+        ]
+        assert not any("shadows" in line for line in lines if "other" in line)
+
+    def test_listing_without_shadows_has_no_extra_column(self) -> None:
+        lines = _render([_info("alpha", PipelineSource.BUILT_IN)])
+
+        assert not any("shadows" in line for line in lines)
+
+    def test_cli_marks_a_user_copy_of_a_builtin(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.chdir(tmp_path)
+        CliRunner().invoke(app, ["pipelines", "copy", "p4"])
+
+        result = CliRunner().invoke(app, ["pipelines", "list"])
+
+        assert any("shadows built-in" in line and "p4" in line for line in result.stdout.splitlines())
+
+
 class TestPipelinesCopy:
     @pytest.fixture
     def homes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:

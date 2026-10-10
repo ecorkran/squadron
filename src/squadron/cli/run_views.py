@@ -114,13 +114,21 @@ def render_pipeline_listing(
         for source in LISTING_ORDER
     ]
     groups = [(source, group) for source, group in groups if group]
-    columns = [Column(None, shrinkable=False), Column(None, shrinkable=True)]
+    # The shadow column exists only when some row shadows, so a plain listing is unchanged.
+    has_shadow = any(info.shadows is not None for _, group in groups for info in group)
+    columns = [Column(None, shrinkable=False)]
+    if has_shadow:
+        columns.append(Column(None, shrinkable=False))
+    columns.append(Column(None, shrinkable=True))
     if verbose:
         columns.append(Column(None, shrinkable=True))
     rows: list[list[Text]] = []
     for _, group in groups:
         for info in group:
-            row = [Text(info.name), Text(info.description)]
+            row = [Text(info.name)]
+            if has_shadow:
+                row.append(Text(f"shadows {info.shadows}" if info.shadows is not None else ""))
+            row.append(Text(info.description))
             if verbose:
                 row.append(Text(params_cell(info.params)))
             rows.append(row)

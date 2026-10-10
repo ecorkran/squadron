@@ -432,3 +432,40 @@ class TestPipelineTargetDir:
         target = pipeline_target_dir(PipelineScope.PROJECT)
 
         assert target.resolve() == (tmp_path / "project-documents/user/pipelines").resolve()
+
+
+class TestShadowing:
+    """discover_pipelines records which source a winning pipeline hides (slice 940 D1)."""
+
+    def test_user_copy_of_a_builtin_shadows_built_in(self, tmp_path: Path) -> None:
+        user = tmp_path / "user"
+        _write_pipeline_yaml(user, "p4")
+
+        by_name = {
+            p.name: p for p in discover_pipelines(project_dir=Path("/nonexistent"), user_dir=user)
+        }
+
+        assert by_name["p4"].source is PipelineSource.USER
+        assert by_name["p4"].shadows is PipelineSource.BUILT_IN
+        assert [p.name for p in by_name.values()].count("p4") == 1
+
+    def test_a_pipeline_that_hides_nothing_has_no_marker(self, tmp_path: Path) -> None:
+        user = tmp_path / "user"
+        _write_pipeline_yaml(user, "only-mine")
+
+        by_name = {
+            p.name: p for p in discover_pipelines(project_dir=Path("/nonexistent"), user_dir=user)
+        }
+
+        assert by_name["only-mine"].shadows is None
+        assert all(p.shadows is None for p in by_name.values() if p.name != "only-mine")
+
+    def test_project_over_user_names_user(self, tmp_path: Path) -> None:
+        user, proj = tmp_path / "user", tmp_path / "proj"
+        _write_pipeline_yaml(user, "dual")
+        _write_pipeline_yaml(proj, "dual")
+
+        by_name = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=user)}
+
+        assert by_name["dual"].source is PipelineSource.PROJECT
+        assert by_name["dual"].shadows is PipelineSource.USER
