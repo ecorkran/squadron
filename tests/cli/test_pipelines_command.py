@@ -5,8 +5,10 @@ from __future__ import annotations
 import io
 import logging
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
+from click.testing import Result
 from rich.console import Console
 from typer.testing import CliRunner
 
@@ -14,7 +16,13 @@ from squadron.cli.app import app
 from squadron.cli.run_views import render_pipeline_listing
 from squadron.data import data_dir
 from squadron.pipeline import loader
-from squadron.pipeline.loader import PipelineInfo, PipelineLocation, PipelineSource, resolve_pipeline
+from squadron.pipeline.loader import (
+    PipelineInfo,
+    PipelineLocation,
+    PipelineSource,
+    load_pipeline,
+    resolve_pipeline,
+)
 from tests.cli.test_run_views import write_pipeline
 
 
@@ -209,3 +217,142 @@ class TestResolvePipeline:
     def test_not_found_names_searched_directories(self, tmp_path: Path) -> None:
         with pytest.raises(FileNotFoundError, match="Searched:"):
             resolve_pipeline("nope", project_dir=tmp_path / "p", user_dir=tmp_path / "u")
+
+
+class TestPipelinesCopy:
+    @pytest.fixture
+    def homes(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+        """(user pipelines dir, project pipelines dir) under a temporary home and cwd."""
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        project = tmp_path / "proj"
+        project.mkdir()
+        monkeypatch.chdir(project)
+        return (
+            tmp_path / "home/.config/squadron/pipelines",
+            project / "project-documents/user/pipelines",
+        )
+
+    @staticmethod
+    def _copy(*args: str) -> Result:
+        return CliRunner().invoke(app, ["pipelines", "copy", *args])
+
+    def test_built_in_copy_is_byte_identical_with_shadow_notice(self, homes: tuple[Path, Path]) -> None:
+        user_dir, _ = homes
+        builtin = data_dir() / "pipelines" / "P4.yaml"
+
+        result = self._copy("p4")
+
+        target = user_dir / "p4.yaml"
+        assert result.exit_code == 0, result.output
+        assert result.stdout == f"{target}\n"
+        assert "shadows the built-in pipeline 'p4'" in result.stderr
+        assert target.read_bytes() == builtin.read_bytes()
+        assert "# source:" not in target.read_text()
+
+    def test_new_name_copy_has_no_shadow_notice(self, homes: tuple[Path, Path]) -> None:
+        user_dir, _ = homes
+
+        result = self._copy("p4", "my-p4")
+
+        assert result.exit_code == 0, result.output
+        assert (user_dir / "my-p4.yaml").is_file()
+        assert result.stderr == ""
+
+    def test_project_scope_writes_under_project_documents_and_builtin_still_resolves(
+        self, homes: tuple[Path, Path]
+    ) -> None:
+        _, project_dir = homes
+
+        result = self._copy("p4", "--project")
+
+        assert result.exit_code == 0, result.output
+        assert (project_dir / "p4.yaml").is_file()
+        assert resolve_pipeline("p4").source is PipelineSource.PROJECT
+        assert resolve_pipeline(
+            "p4", project_dir=Path("/nonexistent"), user_dir=Path("/nonexistent")
+        ).source is (PipelineSource.BUILT_IN)
+
+    def test_second_copy_needs_force_and_refusal_leaves_the_file_unchanged(
+        self, homes: tuple[Path, Path]
+    ) -> None:
+        # A named copy: once an unnamed copy shadows the original, the name resolves to the
+        # copy itself, so a repeat copy of that name is the own-file refusal (next test).
+        user_dir, _ = homes
+        self._copy("p4", "my-p4")
+        target = user_dir / "my-p4.yaml"
+        target.write_text("edited\n")
+
+        refused = self._copy("p4", "my-p4")
+        assert refused.exit_code == 1
+        assert str(target) in refused.stderr.replace("\n", "")
+        assert target.read_text() == "edited\n"
+
+        forced = self._copy("p4", "my-p4", "--force")
+        assert forced.exit_code == 0
+        assert target.read_bytes() == (data_dir() / "pipelines" / "P4.yaml").read_bytes()
+
+    def test_copying_onto_its_own_file_is_refused(self, homes: tuple[Path, Path]) -> None:
+        user_dir, _ = homes
+        write_pipeline(user_dir, "mine")
+
+        result = self._copy("mine")
+
+        assert result.exit_code == 1
+        assert "nothing to copy" in result.stderr
+
+    def test_unknown_name_surfaces_the_resolver_message(self, homes: tuple[Path, Path]) -> None:
+        with pytest.raises(FileNotFoundError) as expected:
+            resolve_pipeline("no-such-pipeline")
+
+        result = self._copy("no-such-pipeline")
+
+        assert result.exit_code == 1
+        assert str(expected.value).split("\n")[0] in result.stderr
+
+    def test_new_name_with_a_path_separator_is_refused(self, homes: tuple[Path, Path]) -> None:
+        result = self._copy("p4", "../escape")
+
+        assert result.exit_code == 1
+        assert not (homes[0].parent / "escape.yaml").exists()
+
+    @pytest.mark.parametrize(
+        "error", [PermissionError(13, "Permission denied"), FileNotFoundError(2, "gone")]
+    )
+    def test_unreadable_or_vanished_source_logs_and_exits_1(
+        self, homes: tuple[Path, Path], caplog: pytest.LogCaptureFixture, error: OSError
+    ) -> None:
+        builtin = data_dir() / "pipelines" / "P4.yaml"
+        with (
+            patch.object(Path, "read_bytes", side_effect=error),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = self._copy("p4")
+
+        assert result.exit_code == 1
+        assert any(str(builtin) in record.getMessage() for record in caplog.records)
+        assert not (homes[0] / "p4.yaml").exists()
+
+    def test_write_error_logs_and_exits_1_without_a_partial_file(
+        self, homes: tuple[Path, Path], caplog: pytest.LogCaptureFixture
+    ) -> None:
+        user_dir, _ = homes
+        with (
+            patch(
+                "squadron.cli.commands.pipelines.write_new_file", side_effect=OSError(28, "No space")
+            ),
+            caplog.at_level(logging.ERROR),
+        ):
+            result = self._copy("p4")
+
+        assert result.exit_code == 1
+        assert any(str(user_dir / "p4.yaml") in record.getMessage() for record in caplog.records)
+        assert not (user_dir / "p4.yaml").exists()
+
+    def test_run_loads_the_copy_after_a_same_name_copy(self, homes: tuple[Path, Path]) -> None:
+        user_dir, _ = homes
+        self._copy("p4")
+        (user_dir / "p4.yaml").write_text(
+            (user_dir / "p4.yaml").read_text().replace("description:", "description: COPY ", 1)
+        )
+
+        assert "COPY" in load_pipeline("p4").description
