@@ -354,6 +354,9 @@ class ReviewResult:
             "finding_scan": asdict(self.finding_scan) if self.finding_scan else None,
             # Slice 931 D10: always present, null when not reported or not sent.
             "effort": self.effort.value if self.effort else None,
+            # Slice 940 D6: always present, null on a hand-built result. Mirrors
+            # frontmatter's aiProfile.
+            "profile": self.profile,
             **RunCost(self.turns, self.usage, self.duration_seconds).json_fields(),
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so

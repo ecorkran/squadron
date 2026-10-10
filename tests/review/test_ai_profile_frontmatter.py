@@ -131,3 +131,11 @@ async def test_pipeline_review_artifact_carries_the_resolved_profile(tmp_path: P
     front = read_frontmatter(artifact)
     assert front is not None
     assert front[_KEY] == "template-profile"
+
+
+@pytest.mark.parametrize("profile", [_PROFILE, None])
+def test_json_carries_the_same_profile_as_frontmatter(profile: str | None) -> None:
+    result = _result(profile)
+
+    assert result.to_dict()["profile"] == profile
+    assert _frontmatter(format_review_markdown(result, "code", _SLICE_INFO)).get(_KEY) == profile
