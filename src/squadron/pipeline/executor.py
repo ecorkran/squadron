@@ -139,7 +139,7 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
         given = result.metadata.get("tools_given")
         if isinstance(given, list):
             made = result.metadata.get("tool_calls_made", 0)
-            extras.append(f"tools={len(given)}/{made} calls")  # pyright: ignore[reportUnknownArgumentType]
+            extras.append(f"tools={len(given)}, calls={made}")  # pyright: ignore[reportUnknownArgumentType]
         suffix = f" ({', '.join(extras)})" if extras else ""
         _logger.info("    -> ok%s", suffix)
     else:

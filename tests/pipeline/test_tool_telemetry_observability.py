@@ -42,7 +42,7 @@ def _result(**metadata: object) -> ActionResult:
 def test_log_line_shows_tools_given_and_calls_made(caplog: pytest.LogCaptureFixture) -> None:
     line = _capture_log(_result(tools_given=["read_file", "grep"], tool_calls_made=3), caplog)
 
-    assert "tools=2/3 calls" in line
+    assert "tools=2, calls=3" in line
 
 
 def test_log_line_shows_zero_calls_distinctly_from_no_tools(
@@ -55,7 +55,7 @@ def test_log_line_shows_zero_calls_distinctly_from_no_tools(
     caplog.clear()
     never = _capture_log(_result(), caplog)
 
-    assert "tools=3/0 calls" in offered
+    assert "tools=3, calls=0" in offered
     assert "tools=" not in never
     assert offered != never
 
@@ -75,7 +75,7 @@ def test_log_line_defaults_missing_call_count_to_zero(
 ) -> None:
     line = _capture_log(_result(tools_given=["read_file"]), caplog)
 
-    assert "tools=1/0 calls" in line
+    assert "tools=1, calls=0" in line
 
 
 # ---------------------------------------------------------------------------
