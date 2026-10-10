@@ -211,6 +211,14 @@ class RunState(BaseModel):
     # named runs and for states written before slice 940 (D4).
     pipeline_path: str | None = None
 
+    @property
+    def load_target(self) -> str:
+        """What ``load_pipeline`` is given to reload this run's pipeline (D4).
+
+        The recorded source path when there is one (never lowercased), else the name.
+        """
+        return self.pipeline_path or self.pipeline
+
     def active_compact_summary_for_resume(self, resume_step_index: int) -> CompactSummary | None:
         """Return the most recent applicable compact summary for resume.
 

@@ -132,7 +132,7 @@ class DefinitionCache:
         A failure is logged once per pipeline at DEBUG; the CLI reports it in one
         summary line rather than per run (174 D10).
         """
-        name = state.pipeline
+        name = state.load_target
         if name not in self._definitions and name not in self._failures:
             try:
                 self._definitions[name] = self._load(name)

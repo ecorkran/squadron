@@ -9,9 +9,11 @@ import sys
 from collections.abc import Coroutine
 from contextlib import AbstractAsyncContextManager, ExitStack, nullcontext
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TextIO
 
 import typer
+import yaml
+from pydantic import ValidationError
 from rich import print as rprint
 from rich.markup import escape
 from rich.table import Table
@@ -176,6 +178,25 @@ def _run_record_identity(pipeline_arg: str) -> tuple[str, str | None]:
     if source_file is None:
         return pipeline_arg, None
     return pipeline_identity(source_file), str(source_file.resolve())
+
+
+def _load_run_definition(state: RunState, *, file: TextIO) -> PipelineDefinition:
+    """Reload the pipeline a recorded run belongs to, or exit 1 naming what failed.
+
+    A path run reloads its recorded file; a missing file is an error, never a
+    fallback to a same-named pipeline (slice 940 D4).
+    """
+    target = state.load_target
+    try:
+        return load_pipeline(target)
+    except FileNotFoundError:
+        rprint(f"[red]Error: Pipeline '{escape(target)}' not found.[/red]", file=file)
+    except (ValidationError, yaml.YAMLError) as exc:
+        rprint(
+            f"[red]Error: Pipeline '{escape(target)}' failed to load: {escape(str(exc))}[/red]",
+            file=file,
+        )
+    raise typer.Exit(1)
 
 
 def _check_cf(cf_client: ContextForgeClient) -> None:
@@ -734,14 +755,7 @@ def _handle_prompt_only_next(
         rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
-    try:
-        definition = load_pipeline(state.pipeline)
-    except FileNotFoundError:
-        rprint(
-            f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]",
-            file=sys.stderr,
-        )
-        raise typer.Exit(1) from None
+    definition = _load_run_definition(state, file=sys.stderr)
 
     next_name = state_mgr.first_unfinished_step(run_id, definition)
     if next_name is None:
@@ -881,14 +895,7 @@ def _handle_step_done(
         rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
-    try:
-        definition = load_pipeline(state.pipeline)
-    except FileNotFoundError:
-        rprint(
-            f"[red]Error: Pipeline '{state.pipeline}' not found.[/red]",
-            file=sys.stderr,
-        )
-        raise typer.Exit(1) from None
+    definition = _load_run_definition(state, file=sys.stderr)
 
     next_name = state_mgr.first_unfinished_step(run_id, definition)
     if next_name is None:
@@ -1204,11 +1211,7 @@ def run(
             rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(1) from None
 
-        try:
-            definition = load_pipeline(state.pipeline)
-        except FileNotFoundError:
-            rprint(f"[red]Error: Pipeline '{escape(str(state.pipeline))}' not found.[/red]")
-            raise typer.Exit(1) from None
+        definition = _load_run_definition(state, file=sys.stdout)
 
         resume_from = state_mgr.first_unfinished_step(resume, definition)
         if resume_from is None:

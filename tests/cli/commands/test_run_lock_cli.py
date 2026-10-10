@@ -139,6 +139,7 @@ def test_a_plain_resume_of_a_paused_run_with_the_lock_held_exits_2(
 ) -> None:
     state = MagicMock()
     state.pipeline = "P6"
+    state.load_target = "P6"
     state.params = {"slice": "105", "model": "haiku"}
     state.execution_mode = ExecutionMode.SDK
     state_mgr = MagicMock()
