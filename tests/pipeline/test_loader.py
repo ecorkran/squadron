@@ -10,10 +10,13 @@ import yaml
 from squadron.data import data_dir
 from squadron.pipeline.loader import (
     LISTING_ORDER,
+    PipelineScope,
     PipelineSource,
     discover_pipelines,
     load_pipeline,
     pipeline_identity,
+    pipeline_target_dir,
+    resolve_pipeline,
 )
 from squadron.pipeline.models import PipelineDefinition
 
@@ -396,3 +399,36 @@ class TestPipelineInfoParams:
         info = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=tmp_path / "u")}
 
         assert info["bare"].params == {}
+
+
+class TestPipelineTargetDir:
+    """The copy target of each scope is the directory the search reads for that source."""
+
+    @pytest.mark.parametrize(
+        ("scope", "source"),
+        [(PipelineScope.USER, PipelineSource.USER), (PipelineScope.PROJECT, PipelineSource.PROJECT)],
+    )
+    def test_a_file_written_to_the_target_is_found_under_that_source(
+        self,
+        scope: PipelineScope,
+        source: PipelineSource,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setenv("HOME", str(tmp_path / "home"))
+        monkeypatch.chdir(tmp_path)
+        _write_pipeline_yaml(pipeline_target_dir(scope), "copied-pipe")
+
+        location = resolve_pipeline("copied-pipe")
+
+        assert location.source is source
+        assert location.path.parent == pipeline_target_dir(scope)
+
+    def test_project_target_is_the_project_documents_pipelines_directory(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+
+        target = pipeline_target_dir(PipelineScope.PROJECT)
+
+        assert target.resolve() == (tmp_path / "project-documents/user/pipelines").resolve()

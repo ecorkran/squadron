@@ -32,12 +32,43 @@ def _user_dir() -> Path:
     return Path.home() / ".config" / "squadron" / "pipelines"
 
 
+def _project_dir() -> Path:
+    return Path.cwd() / _PROJECT_PIPELINES_REL
+
+
 class PipelineSource(StrEnum):
     """Where a discovered pipeline was loaded from (slice 199 D1)."""
 
     BUILT_IN = "built-in"
     PROJECT = "project"
     USER = "user"
+
+
+class PipelineScope(StrEnum):
+    """Where a copied pipeline is written: the places a user can own pipelines (slice 940 D1)."""
+
+    USER = "user"
+    PROJECT = "project"
+
+
+_SCOPE_SOURCE = {
+    PipelineScope.USER: PipelineSource.USER,
+    PipelineScope.PROJECT: PipelineSource.PROJECT,
+}
+
+
+def pipeline_target_dir(
+    scope: PipelineScope,
+    *,
+    project_dir: Path | None = None,
+    user_dir: Path | None = None,
+) -> Path:
+    """The directory ``_search_dirs`` searches for *scope*, where a copy must land to be found."""
+    wanted = _SCOPE_SOURCE[scope]
+    for directory, source in _search_dirs(project_dir=project_dir, user_dir=user_dir):
+        if source is wanted:
+            return directory
+    raise ValueError(f"no pipeline directory for scope {scope!r}")
 
 
 # Display order for listings. Separate from the scan order in discover_pipelines
@@ -164,7 +195,7 @@ def _search_dirs(
     user_dir: Path | None = None,
 ) -> list[tuple[Path, PipelineSource]]:
     """Return pipeline directories in search order (highest priority first)."""
-    proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
+    proj = project_dir if project_dir is not None else _project_dir()
     user = user_dir if user_dir is not None else _user_dir()
     return [
         (proj, PipelineSource.PROJECT),
@@ -191,7 +222,7 @@ def discover_pipelines(
     user = user_dir if user_dir is not None else _user_dir()
     source_dirs.append((user, PipelineSource.USER))
 
-    proj = project_dir if project_dir is not None else (Path.cwd() / _PROJECT_PIPELINES_REL)
+    proj = project_dir if project_dir is not None else _project_dir()
     source_dirs.append((proj, PipelineSource.PROJECT))
 
     found: dict[str, PipelineInfo] = {}
