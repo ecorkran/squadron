@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import re
 from enum import StrEnum
 from pathlib import Path
@@ -157,43 +156,80 @@ def load_rules_frontmatter(rules_dir: Path) -> dict[str, list[str]]:
     return result
 
 
-def detect_languages_from_paths(file_paths: list[str]) -> set[str]:
-    """Extract extensions from file paths.
+# First line of an extensionless script that makes it a shell script.
+_SHELL_SHEBANG_RE = re.compile(r"^#!\s*(?:/usr/bin/env\s+(?:-\S+\s+)*)?(?:\S*/)?(?:ba)?sh\b")
+# Extension a shebang-detected shell script is matched as, so it meets the same
+# frontmatter globs as a file literally named ``*.sh``.
+_SHELL_SCRIPT_SUFFIX = ".sh"
 
-    Returns a set of extension strings (e.g. {'.py', '.ts'}).
+
+def _glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """Compile a rules-frontmatter glob to a full-path regex.
+
+    ``**/`` spans any directories (including none), ``*`` and ``?`` stay inside
+    one path segment. Matching is case-insensitive, as extension matching was.
     """
-    extensions: set[str] = set()
-    for path in file_paths:
-        suffix = Path(path).suffix
-        if suffix:
-            extensions.add(suffix.lower())
-    return extensions
+    out: list[str] = []
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out.append("(?:.*/)?")
+            i += 3
+        elif pattern.startswith("**", i):
+            out.append(".*")
+            i += 2
+        elif pattern[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif pattern[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(pattern[i]))
+            i += 1
+    return re.compile("".join(out) + r"\Z", re.IGNORECASE)
+
+
+def _is_shell_script(path: Path) -> bool:
+    """True when ``path`` has no extension and starts with a bash or sh shebang."""
+    if path.suffix:
+        return False
+    try:
+        with path.open("r", errors="replace") as handle:
+            first_line = handle.readline()
+    except OSError:
+        # Deleted in the diff or unreadable: nothing to sniff, so it is not a script.
+        return False
+    return _SHELL_SHEBANG_RE.match(first_line) is not None
+
+
+def _paths_to_match(file_paths: list[str], cwd: str | None) -> list[str]:
+    """``file_paths`` plus, for each shebang shell script, its ``.sh`` stand-in."""
+    root = Path(cwd) if cwd else Path(".")
+    paths = [p.replace("\\", "/") for p in file_paths]
+    paths += [f"{p}{_SHELL_SCRIPT_SUFFIX}" for p in paths if _is_shell_script(root / p)]
+    return paths
 
 
 def match_rules_files(
-    extensions: set[str],
+    file_paths: list[str],
     rules_dir: Path,
     frontmatter: dict[str, list[str]],
+    cwd: str | None = None,
 ) -> list[Path]:
-    """Match extensions against glob patterns; return sorted list of matching paths."""
-    matched: list[Path] = []
+    """Return the rules files whose ``paths`` globs match any of ``file_paths``.
+
+    Globs match the whole path, so ``**/.gitlab-ci.yml`` does not pick up
+    other ``.yml`` files. Extensionless files with a bash/sh shebang (read
+    relative to ``cwd``) match as if named ``*.sh``.
+    """
+    candidates = _paths_to_match(file_paths, cwd)
+    matched: set[Path] = set()
     for filename, patterns in frontmatter.items():
-        for pattern in patterns:
-            # Convert glob pattern extension to an extension string for matching
-            pat_suffix = Path(pattern).suffix
-            if pat_suffix and pat_suffix.lower() in extensions:
-                matched.append(rules_dir / filename)
-                break
-            # Also try fnmatch on a synthetic path using each extension
-            for ext in extensions:
-                dummy = f"src/foo{ext}"
-                if fnmatch.fnmatch(dummy, pattern):
-                    matched.append(rules_dir / filename)
-                    break
-            else:
-                continue
-            break
-    return sorted(set(matched))
+        regexes = [_glob_to_regex(pattern) for pattern in patterns]
+        if any(rx.match(path) for rx in regexes for path in candidates):
+            matched.add(rules_dir / filename)
+    return sorted(matched)
 
 
 def load_rules_content(rules_files: list[Path]) -> str:
@@ -252,6 +288,7 @@ def load_review_rules(
     rules_dir: Path | None,
     file_paths: list[str] | None = None,
     manual_rules_content: str | None = None,
+    cwd: str | None = None,
 ) -> str | None:
     """Assemble review rules from all sources, in CLI-equivalent order.
 
@@ -277,16 +314,12 @@ def load_review_rules(
 
     # Language auto-detection from changed/target files
     if rules_dir is not None and file_paths:
-        extensions = detect_languages_from_paths(file_paths)
-        if extensions:
-            frontmatter = load_rules_frontmatter(rules_dir)
-            auto_files = match_rules_files(extensions, rules_dir, frontmatter)
-            auto_content = load_rules_content(auto_files)
-            if auto_content:
-                rules_content = (
-                    auto_content
-                    if rules_content is None
-                    else f"{rules_content}\n\n---\n\n{auto_content}"
-                )
+        frontmatter = load_rules_frontmatter(rules_dir)
+        auto_files = match_rules_files(file_paths, rules_dir, frontmatter, cwd)
+        auto_content = load_rules_content(auto_files)
+        if auto_content:
+            rules_content = (
+                auto_content if rules_content is None else f"{rules_content}\n\n---\n\n{auto_content}"
+            )
 
     return rules_content

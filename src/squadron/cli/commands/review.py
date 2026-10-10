@@ -1218,6 +1218,7 @@ def review_code(
             resolved_rules_dir,
             file_paths=file_paths,
             manual_rules_content=manual_content,
+            cwd=review_cwd,
         )
 
     inputs: dict[str, str] = {"cwd": review_cwd}

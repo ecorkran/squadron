@@ -118,6 +118,7 @@ def _resolve_pr_rules_content(
         checkout_rules_dir,
         file_paths=file_paths,
         manual_rules_content=manual_content,
+        cwd=checkout_cwd,
     )
     return content, rules_source
 

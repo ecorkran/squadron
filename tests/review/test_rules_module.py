@@ -5,9 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from squadron.review.rules import (
     RulesSource,
-    detect_languages_from_paths,
     get_template_rules,
     load_rules_content,
     load_rules_frontmatter,
@@ -142,37 +143,6 @@ class TestResolveRulesDir:
 
 
 # ---------------------------------------------------------------------------
-# detect_languages_from_paths
-# ---------------------------------------------------------------------------
-
-
-class TestDetectLanguages:
-    """Test extension extraction from diff paths."""
-
-    def test_extracts_py_and_ts(self) -> None:
-        paths = [
-            "+++ b/src/main.py",
-            "+++ b/frontend/app.ts",
-            "+++ b/package.json",
-        ]
-        exts = detect_languages_from_paths(paths)
-        assert ".py" in exts
-        assert ".ts" in exts
-        assert ".json" in exts
-
-    def test_empty_list(self) -> None:
-        assert detect_languages_from_paths([]) == set()
-
-    def test_paths_without_extensions(self) -> None:
-        exts = detect_languages_from_paths(["Makefile", "LICENSE"])
-        assert exts == set()
-
-    def test_lowercase_normalization(self) -> None:
-        exts = detect_languages_from_paths(["src/foo.PY"])
-        assert ".py" in exts
-
-
-# ---------------------------------------------------------------------------
 # load_rules_frontmatter
 # ---------------------------------------------------------------------------
 
@@ -213,46 +183,120 @@ class TestLoadRulesFrontmatter:
 # ---------------------------------------------------------------------------
 
 
+#: The guide's real rules directory: the frontmatter these tests parse is what
+#: production reads, not a hand-made fixture.
+_GUIDE_RULES_DIR = (
+    Path(__file__).resolve().parents[2]
+    / "project-documents"
+    / "ai-project-guide"
+    / "project-guides"
+    / "rules"
+)
+
+
 class TestMatchRulesFiles:
-    """Test extension-to-rules-file matching."""
+    """Test path-to-rules-file matching."""
 
     def test_match_by_extension(self, tmp_path: Path) -> None:
-        """'.py' extension matches python.md with frontmatter paths [**/*.py]."""
         py_file = tmp_path / "python.md"
         py_file.write_text("Python rules.")
         frontmatter = {"python.md": ["**/*.py"]}
 
-        matched = match_rules_files({".py"}, tmp_path, frontmatter)
-        assert py_file in matched
+        assert py_file in match_rules_files(["src/app/main.py"], tmp_path, frontmatter)
+
+    def test_top_level_file_matches_double_star_prefix(self, tmp_path: Path) -> None:
+        frontmatter = {"python.md": ["**/*.py"]}
+        assert match_rules_files(["main.py"], tmp_path, frontmatter) == [tmp_path / "python.md"]
 
     def test_no_match_for_unrelated_extension(self, tmp_path: Path) -> None:
-        """'.rs' does not match python.md."""
-        (tmp_path / "python.md").write_text("Python rules.")
         frontmatter = {"python.md": ["**/*.py"]}
+        assert match_rules_files(["src/lib.rs"], tmp_path, frontmatter) == []
 
-        matched = match_rules_files({".rs"}, tmp_path, frontmatter)
-        assert matched == []
-
-    def test_filename_fallback_match(self, tmp_path: Path) -> None:
-        """python.md with no frontmatter paths falls back — should match .py."""
-        py_file = tmp_path / "python.md"
-        py_file.write_text("Python rules.")
-        # simulate filename-derived patterns
-        frontmatter = {"python.md": ["**/*.py", "**/*.pyi"]}
-
-        matched = match_rules_files({".py"}, tmp_path, frontmatter)
-        assert py_file in matched
+    def test_empty_paths_match_nothing(self, tmp_path: Path) -> None:
+        assert match_rules_files([], tmp_path, {"python.md": ["**/*.py"]}) == []
 
     def test_result_is_sorted(self, tmp_path: Path) -> None:
-        """Returned list is sorted."""
-        for name in ("z_rules.md", "a_rules.md"):
-            (tmp_path / name).write_text("rules")
-        frontmatter = {
-            "z_rules.md": ["**/*.py"],
-            "a_rules.md": ["**/*.py"],
-        }
-        matched = match_rules_files({".py"}, tmp_path, frontmatter)
+        frontmatter = {"z_rules.md": ["**/*.py"], "a_rules.md": ["**/*.py"]}
+        matched = match_rules_files(["a.py"], tmp_path, frontmatter)
         assert matched == sorted(matched)
+
+
+class TestShellRulesMatching:
+    """shell.md's real frontmatter against real-shaped paths (guide v0.20.x)."""
+
+    @pytest.fixture
+    def frontmatter(self) -> dict[str, list[str]]:
+        return load_rules_frontmatter(_GUIDE_RULES_DIR)
+
+    def _matches_shell(
+        self, paths: list[str], frontmatter: dict[str, list[str]], cwd: str | None = None
+    ) -> bool:
+        matched = match_rules_files(paths, _GUIDE_RULES_DIR, frontmatter, cwd)
+        return _GUIDE_RULES_DIR / "shell.md" in matched
+
+    def test_real_frontmatter_lists_the_documented_globs(
+        self, frontmatter: dict[str, list[str]]
+    ) -> None:
+        assert frontmatter["shell.md"] == [
+            "**/*.sh",
+            "**/*.bash",
+            "**/.github/workflows/*.yml",
+            "**/.github/workflows/*.yaml",
+            "**/.gitlab-ci.yml",
+        ]
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "deploy.sh",
+            "scripts/build.sh",
+            "tools/x/run.bash",
+            ".github/workflows/ci.yml",
+            "sub/.github/workflows/release.yaml",
+            ".gitlab-ci.yml",
+            "svc/.gitlab-ci.yml",
+        ],
+    )
+    def test_shell_and_ci_paths_match(self, path: str, frontmatter: dict[str, list[str]]) -> None:
+        assert self._matches_shell([path], frontmatter)
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "config.yml",
+            "docs/openapi.yaml",
+            "src/squadron/data/pipelines/P6.yaml",
+            ".github/dependabot.yml",
+            ".github/workflows/notes.txt",
+            "src/app.py",
+            "other.gitlab-ci.yml.bak",
+        ],
+    )
+    def test_other_files_do_not_match(self, path: str, frontmatter: dict[str, list[str]]) -> None:
+        assert not self._matches_shell([path], frontmatter)
+
+    @pytest.mark.parametrize(
+        "first_line",
+        ["#!/bin/bash", "#!/bin/sh", "#!/usr/bin/env bash", "#!/usr/bin/env -S bash -e", "#! /bin/sh"],
+    )
+    def test_extensionless_shell_script_matches(
+        self, first_line: str, tmp_path: Path, frontmatter: dict[str, list[str]]
+    ) -> None:
+        (tmp_path / "bin").mkdir()
+        (tmp_path / "bin" / "deploy").write_text(f"{first_line}\nset -e\n")
+        assert self._matches_shell(["bin/deploy"], frontmatter, str(tmp_path))
+
+    @pytest.mark.parametrize("first_line", ["#!/usr/bin/env python3", "#!/bin/zsh", "no shebang"])
+    def test_extensionless_non_shell_script_does_not_match(
+        self, first_line: str, tmp_path: Path, frontmatter: dict[str, list[str]]
+    ) -> None:
+        (tmp_path / "tool").write_text(f"{first_line}\n")
+        assert not self._matches_shell(["tool"], frontmatter, str(tmp_path))
+
+    def test_deleted_extensionless_path_does_not_raise(
+        self, tmp_path: Path, frontmatter: dict[str, list[str]]
+    ) -> None:
+        assert not self._matches_shell(["gone"], frontmatter, str(tmp_path))
 
 
 # ---------------------------------------------------------------------------

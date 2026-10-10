@@ -391,6 +391,7 @@ class ReviewAction:
             rules_dir,
             file_paths=file_paths,
             manual_rules_content=manual_rules,
+            cwd=cwd,
         )
         return rules_content, rules_source
 
