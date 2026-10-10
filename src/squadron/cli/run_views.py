@@ -97,6 +97,11 @@ def params_cell(params: dict[str, str]) -> str:
     return f"{shown} +{hidden}" if hidden > 0 else shown
 
 
+_NAME_STYLE = "bold"
+_DESCRIPTION_STYLE = "dim"
+_SHADOW_STYLE = "yellow"
+
+
 def render_pipeline_listing(
     pipelines: list[PipelineInfo], *, verbose: bool = False, console: Console | None = None
 ) -> None:
@@ -125,10 +130,11 @@ def render_pipeline_listing(
     rows: list[list[Text]] = []
     for _, group in groups:
         for info in group:
-            row = [Text(info.name)]
+            row = [Text(info.name, style=_NAME_STYLE)]
             if has_shadow:
-                row.append(Text(f"shadows {info.shadows}" if info.shadows is not None else ""))
-            row.append(Text(info.description))
+                marker = f"shadows {info.shadows}" if info.shadows is not None else ""
+                row.append(Text(marker, style=_SHADOW_STYLE))
+            row.append(Text(info.description, style=_DESCRIPTION_STYLE))
             if verbose:
                 row.append(Text(params_cell(info.params)))
             rows.append(row)

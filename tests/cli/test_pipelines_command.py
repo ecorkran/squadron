@@ -387,3 +387,33 @@ class TestPipelinesCopy:
         )
 
         assert "COPY" in load_pipeline("p4").description
+
+
+class TestListingColors:
+    _BOLD, _DIM, _YELLOW = "\x1b[1m", "\x1b[2m", "\x1b[33m"
+
+    @staticmethod
+    def _styled(pipelines: list[PipelineInfo]) -> str:
+        buffer = io.StringIO()
+        render_pipeline_listing(
+            pipelines,
+            console=Console(file=buffer, width=200, force_terminal=True, color_system="standard"),
+        )
+        return buffer.getvalue()
+
+    def test_shadowing_row_has_bold_name_dim_description_and_yellow_marker(self) -> None:
+        row = PipelineInfo(
+            "p4", "the [p4] flow", PipelineSource.USER, Path("/u/p4.yaml"), {}, PipelineSource.BUILT_IN
+        )
+
+        line = next(ln for ln in self._styled([row]).splitlines() if "shadows" in ln)
+
+        assert f"{self._BOLD}p4" in line
+        assert f"{self._YELLOW}shadows built-in" in line
+        assert f"{self._DIM}the [p4] flow" in line  # brackets in a description stay literal
+
+    def test_plain_console_output_carries_no_escape_codes(self) -> None:
+        lines = _render([_info("alpha", PipelineSource.BUILT_IN)])
+
+        assert "alpha description" in lines[-1]
+        assert not any("\x1b" in line for line in lines)
