@@ -9,7 +9,7 @@ projectState: >
   everyday CLI commands, each committed on its own.
 dateCreated: 20261009
 dateUpdated: 20261009
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -34,9 +34,9 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Run `cf config get git.integration_branch`; call its value the target (`main` if empty). Confirm `git status` is clean and the current branch is the target
-- [ ] `git checkout -b 940-slice.everyday-cli-fixes {target}`
-  - [ ] Success: `git branch --show-current` prints `940-slice.everyday-cli-fixes`
+- [x] Run `cf config get git.integration_branch`; call its value the target (`main` if empty). Confirm `git status` is clean and the current branch is the target
+- [x] `git checkout -b 940-slice.everyday-cli-fixes {target}`
+  - [x] Success: `git branch --show-current` prints `940-slice.everyday-cli-fixes`
 
 ---
 
