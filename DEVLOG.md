@@ -2,12 +2,20 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261009'
+dateUpdated: '20261010'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261010
+
+### Slice 933: slice design complete (Phase 4)
+
+- Design: `user/slices/933-slice.deterministic-task-file-gate.md`. A pure scanner (`review/task_gate.py`) flags merge checklist items and headings in task files; both tasks-review paths (CLI and pipeline `review:` action) call it before any model call. Real-line fixtures from trading-data 184/185/908/909.
+- Decision with the PM: pipelines that review, revise to threshold, then merge stay as they are; only merge items in task files are forbidden. ai-project-guide is rewording process.md:159 accordingly.
+- Separate from 933: shell.md rule matching (`match_rules_files` is suffix-only) still needs its own slice.
 
 ## 20261009
 
