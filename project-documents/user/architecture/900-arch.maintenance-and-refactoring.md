@@ -5,7 +5,7 @@ project: squadron
 archIndex: 900
 component: maintenance-and-refactoring
 dateCreated: 20260325
-dateUpdated: 20260325
+dateUpdated: 20261009
 status: in_progress
 ---
 
@@ -30,12 +30,12 @@ Work that belongs here:
 
 Work that does **not** belong here:
 
-- New features or capabilities (use the appropriate feature initiative)
+- New feature areas (use the appropriate feature initiative). Small conveniences over existing commands, files and config, such as a subcommand that copies or initializes a file, do belong here.
 - Work scoped entirely within an active feature slice (handle in that slice)
 
 ## Guidelines
 
-- Slices in this initiative should be small and focused — prefer many small slices over few large ones
-- Each slice should be independently deliverable
+- Size slices by process cost, not item count. Group small, unrelated fixes into one slice when each is too small to justify its own design and review cycle (#194).
+- A grouped slice is valid when each item commits separately and can be reverted without touching the others.
 - No strict ordering required — slices can be picked up based on priority
 - Use standard slice design and task breakdown process, but lighter-weight given the maintenance nature
