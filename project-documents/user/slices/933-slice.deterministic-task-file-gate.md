@@ -13,7 +13,7 @@ status: not_started
 # Slice Design: Deterministic Task-File Gate
 
 ## Overview
-A tasks review first scans every task file for merge steps. A file with one gets verdict FAIL and the offending line numbers, and no model is called. The guide forbids merge items in task files (`guide.ai-project.005-task-breakdown`, line 150; `rules/git.md`, "Merging (Phase 7 only…)"), but prose has not stopped them: trading-data 184, 185, 908 and 909 all shipped one, checked off.
+A tasks review first scans every task file for merge steps. A file with one gets verdict FAIL and the offending line numbers, and no model is called. The guide forbids merge items in task files (`guide.ai-project.005-task-breakdown`, line 150; `rules/git.md`, "Merging (Phase 7 only…)"), but prose has not stopped them: trading-data 184, 185, 908 and 909 and trading-ui 124 and 125 all shipped one, checked off.
 
 ## Value
 A prose rule a model can ignore is not a gate. The scan is plain code that runs before any model call, so an agent can no longer reach "merge into the target" through a task item before code review. It also costs nothing: a bad file never pays for a model review.
@@ -42,7 +42,7 @@ Out of scope:
 ### Component Structure
 - `squadron/review/task_gate.py` (new): `scan_merge_steps(text) -> list[MergeStepLine]` and `merge_gate_results(scans: Mapping[Path, list[MergeStepLine]]) -> dict[Path, ReviewResult]` (empty when every part is clean). Pure functions, no I/O.
 - CLI: `review_tasks` reads every part and calls the gate once before its per-part loop.
-- File reads are small synchronous reads done inline, next to the existing `missing_input_files` check; in the pipeline they sit beside that same synchronous validation.
+- File reads are small synchronous reads done inline, next to the existing `missing_input_files` check; in the pipeline they sit beside that same synchronous validation. This is deliberate, not an oversight of the async rule: task files are small and local, so the reads finish well inside the sync budget, as the existing `missing_input_files` stat check already does; no `asyncio.to_thread`.
 - Pipeline: `ReviewAction._review` calls the same gate after parts are resolved and validated, before the first model call, when `template_name` is `tasks`.
 
 ### Data Flow
@@ -57,13 +57,13 @@ None. The scanner is stateless and the FAIL result persists through the existing
 ### What counts as a merge step
 A line is flagged when it is a checklist item (`- [ ]` or `- [x]` at any indent) or a heading, and its text names merging a branch. Prose, frontmatter and notes are never flagged.
 
-Patterns live in one table in `task_gate.py`, each with a name. A line is flagged if any pattern matches its text, case-insensitive:
-- starts with `merge` (as the item's first word, ignoring bold markers and a `T14 —` style label) **and** is immediately followed by `to`/`into` (`Merge to main`; `Merge defaults … into profile` does not match), or by a git object below, or is the whole item (`Merge`);
+Patterns live in one table in `task_gate.py`, each with a name. A line is flagged if any pattern matches its text, case-insensitive. `merge` always means the whole word (`merge`, `merges`, `merged`) bounded by whitespace, punctuation or line edges, where a hyphen or underscore is *not* a boundary: `merge-base`, `--no-merges`, `merge_gate` and `mergeFixResults` never contain the word, so their neighbours (`main` in `git merge-base main HEAD`) are never checked against the git-object rule.
+- starts with `merge` (as the item's first word, ignoring bold markers and a `T14 —` style label) **and** is immediately followed by `to`/`into` (`Merge to main`; `Merge defaults … into profile` does not match), or by a git object below, or by a colon (`Merge: re-read …`), or is the whole item (`Merge`);
 - `merge` joined to a commit/release verb: `commit and merge`, `then merge`, `merge and release`, `merge, tag`;
-- `merge` followed within a few words by a git object: `branch`, `main`, `target`, `slice branch`, `integration branch` (bare `slice` is not one, so `Merge slice config overrides` passes);
+- `merge` followed within `MERGE_OBJECT_WINDOW` words (a named constant in the pattern table, set to 4) by a git object: `branch`, `main`, `target`, `slice branch`, `integration branch` (bare `slice` is not one, so `Merge slice config overrides` passes);
 - `branch merged` / `slice merged` as a success criterion.
 
-Not flagged (these are the negative fixtures, written as checklist items since that is the format the scanner reads): `- [ ] Merge defaults from config into profile`, `- [ ] Merge slice config overrides`, `- [ ] Fix merge blocker`, `- [ ] Zero errors is the merge gate`, `- [ ] Call mergeFixResults`, `- [ ] Merges built-in and user profiles`, `- [ ] Compute merge-base`, `- [ ] Run git log --no-merges`. Also not flagged: any `merged`/`merge` in frontmatter or plain prose such as "Slice 183 complete and merged to main".
+Not flagged (these are the negative fixtures, written as checklist items since that is the format the scanner reads): `- [ ] Merge defaults from config into profile`, `- [ ] Merge slice config overrides`, `- [ ] Fix merge blocker`, `- [ ] Zero errors is the merge gate`, `- [ ] Call mergeFixResults`, `- [ ] Merges built-in and user profiles`, `- [ ] Compute merge-base`, `- [ ] Run git log --no-merges`, `- [ ] Run git merge-base main HEAD`. Also not flagged: any `merged`/`merge` in frontmatter or plain prose such as "Slice 183 complete and merged to main".
 
 ### Failure mode
 If a task file cannot be read or decoded (`OSError`, `UnicodeDecodeError`), the gate raises with the file path; the review does not skip the scan. A missing file already fails earlier in `missing_input_files`, so this path is an I/O or encoding error only.
@@ -91,13 +91,13 @@ If a task file cannot be read or decoded (`OSError`, `UnicodeDecodeError`), the 
 - Same behavior from `sq review tasks <n>`, `sq review tasks <file> --against …`, the slash command, and a pipeline tasks review.
 
 ### Technical Requirements
-- Fixtures are excerpts of the real task files, vendored under `tests/review/fixtures/task_gate/` with their original line numbers noted, so the suite never reads a sibling repo. The list is fixed: trading-data 184 (`T14 — Commit and merge`, `Merge to main`), 185 (`Commit the doc update, then merge`, `Success: branch merged…`), 908 (`4.1 Merge, tag, and publish`), 909 (`5.1 Merge and release`), plus real negatives from squadron's own task files.
+- Fixtures are excerpts of the real task files, vendored under `tests/review/fixtures/task_gate/` with their original line numbers noted, so the suite never reads a sibling repo. The list is fixed: trading-data 184 (`T14 — Commit and merge`, `Merge to main`), 185 (`Commit the doc update, then merge`, `Success: branch merged…`), 908 (`4.1 Merge, tag, and publish`), 909 (`5.1 Merge and release`), trading-ui 124 (line 496, `Merge into the target per the project Git Rules…`) and 125 (line 325, `Merge: re-read cf config get git.integration_branch…`), plus real negatives from squadron's own task files.
 - A test runs the gate over each vendored excerpt and expects FAIL at the noted lines.
 - A test asserts the model is never called when the gate fails.
 - ruff, pyright zero errors.
 
 ### Integration Requirements
-- The FAIL artifact is saved and readable by existing review readers. No model ran, so its fields are explicit, never left for the implementer to invent: `model` is a constant `TASK_GATE_MODEL` (`squadron-task-gate`) defined once in `task_gate.py`, no profile, `verdict_source: imposed` (a measured fact, not a model opinion), `tools_given: []`, `tool_calls_made: 0`, no cost or token telemetry. A test reads the saved artifact back through the existing readers.
+- The FAIL artifact is saved and readable by existing review readers. No model ran, so its fields are explicit, never left for the implementer to invent: `model` is a constant `TASK_GATE_MODEL` (`squadron-task-gate`) defined once in `task_gate.py`, no profile, `verdict_source: imposed` (a measured fact, not a model opinion), `tools_given` and `tool_calls_made` both `None` (the model's tri-state for "ran without tools"; `[]`/`0` would claim a tool-capable run that was offered nothing), no cost or token telemetry. A test reads the saved artifact back through the existing readers and asserts the rendered frontmatter: `aiModel: squadron-task-gate`, `verdictSource: imposed`, and no `toolsGiven`/`toolCallsMade` keys.
 
 ### Verification Walkthrough
 1. `sq review tasks <slice>` on a slice whose task file has a line like `- [ ] Merge to main`: prints verdict FAIL, lists the line number and text, exits non-zero, and the run shows no model call or cost.

@@ -14,62 +14,52 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261010
 dateUpdated: 20261010
-reviewedSha: 84aedd8237087e20a2149ad4e301772b4cc82cc5
+reviewedSha: 8f701a8dd07f9bff18926a3ce01750f8ad49c92b
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 10
-durationSeconds: 50.9
+toolCallsMade: 11
+durationSeconds: 51.1
 squadronVersion: 0.21.3
 findings:
   - id: F001
-    severity: pass
-    category: architecture
-    summary: "Fits the maintenance initiative's scope"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md#overview"
+    severity: concern
+    category: scope
+    summary: "Fixture list leaves out trading-ui 124 and 125, which the slice plan names"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:94"
   - id: F002
-    severity: pass
-    category: architecture
-    summary: "Interface parity and one shared function"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:41-45"
-  - id: F003
-    severity: note
+    severity: concern
     category: integration
-    summary: "The slice plan lists an MCP path; the design drops it"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:24"
-  - id: F004
+    summary: "`tools_given: []` conflicts with the existing tri-state convention"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:100"
+  - id: F003
     severity: concern
     category: under-specification
-    summary: "Multi-part outcome is ambiguous and the signature doesn't match the data flow"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:43-48"
-  - id: F005
-    severity: concern
-    category: correctness
-    summary: "The \"starts with merge\" pattern contradicts the negative fixtures"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:58-63"
-  - id: F006
-    severity: concern
-    category: hidden-dependency
-    summary: "Tests read files from other repositories"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:91-92"
-  - id: F007
-    severity: concern
-    category: integration
-    summary: "Saved FAIL artifact has no defined model, profile or cost fields"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:96-97"
-  - id: F008
+    summary: "\"Within a few words\" is not a specified matching rule"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:61-64"
+  - id: F004
     severity: note
-    category: concurrency
-    summary: "Synchronous file reads inside the async pipeline path"
+    category: performance
+    summary: "Synchronous file reads inside the async pipeline action"
     location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:45"
-  - id: F009
-    severity: note
+  - id: F005
+    severity: pass
+    category: alignment
+    summary: "Fits the architecture's scope and guidelines"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md#technical-scope"
+  - id: F006
+    severity: pass
+    category: integration
+    summary: "MCP path deviation is justified"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:24"
+  - id: F007
+    severity: pass
+    category: architecture
+    summary: "Dependency direction and component boundaries"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md#component-structure"
+  - id: F008
+    severity: pass
     category: error-handling
-    summary: "Failure modes are covered; decode errors aren't"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:65-66"
-  - id: F010
-    severity: note
-    category: interfaces
-    summary: "`resolve_slice_inputs` is a private method"
-    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:37"
+    summary: "Failure modes and result semantics are explicit"
+    location: "project-documents/user/slices/933-slice.deterministic-task-file-gate.md:68-69"
 ---
 
 # Review: slice — slice 933
@@ -79,69 +69,47 @@ findings:
 
 ## Findings
 
-### [PASS] Fits the maintenance initiative's scope
+### [CONCERN] Fixture list leaves out trading-ui 124 and 125, which the slice plan names
 
-This is a tooling check across subsystems that enforces an existing guide rule. It adds no new feature area, which matches the arch's "Tooling and CI" and "Operational" scope. It is a single focused item that can be reverted on its own, as the arch guidelines ask. The parent architecture states no NFRs, so the slice doesn't need to restate any.
+The slice plan entry (900-slices, item 31) names trading-ui 124 ("Merge into the target per the project Git Rules", checked) and 125 as offending files. It also says "the test fixtures are the real lines from the files listed above". The design calls its list "fixed" but includes only trading-data 184/185 and 908/909. The Overview (line 16) leaves trading-ui out too. This matters because the trading-ui 124 wording is the canonical agent phrasing ("Merge into the target"). The design's own rule 1 catches it (`merge` followed directly by `into`), but no fixture proves that. Add the trading-ui 124/125 excerpts with their line numbers, or state why they are excluded.
 
-### [PASS] Interface parity and one shared function
+### [CONCERN] `tools_given: []` conflicts with the existing tri-state convention
 
-`task_gate.py` holds pure functions with no I/O, and both the CLI and the pipeline call the same gate (line 116). The pattern table is the only place that defines what counts as a merge step. Dependencies point the right way: the CLI and pipeline depend on `squadron.review`, not the other way round. I confirmed the hook points exist:
-- `review_tasks` has a per-part loop.
-- `ReviewAction._review` validates every part before the first model call.
+`ReviewResult` documents `tools_given`/`tool_calls_made` as a tri-state. Both are `None` when the review "ran without tools". A populated list means tools were offered. The model code warns that an empty list is easy to confuse with "template declared no tools". Persistence only renders tool-call telemetry when `tools_given is not None`. So `[]` writes `toolsGiven: []` / `toolCallsMade: 0`, which implies a tool-capable run that was offered nothing. No model ran at all, so `None` for both fields matches the established meaning, as the slice already does for cost and tokens. Pick `None` or justify `[]`, and have the read-back test assert the rendered frontmatter.
 
-### [NOTE] The slice plan lists an MCP path; the design drops it
+### [CONCERN] "Within a few words" is not a specified matching rule
 
-The slice plan entry (900-slices, item 31) lists "MCP" among the paths the gate must cover. The design says squadron's server has no review tool today. I found no MCP server or tool registration under `src/`, so dropping it is correct. Add one line saying that any future MCP review tool must call `merge_gate_result`, so the parity requirement isn't lost.
+Rule 3 flags `merge` "followed within a few words by a git object", but never gives the window size. This is the rule most likely to produce false positives, so the window should be a named constant in the pattern table, and the design should state it. Token boundaries are also undefined. The negatives include `merge-base`, `--no-merges` and `mergeFixResults`. A realistic line like `- [ ] Run git merge-base main HEAD` puts `main` within a few words of `merge` (as a substring). Say whether `merge` must be a whole word, separated by whitespace or punctuation and excluding hyphens, and add that line as a negative fixture.
 
-### [CONCERN] Multi-part outcome is ambiguous and the signature doesn't match the data flow
+### [NOTE] Synchronous file reads inside the async pipeline action
 
-- **Signature vs data flow:** `merge_gate_result(scans) -> ReviewResult | None` returns one result. The Data Flow says "build a FAIL `ReviewResult` per offending part" and save each under its own `part-N` slot.
-- **Clean parts are unspecified:** when part 2 fails the gate, do parts 1 and 3 still get a model review?
-  - "skip the model" and the free-rejection argument (line 19) suggest no.
-  - Per-part slots suggest the clean parts still get their normal model review and artifacts.
+`ReviewAction._review` is `async def`. The project's Python rules require synchronous code inside an async function to finish in under 1ms in the worst case. Reading a few small local task files will almost always meet that, and the existing `missing_input_files` stat check sets the precedent. Still, the design should say this is a deliberate choice: task files are small and local. Otherwise it should use `asyncio.to_thread`. The parent architecture states no NFR for this path, so no target needs restating.
 
-**Fix:** pick one rule and change the signature to match. For example, any hit means no model call for any part, and a FAIL is saved only for the offending parts. Also say how the result enters the CLI's worst-verdict exit code and the pipeline's `fold_review_parts`.
+### [PASS] Fits the architecture's scope and guidelines
 
-### [CONCERN] The "starts with merge" pattern contradicts the negative fixtures
+This is tooling and operational hardening that spans the CLI and pipeline subsystems, which is in scope for 900 ("Tooling and CI", "Operational"). It is lightweight, with Effort 2/5, as the architecture asks. It adds nothing beyond the slice plan entry. Out-of-scope items are explicit: historical files, other forbidden content, and pipeline `branch: merge` engine ops.
 
-Pattern 1 flags any checklist item whose first word is `merge`. Lines 62–63 list `merge defaults` and `merges built-in and user profiles` as must-not-flag.
-- A real item such as `- [ ] Merge defaults from config into profile` would be flagged, so these negatives only pass if they appear in prose. The fixture set doesn't say that.
-- Pattern 3 (`merge` near `slice`/`target`) has the same risk, for example `Merge slice config overrides`.
+### [PASS] MCP path deviation is justified
 
-**Fix:** either require a git object or branch verb after the leading `merge`, or add these vocabulary phrases as negative fixtures on checklist items. The project rule asks for fixtures in the format the parser actually reads, which here means checklist lines.
+The slice plan lists MCP among the paths to gate. The design notes that squadron has no MCP review tool today, and that the slash command shells out to `sq review tasks`. Both claims hold: `src/` has no MCP tool registrations, and `commands/agents/sq-review/SKILL.md` invokes the CLI. The design also requires any future tool to call the same gate, so interface parity is kept.
 
-### [CONCERN] Tests read files from other repositories
+### [PASS] Dependency direction and component boundaries
 
-"A test runs the gate over each real file from the list". Those files live in trading-data, trading-data-maintenance and trading-ui, not in squadron, so the test suite would depend on sibling checkouts.
+`task_gate.py` contains pure functions with no I/O and depends only on `squadron.review.models`. The CLI and pipeline depend on it, not the other way round. Both paths call one function, which avoids a DRY violation. The pattern table is the single place to change what counts as a merge step, and the template-name constant is defined once.
 
-**Fix:** state that the real files (or their relevant excerpts, with line numbers kept) are vendored under squadron's `tests/` fixtures. Then the test is self-contained and still uses real input. Also, "trading-ui 124/125 where present" leaves the fixture set open-ended; make it a fixed list.
+### [PASS] Failure modes and result semantics are explicit
 
-### [CONCERN] Saved FAIL artifact has no defined model, profile or cost fields
-
-The requirement says "The FAIL artifact is saved and readable by existing review readers". Saved reviews and their summary readers normally carry model, profile and cost or telemetry. The design doesn't say what those fields hold when no model ran.
-
-The project forbids silent fallbacks, so specify explicit placeholder values, for example a gate marker as the model name and zero cost. Check them against the existing readers. Otherwise the implementer will invent values or break a reader.
-
-### [NOTE] Synchronous file reads inside the async pipeline path
-
-`ReviewAction._review` is `async`. The project's Python rules require any synchronous code in an async function to finish in under 1ms in the worst case. Reading a few small local task files is almost certainly fine. The design should still say where the reads happen, either inline as small sync reads or alongside the existing synchronous input validation, so the reviewer can check it against the rule.
-
-### [NOTE] Failure modes are covered; decode errors aren't
-
-- **Covered:** the scan raises on a read error and is never skipped. A missing file is already handled by `missing_input_files`.
-- **Not mentioned:** `UnicodeDecodeError` on a badly encoded file. Raising with the file path is enough.
-
-The gate is local and pure, so hang, timeout and disconnect don't apply.
-
-### [NOTE] `resolve_slice_inputs` is a private method
-
-In the pipeline the method is `ReviewAction._resolve_slice_inputs`, which is private. The gate only needs the resolved part paths that already exist in `_review` by the time it runs, so it shouldn't depend on this method. Reword the line so the task breakdown doesn't create a dependency on a private method.
+The only new I/O is local file reads. `OSError` and `UnicodeDecodeError` raise with the file path, and the scan is never skipped. Missing files are already handled upstream, and hangs or peer disconnects don't apply to local reads. The FAIL path is also clear:
+- **Verdict:** FAIL, with `verdict_source: imposed`, which matches existing usage in `coverage.py`.
+- **Artifacts:** one per offending part only.
+- **Exits:** the worst-verdict exit code makes the CLI exit non-zero, and `fold_review_parts` handles a subset of parts correctly.
+- **Model calls:** a test asserts that no model is called.
 
 ### Run Digest
 
-- Response length: 7234 chars
+- Response length: 6272 chars
 - Response is newline-free: no
-- Tool calls made: 10
+- Tool calls made: 11
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -151,10 +119,10 @@ In the pipeline the method is `ReviewAction._resolve_slice_inputs`, which is pri
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 50.9 s
+- Duration: 51.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
