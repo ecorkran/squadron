@@ -60,6 +60,7 @@ hallucination trap.
 
 
 ## Project Navigation
+- Bug fixes skip the slice workflow entirely: follow `.claude/rules/bug-fixes.md`.
 - Follow `guide.ai-project.process` and its links for workflow.
 - Follow `file-naming-conventions` for all document naming and metadata.
 - Project guides: `project-documents/ai-project-guide/project-guides/`
