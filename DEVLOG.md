@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261011
 
+### Slice 943: task breakdown complete (Phase 5)
+
+- Tasks: `user/tasks/943-tasks.proportionate-reviews-review-and-revise-loops-that-can-cut-scope.md`, 9 tasks, effort 2/5. Order: branch, revise paragraph + tests, slice/tasks/arch template edits, CHANGELOG, slice 127 rerun (stops and reports on failure rather than iterating wording).
+
 ### Slice 943: design complete (Phase 4)
 
 - Design: `user/slices/943-slice.proportionate-reviews-review-and-revise-loops-that-can-cut-scope.md`, effort 2/5. Prompts only: two-sided proportionality criterion (overweight = CONCERN, cutting plan-assigned scope = CONCERN) and a gap-needs-a-requirement qualifier in slice/tasks/arch templates; a smallest-sufficient-change paragraph in `_findings_block` (deferrals become GitHub issues). Judge and code templates excluded (judge edits re-key 320 calibration).
