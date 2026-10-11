@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Slice, tasks and architecture reviews now flag an overweight artifact and name what to cut, and revise rounds may resolve a finding by cutting or deferring scope (deferrals become GitHub issues). Review loops no longer only add weight.
+
 ### Fixed
 
 - Implement pipelines no longer merge a slice with unchecked task items. A close-out step checks off the items the branch diff verifies, and the merge refuses (naming the first unchecked items) if any remain. (#189)
