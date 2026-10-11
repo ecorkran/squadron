@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261010
 
+### Slice 933: task breakdown complete (Phase 5)
+
+- Tasks: `user/tasks/933-tasks.deterministic-task-file-gate.md`, 12 tasks, effort 2/5. Order: branch, vendored fixtures (trading-data 184/185/908/909, trading-ui 124/125, squadron negatives), scanner + tests, FAIL builder + read-back test, shared read-and-gate helper, CLI hook + tests, pipeline hook + parity tests, walkthrough.
+- The task file keeps every literal merge example in prose and tables, never in checklist items, so it passes the gate it describes.
+
 ### Slice 933: slice design complete (Phase 4)
 
 - Design: `user/slices/933-slice.deterministic-task-file-gate.md`. A pure scanner (`review/task_gate.py`) flags merge checklist items and headings in task files; both tasks-review paths (CLI and pipeline `review:` action) call it before any model call. Real-line fixtures from trading-data 184/185/908/909.
