@@ -27,8 +27,9 @@ from squadron.pipeline.git_ops import (
     verify_git_state,
 )
 from squadron.pr.branch import parse_slice_branch
+from squadron.pr.tasks import parse_task_items
 from squadron.review.git_utils import run_git
-from squadron.review.persistence import CfClientProtocol, resolve_slice_info
+from squadron.review.persistence import TASKS_DIR, CfClientProtocol, resolve_slice_info
 
 _logger = logging.getLogger(__name__)
 
@@ -282,6 +283,8 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
             f"them, then rerun the merge for slice {slice_index}."
         )
 
+    _require_checked_tasks(slice_index, cwd, cf_client)
+
     _checkout(["checkout", target], cwd, branch)
     merged = run_git(
         ["merge", "--no-ff", "-m", f"merge: slice {slice_index} — {name}", branch], cwd=cwd
@@ -295,6 +298,39 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
             cwd=cwd,
         )
     return MergeResult(branch, target, MergeOutcome.MERGED)
+
+
+_UNCHECKED_PREVIEW = 3  # item texts named in the refusal
+
+
+def _require_checked_tasks(slice_index: int, cwd: str, cf_client: CfClientProtocol) -> None:
+    """Refuse the merge while any of the slice's task files has an unchecked box (issue 189).
+
+    A task file cf lists but that cannot be read also refuses: the gate cannot say the
+    work is finished, so it must not say nothing.
+
+    Raises:
+        MergeFailedError: unchecked items remain or a task file is unreadable. Nothing
+            has changed yet, so this is an item failure.
+    """
+    info = resolve_slice_info(cf_client, slice_index)
+    unchecked: list[str] = []
+    for task_file in info["task_files"]:
+        path = Path(cwd) / TASKS_DIR / task_file
+        try:
+            unchecked.extend(parse_task_items(path.read_text(encoding="utf-8")).unchecked)
+        except OSError as exc:
+            raise MergeFailedError(
+                f"slice {slice_index} not merged: cannot read task file {path}: {exc}",
+                BranchFailure.OTHER,
+            ) from exc
+    if unchecked:
+        preview = "; ".join(unchecked[:_UNCHECKED_PREVIEW])
+        raise MergeFailedError(
+            f"slice {slice_index} not merged: {len(unchecked)} unchecked task item(s), "
+            f"first: {preview}. Finish or check them off, then rerun the merge.",
+            BranchFailure.OTHER,
+        )
 
 
 def _is_ancestor(branch: str, target: str, cwd: str) -> bool:

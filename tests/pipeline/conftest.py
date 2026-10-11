@@ -53,6 +53,13 @@ def phase_artifact_cf_client(slice_index: int, design_file: str, task_file: str)
     return cf_client
 
 
+def write_checked_task_file(repo: Path, file_name: str) -> None:
+    """A finished task file (every box checked), as the merge gate requires (issue 189)."""
+    path = repo / "project-documents/user/tasks" / file_name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("- [x] done\n")
+
+
 def artifact_writing_action(cwd: Path, slice_index: int) -> MagicMock:
     """A dispatch-style mock action that writes the expected phase artifact.
 

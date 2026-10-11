@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Implement pipelines no longer merge a slice with unchecked task items. A close-out step checks off the items the branch diff verifies, and the merge refuses (naming the first unchecked items) if any remain. (#189)
+
 ## [0.21.4] - 20261011
 
 ### Added

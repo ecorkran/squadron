@@ -18,7 +18,7 @@ from squadron.review.git_utils import (
     resolve_slice_diff_range,
 )
 from tests.conftest import run_test_git
-from tests.pipeline.conftest import phase_artifact_cf_client
+from tests.pipeline.conftest import phase_artifact_cf_client, write_checked_task_file
 
 _CODE_PIPELINES = ("P6", "implement", "P456", "P56")
 _SLICE = 105
@@ -107,9 +107,14 @@ async def test_p6_runs_on_the_slice_branch_and_ends_merged_on_the_target(
         )
         return action
 
-    async def implement(_ctx: ActionContext) -> ActionResult:
+    async def implement(ctx: ActionContext) -> ActionResult:
+        if ctx.step_name == "close-out":  # the agent has nothing left to commit
+            return ActionResult(success=True, action_type="dispatch", outputs={})
         observed["branch_during_implement"] = run_test_git(repo, "branch", "--show-current").strip()
         (repo / "feature.py").write_text("print('x')\n")
+        tasks = repo / "project-documents/user/tasks/105-tasks.stub.md"
+        tasks.parent.mkdir(parents=True, exist_ok=True)
+        tasks.write_text("- [x] build the feature\n")
         run_test_git(repo, "add", "-A")
         run_test_git(repo, "commit", "-q", "-m", "feat: the agent's own commit")
         return ActionResult(success=True, action_type="dispatch", outputs={})
@@ -270,6 +275,7 @@ async def test_a_second_p6_run_keeps_the_branch_work(temp_git_repo: Path, tmp_pa
     repo = temp_git_repo
     (repo / "DEVLOG.md").write_text("# devlog\n")
     (repo / _ROOT_DESIGN).write_text("# stub design\n")
+    write_checked_task_file(repo, "105-tasks.stub.md")
     run_test_git(repo, "add", "-A")
     run_test_git(repo, "commit", "-q", "-m", "setup")
     # A first run's work, left on the slice branch.
@@ -335,7 +341,9 @@ async def test_a_second_p6_run_keeps_the_branch_work(temp_git_repo: Path, tmp_pa
     )
 
     assert result.status == ExecutionStatus.COMPLETED
-    assert model_calls == []  # implement kept the branch's work; the passing review skipped revise
+    # implement kept the branch's work and the passing review skipped revise;
+    # only the close-out dispatch called a model
+    assert model_calls == ["close-out"]
     implement = next(r for r in result.step_results if r.step_type == "implement")
     kept = next(a for a in implement.action_results if a.action_type == "dispatch")
     assert kept.outputs == {"skipped": "branch has work", "ahead": 1}

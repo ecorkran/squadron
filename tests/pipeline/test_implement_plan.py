@@ -24,6 +24,8 @@ from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pr.branch import parse_slice_branch
 from squadron.review.git_utils import DiffRangeUnresolvedError, resolve_slice_diff_range
 from tests.conftest import run_test_git
+from tests.pipeline.conftest import write_checked_task_file
+from tests.pipeline.item_resume_support import CLOSE_OUT_STEP
 
 PLAN = "300"
 _SLICES = "project-documents/user/slices"
@@ -54,8 +56,10 @@ def _setup_repo(repo: Path) -> None:
     """Designs, passing design and tasks reviews, committed on main."""
     (repo / _SLICES).mkdir(parents=True)
     (repo / _REVIEWS).mkdir(parents=True)
-    for index, (dependencies, _) in _PLAN.items():
+    for index, (dependencies, tasked) in _PLAN.items():
         (repo / _design(index)).write_text(f"---\ndependencies: {list(dependencies)}\n---\n")
+        if tasked:
+            write_checked_task_file(repo, f"{index}-tasks.s{index}.md")
         for template in ("slice", "tasks"):
             review = repo / _REVIEWS / f"{index}-review.{template}.s{index}.md"
             review.write_text("---\nverdict: PASS\n---\n")
@@ -121,6 +125,9 @@ class _Fakes:
 
     async def dispatch(self, ctx: ActionContext) -> ActionResult:
         index = _slice_on(ctx.cwd)
+        if ctx.step_name == CLOSE_OUT_STEP:
+            self.dispatched.append((index, CLOSE_OUT_STEP))
+            return ActionResult(success=True, action_type="dispatch", outputs={"response": "ok"})
         kind = "revise" if ctx.params.get("feedback") else "implement"
         self.dispatched.append((index, kind))
         if index != _COMMITS_NOTHING:
@@ -264,6 +271,7 @@ def test_flagged_items_never_dispatch(batch: tuple[Path, PipelineResult, _Fakes]
     # 303 implemented once and was revised for each of its two rounds.
     assert [kind for index, kind in fakes.dispatched if index == 303] == [
         "implement",
+        CLOSE_OUT_STEP,
         "revise",
         "revise",
     ]

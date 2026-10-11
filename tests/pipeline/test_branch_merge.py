@@ -318,3 +318,50 @@ def test_merge_timeout_with_an_unverifiable_state_raises_state_unknown(
             _merge(slice_repo)
 
     assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Task checkbox gate (issue 189): no merge with unchecked task boxes
+# ---------------------------------------------------------------------------
+
+TASK_FILE = "105-tasks.batch-foo.md"
+
+
+def _cf_with_tasks() -> MagicMock:
+    client = _cf()
+    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[TASK_FILE])]
+    return client
+
+
+def _commit_tasks(repo: Path, text: str) -> None:
+    tasks_dir = repo / "project-documents/user/tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    (tasks_dir / TASK_FILE).write_text(text)
+    run_test_git(repo, "add", "-A")
+    run_test_git(repo, "commit", "-q", "-m", "tasks")
+
+
+def test_merge_refuses_unchecked_task_boxes_and_leaves_the_branch_unmerged(
+    slice_repo: Path,
+) -> None:
+    _commit_tasks(slice_repo, "- [x] first\n- [ ] second\n- [ ] third\n")
+    before = _snapshot(slice_repo)
+
+    with pytest.raises(MergeFailedError, match=r"2 unchecked.*second") as raised:
+        merge_slice_branch(SLICE, str(slice_repo), _cf_with_tasks())
+
+    assert raised.value.failure is BranchFailure.OTHER
+    assert _snapshot(slice_repo) == before  # still on the slice branch, main untouched
+
+
+def test_merge_proceeds_when_every_task_box_is_checked(slice_repo: Path) -> None:
+    _commit_tasks(slice_repo, "- [x] first\n  - [x] nested\n")
+
+    result = merge_slice_branch(SLICE, str(slice_repo), _cf_with_tasks())
+
+    assert result.outcome is MergeOutcome.MERGED
+
+
+def test_merge_fails_loudly_when_a_listed_task_file_is_missing(slice_repo: Path) -> None:
+    with pytest.raises(MergeFailedError, match=TASK_FILE):
+        merge_slice_branch(SLICE, str(slice_repo), _cf_with_tasks())

@@ -17,6 +17,11 @@ steps:
       review: { template: code, model: "{review-model}" }
       checkpoint: never
       existing: keep
+  - dispatch:
+      name: close-out
+      model: "{model}"
+      slice: "{slice}"
+      prompt: "Close out the task file for this slice. The current git branch name starts with the slice index; the task file(s) are the files in project-documents/user/tasks/ whose names start with that index. Compare each task item against the branch's diff from the target branch and check off ONLY the items the diff shows are done. Use the task-checker agent if it is available; otherwise edit the checkboxes directly. Never check off an item you cannot verify in the diff. Leave a task unchecked when it is unfinished, or when work stopped at a point that needs the Project Manager. Commit the task file change."
   - loop:
       name: revise-code
       max: "{max-revisions}"

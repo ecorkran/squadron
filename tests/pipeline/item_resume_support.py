@@ -25,6 +25,7 @@ from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.state import StateManager
 from squadron.pr.branch import parse_slice_branch
 from tests.conftest import run_test_git
+from tests.pipeline.conftest import write_checked_task_file
 
 PLAN = "400"
 PIPELINE = "implement-plan"
@@ -75,6 +76,7 @@ def make_project(repo: Path, runs_dir: Path) -> Project:
     (repo / _REVIEWS).mkdir(parents=True)
     for index, dependencies in _DEPENDENCIES.items():
         (repo / design(index)).write_text(f"---\ndependencies: {dependencies}\n---\n")
+        write_checked_task_file(repo, f"{index}-tasks.s{index}.md")
         for template in ("slice", "tasks"):
             review = repo / _REVIEWS / f"{index}-review.{template}.s{index}.md"
             review.write_text("---\nverdict: PASS\n---\n")
@@ -130,6 +132,10 @@ def make_project(repo: Path, runs_dir: Path) -> Project:
     return Project(repo, runs_dir, run_id, cf, status)
 
 
+# The name of the pipelines' task close-out dispatch step (issue 189).
+CLOSE_OUT_STEP = "close-out"
+
+
 def ok_action(action_type: str) -> MagicMock:
     action = MagicMock()
     action.execute = AsyncMock(
@@ -157,6 +163,9 @@ class BodyFakes:
             kept = _kept_outputs(ctx)  # pyright: ignore[reportPrivateUsage]
             if kept is not None:
                 return ActionResult(success=True, action_type="dispatch", outputs=kept)
+        if ctx.step_name == CLOSE_OUT_STEP:
+            self.dispatch_prompts.append((CLOSE_OUT_STEP, {}))
+            return ActionResult(success=True, action_type="dispatch", outputs={"response": "ok"})
         kind = "revise" if ctx.params.get("feedback") else "implement"
         prompt = DispatchAction._apply_override(ctx, f"{kind} prompt")  # pyright: ignore[reportPrivateUsage]
         self.dispatch_prompts.append((kind, {"prompt": prompt}))

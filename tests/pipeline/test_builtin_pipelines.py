@@ -50,7 +50,7 @@ def test_implement_plan_params_and_shape() -> None:
     assert each.config["source"] == 'cf.slices_ready_to_implement("{plan}", "{accept-threshold}")'
     assert each.config["on_item_failure"] == "continue"
     body = [next(iter(s)) for s in each.config["steps"]]  # type: ignore[union-attr]
-    assert body == ["summary", "branch", "implement", "loop", "devlog", "branch"]
+    assert body == ["summary", "branch", "implement", "dispatch", "loop", "devlog", "branch"]
 
 
 # ---------------------------------------------------------------------------

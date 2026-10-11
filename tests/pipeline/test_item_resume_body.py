@@ -13,7 +13,14 @@ from squadron.pipeline.batch_report import ItemDecision
 from squadron.pipeline.git_ops import GitStateUnknownError
 from squadron.pipeline.item_resume import ResumeExit
 from tests.conftest import run_test_git
-from tests.pipeline.item_resume_support import BodyFakes, Project, branch, make_project, resume
+from tests.pipeline.item_resume_support import (
+    CLOSE_OUT_STEP,
+    BodyFakes,
+    Project,
+    branch,
+    make_project,
+    resume,
+)
 
 _INSTRUCTIONS = "Keep the CLI flags unchanged; fix only what the review lists."
 _BLOCK = "--- Instructions from checkpoint resolution ---"
@@ -47,12 +54,12 @@ async def test_retry_keeps_the_work_revises_with_the_instructions_and_merges(
     )
 
     assert outcome.exit is ResumeExit.RESOLVED
-    assert [kind for kind, _ in fakes.dispatch_prompts] == ["revise"]  # implement kept
+    assert [kind for kind, _ in fakes.dispatch_prompts] == [CLOSE_OUT_STEP, "revise"]  # implement kept
     assert any(
         f"keeps existing work on {branch(401)} (1 commits ahead of main)" in r.getMessage()
         for r in caplog.records
     )
-    prompt = str(fakes.dispatch_prompts[0][1]["prompt"])
+    prompt = str(fakes.dispatch_prompts[1][1]["prompt"])
     assert prompt.startswith(f"{_BLOCK}\n{_INSTRUCTIONS}")
     assert _merges(project) == ["merge: slice 401 — S401"]
     record = project.record("401")
@@ -70,7 +77,7 @@ async def test_accept_reviews_once_runs_no_rounds_and_merges(project: Project) -
     outcome = await resume(project, "401", ItemDecision.ACCEPT, fakes)
 
     assert outcome.exit is ResumeExit.RESOLVED
-    assert fakes.dispatch_prompts == []
+    assert [kind for kind, _ in fakes.dispatch_prompts] == [CLOSE_OUT_STEP]  # implement kept, no revise
     assert fakes.reviews == 1
     assert _merges(project) == ["merge: slice 401 — S401"]
     record = project.record("401")
@@ -101,7 +108,7 @@ async def test_retry_on_a_not_run_item_runs_its_body(project: Project) -> None:
     outcome = await resume(project, "404", ItemDecision.RETRY, fakes)
 
     assert outcome.exit is ResumeExit.RESOLVED
-    assert [kind for kind, _ in fakes.dispatch_prompts] == ["implement"]
+    assert [kind for kind, _ in fakes.dispatch_prompts] == ["implement", CLOSE_OUT_STEP]
     assert _merges(project) == ["merge: slice 404 — S404"]
     assert project.record("404").outcome == "passed"
 
