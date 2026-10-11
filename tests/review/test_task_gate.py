@@ -115,6 +115,20 @@ def test_object_at_window_edge_flagged() -> None:
     assert len(scan_merge_steps(_window_line(MERGE_OBJECT_WINDOW - 1))) == 1
 
 
+@pytest.mark.parametrize(
+    ("line", "rule"),
+    [
+        ("- [ ] Merge to `main`.", "leading_merge_word"),
+        ("- [ ] Commit and merge", "joined_release_verb"),
+        ("- [ ] Then the slice branch gets merged into main", "git_object_window"),
+        ("- [ ] Success: branch merged, tree clean", "merged_success_criterion"),
+    ],
+)
+def test_hit_names_the_matching_rule(line: str, rule: str) -> None:
+    [hit] = scan_merge_steps(line)
+    assert hit.rule == rule
+
+
 def test_object_past_window_not_flagged() -> None:
     assert scan_merge_steps(_window_line(MERGE_OBJECT_WINDOW)) == []
 
@@ -123,7 +137,7 @@ def _inputs(path: str) -> dict[str, str]:
     return {"input": path, "against": "design.md", "cwd": "."}
 
 
-HIT = MergeStepLine(line_number=12, text="- [ ] Merge to `main`.")
+HIT = MergeStepLine(line_number=12, text="- [ ] Merge to `main`.", rule="leading_merge_word")
 
 
 def test_no_hits_gives_no_results() -> None:
@@ -154,6 +168,7 @@ def test_fail_result_fields() -> None:
     assert finding.severity is Severity.FAIL
     assert "12" in finding.title
     assert HIT.text in finding.description
+    assert HIT.rule in finding.description
 
 
 def test_saved_artifact_reads_back(tmp_path: Path) -> None:

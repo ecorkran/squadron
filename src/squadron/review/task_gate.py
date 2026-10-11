@@ -58,10 +58,11 @@ _FRONTMATTER_FENCE = "---"
 
 @dataclass(frozen=True)
 class MergeStepLine:
-    """One flagged line: its 1-based line number and stripped text."""
+    """One flagged line: its 1-based line number, stripped text and the rule that hit."""
 
     line_number: int
     text: str
+    rule: str
 
 
 @dataclass(frozen=True)
@@ -106,10 +107,10 @@ def _normalize(body: str) -> str:
     return body.replace("**", "").replace("`", " ").strip()
 
 
-def _is_merge_step(body: str) -> bool:
-    text = _normalize(body)
-    unlabeled = _LABEL.sub("", text, count=1)
-    return any(pattern.regex.search(unlabeled) for pattern in MERGE_PATTERNS)
+def _matching_rule(body: str) -> str | None:
+    """Name of the first pattern that flags ``body``, or None."""
+    unlabeled = _LABEL.sub("", _normalize(body), count=1)
+    return next((p.name for p in MERGE_PATTERNS if p.regex.search(unlabeled)), None)
 
 
 def _candidate_body(line: str) -> str | None:
@@ -136,8 +137,9 @@ def scan_merge_steps(text: str) -> list[MergeStepLine]:
     hits: list[MergeStepLine] = []
     for index in range(_frontmatter_end(lines), len(lines)):
         body = _candidate_body(lines[index])
-        if body is not None and _is_merge_step(body):
-            hits.append(MergeStepLine(line_number=index + 1, text=lines[index].strip()))
+        rule = _matching_rule(body) if body is not None else None
+        if rule is not None:
+            hits.append(MergeStepLine(index + 1, lines[index].strip(), rule))
     return hits
 
 
@@ -147,7 +149,8 @@ def _hit_finding(path: str, hit: MergeStepLine) -> ReviewFinding:
         title=f"Merge step at line {hit.line_number}: {hit.text}",
         description=(
             f"Line {hit.line_number} schedules a merge: `{hit.text}`. Merging happens in "
-            f"Phase 7 after code review passes; a task file must not contain it."
+            f"Phase 7 after code review passes; a task file must not contain it. "
+            f"Matched rule: {hit.rule}."
         ),
         file_ref=path,
         category=TASK_GATE_CATEGORY,
