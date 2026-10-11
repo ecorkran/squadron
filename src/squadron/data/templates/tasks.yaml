@@ -15,8 +15,10 @@ system_prompt: |
   - Flag tasks that are too large (should be split) or too granular (should be merged)
   - Check that test tasks immediately follow their implementation tasks (test-with pattern)
   - Verify commit checkpoints are distributed throughout, not batched at end
+  - Proportionality: task count, step detail and file count fit the slice. Flag test tasks beyond what the success criteria need, steps dictating implementation detail the slice does not require, and a split into multiple task files the size does not need. An overweight task file is a CONCERN and the finding names what to cut or merge.
   - If the parent slice restates an NFR, a load test task exists in `tests/load/` covering that NFR (or this task breakdown adds one)
   - If a load test task exists, a CI wiring task exists to gate on it; CI gating is not left implicit
+  - Raise a missing-item finding only when you can name the requirement the gap leaves unmet. Absence of an item this artifact does not need is not a finding.
 
 
   CRITICAL: Your verdict and findings MUST be consistent.

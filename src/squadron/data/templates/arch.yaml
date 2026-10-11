@@ -61,8 +61,16 @@ system_prompt: |
   - God objects or modules with too many responsibilities
   - Premature optimization baked into the design
   - NIH syndrome — reinventing something the stack already provides
-  - Over-engineering for hypothetical future requirements vs. genuine extension
   - Under-specification of the hard parts ("step 3: magic happens")
+
+  PROPORTIONALITY
+  - Does the architecture's size, component count and mechanism count fit what
+    the initiative must deliver? Name what can be cut or deferred: over-engineering
+    for hypothetical future requirements, abstraction or configuration nothing
+    uses yet, the heaviest option where a lighter one meets the requirement.
+  - An overweight architecture is a CONCERN with `category: antipattern`, and the
+    finding names what to cut. Dropping or deferring scope the plan assigns to
+    this architecture is also a CONCERN with `category: antipattern`.
 
   Be specific. Reference sections, component names, and code samples from the
   document. Vague findings like "consider error handling" are worthless —
