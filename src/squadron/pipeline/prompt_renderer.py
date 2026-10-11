@@ -36,7 +36,7 @@ from squadron.pipeline.executor import (
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loop_commit import round_commit_params
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
-from squadron.pipeline.steps import get_step_type
+from squadron.pipeline.steps import StepTypeName, get_step_type
 from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
@@ -46,6 +46,10 @@ if TYPE_CHECKING:
     from squadron.pipeline.resolver import ModelResolver
 
 _logger = logging.getLogger(__name__)
+
+# Step types whose ``expand()`` is empty because the executor runs them directly. Prompt-only
+# mode has no executor, so these steps produce no instructions (issue 145).
+EXECUTOR_ONLY_STEP_TYPES = frozenset({StepTypeName.EACH, StepTypeName.LOOP, StepTypeName.FAN_OUT})
 
 # Config key a loop-round commit instruction carries its round number under.
 _ROUND_KEY = "round"
@@ -540,6 +544,13 @@ def render_step_instructions(
 
     step_type_impl = get_step_type(step.step_type)
     actions = step_type_impl.expand(step)
+    if not actions and step.step_type in EXECUTOR_ONLY_STEP_TYPES:
+        _logger.warning(
+            "step '%s' (%s) is not rendered in prompt-only mode: it produces no instructions, "
+            "so the work inside it will not happen",
+            step.name,
+            step.step_type,
+        )
 
     # Inject run_id into params so renderers (e.g. checkpoint) can reference it.
     render_params = {**params, "run_id": run_id}

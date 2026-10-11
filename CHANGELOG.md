@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A failed dispatch inside a revise loop now ends the loop instead of letting the next review accept unrevised work and merge it. An unusable SDK session is replaced with a fresh one (logged), provider errors print as one line instead of a traceback, and a failed run that already merged says so. (#200)
 - Pipeline steps can no longer start background shells. The agent is told to run the command in the foreground, so a step is finished when it returns and nothing keeps writing to the checkout afterwards. (#199)
 - A missing or mistyped tool argument from a model (for example `grep` with no `pattern`) is now a one-line error result the model can correct, not an unexpected-failure traceback on stderr. (#143)
+- `sq run --prompt-only` now warns when it skips a `loop`, `each` or `fan_out` step, naming the step and saying its work will not happen. Previously it skipped them silently. (#145)
 
 ## [0.21.4] - 20261011
 

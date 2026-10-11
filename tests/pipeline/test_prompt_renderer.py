@@ -764,3 +764,51 @@ class TestRenderSummaryEffort:
 
         assert result.command is not None
         assert "--effort" not in result.command
+
+
+@pytest.mark.parametrize("step_type", ["each", "loop", "fan_out"])
+def test_executor_only_step_warns_that_prompt_only_skips_it(
+    step_type: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Issue 145: these steps render nothing in prompt-only mode, which must be said."""
+    import logging
+
+    step = StepConfig(step_type=step_type, name="revise-code", config={})
+    step_impl = MagicMock()
+    step_impl.expand.return_value = []
+
+    with (
+        patch("squadron.pipeline.prompt_renderer.get_step_type", return_value=step_impl),
+        caplog.at_level(logging.WARNING, logger="squadron.pipeline.prompt_renderer"),
+    ):
+        instructions = render_step_instructions(
+            step,
+            step_index=0,
+            total_steps=1,
+            params={},
+            resolver=MagicMock(),
+            run_id="r1",
+        )
+
+    assert instructions.actions == []
+    (record,) = [r for r in caplog.records if r.levelno == logging.WARNING]
+    assert f"'revise-code' ({step_type})" in record.getMessage()
+    assert "not rendered in prompt-only mode" in record.getMessage()
+
+
+def test_other_empty_step_does_not_warn(caplog: pytest.LogCaptureFixture) -> None:
+    import logging
+
+    step = StepConfig(step_type="summary", name="s", config={})
+    step_impl = MagicMock()
+    step_impl.expand.return_value = []
+
+    with (
+        patch("squadron.pipeline.prompt_renderer.get_step_type", return_value=step_impl),
+        caplog.at_level(logging.WARNING, logger="squadron.pipeline.prompt_renderer"),
+    ):
+        render_step_instructions(
+            step, step_index=0, total_steps=1, params={}, resolver=MagicMock(), run_id="r1"
+        )
+
+    assert not caplog.records
