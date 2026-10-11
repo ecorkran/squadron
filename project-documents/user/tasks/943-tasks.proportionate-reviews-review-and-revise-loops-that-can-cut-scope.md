@@ -38,12 +38,12 @@ status: not_started
   - [ ] Update the exact-match expectation in `test_single_file_prompt_is_unchanged` (`tests/pipeline/actions/test_dispatch.py`) to include the paragraph, and check other exact-match prompt tests in the file and in `tests/review` for the same
   - [ ] Add a test that the paragraph appears through the fallback path (`_resolve_prompt_from_prior_review`, no `feedback` param)
   - [ ] Add a test that a review with no findings yields the initial-improvement text without the paragraph
-  - [ ] Run `pytest tests/pipeline/actions/test_dispatch.py tests/review -q`, then ruff and pyright
+  - [ ] Run `pytest tests/pipeline tests/review -q`, then ruff and pyright
   - [ ] Commit: `feat: let revise resolve findings by cutting or deferring scope`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 4: Slice review template (`slice.yaml`)**
-  - [ ] Replace the "Common antipatterns" bullet with the proportionality bullet from the design. It must state all three: overweight is a CONCERN, the finding names what to cut, and cutting or deferring scope the slice plan entry assigns is a CONCERN.
+  - [ ] Remove "over-engineering" from the "Common antipatterns" bullet (keep under-specification and hidden dependencies) and add the proportionality bullet from the design. It must state all three: overweight is a CONCERN, the finding names what to cut, and cutting or deferring scope the slice plan entry assigns is a CONCERN.
   - [ ] Add the gap qualifier directly under the failure-mode and NFR bullets
   - **Success:** the template-load tests in `tests/review` pass, and the system prompt contains both additions
 
@@ -71,6 +71,7 @@ status: not_started
   - [ ] Create the trading-ui worktree at `2c5e9d4` and run `sq run P4 --slice 127 --model opus --review-model sonnet`
   - [ ] Record per-round word counts against the baseline (4,673 → 6,561 → 7,735)
   - [ ] Check coverage against 127's slice plan entry and the approved cut `0589e8e`, and list any deferrals with their GitHub issue numbers
+  - [ ] Read the rerun's review files: every real-gap CONCERN the baseline run raised (failure mode on a new I/O path, NFR target) is still raised, or the design already handles it
   - [ ] If the rerun fails either check, stop and report the review findings to the PM along with the matching cause from the design (criterion wording, revise wording, or gap qualifier). Do not iterate on wording without PM direction.
   - [ ] Remove the worktree and its branch
   - [ ] Record results in the design's Verification Walkthrough, the DEVLOG and the 943 slice plan entry; commit `docs: record slice 943 verification results`
