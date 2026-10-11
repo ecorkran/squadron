@@ -144,3 +144,16 @@ async def test_pathological_pattern_times_out(
     # Returns near the budget, not after running the search to completion.
     assert elapsed < limits.GREP_TIMEOUT_S * 4
     assert any(r"(a|a)*$" in record.getMessage() for record in caplog.records)
+
+
+async def test_bad_argument_is_a_routine_error_result_with_no_traceback(
+    tree: Path, grep: ToolExecutor, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Issue 143: a missing argument is the model's mistake, not a tool bug."""
+    with caplog.at_level(logging.INFO):
+        result = await grep({})
+
+    assert result.is_error is True
+    assert result.content == "Error: invalid argument: missing required argument 'pattern'"
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert not [r for r in caplog.records if r.exc_info]

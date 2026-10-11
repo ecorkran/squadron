@@ -260,6 +260,11 @@ async def guarded(tool: str, run: Callable[[], Awaitable[ToolResult]]) -> ToolRe
         return await run()
     except EXPECTED_FAILURES as exc:
         return expected_failure(tool, exc)
+    except ValueError as exc:
+        # The argument helpers (require_str and kin) and the tools' own checks raise
+        # ValueError for a missing or mistyped argument: the model's mistake, which it can
+        # correct, so a routine error result (issues 143, 174), not an unexpected failure.
+        return error(tool, f"invalid argument: {exc}")
     except Exception as exc:  # noqa: BLE001
         _logger.exception("%s: unexpected failure", tool)
         return ToolResult(content=f"Error: unexpected failure in {tool}: {exc}", is_error=True)
