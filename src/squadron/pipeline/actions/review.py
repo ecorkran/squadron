@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -50,11 +51,17 @@ from squadron.review.rules import (
     resolve_rules_dir,
 )
 from squadron.review.save_target import ArchTarget, StepTarget
+from squadron.review.task_gate_files import gate_task_files
 from squadron.review.template_inputs import (
     missing_input_files,
     resolve_template_input_parts,
 )
-from squadron.review.templates import ReviewTemplate, get_template, load_all_templates
+from squadron.review.templates import (
+    BuiltinReviewTemplate,
+    ReviewTemplate,
+    get_template,
+    load_all_templates,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -257,6 +264,12 @@ class ReviewAction:
             if count == 1
             else [part.name_suffix for part in review_parts([p["input"] for p in part_inputs])]
         )
+        # Any merge step in any part stops the whole review before a model call
+        # (slice 933): offending parts save the gate's FAIL, clean parts nothing.
+        if template_name == BuiltinReviewTemplate.TASKS and (
+            gated := await self._gated_parts(settings, context, part_inputs, suffixes)
+        ):
+            return fold_review_parts(gated)
         results: list[ActionResult] = []
         for number, (part, suffix) in enumerate(zip(part_inputs, suffixes, strict=True), 1):
             if count > 1:
@@ -470,6 +483,31 @@ class ReviewAction:
             settings, context, result, inputs, verdict_override, name_suffix, position
         )
         return self._part_result(settings, result, inputs, review_file_path, verdict, provenance)
+
+    async def _gated_parts(
+        self,
+        settings: _PartSettings,
+        context: ActionContext,
+        part_inputs: list[dict[str, str]],
+        suffixes: Sequence[str | None],
+    ) -> list[ActionResult]:
+        """Save and map the task gate's FAIL results; empty when every part is clean.
+
+        The gate's reads are small and synchronous by design, like the
+        ``_validate_inputs`` stat checks before it (slice 933 design).
+        """
+        gated = gate_task_files(part_inputs)
+        count = len(part_inputs)
+        results: list[ActionResult] = []
+        for number, (part, suffix) in enumerate(zip(part_inputs, suffixes, strict=True), 1):
+            result = gated.get(part["input"])
+            if result is None:
+                continue
+            result.run_id = context.run_id
+            path = await self._save_part(settings, context, result, part, None, suffix, (number, count))
+            verdict = result.verdict.value
+            results.append(self._part_result(settings, result, part, path, verdict, Provenance.REVIEW))
+        return results
 
     def _enforce_verdict(
         self, settings: _PartSettings, context: ActionContext, result: ReviewResult
