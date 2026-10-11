@@ -33,6 +33,7 @@ from claude_agent_sdk.types import SystemPromptPreset
 from squadron.config.keys import FOREGROUND_IDLE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config, get_typed_config
 from squadron.core.teardown import close_best_effort
+from squadron.pipeline.background_shell_guard import pipeline_hooks
 from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
 from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
@@ -556,6 +557,7 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
         system_prompt={"type": "preset", "preset": "claude_code"},
         setting_sources=settings["setting_sources"],  # pyright: ignore[reportArgumentType]
         env=settings["env"],
+        hooks=pipeline_hooks(),  # pyright: ignore[reportArgumentType]
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))
     session = SDKExecutionSession(client=client, base_options=base, seeded=seed is not None)

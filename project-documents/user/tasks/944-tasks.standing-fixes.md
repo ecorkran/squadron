@@ -24,3 +24,7 @@ dateUpdated: 20261011
 - [x] `ProviderError` prints as one line, not a traceback
 - [x] An unusable SDK session is replaced with a fresh one, and the replacement is logged
 - [x] The run's final status says which steps succeeded (including the merge) when a later step fails
+
+## #199 Dispatch ends while a background shell runs
+
+- [x] Pipeline SDK sessions deny `run_in_background` Bash calls via a PreToolUse hook; the agent reruns in the foreground (verified against the real SDK)
