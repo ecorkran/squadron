@@ -12,6 +12,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.7] - 2026-10-11
+
+### Fixed
+- `setup-ide`: migrating a `CLAUDE.md` with the legacy marker no longer replaces project content that follows a hand-added `[//]: # (context-forge:managed end)` line; that content is kept (#33)
+- `setup-ide`: without an install manifest, a rule, agent or skill file that differs from the guide's version is left alone with a warning instead of being backed up and replaced, so customized files survive the first manifest run. Installs that predate the manifest keep older stock files until they are removed once (#34)
+
+## [0.20.6] - 2026-10-11
+
+### Added
+- `file-naming-conventions.md`: registered the optional `revision_number` frontmatter field (integer written only by tooling, for `slice-design`, `tasks`, and `review` docs) (#14)
+
+### Changed
+- Images now live in an `images/` folder next to the document that uses them. The two UI mockups moved from `z-attachments/` to `project-guides/images/`, and the Obsidian attachment guidance in `directory-structure.md` and the process guide was replaced
+- Stopped tracking `.obsidian/` (left over from editing the guide in Obsidian)
+- Added `.understand-anything/.understandignore` so the analyzer skips `.obsidian/` and `DEVLOG.md`; untracked the analyzer's `intermediate/` scratch output
+
+### Fixed
+- `rules/general.md`, `CLAUDE.md`: the magic-defaults example is now valid Python, with the two bad lines marked (#27)
+
+## [0.20.5] - 2026-10-10
+
+### Fixed
+
+- Prompts no longer contradict each other on task checkboxes: all places now say
+  delegate to `task-checker`, and check off directly if it is unavailable
+  (squadron#189).
+
 ## [0.20.4] - 2026-10-10
 
 ### Changed
