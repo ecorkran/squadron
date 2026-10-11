@@ -1,9 +1,7 @@
 """Read task files and run the merge-step gate over them (slice 933).
 
 The one entry point the CLI and pipeline tasks reviews share, so the two paths
-cannot drift. Reads are small, local and synchronous by design: task files are a
-few hundred lines, well inside the sync budget, like the ``missing_input_files``
-stat check they sit beside.
+cannot drift. Synchronous; an async caller runs it through ``asyncio.to_thread``.
 """
 
 from __future__ import annotations

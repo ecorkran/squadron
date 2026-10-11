@@ -43,7 +43,7 @@ Out of scope:
 - `squadron/review/task_gate.py` (new): `scan_merge_steps(text) -> list[MergeStepLine]` and `merge_gate_results(scans: Sequence[tuple[Mapping[str, str], list[MergeStepLine]]]) -> dict[str, ReviewResult]`. Each entry pairs one part's review inputs dict (`input`, `against`, `cwd`) with its hits; the result is keyed by the part's `input` path, copies that inputs dict into `input_files`, and is empty when every part is clean. Pure functions, no I/O.
 - `squadron/review/task_gate_files.py` (new): `gate_task_files(part_inputs: Sequence[Mapping[str, str]]) -> dict[str, ReviewResult]`, the one read-and-gate entry point both callers use, so the CLI and pipeline paths cannot drift. It holds the reads, keeping `task_gate.py` pure.
 - CLI: `review_tasks` reads every part and calls the gate once before its per-part loop.
-- File reads (inside `gate_task_files`) are small synchronous reads, called next to the existing `missing_input_files` check; in the pipeline they sit beside that same synchronous validation. This is deliberate, not an oversight of the async rule: task files are small and local, so the reads finish well inside the sync budget, as the existing `missing_input_files` stat check already does; no `asyncio.to_thread`.
+- File reads happen inside `gate_task_files`, a plain synchronous function. The CLI calls it directly; the pipeline, inside an async action, calls it through `asyncio.to_thread`, since reads plus per-line regex scans have no guaranteed <1ms bound (changed after code review F002; the design first argued for inline sync reads).
 - Pipeline: `ReviewAction._review` calls the same gate after parts are resolved and validated, before the first model call, when `template_name` is `tasks`.
 
 ### Data Flow

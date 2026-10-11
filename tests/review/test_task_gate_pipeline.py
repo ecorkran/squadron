@@ -13,7 +13,7 @@ from squadron.cli.app import app
 from squadron.metrology.identity import read_review_frontmatter
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionResult
-from squadron.review.persistence import REVIEWS_DIR
+from squadron.review.persistence import REVIEWS_DIR, TASKS_DIR
 from squadron.review.task_gate import TASK_GATE_MODEL
 from tests.review.task_gate_support import (
     ARCH,
@@ -112,3 +112,18 @@ def test_cli_and_pipeline_write_identical_gate_artifacts(
     assert pipeline_calls == 0
     assert review_names(cli_root) == review_names(pipeline_root)
     assert review_names(cli_root) == {"194-review.tasks.loop-step-type.part-2.md"}
+
+
+@pytest.mark.asyncio
+async def test_unreadable_task_file_fails_step_with_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(write_project(tmp_path, {SINGLE[0]: CLEAN_BODY}))
+    task_file = tmp_path / TASKS_DIR / SINGLE[0]
+    task_file.write_bytes(b"- [ ] \xff\xfe broken\n")
+
+    result, model_calls = await _run_step(tmp_path, SINGLE)
+
+    assert result.success is False
+    assert result.error is not None and SINGLE[0] in result.error
+    assert model_calls == 0

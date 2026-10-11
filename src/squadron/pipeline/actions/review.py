@@ -51,7 +51,7 @@ from squadron.review.rules import (
     resolve_rules_dir,
 )
 from squadron.review.save_target import ArchTarget, StepTarget
-from squadron.review.task_gate_files import gate_task_files
+from squadron.review.task_gate_files import TaskFileReadError, gate_task_files
 from squadron.review.template_inputs import (
     missing_input_files,
     resolve_template_input_parts,
@@ -165,6 +165,7 @@ class ReviewAction:
             DiffRangeUnresolvedError,
             DiffSpecError,
             EmptyScopeError,
+            TaskFileReadError,
         ) as exc:
             _logger.warning(
                 "review: step %s failed before/during template resolution: %s",
@@ -491,12 +492,10 @@ class ReviewAction:
         part_inputs: list[dict[str, str]],
         suffixes: Sequence[str | None],
     ) -> list[ActionResult]:
-        """Save and map the task gate's FAIL results; empty when every part is clean.
-
-        The gate's reads are small and synchronous by design, like the
-        ``_validate_inputs`` stat checks before it (slice 933 design).
-        """
-        gated = gate_task_files(part_inputs)
+        """Save and map the task gate's FAIL results; empty when every part is clean."""
+        # Off-thread: file reads and per-line regex scans have no <1ms bound
+        # (project async rule), the same reason _save_part runs off-thread.
+        gated = await asyncio.to_thread(gate_task_files, part_inputs)
         count = len(part_inputs)
         results: list[ActionResult] = []
         for number, (part, suffix) in enumerate(zip(part_inputs, suffixes, strict=True), 1):
