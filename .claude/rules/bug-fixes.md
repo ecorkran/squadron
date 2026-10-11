@@ -1,6 +1,6 @@
 ### Bug Fixes
 
-A bug fix is not a slice. Do not create a slice, design, task file, plan entry, or review artifact for one. The GitHub issue is the spec.
+A fix and a bug fix are the same thing: any work that would be committed as `fix:` follows this procedure. A bug fix is not a slice. Do not create a slice, design, task file, plan entry, or review artifact for one. The GitHub issue is the spec.
 
 #### Procedure
 
