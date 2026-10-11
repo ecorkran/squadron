@@ -102,11 +102,17 @@ def test_resolve_slice_cf_not_installed() -> None:
             _resolve_slice_number("118")
 
 
+def _no_gate_hits(part_inputs: list[dict[str, str]]) -> dict[str, object]:
+    """The fixture's task files do not exist on disk; these tests check routing, not the gate."""
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # Command integration (verify digit detection routes through resolver)
 # ---------------------------------------------------------------------------
 
 
+@patch("squadron.cli.commands.review._gate_task_parts", new=_no_gate_hits)
 @patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_tasks_digit_routes_through_resolver(
@@ -194,6 +200,7 @@ def test_review_tasks_split_files_reviews_each_part(
     assert second_save_kwargs["name_suffix"] == "part-2"
 
 
+@patch("squadron.cli.commands.review._gate_task_parts", new=_no_gate_hits)
 @patch("squadron.cli.commands.review.save_review_result")
 @patch("squadron.cli.commands.review._run_review_command")
 def test_review_tasks_single_file_no_suffix(

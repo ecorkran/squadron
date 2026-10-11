@@ -69,6 +69,7 @@ from squadron.review.rules import (
     resolve_rules_dir,
 )
 from squadron.review.save_target import ArchTarget, SliceTarget
+from squadron.review.task_gate_files import TaskFileReadError, gate_task_files
 from squadron.review.template_inputs import missing_input_files
 from squadron.review.templates import (
     ReviewTemplate,
@@ -614,6 +615,29 @@ def _resolve_model(
     return None
 
 
+def _exit_on_missing_inputs(inputs: dict[str, str]) -> None:
+    """Exit when input/against name no real file.
+
+    A stale or mistyped path would otherwise reach the model with its content
+    silently absent, and the model reviews a document it never saw (issue #18).
+    """
+    for key, value in missing_input_files(inputs):
+        rprint(f"[red]Error: {escape(str(key))} file not found: {escape(str(value))}[/red]")
+        raise typer.Exit(code=1)
+
+
+def _gate_task_parts(part_inputs: list[dict[str, str]]) -> dict[str, ReviewResult]:
+    """Run the merge-step gate over every part before any model call (slice 933)."""
+    for inputs in part_inputs:
+        _exit_on_missing_inputs(inputs)
+    try:
+        return gate_task_files(part_inputs)
+    except TaskFileReadError as exc:
+        # Process boundary: report the unreadable file and exit; never skip the scan.
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
 def _run_review_command(
     template_name: str,
     inputs: dict[str, str],
@@ -659,12 +683,7 @@ def _run_review_command(
             )
             raise typer.Exit(code=1)
 
-    # input/against must name real files — a stale or mistyped path would
-    # otherwise reach the model with its content silently absent, and the
-    # model reviews a document it never saw (issue #18).
-    for key, value in missing_input_files(inputs):
-        rprint(f"[red]Error: {escape(str(key))} file not found: {escape(str(value))}[/red]")
-        raise typer.Exit(code=1)
+    _exit_on_missing_inputs(inputs)
 
     # Prepend template-specific rules (review.md / review-{template}.md).
     # Language auto-detection is handled by the caller (review_code) where
@@ -1034,34 +1053,40 @@ def review_tasks(
     # in, so the run reports the worst thing that happened to any part.
     outcome = SaveOutcome.SUPPRESSED
     parts = review_parts(task_file_paths)
-    for part_idx, part in enumerate(parts, start=1):
+    part_inputs = [{"input": part.input_path, "against": against, "cwd": review_cwd} for part in parts]
+    # Any merge step in any part stops the whole review: offending parts get the
+    # gate's FAIL result in their own slot, clean parts get nothing, no model runs.
+    gate_results = _gate_task_parts(part_inputs)
+    for part_idx, (part, inputs) in enumerate(zip(parts, part_inputs, strict=True), start=1):
         task_path, suffix = part.input_path, part.name_suffix
-        if len(parts) > 1:
-            rprint(
-                f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: "
-                f"{escape(str(task_path))}[/bold]"
+        if gate_results:
+            gated = gate_results.get(task_path)
+            if gated is None:
+                continue
+            display_result(gated, output, output_path, verbosity)
+            result = gated
+        else:
+            if len(parts) > 1:
+                rprint(
+                    f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: "
+                    f"{escape(str(task_path))}[/bold]"
+                )
+            # The suffix is bound before the run so a provider failure lands in this
+            # part's own slot, the same one its success path would write.
+            result = _run_review_command(
+                "tasks",
+                inputs,
+                output,
+                output_path,
+                verbosity,
+                model_flag=model,
+                profile_flag=profile,
+                no_tools=no_tools,
+                rules_dir=resolved_rules_dir,
+                failure_target=slice_info,
+                no_save=no_save,
+                failure_name_suffix=suffix,
             )
-        inputs = {
-            "input": task_path,
-            "against": against,
-            "cwd": review_cwd,
-        }
-        # The suffix is bound before the run so a provider failure lands in this
-        # part's own slot, the same one its success path would write.
-        result = _run_review_command(
-            "tasks",
-            inputs,
-            output,
-            output_path,
-            verbosity,
-            model_flag=model,
-            profile_flag=profile,
-            no_tools=no_tools,
-            rules_dir=resolved_rules_dir,
-            failure_target=slice_info,
-            no_save=no_save,
-            failure_name_suffix=suffix,
-        )
         results.append((task_path, result))
 
         # Every part is saved before exiting: the reviews have already been
