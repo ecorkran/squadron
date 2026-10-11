@@ -13,7 +13,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 943: design complete (Phase 4)
 
-- Design: `user/slices/943-slice.proportionate-reviews-review-and-revise-loops-that-can-cut-scope.md`, effort 2/5. Prompts only: proportionality criterion (overweight = CONCERN, name the cut) and a gap-needs-a-requirement qualifier in slice/tasks/arch templates and the two mirrored judges; a smallest-sufficient-change paragraph in `_findings_block`; findings-addressed judge counts a cut as `addressed`. Code review template excluded.
+- Design: `user/slices/943-slice.proportionate-reviews-review-and-revise-loops-that-can-cut-scope.md`, effort 2/5. Prompts only: two-sided proportionality criterion (overweight = CONCERN, cutting plan-assigned scope = CONCERN) and a gap-needs-a-requirement qualifier in slice/tasks/arch templates; a smallest-sufficient-change paragraph in `_findings_block` (deferrals become GitHub issues). Judge and code templates excluded (judge edits re-key 320 calibration).
 - Baseline for verification (trading-ui 127, `run-20261010-p4-e8ba2e27`): design words 4,673 → 6,561 → 7,735 across rounds; in-session cut to 3,135. Rerun from trading-ui `2c5e9d4`.
 
 ### Release 0.21.4
