@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261011
 
+### Release 0.21.4
+
+- **Contents:** Slice 933 (deterministic task-file gate) with its code-review fixes (pipeline off-thread gate and unreadable-file handling, CLI short-circuit before the model loop, matched rule named in findings), plus the #201 fix and the tools/calls telemetry display already on main.
+
 ### Slice 933: implementation complete (Phase 6)
 
 - Branch `933-slice.deterministic-task-file-gate` (from `main`), not yet merged; Phase 7 follows code review.

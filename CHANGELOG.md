@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.4] - 20261011
+
 ### Added
 - Tasks reviews (`sq review tasks`, `/sq:review tasks`, and pipeline `review: {template: tasks}` steps) now fail a task file that schedules a merge as a checklist item or heading, before any model runs and at no cost. The review lists each offending line; merging belongs to Phase 7, after code review.
 
