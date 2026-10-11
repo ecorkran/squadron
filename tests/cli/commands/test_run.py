@@ -1715,6 +1715,36 @@ def test_display_result_summarizes_batch_report(
     assert str(report_path.with_suffix(".json")) in out.replace("\n", "")
 
 
+def test_failed_run_after_a_merge_says_the_slice_was_merged_and_names_the_failed_steps(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Issue 200: `failed` must not hide that the merge already happened."""
+    from squadron.cli.commands.run import _display_result
+    from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
+    from squadron.pipeline.models import ActionResult
+
+    merged = ActionResult(
+        success=True,
+        action_type="branch",
+        outputs={"branch": "940-slice.foo", "target": "main", "merged": "merged"},
+    )
+    failed = ActionResult(success=False, action_type="summary", outputs={}, error="boom")
+    result = PipelineResult(
+        pipeline_name="p6",
+        status=ExecutionStatus.FAILED,
+        step_results=[
+            StepResult("branch-4", "branch", ExecutionStatus.COMPLETED, [merged]),
+            StepResult("summary-5", "summary", ExecutionStatus.FAILED, [failed]),
+        ],
+    )
+
+    _display_result(result)
+
+    out = capsys.readouterr().out.replace("\n", " ")
+    assert "940-slice.foo was merged into main" in out
+    assert "failed: summary-5" in out
+
+
 class TestUnknownAliasRejectedPreRun:
     """#175 / design criterion 11: a mistyped alias fails before any step writes anything."""
 

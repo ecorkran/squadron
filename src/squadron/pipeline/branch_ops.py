@@ -55,6 +55,8 @@ class BranchFailure(StrEnum):
 # branch a successful one entered or merged.
 FAILURE_OUTPUT = "failure"
 BRANCH_OUTPUT = "branch"
+TARGET_OUTPUT = "target"
+MERGED_OUTPUT = "merged"  # present only on a merge; its value is the MergeOutcome
 
 
 class MergeFailedError(ValueError):

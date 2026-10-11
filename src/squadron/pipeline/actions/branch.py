@@ -12,6 +12,8 @@ from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.branch_ops import (
     BRANCH_OUTPUT,
     FAILURE_OUTPUT,
+    MERGED_OUTPUT,
+    TARGET_OUTPUT,
     BranchFailure,
     MergeFailedError,
     enter_slice_branch,
@@ -66,10 +68,18 @@ def _run_op(op: BranchOp, slice_index: int, context: ActionContext) -> dict[str,
     match op:
         case BranchOp.ENTER:
             entered = enter_slice_branch(slice_index, context.cwd, context.cf_client)
-            return {BRANCH_OUTPUT: entered.branch, "target": entered.target, "created": entered.created}
+            return {
+                BRANCH_OUTPUT: entered.branch,
+                TARGET_OUTPUT: entered.target,
+                "created": entered.created,
+            }
         case BranchOp.MERGE:
             result = merge_slice_branch(slice_index, context.cwd, context.cf_client)
-            return {BRANCH_OUTPUT: result.branch, "target": result.target, "merged": result.outcome}
+            return {
+                BRANCH_OUTPUT: result.branch,
+                TARGET_OUTPUT: result.target,
+                MERGED_OUTPUT: result.outcome,
+            }
 
 
 register_action(ActionType.BRANCH, BranchAction())

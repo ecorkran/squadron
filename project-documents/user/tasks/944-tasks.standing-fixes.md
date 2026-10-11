@@ -23,4 +23,4 @@ dateUpdated: 20261011
 - [x] A failed dispatch ends the loop with the loop's `on_exhaust` status (451644ac)
 - [x] `ProviderError` prints as one line, not a traceback
 - [x] An unusable SDK session is replaced with a fresh one, and the replacement is logged
-- [ ] The run's final status says which steps succeeded (including the merge) when a later step fails
+- [x] The run's final status says which steps succeeded (including the merge) when a later step fails

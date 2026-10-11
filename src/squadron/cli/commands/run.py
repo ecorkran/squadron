@@ -34,7 +34,9 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
+from squadron.pipeline.actions import ActionType
 from squadron.pipeline.batch_report import BatchReport, ItemDecision, ItemRerun
+from squadron.pipeline.branch_ops import BRANCH_OUTPUT, MERGED_OUTPUT, TARGET_OUTPUT
 from squadron.pipeline.classification import (
     ClassificationError,
     PipelineClassification,
@@ -630,9 +632,28 @@ def _display_result(result: PipelineResult) -> None:
         if error_msg:
             rprint(f"      [red]Error: {escape(str(error_msg))}[/red]")
 
+    if result.status == ExecutionStatus.FAILED:
+        _display_failure_context(result)
+
     for sr in result.step_results:
         if sr.batch_report is not None:
             _display_batch_report(sr.batch_report)
+
+
+def _display_failure_context(result: PipelineResult) -> None:
+    """Say what a failed run still got done: any merge, and which steps failed (issue 200).
+
+    `failed` alone reads as "nothing landed"; a run whose only failure came after its
+    merge would otherwise hide that the slice is already on the target.
+    """
+    for sr in result.step_results:
+        for ar in sr.action_results:
+            if ar.action_type == ActionType.BRANCH and MERGED_OUTPUT in ar.outputs:
+                branch, target = ar.outputs.get(BRANCH_OUTPUT), ar.outputs.get(TARGET_OUTPUT)
+                rprint(f"  {escape(str(branch))} was merged into {escape(str(target))}.")
+    failed = [sr.step_name for sr in result.step_results if sr.status == ExecutionStatus.FAILED]
+    if failed:
+        rprint(f"  failed: {escape(', '.join(failed))}")
 
 
 def _display_batch_report(report: BatchReport) -> None:

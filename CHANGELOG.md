@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Implement pipelines no longer merge a slice with unchecked task items. A close-out step checks off the items the branch diff verifies, and the merge refuses (naming the first unchecked items) if any remain. (#189)
+- A failed dispatch inside a revise loop now ends the loop instead of letting the next review accept unrevised work and merge it. An unusable SDK session is replaced with a fresh one (logged), provider errors print as one line instead of a traceback, and a failed run that already merged says so. (#200)
 
 ## [0.21.4] - 20261011
 
