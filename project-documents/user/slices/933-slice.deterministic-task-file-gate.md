@@ -40,13 +40,14 @@ Out of scope:
 
 ## Architecture
 ### Component Structure
-- `squadron/review/task_gate.py` (new): `scan_merge_steps(text) -> list[MergeStepLine]` and `merge_gate_results(scans: Mapping[Path, list[MergeStepLine]]) -> dict[Path, ReviewResult]` (empty when every part is clean). Pure functions, no I/O.
+- `squadron/review/task_gate.py` (new): `scan_merge_steps(text) -> list[MergeStepLine]` and `merge_gate_results(scans: Sequence[tuple[Mapping[str, str], list[MergeStepLine]]]) -> dict[str, ReviewResult]`. Each entry pairs one part's review inputs dict (`input`, `against`, `cwd`) with its hits; the result is keyed by the part's `input` path, copies that inputs dict into `input_files`, and is empty when every part is clean. Pure functions, no I/O.
+- `squadron/review/task_gate_files.py` (new): `gate_task_files(part_inputs: Sequence[Mapping[str, str]]) -> dict[str, ReviewResult]`, the one read-and-gate entry point both callers use, so the CLI and pipeline paths cannot drift. It holds the reads, keeping `task_gate.py` pure.
 - CLI: `review_tasks` reads every part and calls the gate once before its per-part loop.
-- File reads are small synchronous reads done inline, next to the existing `missing_input_files` check; in the pipeline they sit beside that same synchronous validation. This is deliberate, not an oversight of the async rule: task files are small and local, so the reads finish well inside the sync budget, as the existing `missing_input_files` stat check already does; no `asyncio.to_thread`.
+- File reads (inside `gate_task_files`) are small synchronous reads, called next to the existing `missing_input_files` check; in the pipeline they sit beside that same synchronous validation. This is deliberate, not an oversight of the async rule: task files are small and local, so the reads finish well inside the sync budget, as the existing `missing_input_files` stat check already does; no `asyncio.to_thread`.
 - Pipeline: `ReviewAction._review` calls the same gate after parts are resolved and validated, before the first model call, when `template_name` is `tasks`.
 
 ### Data Flow
-Task file paths → read each file → `scan_merge_steps` per file → `merge_gate_results`.
+Part inputs dicts → `gate_task_files` reads each `input` file → `scan_merge_steps` per file → `merge_gate_results`.
 
 **Any hit in any part stops the whole review: no model call for any part.** A FAIL `ReviewResult` is built and saved for each offending part only (its own `part-N` slot for a split breakdown, the normal slot for a single file); clean parts are not reviewed and get no artifact. The CLI's worst-verdict exit code sees FAIL and exits non-zero; the pipeline passes the FAIL results through `fold_review_parts`, so the step's verdict is FAIL. If there are no hits, the normal review runs unchanged.
 
