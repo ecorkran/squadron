@@ -106,3 +106,14 @@ def test_slice_review_is_not_gated(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     assert outcome.exit_code == 0, outcome.output
     assert model_calls == 1
+
+
+def test_unreadable_task_file_exits_with_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(write_project(tmp_path, {SINGLE[0]: CLEAN_BODY}))
+    (tmp_path / TASKS_DIR / SINGLE[0]).write_bytes(b"- [ ] \xff\xfe broken\n")
+
+    outcome, model_calls = _invoke(tmp_path, SINGLE, ["review", "tasks", "194"])
+
+    assert outcome.exit_code == 1
+    assert "Cannot read task file" in outcome.output
+    assert model_calls == 0

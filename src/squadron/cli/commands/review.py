@@ -1054,51 +1054,9 @@ def review_tasks(
     outcome = SaveOutcome.SUPPRESSED
     parts = review_parts(task_file_paths)
     part_inputs = [{"input": part.input_path, "against": against, "cwd": review_cwd} for part in parts]
-    # Any merge step in any part stops the whole review: offending parts get the
-    # gate's FAIL result in their own slot, clean parts get nothing, no model runs.
-    gate_results = _gate_task_parts(part_inputs)
-    for part_idx, (part, inputs) in enumerate(zip(parts, part_inputs, strict=True), start=1):
-        task_path, suffix = part.input_path, part.name_suffix
-        if gate_results:
-            gated = gate_results.get(task_path)
-            if gated is None:
-                continue
-            display_result(gated, output, output_path, verbosity)
-            result = gated
-        else:
-            if len(parts) > 1:
-                rprint(
-                    f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: "
-                    f"{escape(str(task_path))}[/bold]"
-                )
-            # The suffix is bound before the run so a provider failure lands in this
-            # part's own slot, the same one its success path would write.
-            result = _run_review_command(
-                "tasks",
-                inputs,
-                output,
-                output_path,
-                verbosity,
-                model_flag=model,
-                profile_flag=profile,
-                no_tools=no_tools,
-                rules_dir=resolved_rules_dir,
-                failure_target=slice_info,
-                no_save=no_save,
-                failure_name_suffix=suffix,
-            )
-        results.append((task_path, result))
 
-        # Every part is saved before exiting: the reviews have already been
-        # paid for, so one unwritable part must not cost the others.
-        def _save_part(
-            info: SliceInfo,
-            part_result: ReviewResult = result,
-            path: str = task_path,
-            suf: str | None = suffix,
-        ) -> bool:
-            # Defaults bind this part's values: the closure outlives the
-            # iteration that created it only if something later calls it.
+    def _save_part(part_result: ReviewResult, path: str, suf: str | None) -> SaveOutcome:
+        def _save(info: SliceInfo) -> bool:
             return _save_and_report(
                 part_result,
                 "tasks",
@@ -1110,13 +1068,50 @@ def review_tasks(
                 project_name=info["project"],
             )
 
-        part_outcome = _resolve_save_outcome(
-            no_save=no_save,
-            target=slice_info,
-            save=_save_part,
-            review_type="tasks",
+        return _resolve_save_outcome(
+            no_save=no_save, target=slice_info, save=_save, review_type="tasks"
         )
-        outcome = _worst_outcome(outcome, part_outcome)
+
+    # Any merge step in any part stops the whole review: offending parts get the
+    # gate's FAIL result in their own slot, clean parts get nothing, no model runs.
+    gate_results = _gate_task_parts(part_inputs)
+    if gate_results:
+        for part in parts:
+            gated = gate_results.get(part.input_path)
+            if gated is not None:
+                display_result(gated, output, output_path, verbosity)
+                results.append((part.input_path, gated))
+                outcome = _worst_outcome(outcome, _save_part(gated, part.input_path, part.name_suffix))
+        _exit_on(Verdict.FAIL, outcome)
+        return
+
+    for part_idx, (part, inputs) in enumerate(zip(parts, part_inputs, strict=True), start=1):
+        task_path, suffix = part.input_path, part.name_suffix
+        if len(parts) > 1:
+            rprint(
+                f"[bold]Reviewing tasks part {part_idx} of {len(parts)}: "
+                f"{escape(str(task_path))}[/bold]"
+            )
+        # The suffix is bound before the run so a provider failure lands in this
+        # part's own slot, the same one its success path would write.
+        result = _run_review_command(
+            "tasks",
+            inputs,
+            output,
+            output_path,
+            verbosity,
+            model_flag=model,
+            profile_flag=profile,
+            no_tools=no_tools,
+            rules_dir=resolved_rules_dir,
+            failure_target=slice_info,
+            no_save=no_save,
+            failure_name_suffix=suffix,
+        )
+        results.append((task_path, result))
+        # Every part is saved before the next runs: the reviews have already been
+        # paid for, so a later part's failure must not cost this one.
+        outcome = _worst_outcome(outcome, _save_part(result, task_path, suffix))
 
     _exit_on(Verdict(worst_verdict(str(r.verdict) for _, r in results)), outcome)
 
