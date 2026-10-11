@@ -144,7 +144,7 @@ def scan_merge_steps(text: str) -> list[MergeStepLine]:
 def _hit_finding(path: str, hit: MergeStepLine) -> ReviewFinding:
     return ReviewFinding(
         severity=Severity.FAIL,
-        title=f"Merge step at line {hit.line_number}",
+        title=f"Merge step at line {hit.line_number}: {hit.text}",
         description=(
             f"Line {hit.line_number} schedules a merge: `{hit.text}`. Merging happens in "
             f"Phase 7 after code review passes; a task file must not contain it."
