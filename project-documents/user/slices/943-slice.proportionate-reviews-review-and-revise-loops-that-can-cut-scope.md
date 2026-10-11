@@ -147,11 +147,12 @@ The trading-ui slice 127 rerun (walkthrough below) produces a final design no la
    ```
 
 2. **Rerun slice 127 from its original input.** Use a throwaway trading-ui worktree at `2c5e9d4`, the commit before the recorded design was added, and the recorded run's models. The installed `sq` must be the 943 build.
+   Run it from a standard terminal: `sq run` refuses SDK pipeline execution inside a Claude Code session. Confirm the 943 build with `which sq` (expect the squadron checkout's `.venv/bin/sq`, an editable install).
    ```bash
    cd /Users/manta/source/repos/manta/trading-ui
    git worktree add /tmp/tui-943 2c5e9d4 -b verify-943
    cd /tmp/tui-943
-   sq run P4 --slice 127 --model opus --review-model sonnet
+   sq run P4 127 --model opus -p review-model=sonnet
    ```
 
 3. **Measure each round.** P4 commits every loop iteration:
