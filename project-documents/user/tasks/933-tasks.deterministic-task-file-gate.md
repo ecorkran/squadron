@@ -112,7 +112,7 @@ reason as Task 2):
 
 Per-rule cases (prose, so this file passes its own gate): R2 joined verbs "commit and merge",
 "commit, then merge", "merge and release", "merge, tag, and publish"; R3 window lines of the
-form "merge the work from this <n filler words> branch" with n = window − 1 (flagged) and
+form "merge <n filler words> branch" with n = window − 1 (flagged) and
 n = window (not flagged), where "branch" is the git object.
 
 ---
