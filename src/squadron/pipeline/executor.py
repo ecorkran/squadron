@@ -1007,6 +1007,25 @@ def _loop_skip_result(
     )
 
 
+def _loop_failure_status(loop_config: LoopConfig) -> ExecutionStatus:
+    """The status a loop that cannot finish reports, per its ``on_exhaust`` mode."""
+    match loop_config.on_exhaust:
+        case ExhaustBehavior.FAIL:
+            return ExecutionStatus.FAILED
+        case ExhaustBehavior.CHECKPOINT:
+            return ExecutionStatus.PAUSED
+        case ExhaustBehavior.SKIP:
+            return ExecutionStatus.SKIPPED
+
+
+def _failed_dispatch_error(inner_result: StepResult) -> str | None:
+    """The error of a dispatch action that failed in *inner_result*, else ``None``."""
+    for action_result in inner_result.action_results:
+        if action_result.action_type == ActionType.DISPATCH and not action_result.success:
+            return action_result.error or "dispatch failed with no error text"
+    return None
+
+
 def _loop_exhaust_result(
     *,
     step: Any,
@@ -1030,13 +1049,7 @@ def _loop_exhaust_result(
             accepted=True,
             exhausted=True,
         )
-    match loop_config.on_exhaust:
-        case ExhaustBehavior.FAIL:
-            status = ExecutionStatus.FAILED
-        case ExhaustBehavior.CHECKPOINT:
-            status = ExecutionStatus.PAUSED
-        case ExhaustBehavior.SKIP:
-            status = ExecutionStatus.SKIPPED
+    status = _loop_failure_status(loop_config)
     final = last_with_verdict(action_results)
     reason = f"loop exhausted at {final.verdict if final is not None else 'no verdict'}"
     if loop_config.accept_if is not None:
@@ -1375,7 +1388,26 @@ async def _execute_loop_body(
                     action_results=iteration_action_results,
                     iteration=iteration,
                 )
-            # FAILED is transient — continue executing remaining inner steps
+            # A failed dispatch ends the loop (issue 200): that round changed nothing, so
+            # a later review must not be allowed to satisfy `until` or `accept_if`. Any
+            # other FAILED inner step is transient and the round continues.
+            if (dispatch_error := _failed_dispatch_error(inner_result)) is not None:
+                _logger.error(
+                    "loop %s round %d: %s dispatch failed: %s; ending the loop",
+                    step.name,
+                    iteration,
+                    inner_result.step_name,
+                    dispatch_error,
+                )
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=_loop_failure_status(loop_config),
+                    action_results=iteration_action_results,
+                    iteration=iteration,
+                    error=f"loop {step.name} round {iteration}: "
+                    f"{inner_result.step_name} dispatch failed: {dispatch_error}",
+                )
 
         # This iteration's body outputs become the next iteration's "prior
         # round". Assigned after the body completes so no step within an

@@ -281,16 +281,17 @@ async def test_loop_body_exhaustion_skip() -> None:
 async def test_inner_failure_is_transient_second_step_still_runs() -> None:
     """First inner step fails on iteration 1; second still runs and produces PASS.
 
-    FAILED status on an inner step does not abort the iteration — execution
-    continues to the next inner step so the until condition can be evaluated.
+    FAILED status on a non-dispatch inner step does not abort the iteration —
+    execution continues to the next inner step so the until condition can be
+    evaluated. (A failed dispatch does end the loop: see the issue 200 tests.)
     """
-    fail_result = _action_result(False, "dispatch")
+    fail_result = _action_result(False, "commit")
     pass_result = _action_result(True, "review", verdict="PASS")
 
     dispatch_action = _mock_action([fail_result])
     review_action = _mock_action([pass_result])
 
-    failing_inner = _mock_step_type([("dispatch", {})])
+    failing_inner = _mock_step_type([("commit", {})])
     passing_inner = _mock_step_type([("review", {})])
 
     register_step_type("_lb_failing_inner_t13", failing_inner)
@@ -318,7 +319,7 @@ async def test_inner_failure_is_transient_second_step_still_runs() -> None:
         resolver=MagicMock(),
         cf_client=MagicMock(),
         _action_registry={
-            "dispatch": dispatch_action,
+            "commit": dispatch_action,
             "review": review_action,
         },
     )
@@ -1966,3 +1967,60 @@ async def test_without_an_accept_decision_the_loop_runs_its_rounds() -> None:
     )
     assert steps[1].accepted is False
     assert review.execute.await_count == 3
+
+
+# ---------------------------------------------------------------------------
+# Issue 200 — a failed dispatch ends the loop; the next review cannot accept it
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("on_exhaust", "expected"),
+    [
+        ("fail", ExecutionStatus.FAILED),
+        ("checkpoint", ExecutionStatus.PAUSED),
+        ("skip", ExecutionStatus.SKIPPED),
+    ],
+)
+@pytest.mark.asyncio
+async def test_failed_dispatch_ends_the_loop_without_running_the_review(
+    on_exhaust: str, expected: ExecutionStatus
+) -> None:
+    failed = ActionResult(
+        success=False, action_type="dispatch", outputs={}, error="SDK session unusable"
+    )
+    dispatch_action = _mock_action([failed])
+    review_action = _mock_action([_action_result(True, "review", verdict="CONCERNS")])
+    register_step_type("_lb_dispatch_i200", _mock_step_type([("dispatch", {})]))
+    register_step_type("_lb_review_i200", _mock_step_type([("review", {})]))
+
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                f"revise-{on_exhaust}",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "accept_if": "review.concerns_or_better",
+                    "on_exhaust": on_exhaust,
+                    "steps": [{"_lb_dispatch_i200": {}}, {"_lb_review_i200": {}}],
+                },
+            )
+        ]
+    )
+
+    result = await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"dispatch": dispatch_action, "review": review_action},
+    )
+
+    step_result = result.step_results[0]
+    assert step_result.status == expected
+    assert step_result.accepted is False
+    assert step_result.iteration == 1  # no later round ran
+    assert step_result.error is not None
+    assert "SDK session unusable" in step_result.error
+    review_action.execute.assert_not_called()
