@@ -290,6 +290,15 @@ class DispatchFeedbackError(ValueError):
     """A ``feedback:`` dispatch has nothing in scope to revise against."""
 
 
+# Appended to every findings list so revise rounds can cut, not only add (slice 943).
+REVISE_GUIDANCE = (
+    "Resolve each finding with the smallest change that satisfies it. Removing "
+    "or simplifying is as valid as adding. Defer only scope the artifact's plan "
+    "does not require, and record each deferral as a GitHub issue named in the "
+    "artifact. Do not add material no finding asks for."
+)
+
+
 class DispatchAction:
     """Pipeline action that dispatches a prompt to a language model.
 
@@ -574,6 +583,7 @@ class DispatchAction:
             part_file = finding_input_file(finding)
             file_suffix = f" — {part_file}" if part_file else ""
             lines.append(f"- [{severity}] {summary}{loc_suffix}{file_suffix}")
+        lines.extend(["", REVISE_GUIDANCE])
         return "\n".join(lines)
 
     @classmethod

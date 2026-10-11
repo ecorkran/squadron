@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from squadron.core.models import AgentConfig, Message
-from squadron.pipeline.actions.dispatch import DispatchAction
+from squadron.pipeline.actions.dispatch import REVISE_GUIDANCE, DispatchAction
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
@@ -752,8 +752,30 @@ class TestFeedbackReview:
             "\n"
             "- [concern] Plan argument is ignored (sources.py:12)\n"
             "\n"
+            f"{REVISE_GUIDANCE}\n"
+            "\n"
             f"Revise `{_DESIGN}` in place; do not create a new file."
         )
+
+    def test_fallback_path_appends_revise_guidance(self, action: DispatchAction) -> None:
+        ctx = _make_context(params={}, prior_outputs={"0-review-0": _review_result(_DESIGN)})
+
+        prompt = action._resolve_prompt(ctx)
+
+        assert prompt.endswith(
+            "- [concern] Plan argument is ignored (sources.py:12)\n\n" + REVISE_GUIDANCE
+        )
+
+    def test_no_findings_prompt_omits_revise_guidance(self, action: DispatchAction) -> None:
+        review = ActionResult(
+            success=True, action_type="review", outputs={}, verdict="PASS", findings=[]
+        )
+        ctx = _make_context(params={}, prior_outputs={"0-review-0": review})
+
+        prompt = action._resolve_prompt(ctx)
+
+        assert "initial improvement pass" in prompt
+        assert REVISE_GUIDANCE not in prompt
 
     def test_multi_file_prompt_lists_every_file_and_tags_findings(self, action: DispatchAction) -> None:
         review = ActionResult(
