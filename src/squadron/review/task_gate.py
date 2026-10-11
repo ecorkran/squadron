@@ -8,7 +8,23 @@ file reads live in ``task_gate_files`` so this module stays I/O-free.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+
+from squadron.review.models import (
+    ReviewFinding,
+    ReviewResult,
+    Severity,
+    Verdict,
+    VerdictSource,
+)
+from squadron.review.templates import BuiltinReviewTemplate
+
+# The FAIL result's model field: no model ran, the gate did.
+TASK_GATE_MODEL = "squadron-task-gate"
+TASK_GATE_CATEGORY = "merge-step"
+# The review inputs key holding the task file a part reviews.
+INPUT_KEY = "input"
 
 # How many words after the merge word a git object may appear and still count.
 MERGE_OBJECT_WINDOW = 4
@@ -123,3 +139,44 @@ def scan_merge_steps(text: str) -> list[MergeStepLine]:
         if body is not None and _is_merge_step(body):
             hits.append(MergeStepLine(line_number=index + 1, text=lines[index].strip()))
     return hits
+
+
+def _hit_finding(path: str, hit: MergeStepLine) -> ReviewFinding:
+    return ReviewFinding(
+        severity=Severity.FAIL,
+        title=f"Merge step at line {hit.line_number}",
+        description=(
+            f"Line {hit.line_number} schedules a merge: `{hit.text}`. Merging happens in "
+            f"Phase 7 after code review passes; a task file must not contain it."
+        ),
+        file_ref=path,
+        category=TASK_GATE_CATEGORY,
+        location=f"{path}:{hit.line_number}",
+    )
+
+
+def _gate_result(inputs: Mapping[str, str], hits: list[MergeStepLine]) -> ReviewResult:
+    path = inputs[INPUT_KEY]
+    lines = ", ".join(str(hit.line_number) for hit in hits)
+    return ReviewResult(
+        verdict=Verdict.FAIL,
+        findings=[_hit_finding(path, hit) for hit in hits],
+        raw_output=(f"The task-file gate found merge steps in {path} (lines {lines}). No model ran."),
+        template_name=BuiltinReviewTemplate.TASKS,
+        input_files=dict(inputs),
+        model=TASK_GATE_MODEL,
+        verdict_source=VerdictSource.IMPOSED,
+        tools_given=None,
+        tool_calls_made=None,
+    )
+
+
+def merge_gate_results(
+    scans: Sequence[tuple[Mapping[str, str], list[MergeStepLine]]],
+) -> dict[str, ReviewResult]:
+    """Build a FAIL result for each part with hits, keyed by its ``input`` path.
+
+    Each scan pairs one part's review inputs dict with that part's hits. Empty
+    when every part is clean.
+    """
+    return {inputs[INPUT_KEY]: _gate_result(inputs, hits) for inputs, hits in scans if hits}

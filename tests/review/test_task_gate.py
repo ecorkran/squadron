@@ -6,7 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from squadron.review.task_gate import MERGE_OBJECT_WINDOW, scan_merge_steps
+from squadron.core.usage import TokenUsage
+from squadron.metrology.identity import read_review_frontmatter
+from squadron.review.models import Severity, Verdict, VerdictSource
+from squadron.review.persistence import SliceInfo, save_review_result
+from squadron.review.task_gate import (
+    MERGE_OBJECT_WINDOW,
+    TASK_GATE_MODEL,
+    MergeStepLine,
+    merge_gate_results,
+    scan_merge_steps,
+)
+from squadron.review.templates import BuiltinReviewTemplate
 
 FIXTURES = Path(__file__).parent / "fixtures" / "task_gate"
 
@@ -106,3 +117,61 @@ def test_object_at_window_edge_flagged() -> None:
 
 def test_object_past_window_not_flagged() -> None:
     assert scan_merge_steps(_window_line(MERGE_OBJECT_WINDOW)) == []
+
+
+def _inputs(path: str) -> dict[str, str]:
+    return {"input": path, "against": "design.md", "cwd": "."}
+
+
+HIT = MergeStepLine(line_number=12, text="- [ ] Merge to `main`.")
+
+
+def test_no_hits_gives_no_results() -> None:
+    assert merge_gate_results([(_inputs("a.md"), []), (_inputs("b.md"), [])]) == {}
+
+
+def test_only_offending_part_gets_a_result() -> None:
+    clean, offending = _inputs("part-1.md"), _inputs("part-2.md")
+    results = merge_gate_results([(clean, []), (offending, [HIT])])
+    assert list(results) == ["part-2.md"]
+    assert results["part-2.md"].input_files == offending
+
+
+def test_fail_result_fields() -> None:
+    result = merge_gate_results([(_inputs("t.md"), [HIT])])["t.md"]
+    assert result.verdict is Verdict.FAIL
+    assert result.template_name == BuiltinReviewTemplate.TASKS
+    assert result.model == TASK_GATE_MODEL
+    assert result.verdict_source is VerdictSource.IMPOSED
+    assert result.tools_given is None
+    assert result.tool_calls_made is None
+    assert result.profile is None
+    assert result.turns is None
+    assert result.duration_seconds is None
+    assert result.usage == TokenUsage()
+    assert "No model ran" in result.raw_output
+    [finding] = result.findings
+    assert finding.severity is Severity.FAIL
+    assert "12" in finding.title
+    assert HIT.text in finding.description
+
+
+def test_saved_artifact_reads_back(tmp_path: Path) -> None:
+    result = merge_gate_results([(_inputs("t.md"), [HIT])])["t.md"]
+    slice_info = SliceInfo(
+        index=933,
+        name="gate",
+        slice_name="gate",
+        design_file=None,
+        task_files=[],
+        arch_file="",
+        project="squadron",
+    )
+    saved = save_review_result(result, "tasks", slice_info=slice_info, reviews_dir=tmp_path)
+
+    frontmatter = read_review_frontmatter(saved)
+    assert frontmatter["aiModel"] == TASK_GATE_MODEL
+    assert frontmatter["verdictSource"] == "imposed"
+    assert frontmatter["verdict"] == "FAIL"
+    assert "toolsGiven" not in frontmatter
+    assert "toolCallsMade" not in frontmatter

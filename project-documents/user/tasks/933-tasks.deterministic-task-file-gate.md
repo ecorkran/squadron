@@ -10,7 +10,7 @@ projectState: >
   call and save a FAIL result per offending part.
 dateCreated: 20261010
 dateUpdated: 20261011
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -46,9 +46,9 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Run `cf config get git.integration_branch`; call its value the target (`main` if empty). Confirm `git status` is clean and the current branch is the target
-- [ ] `git checkout -b 933-slice.deterministic-task-file-gate {target}`
-  - [ ] Success: `git branch --show-current` prints `933-slice.deterministic-task-file-gate`
+- [x] Run `cf config get git.integration_branch`; call its value the target (`main` if empty). Confirm `git status` is clean and the current branch is the target
+- [x] `git checkout -b 933-slice.deterministic-task-file-gate {target}`
+  - [x] Success: `git branch --show-current` prints `933-slice.deterministic-task-file-gate`
 
 ---
 
@@ -68,11 +68,11 @@ the gate it describes):
 | P5 | trading-ui | `124-tasks.chart-data-binding.md` | 496 | "Merge into the target per the project Git Rules…" |
 | P6 | trading-ui | `125-tasks.late-container-mount-fix.md` | 325 | "Merge: re-read `cf config get git.integration_branch`…" |
 
-- [ ] Create `tests/review/fixtures/task_gate/` with one excerpt file per source below. Each excerpt keeps the offending lines verbatim (including `- [x]`, indentation, bold markers and backticks) plus a few surrounding checklist lines
-- [ ] Each excerpt starts with a comment line naming the source repo, file and original line numbers. Record, per excerpt, which lines of the excerpt itself are expected hits (in `README.md` in the same directory, or as constants in the test file from Task 4)
-  - [ ] One excerpt per row of the source table above (P1–P6), each covering every listed line
-- [ ] Add one negatives excerpt from squadron's own task files (`project-documents/user/tasks/`): find real checklist lines that use merge vocabulary without being a merge step (e.g. `grep -nE "^\s*- \[.\].*\bmerge" project-documents/user/tasks/*.md`), copy at least three, and note their source lines. Expected hits: none
-  - [ ] Success: seven excerpt files exist, each with source and line notes; no test reads outside `tests/`
+- [x] Create `tests/review/fixtures/task_gate/` with one excerpt file per source below. Each excerpt keeps the offending lines verbatim (including `- [x]`, indentation, bold markers and backticks) plus a few surrounding checklist lines
+- [x] Each excerpt starts with a comment line naming the source repo, file and original line numbers. Record, per excerpt, which lines of the excerpt itself are expected hits (in `README.md` in the same directory, or as constants in the test file from Task 4)
+  - [x] One excerpt per row of the source table above (P1–P6), each covering every listed line
+- [x] Add one negatives excerpt from squadron's own task files (`project-documents/user/tasks/`): find real checklist lines that use merge vocabulary without being a merge step (e.g. `grep -nE "^\s*- \[.\].*\bmerge" project-documents/user/tasks/*.md`), copy at least three, and note their source lines. Expected hits: none
+  - [x] Success: seven excerpt files exist, each with source and line notes; no test reads outside `tests/`
 
 ---
 
@@ -89,26 +89,26 @@ reason as Task 2):
 - R3 object window: the merge word followed by a git object within `MERGE_OBJECT_WINDOW` words.
 - R4 success criterion: "branch" or "slice" directly followed by "merged".
 
-- [ ] Create `src/squadron/review/task_gate.py` with a frozen dataclass `MergeStepLine(line_number: int, text: str)` (1-based line numbers)
-- [ ] Define the pattern table: one module-level collection of named patterns, the only place that defines what a merge step is. Include `MERGE_OBJECT_WINDOW = 4` and the git-object list (`branch`, `main`, `target`, `slice branch`, `integration branch`) as named constants beside it
-- [ ] Implement each of rules R1–R4 above as its own named entry in the table
-- [ ] Word boundary for `merge`/`merges`/`merged`: whitespace, punctuation (including backticks) or line edges; a hyphen or underscore is not a boundary, and a following letter is not either (`merge-base`, `--no-merges`, `merge_gate`, `mergeFixResults` never match). Matching is case-insensitive. Backticks around a git object (`` `main` ``) still count as that object
-- [ ] Implement `scan_merge_steps(text: str) -> list[MergeStepLine]`: only checklist items (`- [ ]` / `- [x]` at any indent) and headings are candidates; skip YAML frontmatter at the top of the file; prose and notes are never flagged
-  - [ ] Success: module has no file or network I/O; `pyright` zero errors
+- [x] Create `src/squadron/review/task_gate.py` with a frozen dataclass `MergeStepLine(line_number: int, text: str)` (1-based line numbers)
+- [x] Define the pattern table: one module-level collection of named patterns, the only place that defines what a merge step is. Include `MERGE_OBJECT_WINDOW = 4` and the git-object list (`branch`, `main`, `target`, `slice branch`, `integration branch`) as named constants beside it
+- [x] Implement each of rules R1–R4 above as its own named entry in the table
+- [x] Word boundary for `merge`/`merges`/`merged`: whitespace, punctuation (including backticks) or line edges; a hyphen or underscore is not a boundary, and a following letter is not either (`merge-base`, `--no-merges`, `merge_gate`, `mergeFixResults` never match). Matching is case-insensitive. Backticks around a git object (`` `main` ``) still count as that object
+- [x] Implement `scan_merge_steps(text: str) -> list[MergeStepLine]`: only checklist items (`- [ ]` / `- [x]` at any indent) and headings are candidates; skip YAML frontmatter at the top of the file; prose and notes are never flagged
+  - [x] Success: module has no file or network I/O; `pyright` zero errors
 
 ## Task 4 — Scanner tests
 
-- [ ] Create `tests/review/test_task_gate.py`
-- [ ] Parametrized test over excerpts P1–P6 from Task 2: `scan_merge_steps` returns exactly the expected line numbers, and each `text` matches the line
-- [ ] Test over the squadron negatives excerpt: returns `[]`
-- [ ] Parametrized test over the nine negatives listed in design "What counts as a merge step" (the "Not flagged" list), each written as a checklist line exactly as the design gives it. Each returns `[]`
-- [ ] Tests for the design's frontmatter and prose negatives (frontmatter containing the merged word; the "Slice 183 complete…" prose line): not flagged. A level-2 heading built from P1's second line is flagged
-- [ ] Test that a checklist item consisting of the bare merge word alone, and an indented lower-case `- [x]` version of P1's second line, are both flagged
-- [ ] Parametrized per-rule tests built from synthetic checklist lines (cases listed below the checklist), independent of the fixtures, so the pattern table is not fitted to six files
-  - [ ] R2: each joined-verb case is flagged
-  - [ ] R3 boundary: a git object exactly `MERGE_OBJECT_WINDOW` words after the merge word is flagged; one word further is not (build both lines from the constant, not a literal 4)
-  - [ ] Success: all tests pass; any failure here means adjusting the pattern table, not the fixtures
-- [ ] Commit: `feat: add task-file merge-step scanner`
+- [x] Create `tests/review/test_task_gate.py`
+- [x] Parametrized test over excerpts P1–P6 from Task 2: `scan_merge_steps` returns exactly the expected line numbers, and each `text` matches the line
+- [x] Test over the squadron negatives excerpt: returns `[]`
+- [x] Parametrized test over the nine negatives listed in design "What counts as a merge step" (the "Not flagged" list), each written as a checklist line exactly as the design gives it. Each returns `[]`
+- [x] Tests for the design's frontmatter and prose negatives (frontmatter containing the merged word; the "Slice 183 complete…" prose line): not flagged. A level-2 heading built from P1's second line is flagged
+- [x] Test that a checklist item consisting of the bare merge word alone, and an indented lower-case `- [x]` version of P1's second line, are both flagged
+- [x] Parametrized per-rule tests built from synthetic checklist lines (cases listed below the checklist), independent of the fixtures, so the pattern table is not fitted to six files
+  - [x] R2: each joined-verb case is flagged
+  - [x] R3 boundary: a git object exactly `MERGE_OBJECT_WINDOW` words after the merge word is flagged; one word further is not (build both lines from the constant, not a literal 4)
+  - [x] Success: all tests pass; any failure here means adjusting the pattern table, not the fixtures
+- [x] Commit: `feat: add task-file merge-step scanner`
 
 Per-rule cases (prose, so this file passes its own gate): R2 joined verbs "commit and merge",
 "commit, then merge", "merge and release", "merge, tag, and publish"; R3 window lines of the
