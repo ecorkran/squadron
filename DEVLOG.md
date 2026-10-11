@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261011
 
+### Slice 943: design complete (Phase 4)
+
+- Design: `user/slices/943-slice.proportionate-reviews-review-and-revise-loops-that-can-cut-scope.md`, effort 2/5. Prompts only: proportionality criterion (overweight = CONCERN, name the cut) and a gap-needs-a-requirement qualifier in slice/tasks/arch templates and the two mirrored judges; a smallest-sufficient-change paragraph in `_findings_block`; findings-addressed judge counts a cut as `addressed`. Code review template excluded.
+- Baseline for verification (trading-ui 127, `run-20261010-p4-e8ba2e27`): design words 4,673 → 6,561 → 7,735 across rounds; in-session cut to 3,135. Rerun from trading-ui `2c5e9d4`.
+
 ### Release 0.21.4
 
 - **Contents:** Slice 933 (deterministic task-file gate) with its code-review fixes (pipeline off-thread gate and unreadable-file handling, CLI short-circuit before the model loop, matched rule named in findings), plus the #201 fix and the tools/calls telemetry display already on main.
