@@ -31,6 +31,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.sdk_session import DispatchStalledError
 from squadron.providers.base import ProfileName, ProviderType
+from squadron.providers.errors import ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile, profile_credentials
 from squadron.providers.sdk.settings import pipeline_setting_sources
@@ -333,6 +334,16 @@ class DispatchAction:
                 metadata={"stalled": True, "session_usable": exc.session_usable},
             )
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=str(exc),
+            )
+        except ProviderError as exc:
+            # A named provider failure (issue 200): the message says what happened, so
+            # one ERROR line and no traceback. The step fails through its result.
+            _logger.error("dispatch: step %s failed: %s", context.step_name, exc)
             return ActionResult(
                 success=False,
                 action_type=self.action_type,

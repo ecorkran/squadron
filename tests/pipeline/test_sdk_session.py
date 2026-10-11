@@ -820,7 +820,6 @@ async def test_open_pipeline_session_seeds_client_options_and_connects() -> None
 @pytest.mark.asyncio
 async def test_failed_reconnect_marks_session_unusable(caplog: pytest.LogCaptureFixture) -> None:
     from squadron.pipeline.sdk_session import SeedSource
-    from squadron.providers.errors import ProviderError
     from tests.pipeline.conftest import ScriptedClient, failing_reconnect_patch, scripted_session
 
     session = scripted_session(ScriptedClient())
@@ -833,14 +832,13 @@ async def test_failed_reconnect_marks_session_unusable(caplog: pytest.LogCapture
     assert session.unusable_reason is not None and "E2BIG" in session.unusable_reason
     assert any(r.levelno == logging.ERROR and r.exc_info for r in caplog.records)
 
-    fresh = session.client
-    with pytest.raises(ProviderError, match="SDK session unusable"):
-        await session.dispatch("p")
-    fresh.query.assert_not_called()  # type: ignore[attr-defined]
-    with pytest.raises(ProviderError, match="SDK session unusable"):
-        await session.compact(instructions="x", summary="s")
-    with pytest.raises(ProviderError, match="SDK session unusable"):
-        await session.seed_context("again", SeedSource.RESUME)
+    # A later call replaces the session instead of failing (issue 200); while the
+    # replacement itself cannot connect, the call raises and the reason is kept.
+    with caplog.at_level(logging.WARNING, logger=_MOD), failing_reconnect_patch():
+        with pytest.raises(Exception, match="E2BIG"):
+            await session.dispatch("p")
+    assert session.unusable_reason is not None and "E2BIG" in session.unusable_reason
+    assert any("replacing it with a fresh session" in r.getMessage() for r in caplog.records)
 
 
 # ---------------------------------------------------------------------------
@@ -1234,7 +1232,6 @@ class TestForegroundStall:
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
         from squadron.pipeline.sdk_session import DispatchStalledError
-        from squadron.providers.errors import ProviderError
 
         client = ScriptedClient([_SILENT])
         client.interrupt.side_effect = Exception("control request timeout: interrupt")
@@ -1248,8 +1245,18 @@ class TestForegroundStall:
         assert session.unusable_reason is not None  # type: ignore[attr-defined]
         assert session.unusable_reason.startswith("foreground stall: interrupt did not complete")  # type: ignore[attr-defined]
         assert any(r.levelno == logging.ERROR for r in caplog.records)
-        with pytest.raises(ProviderError, match="foreground stall"):
-            await session.dispatch("next")  # type: ignore[attr-defined]
+        # The next call replaces the session rather than failing (issue 200).
+        from unittest.mock import patch
+
+        replacement = ScriptedClient()
+        with (
+            caplog.at_level(logging.WARNING, logger=_MOD),
+            patch("squadron.pipeline.sdk_session.ClaudeSDKClient", return_value=replacement),
+        ):
+            await session._ensure_usable()  # type: ignore[attr-defined]  # pyright: ignore
+        assert session.unusable_reason is None  # type: ignore[attr-defined]
+        replacement.connect.assert_awaited_once()
+        assert any("replacing it with a fresh session" in r.getMessage() for r in caplog.records)
         client.query.assert_awaited_once()
 
     @pytest.mark.asyncio

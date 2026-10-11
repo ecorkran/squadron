@@ -10,6 +10,7 @@ from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
+from squadron.providers.errors import ProviderError
 from squadron.providers.profiles import is_sdk_profile
 
 _logger = logging.getLogger(__name__)
@@ -283,6 +284,15 @@ async def _execute_summary(
                 cwd=context.cwd,
                 effort=effort,
             )
+    except ProviderError as exc:
+        # A named provider failure (issue 200): one ERROR line, no traceback.
+        _logger.error("summary action: failed to capture summary: %s", exc)
+        return ActionResult(
+            success=False,
+            action_type=action_type,
+            outputs={},
+            error=str(exc),
+        )
     except Exception as exc:  # noqa: BLE001
         # Boundary by design: this wraps SDK session dispatch (capture_summary)
         # or a separate provider dispatch (capture_summary_via_profile) —

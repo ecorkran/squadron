@@ -305,3 +305,21 @@ async def test_stalled_dispatch_fails_step_with_warning_and_no_traceback(
     assert len(records) == 1
     assert records[0].levelno == logging.WARNING
     assert records[0].exc_info is None
+
+
+@pytest.mark.asyncio
+async def test_provider_error_fails_step_with_one_error_line_and_no_traceback(
+    action: DispatchAction, caplog: pytest.LogCaptureFixture
+) -> None:
+    session = _make_session()
+    session.dispatch.side_effect = ProviderError("SDK session unusable: reconnect failed")
+    ctx = _make_context(session=session)
+
+    with caplog.at_level(logging.ERROR, logger="squadron.pipeline.actions.dispatch"):
+        result = await action.execute(ctx)
+
+    assert result.success is False
+    assert result.error == "SDK session unusable: reconnect failed"
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is None

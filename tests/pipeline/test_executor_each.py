@@ -270,8 +270,9 @@ class TestUnusableSessionInBatch:
     async def test_items_after_failed_reconnect_are_flagged_unusable(
         self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        """Slice 932 D13: a failed rotate reconnect leaves the session unusable;
-        later items are flagged with that reason and never reach query()."""
+        """Slice 932 D13, changed by issue 200: a failed rotate reconnect leaves the session
+        unusable; each later item tries a replacement, and while that cannot connect the
+        item is flagged with the connect error and never reaches query()."""
         from squadron.pipeline.actions.compact import CompactAction
         from squadron.pipeline.actions.dispatch import DispatchAction
         from tests.pipeline.conftest import (
@@ -327,9 +328,9 @@ class TestUnusableSessionInBatch:
         assert report is not None
         reasons = {r.index: r.reason or "" for r in report.records}
         assert "E2BIG" in reasons["1"]
-        assert "SDK session unusable" in reasons["2"]
-        assert "SDK session unusable" in reasons["3"]
-        assert "item 2 FLAGGED: SDK session unusable" in caplog.text
+        assert "E2BIG" in reasons["2"]
+        assert "E2BIG" in reasons["3"]
+        assert "item 2 FLAGGED: spawn failed: E2BIG" in caplog.text
         fresh_ctor.return_value.query.assert_not_called()
 
 

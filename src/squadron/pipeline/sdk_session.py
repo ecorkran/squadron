@@ -78,6 +78,7 @@ class SeedSource(StrEnum):
     COMPACT = "compact"
     RESUME = "resume"
     RESTORE = "restore"
+    REPLACEMENT = "replacement"  # an unusable session replaced by an unseeded one
 
 
 def frame_summary_for_seed(summary: str) -> str:
@@ -221,7 +222,7 @@ class SDKExecutionSession:
             ProviderError: For other SDK errors, if the session is unusable, or
                 if the stream ends while a background agent is still running.
         """
-        self._require_usable()
+        await self._ensure_usable()
         turns = DispatchTurns()
         self.background_tasks_stopped = 0
         try:
@@ -471,7 +472,7 @@ class SDKExecutionSession:
 
         Exceptions are allowed to propagate; the compact action wraps them.
         """
-        self._require_usable()
+        await self._ensure_usable()
         if summary is None:
             summary = await self.capture_summary(
                 instructions, summary_model=summary_model, restore_model=None
@@ -490,13 +491,25 @@ class SDKExecutionSession:
         Any history since the last rotation is dropped. The caller passes
         raw text; framing happens in ``_seeded_options``. No turn is sent.
         """
-        self._require_usable()
+        await self._ensure_usable()
         await self._reconnect(text, source)
 
-    def _require_usable(self) -> None:
-        """Raise if an earlier reconnect failed and left no live client."""
-        if self.unusable_reason is not None:
-            raise ProviderError(f"SDK session unusable: {self.unusable_reason}")
+    async def _ensure_usable(self) -> None:
+        """Replace an unusable session with a fresh, unseeded one (issue 200).
+
+        A stalled interrupt or a failed reconnect leaves the session unusable, and
+        failing every later step would turn one stall into a failed run. The old
+        conversation is already lost, so the replacement starts empty; that is logged
+        at WARNING. If the replacement cannot connect, ``_reconnect`` records why and
+        raises, and the next call tries again.
+        """
+        if self.unusable_reason is None:
+            return
+        _logger.warning(
+            "SDK session unusable (%s); replacing it with a fresh session", self.unusable_reason
+        )
+        self.unusable_reason = None
+        await self._reconnect(None, SeedSource.REPLACEMENT)
 
     async def _reconnect(self, seed: str | None, source: SeedSource) -> None:
         """Disconnect and connect a fresh client seeded via the system prompt."""
