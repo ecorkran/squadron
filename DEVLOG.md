@@ -2,14 +2,24 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261010'
+dateUpdated: '20261011'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 
-## 20261010
+## 20261011
+
+### Slice 933: implementation complete (Phase 6)
+
+- Branch `933-slice.deterministic-task-file-gate` (from `main`), not yet merged; Phase 7 follows code review.
+- `review/task_gate.py` (pure): `scan_merge_steps` with a named four-rule pattern table (`MERGE_OBJECT_WINDOW = 4`), and `merge_gate_results`, which builds FAIL `ReviewResult`s (`model=squadron-task-gate`, `verdict_source=imposed`, no tools, no profile, no cost) keyed by each part's `input` path, with that part's full inputs dict as `input_files`.
+- `review/task_gate_files.py`: `gate_task_files(part_inputs)`, the one read-and-gate entry point both callers use; `TaskFileReadError` names the unreadable path.
+- CLI `review_tasks`: builds every part's inputs dict up front, runs the missing-file check (extracted to `_exit_on_missing_inputs`) and the gate before the per-part loop; gated parts reuse the loop's display/save path. Pipeline `ReviewAction._gated_parts` reuses `_save_part`/`_part_result` and `fold_review_parts`.
+- Tests: real-line fixtures under `tests/review/fixtures/task_gate/` (trading-data 184/185/908/909, trading-ui 124/125, squadron negatives); scanner, builder read-back, helper, CLI, pipeline and CLI/pipeline parity tests. Two existing routing tests in `tests/cli/test_review_resolve.py` reference task files that do not exist on disk; they now stub the gate.
+- Walkthrough verified (design "Verification Walkthrough" updated with commands and output); the finding title now carries the offending line text so the default terminal view shows it.
+
 
 ### Slice 933: task breakdown complete (Phase 5)
 

@@ -10,7 +10,7 @@ projectState: >
   call and save a FAIL result per offending part.
 dateCreated: 20261010
 dateUpdated: 20261011
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -119,20 +119,20 @@ n = window (not flagged), where "branch" is the git object.
 
 ## Task 5 — FAIL result builder
 
-- [ ] In `task_gate.py`, define `TASK_GATE_MODEL = "squadron-task-gate"` once
-- [ ] Implement `merge_gate_results(scans: Sequence[tuple[Mapping[str, str], list[MergeStepLine]]]) -> dict[str, ReviewResult]` per design "Component Structure": each entry is one part's review inputs dict and its hits. Empty dict when every scan is empty; otherwise one entry per offending part, keyed by its `input` path, none for clean parts
-- [ ] Each `ReviewResult` follows design "Integration Requirements" exactly: `verdict=Verdict.FAIL`, `template_name="tasks"` (use the existing tasks template name constant if one exists; otherwise define one in `task_gate.py`), `model=TASK_GATE_MODEL`, `verdict_source=VerdictSource.IMPOSED`, `tools_given=None`, `tool_calls_made=None`, no profile, no cost or token fields
-- [ ] One `ReviewFinding` per hit, severity FAIL, naming the line number and quoting the line text; `raw_output` states that the gate found merge steps and no model ran
-- [ ] `input_files` is a copy of that part's inputs dict (`input`, `against`, `cwd`), exactly what a model review of the part records
-  - [ ] Success: `pyright` zero errors
+- [x] In `task_gate.py`, define `TASK_GATE_MODEL = "squadron-task-gate"` once
+- [x] Implement `merge_gate_results(scans: Sequence[tuple[Mapping[str, str], list[MergeStepLine]]]) -> dict[str, ReviewResult]` per design "Component Structure": each entry is one part's review inputs dict and its hits. Empty dict when every scan is empty; otherwise one entry per offending part, keyed by its `input` path, none for clean parts
+- [x] Each `ReviewResult` follows design "Integration Requirements" exactly: `verdict=Verdict.FAIL`, `template_name="tasks"` (use the existing tasks template name constant if one exists; otherwise define one in `task_gate.py`), `model=TASK_GATE_MODEL`, `verdict_source=VerdictSource.IMPOSED`, `tools_given=None`, `tool_calls_made=None`, no profile, no cost or token fields
+- [x] One `ReviewFinding` per hit, severity FAIL, naming the line number and quoting the line text; `raw_output` states that the gate found merge steps and no model ran
+- [x] `input_files` is a copy of that part's inputs dict (`input`, `against`, `cwd`), exactly what a model review of the part records
+  - [x] Success: `pyright` zero errors
 
 ## Task 6 — FAIL result builder tests
 
-- [ ] In `tests/review/test_task_gate.py`: empty scans → `{}`; two parts, one with hits → one entry, keyed by the offending part's `input` path, with `input_files` equal to that part's inputs dict
-- [ ] Assert every field listed in Task 5 on the built result, including `tools_given is None` and `tool_calls_made is None`
-- [ ] Read-back test: save the result through the existing persistence path used for tasks reviews (find it from `_save_and_report` / `save_review_result`, writing into `tmp_path`), read the file back, and assert the frontmatter has `aiModel: squadron-task-gate` and `verdictSource: imposed`, and has no `toolsGiven` or `toolCallsMade` keys
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: build FAIL review results from task-gate hits`
+- [x] In `tests/review/test_task_gate.py`: empty scans → `{}`; two parts, one with hits → one entry, keyed by the offending part's `input` path, with `input_files` equal to that part's inputs dict
+- [x] Assert every field listed in Task 5 on the built result, including `tools_given is None` and `tool_calls_made is None`
+- [x] Read-back test: save the result through the existing persistence path used for tasks reviews (find it from `_save_and_report` / `save_review_result`, writing into `tmp_path`), read the file back, and assert the frontmatter has `aiModel: squadron-task-gate` and `verdictSource: imposed`, and has no `toolsGiven` or `toolCallsMade` keys
+  - [x] Success: tests pass
+- [x] Commit: `feat: build FAIL review results from task-gate hits`
 
 ---
 
@@ -140,61 +140,61 @@ n = window (not flagged), where "branch" is the git object.
 
 Both callers read files, then call the gate. Put that in one place so the two paths cannot drift.
 
-- [ ] Create `src/squadron/review/task_gate_files.py` with `gate_task_files(part_inputs: Sequence[Mapping[str, str]]) -> dict[str, ReviewResult]`: reads each part's `input` file as UTF-8, scans it, returns `merge_gate_results(...)` over the (inputs, hits) pairs. `task_gate.py` stays free of I/O
-- [ ] `OSError` and `UnicodeDecodeError` propagate with the file path in the message (re-raise a clear error naming the path; never skip the file)
-- [ ] Tests (in `tests/review/test_task_gate_files.py`): a clean file → `{}`; an offending file → one FAIL entry; a file of invalid UTF-8 bytes in `tmp_path` → raises, and the message contains the path
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: add task-file gate entry point for review callers`
+- [x] Create `src/squadron/review/task_gate_files.py` with `gate_task_files(part_inputs: Sequence[Mapping[str, str]]) -> dict[str, ReviewResult]`: reads each part's `input` file as UTF-8, scans it, returns `merge_gate_results(...)` over the (inputs, hits) pairs. `task_gate.py` stays free of I/O
+- [x] `OSError` and `UnicodeDecodeError` propagate with the file path in the message (re-raise a clear error naming the path; never skip the file)
+- [x] Tests (in `tests/review/test_task_gate_files.py`): a clean file → `{}`; an offending file → one FAIL entry; a file of invalid UTF-8 bytes in `tmp_path` → raises, and the message contains the path
+  - [x] Success: tests pass
+- [x] Commit: `feat: add task-file gate entry point for review callers`
 
 ---
 
 ## Task 8 — CLI hook in `review_tasks`
 
-- [ ] In `review_tasks`, after `parts = review_parts(task_file_paths)` and before the per-part loop, build each part's inputs dict once (the `input`/`against`/`cwd` dict the loop already builds) and call `gate_task_files` on that list; the loop reuses the same dicts
-- [ ] If the result is empty, the existing loop runs unchanged
-- [ ] If not empty: skip the loop entirely (no `_run_review_command` call for any part). For each offending part, display the FAIL result with the existing `display_result` and save it through the existing `_save_and_report` / `_resolve_save_outcome` path with that part's `name_suffix`, so it lands in the same slot a model review of that part would. Clean parts get nothing
-- [ ] Exit through the existing `_exit_on(worst_verdict, outcome)`, so FAIL gives a non-zero exit
-- [ ] Keep the per-part save logic shared with the normal path rather than copying it (extract a helper if needed)
-  - [ ] Success: `pyright` zero errors; existing CLI review tests still pass
+- [x] In `review_tasks`, after `parts = review_parts(task_file_paths)` and before the per-part loop, build each part's inputs dict once (the `input`/`against`/`cwd` dict the loop already builds) and call `gate_task_files` on that list; the loop reuses the same dicts
+- [x] If the result is empty, the existing loop runs unchanged
+- [x] If not empty: skip the loop entirely (no `_run_review_command` call for any part). For each offending part, display the FAIL result with the existing `display_result` and save it through the existing `_save_and_report` / `_resolve_save_outcome` path with that part's `name_suffix`, so it lands in the same slot a model review of that part would. Clean parts get nothing
+- [x] Exit through the existing `_exit_on(worst_verdict, outcome)`, so FAIL gives a non-zero exit
+- [x] Keep the per-part save logic shared with the normal path rather than copying it (extract a helper if needed)
+  - [x] Success: `pyright` zero errors; existing CLI review tests still pass
 
 ## Task 9 — CLI hook tests
 
-- [ ] In `tests/review/test_cli_review.py` (or a new `tests/review/test_task_gate_cli.py` if that file is near its size limit), with `run_review_with_profile` patched:
-  - [ ] Single task file containing an unchecked copy of P1's second line: exit code non-zero, output shows FAIL and the line number, the patched model call is never called, one artifact saved in the normal (unsuffixed) slot
-  - [ ] Split breakdown, part 2 offending: no model call for any part; one artifact under part 2's suffix; none for part 1
-  - [ ] Clean task file: model called as before, normal result
-  - [ ] `sq review slice` on a design file containing P1's second line: no gate, model called as before
-  - [ ] `sq review tasks <file> --against <design>` form with an offending file: same FAIL behavior
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: gate sq review tasks on merge steps before any model call`
+- [x] In `tests/review/test_cli_review.py` (or a new `tests/review/test_task_gate_cli.py` if that file is near its size limit), with `run_review_with_profile` patched:
+  - [x] Single task file containing an unchecked copy of P1's second line: exit code non-zero, output shows FAIL and the line number, the patched model call is never called, one artifact saved in the normal (unsuffixed) slot
+  - [x] Split breakdown, part 2 offending: no model call for any part; one artifact under part 2's suffix; none for part 1
+  - [x] Clean task file: model called as before, normal result
+  - [x] `sq review slice` on a design file containing P1's second line: no gate, model called as before
+  - [x] `sq review tasks <file> --against <design>` form with an offending file: same FAIL behavior
+  - [x] Success: tests pass
+- [x] Commit: `feat: gate sq review tasks on merge steps before any model call`
 
 ---
 
 ## Task 10 — Pipeline hook in `ReviewAction._review`
 
-- [ ] Define the tasks-template check through one constant (reuse the same one Task 5 uses); no new string comparisons on template names
-- [ ] When the template is tasks, after the `_validate_inputs` loop and before the `_run_part` loop, call `gate_task_files(part_inputs)`
-- [ ] If not empty: no `_run_part` call for any part. For each offending part, set `run_id` and save the FAIL result through the existing `_save_part` with that part's suffix, and build its `ActionResult` through the existing `_part_result`, so the artifact and step output match a model review's. Return `fold_review_parts` over those results
-- [ ] If empty, the existing loop runs unchanged
-  - [ ] Success: `pyright` zero errors; existing pipeline review tests still pass
+- [x] Define the tasks-template check through one constant (reuse the same one Task 5 uses); no new string comparisons on template names
+- [x] When the template is tasks, after the `_validate_inputs` loop and before the `_run_part` loop, call `gate_task_files(part_inputs)`
+- [x] If not empty: no `_run_part` call for any part. For each offending part, set `run_id` and save the FAIL result through the existing `_save_part` with that part's suffix, and build its `ActionResult` through the existing `_part_result`, so the artifact and step output match a model review's. Return `fold_review_parts` over those results
+- [x] If empty, the existing loop runs unchanged
+  - [x] Success: `pyright` zero errors; existing pipeline review tests still pass
 
 ## Task 11 — Pipeline hook and parity tests
 
-- [ ] In a pipeline review test (follow `tests/review/test_split_review_parity.py` for context and cf-client setup), with `squadron.pipeline.actions.review.run_review_with_profile` patched:
-  - [ ] Offending single task file: step verdict FAIL, the patched model call is never called, artifact saved with `aiModel: squadron-task-gate`
-  - [ ] Split breakdown with one offending part: no model call; one artifact, under that part's suffix
-  - [ ] Clean task file: model called as before
-  - [ ] Non-tasks template (slice review) whose input file contains P1's second line: gate does not run, model called as before
-- [ ] Parity test: same offending split project through the CLI and the pipeline step writes identical artifact file names (extend the pattern in `test_split_review_parity.py`)
-  - [ ] Success: tests pass
-- [ ] Commit: `feat: gate pipeline tasks reviews on merge steps`
+- [x] In a pipeline review test (follow `tests/review/test_split_review_parity.py` for context and cf-client setup), with `squadron.pipeline.actions.review.run_review_with_profile` patched:
+  - [x] Offending single task file: step verdict FAIL, the patched model call is never called, artifact saved with `aiModel: squadron-task-gate`
+  - [x] Split breakdown with one offending part: no model call; one artifact, under that part's suffix
+  - [x] Clean task file: model called as before
+  - [x] Non-tasks template (slice review) whose input file contains P1's second line: gate does not run, model called as before
+- [x] Parity test: same offending split project through the CLI and the pipeline step writes identical artifact file names (extend the pattern in `test_split_review_parity.py`)
+  - [x] Success: tests pass
+- [x] Commit: `feat: gate pipeline tasks reviews on merge steps`
 
 ---
 
 ## Task 12 — Full validation and walkthrough
 
-- [ ] Run the full suite, `ruff format`, `ruff check`, `pyright`: zero errors, no new failures
-- [ ] Run design "Verification Walkthrough" steps 1 and 2 by hand against a scratch task file outside the repo (`sq review tasks <file> --against <design> --no-save --model <model>`): step 1 prints FAIL with the line and exits non-zero with no model call or cost; step 2 (line removed) runs the normal review. Step 3 is covered by Task 11. Repeat step 1 through the `/sq:review tasks` slash command and confirm the same FAIL output
-- [ ] Add a DEVLOG entry for Phase 6 completion
-  - [ ] Success: walkthrough results match the design
-- [ ] Commit: `docs: record slice 933 implementation in DEVLOG`
+- [x] Run the full suite, `ruff format`, `ruff check`, `pyright`: zero errors, no new failures
+- [x] Run design "Verification Walkthrough" steps 1 and 2 by hand against a scratch task file outside the repo (`sq review tasks <file> --against <design> --no-save --model <model>`): step 1 prints FAIL with the line and exits non-zero with no model call or cost; step 2 (line removed) runs the normal review. Step 3 is covered by Task 11. Repeat step 1 through the `/sq:review tasks` slash command and confirm the same FAIL output
+- [x] Add a DEVLOG entry for Phase 6 completion
+  - [x] Success: walkthrough results match the design
+- [x] Commit: `docs: record slice 933 implementation in DEVLOG`

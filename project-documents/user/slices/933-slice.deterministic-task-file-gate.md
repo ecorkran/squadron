@@ -6,8 +6,8 @@ parent: user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: [930]
 interfaces: []
 dateCreated: 20261010
-dateUpdated: 20261010
-status: not_started
+dateUpdated: 20261011
+status: complete
 ---
 
 # Slice Design: Deterministic Task-File Gate
@@ -101,9 +101,24 @@ If a task file cannot be read or decoded (`OSError`, `UnicodeDecodeError`), the 
 - The FAIL artifact is saved and readable by existing review readers. No model ran, so its fields are explicit, never left for the implementer to invent: `model` is a constant `TASK_GATE_MODEL` (`squadron-task-gate`) defined once in `task_gate.py`, no profile, `verdict_source: imposed` (a measured fact, not a model opinion), `tools_given` and `tool_calls_made` both `None` (the model's tri-state for "ran without tools"; `[]`/`0` would claim a tool-capable run that was offered nothing), no cost or token telemetry. A test reads the saved artifact back through the existing readers and asserts the rendered frontmatter: `aiModel: squadron-task-gate`, `verdictSource: imposed`, and no `toolsGiven`/`toolCallsMade` keys.
 
 ### Verification Walkthrough
-1. `sq review tasks <slice>` on a slice whose task file has a line like `- [ ] Merge to main`: prints verdict FAIL, lists the line number and text, exits non-zero, and the run shows no model call or cost.
-2. Remove the line and rerun: the normal review runs.
-3. Run a pipeline with a `review: {template: tasks}` step against the same file: the step fails with the same findings.
+Verified 20261011 on branch `933-slice.deterministic-task-file-gate`. Run from the squadron repo root; `<scratch>` is any directory outside the repo.
+
+1. Create a scratch task file whose last checklist item is a merge step:
+   ```bash
+   printf -- '---\ndocType: tasks\n---\n\n## Task 1\n\n- [ ] Add the scanner\n- [ ] Merge to main\n' > <scratch>/scratch-tasks.md
+   sq review tasks <scratch>/scratch-tasks.md --against project-documents/user/slices/933-slice.deterministic-task-file-gate.md --no-save --model haiku; echo "exit=$?"
+   ```
+   Expected output, with no model call (the header names `squadron-task-gate`, not a model) and so no cost:
+   ```
+   Review: tasks  Verdict: FAIL  Model: squadron-task-gate
+   [FAIL] Merge step at line 8: - [ ] Merge to main
+   exit=2
+   ```
+   `/sq:review tasks <same arguments>` runs the same command and prints the same output.
+2. Delete the `Merge to main` line and rerun the same command: the normal review runs. The header names the real model (e.g. `claude-haiku-4-5-…`) and the exit code reflects that model's verdict. A one-item stub file gets a content FAIL from the model; that verdict is the model's, not the gate's.
+3. The pipeline path is covered by `tests/review/test_task_gate_pipeline.py`: a `review: {template: tasks}` step over an offending file returns verdict FAIL with no model call, saves the artifact with `aiModel: squadron-task-gate`, and writes the same artifact names as the CLI (`test_cli_and_pipeline_write_identical_gate_artifacts`). Run `uv run pytest tests/review/test_task_gate_pipeline.py -q`; expected `5 passed`.
+
+Caveats: the gate reads only checklist items and headings; a merge step written as plain prose is not flagged (by design). An unreadable or undecodable task file exits 1 with `Cannot read task file <path> for the merge-step gate`.
 
 ## Risk Assessment
 ### Technical Risks
