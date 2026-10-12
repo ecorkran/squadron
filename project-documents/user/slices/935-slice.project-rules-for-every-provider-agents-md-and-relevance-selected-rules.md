@@ -18,7 +18,7 @@ Fixes [#181](https://github.com/ecorkran/squadron/issues/181) and [#182](https:/
 
 Today only SDK dispatches see project rules, and they get them from the Claude CLI (`setting_sources=("project",)`), which loads `CLAUDE.md` and `.claude/rules/*.md`. Non-SDK dispatches (OpenRouter, OpenAI-compatible, codex) get nothing: `setting_sources=None`, and the cf prompt doesn't point at the files. Reviews inject `CLAUDE.md` or `.claude/CLAUDE.md` by probing `review_client._inject_file_contents`, never `AGENTS.md`, and the artifact records only `rulesSource`, which describes the rules directory, not the conventions file.
 
-This slice makes squadron read the rules itself. It picks one conventions file (`CLAUDE.md`, `.claude/CLAUDE.md` or `AGENTS.md`), selects rule files from frontmatter by step kind and by what the agent's tools can do, injects the result into every non-SDK dispatch and every review, and records what it injected, including "none".
+This slice makes squadron read the rules itself. It picks one conventions file (`AGENTS.md`, `CLAUDE.md` or `.claude/CLAUDE.md`, resolving `@` imports in a `CLAUDE.md`), selects rule files from frontmatter by step kind and by what the agent's tools can do, injects the result into every non-SDK dispatch and every review, and records what it injected, including "none".
 
 ## Value
 
@@ -41,7 +41,7 @@ This slice makes squadron read the rules itself. It picks one conventions file (
 - SDK dispatches keep native loading (D4). Only their record changes.
 - Splitting `CLAUDE.md` or `AGENTS.md` into parts. Either file is one always-apply unit (D2).
 - Per-model budgets (an alias field). The global key covers it until a real small-context model needs less; tracked as an issue at implementation time.
-- Changing the content of squadron's own `CLAUDE.md`/`AGENTS.md` (cf generates both).
+- Changing the content of squadron's own `CLAUDE.md`/`AGENTS.md` (cf generates both). Compiling the rules once to `AGENTS.md`, with `CLAUDE.md` importing it, is [context-forge#116](https://github.com/ecorkran/context-forge/issues/116).
 - Summary and compact dispatches. They don't produce project artifacts.
 
 ## Dependencies
@@ -102,10 +102,14 @@ No new state. The record rides in existing persisted structures: dispatch `Actio
 ### D1 — One package, two consumers
 Discovery and selection live in `squadron.project_rules`, not in `review/` or `pipeline/`. Dispatch and review both import it, so "which file, which rules" has one answer. The frontmatter and glob helpers move out of `review/rules.py`; review keeps its rules-directory resolution and its template-rule loading, which are review concepts.
 
-### D2 — Conventions file: one, by fixed order, never concatenated
-Candidates in order: `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`. The first one present is used. Any others present are recorded as `skipped`, not injected.
+### D2 — Conventions file: one, AGENTS.md first, never concatenated
+Candidates in order: `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`. The first one present is used. Any others present are recorded as `skipped`, not injected.
 
-Why not concatenate: in cf-managed projects both files come from the same source. In squadron they differ only in the title line, the bug-fixes pointer and `AGENTS.md`'s rules index. Concatenating doubles about 13K characters for nothing. Why `CLAUDE.md` first: it is what reviews inject today, so every existing project keeps the same review input.
+Why not concatenate: in cf-managed projects both files come from the same source. In squadron they differ only in the title line, the bug-fixes pointer and `AGENTS.md`'s rules index. Concatenating doubles about 13K characters for nothing.
+
+Why `AGENTS.md` first: squadron injects only for models that aren't Claude (D4), and `AGENTS.md` is the file every agent tool reads (codex, Copilot, Cursor). `CLAUDE.md` is becoming the Claude-only layer on top: `@AGENTS.md` plus notes for Claude, which Claude Code loads natively. A non-Claude model should get the neutral rules, not instructions written for Claude. For projects with both files, reviews switch from `CLAUDE.md` to `AGENTS.md`; in cf-managed projects the content is nearly identical.
+
+**Imports.** When the chosen file is a `CLAUDE.md`, lines of the form `@path` are resolved the way Claude Code does it: relative to the importing file, up to 5 levels deep, each file included once (cycles stop). Otherwise a `CLAUDE.md` that is only `@AGENTS.md` would inject one pointer line. An import that doesn't resolve stays as written, and squadron logs a WARNING naming it. Imports in `AGENTS.md` are left alone, since no `AGENTS.md` reader resolves them.
 
 The file is injected whole. It is the project's always-apply layer (`AGENTS.md` says as much: "The rules above always apply"), and the only way to split it would be by its headings, which this project forbids as structure. A project that wants git rules kept away from reviewers moves them into a rule file with `steps: [implement]`.
 
@@ -130,8 +134,10 @@ The defaults match Claude Code where they overlap (a rule with no `paths` always
 ### D4 — SDK dispatches keep native loading
 Rejected: moving SDK to squadron's selection with `setting_sources=[]`. Two reasons. Dropping `project` also drops the project's `settings.json` (permissions, hooks), which squadron can't replicate. And the persistent SDK session fixes its system prompt at connect time (#155 guard), so per-step selection is impossible on that path. SDK parity is in the record (`sdk-native`), not in the mechanism.
 
-### D5 — Codex is treated like any non-SDK provider
-Codex gets the same injection through `base_instructions`. The codex binary may also load `AGENTS.md` from `cwd` on its own; the Python SDK shows no such control, so squadron can't rule it out. Duplicating an always-apply file costs context but is never wrong, so injection stays unconditional. The verification walkthrough checks this. If codex does load it natively, an issue gets filed to skip the conventions file for codex.
+### D5 — Codex loads AGENTS.md itself; squadron injects only what it doesn't
+Verified 20261012 with a probe through the same `openai_codex` SDK squadron uses (thread at `cwd`, read-only sandbox, no tool calls made). In a repo with both files, codex answered with the codeword from `AGENTS.md` and knew nothing of the one in `CLAUDE.md`. So codex loads `AGENTS.md` natively and ignores `CLAUDE.md`.
+
+Each provider type therefore declares which conventions file it loads natively: SDK → `CLAUDE.md` (plus rules, D4), codex → `AGENTS.md`, OpenAI-compatible → none. It's one table keyed by `ProviderType`. When the chosen conventions file (D2) is the one the provider loads natively, squadron skips the conventions file and records it as `native`. Selected rules are still injected, because codex has no rules mechanism. Codex with only `CLAUDE.md` present gets `CLAUDE.md` injected.
 
 Codex capabilities come from its sandbox: `read-only` gives `{read, shell}`, any writable sandbox gives `{read, write, shell}`. Built-in non-SDK tools map as: `read_file`, `list_files`, `grep` → `read`; `write_file` → `write`; `bash` → `shell`. The mapping is one table in `selection.py`, keyed by tool-name constants from `tools/builtin/_shared.py`.
 
@@ -145,10 +151,10 @@ Reviews keep their existing `review.max_*` budgets, which already cover the conv
 
 Dispatch metadata `project_rules`:
 ```json
-{"conventions": "CLAUDE.md", "skipped": ["AGENTS.md"],
+{"conventions": "AGENTS.md", "native": false, "skipped": ["CLAUDE.md"],
  "rules": ["bug-fixes.md", "python.md"], "dropped": [], "chars": 23140}
 ```
-Review frontmatter: `conventionsSource: CLAUDE.md` and `projectRules: [python.md]`.
+Review frontmatter: `conventionsSource: AGENTS.md` and `projectRules: [python.md]`.
 
 When the conventions source is `none` and no rule was selected for a non-SDK dispatch, log a WARNING naming the root and the step: an agent writing project artifacts with zero rules is worth seeing. A review with no conventions file logs at INFO; its frontmatter already says `none`.
 
@@ -178,7 +184,7 @@ When the conventions source is `none` and no rule was selected for a non-SDK dis
 
 ### Functional Requirements
 - A non-SDK design, tasks or implement dispatch includes the chosen conventions file and the selected rules in its system prompt. The step's state holds the `project_rules` record.
-- With `CLAUDE.md` only, `AGENTS.md` only, both, or neither, the chosen source follows D2, `skipped` lists the unused candidates, and neither file content appears twice.
+- With `CLAUDE.md` only, `AGENTS.md` only, both, or neither, the chosen source follows D2, `skipped` lists the unused candidates, and neither file content appears twice. A `CLAUDE.md` that is `@AGENTS.md` plus notes injects the imported content and the notes; an import that doesn't resolve logs a WARNING.
 - A rule with `steps: [implement]` reaches implement dispatches and never design, tasks or review. A rule with `requires: [shell]` never reaches a read-only reviewer.
 - A path-scoped rule reaches implement only when a tracked file matches its `paths`.
 - Reviews from an `AGENTS.md`-only project inject `AGENTS.md`. Review frontmatter carries `conventionsSource` and `projectRules`.
@@ -200,30 +206,31 @@ When the conventions source is `none` and no rule was selected for a non-SDK dis
 
 Run from a scratch copy so the project's files stay untouched.
 
-1. **Review picks up AGENTS.md.**
+1. **Review picks AGENTS.md over CLAUDE.md.**
    ```bash
    cp -R ~/source/repos/manta/squadron /tmp/sq935 && cd /tmp/sq935
-   git mv CLAUDE.md CLAUDE.md.off && git commit -qm "test: hide CLAUDE.md"
    sq review slice 935 --model <non-sdk-alias>
    ```
    The new review file under `project-documents/user/reviews/` has `conventionsSource: AGENTS.md` in its frontmatter.
 
-2. **Neither file.** `git mv AGENTS.md AGENTS.md.off`, then rerun step 1. Frontmatter shows `conventionsSource: none`.
+2. **CLAUDE.md with an import.** `git mv AGENTS.md docs-agents.md`, then replace `CLAUDE.md` with one line, `@docs-agents.md`, and commit. Rerun step 1. Frontmatter shows `conventionsSource: CLAUDE.md`, and the review prompt (`-vv`) contains the imported rules, not the `@` line.
 
-3. **Non-SDK implement dispatch records its rules.** Restore both files. Run an implement pipeline on a non-SDK alias (`sq run implement <slice> --model <non-sdk-alias>`), then:
+3. **Neither file.** Remove both files, commit, rerun step 1. Frontmatter shows `conventionsSource: none`.
+
+4. **Non-SDK implement dispatch records its rules.** Restore both files (`git reset --hard HEAD~2`). Run an implement pipeline on a non-SDK alias (`sq run implement <slice> --model <non-sdk-alias>`), then:
    ```bash
    jq '.completed_steps[] | select(.step_type=="implement") | .action_results[].metadata.project_rules' \
      ~/.config/squadron/runs/<run-id>.json
    ```
-   Expect `conventions: "CLAUDE.md"`, `skipped: ["AGENTS.md"]`, and `rules` containing `python.md` and `testing.md`.
+   Expect `conventions: "AGENTS.md"`, `skipped: ["CLAUDE.md"]`, and `rules` containing `python.md` and `testing.md`.
 
-4. **Step relevance.** Add `steps: [implement]` to `.claude/rules/bug-fixes.md` frontmatter. Rerun `sq review slice 935 --model <non-sdk-alias>`. `projectRules` doesn't list `bug-fixes.md`. A design dispatch's record doesn't list it either.
+5. **Step relevance.** Add `steps: [implement]` to `.claude/rules/bug-fixes.md` frontmatter. Rerun `sq review slice 935 --model <non-sdk-alias>`. `projectRules` doesn't list `bug-fixes.md`. A design dispatch's record doesn't list it either.
 
-5. **SDK unchanged.** Run any phase step on an SDK alias. Its record is `conventions: "sdk-native"`.
+6. **SDK unchanged.** Run any phase step on an SDK alias. Its record is `conventions: "sdk-native"`.
 
-6. **Budget.** `sq config set project_rules.max_chars 5000`, rerun step 3. The run fails, and the error names `CLAUDE.md`, its size, and `project_rules.max_chars`. Unset the key afterward.
+7. **Budget.** `sq config set project_rules.max_chars 5000`, rerun step 4. The run fails, and the error names `AGENTS.md`, its size, and `project_rules.max_chars`. Unset the key afterward.
 
-7. **Codex duplicate check (D5).** Run a codex-profile dispatch with `-vv` and check whether codex reports loading `AGENTS.md` on its own. If it does, file the follow-up issue named in D5.
+8. **Codex native loading (D5).** With `AGENTS.md` present, run a codex-profile dispatch. The record shows `AGENTS.md` as `native` with the selected rules injected. Hide `AGENTS.md`, rerun, and the record shows `CLAUDE.md` injected.
 
 ## Risk Assessment
 
