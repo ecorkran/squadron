@@ -136,7 +136,7 @@ Selection for one rule file:
 2. The step kind must be in `steps`, explicit or defaulted.
 3. If the rule has `paths` and the step has `file_paths` (implement, review), at least one path must match. Design, tasks and dispatch have no file set, so they skip the path check. A path-scoped rule reaches them only when `steps` lists them explicitly.
 
-The defaults match Claude Code where they overlap (a rule with no `paths` always loads), so a project's existing rules behave as they do under the SDK. Applied to squadron's `.claude/rules` with no edits: implement gets `bug-fixes`, `python`, `testing`, `shell`; design and tasks get `bug-fixes`; review gets what `load_review_rules` gives it today.
+The defaults match Claude Code where they overlap (a rule with no `paths` always loads), so a project's existing rules behave as they do under the SDK. Applied to squadron's `.claude/rules` with no edits: implement gets `bug-fixes`, `python`, `shell`, `sql`, `testing` (`sql` through its `**/tests/**/*.py` and `**/conftest.py` globs); design and tasks get `bug-fixes`; review gets what `load_review_rules` gives it today.
 
 `RuleStep` is a `StrEnum` in `project_rules`. Frontmatter values are parsed into it, and an unknown value raises at parse time with the file name. It is never ignored. This is fail-fast on purpose: one typo'd `steps` value fails every dispatch and review that loads that rules directory, and the error names the file to fix. Skipping the rule would hide it from every step with no signal.
 

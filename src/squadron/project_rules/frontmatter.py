@@ -85,6 +85,17 @@ def _parse_steps(values: list[str], filename: str) -> frozenset[RuleStep]:
     return frozenset(steps)
 
 
+#: ``steps`` default for a rule with ``paths`` (D3); one without ``paths`` applies everywhere.
+_PATH_SCOPED_DEFAULT_STEPS = frozenset({RuleStep.IMPLEMENT, RuleStep.REVIEW})
+
+
+def effective_steps(fm: RuleFrontmatter) -> frozenset[RuleStep]:
+    """The step kinds a rule applies to: explicit ``steps``, else the D3 default."""
+    if fm.steps is not None:
+        return fm.steps
+    return frozenset(RuleStep) if fm.paths is None else _PATH_SCOPED_DEFAULT_STEPS
+
+
 def parse_rule_frontmatter(content: str, filename: str) -> RuleFrontmatter:
     """Parse ``paths`` and ``steps`` from one rule file's content.
 
@@ -201,12 +212,18 @@ def _is_shell_script(path: Path) -> bool:
     return _SHELL_SHEBANG_RE.match(first_line) is not None
 
 
-def _paths_to_match(file_paths: list[str], cwd: str | None) -> list[str]:
+def paths_to_match(file_paths: list[str], cwd: str | None) -> list[str]:
     """``file_paths`` plus, for each shebang shell script, its ``.sh`` stand-in."""
     root = Path(cwd) if cwd else Path(".")
     paths = [p.replace("\\", "/") for p in file_paths]
     paths += [f"{p}{_SHELL_SCRIPT_SUFFIX}" for p in paths if _is_shell_script(root / p)]
     return paths
+
+
+def globs_match(patterns: list[str], candidates: list[str]) -> bool:
+    """True when any glob in ``patterns`` matches any path from :func:`paths_to_match`."""
+    regexes = [_glob_to_regex(pattern) for pattern in patterns]
+    return any(rx.match(path) for rx in regexes for path in candidates)
 
 
 def match_rules_files(
@@ -221,10 +238,9 @@ def match_rules_files(
     other ``.yml`` files. Extensionless files with a bash/sh shebang (read
     relative to ``cwd``) match as if named ``*.sh``.
     """
-    candidates = _paths_to_match(file_paths, cwd)
-    matched: set[Path] = set()
-    for filename, patterns in frontmatter.items():
-        regexes = [_glob_to_regex(pattern) for pattern in patterns]
-        if any(rx.match(path) for rx in regexes for path in candidates):
-            matched.add(rules_dir / filename)
-    return sorted(matched)
+    candidates = paths_to_match(file_paths, cwd)
+    return sorted(
+        rules_dir / filename
+        for filename, patterns in frontmatter.items()
+        if globs_match(patterns, candidates)
+    )

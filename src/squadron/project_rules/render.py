@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import re
 
+from squadron.project_rules.selection import ProjectRules
+
 _HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
 
 
@@ -20,3 +22,22 @@ def demote_headings(content: str, levels: int = 2) -> str:
         return "#" * new_depth + " "
 
     return _HEADING_RE.sub(_shift, content)
+
+
+_SECTION_HEADING = "## Project Rules"
+_SEPARATOR = "\n\n---\n\n"
+
+
+def render_project_rules(rules: ProjectRules) -> str:
+    """A ``## Project Rules`` section: conventions (unless native), then each rule.
+
+    Headings inside the files are demoted two levels so they sit under the
+    section heading. Returns ``""`` when there is nothing to inject.
+    """
+    parts: list[str] = []
+    if rules.conventions is not None and not rules.native:
+        parts.append(demote_headings(rules.conventions.content.strip()))
+    parts.extend(demote_headings(rule.content.strip()) for rule in rules.rules)
+    if not parts:
+        return ""
+    return f"{_SECTION_HEADING}\n\n{_SEPARATOR.join(parts)}"

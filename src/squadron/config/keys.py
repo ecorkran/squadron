@@ -167,6 +167,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "providers that can't read files directly."
         ),
     ),
+    "project_rules.max_chars": ConfigKey(
+        name="project_rules.max_chars",
+        type_=int,
+        default=48_000,
+        description=(
+            "Character budget for the conventions file plus rule files injected into "
+            "non-SDK dispatches. Rules that don't fit are dropped with a warning; a "
+            "conventions file alone over the budget fails the dispatch."
+        ),
+    ),
     "metrology.store_dir": ConfigKey(
         name="metrology.store_dir",
         type_=str,
