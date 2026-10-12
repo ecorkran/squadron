@@ -287,6 +287,14 @@ async def test_session_dispatch_records_prompt_and_settings(
 
 
 @pytest.mark.asyncio
+async def test_session_dispatch_records_sdk_native_project_rules(action: DispatchAction) -> None:
+    """Slice 935 D4: the session loads project files itself; its record says so."""
+    result = await action.execute(_make_context(session=_make_session()))
+
+    assert result.metadata["project_rules"] == {"conventions": "sdk-native"}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("usable", [True, False])
 async def test_stalled_dispatch_fails_step_with_warning_and_no_traceback(
     action: DispatchAction, caplog: pytest.LogCaptureFixture, usable: bool

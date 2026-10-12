@@ -8,16 +8,28 @@ about project rules lives here so ``dispatch.py`` doesn't grow and
 
 from __future__ import annotations
 
+import asyncio
+import logging
+from collections.abc import Mapping
 from pathlib import Path
 
 from squadron.config.manager import get_config
 from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.steps.phase import RULES_STEP_PARAM
 from squadron.project_rules.conventions import ConventionsSource
 from squadron.project_rules.frontmatter import RuleStep
-from squadron.project_rules.selection import MAX_CHARS_KEY, RuleContext
+from squadron.project_rules.render import render_project_rules
+from squadron.project_rules.selection import (
+    MAX_CHARS_KEY,
+    ProjectRules,
+    RuleContext,
+    select_project_rules,
+)
 from squadron.providers.base import ProviderType
 from squadron.review.git_utils import GIT_COMMAND_TIMEOUT_SECONDS, run_git
 from squadron.review.rules import resolve_rules_dir
+
+_logger = logging.getLogger(__name__)
 
 #: Dispatching step types and the rule step kind each selects for (D3).
 _RULE_STEPS: dict[StepTypeName, RuleStep] = {
@@ -73,6 +85,41 @@ def tracked_files(cwd: str) -> list[str]:
             f"git ls-files failed in {cwd} (exit {result.returncode}): {result.stderr.strip()}"
         )
     return [line for line in result.stdout.splitlines() if line.strip()]
+
+
+def rule_step_from_params(params: Mapping[str, object]) -> StepTypeName:
+    """The dispatching step's kind: the phase step's param, else a bare ``dispatch``."""
+    return StepTypeName(str(params.get(RULES_STEP_PARAM, StepTypeName.DISPATCH)))
+
+
+def sdk_native_record() -> dict[str, object]:
+    """The record for an SDK dispatch, which loads the project's files itself (D4)."""
+    return {"conventions": ConventionsSource.SDK_NATIVE.value}
+
+
+def _select(step_type: StepTypeName, provider: ProviderType, cwd: str) -> ProjectRules:
+    return select_project_rules(build_rule_context(step_type, provider, cwd))
+
+
+async def project_rules_for_dispatch(
+    step_type: StepTypeName, provider: ProviderType, cwd: str
+) -> tuple[str, dict[str, object]]:
+    """The ``## Project Rules`` block to append to a dispatch's instructions, and its record.
+
+    SDK providers get no block and the ``sdk-native`` record. Selection does git
+    and file I/O, so it runs off the event loop; rendering is pure.
+    """
+    if provider == ProviderType.SDK:
+        return "", sdk_native_record()
+    rules = await asyncio.to_thread(_select, step_type, provider, cwd)
+    if rules.conventions is None and not rules.rules:
+        _logger.warning(
+            "Step kind %s dispatches with no project rules: no conventions file and no "
+            "selected rule files under %s",
+            step_type.value,
+            cwd,
+        )
+    return render_project_rules(rules), rules.to_record()
 
 
 def build_rule_context(step_type: StepTypeName, provider: ProviderType, cwd: str) -> RuleContext:

@@ -23,6 +23,11 @@ from squadron.core.models import (
 )
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.dispatch_rules import (
+    project_rules_for_dispatch,
+    rule_step_from_params,
+    sdk_native_record,
+)
 from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
@@ -39,6 +44,7 @@ from squadron.tools import resolve_effective_tools
 
 if TYPE_CHECKING:
     from squadron.pipeline.sdk_session import SDKExecutionSession
+    from squadron.pipeline.steps import StepTypeName
 
 _logger = logging.getLogger(__name__)
 
@@ -107,6 +113,7 @@ async def one_shot_dispatch_with_telemetry(
     model_allows_tools: bool = True,
     cwd: str | None = None,
     effort: Effort | None = None,
+    rule_step: StepTypeName | None = None,
 ) -> tuple[str, dict[str, object]]:
     """Spawn a one-shot agent and return its text alongside tool-use telemetry.
 
@@ -118,6 +125,10 @@ async def one_shot_dispatch_with_telemetry(
     ``ActionResult.metadata`` unconditionally without inventing keys (design D5). The
     prompt and settings keys (slice 932 D12) are always present, derived from the config
     actually spawned.
+
+    ``rule_step`` names the dispatching step kind, which selects the project rules
+    appended to the instructions and recorded as ``project_rules`` (slice 935). ``None``
+    means no rules and no record, for dispatches that write no project artifacts.
     """
     profile = get_profile(profile_name)
     # The capability gate (slice 266), applied before the SDK guard below: a model whose
@@ -147,10 +158,16 @@ async def one_shot_dispatch_with_telemetry(
     # non-SDK side an empty prompt becomes no system message at all, so with tools the
     # guidance block (composed in the agent, slice 267 D1) is the whole system prompt.
     use_default_system_prompt = is_sdk
-    instructions = system_prompt or None
-
     # Pipeline settings policy (slice 932 D10/D11); not applicable off the SDK.
     config_cwd = cwd or "."
+    # Slice 935: project rules follow the step system_prompt; the agent appends the
+    # tool-use guidance (267) after both.
+    rules_block, rules_record = (
+        await project_rules_for_dispatch(rule_step, ProviderType(profile.provider), config_cwd)
+        if rule_step is not None
+        else ("", None)
+    )
+    instructions = "\n\n".join(part for part in (system_prompt, rules_block) if part) or None
     setting_sources = (
         list(
             pipeline_setting_sources(
@@ -184,6 +201,8 @@ async def one_shot_dispatch_with_telemetry(
     registry = get_registry()
     agent = await registry.spawn(config)
     telemetry = describe_run_settings(config, is_sdk=is_sdk)
+    if rules_record is not None:
+        telemetry["project_rules"] = rules_record
     try:
         message = Message(
             sender="pipeline",
@@ -493,6 +512,7 @@ class DispatchAction:
                 ).value,
                 "setting_sources": describe_setting_sources(session.setting_sources, is_sdk=True),
                 "auto_memory": session.auto_memory,
+                "project_rules": sdk_native_record(),
             },
         )
 
@@ -732,6 +752,7 @@ class DispatchAction:
             # ClaudeAgentOptions and previously never received the key — threading
             # it there would change one-shot SDK behavior beyond this slice.
             cwd=context.cwd,
+            rule_step=rule_step_from_params(context.params),
         )
 
         if error_result := _check_cli_error(response_text):
