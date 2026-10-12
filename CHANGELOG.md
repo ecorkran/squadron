@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.5] - 20261012
+
 ### Changed
 
 - Slice, tasks and architecture reviews now flag an overweight artifact and name what to cut, and revise rounds may resolve a finding by cutting or deferring scope (deferrals become GitHub issues). Review loops no longer only add weight.

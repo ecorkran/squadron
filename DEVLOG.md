@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261011'
+dateUpdated: '20261012'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261012
+
+### Release 0.21.5
+
+- **Contents:** slice 943 (Proportionate Reviews); fixes #189, #200, #199, #143, #145; ai-project-guide v0.20.10.
 
 ## 20261011
 
