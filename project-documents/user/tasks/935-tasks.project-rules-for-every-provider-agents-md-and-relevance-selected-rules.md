@@ -116,13 +116,13 @@ status: not_started
 - [ ] **Task 12: `render.py`**
   - [ ] `render_project_rules(ProjectRules) -> str`: a `## Project Rules` section with the conventions content (unless native) and then each rule, headings demoted like the review injection. Return an empty string when there's nothing to inject.
   - [ ] Reuse the existing heading-demotion helper. If it lives in `review/`, move it into `project_rules` and import it back in review (D1 direction).
-  - **Success:** the rendered length equals `ProjectRules.chars`
+  - **Success:** the rendered section holds the conventions (unless native) and every selected rule, in order. `ProjectRules.chars` counts raw file content only (what the budget is checked against), not the rendered heading, separators or demotion.
 
 - [ ] **Task 13: Test selection and render**
   - [ ] One test per D3 selection rule: review template files skipped; `steps` explicit; `steps` defaulted without `paths` (all kinds); defaulted with `paths` (implement and review only); path check skipped when `file_paths` is `None`; path-scoped rule with no matching file excluded
   - [ ] D2/D5 cases: native match sets `native` and omits the content but keeps the rules; no native match injects the content
   - [ ] Failure-mode rows: a rule over budget is dropped with a WARNING (`caplog`); conventions over budget raises naming the key; an unreadable rule produces a WARNING and lands in `dropped`
-  - [ ] `to_record()` matches the D7 shape. Render output contains the heading and each selected rule, and its length equals `chars`.
+  - [ ] `to_record()` matches the D7 shape. Render output contains the heading and each selected rule in order. `chars` equals the summed raw length of the injected conventions and rule files.
   - [ ] Real-files test: run selection against squadron's own root and `.claude/rules/` and assert the per-kind results in D3 (implement: `bug-fixes`, `python`, `testing`, `shell`, with the tracked file list; design and tasks: `bug-fixes`). Conventions source is `AGENTS.md`, and `skipped` contains `CLAUDE.md`.
   - [ ] Run the tests, ruff, pyright
   - [ ] Commit: `feat: select project rules by step kind with a size budget`
@@ -133,13 +133,13 @@ status: not_started
 - [ ] **Task 14: `pipeline/actions/dispatch_rules.py`**
   - [ ] `StepTypeName` → `RuleStep` table for `design`, `tasks`, `implement`, `dispatch`. A missing entry raises naming the step type (D3).
   - [ ] `ProviderType` → native `ConventionsSource | None` table: `SDK` → `CLAUDE.md`, `OPENAI_OAUTH` → `AGENTS.md`, `OPENAI` → `None`. A missing provider type raises (D5).
-  - [ ] `build_rule_context(step_type, provider, cwd)`: maps the step; resolves `rules_dir` via `resolve_rules_dir(cwd, None, None)`; reads `project_rules.max_chars`; for implement, gets `file_paths` from `git ls-files` through `run_git` (a git failure or timeout raises, never an empty list)
+  - [ ] `build_rule_context(step_type, provider, cwd)`: maps the step; resolves `rules_dir` via `resolve_rules_dir(cwd, None, None)`; reads `project_rules.max_chars`; for implement, gets `file_paths` from `git ls-files` through `run_git`. `run_git` never raises: it returns `None` (git missing or timed out) or a process with a non-zero `returncode` (git refused). Both raise here, naming the git error; neither becomes an empty list.
   - **Success:** all pipeline-to-package translation lives in this module
 
 - [ ] **Task 15: Test `dispatch_rules`**
   - [ ] Each table entry; a missing step type raises; a missing provider type raises
   - [ ] Implement gets tracked files; design gets `None`
-  - [ ] A `run_git` failure propagates (monkeypatch `run_git` to raise)
+  - [ ] Monkeypatch `run_git` to return `None`, then a process with a non-zero `returncode`: each raises, naming the git error
   - [ ] Run the tests, ruff, pyright
   - [ ] Commit: `feat: add pipeline glue for project rule selection`
   - **Success:** tests pass
@@ -151,7 +151,7 @@ status: not_started
 
 - [ ] **Task 17: Inject in non-SDK one-shot dispatch**
   - [ ] Add a keyword parameter `rule_step: StepTypeName | None = None` to `one_shot_dispatch_with_telemetry`. `None` means no rules and no record, which keeps the summary caller at line ~81 unchanged.
-  - [ ] When `rule_step` is set and the provider is not SDK: `build_rule_context` → `select_project_rules` → `render_project_rules`, appended to `instructions` after the step `system_prompt`, and `telemetry["project_rules"] = to_record()`
+  - [ ] When `rule_step` is set and the provider is not SDK: `build_rule_context` → `select_project_rules` → `render_project_rules`, appended to `instructions` after the step `system_prompt`, and `telemetry["project_rules"] = to_record()`. The build-and-select call does git and file I/O, so run it through `asyncio.to_thread` (same pattern as `_kept_outputs` in `dispatch.py`); render is pure and stays inline.
   - [ ] When `rule_step` is set and the provider is SDK: no injection; `telemetry["project_rules"] = {"conventions": "sdk-native"}`, built from the enum
   - [ ] Non-SDK with conventions `none` and no rules selected: WARNING naming the root and the step (D7)
   - [ ] `_dispatch_via_agent` reads `RULES_STEP_PARAM` (default `DISPATCH`) and passes it as `rule_step`
@@ -173,11 +173,13 @@ status: not_started
 - [ ] **Task 19: Filter review language rules by `steps`, record `projectRules`**
   - [ ] In `load_review_rules`, language-rule matching also applies the D3 step check with `RuleStep.REVIEW`. Template rules and manual rules are unchanged.
   - [ ] Return the selected language-rule filenames along with the content (a small result dataclass), and update the three callers (`cli/commands/review.py`, `cli/commands/review_pr.py`, `pipeline/actions/review.py`)
+  - [ ] Replace the silent `except OSError: continue` in `load_rules_content` and the `except OSError: pass` in `get_template_rules` with a WARNING naming the file. Unreadable language rules are left out of the returned filenames (the failure-mode row's `dropped` case).
   - [ ] Write `projectRules: [...]` next to `conventionsSource` in the same frontmatter builders as Task 8
   - **Success:** a rule with `steps: [implement]` never reaches a review
 
 - [ ] **Task 20: Test review filtering**
   - [ ] `tests/review/test_rules.py`: a language rule with `steps: [implement]` is excluded; with `steps: [review]` it is included; with no `steps` the behavior is as before
+  - [ ] An unreadable language rule and an unreadable template rule each log a WARNING naming the file (`caplog`); the language rule is absent from the returned filenames
   - [ ] `test_save_target.py`: `projectRules` lists the selected rules
   - [ ] Run `pytest tests/review tests/cli tests/pipeline -q`, then ruff and pyright
   - [ ] Commit: `feat: filter review rules by steps and record projectRules`
