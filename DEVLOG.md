@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261012
 
+### Slice 935: design complete (Phase 4)
+
+- Design: `user/slices/935-slice.project-rules-for-every-provider-agents-md-and-relevance-selected-rules.md`, effort 3/5. Fixes #181, #182.
+- New `squadron.project_rules` package used by non-SDK dispatch and reviews. Conventions file: first of `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, injected whole; others recorded as skipped. Rule relevance via new optional frontmatter `steps` and `requires` (read/write/shell), with Claude Code-compatible defaults.
+- SDK keeps native loading (records `sdk-native`); codex injected like other non-SDK (native AGENTS.md duplication checked in walkthrough). Budget `project_rules.max_chars` (48000): drop rules with WARNING, fail if the conventions file alone exceeds it.
+- Recorded in dispatch metadata `project_rules` and review frontmatter `conventionsSource`/`projectRules`.
+
 ### Release 0.21.5
 
 - **Contents:** slice 943 (Proportionate Reviews); fixes #189, #200, #199, #143, #145; ai-project-guide v0.20.10.
