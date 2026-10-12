@@ -15,12 +15,11 @@ from squadron.project_rules.frontmatter import (
     match_rules_files,
     path_globs,
 )
+from squadron.project_rules.render import RULES_SEPARATOR
 from squadron.review.git_utils import run_git
 from squadron.review.templates import user_templates_dir
 
 _logger = logging.getLogger(__name__)
-
-_RULES_SEPARATOR = "\n\n---\n\n"
 
 
 class RulesSource(StrEnum):
@@ -108,7 +107,7 @@ def _read_rules(rules_files: list[Path]) -> list[tuple[Path, str]]:
 
 def load_rules_content(rules_files: list[Path]) -> str:
     """Read and concatenate content of each rules file."""
-    return _RULES_SEPARATOR.join(content for _, content in _read_rules(rules_files))
+    return RULES_SEPARATOR.join(content for _, content in _read_rules(rules_files))
 
 
 def get_template_rules(template_name: str, rules_dir: Path) -> str | None:
@@ -122,7 +121,7 @@ def get_template_rules(template_name: str, rules_dir: Path) -> str | None:
         if (rules_dir / filename).is_file()
     ]
     parts = [content for _, content in _read_rules(candidates)]
-    return _RULES_SEPARATOR.join(parts) if parts else None
+    return RULES_SEPARATOR.join(parts) if parts else None
 
 
 def extract_diff_paths(
@@ -201,12 +200,12 @@ def load_review_rules(
         auto_files = match_rules_files(file_paths, rules_dir, path_globs(relevant), cwd)
         loaded = _read_rules(auto_files)
         language_rules = [path.name for path, _ in loaded]
-        auto_content = _RULES_SEPARATOR.join(content for _, content in loaded)
+        auto_content = RULES_SEPARATOR.join(content for _, content in loaded)
         if auto_content:
             rules_content = (
                 auto_content
                 if rules_content is None
-                else f"{rules_content}{_RULES_SEPARATOR}{auto_content}"
+                else f"{rules_content}{RULES_SEPARATOR}{auto_content}"
             )
 
     return ReviewRules(content=rules_content, language_rules=language_rules)

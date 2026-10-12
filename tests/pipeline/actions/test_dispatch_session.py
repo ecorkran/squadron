@@ -78,11 +78,11 @@ async def test_routes_to_agent_path_when_session_none(
     from unittest.mock import patch
 
     from squadron.providers.profiles import ProviderProfile
-    from tests.pipeline.actions.test_dispatch import _make_agent_mock, _make_registry
+    from tests.pipeline.actions.dispatch_helpers import make_agent_mock, make_registry
 
     ctx = _make_context(session=None)
-    mock_agent = _make_agent_mock("agent response")
-    mock_registry = _make_registry(mock_agent)
+    mock_agent = make_agent_mock("agent response")
+    mock_registry = make_registry(mock_agent)
     sdk_profile = ProviderProfile(name="sdk", provider="sdk", api_key_env=None, description="test")
 
     with (

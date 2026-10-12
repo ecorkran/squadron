@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.project_rules.errors import ProjectRulesError
+
 logger = logging.getLogger(__name__)
 
 # Frontmatter YAML block at start of file
@@ -31,6 +33,10 @@ class RuleStep(StrEnum):
     DISPATCH = "dispatch"
 
 
+class UnknownRuleStepError(ProjectRulesError):
+    """A rule file's ``steps`` names a value that isn't a :class:`RuleStep` (D3)."""
+
+
 @dataclass(frozen=True)
 class RuleFrontmatter:
     """Selection keys parsed from one rule file. ``None`` means the key is absent."""
@@ -46,8 +52,8 @@ def _clean_item(raw: str) -> str:
 def _parse_list_field(fm_body: str, key: str) -> list[str] | None:
     """Read ``key`` as an inline list, a block list, or a bare scalar; None if absent."""
     name = re.escape(key)
-    # Inline list: paths: [**/*.py, **/*.pyi]
-    inline = re.search(rf"^{name}\s*:\s*\[(.*?)\]", fm_body, re.MULTILINE)
+    # Inline list, on one line or several: paths: [**/*.py, **/*.pyi]
+    inline = re.search(rf"^{name}\s*:\s*\[(.*?)\]", fm_body, re.MULTILINE | re.DOTALL)
     if inline:
         return [item for part in inline.group(1).split(",") if (item := _clean_item(part))]
 
@@ -79,7 +85,7 @@ def _parse_steps(values: list[str], filename: str) -> frozenset[RuleStep]:
             steps.add(RuleStep(value.lower()))
         except ValueError:
             allowed = ", ".join(step.value for step in RuleStep)
-            raise ValueError(
+            raise UnknownRuleStepError(
                 f"Rule file {filename}: unknown steps value {value!r} (allowed: {allowed})"
             ) from None
     return frozenset(steps)
@@ -100,7 +106,7 @@ def parse_rule_frontmatter(content: str, filename: str) -> RuleFrontmatter:
     """Parse ``paths`` and ``steps`` from one rule file's content.
 
     Layout is read leniently (inline, block, or scalar lists; any indent).
-    Values are strict: an unknown ``steps`` value raises ``ValueError`` naming
+    Values are strict: an unknown ``steps`` value raises :class:`UnknownRuleStepError` naming
     ``filename`` and the value.
     """
     fm_match = _FRONTMATTER_RE.match(content)

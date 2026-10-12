@@ -11,6 +11,7 @@ from squadron.project_rules.conventions import (
     ConventionsSource,
     find_conventions,
 )
+from squadron.project_rules.errors import ProjectRulesError
 from squadron.project_rules.frontmatter import (
     RuleStep,
     effective_steps,
@@ -29,7 +30,7 @@ _REVIEW_TEMPLATE_RULE = "review.md"
 _REVIEW_TEMPLATE_RULE_PREFIX = "review-"
 
 
-class ProjectRulesBudgetError(ValueError):
+class ProjectRulesBudgetError(ProjectRulesError):
     """The conventions file alone exceeds ``project_rules.max_chars`` (D6)."""
 
 
@@ -85,10 +86,17 @@ def is_review_template_rule(name: str) -> bool:
     return name == _REVIEW_TEMPLATE_RULE or name.startswith(_REVIEW_TEMPLATE_RULE_PREFIX)
 
 
-def _candidate_rules(ctx: RuleContext, dropped: list[str]) -> list[SelectedRule]:
-    """Rules relevant to the step, in filename order, before the budget (D3)."""
+def _candidate_rules(ctx: RuleContext) -> tuple[list[SelectedRule], list[str]]:
+    """Rules relevant to the step, in filename order, before the budget (D3), and the
+    unreadable ones dropped.
+
+    Reads the files itself rather than through ``load_rules_frontmatter``: selection
+    needs the content too, and an unreadable rule here is recorded in ``dropped``,
+    where the review path only logs and skips it.
+    """
+    dropped: list[str] = []
     if ctx.rules_dir is None:
-        return []
+        return [], dropped
     candidates = None if ctx.file_paths is None else paths_to_match(ctx.file_paths, str(ctx.root))
     selected: list[SelectedRule] = []
     for path in sorted(ctx.rules_dir.glob("*.md")):
@@ -107,14 +115,14 @@ def _candidate_rules(ctx: RuleContext, dropped: list[str]) -> list[SelectedRule]
             if not globs_match(fm.paths, candidates):
                 continue
         selected.append(SelectedRule(name=path.name, content=content))
-    return selected
+    return selected, dropped
 
 
 def select_project_rules(ctx: RuleContext) -> ProjectRules:
     """Pick the conventions file and the rules for ``ctx.step_kind`` within the budget.
 
     Raises :class:`ConventionsReadError` for an unreadable conventions file,
-    ``ValueError`` for an unknown ``steps`` value, and
+    :class:`UnknownRuleStepError` for an unknown ``steps`` value, and
     :class:`ProjectRulesBudgetError` when the conventions file alone is over budget.
     """
     lookup = find_conventions(ctx.root)
@@ -129,9 +137,9 @@ def select_project_rules(ctx: RuleContext) -> ProjectRules:
                 f"{ctx.max_chars}-character budget ({MAX_CHARS_KEY})"
             )
 
-    dropped: list[str] = []
+    candidates, dropped = _candidate_rules(ctx)
     rules: list[SelectedRule] = []
-    for rule in _candidate_rules(ctx, dropped):
+    for rule in candidates:
         if chars + len(rule.content) > ctx.max_chars:
             logger.warning(
                 "Dropping rule %s (%d characters): over the %d-character budget (%s)",

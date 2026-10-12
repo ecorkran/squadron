@@ -36,6 +36,7 @@ from squadron.models.aliases import (
     require_known_model,
     resolve_model_alias,
 )
+from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.errors import ProviderError
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
 from squadron.review.git_utils import (
@@ -63,6 +64,7 @@ from squadron.review.resolution import Resolution, ResolutionResult, resolve_rev
 from squadron.review.resolution_evidence import ResolutionError
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
+    ReviewRules,
     RulesSource,
     extract_diff_paths,
     load_review_rules,
@@ -485,6 +487,25 @@ def _resolve_verbosity(verbose: int) -> int:
     return resolved
 
 
+def load_review_rules_or_exit(
+    template_name: str,
+    rules_dir: Path | None,
+    file_paths: list[str] | None = None,
+    manual_rules_content: str | None = None,
+    cwd: str | None = None,
+) -> ReviewRules:
+    """``load_review_rules`` for a CLI boundary: a rules problem prints one error and exits 1.
+
+    A typo'd ``steps`` value or unreadable conventions file is the user's to fix; the
+    message names the file, so a traceback adds nothing (slice 935 review F003).
+    """
+    try:
+        return load_review_rules(template_name, rules_dir, file_paths, manual_rules_content, cwd)
+    except ProjectRulesError as exc:
+        rprint(f"[red]Error: {escape(str(exc))}[/red]")
+        raise typer.Exit(code=1) from exc
+
+
 def _resolve_rules_content(rules_path: str | None) -> str | None:
     """Read rules file content if a path is provided."""
     if not rules_path:
@@ -694,7 +715,7 @@ def _run_review_command(
     # file paths are known; _run_review_command only sees the template.
     selected_rules = list(language_rules)
     if rules_dir is not None:
-        loaded = load_review_rules(
+        loaded = load_review_rules_or_exit(
             template_name,
             rules_dir,
             file_paths=None,
@@ -1242,7 +1263,7 @@ def review_code(
 
                 file_paths = _glob.glob(files, root_dir=review_cwd)
 
-        loaded = load_review_rules(
+        loaded = load_review_rules_or_exit(
             "code",
             resolved_rules_dir,
             file_paths=file_paths,

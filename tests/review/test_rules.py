@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -242,7 +243,9 @@ class TestLoadReviewRulesSteps:
         assert loaded.language_rules == ["python.md"]
         assert "go.md" in caplog.text
 
-    @pytest.mark.skipif(os.geteuid() == 0, reason="chmod 000 is readable by root")
+    @pytest.mark.skipif(
+        sys.platform == "win32" or os.geteuid() == 0, reason="chmod 000 is readable by root"
+    )
     def test_unreadable_template_rule_warns(
         self, tmp_path: Path, caplog: pytest.LogCaptureFixture
     ) -> None:
@@ -257,3 +260,32 @@ class TestLoadReviewRulesSteps:
             (rules_dir / "review.md").chmod(0o644)
         assert loaded.content is None
         assert "review.md" in caplog.text
+
+
+class TestCliRulesErrors:
+    """Review F003: a rules problem at the CLI boundary is one error line and exit 1."""
+
+    def test_unknown_steps_value_exits_cleanly(self, cli_runner: CliRunner, tmp_path: Path) -> None:
+        (tmp_path / "a.py").write_text("print('a')\n")
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "python.md").write_text("---\nsteps: [implemnt]\n---\nBody\n")
+        with patch("squadron.cli.commands.review._run_review_command") as run:
+            result = cli_runner.invoke(
+                app,
+                [
+                    "review",
+                    "code",
+                    "--files",
+                    "*.py",
+                    "--cwd",
+                    str(tmp_path),
+                    "--rules-dir",
+                    str(rules_dir),
+                    "--no-save",
+                ],
+            )
+        assert result.exit_code == 1
+        assert "unknown steps value 'implemnt'" in result.output
+        assert result.exception is None or isinstance(result.exception, SystemExit)
+        run.assert_not_called()

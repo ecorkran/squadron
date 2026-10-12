@@ -29,6 +29,7 @@ from squadron.cli.commands.review import (
     _resolve_save_outcome,  # pyright: ignore[reportPrivateUsage]
     _resolve_verbosity,  # pyright: ignore[reportPrivateUsage]
     _run_review_command,  # pyright: ignore[reportPrivateUsage]
+    load_review_rules_or_exit,
     review_app,
 )
 from squadron.codehost.errors import CodeHostError
@@ -43,7 +44,7 @@ from squadron.review.models import ReviewResult
 from squadron.review.persistence import save_review_result
 from squadron.review.pr_comment import compose_comment, marker_for
 from squadron.review.reviews_dir import resolve_reviews_dir
-from squadron.review.rules import ReviewRules, RulesSource, load_review_rules, resolve_rules_dir
+from squadron.review.rules import ReviewRules, RulesSource, resolve_rules_dir
 from squadron.review.save_target import TargetKind
 from squadron.review.templates import get_template, load_all_templates
 
@@ -113,7 +114,7 @@ def _resolve_pr_rules_content(
     if checkout_rules_dir is None and manual_content is not None:
         rules_source = RulesSource.FILE
     file_paths = changed_paths if checkout_rules_dir is not None else []
-    loaded = load_review_rules(
+    loaded = load_review_rules_or_exit(
         "code",
         checkout_rules_dir,
         file_paths=file_paths,

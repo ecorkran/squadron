@@ -17,6 +17,7 @@ from squadron.config.manager import get_config
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.phase import RULES_STEP_PARAM
 from squadron.project_rules.conventions import ConventionsSource
+from squadron.project_rules.errors import ProjectRulesError
 from squadron.project_rules.frontmatter import RuleStep
 from squadron.project_rules.render import render_project_rules
 from squadron.project_rules.selection import (
@@ -50,7 +51,7 @@ _NATIVE_CONVENTIONS: dict[ProviderType, ConventionsSource | None] = {
 _FILE_SCOPED_STEPS = frozenset({RuleStep.IMPLEMENT})
 
 
-class ProjectRulesContextError(RuntimeError):
+class ProjectRulesContextError(ProjectRulesError):
     """The pipeline couldn't build a rule context (unmapped type, git failure)."""
 
 

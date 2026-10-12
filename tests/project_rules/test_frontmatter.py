@@ -9,6 +9,7 @@ import pytest
 from squadron.project_rules.frontmatter import (
     RuleFrontmatter,
     RuleStep,
+    UnknownRuleStepError,
     load_rules_frontmatter,
     parse_rule_frontmatter,
 )
@@ -26,6 +27,12 @@ class TestParseSteps:
         content = "---\nsteps:  \n  - design\n    - tasks   \n---\nBody\n"
         fm = parse_rule_frontmatter(content, "a.md")
         assert fm.steps == frozenset({RuleStep.DESIGN, RuleStep.TASKS})
+
+    def test_multiline_inline_list(self) -> None:
+        content = '---\npaths: [\n  "**/*.py",\n  "**/*.pyi"\n]\nsteps: [\n implement\n]\n---\nBody\n'
+        fm = parse_rule_frontmatter(content, "a.md")
+        assert fm.paths == ["**/*.py", "**/*.pyi"]
+        assert fm.steps == frozenset({RuleStep.IMPLEMENT})
 
     def test_scalar_steps(self) -> None:
         fm = parse_rule_frontmatter("---\nsteps: implement\n---\nBody\n", "a.md")
@@ -45,12 +52,12 @@ class TestParseSteps:
         assert fm.steps is None
 
     def test_unknown_value_names_file_and_value(self) -> None:
-        with pytest.raises(ValueError, match=r"typo\.md.*'implemnt'"):
+        with pytest.raises(UnknownRuleStepError, match=r"typo\.md.*'implemnt'"):
             parse_rule_frontmatter("---\nsteps: [implemnt]\n---\nBody\n", "typo.md")
 
     def test_load_propagates_unknown_value(self, tmp_path: Path) -> None:
         (tmp_path / "bad.md").write_text("---\nsteps: [nope]\n---\nBody\n")
-        with pytest.raises(ValueError, match=r"bad\.md"):
+        with pytest.raises(UnknownRuleStepError, match=r"bad\.md"):
             load_rules_frontmatter(tmp_path)
 
 

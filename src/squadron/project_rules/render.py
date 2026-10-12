@@ -25,7 +25,8 @@ def demote_headings(content: str, levels: int = 2) -> str:
 
 
 _SECTION_HEADING = "## Project Rules"
-_SEPARATOR = "\n\n---\n\n"
+#: Between rule files wherever they are joined (dispatch render and review rules).
+RULES_SEPARATOR = "\n\n---\n\n"
 
 
 def render_project_rules(rules: ProjectRules) -> str:
@@ -40,4 +41,4 @@ def render_project_rules(rules: ProjectRules) -> str:
     parts.extend(demote_headings(rule.content.strip()) for rule in rules.rules)
     if not parts:
         return ""
-    return f"{_SECTION_HEADING}\n\n{_SEPARATOR.join(parts)}"
+    return f"{_SECTION_HEADING}\n\n{RULES_SEPARATOR.join(parts)}"

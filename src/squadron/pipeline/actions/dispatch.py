@@ -35,6 +35,7 @@ from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.sdk_session import DispatchStalledError
+from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.base import ProfileName, ProviderType
 from squadron.providers.errors import ProviderError
 from squadron.providers.loader import ensure_provider_loaded
@@ -364,6 +365,16 @@ class DispatchAction:
                 metadata={"stalled": True, "session_usable": exc.session_usable},
             )
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=str(exc),
+            )
+        except ProjectRulesError as exc:
+            # Slice 935: a rules problem the message names (budget, unreadable file, bad
+            # `steps` value, git failure). One ERROR line, no traceback; the step fails.
+            _logger.error("dispatch: step %s: project rules: %s", context.step_name, exc)
             return ActionResult(
                 success=False,
                 action_type=self.action_type,

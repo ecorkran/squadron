@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.project_rules.errors import ProjectRulesError
+
 
 class ConventionsSource(StrEnum):
     """Where a run's project conventions came from.
@@ -31,7 +33,7 @@ CONVENTIONS_CANDIDATES: tuple[ConventionsSource, ...] = (
 )
 
 
-class ConventionsReadError(RuntimeError):
+class ConventionsReadError(ProjectRulesError):
     """A conventions file exists but can't be read. Never skipped in favor of the next."""
 
 

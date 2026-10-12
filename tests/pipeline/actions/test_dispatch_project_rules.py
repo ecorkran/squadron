@@ -16,13 +16,13 @@ from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.phase import RULES_STEP_PARAM
 from squadron.providers.profiles import ProviderProfile
 from squadron.review.rules import RulesSource
-from tests.pipeline.actions.test_dispatch import (
-    _P,  # pyright: ignore[reportPrivateUsage]
-    _make_agent_mock,  # pyright: ignore[reportPrivateUsage]
-    _make_context,  # pyright: ignore[reportPrivateUsage]
-    _make_registry,  # pyright: ignore[reportPrivateUsage]
-    _openrouter_profile,  # pyright: ignore[reportPrivateUsage]
-    _sdk_profile,  # pyright: ignore[reportPrivateUsage]
+from tests.pipeline.actions.dispatch_helpers import (
+    DISPATCH_MODULE,
+    make_agent_mock,
+    make_context,
+    make_registry,
+    openrouter_profile,
+    sdk_profile,
 )
 
 _AGENTS_TEXT = "Agents conventions text."
@@ -43,12 +43,12 @@ def _project(root: Path, *, agents: bool = True) -> None:
 async def _run(
     root: Path, profile: ProviderProfile, step: StepTypeName = StepTypeName.DESIGN
 ) -> tuple[ActionResult, AgentConfig]:
-    ctx = _make_context(cwd=str(root), params={"prompt": "Go", RULES_STEP_PARAM: step})
-    registry = _make_registry(_make_agent_mock("done"))
+    ctx = make_context(cwd=str(root), params={"prompt": "Go", RULES_STEP_PARAM: step})
+    registry = make_registry(make_agent_mock("done"))
     with (
-        patch(f"{_P}.get_registry", return_value=registry),
-        patch(f"{_P}.get_profile", return_value=profile),
-        patch(f"{_P}.ensure_provider_loaded"),
+        patch(f"{DISPATCH_MODULE}.get_registry", return_value=registry),
+        patch(f"{DISPATCH_MODULE}.get_profile", return_value=profile),
+        patch(f"{DISPATCH_MODULE}.ensure_provider_loaded"),
     ):
         result = await DispatchAction().execute(ctx)
     spawn: AsyncMock = registry.spawn
@@ -59,7 +59,7 @@ async def _run(
 @pytest.mark.asyncio
 async def test_non_sdk_dispatch_gets_rules_and_record(tmp_path: Path) -> None:
     _project(tmp_path)
-    result, config = await _run(tmp_path, _openrouter_profile())
+    result, config = await _run(tmp_path, openrouter_profile())
 
     assert result.success is True
     assert config.instructions is not None
@@ -80,7 +80,7 @@ async def test_non_sdk_dispatch_gets_rules_and_record(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_sdk_one_shot_instructions_unchanged(tmp_path: Path) -> None:
     _project(tmp_path)
-    result, config = await _run(tmp_path, _sdk_profile())
+    result, config = await _run(tmp_path, sdk_profile())
 
     assert config.instructions is None
     assert result.metadata["project_rules"] == {"conventions": "sdk-native"}
@@ -106,7 +106,7 @@ async def test_no_conventions_and_no_rules_warns(
 ) -> None:
     monkeypatch.setattr(dispatch_rules, "resolve_rules_dir", lambda *_: (None, RulesSource.NONE))
     with caplog.at_level(logging.WARNING):
-        result, config = await _run(tmp_path, _openrouter_profile())
+        result, config = await _run(tmp_path, openrouter_profile())
 
     assert result.success is True
     assert config.instructions is None
@@ -117,11 +117,18 @@ async def test_no_conventions_and_no_rules_warns(
 
 @pytest.mark.asyncio
 async def test_conventions_over_budget_fails_the_action(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     _project(tmp_path)
     monkeypatch.setattr(dispatch_rules, "get_config", lambda key, cwd=".": 5)
-    result, _ = await _run(tmp_path, _openrouter_profile())
+    with caplog.at_level(logging.WARNING):
+        result, _ = await _run(tmp_path, openrouter_profile())
+
+    # A named failure: one ERROR line, no traceback (review F001).
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(errors) == 1
+    assert errors[0].exc_info is None
+    assert "project_rules.max_chars" in errors[0].getMessage()
 
     assert result.success is False
     assert result.error is not None
