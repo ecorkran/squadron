@@ -687,6 +687,74 @@ Actions are the internal execution units that step types expand into. Pipeline a
 
 ---
 
+## Project Rules
+
+Every model that writes or reviews project artifacts gets the project's conventions and the rule files that apply to the step. SDK dispatches load them natively through the Claude CLI. For every other dispatch (OpenAI-compatible, OpenRouter, codex) and for every review, squadron reads the files itself and puts them in the prompt.
+
+### Conventions file
+
+Squadron uses one conventions file, the first of these that exists in the project root:
+
+1. `AGENTS.md`
+2. `CLAUDE.md`
+3. `.claude/CLAUDE.md`
+
+The others are never added on top of it. A file that exists but can't be read fails the run; squadron never falls through to the next candidate. `@path` import lines are injected as written, not resolved.
+
+A codex dispatch already loads `AGENTS.md` on its own, so squadron skips that file there (recorded as `native: true`) and still injects the rule files.
+
+### Rule files and the `steps` key
+
+Rule files come from the rules directory that `sq review` resolves (`rules/`, then `.claude/rules/`, then the user directories). `review.md` and `review-*.md` stay review template rules and are never sent to dispatches.
+
+A rule file declares where it applies with optional frontmatter:
+
+```yaml
+---
+description: Python coding standards
+paths:
+  - "**/*.py"
+steps: [implement, review]
+---
+```
+
+| `steps` value | Applies to |
+|---|---|
+| `design`, `tasks`, `implement`, `dispatch` | the phase step of that name; `dispatch` is a bare `dispatch` step |
+| `review` | language rules in reviews |
+| absent, no `paths` | every step kind |
+| absent, with `paths` | `implement` and `review` |
+
+Inline (`[a, b]`), block (`- a`) and single-value forms are all accepted. An unknown value fails every dispatch and review that loads the directory, and the error names the rule file. When a rule has `paths`, implement dispatches check them against the project's tracked files (`git ls-files`) and reviews check them against the changed files. Design, tasks and dispatch skip the path check, so a path-scoped rule reaches them only if `steps` names them.
+
+### Size budget
+
+`project_rules.max_chars` (default `48000`) caps the conventions file plus rule files injected into a dispatch. The conventions file goes in first, then rules in filename order. A rule that doesn't fit is dropped with a warning. A conventions file that alone exceeds the budget fails the dispatch, and the error names the file, its size and the key. Rules are never truncated.
+
+```bash
+sq config set project_rules.max_chars 64000
+```
+
+Reviews keep their own `review.max_*` limits.
+
+### What gets recorded
+
+Each dispatch step's `ActionResult.metadata` carries a `project_rules` record, which is saved in the run state file:
+
+```json
+{"conventions": "AGENTS.md", "native": false, "skipped": ["CLAUDE.md"],
+ "rules": ["bug-fixes.md", "python.md"], "dropped": [], "chars": 23140}
+```
+
+SDK dispatches record `{"conventions": "sdk-native"}`. A non-SDK dispatch that finds neither a conventions file nor a rule logs a warning and records `"conventions": "none"`.
+
+Review artifacts carry two frontmatter keys next to `rulesSource`:
+
+- `conventionsSource`: `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md` or `none`
+- `projectRules`: the language rule files the review was given, e.g. `[python.md, testing.md]`
+
+---
+
 ## Model Resolution
 
 Squadron resolves the active model for each action through a 5-level cascade, highest priority first:

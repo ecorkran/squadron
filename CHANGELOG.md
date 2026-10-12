@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Non-SDK dispatches (OpenAI-compatible, OpenRouter, codex) now get the project's conventions file and the rule files that apply to the step, capped by `project_rules.max_chars` (#181, #182).
+- Rule files can declare where they apply with a `steps` frontmatter key (`design`, `tasks`, `implement`, `review`, `dispatch`).
+- Review artifacts record `conventionsSource` and `projectRules`; dispatch steps record `project_rules` in run state.
+
+### Changed
+
+- Reviews read `AGENTS.md` first, then `CLAUDE.md`, then `.claude/CLAUDE.md`. An `AGENTS.md`-only project now gets its conventions in reviews.
+
 ### Fixed
 
 - `sq run --resume` resumes an orphaned run, re-running the step it died in, and refuses a run that is still running with a plain error (#195).
