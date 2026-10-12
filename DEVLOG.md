@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261011
 
+### Slice 943: implementation complete (Phase 6)
+
+- Branch `943-slice.proportionate-reviews-review-and-revise-loops-that-can-cut-scope` (from `main`), not merged; code review comes before Phase 7.
+- `REVISE_GUIDANCE` in `dispatch.py`, appended by `_findings_block` when there are findings (both revise paths). Proportionality bullet and gap qualifier in `slice.yaml` and `tasks.yaml`, and a PROPORTIONALITY block in `arch.yaml`. No judge template changed.
+- Rerun of trading-ui 127 (opus/sonnet): 5,064 → 5,217 → 5,287 words (+4.4%; baseline +65%). All CONCERNs were real correctness gaps, coverage held, nothing deferred. The pass rule changed from "final ≤ initial" to "no round grows more than about 10%" (PM accepted).
+- The rerun needs a cf-registered worktree with its own integration branch, arch and plan (walkthrough step 2). Issues: #202 (cf error traceback in the artifact post-condition), #203 (heavy first drafts still pass proportionality).
+
 ### Slice 943: task breakdown complete (Phase 5)
 
 - Tasks: `user/tasks/943-tasks.proportionate-reviews-review-and-revise-loops-that-can-cut-scope.md`, 9 tasks, effort 2/5. Order: branch, revise paragraph + tests, slice/tasks/arch template edits, CHANGELOG, slice 127 rerun (stops and reports on failure rather than iterating wording).

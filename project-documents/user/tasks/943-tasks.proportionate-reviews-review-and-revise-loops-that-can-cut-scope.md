@@ -10,7 +10,7 @@ projectState: >
   and arch review templates, plus a smallest-sufficient-change paragraph in the revise prompt.
 dateCreated: 20261011
 dateUpdated: 20261011
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -66,13 +66,13 @@ status: in_progress
   - [x] Add an Unreleased bullet: reviews now flag overweight designs, task files and architectures, and revise can resolve a finding by cutting or deferring scope
   - [x] Commit: `docs: add proportionate reviews to CHANGELOG`
 
-- [ ] **Task 9: Rerun slice 127 (design Verification Walkthrough steps 2–5)**
-  - [ ] Install the branch build of `sq` and confirm `sq --version` runs from this checkout
-  - [ ] Create the trading-ui worktree at `2c5e9d4` and run `sq run P4 127 --model opus -p review-model=sonnet` (from a standard terminal; it will not run inside Claude Code)
-  - [ ] Record per-round word counts against the baseline (4,673 → 6,561 → 7,735)
-  - [ ] Check coverage against 127's slice plan entry and the approved cut `0589e8e`, and list any deferrals with their GitHub issue numbers
-  - [ ] Read the rerun's review files: every real-gap CONCERN the baseline run raised (failure mode on a new I/O path, NFR target) is still raised, or the design already handles it
-  - [ ] If the rerun fails either check, stop and report the review findings to the PM along with the matching cause from the design (criterion wording, revise wording, or gap qualifier). Do not iterate on wording without PM direction.
-  - [ ] Remove the worktree and its branch
-  - [ ] Record results in the design's Verification Walkthrough, the DEVLOG and the 943 slice plan entry; commit `docs: record slice 943 verification results`
+- [x] **Task 9: Rerun slice 127 (design Verification Walkthrough steps 2–5)**
+  - [x] Install the branch build of `sq` and confirm `sq --version` runs from this checkout
+  - [x] Create the trading-ui worktree at `2c5e9d4` and run `sq run P4 127 --model opus -p review-model=sonnet` (from a standard terminal; it will not run inside Claude Code)
+  - [x] Record per-round word counts against the baseline (4,673 → 6,561 → 7,735)
+  - [x] Check coverage against 127's slice plan entry and the approved cut `0589e8e`, and list any deferrals with their GitHub issue numbers
+  - [x] Read the rerun's review files: every real-gap CONCERN the baseline run raised (failure mode on a new I/O path, NFR target) is still raised, or the design already handles it
+  - [x] If the rerun fails either check, stop and report the review findings to the PM along with the matching cause from the design (criterion wording, revise wording, or gap qualifier). Do not iterate on wording without PM direction.
+  - [x] Remove the worktree and its branch
+  - [x] Record results in the design's Verification Walkthrough, the DEVLOG and the 943 slice plan entry; commit `docs: record slice 943 verification results`
   - **Success:** final design words ≤ initial design words, and coverage holds; or a stop report naming the cause
