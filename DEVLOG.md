@@ -11,6 +11,20 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261012
 
+### Slice 935: implementation complete (Phase 6)
+
+- Branch `935-slice.project-rules-for-every-provider-agents-md-and-relevance-selected-rules` (from `main`), not merged; code review comes before Phase 7. Full suite 6533 passed, 4 skipped; pyright 0 errors.
+- New `squadron.project_rules` (`conventions`, `frontmatter`, `selection`, `render`); pipeline glue in `pipeline/actions/dispatch_rules.py`; phase steps pass `RULES_STEP_PARAM`.
+- Deviations: `conventionsSource`/`projectRules` ride on `ReviewResult` and are written once in persistence (known only after rules load or the review runs), not threaded through each save target; provider-failure artifacts carry neither. `load_review_rules` returns `ReviewRules(content, language_rules)`. `sql.md` matches implement and review via `**/tests/**/*.py` and `**/conftest.py`; D3 corrected.
+- Walkthrough (scratch copy, `cf init --lite`, one-step pipelines; design section rewritten with the working commands):
+  1. `conventionsSource: AGENTS.md` (luna). 2. `CLAUDE.md`. 3. `none`.
+  4. qwen38-flash implement: `{"conventions":"AGENTS.md","native":false,"skipped":["CLAUDE.md"],"rules":["bug-fixes.md","python.md","shell.md","sql.md","testing.md"],"dropped":[],"chars":37502}`.
+  5. `bug-fixes.md` with `steps: [implement]`: bare dispatch `"rules":[]`; code review `projectRules: [python.md, sql.md, testing.md]`.
+  6. Not run here: `sq run` refuses inside Claude Code and the SDK step must not nest; PM to run from a terminal (expect `{"conventions":"sdk-native"}`).
+  7. Budget 5000: fails with `…/AGENTS.md is 14798 characters, over the 5000-character budget (project_rules.max_chars)`.
+  8. luna: `"conventions":"AGENTS.md","native":true`, five rules, `chars` 22731; with `AGENTS.md` removed: `"conventions":"CLAUDE.md","native":false`.
+- The `openai` API-key aliases have no credits by design; use `openai-oauth` aliases (luna/sol/astra).
+
 ### Slice 935: task breakdown complete (Phase 5)
 
 - Tasks: `user/tasks/935-tasks.project-rules-for-every-provider-agents-md-and-relevance-selected-rules.md`, 23 tasks, effort 3/5. Order: branch, helper move (no behavior change), `steps` parsing, conventions discovery + review switch, selection/render/budget, `dispatch_rules.py` + dispatch wiring, review filtering, docs, walkthrough.

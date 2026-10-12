@@ -7,7 +7,7 @@ dependencies: [260, 267]
 interfaces: []
 dateCreated: 20261012
 dateUpdated: 20261012
-status: not_started
+status: complete
 ---
 
 # Slice Design: Project Rules for Every Provider — AGENTS.md and Relevance-Selected Rules
@@ -227,33 +227,61 @@ When the conventions source is `none` and no rule was selected for a non-SDK dis
 
 ### Verification Walkthrough
 
-Run from a scratch copy so the project's files stay untouched.
+Verified 20261012 on the slice branch. Run from a scratch copy so the project's files stay untouched. `<non-sdk-alias>` is an openrouter alias (`qwen38-flash` was used); `luna` is the codex-profile (`openai-oauth`) alias. Don't use the `openai` API-key profile aliases.
 
-1. **Review picks AGENTS.md over CLAUDE.md.**
-   ```bash
-   cp -R ~/source/repos/manta/squadron /tmp/sq935 && cd /tmp/sq935
-   sq review slice 935 --model <non-sdk-alias>
+**Setup.** The copy needs its own Context Forge project for `sq review slice` to resolve the slice, and two one-step pipelines.
+```bash
+cp -R ~/source/repos/manta/squadron "$SCRATCH/sq935" && cd "$SCRATCH/sq935"
+cf init --lite --name sq935
+cf set plan 900-slices.maintenance-and-refactoring
+cf set arch 900-arch.maintenance-and-refactoring
+mkdir -p project-documents/user/pipelines
+cat > project-documents/user/pipelines/wt-implement.yaml <<'EOF'
+name: wt-implement
+description: one implement dispatch to record project_rules
+params: { slice: required, model: qwen38-flash }
+steps:
+  - branch: { op: enter }
+  - implement: { phase: 6, model: "{model}", checkpoint: never }
+EOF
+cat > project-documents/user/pipelines/wt-dispatch.yaml <<'EOF'
+name: wt-dispatch
+description: one bare dispatch to record project_rules
+params: { model: qwen38-flash }
+steps:
+  - dispatch: { model: "{model}", prompt: "Reply with the single word OK." }
+EOF
+git add -A && git commit -qm "walkthrough setup" --no-verify
+```
+The built-in `implement` pipeline doesn't fit step 4: on a slice branch that already has commits, `existing: keep` skips the implement dispatch. `sq run` refuses to start inside a Claude Code session (it checks `CLAUDECODE`); run steps 4–8 from a terminal, or prefix the non-SDK runs with `env -u CLAUDECODE`. Every step below commits its file changes first, because `branch: enter` needs a clean tree.
+
+Read a run's record with:
+```bash
+jq -c '.completed_steps[].action_results[] | select(.metadata.project_rules) | .metadata.project_rules' \
+  "$(ls -t ~/.config/squadron/runs/*.json | head -1)"
+```
+
+1. **Review picks AGENTS.md over CLAUDE.md.** `sq review slice 935 --model luna`. Frontmatter: `conventionsSource: AGENTS.md`, `projectRules: []` (a slice review selects no language rules).
+
+2. **CLAUDE.md only.** `git rm AGENTS.md`, commit, rerun step 1. Frontmatter: `conventionsSource: CLAUDE.md`.
+
+3. **Neither file.** `git rm CLAUDE.md`, commit, rerun step 1. Frontmatter: `conventionsSource: none`.
+
+4. **Non-SDK implement dispatch records its rules.** Restore both files (`git checkout <commit-before-step-2> -- AGENTS.md CLAUDE.md`), commit, then `sq run wt-implement 935`. Record:
+   ```json
+   {"conventions":"AGENTS.md","native":false,"skipped":["CLAUDE.md"],
+    "rules":["bug-fixes.md","python.md","shell.md","sql.md","testing.md"],"dropped":[],"chars":37502}
    ```
-   The new review file under `project-documents/user/reviews/` has `conventionsSource: AGENTS.md` in its frontmatter.
 
-2. **CLAUDE.md only.** `git rm AGENTS.md` and commit. Rerun step 1. Frontmatter shows `conventionsSource: CLAUDE.md`.
+5. **Step relevance.** Prepend `---\nsteps: [implement]\n---` to `.claude/rules/bug-fixes.md` and commit. `sq run wt-dispatch` records `"rules": []` (before the edit, a bare dispatch got `bug-fixes.md`). `sq review code 935 --model luna` writes `projectRules` with the matching language rules and no `bug-fixes.md`. A slice review can't show this, since it selects no language rules.
 
-3. **Neither file.** Remove both files, commit, rerun step 1. Frontmatter shows `conventionsSource: none`.
+6. **SDK unchanged.** From a terminal (not inside Claude Code): `sq run wt-implement 935 --param model=haiku`. Record: `{"conventions":"sdk-native"}`.
 
-4. **Non-SDK implement dispatch records its rules.** Restore both files (`git reset --hard HEAD~2`). Run an implement pipeline on a non-SDK alias (`sq run implement <slice> --model <non-sdk-alias>`), then:
-   ```bash
-   jq '.completed_steps[] | select(.step_type=="implement") | .action_results[].metadata.project_rules' \
-     ~/.config/squadron/runs/<run-id>.json
-   ```
-   Expect `conventions: "AGENTS.md"`, `skipped: ["CLAUDE.md"]`, and `rules` containing `python.md` and `testing.md`.
+7. **Budget.** `sq config set --project project_rules.max_chars 5000`, then `sq run wt-implement 935`. The step fails with `Conventions file …/AGENTS.md is 14798 characters, over the 5000-character budget (project_rules.max_chars)`. Afterward run `sq config unset --project project_rules.max_chars`.
 
-5. **Step relevance.** Add `steps: [implement]` to `.claude/rules/bug-fixes.md` frontmatter. Rerun `sq review slice 935 --model <non-sdk-alias>`. `projectRules` doesn't list `bug-fixes.md`. A design dispatch's record doesn't list it either.
+8. **Codex native loading (D5).** `sq run wt-implement 935 --param model=luna` records `"conventions":"AGENTS.md","native":true` with all five rules, and `chars` counts only the rules. Then `git rm AGENTS.md`, commit, and rerun: `"conventions":"CLAUDE.md","native":false`.
 
-6. **SDK unchanged.** Run any phase step on an SDK alias. Its record is `conventions: "sdk-native"`.
-
-7. **Budget.** `sq config set project_rules.max_chars 5000`, rerun step 4. The run fails, and the error names `AGENTS.md`, its size, and `project_rules.max_chars`. Unset the key afterward.
-
-8. **Codex native loading (D5).** With `AGENTS.md` present, run a codex-profile dispatch. The record shows `AGENTS.md` as `native` with the selected rules injected. Hide `AGENTS.md`, rerun, and the record shows `CLAUDE.md` injected.
+**Cleanup.** `cf project rm sq935`, then delete the scratch copy.
 
 ## Risk Assessment
 
