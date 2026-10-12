@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import socket
 import sys
 from collections.abc import Coroutine
 from contextlib import AbstractAsyncContextManager, ExitStack, nullcontext
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
@@ -71,6 +73,7 @@ from squadron.pipeline.prompt_renderer import (
 )
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ModelResolver
 from squadron.pipeline.run_heartbeat import RunHeartbeat, heartbeat_interval_s
+from squadron.pipeline.run_liveness import is_live
 from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
 from squadron.pipeline.sdk_session import SDKExecutionSession, open_pipeline_session
 from squadron.pipeline.state import (
@@ -224,6 +227,21 @@ def _check_cf(cf_client: ContextForgeClient) -> None:
     except ContextForgeError as exc:
         rprint(f"[red]Error: Context Forge pre-flight check failed — {escape(str(exc))}[/red]")
         raise typer.Exit(1) from None
+
+
+def _refuse_live_run(state: RunState) -> None:
+    """Exit 1 when *state* is running under a live process; an orphaned run resumes (#195).
+
+    ``claim`` applies the same rule, but only once the run has started; this check
+    reports it before any work, without a traceback.
+    """
+    if state.owner is None or not is_live(state, now=datetime.now(UTC), hostname=socket.gethostname()):
+        return
+    rprint(
+        f"[red]Error: Run '{escape(state.run_id)}' is still running under pid "
+        f"{state.owner.pid} on {escape(state.owner.hostname)}.[/red]"
+    )
+    raise typer.Exit(1)
 
 
 def _resolve_resume_iteration(state_mgr: StateManager, run_id: str, step_name: str) -> int:
@@ -1240,6 +1258,7 @@ def run(
             rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(1) from None
 
+        _refuse_live_run(state)
         definition = _load_run_definition(state, file=sys.stderr)
 
         resume_from = state_mgr.first_unfinished_step(resume, definition)

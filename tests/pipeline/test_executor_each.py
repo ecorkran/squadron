@@ -39,6 +39,8 @@ async def _run(
     outcome_for: Callable[[str], ActionResult],
     policy: str | None = None,
     observer: RecordingObserver | None = None,
+    run_id: str | None = None,
+    start_from: str | None = None,
 ) -> tuple[PipelineResult, list[str]]:
     """Run an ``each`` over *items*; return the result and the indices whose body ran."""
 
@@ -78,6 +80,8 @@ async def _run(
         resolver=MagicMock(),
         cf_client=MagicMock(),
         observer=observer,
+        run_id=run_id,
+        start_from=start_from,
         _action_registry={"dispatch": dispatch},
     )
     return result, ran
@@ -156,6 +160,47 @@ class TestStopPolicy:
 
         assert result.status == ExecutionStatus.FAILED
         assert ran == ["1"]
+
+
+class TestResumeIntoEachStep:
+    """A run resuming into its ``each`` step skips the items that already finished (#195)."""
+
+    @pytest.mark.asyncio
+    async def test_finished_items_keep_their_records_and_do_not_rerun(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run_id = "run-resume-each"
+        await _run(
+            monkeypatch,
+            _items("1", "2", "3"),
+            lambda i: _fail("boom") if i == "2" else _OK,
+            run_id=run_id,
+        )
+
+        result, ran = await _run(
+            monkeypatch, _items("1", "2", "3"), lambda _: _OK, run_id=run_id, start_from="slices"
+        )
+
+        assert result.status == ExecutionStatus.COMPLETED
+        assert ran == ["2", "3"]
+        report = result.step_results[0].batch_report
+        assert report is not None
+        assert [(r.index, r.outcome) for r in report.records] == [
+            ("1", ItemOutcome.PASSED),
+            ("2", ItemOutcome.PASSED),
+            ("3", ItemOutcome.PASSED),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_run_not_resuming_into_the_step_runs_every_item(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        run_id = "run-rerun-each"
+        await _run(monkeypatch, _items("1", "2"), lambda _: _OK, run_id=run_id)
+
+        _, ran = await _run(monkeypatch, _items("1", "2"), lambda _: _OK, run_id=run_id)
+
+        assert ran == ["1", "2"]
 
 
 class TestPreFlaggedItems:

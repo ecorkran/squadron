@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `sq run --resume` resumes an orphaned run, re-running the step it died in, and refuses a run that is still running with a plain error (#195).
+- Resuming into an `each` step skips items that already passed or were accepted, instead of re-running the whole batch (#195, #59).
+
 ## [0.21.5] - 20261012
 
 ### Changed

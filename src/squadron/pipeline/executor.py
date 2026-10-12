@@ -26,7 +26,15 @@ from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
 from squadron.pipeline.actions import ActionType
-from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, FlagKind, ItemRerun
+from squadron.pipeline.batch_report import (
+    BatchItemRecord,
+    BatchReport,
+    FlagKind,
+    ItemOutcome,
+    ItemRerun,
+    item_record_index,
+    report_json_path,
+)
 from squadron.pipeline.branch_ops import FAILURE_OUTPUT, BranchFailure
 from squadron.pipeline.classification import (
     PERSISTENT_SESSION_STEP_TYPES,
@@ -574,6 +582,9 @@ async def execute_pipeline(
                 step=step, start_from=start_from, start_from_iteration=start_from_iteration
             ),
             item_rerun=item_rerun,
+            resume_report=await asyncio.to_thread(
+                _resume_report, step, start_from, effective_run_id, runs_dir
+            ),
             observer=observer,
         )
 
@@ -728,6 +739,7 @@ async def _execute_step(
     iteration: int = 0,
     prior_iteration_step_outputs: dict[str, ActionResult] | None = None,
     item_rerun: ItemRerun | None = None,
+    resume_report: BatchReport | None = None,
     observer: RunObserver | None = None,
 ) -> StepResult:
     """Route *step* to the executor for its shape (D3, slice 195).
@@ -756,7 +768,11 @@ async def _execute_step(
     }
     if step.step_type == StepTypeName.EACH:
         return await _execute_each_step(
-            resolved_config=resolved_config, item_rerun=item_rerun, observer=observer, **common
+            resolved_config=resolved_config,
+            item_rerun=item_rerun,
+            resume_report=resume_report,
+            observer=observer,
+            **common,
         )
     if step.step_type == StepTypeName.FAN_OUT:
         return await _execute_fan_out_step(resolved_config=resolved_config, **common)
@@ -1539,6 +1555,33 @@ async def _finish_each_report(
         _logger.exception("cannot write the batch report for halted step %s", step_name)
 
 
+def _resume_report(
+    step: Any, start_from: str | None, run_id: str, runs_dir: Path | None
+) -> BatchReport | None:
+    """The report *step* left before its run stopped, when the run resumes into it (#195).
+
+    Only the step a resume starts at reads one, so an ``each`` step run fresh never
+    inherits records. An unreadable report raises: rerunning items that already
+    finished (and merged) is worse than stopping.
+    """
+    if step.name != start_from or step.step_type != StepTypeName.EACH:
+        return None
+    from squadron.pipeline.state import StateManager  # state imports this module
+
+    path = report_json_path(StateManager(runs_dir=runs_dir).runs_dir, run_id, step.name)
+    if not path.exists():
+        return None
+    return BatchReport.load(path)
+
+
+def _finished_records(report: BatchReport | None) -> dict[str, BatchItemRecord]:
+    """*report*'s passed and accepted records by index; flagged and not-run items rerun."""
+    if report is None:
+        return {}
+    done = (ItemOutcome.PASSED, ItemOutcome.ACCEPTED)
+    return {r.index: r for r in report.records if r.outcome in done}
+
+
 def _add_record(report: BatchReport, record: BatchItemRecord, item_rerun: ItemRerun | None) -> None:
     """Append *record*, or on an item resume put it in place of the item's old one."""
     if item_rerun is None:
@@ -1565,9 +1608,14 @@ async def _execute_each_step(
     get_action_fn: Any,
     runs_dir: Path | None = None,
     item_rerun: ItemRerun | None = None,
+    resume_report: BatchReport | None = None,
     observer: RunObserver | None = None,
 ) -> StepResult:
-    """Execute an `each` collection step; on an item resume, only that item (197 D8)."""
+    """Execute an `each` collection step; on an item resume, only that item (197 D8).
+
+    With *resume_report* (a run resuming into this step), items it records as passed
+    or accepted keep their records and do not run again (#195).
+    """
     as_name = str(resolved_config.get("as", ""))
     if item_rerun is not None:
         items, report = [item_rerun.item], item_rerun.report
@@ -1590,8 +1638,14 @@ async def _execute_each_step(
     # propagates down the plan in run order.
     flagged: set[int] = set()
     halt: GitEnvironmentError | None = None
+    # An item rerun names its one item; its report already holds the rest.
+    finished = _finished_records(resume_report) if item_rerun is None else {}
     try:
         for position, item in enumerate(items):
+            done = finished.get(item_record_index(item, position))
+            if done is not None:
+                report.records.append(done)
+                continue
             in_flight = (position, item)
             if observer is not None:
                 observer.item_started(step.name, _active_item(item, position, len(items)))

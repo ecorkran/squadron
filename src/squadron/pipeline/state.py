@@ -381,12 +381,11 @@ class StateManager:
         live owner. The check and the write are not atomic: two simultaneous
         resumes of one run can both succeed.
         """
-        from squadron.pipeline.run_liveness import RunLiveness, assess_liveness
+        from squadron.pipeline.run_liveness import is_live
 
         state = self.load(run_id)
         now = datetime.now(UTC)
-        current = assess_liveness(state, now=now, hostname=owner.hostname)
-        if state.owner is not None and current is not None and current.liveness is RunLiveness.LIVE:
+        if state.owner is not None and is_live(state, now=now, hostname=owner.hostname):
             raise RuntimeError(
                 f"run {run_id} is already running under pid {state.owner.pid} on {state.owner.hostname}"
             )

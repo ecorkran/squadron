@@ -344,7 +344,7 @@ Give each model role its own named `params` entry (as above) rather than leaving
 - **Every pause is logged.** When a loop's body pauses on an inner checkpoint, this is logged at WARNING — naming the pipeline, the step, the paused round, and how many rounds were not run — so an abandoned loop is never silent. Re-entering a loop above round 1 on resume is logged at INFO.
 - **A `FAILED` step resumes the same way a `PAUSED` one does** — no checkpoint required. Resume returns to a failed step rather than treating it as done.
 
-**Known limitation — `each`/`fan_out` bodies resume by restart, not re-entry.** Neither `each:` nor `fan_out:` records a per-branch round the way `loop` does, so a checkpoint pausing inside either causes resume to re-run that step's branches from the start rather than continuing from where it paused.
+**`each` resumes past finished items; `fan_out` restarts.** A run that resumes into an `each` step reads that step's batch report: items it records as passed or accepted keep their records and do not run again, and flagged, not-run and unreached items run. `fan_out:` records no per-branch outcome, so a resume re-runs all its branches from the start.
 
 ---
 
@@ -933,7 +933,7 @@ A running run shows where it is (the step, and `[item P/T · index]` inside an `
 |---|---|
 | `running` | alive: its process is there and its heartbeat is current. A run with no Activity has no owner record: it was started by an older squadron or by `--prompt-only`, so its liveness is unknown |
 | `stale` | its heartbeat is more than 10 intervals overdue but its process can't be proven gone (another host, a blocked process, or a reused PID). It may still finish |
-| `orphaned` | its process on this host is gone; nothing will ever finish it |
+| `orphaned` | its process on this host is gone; nothing will finish it unless you resume it with `sq run --resume <run-id>`, which re-runs the step it died in |
 
 When it cannot tell whether a run is resumable, it shows the run anyway with a marker:
 

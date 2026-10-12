@@ -96,6 +96,22 @@ def assess_liveness(
     return LivenessAssessment(liveness, elapsed, progress_age, heartbeat_age)
 
 
+def is_live(
+    state: RunState,
+    *,
+    now: datetime,
+    hostname: str,
+    process_alive: ProcessCheck = process_alive,
+) -> bool:
+    """Whether *state* is ``running`` under a live owner, which a resume must not take over.
+
+    Orphaned, stale and unowned runs are not live: their owner is gone or cannot
+    be judged, so a resume may claim them (#195).
+    """
+    assessment = assess_liveness(state, now=now, hostname=hostname, process_alive=process_alive)
+    return assessment is not None and assessment.liveness is RunLiveness.LIVE
+
+
 def format_duration(delta: timedelta) -> str:
     """A compact two-unit duration: ``40s``, ``12m05s``, ``1h04m``, ``3d02h``."""
     seconds = max(0, int(delta.total_seconds()))

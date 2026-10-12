@@ -12,6 +12,7 @@ from squadron.pipeline.run_liveness import (
     STALE_HEARTBEAT_INTERVALS,
     RunLiveness,
     assess_liveness,
+    is_live,
     process_alive,
 )
 from squadron.pipeline.state import RUNNING_STATUS, RunOwner, RunState
@@ -105,6 +106,23 @@ class TestAssessLiveness:
         assert result.elapsed == timedelta(hours=1)
         assert result.progress_age == timedelta(seconds=40)
         assert result.heartbeat_age == timedelta(seconds=5)
+
+
+class TestIsLive:
+    @pytest.mark.parametrize(
+        ("state", "alive", "expected"),
+        [
+            (_state(), True, True),
+            (_state(), False, False),  # orphaned
+            (_state(heartbeat_age=OVERDUE), None, False),  # stale
+            (_state(owner_host=None), True, False),  # unowned
+            (_state(status="failed"), True, False),
+        ],
+    )
+    def test_only_a_live_owned_running_run_is_live(
+        self, state: RunState, alive: bool | None, expected: bool
+    ) -> None:
+        assert is_live(state, now=NOW, hostname=HOST, process_alive=lambda _pid: alive) is expected
 
 
 class TestProcessAlive:

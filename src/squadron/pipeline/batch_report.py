@@ -123,6 +123,11 @@ _SECTION_TITLES: dict[ItemOutcome, str] = {
 }
 
 
+def item_record_index(item: dict[str, object], position: int) -> str:
+    """The key a record files *item* under: its own ``index``, else its 1-based position."""
+    return str(item.get("index", f"#{position + 1}"))
+
+
 @dataclass
 class BatchItemRecord:
     """One item's outcome, with what a reader needs to follow it up."""
@@ -167,7 +172,7 @@ class BatchItemRecord:
         else:
             outcome = ItemOutcome.PASSED
         return cls(
-            index=str(item.get("index", f"#{position + 1}")),
+            index=item_record_index(item, position),
             name=str(item.get("name", "")),
             outcome=outcome,
             reason=failure_reason,
@@ -183,7 +188,7 @@ class BatchItemRecord:
     def not_run(cls, item: dict[str, object], position: int, reason: str) -> BatchItemRecord:
         """The record of an item a halted batch never reached (slice 197 D7)."""
         return cls(
-            index=str(item.get("index", f"#{position + 1}")),
+            index=item_record_index(item, position),
             name=str(item.get("name", "")),
             outcome=ItemOutcome.NOT_RUN,
             reason=reason,
