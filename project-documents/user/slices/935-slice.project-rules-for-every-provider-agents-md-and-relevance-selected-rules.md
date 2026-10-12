@@ -18,7 +18,7 @@ Fixes [#181](https://github.com/ecorkran/squadron/issues/181) and [#182](https:/
 
 Today only SDK dispatches see project rules, and they get them from the Claude CLI (`setting_sources=("project",)`), which loads `CLAUDE.md` and `.claude/rules/*.md`. Non-SDK dispatches (OpenRouter, OpenAI-compatible, codex) get nothing: `setting_sources=None`, and the cf prompt doesn't point at the files. Reviews inject `CLAUDE.md` or `.claude/CLAUDE.md` by probing `review_client._inject_file_contents`, never `AGENTS.md`, and the artifact records only `rulesSource`, which describes the rules directory, not the conventions file.
 
-This slice makes squadron read the rules itself. It picks one conventions file (`AGENTS.md`, `CLAUDE.md` or `.claude/CLAUDE.md`, resolving `@` imports in a `CLAUDE.md`), selects rule files from frontmatter by step kind and by what the agent's tools can do, injects the result into every non-SDK dispatch and every review, and records what it injected, including "none".
+This slice makes squadron read the rules itself. It picks one conventions file (`AGENTS.md`, `CLAUDE.md` or `.claude/CLAUDE.md`), selects rule files from frontmatter by step kind, injects the result into every non-SDK dispatch and every review, and records what it injected, including "none".
 
 ## Value
 
@@ -31,8 +31,8 @@ This slice makes squadron read the rules itself. It picks one conventions file (
 **Included**
 - A shared `squadron.project_rules` package: conventions-file discovery, rule selection by frontmatter, a size budget, and a record of what was injected.
 - Injection into non-SDK one-shot dispatch (`_dispatch_via_agent` → `one_shot_dispatch_with_telemetry`).
-- Reviews (CLI `sq review`, pipeline `review` action, PR review) use the same conventions discovery and the same `steps`/`requires` filtering for language rules.
-- Two new optional rule-frontmatter keys, `steps` and `requires`.
+- Reviews (CLI `sq review`, pipeline `review` action, PR review) use the same conventions discovery and the same `steps` filtering for language rules.
+- One new optional rule-frontmatter key, `steps`.
 - Recording: `project_rules` in dispatch step metadata (persisted in run state), `conventionsSource` and `projectRules` in review frontmatter.
 - One config key, `project_rules.max_chars`.
 - Docs: rule frontmatter keys and selection behavior in the user docs.
@@ -43,6 +43,8 @@ This slice makes squadron read the rules itself. It picks one conventions file (
 - Per-model budgets (an alias field). The global key covers it until a real small-context model needs less; tracked as an issue at implementation time.
 - Changing the content of squadron's own `CLAUDE.md`/`AGENTS.md` (cf generates both). Compiling the rules once to `AGENTS.md`, with `CLAUDE.md` importing it, is [context-forge#116](https://github.com/ecorkran/context-forge/issues/116).
 - Summary and compact dispatches. They don't produce project artifacts.
+- A `requires` key (rule selection by agent capability): [#204](https://github.com/ecorkran/squadron/issues/204). No existing rule needs it, and it needs a capability model per provider and reviewer.
+- Resolving `@path` imports in an injected `CLAUDE.md`: [#205](https://github.com/ecorkran/squadron/issues/205). With `AGENTS.md` chosen first, a `CLAUDE.md` that only imports `AGENTS.md` is never the chosen file.
 
 ## Dependencies
 
@@ -52,10 +54,10 @@ This slice makes squadron read the rules itself. It picks one conventions file (
 - **382 D1**: `convention_root` for PR reviews, honored by the new discovery. Complete.
 
 ### Interfaces Required
-- `review.rules.resolve_rules_dir` for rules-directory resolution (unchanged priority order).
+- `review.rules.resolve_rules_dir` for rules-directory resolution (unchanged priority order). The caller resolves the directory and passes it in `RuleContext.rules_dir`; `project_rules` never imports from `review` (D1).
 - `review.rules` frontmatter and glob helpers (`load_rules_frontmatter`, `match_rules_files`, `_glob_to_regex`), moved into the new package (Migration Plan).
-- `tools.effective.resolve_effective_tools` output, and the codex sandbox setting, to derive what the agent can do.
-- `StepTypeName` for step kinds.
+- `ProviderType` for the native-loading table (D5).
+- `StepTypeName` for step kinds, mapped to `RuleStep` on the pipeline side (D3).
 
 ## Architecture
 
@@ -64,29 +66,34 @@ This slice makes squadron read the rules itself. It picks one conventions file (
 ```
 src/squadron/project_rules/
   conventions.py   ConventionsSource enum, find_conventions(root) -> ConventionsFile | None
-  frontmatter.py   moved from review/rules.py; parses paths, steps, requires
+  frontmatter.py   moved from review/rules.py; parses paths, steps
   selection.py     RuleContext, select_project_rules(...) -> ProjectRules
   render.py        render_project_rules(ProjectRules) -> str (headings demoted)
+
+src/squadron/pipeline/actions/dispatch_rules.py
+  StepTypeName -> RuleStep map, native-loading table, build_rule_context(...)
 ```
 
-`ProjectRules` is a frozen dataclass holding the chosen conventions file (or none), the selected rule files, the dropped rule files, the rendered character count, and `to_record() -> dict[str, object]` for metadata and frontmatter.
+`dispatch_rules.py` is the pipeline-side glue. It keeps `dispatch.py` (already over 700 lines) from growing, and it is where pipeline concepts (`StepTypeName`, `ProviderType`, `resolve_rules_dir`) meet the package.
 
-`RuleContext` is what selection needs and nothing else: `step_kind: RuleStep`, `capabilities: frozenset[ToolCapability]`, `file_paths: list[str] | None`, `root: Path`.
+`ProjectRules` is a frozen dataclass holding the chosen conventions file (or none), whether it was skipped as native, the skipped candidates, the selected rule files, the dropped rule files, the rendered character count, and `to_record() -> dict[str, object]` for metadata and frontmatter.
+
+`RuleContext` is what selection needs and nothing else: `step_kind: RuleStep`, `file_paths: list[str] | None`, `root: Path`, `rules_dir: Path | None`, `native: ConventionsSource | None` (the file the provider loads itself, D5), `max_chars: int`.
 
 ### Data Flow
 
 **Non-SDK dispatch**
 
 1. Phase steps (design, tasks, implement) already pass params into their dispatch action. They add `RULES_STEP_PARAM` with their `StepTypeName`. A bare `dispatch` step has no param and gets kind `dispatch`.
-2. `_dispatch_via_agent` computes capabilities from the effective tool set (after the 266 capability gate) or from the codex sandbox.
+2. `_dispatch_via_agent` calls `build_rule_context`, which maps the step kind, resolves the rules directory with `resolve_rules_dir(cwd, None, None)`, looks up the provider's native file, and reads `project_rules.max_chars`.
 3. For implement, `file_paths` is the project's tracked files (`git ls-files`, through `run_git`). Design, tasks and dispatch pass `None`.
 4. `select_project_rules` → `render_project_rules` → appended to `instructions` under a `## Project Rules` heading, after any step `system_prompt`. The agent then adds the 267 guidance block as today.
 5. `ProjectRules.to_record()` goes into the returned telemetry dict under `project_rules`, which lands in `ActionResult.metadata` and so in `StepState.action_results` in the run state file.
 
 **Review**
 
-1. `_inject_file_contents` replaces its `CLAUDE.md` probe with `find_conventions(convention_root or cwd)`. Placement doesn't change: the conventions file is still injected into the user prompt, demoted, and counts against `review.max_total_injection_bytes`.
-2. `load_review_rules` keeps its order (template rules, manual rules, language rules). Language rules now pass through the same `steps`/`requires` filter with kind `review` and the reviewer's capabilities, matched against the diff or target paths as today.
+1. `_inject_file_contents` replaces its `CLAUDE.md` probe with `find_conventions(convention_root or cwd)`. Placement doesn't change: the conventions file is still injected into the user prompt, demoted, and counts against `review.max_total_injection_bytes`. The code-review builder's "Apply the project conventions from CLAUDE.md" line stops naming a file.
+2. `load_review_rules` keeps its order (template rules, manual rules, language rules). Language rules now pass through the same `steps` filter with kind `review`, matched against the diff or target paths as today.
 3. The save target writes `conventionsSource` and `projectRules` next to `rulesSource`.
 
 **SDK dispatch and SDK session**
@@ -102,6 +109,8 @@ No new state. The record rides in existing persisted structures: dispatch `Actio
 ### D1 — One package, two consumers
 Discovery and selection live in `squadron.project_rules`, not in `review/` or `pipeline/`. Dispatch and review both import it, so "which file, which rules" has one answer. The frontmatter and glob helpers move out of `review/rules.py`; review keeps its rules-directory resolution and its template-rule loading, which are review concepts.
 
+Import direction: `project_rules` imports nothing from `review` or `pipeline`. It takes the rules directory, the native file and the budget as inputs. `review` and `pipeline` import `project_rules`, never the reverse. Moving `resolve_rules_dir` was rejected: it reads config and `review.templates`, so moving it would drag those dependencies along.
+
 ### D2 — Conventions file: one, AGENTS.md first, never concatenated
 Candidates in order: `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`. The first one present is used. Any others present are recorded as `skipped`, not injected.
 
@@ -109,27 +118,29 @@ Why not concatenate: in cf-managed projects both files come from the same source
 
 Why `AGENTS.md` first: squadron injects only for models that aren't Claude (D4), and `AGENTS.md` is the file every agent tool reads (codex, Copilot, Cursor). `CLAUDE.md` is becoming the Claude-only layer on top: `@AGENTS.md` plus notes for Claude, which Claude Code loads natively. A non-Claude model should get the neutral rules, not instructions written for Claude. For projects with both files, reviews switch from `CLAUDE.md` to `AGENTS.md`; in cf-managed projects the content is nearly identical.
 
-**Imports.** When the chosen file is a `CLAUDE.md`, lines of the form `@path` are resolved the way Claude Code does it: relative to the importing file, up to 5 levels deep, each file included once (cycles stop). Otherwise a `CLAUDE.md` that is only `@AGENTS.md` would inject one pointer line. An import that doesn't resolve stays as written, and squadron logs a WARNING naming it. Imports in `AGENTS.md` are left alone, since no `AGENTS.md` reader resolves them.
+**Imports.** The chosen file is injected as written; `@path` lines are not resolved ([#205](https://github.com/ecorkran/squadron/issues/205)). With `AGENTS.md` first, the cf#116 layout (`CLAUDE.md` = `@AGENTS.md` plus notes) always picks `AGENTS.md`, so the pointer line never reaches a prompt.
+
+**Unreadable file.** A candidate that exists but can't be read (`OSError`: permissions, a broken symlink) raises an error naming the path, in dispatch and in review. It is never skipped in favor of the next candidate, because that would silently swap one project's rules for another file.
 
 The file is injected whole. It is the project's always-apply layer (`AGENTS.md` says as much: "The rules above always apply"), and the only way to split it would be by its headings, which this project forbids as structure. A project that wants git rules kept away from reviewers moves them into a rule file with `steps: [implement]`.
 
 ### D3 — How a rule declares relevance: frontmatter
-Rule files already carry `description` and `paths` frontmatter (Claude Code's format). Two optional keys are added. Squadron reads them and Claude Code ignores them.
+Rule files already carry `description` and `paths` frontmatter (Claude Code's format). One optional key is added. Squadron reads it and Claude Code ignores it.
 
 | Key | Values | Absent means |
 |---|---|---|
 | `steps` | any of `design`, `tasks`, `implement`, `review`, `dispatch` | no `paths`: all kinds. With `paths`: `implement`, `review` |
-| `requires` | any of `read`, `write`, `shell` | no capability requirement |
 
 Selection for one rule file:
 1. `review.md` and `review-*.md` are skipped for dispatch. They keep their existing role as review template rules (`get_template_rules`).
 2. The step kind must be in `steps`, explicit or defaulted.
-3. If `requires` is present, the agent's capabilities must include at least one listed value.
-4. If the rule has `paths` and the step has `file_paths` (implement, review), at least one path must match. Design, tasks and dispatch have no file set, so they skip the path check. A path-scoped rule reaches them only when `steps` lists them explicitly.
+3. If the rule has `paths` and the step has `file_paths` (implement, review), at least one path must match. Design, tasks and dispatch have no file set, so they skip the path check. A path-scoped rule reaches them only when `steps` lists them explicitly.
 
 The defaults match Claude Code where they overlap (a rule with no `paths` always loads), so a project's existing rules behave as they do under the SDK. Applied to squadron's `.claude/rules` with no edits: implement gets `bug-fixes`, `python`, `testing`, `shell`; design and tasks get `bug-fixes`; review gets what `load_review_rules` gives it today.
 
-`RuleStep` and `ToolCapability` are `StrEnum`s. The frontmatter values are parsed into them, and an unknown value raises at parse time with the file name. It is never ignored.
+`RuleStep` is a `StrEnum` in `project_rules`. Frontmatter values are parsed into it, and an unknown value raises at parse time with the file name. It is never ignored. This is fail-fast on purpose: one typo'd `steps` value fails every dispatch and review that loads that rules directory, and the error names the file to fix. Skipping the rule would hide it from every step with no signal.
+
+`StepTypeName` → `RuleStep` is one table in `dispatch_rules.py`: `design`, `tasks`, `implement`, `dispatch` map by name. Review sites pass `RuleStep.REVIEW` directly. A step type outside the table raises, so a new phase step can't silently get no rules.
 
 ### D4 — SDK dispatches keep native loading
 Rejected: moving SDK to squadron's selection with `setting_sources=[]`. Two reasons. Dropping `project` also drops the project's `settings.json` (permissions, hooks), which squadron can't replicate. And the persistent SDK session fixes its system prompt at connect time (#155 guard), so per-step selection is impossible on that path. SDK parity is in the record (`sdk-native`), not in the mechanism.
@@ -137,9 +148,7 @@ Rejected: moving SDK to squadron's selection with `setting_sources=[]`. Two reas
 ### D5 — Codex loads AGENTS.md itself; squadron injects only what it doesn't
 Verified 20261012 with a probe through the same `openai_codex` SDK squadron uses (thread at `cwd`, read-only sandbox, no tool calls made). In a repo with both files, codex answered with the codeword from `AGENTS.md` and knew nothing of the one in `CLAUDE.md`. So codex loads `AGENTS.md` natively and ignores `CLAUDE.md`.
 
-Each provider type therefore declares which conventions file it loads natively: SDK → `CLAUDE.md` (plus rules, D4), codex → `AGENTS.md`, OpenAI-compatible → none. It's one table keyed by `ProviderType`. When the chosen conventions file (D2) is the one the provider loads natively, squadron skips the conventions file and records it as `native`. Selected rules are still injected, because codex has no rules mechanism. Codex with only `CLAUDE.md` present gets `CLAUDE.md` injected.
-
-Codex capabilities come from its sandbox: `read-only` gives `{read, shell}`, any writable sandbox gives `{read, write, shell}`. Built-in non-SDK tools map as: `read_file`, `list_files`, `grep` → `read`; `write_file` → `write`; `bash` → `shell`. The mapping is one table in `selection.py`, keyed by tool-name constants from `tools/builtin/_shared.py`.
+Each provider type therefore declares which conventions file it loads natively: `ProviderType.SDK` → `CLAUDE.md` (plus rules, D4), `ProviderType.OPENAI_OAUTH` (codex) → `AGENTS.md`, `ProviderType.OPENAI` → none. It's one table in `dispatch_rules.py`, and a provider type missing from it raises. When the chosen conventions file (D2) is the one the provider loads natively, squadron skips the conventions file and records it as `native`. Selected rules are still injected, because codex has no rules mechanism. Codex with only `CLAUDE.md` present gets `CLAUDE.md` injected.
 
 ### D6 — Size budget: one config key, drop rules, never truncate
 New key `project_rules.max_chars`, default `48000`, defined in `config/keys.py` like every other default. The conventions file goes in first, then rules in filename order. A rule that would exceed the budget is dropped: one WARNING naming it, plus an entry in `dropped`. If the conventions file alone exceeds the budget, the dispatch fails with an error naming the file, its size and the key. Rules are never truncated mid-file, because a half rule reads as the whole rule.
@@ -159,16 +168,29 @@ Review frontmatter: `conventionsSource: AGENTS.md` and `projectRules: [python.md
 When the conventions source is `none` and no rule was selected for a non-SDK dispatch, log a WARNING naming the root and the step: an agent writing project artifacts with zero rules is worth seeing. A review with no conventions file logs at INFO; its frontmatter already says `none`.
 
 ### Patterns and Conventions
-- Comparison values are enums (`ConventionsSource`, `RuleStep`, `ToolCapability`), never bare strings.
+- Comparison values are enums (`ConventionsSource`, `RuleStep`), never bare strings.
 - Frontmatter parsing stays lenient about layout (inline and block lists, varying indent, as today) and strict about values (unknown enum value → error).
 - Unreadable rule file (`OSError`): WARNING and recorded in `dropped`. Today `load_rules_content` skips it silently; that `continue` is replaced.
+
+**Failure modes and their signals** (each gets a test asserting the signal):
+
+| Failure | Signal |
+|---|---|
+| Conventions file exists but can't be read | error naming the path (D2) |
+| Unknown `steps` value | error naming the file and value (D3) |
+| Rule file can't be read | WARNING, entry in `dropped` |
+| Rule doesn't fit the budget | WARNING, entry in `dropped` (D6) |
+| Conventions file alone over budget | dispatch fails naming file, size, `project_rules.max_chars` (D6) |
+| `git ls-files` fails or times out | dispatch fails with the git error (Special Considerations) |
+| No conventions and no rules, non-SDK dispatch | WARNING naming root and step (D7) |
+| Step type or provider type missing from a `dispatch_rules.py` table | error naming it |
 
 ## Implementation Details
 
 ### Migration Plan
-- **Moved:** `_FRONTMATTER_RE`, `_PATHS_RE`, `_PATHS_LIST_RE`, `_parse_frontmatter_paths`, `_filename_to_glob`, `load_rules_frontmatter`, `_glob_to_regex`, shell-shebang detection, `match_rules_files`, from `review/rules.py` to `project_rules/frontmatter.py`. `load_rules_frontmatter` returns a `RuleFrontmatter` dataclass (`paths`, `steps`, `requires`) per file instead of only the path list.
+- **Moved:** `_FRONTMATTER_RE`, `_PATHS_RE`, `_PATHS_LIST_RE`, `_parse_frontmatter_paths`, `_filename_to_glob`, `load_rules_frontmatter`, `_glob_to_regex`, shell-shebang detection, `match_rules_files`, from `review/rules.py` to `project_rules/frontmatter.py`. `load_rules_frontmatter` returns a `RuleFrontmatter` dataclass (`paths`, `steps`) per file instead of only the path list.
 - **Consumers:** `review/rules.py` (`load_review_rules`) imports from the new module. `cli/commands/review_pr.py` and `pipeline/actions/review.py` keep importing `resolve_rules_dir`/`load_review_rules` from `review.rules`, unchanged.
-- **Behavior preserved:** the existing `tests/review/test_rules*.py` pass unchanged after import-path updates. For rule files without `steps`/`requires`, review language-rule selection is identical to today's.
+- **Behavior preserved:** the existing `tests/review/test_rules*.py` pass unchanged after import-path updates. For rule files without `steps`, review language-rule selection is identical to today's.
 
 ## Integration Points
 
@@ -184,8 +206,8 @@ When the conventions source is `none` and no rule was selected for a non-SDK dis
 
 ### Functional Requirements
 - A non-SDK design, tasks or implement dispatch includes the chosen conventions file and the selected rules in its system prompt. The step's state holds the `project_rules` record.
-- With `CLAUDE.md` only, `AGENTS.md` only, both, or neither, the chosen source follows D2, `skipped` lists the unused candidates, and neither file content appears twice. A `CLAUDE.md` that is `@AGENTS.md` plus notes injects the imported content and the notes; an import that doesn't resolve logs a WARNING.
-- A rule with `steps: [implement]` reaches implement dispatches and never design, tasks or review. A rule with `requires: [shell]` never reaches a read-only reviewer.
+- With `CLAUDE.md` only, `AGENTS.md` only, both, or neither, the chosen source follows D2, `skipped` lists the unused candidates, and neither file content appears twice.
+- A rule with `steps: [implement]` reaches implement dispatches and never design, tasks or review.
 - A path-scoped rule reaches implement only when a tracked file matches its `paths`.
 - Reviews from an `AGENTS.md`-only project inject `AGENTS.md`. Review frontmatter carries `conventionsSource` and `projectRules`.
 - SDK dispatch and SDK session steps record `conventions: sdk-native`, and their prompts are unchanged.
@@ -195,7 +217,8 @@ When the conventions source is `none` and no rule was selected for a non-SDK dis
 ### Technical Requirements
 - Unit tests for selection covering each D3 rule, each D2 case, and the budget paths in D6.
 - One test runs selection against squadron's real `.claude/rules/` and real `CLAUDE.md`/`AGENTS.md` and asserts the per-kind result listed in D3 (real-format fixture requirement).
-- Frontmatter parser tests: inline and block `steps`/`requires`, unknown value → error naming the file.
+- Frontmatter parser tests: inline and block `steps`, unknown value → error naming the file.
+- One test per row of the failure-mode table (Patterns and Conventions), asserting its signal.
 - `ruff format`, `ruff check`, and `pyright` with zero errors.
 
 ### Integration Requirements
@@ -213,7 +236,7 @@ Run from a scratch copy so the project's files stay untouched.
    ```
    The new review file under `project-documents/user/reviews/` has `conventionsSource: AGENTS.md` in its frontmatter.
 
-2. **CLAUDE.md with an import.** `git mv AGENTS.md docs-agents.md`, then replace `CLAUDE.md` with one line, `@docs-agents.md`, and commit. Rerun step 1. Frontmatter shows `conventionsSource: CLAUDE.md`, and the review prompt (`-vv`) contains the imported rules, not the `@` line.
+2. **CLAUDE.md only.** `git rm AGENTS.md` and commit. Rerun step 1. Frontmatter shows `conventionsSource: CLAUDE.md`.
 
 3. **Neither file.** Remove both files, commit, rerun step 1. Frontmatter shows `conventionsSource: none`.
 
@@ -244,11 +267,11 @@ Run from a scratch copy so the project's files stay untouched.
 
 ### Development Approach
 1. Move the frontmatter and glob helpers into `project_rules/frontmatter.py`. The review tests should pass with no behavior change. Commit.
-2. Add `steps`/`requires` parsing and the enums, with parser tests.
+2. Add `steps` parsing and the `RuleStep` enum, with parser tests.
 3. Add `conventions.py` and switch the review probe to it. Add the frontmatter keys to the save targets.
 4. Add `selection.py`, `render.py`, the budget key, and the real-files test.
-5. Wire into `one_shot_dispatch_with_telemetry`: phase steps pass `RULES_STEP_PARAM`; SDK paths record `sdk-native`.
-6. Filter review language rules by `steps`/`requires`.
+5. Add `dispatch_rules.py` and wire into `one_shot_dispatch_with_telemetry`: phase steps pass `RULES_STEP_PARAM`; SDK paths record `sdk-native`.
+6. Filter review language rules by `steps`.
 7. Docs: the rule frontmatter keys and selection table in the rules or pipelines docs, and a CHANGELOG bullet.
 
 ### Special Considerations

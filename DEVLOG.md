@@ -14,9 +14,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 ### Slice 935: design complete (Phase 4)
 
 - Design: `user/slices/935-slice.project-rules-for-every-provider-agents-md-and-relevance-selected-rules.md`, effort 3/5. Fixes #181, #182.
-- New `squadron.project_rules` package used by non-SDK dispatch and reviews. Conventions file: first of `CLAUDE.md`, `.claude/CLAUDE.md`, `AGENTS.md`, injected whole; others recorded as skipped. Rule relevance via new optional frontmatter `steps` and `requires` (read/write/shell), with Claude Code-compatible defaults.
-- SDK keeps native loading (records `sdk-native`); codex injected like other non-SDK (native AGENTS.md duplication checked in walkthrough). Budget `project_rules.max_chars` (48000): drop rules with WARNING, fail if the conventions file alone exceeds it.
+- New `squadron.project_rules` package used by non-SDK dispatch and reviews. Conventions file: first of `AGENTS.md`, `CLAUDE.md`, `.claude/CLAUDE.md`, injected whole as written; others recorded as skipped. Rule relevance via a new optional frontmatter key `steps`, with Claude Code-compatible defaults.
+- SDK keeps native loading (records `sdk-native`). Codex loads `AGENTS.md` natively (verified by probe), so squadron skips that file for codex and injects only the selected rules. Budget `project_rules.max_chars` (48000): drop rules with WARNING, fail if the conventions file alone exceeds it.
 - Recorded in dispatch metadata `project_rules` and review frontmatter `conventionsSource`/`projectRules`.
+- Slice review (CONCERNS) addressed: `requires`/capability model cut (#204), `@` import resolution cut (#205), `RuleContext` carries `rules_dir` so `project_rules` never imports `review`, failure-mode table added.
 
 ### Release 0.21.5
 
