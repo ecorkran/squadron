@@ -7,12 +7,11 @@ from unittest.mock import patch
 
 import pytest
 
+from squadron.project_rules.frontmatter import load_rules_frontmatter, match_rules_files
 from squadron.review.rules import (
     RulesSource,
     get_template_rules,
     load_rules_content,
-    load_rules_frontmatter,
-    match_rules_files,
     resolve_rules_dir,
 )
 
