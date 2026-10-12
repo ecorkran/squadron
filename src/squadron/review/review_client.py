@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import glob as glob_mod
 import logging
-import re
 import subprocess
 import time
 from collections.abc import Callable
@@ -27,6 +26,8 @@ from squadron.core.models import (
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.integrations.context_forge import DOCS_ROOT
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
+from squadron.project_rules.conventions import ConventionsSource, find_conventions
+from squadron.project_rules.render import demote_headings
 from squadron.providers.base import ProviderType
 from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.loader import ensure_provider_loaded
@@ -184,7 +185,7 @@ async def run_review_with_profile(
         allowed_tools=resolved_allowed_tools,
         provider=provider_profile.provider,
     )
-    prompt, diff_injection = _inject_file_contents(
+    prompt, diff_injection, conventions_source = _inject_file_contents(
         prompt,
         inputs,
         template.diff_exclude_patterns,
@@ -323,6 +324,7 @@ async def run_review_with_profile(
     result.reasoning_chars = capture.reasoning_chars
     result.failed_tool_calls = capture.failed_tool_calls
     result.diff_injection = diff_injection
+    result.conventions_source = conventions_source
 
     # Part B (slice 927 D4): a truncated diff with no successful tool call turns a
     # stated PASS into CONCERNS. Must run after tool_calls_made/failed_tool_calls above.
@@ -453,23 +455,6 @@ def _log_budget_skip(
 # named inside a PR body off disk and inject it (Scope corrections table, design row 3).
 _SKIP_KEYS = {"cwd", "diff", "files", "pr"}
 
-_HEADING_RE = re.compile(r"^(#{1,6})\s", re.MULTILINE)
-
-
-def _demote_headings(content: str, levels: int = 2) -> str:
-    """Shift all markdown headings down by *levels* (e.g. H1→H3 when levels=2).
-
-    Headings that would exceed H6 are clamped to H6.
-    Lines that are not headings are returned unchanged.
-    """
-
-    def _shift(m: re.Match[str]) -> str:
-        hashes = m.group(1)
-        new_depth = min(len(hashes) + levels, 6)
-        return "#" * new_depth + " "
-
-    return _HEADING_RE.sub(_shift, content)
-
 
 def _truncate(content: str, label: str, max_file_size: int) -> str:
     """Truncate content exceeding *max_file_size* with a message."""
@@ -483,10 +468,12 @@ def _truncate(content: str, label: str, max_file_size: int) -> str:
 
 
 class InjectedPrompt(NamedTuple):
-    """Result of :func:`_inject_file_contents`: the prompt plus diff coverage (slice 927)."""
+    """Result of :func:`_inject_file_contents`: the prompt, diff coverage (slice 927),
+    and which conventions file was injected (slice 935 D7)."""
 
     prompt: str
     diff: DiffInjection | None
+    conventions: ConventionsSource
 
 
 def _inject_file_contents(
@@ -508,10 +495,11 @@ def _inject_file_contents(
     review.max_total_injection_bytes) so they can be raised for
     large-context models rather than hardcoded (issue #19).
 
-    CLAUDE.md is read from convention_root when given (slice 382, design D1) —
-    e.g. a PR review's scratch worktree holds the code under review, but
-    conventions must still come from the trusted checkout. None (the default)
-    preserves today's behavior of reading from inputs["cwd"].
+    The conventions file (AGENTS.md, CLAUDE.md or .claude/CLAUDE.md, slice 935
+    D2) is read from convention_root when given (slice 382, design D1) — e.g. a
+    PR review's scratch worktree holds the code under review, but conventions
+    must still come from the trusted checkout. None (the default) reads from
+    inputs["cwd"]. A conventions file that exists but can't be read raises.
     """
     cwd_for_config = inputs.get("cwd", ".")
     max_file_size = get_config("review.max_file_size_bytes", cwd=cwd_for_config)
@@ -597,26 +585,27 @@ def _inject_file_contents(
         cwd = inputs.get("cwd", ".")
         _inject_glob_files(files_glob, cwd, _add_injection)
 
-    # Inject CLAUDE.md so the model can apply project conventions without
+    # Inject the conventions file so the model can apply project conventions without
     # needing file-read tools (which one-shot API providers don't support).
     # Headings are demoted (H1→H3, H2→H4, etc.) so they fit the same visual
     # hierarchy as the injected rules content and don't dominate the prompt.
-    cwd_for_claude = convention_root if convention_root is not None else inputs.get("cwd", ".")
-    for candidate in ("CLAUDE.md", ".claude/CLAUDE.md"):
-        claude_path = Path(cwd_for_claude) / candidate
-        if claude_path.is_file():
-            try:
-                content = _demote_headings(claude_path.read_text(), levels=2)
-                _add_injection("CLAUDE.md (project conventions)", content)
-            except OSError as exc:
-                _logger.warning("Failed to read %s: %s", claude_path, exc)
-            break
+    conventions_root = Path(convention_root if convention_root is not None else inputs.get("cwd", "."))
+    chosen = find_conventions(conventions_root).chosen
+    if chosen is None:
+        _logger.info("No conventions file under %s; review runs without one", conventions_root)
+        conventions = ConventionsSource.NONE
+    else:
+        conventions = chosen.source
+        _add_injection(
+            f"{chosen.source.value} (project conventions)",
+            demote_headings(chosen.content, levels=2),
+        )
 
     if not injections:
-        return InjectedPrompt(prompt, diff_injection)
+        return InjectedPrompt(prompt, diff_injection, conventions)
 
     file_section = "\n\n## File Contents\n\n" + "\n\n".join(injections)
-    return InjectedPrompt(prompt + file_section, diff_injection)
+    return InjectedPrompt(prompt + file_section, diff_injection, conventions)
 
 
 def _run_git_diff_filenames(

@@ -10,6 +10,7 @@ from squadron import __version__
 from squadron.core.models import Effort, SystemPromptMode
 from squadron.core.usage import TokenUsage
 from squadron.models.snapshot import answers_as_requested
+from squadron.project_rules.conventions import ConventionsSource
 from squadron.review.run_cost import RunCost
 
 
@@ -226,6 +227,9 @@ class ReviewResult:
     # truncated): that gives a gate three distinguishable states instead of collapsing
     # "no diff" and "saw it all" together.
     diff_injection: DiffInjection | None = None
+    # Which conventions file the review injected (slice 935 D7). None on a hand-built
+    # result; a review run always sets it, to NONE when no file was found.
+    conventions_source: ConventionsSource | None = None
     # The model id squadron asked for (slice 927 D10). None on a hand-built result or a
     # run with no explicit request (the SDK default model — nothing was requested, so
     # nothing can be a substitution, D9).

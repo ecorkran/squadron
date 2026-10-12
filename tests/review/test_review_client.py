@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Effort, Message, MessageType
+from squadron.project_rules.conventions import ConventionsSource
 from squadron.providers.base import ProviderCapabilities
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.git_utils import EmptyDiffError
@@ -224,7 +225,7 @@ class TestFileInjection:
             patch(f"{_P}.ensure_provider_loaded"),
             patch(
                 f"{_P}._inject_file_contents",
-                side_effect=lambda p, *a, **k: InjectedPrompt(p, None),
+                side_effect=lambda p, *a, **k: InjectedPrompt(p, None, ConventionsSource.NONE),
             ) as mock_inject,
         ):
             from squadron.providers.base import AuthType, ProviderType

@@ -16,6 +16,7 @@ from squadron import __version__
 from squadron.core.models import Effort, SystemPromptMode
 from squadron.documents.schema import DocType, DocumentStatus
 from squadron.integrations.context_forge import ARCHITECTURE_DIR
+from squadron.project_rules.conventions import ConventionsSource
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import run_git
 from squadron.review.models import ReviewResult, Verdict, VerdictSource
@@ -386,6 +387,7 @@ def _review_frontmatter_lines(
     tool_calls_made: int | None,
     tools_suppressed_reason: str | None,
     diff_truncated: bool | None = None,
+    conventions_source: ConventionsSource | None = None,
     requested_model: str | None = None,
     recovery_turn: bool = False,
     run_id: str | None = None,
@@ -424,6 +426,9 @@ def _review_frontmatter_lines(
     ]
     for key, value in target_fields.items():
         lines.extend(_render_frontmatter_value(key, value))
+    # Slice 935 D7: beside the target's rulesSource. Absent only where no review ran.
+    if conventions_source is not None:
+        lines.append(f"conventionsSource: {conventions_source.value}")
     lines += [
         f"project: {project_name}",
         f"verdict: {verdict}",
@@ -595,6 +600,7 @@ def format_review_markdown(
         tool_calls_made=result.tool_calls_made,
         tools_suppressed_reason=result.tools_suppressed_reason,
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
+        conventions_source=result.conventions_source,
         requested_model=result.requested_model if result.model_substituted else None,
         recovery_turn=result.recovery_turn_used,
         run_id=result.run_id,

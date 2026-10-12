@@ -8,8 +8,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from squadron.config.keys import CONFIG_KEYS
+from squadron.project_rules.conventions import ConventionsReadError, ConventionsSource
+from squadron.project_rules.render import demote_headings
 from squadron.review.review_client import (
-    _demote_headings,
     _inject_file_contents,
 )
 
@@ -358,21 +359,21 @@ def test_no_diff_key_yields_none_diff_injection(tmp_path: Path) -> None:
 def test_demote_headings_shifts_by_two() -> None:
     """H1→H3, H2→H4, H3→H5 with default levels=2."""
     content = "# Title\n## Section\n### Sub\nPlain text."
-    result = _demote_headings(content, levels=2)
+    result = demote_headings(content, levels=2)
     assert result == "### Title\n#### Section\n##### Sub\nPlain text."
 
 
 def test_demote_headings_clamps_at_h6() -> None:
     """Headings that would exceed H6 are clamped to H6."""
     content = "##### Deep\n###### Already max"
-    result = _demote_headings(content, levels=2)
+    result = demote_headings(content, levels=2)
     assert result == "###### Deep\n###### Already max"
 
 
 def test_demote_headings_leaves_non_headings_unchanged() -> None:
     """Lines that are not headings pass through unmodified."""
     content = "Normal line\n  # indented (not a heading)\n#NoSpace"
-    result = _demote_headings(content, levels=2)
+    result = demote_headings(content, levels=2)
     # Only ATX headings at column 0 with a space after # are demoted
     assert "Normal line" in result
     assert "  # indented (not a heading)" in result
@@ -381,13 +382,13 @@ def test_demote_headings_leaves_non_headings_unchanged() -> None:
 
 def test_demote_headings_empty_string() -> None:
     """Empty input returns empty output without error."""
-    assert _demote_headings("", levels=2) == ""
+    assert demote_headings("", levels=2) == ""
 
 
 def test_demote_headings_levels_zero() -> None:
     """levels=0 returns content unchanged."""
     content = "# Title\n## Section"
-    assert _demote_headings(content, levels=0) == content
+    assert demote_headings(content, levels=0) == content
 
 
 # ---------------------------------------------------------------------------
@@ -426,8 +427,51 @@ def test_claude_md_absent_is_silently_skipped(tmp_path: Path) -> None:
     prompt = "Review code"
     inputs = {"cwd": str(tmp_path)}
 
-    result = _inject_file_contents(prompt, inputs).prompt
-    assert result == prompt
+    injected = _inject_file_contents(prompt, inputs)
+    assert injected.prompt == prompt
+    assert injected.conventions is ConventionsSource.NONE
+
+
+def test_agents_md_only_is_injected(tmp_path: Path) -> None:
+    (tmp_path / "AGENTS.md").write_text("Agents rules here.")
+    injected = _inject_file_contents("Review", {"cwd": str(tmp_path)})
+    assert "AGENTS.md (project conventions)" in injected.prompt
+    assert "Agents rules here." in injected.prompt
+    assert injected.conventions is ConventionsSource.AGENTS_MD
+
+
+def test_agents_md_wins_over_claude_md_once(tmp_path: Path) -> None:
+    (tmp_path / "AGENTS.md").write_text("Agents rules here.")
+    (tmp_path / "CLAUDE.md").write_text("Claude rules here.")
+    injected = _inject_file_contents("Review", {"cwd": str(tmp_path)})
+    assert injected.prompt.count("Agents rules here.") == 1
+    assert "Claude rules here." not in injected.prompt
+    assert injected.conventions is ConventionsSource.AGENTS_MD
+
+
+def test_claude_md_records_its_source(tmp_path: Path) -> None:
+    (tmp_path / "CLAUDE.md").write_text("Claude rules here.")
+    injected = _inject_file_contents("Review", {"cwd": str(tmp_path)})
+    assert injected.conventions is ConventionsSource.CLAUDE_MD
+
+
+def test_convention_root_is_honored(tmp_path: Path) -> None:
+    worktree = tmp_path / "worktree"
+    trusted = tmp_path / "trusted"
+    worktree.mkdir()
+    trusted.mkdir()
+    (worktree / "AGENTS.md").write_text("Untrusted rules.")
+    (trusted / "AGENTS.md").write_text("Trusted rules.")
+    injected = _inject_file_contents("Review", {"cwd": str(worktree)}, convention_root=str(trusted))
+    assert "Trusted rules." in injected.prompt
+    assert "Untrusted rules." not in injected.prompt
+
+
+def test_unreadable_conventions_file_raises(tmp_path: Path) -> None:
+    (tmp_path / "AGENTS.md").symlink_to(tmp_path / "missing.md")
+    (tmp_path / "CLAUDE.md").write_text("Claude rules here.")
+    with pytest.raises(ConventionsReadError, match="AGENTS.md"):
+        _inject_file_contents("Review", {"cwd": str(tmp_path)})
 
 
 # ---------------------------------------------------------------------------

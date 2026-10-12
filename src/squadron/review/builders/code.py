@@ -114,7 +114,7 @@ def code_review_prompt(inputs: dict[str, str]) -> str:
     sections.append("")
     sections.append("<output_format>")
     sections.append(
-        "Apply the project conventions from CLAUDE.md and language-specific "
+        "Apply the project conventions and language-specific "
         "best practices. Report your findings using the severity format "
         "described in your instructions."
     )

@@ -15,7 +15,11 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from squadron.review.persistence import SaveTargetProtocol, SliceInfo
+import pytest
+
+from squadron.project_rules.conventions import ConventionsSource
+from squadron.review.models import ReviewResult, Verdict
+from squadron.review.persistence import SaveTargetProtocol, SliceInfo, format_review_markdown
 from squadron.review.rules import RulesSource
 from squadron.review.save_target import ArchTarget, SaveTarget, SliceTarget, StepTarget
 
@@ -200,3 +204,43 @@ class TestProtocolConformance:
         make every implementation carry a value it cannot answer for.
         """
         assert not hasattr(SliceTarget(_slice_info()), "reviews_dir")
+
+
+class TestConventionsSourceFrontmatter:
+    """Slice 935 D7: every target kind's artifact carries conventionsSource after rulesSource."""
+
+    @staticmethod
+    def _frontmatter(target: SaveTarget, conventions: ConventionsSource | None) -> list[str]:
+        result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="",
+            template_name="slice",
+            input_files={},
+            conventions_source=conventions,
+        )
+        with patch("squadron.review.save_target.resolve_reviewed_sha", return_value=_SHA):
+            markdown = format_review_markdown(result, "slice", target=target)
+        return markdown.split("\n---\n", 1)[0].splitlines()
+
+    @pytest.mark.parametrize(
+        "target",
+        [
+            SliceTarget(_slice_info()),
+            ArchTarget(380, "project-documents/user/architecture/380-arch.pull-request-workflow.md"),
+            StepTarget("review-code", 3),
+        ],
+        ids=["slice", "arch", "step"],
+    )
+    def test_written_next_to_rules_source(self, target: SaveTarget) -> None:
+        lines = self._frontmatter(target, ConventionsSource.AGENTS_MD)
+        rules_at = lines.index("rulesSource: none")
+        assert lines[rules_at + 1] == "conventionsSource: AGENTS.md"
+
+    def test_none_is_written_as_none(self) -> None:
+        lines = self._frontmatter(SliceTarget(_slice_info()), ConventionsSource.NONE)
+        assert "conventionsSource: none" in lines
+
+    def test_absent_when_no_review_ran(self) -> None:
+        lines = self._frontmatter(SliceTarget(_slice_info()), None)
+        assert not any(line.startswith("conventionsSource") for line in lines)
