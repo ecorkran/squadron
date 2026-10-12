@@ -6,7 +6,10 @@ import pytest
 
 from squadron.pipeline.commit_plan import CommitSubject
 from squadron.pipeline.models import StepConfig
-from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
+from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.steps.phase import RULES_STEP_PARAM, ArtifactKind, PhaseStepType
+
+_DESIGN_RULES: dict[str, object] = {RULES_STEP_PARAM: StepTypeName.DESIGN}
 
 
 @pytest.fixture
@@ -141,7 +144,7 @@ def test_expand_full_config(design_step: PhaseStepType) -> None:
     assert actions[0] == ("cf-op", {"operation": "set_slice", "slice": "{slice}"})
     assert actions[1] == ("cf-op", {"operation": "set_phase", "phase": 4})
     assert actions[2] == ("cf-op", {"operation": "build_context"})
-    assert actions[3] == ("dispatch", {"model": "opus", "slice": "{slice}"})
+    assert actions[3] == ("dispatch", {"model": "opus", "slice": "{slice}", **_DESIGN_RULES})
     assert actions[4] == (
         "review",
         {"template": "slice", "model": None, "slice": "{slice}"},
@@ -232,13 +235,13 @@ def test_expand_review_no_checkpoint(design_step: PhaseStepType) -> None:
 def test_expand_dispatch_model_from_config(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4, "model": "opus"}))
     dispatch = actions[3]
-    assert dispatch == ("dispatch", {"model": "opus", "slice": "{slice}"})
+    assert dispatch == ("dispatch", {"model": "opus", "slice": "{slice}", **_DESIGN_RULES})
 
 
 def test_expand_dispatch_model_none(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4}))
     dispatch = actions[3]
-    assert dispatch == ("dispatch", {"model": None, "slice": "{slice}"})
+    assert dispatch == ("dispatch", {"model": None, "slice": "{slice}", **_DESIGN_RULES})
 
 
 def test_expand_commit_names_its_subject_not_the_step(design_step: PhaseStepType) -> None:
@@ -308,7 +311,12 @@ def test_expand_forwards_pre_emption_fragment(design_step: PhaseStepType) -> Non
     actions = design_step.expand(_make_config({"phase": 4, "pre_emption_fragment": "/tmp/frag.md"}))
     assert actions[3] == (
         "dispatch",
-        {"model": None, "slice": "{slice}", "pre_emption_fragment": "/tmp/frag.md"},
+        {
+            "model": None,
+            "slice": "{slice}",
+            **_DESIGN_RULES,
+            "pre_emption_fragment": "/tmp/frag.md",
+        },
     )
 
 
@@ -341,7 +349,7 @@ def test_expand_forwards_allowed_tools(design_step: PhaseStepType) -> None:
     )
     assert actions[3] == (
         "dispatch",
-        {"model": None, "slice": "{slice}", "allowed_tools": ["write_file"]},
+        {"model": None, "slice": "{slice}", **_DESIGN_RULES, "allowed_tools": ["write_file"]},
     )
     for action_type, action_config in actions:
         if action_type != "dispatch":
@@ -351,3 +359,13 @@ def test_expand_forwards_allowed_tools(design_step: PhaseStepType) -> None:
 def test_expand_omits_allowed_tools_when_absent(design_step: PhaseStepType) -> None:
     actions = design_step.expand(_make_config({"phase": 4}))
     assert "allowed_tools" not in actions[3][1]
+
+
+@pytest.mark.parametrize(
+    "phase_name", [StepTypeName.DESIGN, StepTypeName.TASKS, StepTypeName.IMPLEMENT]
+)
+def test_dispatch_carries_its_rules_step(phase_name: StepTypeName) -> None:
+    """Slice 935: the phase's kind travels to dispatch to select project rules."""
+    actions = PhaseStepType(phase_name).expand(_make_config({"phase": 6}))
+    dispatch = next(cfg for action_type, cfg in actions if action_type == "dispatch")
+    assert dispatch[RULES_STEP_PARAM] is phase_name

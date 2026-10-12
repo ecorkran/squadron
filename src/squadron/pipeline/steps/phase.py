@@ -38,6 +38,8 @@ class KeepCheck(StrEnum):
 EXISTING_PARAM = "existing"
 KEEP_CHECK_PARAM = "keep_check"
 ARTIFACT_KIND_PARAM = "artifact_kind"
+#: The phase's StepTypeName, which picks the project rules its dispatch gets (slice 935).
+RULES_STEP_PARAM = "rules_step"
 
 _KEEP_CHECK: dict[str, KeepCheck] = {
     StepTypeName.DESIGN: KeepCheck.ARTIFACT,
@@ -219,7 +221,11 @@ class PhaseStepType:
         slice_ref = None if initiative_scoped else cfg.get("slice", "{slice}")
         target: dict[str, object] = {"plan": cfg["plan"]} if initiative_scoped else {"slice": slice_ref}
 
-        dispatch_config: dict[str, object] = {"model": model, **target}
+        dispatch_config: dict[str, object] = {
+            "model": model,
+            **target,
+            RULES_STEP_PARAM: StepTypeName(self._phase_name),
+        }
         # Conditional, not unconditional: an absent key must leave the
         # expanded dict byte-identical to its pre-324 shape, which the
         # existing exact-equality expand() tests assert.
