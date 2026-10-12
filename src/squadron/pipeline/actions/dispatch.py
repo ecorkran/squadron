@@ -295,7 +295,9 @@ REVISE_GUIDANCE = (
     "Resolve each finding with the smallest change that satisfies it. Removing "
     "or simplifying is as valid as adding. Defer only scope the artifact's plan "
     "does not require, and record each deferral as a GitHub issue named in the "
-    "artifact. Do not add material no finding asks for."
+    "artifact. If you cannot create the issue, write `issue not filed` where its "
+    "number would go and say so in your reply; never write an issue number GitHub "
+    "did not return to you. Do not add material no finding asks for."
 )
 
 
