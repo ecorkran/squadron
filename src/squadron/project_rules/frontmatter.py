@@ -6,43 +6,101 @@ from ``squadron.review`` or ``squadron.pipeline``.
 
 from __future__ import annotations
 
+import logging
 import re
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # Frontmatter YAML block at start of file
 _FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
-_PATHS_RE = re.compile(r"^paths\s*:\s*\[(.+?)\]", re.MULTILINE)
-_PATHS_LIST_RE = re.compile(r"^paths\s*:\s*\n((?:\s*-\s*.+\n?)+)", re.MULTILINE)
+
+_PATHS_KEY = "paths"
+_STEPS_KEY = "steps"
 
 
-def _parse_frontmatter_paths(content: str) -> list[str] | None:
-    """Extract the paths list from YAML frontmatter, or None if not present."""
-    fm_match = _FRONTMATTER_RE.match(content)
-    if fm_match is None:
-        return None
-    fm_body = fm_match.group(1)
+class RuleStep(StrEnum):
+    """Step kinds a rule file can declare itself relevant to (``steps`` key)."""
 
+    DESIGN = "design"
+    TASKS = "tasks"
+    IMPLEMENT = "implement"
+    REVIEW = "review"
+    DISPATCH = "dispatch"
+
+
+@dataclass(frozen=True)
+class RuleFrontmatter:
+    """Selection keys parsed from one rule file. ``None`` means the key is absent."""
+
+    paths: list[str] | None
+    steps: frozenset[RuleStep] | None
+
+
+def _clean_item(raw: str) -> str:
+    return raw.strip().strip("\"'")
+
+
+def _parse_list_field(fm_body: str, key: str) -> list[str] | None:
+    """Read ``key`` as an inline list, a block list, or a bare scalar; None if absent."""
+    name = re.escape(key)
     # Inline list: paths: [**/*.py, **/*.pyi]
-    inline = _PATHS_RE.search(fm_body)
+    inline = re.search(rf"^{name}\s*:\s*\[(.*?)\]", fm_body, re.MULTILINE)
     if inline:
-        raw = inline.group(1)
-        parts = [p.strip().strip("\"'") for p in raw.split(",")]
-        return [p for p in parts if p]
+        return [item for part in inline.group(1).split(",") if (item := _clean_item(part))]
 
     # Block list:
     # paths:
     #   - **/*.py
-    block = _PATHS_LIST_RE.search(fm_body)
+    block = re.search(rf"^{name}\s*:\s*\n((?:\s*-\s*.+\n?)+)", fm_body, re.MULTILINE)
     if block:
-        raw = block.group(1)
         items = [
-            line.strip().lstrip("- ").strip().strip("\"'")
-            for line in raw.splitlines()
+            _clean_item(line.strip().lstrip("- "))
+            for line in block.group(1).splitlines()
             if line.strip().startswith("-")
         ]
         return [i for i in items if i]
 
+    # Bare scalar: steps: implement (comma-separated values accepted)
+    scalar = re.search(rf"^{name}\s*:[ \t]*(\S.*?)\s*$", fm_body, re.MULTILINE)
+    if scalar:
+        return [item for part in scalar.group(1).split(",") if (item := _clean_item(part))]
+
     return None
+
+
+def _parse_steps(values: list[str], filename: str) -> frozenset[RuleStep]:
+    """Map ``steps`` values to :class:`RuleStep`; an unknown value raises (D3)."""
+    steps: set[RuleStep] = set()
+    for value in values:
+        try:
+            steps.add(RuleStep(value.lower()))
+        except ValueError:
+            allowed = ", ".join(step.value for step in RuleStep)
+            raise ValueError(
+                f"Rule file {filename}: unknown steps value {value!r} (allowed: {allowed})"
+            ) from None
+    return frozenset(steps)
+
+
+def parse_rule_frontmatter(content: str, filename: str) -> RuleFrontmatter:
+    """Parse ``paths`` and ``steps`` from one rule file's content.
+
+    Layout is read leniently (inline, block, or scalar lists; any indent).
+    Values are strict: an unknown ``steps`` value raises ``ValueError`` naming
+    ``filename`` and the value.
+    """
+    fm_match = _FRONTMATTER_RE.match(content)
+    if fm_match is None:
+        return RuleFrontmatter(paths=None, steps=None)
+    fm_body = fm_match.group(1)
+    raw_steps = _parse_list_field(fm_body, _STEPS_KEY)
+    return RuleFrontmatter(
+        paths=_parse_list_field(fm_body, _PATHS_KEY),
+        steps=None if raw_steps is None else _parse_steps(raw_steps, filename),
+    )
 
 
 def _filename_to_glob(stem: str) -> list[str]:
@@ -67,23 +125,33 @@ def _filename_to_glob(stem: str) -> list[str]:
     return _STEM_TO_EXTS.get(stem.lower(), [f"**/*.{stem.lower()}"])
 
 
-def load_rules_frontmatter(rules_dir: Path) -> dict[str, list[str]]:
-    """Scan rules_dir, parse YAML frontmatter paths field from each .md file.
+def load_rules_frontmatter(rules_dir: Path) -> dict[str, RuleFrontmatter]:
+    """Scan rules_dir and parse the frontmatter of each .md file.
 
-    Returns {filename: [glob_patterns]}.
-    Files without a paths field use filename-based fallback.
+    Returns ``{filename: RuleFrontmatter}``. An unreadable file logs a WARNING
+    naming it and is left out.
     """
-    result: dict[str, list[str]] = {}
+    result: dict[str, RuleFrontmatter] = {}
     for md_file in sorted(rules_dir.glob("*.md")):
         try:
             content = md_file.read_text()
-        except OSError:
+        except OSError as exc:
+            logger.warning("Skipping unreadable rule file %s: %s", md_file, exc)
             continue
-        paths = _parse_frontmatter_paths(content)
-        if paths is None:
-            paths = _filename_to_glob(md_file.stem)
-        result[md_file.name] = paths
+        result[md_file.name] = parse_rule_frontmatter(content, md_file.name)
     return result
+
+
+def path_globs(frontmatter: dict[str, RuleFrontmatter]) -> dict[str, list[str]]:
+    """Each file's ``paths`` globs, or globs derived from its filename when absent.
+
+    The filename fallback (``python.md`` → ``**/*.py``) is what review
+    language-rule matching has always used.
+    """
+    return {
+        name: fm.paths if fm.paths is not None else _filename_to_glob(Path(name).stem)
+        for name, fm in frontmatter.items()
+    }
 
 
 # First line of an extensionless script that makes it a shell script.

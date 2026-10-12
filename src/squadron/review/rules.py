@@ -6,7 +6,11 @@ from enum import StrEnum
 from pathlib import Path
 
 from squadron.config.manager import get_config
-from squadron.project_rules.frontmatter import load_rules_frontmatter, match_rules_files
+from squadron.project_rules.frontmatter import (
+    load_rules_frontmatter,
+    match_rules_files,
+    path_globs,
+)
 from squadron.review.git_utils import run_git
 from squadron.review.templates import user_templates_dir
 
@@ -162,8 +166,8 @@ def load_review_rules(
 
     # Language auto-detection from changed/target files
     if rules_dir is not None and file_paths:
-        frontmatter = load_rules_frontmatter(rules_dir)
-        auto_files = match_rules_files(file_paths, rules_dir, frontmatter, cwd)
+        globs = path_globs(load_rules_frontmatter(rules_dir))
+        auto_files = match_rules_files(file_paths, rules_dir, globs, cwd)
         auto_content = load_rules_content(auto_files)
         if auto_content:
             rules_content = (

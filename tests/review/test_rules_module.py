@@ -7,7 +7,11 @@ from unittest.mock import patch
 
 import pytest
 
-from squadron.project_rules.frontmatter import load_rules_frontmatter, match_rules_files
+from squadron.project_rules.frontmatter import (
+    load_rules_frontmatter,
+    match_rules_files,
+    path_globs,
+)
 from squadron.review.rules import (
     RulesSource,
     get_template_rules,
@@ -152,28 +156,28 @@ class TestLoadRulesFrontmatter:
     def test_frontmatter_inline_paths(self, tmp_path: Path) -> None:
         """Parses inline-list paths from frontmatter."""
         (tmp_path / "python.md").write_text("---\npaths: [**/*.py, **/*.pyi]\n---\nPython rules.\n")
-        result = load_rules_frontmatter(tmp_path)
+        result = path_globs(load_rules_frontmatter(tmp_path))
         assert "python.md" in result
         assert "**/*.py" in result["python.md"]
 
     def test_frontmatter_block_paths(self, tmp_path: Path) -> None:
         """Parses block-list paths from frontmatter."""
         (tmp_path / "ts.md").write_text("---\npaths:\n  - **/*.ts\n  - **/*.tsx\n---\nTS rules.\n")
-        result = load_rules_frontmatter(tmp_path)
+        result = path_globs(load_rules_frontmatter(tmp_path))
         assert "ts.md" in result
         assert "**/*.ts" in result["ts.md"]
 
     def test_filename_fallback_python(self, tmp_path: Path) -> None:
         """python.md with no frontmatter paths falls back to **/*.py."""
         (tmp_path / "python.md").write_text("Python rules.\n")
-        result = load_rules_frontmatter(tmp_path)
+        result = path_globs(load_rules_frontmatter(tmp_path))
         assert "python.md" in result
         assert "**/*.py" in result["python.md"]
 
     def test_skips_non_md(self, tmp_path: Path) -> None:
         """Non-.md files are ignored."""
         (tmp_path / "python.txt").write_text("not a rules file")
-        result = load_rules_frontmatter(tmp_path)
+        result = path_globs(load_rules_frontmatter(tmp_path))
         assert "python.txt" not in result
 
 
@@ -225,7 +229,7 @@ class TestShellRulesMatching:
 
     @pytest.fixture
     def frontmatter(self) -> dict[str, list[str]]:
-        return load_rules_frontmatter(_GUIDE_RULES_DIR)
+        return path_globs(load_rules_frontmatter(_GUIDE_RULES_DIR))
 
     def _matches_shell(
         self, paths: list[str], frontmatter: dict[str, list[str]], cwd: str | None = None
