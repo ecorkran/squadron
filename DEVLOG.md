@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261012
 
+### Slice 935: task breakdown complete (Phase 5)
+
+- Tasks: `user/tasks/935-tasks.project-rules-for-every-provider-agents-md-and-relevance-selected-rules.md`, 23 tasks, effort 3/5. Order: branch, helper move (no behavior change), `steps` parsing, conventions discovery + review switch, selection/render/budget, `dispatch_rules.py` + dispatch wiring, review filtering, docs, walkthrough.
+
 ### Slice 935: design complete (Phase 4)
 
 - Design: `user/slices/935-slice.project-rules-for-every-provider-agents-md-and-relevance-selected-rules.md`, effort 3/5. Fixes #181, #182.
