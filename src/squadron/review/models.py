@@ -230,6 +230,9 @@ class ReviewResult:
     # Which conventions file the review injected (slice 935 D7). None on a hand-built
     # result; a review run always sets it, to NONE when no file was found.
     conventions_source: ConventionsSource | None = None
+    # Language rule files the review was given (slice 935 D7), stamped by the caller that
+    # loaded them. None on a hand-built result.
+    project_rules: list[str] | None = None
     # The model id squadron asked for (slice 927 D10). None on a hand-built result or a
     # run with no explicit request (the SDK default model — nothing was requested, so
     # nothing can be a substitution, D9).

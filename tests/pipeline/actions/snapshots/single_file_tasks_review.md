@@ -3,6 +3,7 @@ docType: review
 layer: project
 reviewType: tasks
 slice: loop-step-type-for-multi-step-bodies
+projectRules: []
 project: squadron
 verdict: CONCERNS
 sourceDocument: project-documents/user/tasks/194-tasks.loop-step-type-for-multi-step-bodies.md

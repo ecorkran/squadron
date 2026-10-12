@@ -654,10 +654,14 @@ def _run_review_command(
     failure_name_suffix: str | None = None,
     convention_root: str | None = None,
     setting_sources_override: list[str] | None = None,
+    language_rules: tuple[str, ...] = (),
 ) -> ReviewResult:
     """Common logic for running a review and displaying results.
 
     Returns the ReviewResult so callers can save it.
+
+    ``language_rules`` names the language rule files already assembled into
+    ``rules_content`` by the caller; they are recorded as ``projectRules``.
 
     ``failure_target`` and ``no_save`` govern what happens when the provider
     raises: a failure artifact is written into the review's own slot so the
@@ -688,13 +692,16 @@ def _run_review_command(
     # Prepend template-specific rules (review.md / review-{template}.md).
     # Language auto-detection is handled by the caller (review_code) where
     # file paths are known; _run_review_command only sees the template.
+    selected_rules = list(language_rules)
     if rules_dir is not None:
-        rules_content = load_review_rules(
+        loaded = load_review_rules(
             template_name,
             rules_dir,
             file_paths=None,
             manual_rules_content=rules_content,
         )
+        rules_content = loaded.content
+        selected_rules += loaded.language_rules
 
     # Resolve model from flag → per-template config → config → template default
     # Read the tool_use capability from the alias name before resolution
@@ -758,6 +765,7 @@ def _run_review_command(
         rprint(f"[red]Error: Review failed — {escape(str(exc))}[/red]")
         raise typer.Exit(code=1) from exc
 
+    result.project_rules = selected_rules
     display_result(result, output, output_path, verbosity)
 
     return result
@@ -1212,6 +1220,7 @@ def review_code(
     verbosity = _resolve_verbosity(verbose)
 
     rules_content: str | None = None
+    language_rules: list[str] = []
     resolved_rules_dir: Path | None = None
 
     if not no_rules:
@@ -1233,13 +1242,15 @@ def review_code(
 
                 file_paths = _glob.glob(files, root_dir=review_cwd)
 
-        rules_content = load_review_rules(
+        loaded = load_review_rules(
             "code",
             resolved_rules_dir,
             file_paths=file_paths,
             manual_rules_content=manual_content,
             cwd=review_cwd,
         )
+        rules_content = loaded.content
+        language_rules = loaded.language_rules
 
     inputs: dict[str, str] = {"cwd": review_cwd}
     if files:
@@ -1265,6 +1276,7 @@ def review_code(
         # too would make _run_review_command redundantly re-prepend template
         # rules onto content that already has them (issue #24).
         rules_dir=None,
+        language_rules=tuple(language_rules),
     )
 
     outcome = _resolve_save_outcome(

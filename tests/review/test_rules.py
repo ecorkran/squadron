@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import os
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -10,7 +12,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.review.models import ReviewResult, Verdict
-from squadron.review.rules import RulesSource
+from squadron.review.rules import RulesSource, load_review_rules
 
 
 @pytest.fixture
@@ -197,3 +199,61 @@ class TestRunnerRulesInjection:
         assert "Base prompt." in system_prompt
         assert "## Additional Review Rules" in system_prompt
         assert "Check for SQL injection." in system_prompt
+
+
+class TestLoadReviewRulesSteps:
+    """Slice 935 D3: review language rules honor the ``steps`` key."""
+
+    @staticmethod
+    def _rules_dir(tmp_path: Path, frontmatter: str) -> Path:
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "python.md").write_text(f"---\n{frontmatter}\n---\nPython rule body.\n")
+        return rules_dir
+
+    def test_implement_only_rule_is_excluded(self, tmp_path: Path) -> None:
+        rules_dir = self._rules_dir(tmp_path, 'paths: ["**/*.py"]\nsteps: [implement]')
+        loaded = load_review_rules("code", rules_dir, file_paths=["src/a.py"])
+        assert loaded.language_rules == []
+        assert loaded.content is None
+
+    def test_review_rule_is_included(self, tmp_path: Path) -> None:
+        rules_dir = self._rules_dir(tmp_path, 'paths: ["**/*.py"]\nsteps: [review]')
+        loaded = load_review_rules("code", rules_dir, file_paths=["src/a.py"])
+        assert loaded.language_rules == ["python.md"]
+        assert loaded.content is not None
+        assert "Python rule body." in loaded.content
+
+    def test_no_steps_behaves_as_before(self, tmp_path: Path) -> None:
+        rules_dir = self._rules_dir(tmp_path, 'paths: ["**/*.py"]')
+        loaded = load_review_rules("code", rules_dir, file_paths=["src/a.py"])
+        assert loaded.language_rules == ["python.md"]
+
+    def test_unreadable_language_rule_warns_and_is_left_out(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "python.md").write_text("Python rule body.\n")
+        # A broken link has a filename-derived glob but can't be read.
+        (rules_dir / "go.md").symlink_to(tmp_path / "missing.md")
+        with caplog.at_level(logging.WARNING):
+            loaded = load_review_rules("code", rules_dir, file_paths=["a.py", "b.go"])
+        assert loaded.language_rules == ["python.md"]
+        assert "go.md" in caplog.text
+
+    @pytest.mark.skipif(os.geteuid() == 0, reason="chmod 000 is readable by root")
+    def test_unreadable_template_rule_warns(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        rules_dir = tmp_path / "rules"
+        rules_dir.mkdir()
+        (rules_dir / "review.md").write_text("General review rule.\n")
+        (rules_dir / "review.md").chmod(0)
+        try:
+            with caplog.at_level(logging.WARNING):
+                loaded = load_review_rules("code", rules_dir)
+        finally:
+            (rules_dir / "review.md").chmod(0o644)
+        assert loaded.content is None
+        assert "review.md" in caplog.text

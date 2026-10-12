@@ -45,6 +45,7 @@ from squadron.review.persistence import (
 from squadron.review.profile_resolution import resolve_review_profile, review_profile_source
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.rules import (
+    ReviewRules,
     RulesSource,
     extract_diff_paths,
     load_review_rules,
@@ -121,7 +122,7 @@ class _PartSettings:
     template_name: str
     resolved: ResolvedModel
     profile_name: str
-    rules_content: str | None
+    rules: ReviewRules
     rules_source: RulesSource
     allowed_tools: list[str] | None
     slice_info: SliceInfo | None
@@ -242,7 +243,7 @@ class ReviewAction:
             self._validate_inputs(template, template_name, part, _part_label(number, count, part))
         # Rules depend on the diff, file glob and rules params, never on the
         # part's input file, so every part shares one resolution.
-        rules_content, rules_source = self._resolve_rules(context, template_name, part_inputs[0])
+        rules, rules_source = self._resolve_rules(context, template_name, part_inputs[0])
 
         # A step-level allowed_tools overrides the template's default; None leaves the
         # template authoritative (slice 265).
@@ -252,7 +253,7 @@ class ReviewAction:
             template_name=template_name,
             resolved=resolved,
             profile_name=profile_name,
-            rules_content=rules_content,
+            rules=rules,
             rules_source=rules_source,
             allowed_tools=allowed_tools,
             slice_info=slice_info,
@@ -370,7 +371,7 @@ class ReviewAction:
 
     def _resolve_rules(
         self, context: ActionContext, template_name: str, inputs: dict[str, str]
-    ) -> tuple[str | None, RulesSource]:
+    ) -> tuple[ReviewRules, RulesSource]:
         # Rules content — mirror CLI: template rules + language auto-detection,
         # layered on any explicit rules_content passed in via params.
         cwd = context.cwd
@@ -400,14 +401,14 @@ class ReviewAction:
                 import glob as _glob
 
                 file_paths = _glob.glob(inputs["files"], root_dir=cwd)
-        rules_content = load_review_rules(
+        rules = load_review_rules(
             template_name,
             rules_dir,
             file_paths=file_paths,
             manual_rules_content=manual_rules,
             cwd=cwd,
         )
-        return rules_content, rules_source
+        return rules, rules_source
 
     async def _run_part(
         self,
@@ -428,7 +429,7 @@ class ReviewAction:
                 inputs,
                 profile=settings.profile_name,
                 model=settings.resolved.model_id,
-                rules_content=settings.rules_content,
+                rules_content=settings.rules.content,
                 allowed_tools=settings.allowed_tools,
                 model_allows_tools=settings.resolved.allows_tools,
                 max_output_tokens=settings.resolved.max_output_tokens,
@@ -479,6 +480,8 @@ class ReviewAction:
         result.run_id = context.run_id
         # Slice 940 D6: the profile this step resolved, recorded as aiProfile.
         result.profile = settings.profile_name
+        # Slice 935 D7: the language rules this review was given, recorded as projectRules.
+        result.project_rules = list(settings.rules.language_rules)
         verdict, provenance, verdict_override = self._enforce_verdict(settings, context, result)
         review_file_path = await self._save_part(
             settings, context, result, inputs, verdict_override, name_suffix, position

@@ -43,7 +43,7 @@ from squadron.review.models import ReviewResult
 from squadron.review.persistence import save_review_result
 from squadron.review.pr_comment import compose_comment, marker_for
 from squadron.review.reviews_dir import resolve_reviews_dir
-from squadron.review.rules import RulesSource, load_review_rules, resolve_rules_dir
+from squadron.review.rules import ReviewRules, RulesSource, load_review_rules, resolve_rules_dir
 from squadron.review.save_target import TargetKind
 from squadron.review.templates import get_template, load_all_templates
 
@@ -84,8 +84,8 @@ def _resolve_pr_rules_content(
     rules_dir_flag: str | None,
     rules_flag: str | None,
     changed_paths: list[str],
-) -> tuple[str | None, RulesSource]:
-    """Rules-directory provenance is part of the two-root split, not only CLAUDE.md.
+) -> tuple[ReviewRules, RulesSource]:
+    """Rules-directory provenance is part of the two-root split, not only the conventions file.
 
     Resolved from ``checkout_cwd`` explicitly, never via ``_resolve_review_cwd``
     (Task G.5) — that helper would resolve the rules directory from whichever root
@@ -113,14 +113,14 @@ def _resolve_pr_rules_content(
     if checkout_rules_dir is None and manual_content is not None:
         rules_source = RulesSource.FILE
     file_paths = changed_paths if checkout_rules_dir is not None else []
-    content = load_review_rules(
+    loaded = load_review_rules(
         "code",
         checkout_rules_dir,
         file_paths=file_paths,
         manual_rules_content=manual_content,
         cwd=checkout_cwd,
     )
-    return content, rules_source
+    return loaded, rules_source
 
 
 class PrTarget:
@@ -397,9 +397,9 @@ def review_pr(
     # picked: no rules reached the reviewer, so naming a directory in the
     # artifact would claim a provenance this run does not have.
     if no_rules:
-        rules_content, rules_source = None, RulesSource.NONE
+        loaded_rules, rules_source = ReviewRules(content=None), RulesSource.NONE
     else:
-        rules_content, rules_source = _resolve_pr_rules_content(
+        loaded_rules, rules_source = _resolve_pr_rules_content(
             checkout_cwd, rules_dir_flag, rules, list(fetched.changed_paths)
         )
 
@@ -421,7 +421,7 @@ def review_pr(
             output,
             output_path,
             verbosity,
-            rules_content,
+            loaded_rules.content,
             model_flag=model,
             profile_flag=profile,
             no_tools=no_tools,
@@ -430,6 +430,7 @@ def review_pr(
             rules_dir=None,
             convention_root=convention_root,
             setting_sources_override=[],
+            language_rules=tuple(loaded_rules.language_rules),
         )
 
     if no_tools:

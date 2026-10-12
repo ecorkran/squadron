@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 
 from squadron.config.manager import get_config
 from squadron.project_rules.frontmatter import (
+    RuleStep,
+    effective_steps,
     load_rules_frontmatter,
     match_rules_files,
     path_globs,
 )
 from squadron.review.git_utils import run_git
 from squadron.review.templates import user_templates_dir
+
+_logger = logging.getLogger(__name__)
+
+_RULES_SEPARATOR = "\n\n---\n\n"
 
 
 class RulesSource(StrEnum):
@@ -84,15 +92,23 @@ def resolve_rules_dir(
     return None, RulesSource.NONE
 
 
+def _read_rule(path: Path) -> str | None:
+    """A rule file's stripped content, or None with a WARNING naming it when unreadable."""
+    try:
+        return path.read_text().strip()
+    except OSError as exc:
+        _logger.warning("Skipping unreadable rule file %s: %s", path, exc)
+        return None
+
+
+def _read_rules(rules_files: list[Path]) -> list[tuple[Path, str]]:
+    """Each readable rules file with its content; unreadable ones are logged and left out."""
+    return [(path, content) for path in rules_files if (content := _read_rule(path)) is not None]
+
+
 def load_rules_content(rules_files: list[Path]) -> str:
     """Read and concatenate content of each rules file."""
-    parts: list[str] = []
-    for path in rules_files:
-        try:
-            parts.append(path.read_text().strip())
-        except OSError:
-            continue
-    return "\n\n---\n\n".join(parts)
+    return _RULES_SEPARATOR.join(content for _, content in _read_rules(rules_files))
 
 
 def get_template_rules(template_name: str, rules_dir: Path) -> str | None:
@@ -100,15 +116,13 @@ def get_template_rules(template_name: str, rules_dir: Path) -> str | None:
 
     Returns concatenated content or None if neither exists.
     """
-    parts: list[str] = []
-    for filename in (f"review-{template_name}.md", "review.md"):
-        path = rules_dir / filename
-        if path.is_file():
-            try:
-                parts.append(path.read_text().strip())
-            except OSError:
-                pass
-    return "\n\n---\n\n".join(parts) if parts else None
+    candidates = [
+        rules_dir / filename
+        for filename in (f"review-{template_name}.md", "review.md")
+        if (rules_dir / filename).is_file()
+    ]
+    parts = [content for _, content in _read_rules(candidates)]
+    return _RULES_SEPARATOR.join(parts) if parts else None
 
 
 def extract_diff_paths(
@@ -135,23 +149,35 @@ def extract_diff_paths(
     return []
 
 
+@dataclass(frozen=True)
+class ReviewRules:
+    """Assembled review rules and the language rule files among them.
+
+    ``language_rules`` is written to review frontmatter as ``projectRules``
+    (slice 935 D7).
+    """
+
+    content: str | None
+    language_rules: list[str] = field(default_factory=list[str])
+
+
 def load_review_rules(
     template_name: str,
     rules_dir: Path | None,
     file_paths: list[str] | None = None,
     manual_rules_content: str | None = None,
     cwd: str | None = None,
-) -> str | None:
+) -> ReviewRules:
     """Assemble review rules from all sources, in CLI-equivalent order.
 
     Combines, in order:
       1. Template rules (``review.md`` and ``review-{template_name}.md``)
       2. Manual override rules supplied by caller
-      3. Language-auto-detected rules matched against *file_paths*
+      3. Language-auto-detected rules matched against *file_paths*, limited to
+         rules whose ``steps`` include ``review`` (slice 935 D3)
 
-    Returns the concatenated content, or ``None`` if no source produced
-    anything. Single source of truth for both CLI and pipeline review
-    paths — keeps the two in lockstep.
+    ``content`` is ``None`` if no source produced anything. Single source of
+    truth for both CLI and pipeline review paths — keeps the two in lockstep.
     """
     # Template-specific rules (prepended to manual content, per CLI order)
     rules_content: str | None = manual_rules_content
@@ -165,13 +191,22 @@ def load_review_rules(
             )
 
     # Language auto-detection from changed/target files
+    language_rules: list[str] = []
     if rules_dir is not None and file_paths:
-        globs = path_globs(load_rules_frontmatter(rules_dir))
-        auto_files = match_rules_files(file_paths, rules_dir, globs, cwd)
-        auto_content = load_rules_content(auto_files)
+        relevant = {
+            name: fm
+            for name, fm in load_rules_frontmatter(rules_dir).items()
+            if RuleStep.REVIEW in effective_steps(fm)
+        }
+        auto_files = match_rules_files(file_paths, rules_dir, path_globs(relevant), cwd)
+        loaded = _read_rules(auto_files)
+        language_rules = [path.name for path, _ in loaded]
+        auto_content = _RULES_SEPARATOR.join(content for _, content in loaded)
         if auto_content:
             rules_content = (
-                auto_content if rules_content is None else f"{rules_content}\n\n---\n\n{auto_content}"
+                auto_content
+                if rules_content is None
+                else f"{rules_content}{_RULES_SEPARATOR}{auto_content}"
             )
 
-    return rules_content
+    return ReviewRules(content=rules_content, language_rules=language_rules)

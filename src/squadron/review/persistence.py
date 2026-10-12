@@ -388,6 +388,7 @@ def _review_frontmatter_lines(
     tools_suppressed_reason: str | None,
     diff_truncated: bool | None = None,
     conventions_source: ConventionsSource | None = None,
+    project_rules: list[str] | None = None,
     requested_model: str | None = None,
     recovery_turn: bool = False,
     run_id: str | None = None,
@@ -429,6 +430,8 @@ def _review_frontmatter_lines(
     # Slice 935 D7: beside the target's rulesSource. Absent only where no review ran.
     if conventions_source is not None:
         lines.append(f"conventionsSource: {conventions_source.value}")
+    if project_rules is not None:
+        lines.append(f"projectRules: [{', '.join(project_rules)}]")
     lines += [
         f"project: {project_name}",
         f"verdict: {verdict}",
@@ -601,6 +604,7 @@ def format_review_markdown(
         tools_suppressed_reason=result.tools_suppressed_reason,
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
         conventions_source=result.conventions_source,
+        project_rules=result.project_rules,
         requested_model=result.requested_model if result.model_substituted else None,
         recovery_turn=result.recovery_turn_used,
         run_id=result.run_id,

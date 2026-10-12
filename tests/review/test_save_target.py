@@ -241,6 +241,22 @@ class TestConventionsSourceFrontmatter:
         lines = self._frontmatter(SliceTarget(_slice_info()), ConventionsSource.NONE)
         assert "conventionsSource: none" in lines
 
+    def test_project_rules_lists_selected_rules(self) -> None:
+        result = ReviewResult(
+            verdict=Verdict.PASS,
+            findings=[],
+            raw_output="",
+            template_name="code",
+            input_files={},
+            conventions_source=ConventionsSource.AGENTS_MD,
+            project_rules=["python.md", "testing.md"],
+        )
+        with patch("squadron.review.save_target.resolve_reviewed_sha", return_value=_SHA):
+            markdown = format_review_markdown(result, "code", target=SliceTarget(_slice_info()))
+        lines = markdown.split("\n---\n", 1)[0].splitlines()
+        at = lines.index("conventionsSource: AGENTS.md")
+        assert lines[at + 1] == "projectRules: [python.md, testing.md]"
+
     def test_absent_when_no_review_ran(self) -> None:
         lines = self._frontmatter(SliceTarget(_slice_info()), None)
         assert not any(line.startswith("conventionsSource") for line in lines)
