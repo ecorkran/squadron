@@ -30,12 +30,13 @@ Included:
 3. **Kind → pipeline table:** `REVISE_PIPELINE_BY_KIND: dict[BuiltinReviewTemplate, str]`, holding `SLICE → "P4"`, `TASKS → "P5"`, `CODE → "P6"`. `sq review arch --max` does not exist as an option. Any other kind missing from the table gets an explicit error.
 4. **Loop runner:** builds a two-step pipeline definition from the mapped pipeline, `[review, <that pipeline's loop>]`, and runs it with `execute_pipeline`.
 5. **`/sq:review` slash command:** documents `--max` and `--revise-model` and passes them through.
+6. **Loop fix:** a failed round commit ends the loop (D5). This is in `_execute_loop_body` and applies to every pipeline loop.
 
 Excluded:
 
 - **MCP.** Squadron has no MCP review tool. Its only MCP code is a client (`tools/mcp_bridge.py`, `tools/cf_tools.py`), so the plan entry's MCP parity item has nothing to attach to. The 900 plan entry is amended to match. Interface parity here means CLI and slash command. If a later slice adds an MCP review tool, that tool exposes `--max` and `--revise-model` under the same parity rule.
 - **Resume.** No resumable run state is written (D4).
-- **`sq run --from loop-1`.** Pipelines are unchanged.
+- **`sq run --from loop-1`.** The pipeline YAML files are unchanged.
 
 ## Dependencies
 
@@ -47,11 +48,11 @@ None. Every piece this slice composes already exists.
 
 | Interface | Location | Use |
 |---|---|---|
-| `load_pipeline(name)` | `pipeline/loader.py:148` | load P4/P5/P6, honoring project and user overrides |
-| `execute_pipeline(definition, params, ...)` | `pipeline/executor.py:387` | run the composed definition |
-| `StepConfig`, `PipelineDefinition` | `pipeline/models.py:76,85` | compose the two-step definition |
+| `load_pipeline(name)` | `pipeline/loader.py` | load P4/P5/P6, honoring project and user overrides |
+| `execute_pipeline(definition, params, ...)` | `pipeline/executor.py` | run the composed definition |
+| `StepConfig`, `PipelineDefinition` | `pipeline/models.py` | compose the two-step definition |
 | `StepTypeName.LOOP`, `parse_loop_config`, `ExhaustBehavior` | `pipeline/loop_config.py` | find the loop and override `on_exhaust` |
-| `BuiltinReviewTemplate` | `review/templates/__init__.py:18` | key the table |
+| `BuiltinReviewTemplate` | `review/templates/__init__.py` | key the table |
 | `save_review_result` / `archive_existing_review` | `review/persistence.py` | used unchanged by the pipeline review action |
 
 ## Architecture
@@ -106,6 +107,13 @@ The loop is found as the single step whose `step_type` is `StepTypeName.LOOP`, n
 
 The leading review step copies the loop body's review action config (template, `{review-model}`, `{slice}`). The template is therefore never restated in this slice. Because the pipeline goes through `load_pipeline`, a project or user override of P4/P5/P6 changes `sq review --max` too.
 
+Overrides can also change the shape the builder relies on, so the builder checks the loop and raises an error naming the pipeline when any of these fail:
+- the loop body has exactly one `review` step;
+- the loop sets `until`;
+- the loop sets `skip_if_met: true`. Zero rounds after a passing first review (Success Criterion 2) depends on it.
+
+All three shipped loops satisfy these checks.
+
 ### D3 — Model params
 
 - **Reviewer:** `--model` is the reviewer. `review.py` resolves it with its existing `_resolve_model`, which also covers the omitted case through the config cascade, and passes the result to `run_review_revise` as `reviewer`. The runner passes it on as `review-model`. `review_revise.py` imports nothing from `review.py`, so there is no import cycle and no private-symbol reach.
@@ -124,12 +132,14 @@ For the same reason, the pipelines' `on_exhaust: checkpoint` cannot be honored, 
 
 ### D5 — Outcomes, failure modes and exit codes
 
+Exit codes 0, 1 and 2 mean what they mean for `sq review` without `--max` (`_exit_on`): 2 is a FAIL verdict, 1 is a failed run or save, and CONCERNS exits 0. An exhausted loop that is not accepted ends at FAIL, because `accept_if` is `concerns_or_better`.
+
 | Outcome | Behavior | Signal | Exit |
 |---|---|---|---|
 | Final verdict PASS, or accepted by `accept_if` | normal finish | per-round lines | 0 |
 | Final verdict FAIL, or loop exhausted and not accepted | normal finish | per-round lines | 2 |
 | Revise dispatch or review fails, including a model call that hangs or times out | Inherited unchanged: the provider and dispatch timeouts apply, and this slice adds none. The loop ends. | The action error is printed | 1 |
-| Round commit fails (hook failure, git timeout, planning commit off the target branch) | Inherited: the loop records the failed commit result and continues (`executor.py`, `commit_each_iteration` block). The runner checks every round's commit result. | `round N commit failed: <error>` on stderr, logged at WARNING | 1 |
+| Round commit fails (hook failure, git timeout, planning commit off the target branch) | The loop stops after that round and ends with the same status a failed revise dispatch gets (`_loop_failure_status`). Today the loop records the failure and continues, which lets the next round sweep an uncommitted revision into a later commit, or revise on top of it. This slice changes `_execute_loop_body` so that a failed round commit ends the loop. P4/P5/P6 get the same fix. | `round N commit failed: <error>` on stderr, logged at WARNING | 1 |
 | Ctrl-C mid-round | Inherited: `KeyboardInterrupt` propagates, and that round is not committed. `slice` and `tasks` commits stage only the artifact and review paths, so on a rerun a leftover artifact edit is reviewed and committed with round 1. | Python's interrupt | non-zero |
 | `code` with a dirty working tree | Refused before any model call. `code` round commits stage everything (`git add -A`), so unrelated changes or a leftover interrupted edit would be swept into a revision commit. | Error listing the dirty paths | 1 |
 
@@ -194,10 +204,11 @@ None.
 
 - Unit tests for `build_review_revise_definition`:
   - each mapped kind yields `[review, loop]` with the pipeline's own loop config and `on_exhaust=fail`;
-  - a pipeline with zero or two loops raises an error;
+  - an error is raised for zero or two loops, for zero or two review steps in the loop body, and for a loop without `until` or `skip_if_met`;
   - a project override of P4 is picked up.
 - CLI tests with the executor stubbed cover option validation, param assembly (`review-model`, `model`, `max-revisions`, `slice`) and the D5 exit-code mapping.
 - A stubbed failed round commit produces the stderr line, a WARNING log record and exit 1.
+- An executor test: in a three-round loop, a failed round-1 commit runs no round 2.
 - `code` with a dirty tree exits 1 before any executor call.
 - One integration test runs the composed definition with fake review/dispatch actions through two rounds: CONCERNS → PASS.
 - `ruff format`, `ruff check` and `pyright` with zero errors.
