@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.7] - 20261013
+
 ### Added
 - `sq review slice|tasks|code <number> --max N` revises an existing artifact until its review passes, committing each round; `--revise-model` picks the reviser.
 

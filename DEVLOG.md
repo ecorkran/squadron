@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261013
 
+### Release 0.21.7
+
+- **Contents:** slice 941 (`sq review slice|tasks|code --max N [--revise-model M]`: review, then revise until it passes, using P4/P5/P6's loop); fix: a revise loop ends when its round commit fails (issue 200 follow-on, 85a7f7aa). Slice 935 plan entry checked.
+
 ### Slice 941: implementation complete (Phase 6)
 
 - Branch `941-slice.review-and-revise-loop-from-sq-review-max` (from `main`), not merged; code review comes before Phase 7. Full suite 6599 passed, 4 skipped before the walkthrough fixes; pyright 0 errors.
