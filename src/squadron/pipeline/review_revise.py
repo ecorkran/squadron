@@ -23,7 +23,7 @@ REVISE_PIPELINE_BY_KIND: dict[BuiltinReviewTemplate, str] = {
     BuiltinReviewTemplate.CODE: "P6",
 }
 
-_REVIEW_STEP_NAME = "review"
+REVIEW_STEP_NAME = "review"
 
 
 def build_review_revise_definition(kind: BuiltinReviewTemplate) -> PipelineDefinition:
@@ -53,7 +53,7 @@ def build_review_revise_definition(kind: BuiltinReviewTemplate) -> PipelineDefin
         steps=[
             StepConfig(
                 step_type=StepTypeName.REVIEW,
-                name=_REVIEW_STEP_NAME,
+                name=REVIEW_STEP_NAME,
                 config=copy.deepcopy(review_config),
             ),
             StepConfig(
