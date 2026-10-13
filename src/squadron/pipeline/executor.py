@@ -778,7 +778,10 @@ async def _execute_step(
         return await _execute_fan_out_step(resolved_config=resolved_config, **common)
     if step.step_type == StepTypeName.LOOP:
         return await _execute_loop_body(
-            resolved_config=resolved_config, start_iteration=start_iteration, **common
+            resolved_config=resolved_config,
+            start_iteration=start_iteration,
+            observer=observer,
+            **common,
         )
     loop_raw = resolved_config.get("loop")
     if isinstance(loop_raw, dict):
@@ -1263,6 +1266,17 @@ def _unpack_body(resolved_config: dict[str, object]) -> list[Any]:
     )
 
 
+def _report_round(
+    observer: RunObserver | None,
+    step_name: str,
+    iteration: int,
+    results: list[ActionResult],
+) -> None:
+    """Tell *observer* a loop round finished, with a snapshot of that round's results."""
+    if observer is not None:
+        observer.round_completed(step_name, iteration, list(results))
+
+
 async def _execute_loop_body(
     *,
     step: Any,
@@ -1281,6 +1295,7 @@ async def _execute_loop_body(
     get_action_fn: Any,
     runs_dir: Path | None = None,
     start_iteration: int = 1,
+    observer: RunObserver | None = None,
 ) -> StepResult:
     """Execute a ``loop:`` step type with a multi-step body.
 
@@ -1465,6 +1480,7 @@ async def _execute_loop_body(
             # is one past the last real inner_step_index, so it can't collide.
             commit_key = f"{len(inner_steps)}-{commit_result.action_type}-0"
             running_prior[commit_key] = commit_result
+            _report_round(observer, step.name, iteration, iteration_action_results)
             # A failed round commit ends the loop: continuing would let the next
             # round revise on top of, and later commit, this round's uncommitted edit.
             if not commit_result.success:
@@ -1482,6 +1498,8 @@ async def _execute_loop_body(
                     iteration=iteration,
                     error=f"loop {step.name} round {iteration} commit failed: {commit_result.error}",
                 )
+        else:
+            _report_round(observer, step.name, iteration, iteration_action_results)
 
         # Evaluate until condition after all inner steps complete
         if loop_config.until is not None:

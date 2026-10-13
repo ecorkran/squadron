@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from squadron.pipeline.executor import StepResult
+    from squadron.pipeline.models import ActionResult
     from squadron.pipeline.state import ActiveItem, StateManager
 
 
@@ -25,6 +26,8 @@ class RunObserver(Protocol):
     def item_started(self, step_name: str, item: ActiveItem) -> None: ...
 
     def step_completed(self, result: StepResult) -> None: ...
+
+    def round_completed(self, step_name: str, iteration: int, results: list[ActionResult]) -> None: ...
 
 
 class RunStateRecorder:
@@ -45,3 +48,6 @@ class RunStateRecorder:
     def step_completed(self, result: StepResult) -> None:
         """Append the step and record any compact summaries it produced."""
         self._state_mgr.record_step_completed(self._run_id, result)
+
+    def round_completed(self, step_name: str, iteration: int, results: list[ActionResult]) -> None:
+        """Nothing to record: the loop's final StepResult is what the state file keeps."""

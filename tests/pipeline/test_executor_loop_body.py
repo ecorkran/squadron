@@ -15,6 +15,7 @@ from squadron.pipeline.executor import ExecutionStatus, StepResult, execute_pipe
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import StateManager
 from squadron.pipeline.steps import register_step_type
+from tests.pipeline.observer_support import RecordingObserver
 
 # ---------------------------------------------------------------------------
 # Test helpers
@@ -1946,6 +1947,108 @@ async def test_failed_round_commit_ends_the_loop(
     assert step_result.error == "loop commit-fail-loop round 1 commit failed: hook rejected"
     assert review_action.execute.await_count == 1
     assert "round 1 commit failed: hook rejected" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# Slice 941 D7 — RunObserver.round_completed
+# ---------------------------------------------------------------------------
+
+
+async def _run_observed_loop(
+    review_results: list[ActionResult],
+    commit_results: list[ActionResult],
+    *,
+    max_rounds: int,
+    commit_each_iteration: bool,
+) -> RecordingObserver:
+    register_step_type(
+        "_lb_observed", _mock_step_type([("review", {"template": "slice", "slice": "105"})])
+    )
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "observed-loop",
+                {
+                    "max": max_rounds,
+                    "until": "review.pass",
+                    "commit_each_iteration": commit_each_iteration,
+                    "steps": [{"_lb_observed": {}}],
+                },
+            )
+        ]
+    )
+    observer = RecordingObserver()
+    await execute_pipeline(
+        pipeline,
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        observer=observer,
+        _action_registry={
+            "review": _mock_action(review_results),
+            "commit": _mock_action(commit_results),
+        },
+    )
+    return observer
+
+
+def _committed(sha: str) -> ActionResult:
+    return ActionResult(success=True, action_type="commit", outputs={"sha": sha})
+
+
+@pytest.mark.asyncio
+async def test_round_completed_fires_once_per_round_with_that_rounds_results() -> None:
+    observer = await _run_observed_loop(
+        [
+            _action_result(True, "review", verdict="CONCERNS"),
+            _action_result(True, "review", verdict="PASS"),
+        ],
+        [_committed("aaa"), _committed("bbb")],
+        max_rounds=3,
+        commit_each_iteration=True,
+    )
+
+    assert [(name, iteration) for name, iteration, _ in observer.rounds] == [
+        ("observed-loop", 1),
+        ("observed-loop", 2),
+    ]
+    for _, _, results in observer.rounds:
+        assert [r.action_type for r in results] == ["review", "commit"]
+    assert [
+        r.outputs["sha"] for _, _, rs in observer.rounds for r in rs if r.action_type == "commit"
+    ] == [
+        "aaa",
+        "bbb",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_round_completed_reports_the_round_whose_commit_failed() -> None:
+    failed = ActionResult(success=False, action_type="commit", outputs={}, error="hook rejected")
+    observer = await _run_observed_loop(
+        [_action_result(True, "review", verdict="CONCERNS")] * 3,
+        [failed],
+        max_rounds=3,
+        commit_each_iteration=True,
+    )
+
+    assert len(observer.rounds) == 1
+    _, iteration, results = observer.rounds[0]
+    assert iteration == 1
+    assert results[-1] is failed
+
+
+@pytest.mark.asyncio
+async def test_round_completed_fires_once_when_until_is_met_on_round_one() -> None:
+    observer = await _run_observed_loop(
+        [_action_result(True, "review", verdict="PASS")],
+        [],
+        max_rounds=3,
+        commit_each_iteration=False,
+    )
+
+    assert [iteration for _, iteration, _ in observer.rounds] == [1]
+    assert [r.action_type for r in observer.rounds[0][2]] == ["review"]
 
 
 # ---------------------------------------------------------------------------
