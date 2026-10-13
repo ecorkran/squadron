@@ -200,8 +200,9 @@ def test_arch_has_no_max_option() -> None:
 def test_max_below_one_is_rejected_before_any_review(command: str, execute: AsyncMock) -> None:
     result = _invoke(command, "941", "--max", "0", "--model", "sol")
 
+    # Typer's usage error (exit 2). Its rendered text varies with terminal width and
+    # color, so only the code and the absence of any run are asserted.
     assert result.exit_code == 2
-    assert "--max" in result.output
     execute.assert_not_awaited()
 
 
