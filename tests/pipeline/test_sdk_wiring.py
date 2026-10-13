@@ -144,7 +144,7 @@ async def test_run_pipeline_sdk_connects_and_disconnects_on_success() -> None:
         patch("squadron.cli.commands.run.load_pipeline"),
         patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
         patch(
-            "squadron.cli.commands.run.classify_pipeline",
+            "squadron.pipeline.run_session.classify_pipeline",
             return_value=_make_sdk_classification(),
         ),
         patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
@@ -182,7 +182,7 @@ async def test_run_pipeline_sdk_disconnects_on_failure() -> None:
         patch("squadron.cli.commands.run.load_pipeline"),
         patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
         patch(
-            "squadron.cli.commands.run.classify_pipeline",
+            "squadron.pipeline.run_session.classify_pipeline",
             return_value=_make_sdk_classification(),
         ),
         patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),

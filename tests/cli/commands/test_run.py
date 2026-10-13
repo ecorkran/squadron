@@ -1454,7 +1454,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         )
 
     # T7a — all SDK_REQUIRED steps → Claude-required (persistent)
@@ -1467,7 +1467,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0
@@ -1492,7 +1492,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0
@@ -1517,7 +1517,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0
@@ -1531,8 +1531,8 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
-            patch("squadron.cli.commands.run.ModelResolver", mock_resolver_cls),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.ModelResolver", mock_resolver_cls),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "p", "--explain", "--param", "model=minimax"])
         assert result.exit_code == 0
@@ -1549,7 +1549,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", mock_classify),
+            patch("squadron.pipeline.run_session.classify_pipeline", mock_classify),
         ):
             result = runner.invoke(app, ["run", "p", "--explain", "--strict"])
         assert result.exit_code == 0
@@ -1591,7 +1591,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 side_effect=ClassificationError("step has no model"),
             ),
         ):
@@ -1618,7 +1618,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0
@@ -1645,7 +1645,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0
@@ -1662,7 +1662,7 @@ class TestExplainCommand:
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch("squadron.cli.commands.run.DefaultPoolBackend"),
             patch("squadron.cli.commands.run.ModelResolver"),
-            patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+            patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
             result = runner.invoke(app, ["run", "my-pipeline", "--explain"])
         assert result.exit_code == 0

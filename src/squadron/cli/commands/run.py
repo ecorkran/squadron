@@ -45,7 +45,6 @@ from squadron.pipeline.classification import (
     PipelineShape,
     PoolClassificationPolicy,
     StepClass,
-    classify_pipeline,
     has_profile_param,
 )
 from squadron.pipeline.control_params import reserved_param_error
@@ -75,7 +74,7 @@ from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionE
 from squadron.pipeline.run_heartbeat import RunHeartbeat, heartbeat_interval_s
 from squadron.pipeline.run_liveness import is_live
 from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
-from squadron.pipeline.sdk_session import SDKExecutionSession, open_pipeline_session
+from squadron.pipeline.run_session import classify_for_run, pipeline_session
 from squadron.pipeline.state import (
     ExecutionMode,
     RunOwner,
@@ -351,34 +350,6 @@ async def _run_pipeline(
     return result
 
 
-def _classify_for_run(
-    definition: PipelineDefinition,
-    *,
-    model_override: str | None,
-    params: dict[str, object],
-    strict: bool,
-) -> PipelineClassification:
-    """Classify *definition* the one way every ``sq run`` path does.
-
-    Owns the policy (YAML ``auth_policy`` < ``--strict``), the classification
-    pool backend and resolver, and the ``classify_pipeline`` call, so a run,
-    ``--explain`` and ``--dry-run`` cannot disagree. Raises ``ClassificationError``;
-    each caller words its own message.
-    """
-    policy = PoolClassificationPolicy.LAZY
-    if definition.auth_policy == PoolClassificationPolicy.STRICT or strict:
-        policy = PoolClassificationPolicy.STRICT
-
-    pool_backend = DefaultPoolBackend()
-    resolver = ModelResolver(
-        cli_override=model_override,
-        pipeline_model=definition.model,
-        pool_backend=pool_backend,
-        profile_source=has_profile_param(params),
-    )
-    return classify_pipeline(definition, resolver, pool_backend, policy=policy, params=params)
-
-
 async def _run_pipeline_sdk(
     pipeline_name: str,
     params: dict[str, object],
@@ -419,7 +390,7 @@ async def _run_pipeline_sdk(
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
     try:
-        classification = _classify_for_run(
+        classification = classify_for_run(
             definition, model_override=model_override, params=params, strict=strict
         )
     except ClassificationError as exc:
@@ -446,48 +417,40 @@ async def _run_pipeline_sdk(
             step.profile,
         )
 
-    session: SDKExecutionSession | None
-    if classification.needs_persistent_session:
-        session = await open_pipeline_session()
-    else:
-        session = None
-
-    try:
-        result = await _run_pipeline(
-            pipeline_name,
-            params,
-            model_override=model_override,
-            runs_dir=runs_dir,
-            from_step=from_step,
-            from_iteration=from_iteration,
-            sdk_session=session,
-            run_id=run_id,
-            execution_mode=ExecutionMode.SDK,
-            pool_backend=pool_backend,
-            pool_policy=classification.policy,
-            item_rerun=item_rerun,
-        )
-    except LazySessionConnectError as exc:
-        # State is already saved by _run_pipeline's BaseException handler.
-        # Surface a user-friendly error pointing to --strict.
-        _run_id = run_id or "unknown"
-        rprint(
-            f"[red]Error: Claude auth required — connection failed mid-run"
-            f" at step '{escape(str(exc.step_name))}'.[/red]\n"
-            f"Run state saved. Resume with: sq run --resume {_run_id}"
-        )
-        raise typer.Exit(1) from exc
-    except GitEnvironmentError as exc:
-        if item_rerun is not None:
-            raise  # item resume reports it as HALTED (slice 197 D8)
-        # A git fault that every later item would hit too (wrong branch, dirty tree,
-        # unknown state) ends the run. State is saved; the operator fixes the checkout.
-        _logger.error("pipeline '%s' halted by a git environment fault: %s", pipeline_name, exc)
-        rprint(f"[red]Error: {escape(str(exc))}[/red]")
-        raise typer.Exit(1) from exc
-    finally:
-        if session is not None:
-            await session.disconnect()
+    async with pipeline_session(classification) as session:
+        try:
+            result = await _run_pipeline(
+                pipeline_name,
+                params,
+                model_override=model_override,
+                runs_dir=runs_dir,
+                from_step=from_step,
+                from_iteration=from_iteration,
+                sdk_session=session,
+                run_id=run_id,
+                execution_mode=ExecutionMode.SDK,
+                pool_backend=pool_backend,
+                pool_policy=classification.policy,
+                item_rerun=item_rerun,
+            )
+        except LazySessionConnectError as exc:
+            # State is already saved by _run_pipeline's BaseException handler.
+            # Surface a user-friendly error pointing to --strict.
+            _run_id = run_id or "unknown"
+            rprint(
+                f"[red]Error: Claude auth required — connection failed mid-run"
+                f" at step '{escape(str(exc.step_name))}'.[/red]\n"
+                f"Run state saved. Resume with: sq run --resume {_run_id}"
+            )
+            raise typer.Exit(1) from exc
+        except GitEnvironmentError as exc:
+            if item_rerun is not None:
+                raise  # item resume reports it as HALTED (slice 197 D8)
+            # A git fault that every later item would hit too (wrong branch, dirty tree,
+            # unknown state) ends the run. State is saved; the operator fixes the checkout.
+            _logger.error("pipeline '%s' halted by a git environment fault: %s", pipeline_name, exc)
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
+            raise typer.Exit(1) from exc
 
     return result
 
@@ -606,7 +569,7 @@ def _handle_explain(
     _apply_param_overrides(explain_params, param)
 
     try:
-        classification = _classify_for_run(
+        classification = classify_for_run(
             definition, model_override=cli_override, params=explain_params, strict=strict
         )
     except ClassificationError as exc:
@@ -1221,7 +1184,7 @@ def run(
         # The same pre-run check a real run applies, so a typo'd alias or template
         # fails here instead of rendering a plan that cannot run (#175).
         try:
-            _classify_for_run(
+            classify_for_run(
                 definition,
                 model_override=_extract_model_override(model, param),
                 params=params,

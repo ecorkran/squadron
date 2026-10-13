@@ -157,7 +157,7 @@ def _sdk_patches(
     patches: list[Any] = [
         patch("squadron.cli.commands.run.load_pipeline", return_value=_make_definition()),
         patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
-        patch("squadron.cli.commands.run.classify_pipeline", return_value=classification),
+        patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         patch(
             "squadron.cli.commands.run._run_pipeline",
             new_callable=AsyncMock,
@@ -208,7 +208,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
@@ -241,7 +241,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
@@ -277,7 +277,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
@@ -325,7 +325,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
@@ -362,7 +362,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
@@ -395,7 +395,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 side_effect=ClassificationError("bad cascade"),
             ),
             patch("squadron.cli.commands.run.DefaultPoolBackend", return_value=MagicMock()),
@@ -429,7 +429,7 @@ class TestClassificationGate:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch("squadron.cli.commands.run._run_pipeline", new_callable=AsyncMock),
@@ -474,7 +474,7 @@ class TestResumePath:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
@@ -518,7 +518,7 @@ class TestResumePath:
             ),
             patch("squadron.cli.commands.run.validate_pipeline", return_value=[]),
             patch(
-                "squadron.cli.commands.run.classify_pipeline",
+                "squadron.pipeline.run_session.classify_pipeline",
                 return_value=classification,
             ),
             patch(
