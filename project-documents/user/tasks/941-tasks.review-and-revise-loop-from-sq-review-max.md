@@ -90,16 +90,16 @@ status: not_started
   - [x] Commit: `feat: add --max and --revise-model to sq review slice, tasks and code`
   - **Success:** tests pass
 
-- [ ] **Task 10: Two-round integration test**
-  - [ ] New `tests/pipeline/test_review_revise_integration.py`, using the fake-action and tmp-git-repo patterns in `test_loop_round_commits.py` / `test_executor_integration.py`: review CONCERNS → round 1 CONCERNS → round 2 PASS. Assert two `round_completed` calls, a commit per round, prior reviews in `reviews/archive/`, final PASS
-  - [ ] A first-review PASS case runs zero rounds (Success Criterion 2)
-  - [ ] Commit: `test: add review-revise integration test`
+- [x] **Task 10: Two-round integration test**
+  - [x] New `tests/pipeline/test_review_revise_integration.py`, using the fake-action and tmp-git-repo patterns in `test_loop_round_commits.py` / `test_executor_integration.py`: review CONCERNS → round 1 CONCERNS → round 2 PASS. Assert two `round_completed` calls, a commit per round, prior reviews in `reviews/archive/`, final PASS
+  - [x] A first-review PASS case runs zero rounds (Success Criterion 2)
+  - [x] Commit: `test: add review-revise integration test`
   - **Success:** tests pass
 
-- [ ] **Task 11: Slash command doc and CHANGELOG**
-  - [ ] In `commands/sq/review.md`, document `--max N` and `--revise-model` for `slice`, `tasks` and `code` as passed through to `sq review` unchanged, with the D6 restrictions; run any installed-command sync/parity tests covering `commands/sq/`
-  - [ ] Add an Unreleased `### Added` CHANGELOG bullet: `sq review slice|tasks|code --max N` revises an existing artifact until its review passes, with `--revise-model` for the reviser
-  - [ ] Commit: `docs: document sq review --max in slash command and CHANGELOG`
+- [x] **Task 11: Slash command doc and CHANGELOG**
+  - [x] In `commands/sq/review.md`, document `--max N` and `--revise-model` for `slice`, `tasks` and `code` as passed through to `sq review` unchanged, with the D6 restrictions; run any installed-command sync/parity tests covering `commands/sq/`
+  - [x] Add an Unreleased `### Added` CHANGELOG bullet: `sq review slice|tasks|code --max N` revises an existing artifact until its review passes, with `--revise-model` for the reviser
+  - [x] Commit: `docs: document sq review --max in slash command and CHANGELOG`
 
 - [ ] **Task 12: Final gate and Verification Walkthrough (design steps 1–6)**
   - [ ] Full test suite, `ruff format`, `ruff check`, `pyright` pass
