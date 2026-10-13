@@ -7,6 +7,7 @@ pipeline runs; ``run_review_revise`` drives that pipeline.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -19,7 +20,7 @@ from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.branch_ops import dirty_paths, slice_facts
 from squadron.pipeline.classification import ClassificationError, has_profile_param
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult, execute_pipeline
-from squadron.pipeline.git_ops import GitEnvironmentError, current_branch
+from squadron.pipeline.git_ops import GitEnvironmentError, current_branch, read_integration_target
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.loop_config import last_with_verdict
 from squadron.pipeline.models import ActionResult
@@ -35,6 +36,8 @@ from squadron.review.templates import BuiltinReviewTemplate
 # on the command line is refused: the loop's review steps cannot honor it, and silently
 # ignoring it would be a fallback. Options added to `sq review` later are refused by default.
 MAX_SUPPORTED_OPTIONS = frozenset({"max_rounds", "model", "revise_model", "cwd", "verbose"})
+
+_logger = logging.getLogger(__name__)
 
 EXIT_OK = 0
 EXIT_RUN_FAILED = 1
@@ -200,17 +203,24 @@ async def _run(
         pool_backend=pool_backend,
         profile_source=has_profile_param(params),
     )
-    async with pipeline_session(classification) as session:
-        result = await execute_pipeline(
-            definition,
-            params,
-            resolver=resolver,
-            cf_client=ContextForgeClient(),
-            cwd=cwd,
-            sdk_session=session,
-            pool_policy=classification.policy,
-            observer=printer,
-        )
+    try:
+        async with pipeline_session(classification) as session:
+            result = await execute_pipeline(
+                definition,
+                params,
+                resolver=resolver,
+                cf_client=ContextForgeClient(),
+                cwd=cwd,
+                sdk_session=session,
+                pool_policy=classification.policy,
+                observer=printer,
+            )
+    except GitEnvironmentError as exc:
+        # Process boundary: a git fault (wrong branch, unreadable state) ends the run
+        # with its message, as `sq run` does; the operator fixes the checkout.
+        _logger.exception("review-revise halted by a git environment fault")
+        typer.echo(f"Error: {exc}", err=True)
+        return EXIT_RUN_FAILED
     outcome = outcome_of(result)
     if outcome.error is not None:
         typer.echo(outcome.error, err=True)
@@ -246,17 +256,27 @@ def validate_max_options(
         given = ctx.get_parameter_source(param.name) == ParameterSource.COMMANDLINE
         if given and param.name not in MAX_SUPPORTED_OPTIONS:
             raise _refuse(f"{param.opts[0]} is not supported with --max")
-    if kind == BuiltinReviewTemplate.CODE:
-        _require_code_preconditions(int(slice_input), cwd)
+    _require_branch_preconditions(kind, int(slice_input), cwd)
 
 
-def _require_code_preconditions(slice_index: int, cwd: str) -> None:
-    """``code`` revisions commit to the checked-out slice branch and stage everything."""
+def _require_branch_preconditions(kind: BuiltinReviewTemplate, slice_index: int, cwd: str) -> None:
+    """Where the rounds will commit must be where this checkout is.
+
+    ``slice`` and ``tasks`` rounds are planning commits, which only land on the integration
+    target. ``code`` rounds commit to the checked-out slice branch and stage everything, so
+    that branch must be the slice's and the tree clean.
+    """
+    cf_client = ContextForgeClient()
     try:
-        expected, _ = slice_facts(slice_index, ContextForgeClient())
+        if kind == BuiltinReviewTemplate.CODE:
+            expected, _ = slice_facts(slice_index, cf_client)
+        else:
+            expected = read_integration_target(cf_client)
         if (actual := current_branch(cwd)) != expected:
-            raise _refuse(f"--max for code must run on branch {expected}, but {actual} is checked out")
-        if paths := dirty_paths(cwd):
-            raise _refuse(f"working tree is not clean: {paths}")
+            raise _refuse(
+                f"--max for {kind} must run on branch {expected}, but {actual} is checked out"
+            )
+        if kind == BuiltinReviewTemplate.CODE and (paths := dirty_paths(cwd)):
+            raise _refuse(f"working tree is not clean: {paths}. Commit or discard these, then rerun.")
     except GitEnvironmentError as exc:
         raise _refuse(str(exc)) from exc

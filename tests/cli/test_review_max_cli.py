@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
+from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.review.templates import BuiltinReviewTemplate
 
 runner = CliRunner()
@@ -32,7 +33,11 @@ def _passing_result() -> PipelineResult:
 
 @pytest.fixture
 def execute() -> Iterator[AsyncMock]:
-    """The pipeline executor, stubbed: a refusal must leave it unawaited."""
+    """The pipeline executor, stubbed: a refusal must leave it unawaited.
+
+    The branch checks read this checkout's git state, so they are stubbed to pass here;
+    the tests of those checks patch their own inputs.
+    """
     stub = AsyncMock(return_value=_passing_result())
     classification = MagicMock(needs_persistent_session=False)
     with (
@@ -61,7 +66,7 @@ def test_each_command_routes_to_the_runner_with_its_kind(
 ) -> None:
     with (
         patch(_RUNNER, return_value=0) as run,
-        patch(f"{_REVISE}._require_code_preconditions"),
+        patch(f"{_REVISE}._require_branch_preconditions"),
     ):
         result = _invoke(command, "941", *max_args, "--model", "sol")
 
@@ -71,14 +76,15 @@ def test_each_command_routes_to_the_runner_with_its_kind(
 
 
 def test_runner_exit_code_becomes_the_commands_exit_code() -> None:
-    with patch(_RUNNER, return_value=2):
+    with patch(_RUNNER, return_value=2), patch(f"{_REVISE}._require_branch_preconditions"):
         result = _invoke("slice", "941", "--max", "1", "--model", "sol")
 
     assert result.exit_code == 2
 
 
 def test_valid_invocation_reaches_the_executor(execute: AsyncMock) -> None:
-    result = _invoke("slice", "941", "--max", "2", "--model", "sol", "--revise-model", "sonnet")
+    with patch(f"{_REVISE}._require_branch_preconditions"):
+        result = _invoke("slice", "941", "--max", "2", "--model", "sol", "--revise-model", "sonnet")
 
     assert result.exit_code == 0, result.output
     params = execute.await_args.args[1]
@@ -108,6 +114,41 @@ def test_refusals_exit_one_and_never_call_the_executor(
     assert result.exit_code == 1
     assert message in result.output
     execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize("command", ["slice", "tasks"])
+def test_planning_kinds_off_the_target_branch_name_the_target(command: str, execute: AsyncMock) -> None:
+    with (
+        patch(f"{_REVISE}.read_integration_target", return_value="main"),
+        patch(f"{_REVISE}.current_branch", return_value="941-slice.review-loop"),
+    ):
+        result = _invoke(command, "941", "--max", "1", "--model", "sol")
+
+    assert result.exit_code == 1
+    assert "must run on branch main" in result.output
+    assert "941-slice.review-loop" in result.output
+    execute.assert_not_awaited()
+
+
+def test_planning_kind_on_the_target_branch_runs(execute: AsyncMock) -> None:
+    with (
+        patch(f"{_REVISE}.read_integration_target", return_value="dev/erik"),
+        patch(f"{_REVISE}.current_branch", return_value="dev/erik"),
+    ):
+        result = _invoke("slice", "941", "--max", "1", "--model", "sol")
+
+    assert result.exit_code == 0, result.output
+    execute.assert_awaited_once()
+
+
+def test_a_git_fault_during_the_run_exits_one_with_its_message(execute: AsyncMock) -> None:
+    execute.side_effect = GitEnvironmentError("planning commit for slice 941 on x; expected main")
+    with patch(f"{_REVISE}._require_branch_preconditions"):
+        result = _invoke("slice", "941", "--max", "1", "--model", "sol")
+
+    assert result.exit_code == 1
+    assert "expected main" in result.output
+    assert "Traceback" not in result.output
 
 
 def test_code_on_the_wrong_branch_names_the_expected_branch(execute: AsyncMock) -> None:
