@@ -16,7 +16,26 @@ If the subcommand is missing or unrecognized, show the usage below and stop.
 /sq:review arch [NUMBER | FLAGS]     — architecture review
 /sq:review resolve NUMBER [TYPE]     — were a review's findings addressed?
 /sq:review pr [TARGET | FLAGS]       — pull request review
+/sq:review {code|slice|tasks} NUMBER --max N [--revise-model MODEL]  — review, then revise until it passes
 ```
+
+---
+
+## Revise loop: `--max`
+
+`code`, `slice` and `tasks` accept `--max N` and `--revise-model MODEL`. Pass them through to `sq review` unchanged:
+
+`sq review {kind} {number} --max {N} [--model REVIEWER] [--revise-model REVISER] -v`
+
+The CLI runs one review, then up to N rounds of revise-and-review using the loop of the matching pipeline (P4 for `slice`, P5 for `tasks`, P6 for `code`). It revises the existing artifact in place, commits each round, and stops early when the review passes. It prints one line per round and a final `final: VERDICT after N rounds` line.
+
+- `--model` is the reviewer. `--revise-model` is the reviser and is only valid with `--max`; without it the pipeline's own model is used.
+- `--max` needs a slice **number**, not a file path.
+- Only `--model`, `--revise-model`, `--cwd` and `-v`/`-vv` may be combined with `--max`. Any other flag (for example `--json` or `--no-save`) is refused with an error naming it, and nothing runs.
+- `code` must run on the slice's branch with a clean working tree; otherwise it is refused.
+- Exit codes: `0` for PASS, CONCERNS, or a loop that ran out of rounds but was accepted; `2` for FAIL or a loop that ran out of rounds unaccepted; `1` for a failed run, save, or round commit.
+
+Show the per-round lines and the final verdict. If the verdict is FAIL or CONCERNS, highlight the key findings.
 
 ---
 

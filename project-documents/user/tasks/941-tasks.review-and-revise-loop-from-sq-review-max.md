@@ -50,44 +50,44 @@ status: not_started
   - [x] Commit: `feat: print review-revise rounds through RoundPrinter`
   - **Success:** tests pass
 
-- [ ] **Task 6: `run_review_revise` (D3, D4, D5)**
-  - [ ] `run_review_revise(kind, slice_index, reviewer, revise_model, max_rounds, cwd, verbosity) -> int`: build the definition, assemble params per D3 (`model` only when `revise_model` is given), run `execute_pipeline` with `RoundPrinter` and no run-state recording, print `final: <VERDICT> after N rounds`, return the D5 exit code
-  - [ ] Read the outcome from the returned `PipelineResult`: rounds = loop `StepResult.iteration`; final verdict = the review result in the loop's `action_results` when rounds > 0, else the leading review step's; `accepted` / `exhausted` from the loop `StepResult`
-  - [ ] Check `accepted`, then `exhausted`, before run status: an exhausted, unaccepted loop has failed status but exits 2, not 1
-  - [ ] Implement the mapping here; do not import or move `_exit_on` (D3, and Task 8's `review.py` diff limit)
-  - [ ] On a failed run, print the failing step's `error` to stderr and return 1. For a failed round commit that error is the executor's `loop <name> round N commit failed: <error>` (D5), so the runner prints it as-is and does not build its own text
-  - [ ] Session handling (PM decision 2026-10-13): `classify_for_run` and the `pipeline_session` context manager are extracted from `sq run` into `pipeline/run_session.py` (commit `refactor: extract classify_for_run and pipeline_session from sq run`); the runner uses both so a revise dispatch on an sdk model gets the persistent session the executor's lazy hook would not open for a dispatch inside a loop. The runner takes no `verbosity` parameter; `review.py` sets up logging before calling it (Task 8)
-  - [ ] Apply no `CLAUDECODE` guard in the runner or the `--max` wiring (D5, "Claude Code sessions"); do not import `_resolve_execution_mode`
+- [x] **Task 6: `run_review_revise` (D3, D4, D5)**
+  - [x] `run_review_revise(kind, slice_index, reviewer, revise_model, max_rounds, cwd, verbosity) -> int`: build the definition, assemble params per D3 (`model` only when `revise_model` is given), run `execute_pipeline` with `RoundPrinter` and no run-state recording, print `final: <VERDICT> after N rounds`, return the D5 exit code
+  - [x] Read the outcome from the returned `PipelineResult`: rounds = loop `StepResult.iteration`; final verdict = the review result in the loop's `action_results` when rounds > 0, else the leading review step's; `accepted` / `exhausted` from the loop `StepResult`
+  - [x] Check `accepted`, then `exhausted`, before run status: an exhausted, unaccepted loop has failed status but exits 2, not 1
+  - [x] Implement the mapping here; do not import or move `_exit_on` (D3, and Task 8's `review.py` diff limit)
+  - [x] On a failed run, print the failing step's `error` to stderr and return 1. For a failed round commit that error is the executor's `loop <name> round N commit failed: <error>` (D5), so the runner prints it as-is and does not build its own text
+  - [x] Session handling (PM decision 2026-10-13): `classify_for_run` and the `pipeline_session` context manager are extracted from `sq run` into `pipeline/run_session.py` (commit `refactor: extract classify_for_run and pipeline_session from sq run`); the runner uses both so a revise dispatch on an sdk model gets the persistent session the executor's lazy hook would not open for a dispatch inside a loop. The runner takes no `verbosity` parameter; `review.py` sets up logging before calling it (Task 8)
+  - [x] Apply no `CLAUDECODE` guard in the runner or the `--max` wiring (D5, "Claude Code sessions"); do not import `_resolve_execution_mode`
   - **Success:** every runner-owned D5 row returns its code
 
-- [ ] **Task 7: Test the runner**
-  - [ ] In `tests/cli/test_review_revise.py`, executor stubbed:
-    1. params contain `slice`, `review-model`, `max-revisions`; `model` only with a reviser; a pool alias reaches `review-model` unchanged
-    2. exit 0 for PASS and CONCERNS, 2 for FAIL, 1 for a failed action
-    3. exhausted loop: accepted → 0, not accepted → 2
-    4. zero rounds: `final:` uses the leading review's verdict and reports 0 rounds
-    5. failed round commit → stderr `round N commit failed: …`, exit 1
-  - [ ] Commit: `feat: add review-revise runner with params and exit codes`
+- [x] **Task 7: Test the runner**
+  - [x] In `tests/cli/test_review_revise.py`, executor stubbed:
+    1. [x] params contain `slice`, `review-model`, `max-revisions`; `model` only with a reviser; a pool alias reaches `review-model` unchanged
+    2. [x] exit 0 for PASS and CONCERNS, 2 for FAIL, 1 for a failed action
+    3. [x] exhausted loop: accepted → 0, not accepted → 2
+    4. [x] zero rounds: `final:` uses the leading review's verdict and reports 0 rounds
+    5. [x] failed round commit → stderr `round N commit failed: …`, exit 1
+  - [x] Commit: `feat: add review-revise runner with params and exit codes`
   - **Success:** tests pass
 
-- [ ] **Task 8: Option validation and wiring into `review.py` (D6)**
-  - [ ] In `review_revise.py`, define `MAX_SUPPORTED_OPTIONS` and `validate_max_options(ctx, kind, input)` implementing D6. Only `click.Option` parameters are checked, so the positional index is exempt. Each refusal prints its error to stderr and raises `typer.Exit(1)`
-  - [ ] In the same function, for `CODE` only: refuse a dirty working tree (D5 last row), listing the dirty paths (`git status --porcelain` through `run_git`); a failed git call is an error, not a clean tree
-  - [ ] In `review.py`, for `review_slice` (`SLICE`), `review_tasks` (`TASKS`) and `review_code` (`CODE`):
-    1. add `ctx: typer.Context`, `--max` (int; the range is enforced by the loop's `max` validation, not Typer) and `--revise-model`
-    2. refuse `--revise-model` without `--max`
-    3. early branch when `--max` is given: `validate_max_options(ctx, kind, input)`, resolve the reviewer with `_resolve_model`, then `raise typer.Exit(run_review_revise(...))`
-  - [ ] Convert the literal kind to `BuiltinReviewTemplate` once, at this boundary. Do not touch `review_arch`
+- [x] **Task 8: Option validation and wiring into `review.py` (D6)**
+  - [x] In `review_revise.py`, define `MAX_SUPPORTED_OPTIONS` and `validate_max_options(ctx, kind, input)` implementing D6. Only `click.Option` parameters are checked, so the positional index is exempt. Each refusal prints its error to stderr and raises `typer.Exit(1)`
+  - [x] In the same function, for `CODE` only: refuse a dirty working tree (D5 last row), listing the dirty paths (`git status --porcelain` through `run_git`); a failed git call is an error, not a clean tree
+  - [x] In `review.py`, for `review_slice` (`SLICE`), `review_tasks` (`TASKS`) and `review_code` (`CODE`):
+    1. [x] add `ctx: typer.Context`, `--max` (int; the range is enforced by the loop's `max` validation, not Typer) and `--revise-model`
+    2. [x] refuse `--revise-model` without `--max`
+    3. [x] early branch when `--max` is given: `validate_max_options(ctx, kind, input)`, resolve the reviewer with `_resolve_model`, then `raise typer.Exit(run_review_revise(...))`
+  - [x] Convert the literal kind to `BuiltinReviewTemplate` once, at this boundary. Do not touch `review_arch`
   - **Success:** `--help` for the three subcommands lists both options; `review.py` diff is limited to these declarations and early branches
 
-- [ ] **Task 9: Test validation and wiring through the CLI**
-  - [ ] Through Typer's `CliRunner` with `execute_pipeline` stubbed:
-    1. `slice`, `tasks` and `code` route to the runner with the right kind; `--max 3` and `--max=3` both parse
-    2. a valid `<index> --max 2 --model X` reaches the stubbed executor
-    3. refusals exit 1 with the stub never called: path input, `--json` and one other unsupported option (error names it), `--revise-model` without `--max`, `code` on the wrong branch (names the expected branch), `code` with a dirty tree (lists the paths)
-    4. `arch --max 1` fails with Typer's unknown-option error
-  - [ ] `pytest tests/cli -q`: all existing review CLI tests pass unchanged (Success Criterion 6)
-  - [ ] Commit: `feat: add --max and --revise-model to sq review slice, tasks and code`
+- [x] **Task 9: Test validation and wiring through the CLI**
+  - [x] Through Typer's `CliRunner` with `execute_pipeline` stubbed:
+    1. [x] `slice`, `tasks` and `code` route to the runner with the right kind; `--max 3` and `--max=3` both parse
+    2. [x] a valid `<index> --max 2 --model X` reaches the stubbed executor
+    3. [x] refusals exit 1 with the stub never called: path input, `--json` and one other unsupported option (error names it), `--revise-model` without `--max`, `code` on the wrong branch (names the expected branch), `code` with a dirty tree (lists the paths)
+    4. [x] `arch --max 1` fails with Typer's unknown-option error
+  - [x] `pytest tests/cli -q`: all existing review CLI tests pass unchanged (Success Criterion 6)
+  - [x] Commit: `feat: add --max and --revise-model to sq review slice, tasks and code`
   - **Success:** tests pass
 
 - [ ] **Task 10: Two-round integration test**

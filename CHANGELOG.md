@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq review slice|tasks|code <number> --max N` revises an existing artifact until its review passes, committing each round; `--revise-model` picks the reviser.
+
 ### Fixed
 - A revise loop now stops when a round's commit fails (for example, a rejected pre-commit hook), instead of starting the next round on top of the uncommitted revision.
 
