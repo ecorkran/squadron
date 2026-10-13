@@ -56,6 +56,7 @@ status: not_started
   - [ ] Check `accepted`, then `exhausted`, before run status: an exhausted, unaccepted loop has failed status but exits 2, not 1
   - [ ] Implement the mapping here; do not import or move `_exit_on` (D3, and Task 8's `review.py` diff limit)
   - [ ] On a failed run, print the failing step's `error` to stderr and return 1. For a failed round commit that error is the executor's `loop <name> round N commit failed: <error>` (D5), so the runner prints it as-is and does not build its own text
+  - [ ] Session handling (PM decision 2026-10-13): `classify_for_run` and the `pipeline_session` context manager are extracted from `sq run` into `pipeline/run_session.py` (commit `refactor: extract classify_for_run and pipeline_session from sq run`); the runner uses both so a revise dispatch on an sdk model gets the persistent session the executor's lazy hook would not open for a dispatch inside a loop. The runner takes no `verbosity` parameter; `review.py` sets up logging before calling it (Task 8)
   - [ ] Apply no `CLAUDECODE` guard in the runner or the `--max` wiring (D5, "Claude Code sessions"); do not import `_resolve_execution_mode`
   - **Success:** every runner-owned D5 row returns its code
 

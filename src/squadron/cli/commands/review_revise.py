@@ -6,15 +6,30 @@ pipeline runs; ``run_review_revise`` drives that pipeline.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import typer
 
+from squadron.integrations.context_forge import ContextForgeClient
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
-from squadron.pipeline.executor import StepResult
+from squadron.pipeline.classification import ClassificationError, has_profile_param
+from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult, execute_pipeline
+from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
+from squadron.pipeline.loop_config import last_with_verdict
 from squadron.pipeline.models import ActionResult
-from squadron.pipeline.review_revise import REVIEW_STEP_NAME
+from squadron.pipeline.resolver import ModelResolver
+from squadron.pipeline.review_revise import REVIEW_STEP_NAME, build_review_revise_definition
+from squadron.pipeline.run_session import classify_for_run, pipeline_session
 from squadron.pipeline.state import ActiveItem
+from squadron.pipeline.steps import StepTypeName
+from squadron.review.models import Verdict
+from squadron.review.templates import BuiltinReviewTemplate
+
+EXIT_OK = 0
+EXIT_RUN_FAILED = 1
+EXIT_REVIEW_FAILED = 2
 
 _SHORT_SHA_LENGTH = 7
 _LABEL_WIDTH = 10
@@ -84,3 +99,112 @@ class RoundPrinter:
         if commit.outputs.get("committed") is False:
             return "no changes"
         return f"committed {str(commit.outputs['sha'])[:_SHORT_SHA_LENGTH]}"
+
+
+@dataclass(frozen=True)
+class ReviseOutcome:
+    """What a finished review-revise run earned (D5)."""
+
+    exit_code: int
+    final_verdict: str | None
+    rounds: int
+    error: str | None = None
+
+
+def outcome_of(result: PipelineResult) -> ReviseOutcome:
+    """Map the composed pipeline's result to the D5 exit code.
+
+    ``accepted`` and ``exhausted`` are read before run status: an exhausted,
+    unaccepted loop has FAILED status but exits 2, not 1.
+    """
+    review = next((r for r in result.step_results if r.step_name == REVIEW_STEP_NAME), None)
+    loop = next((r for r in result.step_results if r.step_type == StepTypeName.LOOP), None)
+    if review is None or review.status != ExecutionStatus.COMPLETED or loop is None:
+        return ReviseOutcome(EXIT_RUN_FAILED, None, 0, _failure_text(result))
+    rounds = loop.iteration
+    final = last_with_verdict(loop.action_results if rounds > 0 else review.action_results)
+    verdict = final.verdict if final is not None else None
+    if loop.accepted:
+        return ReviseOutcome(EXIT_OK, verdict, rounds)
+    if loop.exhausted:
+        return ReviseOutcome(EXIT_REVIEW_FAILED, verdict, rounds)
+    if loop.status != ExecutionStatus.COMPLETED:
+        return ReviseOutcome(EXIT_RUN_FAILED, verdict, rounds, _failure_text(result))
+    code = EXIT_REVIEW_FAILED if verdict == Verdict.FAIL else EXIT_OK
+    return ReviseOutcome(code, verdict, rounds)
+
+
+def _failure_text(result: PipelineResult) -> str:
+    """The failing step's error as the executor reported it, for stderr."""
+    for step in result.step_results:
+        if step.status == ExecutionStatus.COMPLETED:
+            continue
+        if step.error is not None:
+            return step.error
+        action_error = next((a.error for a in step.action_results if a.error), None)
+        return action_error or f"step '{step.step_name}' ended {step.status}"
+    return result.error or "pipeline did not finish"
+
+
+def run_review_revise(
+    kind: BuiltinReviewTemplate,
+    slice_index: str,
+    reviewer: str,
+    revise_model: str | None,
+    max_rounds: int,
+    cwd: str,
+) -> int:
+    """Run one review and up to *max_rounds* revise-and-review rounds; return the exit code."""
+    return asyncio.run(_run(kind, slice_index, reviewer, revise_model, max_rounds, cwd))
+
+
+async def _run(
+    kind: BuiltinReviewTemplate,
+    slice_index: str,
+    reviewer: str,
+    revise_model: str | None,
+    max_rounds: int,
+    cwd: str,
+) -> int:
+    definition = build_review_revise_definition(kind)
+    # `model` only when given: otherwise the mapped pipeline's own default applies (D3).
+    overrides: dict[str, object] = {
+        "slice": slice_index,
+        "review-model": reviewer,
+        "max-revisions": str(max_rounds),
+    }
+    if revise_model is not None:
+        overrides["model"] = revise_model
+    params = {k: v for k, v in definition.params.items() if v != "required"} | overrides
+    try:
+        classification = classify_for_run(definition, model_override=None, params=params, strict=False)
+    except ClassificationError as exc:
+        typer.echo(f"Error: pipeline classification failed: {exc}", err=True)
+        return EXIT_RUN_FAILED
+
+    printer = RoundPrinter()
+    printer.header(str(kind), slice_index, reviewer, str(params["model"]), max_rounds)
+    pool_backend = DefaultPoolBackend()
+    resolver = ModelResolver(
+        cli_override=None,
+        pipeline_model=definition.model,
+        pool_backend=pool_backend,
+        profile_source=has_profile_param(params),
+    )
+    async with pipeline_session(classification) as session:
+        result = await execute_pipeline(
+            definition,
+            params,
+            resolver=resolver,
+            cf_client=ContextForgeClient(),
+            cwd=cwd,
+            sdk_session=session,
+            pool_policy=classification.policy,
+            observer=printer,
+        )
+    outcome = outcome_of(result)
+    if outcome.error is not None:
+        typer.echo(outcome.error, err=True)
+    if outcome.final_verdict is not None:
+        typer.echo(f"final: {outcome.final_verdict} after {outcome.rounds} rounds")
+    return outcome.exit_code
