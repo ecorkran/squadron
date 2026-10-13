@@ -8,8 +8,8 @@ projectState: >
   Slice design 941 complete after two review rounds plus the D7 observer hook (20261012).
   Prerequisite fix 85a7f7aa (a failed round commit ends the loop) is on main. No code written.
 dateCreated: 20261012
-dateUpdated: 20261012
-status: not_started
+dateUpdated: 20261013
+status: complete
 ---
 
 ## Context Summary
@@ -101,9 +101,9 @@ status: not_started
   - [x] Add an Unreleased `### Added` CHANGELOG bullet: `sq review slice|tasks|code --max N` revises an existing artifact until its review passes, with `--revise-model` for the reviser
   - [x] Commit: `docs: document sq review --max in slash command and CHANGELOG`
 
-- [ ] **Task 12: Final gate and Verification Walkthrough (design steps 1–6)**
-  - [ ] Full test suite, `ruff format`, `ruff check`, `pyright` pass
-  - [ ] Install the branch build of `sq`, confirm `sq --version` runs from this checkout, and run walkthrough steps 1–5 against slice 941 from a standard terminal (step 4: slice branch, then `main`)
-  - [ ] Run step 6 (`/sq:review` parity, Success Criterion 9) inside Claude Code. If it cannot run in this session, the closing report to the PM states that SC9 is unverified and gives the exact command to run
-  - [ ] Record results in the design's Verification Walkthrough and the DEVLOG; commit `docs: record slice 941 verification results`
+- [x] **Task 12: Final gate and Verification Walkthrough (design steps 1–6)**
+  - [x] Full test suite, `ruff format`, `ruff check`, `pyright` pass
+  - [x] Install the branch build of `sq`, confirm `sq --version` runs from this checkout, and run walkthrough steps 1–5 against slice 941 from a standard terminal (step 4: slice branch, then `main`)
+  - [x] Run step 6 (`/sq:review` parity, Success Criterion 9) inside Claude Code. If it cannot run in this session, the closing report to the PM states that SC9 is unverified and gives the exact command to run
+  - [x] Record results in the design's Verification Walkthrough and the DEVLOG; commit `docs: record slice 941 verification results`
   - **Success:** each step's output matches the design, or the mismatch is reported to the PM with the command and output

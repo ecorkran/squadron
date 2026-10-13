@@ -6,8 +6,8 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: []
 interfaces: []
 dateCreated: 20261012
-dateUpdated: 20261012
-status: not_started
+dateUpdated: 20261013
+status: complete
 ---
 
 # Slice Design: Review-and-Revise Loop from `sq review` — `--max`
@@ -62,6 +62,7 @@ None outstanding. A failed round commit already ends the loop (fix 85a7f7aa); D5
 
 - **`src/squadron/pipeline/review_revise.py`** (new). Holds `REVISE_PIPELINE_BY_KIND` and `build_review_revise_definition(kind) -> PipelineDefinition`. Pipeline knowledge stays in the pipeline package.
 - **`src/squadron/cli/commands/review_revise.py`** (new). Holds `run_review_revise(kind, slice_index, reviewer, revise_model, max_rounds, cwd, verbosity) -> int`. It validates options, assembles params, calls `execute_pipeline` and reports the result. `review.py` is already about 1,300 lines, so it gets only the two option declarations per subcommand and a single early branch: `if max_rounds is not None: raise typer.Exit(run_review_revise(...))`.
+- **`src/squadron/pipeline/run_session.py`** (new, PM decision 2026-10-13). `classify_for_run` and the `pipeline_session` context manager, extracted from `sq run`. The executor's lazy session hook only opens a session for a top-level `dispatch`/`summary`/`compact` step, so a revise dispatch inside the loop on an sdk model needs the session opened up front, exactly as `sq run` does. Both commands now share it. The runner takes no `verbosity`; `review.py` sets up logging first. `MAX_SUPPORTED_OPTIONS` holds Python parameter names, so `max` is `max_rounds`.
 - **`commands/sq/review.md`**: documents the options for `slice`, `tasks` and `code`.
 
 ### Data Flow
@@ -114,7 +115,8 @@ The leading review step copies the loop body's review action config (template, `
 Overrides can also change the shape the builder relies on, so the builder checks the loop and raises an error naming the pipeline when any of these fail:
 - the loop body has exactly one `review` step;
 - the loop sets `until`;
-- the loop sets `skip_if_met: true`. Zero rounds after a passing first review (Success Criterion 2) depends on it.
+- the loop sets `skip_if_met: true`. Zero rounds after a passing first review (Success Criterion 2) depends on it;
+- the loop sets `commit_each_iteration: true`. The per-round line needs each round's commit result (added after the walkthrough's code review).
 
 All three shipped loops satisfy these checks.
 
@@ -145,6 +147,8 @@ Exit codes 0, 1 and 2 mean what they mean for `sq review` without `--max` (`_exi
 | Revise dispatch or review fails, including a model call that hangs or times out | Inherited unchanged: the provider and dispatch timeouts apply, and this slice adds none. The loop ends. | The action error is printed | 1 |
 | Round commit fails (hook failure, git timeout, planning commit off the target branch) | Inherited (fix 85a7f7aa): the loop stops after that round with the status a failed revise dispatch gets, `on_exhaust: fail` here. | `round N commit failed: <error>` on stderr from the run error; the executor logs it at ERROR | 1 |
 | Ctrl-C mid-round | Inherited: `KeyboardInterrupt` propagates, and that round is not committed. `slice` and `tasks` commits stage only the artifact and review paths, so on a rerun a leftover artifact edit is reviewed and committed with round 1. | Python's interrupt | non-zero |
+| Final review not saved (PASS or CONCERNS) | The run finishes, but the review file the run ends on was never written. A FAIL keeps exit 2. | `the final review was not saved` on stderr | 1 |
+| A review fails (leading or in a round) | The printer shows `review failed: <error>` in place of the verdict; the run maps to exit 1 | The action error | 1 |
 | `code` with a dirty working tree | Refused before any model call. `code` round commits stage everything (`git add -A`), so unrelated changes or a leftover interrupted edit would be swept into a revision commit. | Error listing the dirty paths | 1 |
 
 **Claude Code sessions.** `--max` applies no `CLAUDECODE` guard, unlike `sq run` (`_resolve_execution_mode`). Plain `sq review` already runs on the sdk profile inside Claude Code, and a probe (2026-10-13) ran a one-step haiku dispatch through the pipeline executor inside a session with the `sq run` guard bypassed; it completed with no nesting error. The `sq run` guard is blanket and over-broad (#144), and `/sq:review --max` parity (SC9) depends on `--max` not copying it.
@@ -154,6 +158,8 @@ Exit codes 0, 1 and 2 mean what they mean for `sq review` without `--max` (`_exi
 - The positional argument must be a slice index. Path inputs are refused with `--max requires a slice index`.
 - `--revise-model` without `--max` is an error.
 - With `--max`, the only options allowed are those in one constant, `MAX_SUPPORTED_OPTIONS`: `max`, `model`, `revise_model`, `cwd` and `verbose`. Any other parameter whose Click source is `ParameterSource.COMMANDLINE` is refused, and the error names it. The loop's review steps cannot honor other options, and silently ignoring them would be a fallback. Options added to `sq review` later are refused by default.
+- For `slice` and `tasks`, the current branch must be the integration target (`cf config get git.integration_branch`, else `main`): their round commits are planning commits, which the commit action refuses anywhere else. Found in the walkthrough, where a run on the slice branch revised the design and then failed its first commit.
+- `--max` below 1 is rejected by Typer (`min=1`) before the first review.
 - For `code`, the current branch must be the slice branch, because revisions are committed to the checked-out branch. P6 enters the branch itself; this command does not switch branches. When the branch is wrong, the error names the expected branch.
 
 ### D7 — Per-round progress through `RunObserver`
@@ -235,25 +241,29 @@ None.
 
 ### Verification Walkthrough
 
-1. Reviewer only, no revision, to see the baseline:
-   `sq review slice 941 --model sol -v` → a single review, exactly as today.
-2. Revise loop on a design:
-   `sq review slice 941 --model sol --max 2 -v`
-   - Expect: the review line plus up to 2 round lines, then `final: …`.
-   - `git log --oneline -3` shows one commit per round.
-   - `ls project-documents/user/reviews/archive/ | grep 941-review.slice` shows the archived earlier reviews.
-   - The design file was edited in place, and no new design file exists.
-3. Reviser override:
-   `sq review tasks 941 --model sol --max 1 --revise-model sonnet -v` → the header shows `reviser=sonnet`.
-4. Code loop:
-   - On the slice branch: `sq review code 941 --model sol --max 1 -v` → revisions are committed on that branch.
-   - On `main`, the same command exits 1 with an error naming the expected branch.
-5. Refusals, each exiting non-zero with no model call:
-   - `sq review arch 941 --max 1` → Typer reports an unknown option.
-   - `sq review slice 941 --max 1 --json` → `--json is not supported with --max`.
-   - `sq review slice path/to/file.md --against x --max 1` → `--max requires a slice index`.
-   - `sq review slice 941 --revise-model opus` → `--revise-model requires --max`.
-6. Parity: `/sq:review slice 941 --max 1 --model sol` in Claude Code produces the same output and commits as step 2.
+Run 2026-10-13 with the branch build (`.venv/bin/sq`, 0.21.6 + this branch), from inside Claude Code (`CLAUDECODE` set), so every step below also exercises D5's "no guard" decision; step 2's reviser `opus` resolves to the sdk profile.
+
+Steps 2–4 revise and commit real artifacts, so they ran in a throwaway clone, never in the working repo: `git clone --branch main <repo> <scratch>/wt`, then `cf init --lite --name sq-walkthrough-941` and `cf set arch 900-arch.maintenance-and-refactoring` and `cf set slice 941-slice.review-and-revise-loop-from-sq-review-max` inside the clone. Afterwards: `cf project rm sq-walkthrough-941 --yes` and delete the clone.
+
+1. Baseline, in the repo: `sq review slice 941 --model sol -v` → one review, exit 0, the prior review archived. Unchanged behavior.
+2. Design loop, clone on `main`: `sq review slice 941 --model sol --max 2`
+   ```
+   review-revise slice 941  reviewer=sol  reviser=opus  max=2
+     review    FAIL (4)      project-documents/user/reviews/941-review.slice.….md
+     round 1   CONCERNS (3)  committed 5264c3e
+     round 2   FAIL (3)      committed 94dfc55
+   final: FAIL after 2 rounds
+   ```
+   Exit 2 (exhausted, not accepted). `git log` shows two commits per round: the reviser's own edit commit, then the round commit. Three archived reviews; the design was edited in place, no new design file. Each review also prints a `review: overwriting …` line from the review action itself.
+3. Reviser override, clone on `main`: `sq review tasks 941 --model sol --max 1 --revise-model sonnet` → header `reviser=sonnet`; `review FAIL (4)`, `round 1 CONCERNS (2) committed 317489d`, final CONCERNS, exit 0 (exhausted, accepted).
+4. Code loop, clone on the slice branch: `sq review code 941 --model sol --max 1` → `review FAIL (4)`, `round 1 FAIL (5) committed 33f9b25`, exit 2; revisions committed on the slice branch. On `main` the same command exits 1 before any model call: `Error: --max for code must run on branch 941-slice.review-and-revise-loop-from-sq-review-max, but main is checked out`.
+5. Refusals (exit 1, no model call; covered by `tests/cli/test_review_max_cli.py`): path input → `--max requires a slice index`; `--json` → `--json is not supported with --max`; `--revise-model` without `--max` → `--revise-model requires --max`; `slice`/`tasks` off the target branch → `must run on branch main`; `--max 0` → Typer range error (exit 2); `arch 941 --max 1` → Typer `No such option` (exit 2).
+6. Parity: `/sq:review slice 941 --max 1 --model sol` passes the arguments to `sq review` unchanged, the same invocation as steps 2–4, which already ran inside Claude Code. It needs an installed `sq` that has `--max`; the PATH `sq` (released 0.21.6) does not until this ships.
+
+Caveats found:
+- **Run slice/tasks on the target.** The first attempt at step 2 ran on the slice branch: round 1 revised the design, then its planning commit was refused and a traceback escaped. Fixed: the target-branch check in D6, and a git fault during the run now prints an error line and exits 1.
+- **Step 4's own code review** (sol, FAIL) found that a failed review crashed `RoundPrinter`, that an unsaved final review could exit 0, and that the builder accepted a loop without `commit_each_iteration`. All three fixed. Its fourth finding, that `--cwd` does not anchor cf and pipeline lookup, applies equally to plain `sq review` and is left alone.
+- **P6 round commits read `feat: implement slice N (review: …)`** for a revision round. That is P6's existing commit plan, unchanged here.
 
 ## Implementation Notes
 

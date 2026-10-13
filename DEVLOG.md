@@ -2,12 +2,23 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261012'
+dateUpdated: '20261013'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261013
+
+### Slice 941: implementation complete (Phase 6)
+
+- Branch `941-slice.review-and-revise-loop-from-sq-review-max` (from `main`), not merged; code review comes before Phase 7. Full suite 6599 passed, 4 skipped before the walkthrough fixes; pyright 0 errors.
+- New: `pipeline/review_revise.py` (builder), `pipeline/run_session.py` (`classify_for_run` + `pipeline_session`, extracted from `sq run` per PM, so the loop's revise dispatch gets its SDK session), `cli/commands/review_revise.py` (`RoundPrinter`, runner, D6 validation); `RunObserver.round_completed`; one helper plus option declarations in `review.py`.
+- Walkthrough fixes: `slice`/`tasks --max` must run on the integration target (planning commits); git faults exit 1 without a traceback; `--max` min 1; a failed review prints instead of crashing the printer; an unsaved final review exits 1; the builder requires `commit_each_iteration`.
+- Walkthrough ran inside Claude Code in a scratch clone registered with `cf init --lite` (removed after): design loop FAIL→CONCERNS→FAIL exit 2; tasks loop with `--revise-model sonnet` accepted at CONCERNS exit 0; code loop on the slice branch exit 2, refused on `main`. The sdk reviser (opus) ran in-session, so `--max` needs no `CLAUDECODE` guard.
+- Not done: `/sq:review --max` (step 6) needs an installed `sq` with `--max`. Declined from the walkthrough's reviews: design edits that grew scope (failed round review ends the loop, more builder checks), and `--cwd` anchoring cf/pipeline lookup, which plain `sq review` shares.
+- Next: code review, then Phase 7; then #144.
 
 ## 20261012
 
