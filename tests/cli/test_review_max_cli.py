@@ -22,7 +22,12 @@ _REVISE = "squadron.cli.commands.review_revise"
 
 def _passing_result() -> PipelineResult:
     review = MagicMock(
-        action_type="review", verdict="PASS", findings=[], outputs={}, success=True, error=None
+        action_type="review",
+        verdict="PASS",
+        findings=[],
+        outputs={"review_file": "r.md"},
+        success=True,
+        error=None,
     )
     steps = [
         StepResult("review", "review", ExecutionStatus.COMPLETED, [review]),

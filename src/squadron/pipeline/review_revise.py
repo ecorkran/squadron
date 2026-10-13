@@ -91,6 +91,11 @@ def _body_review_config(loop_step: StepConfig, pipeline_name: str) -> dict[str, 
         )
     if loop_step.config.get("until") is None:
         raise ValueError(f"Pipeline '{pipeline_name}': the loop must set 'until'")
+    if loop_step.config.get("commit_each_iteration") is not True:
+        raise ValueError(
+            f"Pipeline '{pipeline_name}': the loop must set 'commit_each_iteration: true' "
+            "so every round's revision is committed"
+        )
     if loop_step.config.get("skip_if_met") is not True:
         raise ValueError(
             f"Pipeline '{pipeline_name}': the loop must set 'skip_if_met: true' "

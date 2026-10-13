@@ -154,3 +154,12 @@ def test_loop_without_skip_if_met_raises(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(ValueError, match=r"'P4'.*skip_if_met"):
         build_review_revise_definition(BuiltinReviewTemplate.SLICE)
+
+
+def test_loop_without_commit_each_iteration_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    definition = _p4()
+    del _loop(definition).config["commit_each_iteration"]
+    _serve(monkeypatch, definition)
+
+    with pytest.raises(ValueError, match=r"'P4'.*commit_each_iteration"):
+        build_review_revise_definition(BuiltinReviewTemplate.SLICE)

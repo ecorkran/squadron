@@ -99,6 +99,9 @@ class RoundPrinter:
 
     @staticmethod
     def _verdict_cell(review: ActionResult) -> str:
+        if not review.success:
+            # A failed review is a run failure, reported here and mapped to exit 1 later.
+            return f"review failed: {review.error}  "
         if review.verdict is None:
             raise ValueError("review-revise: a review result carries no verdict")
         text = f"{review.verdict} ({len(review.findings)})" if review.findings else review.verdict
@@ -136,14 +139,23 @@ def outcome_of(result: PipelineResult) -> ReviseOutcome:
     rounds = loop.iteration
     final = last_with_verdict(loop.action_results if rounds > 0 else review.action_results)
     verdict = final.verdict if final is not None else None
-    if loop.accepted:
-        return ReviseOutcome(EXIT_OK, verdict, rounds)
-    if loop.exhausted:
+    if loop.exhausted and not loop.accepted:
         return ReviseOutcome(EXIT_REVIEW_FAILED, verdict, rounds)
     if loop.status != ExecutionStatus.COMPLETED:
         return ReviseOutcome(EXIT_RUN_FAILED, verdict, rounds, _failure_text(result))
-    code = EXIT_REVIEW_FAILED if verdict == Verdict.FAIL else EXIT_OK
-    return ReviseOutcome(code, verdict, rounds)
+    if verdict == Verdict.FAIL and not loop.accepted:
+        return ReviseOutcome(EXIT_REVIEW_FAILED, verdict, rounds)
+    # A FAIL keeps precedence (as `_exit_on`), but a passing run must not exit 0 when
+    # the review it ends on was never written: reruns and gates read the file.
+    if final is None or not _saved(final):
+        return ReviseOutcome(EXIT_RUN_FAILED, verdict, rounds, "the final review was not saved")
+    return ReviseOutcome(EXIT_OK, verdict, rounds)
+
+
+def _saved(review: ActionResult) -> bool:
+    return (
+        ReviewOutputKey.REVIEW_FILE in review.outputs or ReviewOutputKey.REVIEW_FILES in review.outputs
+    )
 
 
 def _failure_text(result: PipelineResult) -> str:

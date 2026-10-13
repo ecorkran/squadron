@@ -13,7 +13,9 @@ from squadron.pipeline.models import ActionResult
 from squadron.review.templates import BuiltinReviewTemplate
 
 
-def _review(verdict: str | None, findings: int = 0, file_name: str | None = None) -> ActionResult:
+def _review(
+    verdict: str | None, findings: int = 0, file_name: str | None = "review.md"
+) -> ActionResult:
     outputs: dict[str, object] = {}
     if file_name is not None:
         outputs[ReviewOutputKey.REVIEW_FILE] = file_name
@@ -329,3 +331,38 @@ def test_one_round_is_singular(capsys: pytest.CaptureFixture[str]) -> None:
     _run_with(_result(_leading("CONCERNS"), loop))
 
     assert "final: PASS after 1 round\n" in capsys.readouterr().out
+
+
+def test_a_failed_leading_review_prints_its_error_instead_of_raising() -> None:
+    printer, lines = _printer()
+    failed = ActionResult(success=False, action_type="review", outputs={}, error="provider timeout")
+
+    printer.step_completed(_step("review", "review", [failed], status=ExecutionStatus.FAILED))
+
+    assert lines == ["  review    review failed: provider timeout"]
+
+
+def test_a_failed_round_review_prints_its_error_and_the_commit() -> None:
+    printer, lines = _printer()
+    failed = ActionResult(success=False, action_type="review", outputs={}, error="disconnected")
+
+    printer.round_completed("loop-1", 1, [failed, _commit({"committed": False})])
+
+    assert lines == ["  round 1   review failed: disconnected  no changes"]
+
+
+@pytest.mark.parametrize("verdict", ["PASS", "CONCERNS"])
+def test_an_unsaved_final_review_exits_one(verdict: str) -> None:
+    unsaved = _step("review", "review", [_review(verdict, file_name=None)])
+
+    outcome = outcome_of(_result(unsaved, _step("loop-1", "loop", [], iteration=0)))
+
+    assert (outcome.exit_code, outcome.error) == (1, "the final review was not saved")
+
+
+def test_an_unsaved_fail_still_exits_two() -> None:
+    unsaved = _step("review", "review", [_review("FAIL", file_name=None)])
+
+    outcome = outcome_of(_result(unsaved, _step("loop-1", "loop", [], iteration=0)))
+
+    assert outcome.exit_code == 2
