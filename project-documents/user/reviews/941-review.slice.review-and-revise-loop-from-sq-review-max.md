@@ -14,44 +14,39 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261012
 dateUpdated: 20261012
-reviewedSha: ede19d6a753c23a7c63f442b7763b2ba08ff1424
-revision_number: 1
+reviewedSha: a93703d3c099b7a377a0ce01a69dfe344fed7688
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
-durationSeconds: 33.3
+toolCallsMade: 6
+durationSeconds: 29.3
 runId: run-20261013-p4-55015267
 squadronVersion: 0.21.6
 findings:
   - id: F001
     severity: concern
-    category: under-specification
-    summary: "Review-step extraction from the loop body is under-specified"
-    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#D2 — The loop and review config come from the loaded pipeline"
+    category: scope-creep
+    summary: "Shared loop executor change is scope beyond the plan entry"
+    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#Technical Scope (item 6) and D5"
   - id: F002
     severity: concern
-    category: hidden-dependency
-    summary: "Zero-round behavior depends on an unverified `skip_if_met` in the shipped loops"
-    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md:79-81"
+    category: proportionality
+    summary: "Validation and guard mechanisms are heavier than the requirement needs"
+    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#D6 and D2"
   - id: F003
     severity: concern
-    category: error-handling
-    summary: "A failed round commit lets the loop keep revising"
-    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md:132"
+    category: under-specification
+    summary: "Per-round progress output is not tied to a pipeline hook"
+    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#Data Flow, API Contracts"
   - id: F004
     severity: note
-    category: proportionality
-    summary: "The option-allowlist mechanism is heavier than the plan requires"
-    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#D6 — Option validation"
+    category: error-handling
+    summary: "Failure modes are enumerated with observable signals"
+    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#D5"
   - id: F005
     severity: note
-    category: integration
-    summary: "Exit code 2 and line-number references need confirming"
-    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md:125-134"
-  - id: F006
-    severity: pass
-    category: alignment
-    summary: "Scope and boundaries match the plan entry"
-    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#Technical Scope"
+    category: architecture
+    summary: "Composition over extraction is well justified"
+    location: "project-documents/user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md#D1, D4"
 ---
 
 # Review: slice — slice 941
@@ -61,35 +56,39 @@ findings:
 
 ## Findings
 
-### [CONCERN] Review-step extraction from the loop body is under-specified
+### [CONCERN] Shared loop executor change is scope beyond the plan entry
 
-D2 defines errors only for zero or multiple loop steps. The builder also copies "the loop body's review action config" into the leading review step, and that is a second hidden dependency on the shape of P4/P5/P6. The doc doesn't say what happens if the loop body has no review action, has more than one, or if the review has a different shape in one pipeline. Integration Points covers only the loss of the loop itself. Add an explicit error for 0 or more than 1 review actions in the loop body, and a unit test for it. Without that, a pipeline edit could silently produce a wrong review step.
+Item 6 and the D5 table change `_execute_loop_body`, so a failed round commit ends the loop. This changes behavior for every P4, P5 and P6 pipeline run, not just `sq review --max`. The 941 plan entry says nothing about modifying shared executor semantics. The motivation is sound: a failed commit would otherwise let the next round sweep an uncommitted revision into a later commit. But it is a standalone bug fix that carries cross-pipeline blast radius.
+- Either move it to the standing fixes slice 944 (the repo's bug-fix rule says fixes don't get their own slice) and make 941 depend on it.
+- Or keep it here and amend the plan entry to name it, with a regression test showing the existing pipelines' behavior on commit failure.
 
-### [CONCERN] Zero-round behavior depends on an unverified `skip_if_met` in the shipped loops
+### [CONCERN] Validation and guard mechanisms are heavier than the requirement needs
 
-Success Criterion 2 (a PASS on the first review runs zero rounds) relies on the mapped pipeline's loop having `skip_if_met` and an `until` condition. The data flow presents this as inherited behavior. But D1 and D2 take the loop from whatever `load_pipeline` returns, including project and user overrides. If an override drops `skip_if_met`, a PASS design still gets a revise round. State the assumption and add a check or test that fails clearly when the loop lacks it. Alternatively, have the runner skip the loop itself when the first review already passes.
+The slice adds several guard layers beyond the plan entry's `--max` and `--revise-model`, which makes it heavy for an effort of 3/5.
+- **`MAX_SUPPORTED_OPTIONS` allowlist.** It uses Click `ParameterSource` inspection to reject every other option. A short explicit list of the options that conflict with the loop would meet the requirement without a generic refuse-by-default mechanism.
+- **Dirty-tree refusal for `code`.** This adds a check, an error format and a test.
+- **Slice-branch check for `code`.** This duplicates branch logic that P6 already owns.
+- **Shape checks in D2.** Three separate override-shape checks cover hypothetical user overrides of P4/P5/P6. Keep the zero-or-multiple-loop check. The `until` and `skip_if_met` checks could collapse into one "loop shape unsupported" error.
 
-### [CONCERN] A failed round commit lets the loop keep revising
+Cut or defer the dirty-tree and branch guards if the PM accepts the sweep-in risk, and simplify the option allowlist. If any are kept, say which plan requirement each one protects.
 
-D5 accepts that the loop "records the failed commit result and continues". The runner only reports exit 1 after the loop finishes. For `code`, round commits use `git add -A`, so uncommitted edits from the failed round get swept into the next round's commit. The slice and tasks commits stage only the artifact and review paths, so they leave an unreviewed gap. The slice itself worries about this kind of contamination in the dirty-tree rule. Either stop the loop on the first failed commit, or explain why continuing is safe. The failure is observable (stderr plus a WARNING log), but its consequences aren't handled.
+### [CONCERN] Per-round progress output is not tied to a pipeline hook
 
-### [NOTE] The option-allowlist mechanism is heavier than the plan requires
+The example stdout shows per-round verdicts, finding counts, short commit SHAs and the filename. The final step in the Data Flow diagram says it prints these from `execute_pipeline`'s result. The design never says what `execute_pipeline` returns or exposes for per-round data, and the Interfaces Required table lists no result or progress type. This is a hidden dependency. It is not yet clear that the information exists without either changing the executor or parsing logs. State the source (result type or callback) and what happens when a field is unavailable. Otherwise the output contract is a promise the implementation may not be able to keep.
 
-The plan asks only that `--max` and `--revise-model` be declared options. The `MAX_SUPPORTED_OPTIONS` allowlist, which uses Click `ParameterSource`, is extra, and so are the dirty-tree and branch checks for `code`. These are defensible under the "no silent fallback" rule and are small. If effort runs over 3/5, the cheaper cut is to refuse a short explicit list of known-incompatible options and defer the default-deny allowlist.
+### [NOTE] Failure modes are enumerated with observable signals
 
-### [NOTE] Exit code 2 and line-number references need confirming
+D5 covers the review or revise hang and timeout (inherited), the commit failure (WARNING log plus stderr), Ctrl-C, and the dirty tree. It also maps each to an exit code, with tests for the commit-failure and dirty-tree rows. The 900 architecture states no NFRs for this path, so nothing needs restating.
 
-Exit code 2 for FAIL or an unaccepted exhausted loop should match what the existing `sq review` verdict exit codes mean, so scripts see the same codes. The doc doesn't say whether it does. The interface table also cites line numbers such as `loader.py:148`, which will drift. Cite the symbol names only.
+### [NOTE] Composition over extraction is well justified
 
-### [PASS] Scope and boundaries match the plan entry
-
-The scope matches plan entry 35, including the explicit exclusions: MCP, resume, and `sq run --from`. Rejecting `sq run P4 --from loop-1` and the choice to compose `[review, loop]` rather than extract the loop respect DRY and leave the pipelines unchanged. The failure modes for hangs, timeouts, interrupts and commit failures are enumerated in D5 with exit codes. The doc names no NFR targets, and none appear to apply.
+D1 resolves the "run the loop only" versus "extract the loop" question the plan entry left open. It does this without duplicating loop YAML or restructuring shipped pipelines. D4 explains why run state is omitted and why `on_exhaust` becomes `fail`. Both decisions stay inside the pipeline package boundary and match the plan's requirement that loop changes propagate automatically.
 
 ### Run Digest
 
-- Response length: 4872 chars
+- Response length: 4585 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -99,10 +98,10 @@ The scope matches plan entry 35, including the explicit exclusions: MCP, resume,
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 33.3 s
+- Duration: 29.3 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 5
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 5
+- Finding-shaped matches — surviving validation: 5
