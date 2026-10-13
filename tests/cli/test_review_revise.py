@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
+from functools import partial
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import squadron.pipeline.review_revise as review_revise_pipeline
 from squadron.cli.commands.review_revise import RoundPrinter, outcome_of, run_review_revise
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
-from squadron.pipeline.models import ActionResult
+from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.loader import load_pipeline
+from squadron.pipeline.models import ActionResult, PipelineDefinition
 from squadron.review.templates import BuiltinReviewTemplate
 
 
@@ -31,6 +37,19 @@ def _review(
 def _commit(outputs: dict[str, object], *, success: bool = True) -> ActionResult:
     return ActionResult(
         success=success, action_type="commit", outputs=outputs, error=None if success else "boom"
+    )
+
+
+_NONEXISTENT = Path("/nonexistent-941")
+
+
+@pytest.fixture(autouse=True)
+def shipped_pipelines(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The shipped P4/P5/P6, not any project or user override on this machine."""
+    monkeypatch.setattr(
+        review_revise_pipeline,
+        "load_pipeline",
+        partial(load_pipeline, project_dir=_NONEXISTENT, user_dir=_NONEXISTENT),
     )
 
 
@@ -101,25 +120,23 @@ def test_round_with_nothing_to_commit_says_no_changes() -> None:
     assert lines == ["  round 1   " + "FAIL (1)".ljust(14) + "no changes"]
 
 
-def test_round_without_a_review_raises() -> None:
-    printer, _ = _printer()
+@pytest.mark.parametrize(
+    ("results", "expected"),
+    [
+        ([_commit({"committed": False})], "<no review result>"),
+        ([_review("PASS")], "<no commit result>"),
+        ([_review(None), _commit({"committed": False})], "<no verdict>"),
+    ],
+)
+def test_an_impossible_round_prints_a_placeholder_instead_of_raising(
+    results: list[ActionResult], expected: str
+) -> None:
+    """A RunObserver must never fail the run through a progress write."""
+    printer, lines = _printer()
 
-    with pytest.raises(ValueError, match="no review result"):
-        printer.round_completed("loop-1", 1, [_commit({"committed": False})])
+    printer.round_completed("loop-1", 1, results)
 
-
-def test_round_without_a_commit_raises() -> None:
-    printer, _ = _printer()
-
-    with pytest.raises(ValueError, match="no commit result"):
-        printer.round_completed("loop-1", 1, [_review("PASS")])
-
-
-def test_review_without_a_verdict_raises() -> None:
-    printer, _ = _printer()
-
-    with pytest.raises(ValueError, match="no verdict"):
-        printer.round_completed("loop-1", 1, [_review(None), _commit({"committed": False})])
+    assert expected in lines[0]
 
 
 # ---------------------------------------------------------------------------
@@ -267,6 +284,7 @@ def _run_with(result: PipelineResult, **kwargs: object) -> tuple[int, AsyncMock,
         patch(f"{_MODULE}.execute_pipeline", execute),
         patch(f"{_MODULE}.classify_for_run", return_value=classification) as classify,
         patch(f"{_MODULE}.ContextForgeClient"),
+        patch(f"{_MODULE}.project_run_lock", return_value=nullcontext()),
     ):
         code = run_review_revise(**arguments)  # type: ignore[arg-type]
     return code, execute, classify
@@ -366,3 +384,44 @@ def test_an_unsaved_fail_still_exits_two() -> None:
     outcome = outcome_of(_result(unsaved, _step("loop-1", "loop", [], iteration=0)))
 
     assert outcome.exit_code == 2
+
+
+def test_a_held_run_lock_exits_one_before_anything_runs(capsys: pytest.CaptureFixture[str]) -> None:
+    execute = AsyncMock()
+    with (
+        patch(f"{_MODULE}.execute_pipeline", execute),
+        patch(f"{_MODULE}.project_run_lock", side_effect=GitEnvironmentError("run lock held")),
+    ):
+        code = run_review_revise(BuiltinReviewTemplate.SLICE, "941", "sol", None, 1, "/repo")
+
+    assert code == 1
+    assert "run lock held" in capsys.readouterr().err
+    execute.assert_not_awaited()
+
+
+def test_a_bad_pipeline_shape_exits_one_without_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def no_loop(name: str) -> PipelineDefinition:
+        return PipelineDefinition(name=name, description="", params={}, steps=[])
+
+    monkeypatch.setattr(review_revise_pipeline, "load_pipeline", no_loop)
+
+    code = run_review_revise(BuiltinReviewTemplate.SLICE, "941", "sol", None, 1, "/repo")
+
+    assert code == 1
+    assert "exactly one loop" in capsys.readouterr().err
+
+
+def test_a_pipeline_without_a_model_param_needs_revise_model(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shipped = load_pipeline("P4", project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
+    del shipped.params["model"]
+    monkeypatch.setattr(review_revise_pipeline, "load_pipeline", lambda name: shipped)
+
+    code, execute, _ = _run_with(_result(_leading("PASS"), _step("loop-1", "loop", [])))
+
+    assert code == 1
+    assert "has no 'model' param" in capsys.readouterr().err
+    execute.assert_not_awaited()

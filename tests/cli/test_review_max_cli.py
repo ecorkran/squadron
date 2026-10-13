@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import nullcontext
+from functools import partial
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,12 +14,14 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
-from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.git_ops import GitEnvironmentError, SliceNotInPlanError
+from squadron.pipeline.loader import load_pipeline
 from squadron.review.templates import BuiltinReviewTemplate
 
 runner = CliRunner()
 
 _RUNNER = "squadron.cli.commands.review.run_review_revise"
+_NONEXISTENT = Path("/nonexistent-941")
 _REVISE = "squadron.cli.commands.review_revise"
 
 
@@ -45,10 +50,13 @@ def execute() -> Iterator[AsyncMock]:
     """
     stub = AsyncMock(return_value=_passing_result())
     classification = MagicMock(needs_persistent_session=False)
+    shipped = partial(load_pipeline, project_dir=_NONEXISTENT, user_dir=_NONEXISTENT)
     with (
         patch(f"{_REVISE}.execute_pipeline", stub),
         patch(f"{_REVISE}.classify_for_run", return_value=classification),
         patch(f"{_REVISE}.ContextForgeClient"),
+        patch(f"{_REVISE}.project_run_lock", return_value=nullcontext()),
+        patch("squadron.pipeline.review_revise.load_pipeline", shipped),
     ):
         yield stub
 
@@ -194,4 +202,15 @@ def test_max_below_one_is_rejected_before_any_review(command: str, execute: Asyn
 
     assert result.exit_code == 2
     assert "--max" in result.output
+    execute.assert_not_awaited()
+
+
+def test_code_for_a_slice_outside_the_plan_is_refused_cleanly(execute: AsyncMock) -> None:
+    with patch(
+        f"{_REVISE}.slice_facts", side_effect=SliceNotInPlanError("slice 999 is not in the plan")
+    ):
+        result = _invoke("code", "999", "--max", "1", "--model", "sol")
+
+    assert result.exit_code == 1
+    assert "slice 999 is not in the plan" in result.output
     execute.assert_not_awaited()

@@ -664,7 +664,7 @@ def _run_revise_loop_if_requested(
     if reviewer is None:
         rprint("[red]Error: --max needs a reviewer model: pass --model or set default_model.[/red]")
         raise typer.Exit(code=1)
-    _configure_agent_logging(_resolve_verbosity(verbose))
+    _resolve_verbosity(verbose)  # also attaches the agent log handlers
     raise typer.Exit(
         run_review_revise(kind, str(slice_input), reviewer, revise_model, max_rounds, review_cwd)
     )

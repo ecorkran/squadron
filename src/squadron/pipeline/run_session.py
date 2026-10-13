@@ -6,7 +6,7 @@ the persistent Claude session the same way (slice 941).
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 
 from squadron.pipeline.classification import (
@@ -15,7 +15,7 @@ from squadron.pipeline.classification import (
     classify_pipeline,
     has_profile_param,
 )
-from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
+from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend, PoolBackend
 from squadron.pipeline.models import PipelineDefinition
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.sdk_session import SDKExecutionSession, open_pipeline_session
@@ -40,13 +40,26 @@ def classify_for_run(
         policy = PoolClassificationPolicy.STRICT
 
     pool_backend = DefaultPoolBackend()
-    resolver = ModelResolver(
+    resolver = run_resolver(
+        definition, model_override=model_override, params=params, pool_backend=pool_backend
+    )
+    return classify_pipeline(definition, resolver, pool_backend, policy=policy, params=params)
+
+
+def run_resolver(
+    definition: PipelineDefinition,
+    *,
+    model_override: str | None,
+    params: Mapping[str, object],
+    pool_backend: PoolBackend,
+) -> ModelResolver:
+    """The model resolver a run of *definition* with *params* uses."""
+    return ModelResolver(
         cli_override=model_override,
         pipeline_model=definition.model,
         pool_backend=pool_backend,
         profile_source=has_profile_param(params),
     )
-    return classify_pipeline(definition, resolver, pool_backend, policy=policy, params=params)
 
 
 @asynccontextmanager

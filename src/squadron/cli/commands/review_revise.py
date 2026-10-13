@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
+from contextlib import ExitStack
 from dataclasses import dataclass
 
 import click
@@ -18,15 +19,21 @@ from click.core import ParameterSource
 from squadron.integrations.context_forge import ContextForgeClient
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.branch_ops import dirty_paths, slice_facts
-from squadron.pipeline.classification import ClassificationError, has_profile_param
+from squadron.pipeline.classification import ClassificationError
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult, execute_pipeline
-from squadron.pipeline.git_ops import GitEnvironmentError, current_branch, read_integration_target
+from squadron.pipeline.git_ops import (
+    GitEnvironmentError,
+    NoDesignFileError,
+    SliceNotInPlanError,
+    current_branch,
+    read_integration_target,
+)
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.loop_config import last_with_verdict
-from squadron.pipeline.models import ActionResult
-from squadron.pipeline.resolver import ModelResolver
+from squadron.pipeline.models import ActionResult, PipelineDefinition
 from squadron.pipeline.review_revise import REVIEW_STEP_NAME, build_review_revise_definition
-from squadron.pipeline.run_session import classify_for_run, pipeline_session
+from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
+from squadron.pipeline.run_session import classify_for_run, pipeline_session, run_resolver
 from squadron.pipeline.state import ActiveItem
 from squadron.pipeline.steps import StepTypeName
 from squadron.review.models import Verdict
@@ -38,6 +45,9 @@ from squadron.review.templates import BuiltinReviewTemplate
 MAX_SUPPORTED_OPTIONS = frozenset({"max_rounds", "model", "revise_model", "cwd", "verbose"})
 
 _logger = logging.getLogger(__name__)
+
+# The pipeline param the loop's revise dispatch reads its model from (D3).
+REVISER_PARAM = "model"
 
 EXIT_OK = 0
 EXIT_RUN_FAILED = 1
@@ -55,9 +65,9 @@ def _single(results: list[ActionResult], action_type: str) -> ActionResult | Non
 class RoundPrinter:
     """Prints the review line, one line per round, and nothing else (D7).
 
-    Raises ``ValueError`` when a round has no review result or no commit result:
-    both are guaranteed by the loop shape the builder checks, so their absence is
-    a bug to surface, not a line to print around.
+    Never raises: a ``RunObserver`` must not fail a run through a progress write. The
+    builder already guarantees each round has a review and a commit result, so a missing
+    one prints a visible placeholder, never a guess.
     """
 
     def __init__(self, write: Callable[[str], None] = typer.echo) -> None:
@@ -80,40 +90,37 @@ class RoundPrinter:
         if result.step_name != REVIEW_STEP_NAME:
             return
         review = _single(result.action_results, "review")
-        if review is None:
-            raise ValueError("review-revise: the leading review step produced no review result")
-        file_name = review.outputs.get(ReviewOutputKey.REVIEW_FILE, "")
-        self._write(f"  {'review':<{_LABEL_WIDTH}}{self._verdict_cell(review)}{file_name}".rstrip())
+        file_name = review.outputs.get(ReviewOutputKey.REVIEW_FILE, "") if review else ""
+        self._write(f"  {'review':<{_LABEL_WIDTH}}{_verdict_cell(review)}{file_name}".rstrip())
 
     def round_completed(self, step_name: str, iteration: int, results: list[ActionResult]) -> None:
-        review = _single(results, "review")
-        if review is None:
-            raise ValueError(f"review-revise: round {iteration} of '{step_name}' has no review result")
-        commit = _single(results, "commit")
-        if commit is None:
-            raise ValueError(f"review-revise: round {iteration} of '{step_name}' has no commit result")
         label = f"round {iteration}"
-        self._write(
-            f"  {label:<{_LABEL_WIDTH}}{self._verdict_cell(review)}{self._commit_text(commit)}".rstrip()
-        )
+        review = _single(results, "review")
+        commit = _single(results, "commit")
+        self._write(f"  {label:<{_LABEL_WIDTH}}{_verdict_cell(review)}{_commit_text(commit)}".rstrip())
 
-    @staticmethod
-    def _verdict_cell(review: ActionResult) -> str:
-        if not review.success:
-            # A failed review is a run failure, reported here and mapped to exit 1 later.
-            return f"review failed: {review.error}  "
-        if review.verdict is None:
-            raise ValueError("review-revise: a review result carries no verdict")
+
+def _verdict_cell(review: ActionResult | None) -> str:
+    if review is None:
+        text = "<no review result>"
+    elif not review.success:
+        # A failed review is a run failure, reported here and mapped to exit 1 later.
+        return f"review failed: {review.error}  "
+    elif review.verdict is None:
+        text = "<no verdict>"
+    else:
         text = f"{review.verdict} ({len(review.findings)})" if review.findings else review.verdict
-        return f"{text:<{_VERDICT_WIDTH}}"
+    return f"{text:<{_VERDICT_WIDTH}}"
 
-    @staticmethod
-    def _commit_text(commit: ActionResult) -> str:
-        if not commit.success:
-            return "commit failed"
-        if commit.outputs.get("committed") is False:
-            return "no changes"
-        return f"committed {str(commit.outputs['sha'])[:_SHORT_SHA_LENGTH]}"
+
+def _commit_text(commit: ActionResult | None) -> str:
+    if commit is None:
+        return "<no commit result>"
+    if not commit.success:
+        return "commit failed"
+    if commit.outputs.get("committed") is False:
+        return "no changes"
+    return f"committed {str(commit.outputs.get('sha', '<no sha>'))[:_SHORT_SHA_LENGTH]}"
 
 
 @dataclass(frozen=True)
@@ -178,11 +185,28 @@ def run_review_revise(
     max_rounds: int,
     cwd: str,
 ) -> int:
-    """Run one review and up to *max_rounds* revise-and-review rounds; return the exit code."""
-    return asyncio.run(_run(kind, slice_index, reviewer, revise_model, max_rounds, cwd))
+    """Run one review and up to *max_rounds* revise-and-review rounds; return the exit code.
+
+    Holds the project run lock, as ``sq run`` does for a mutating pipeline: every round
+    commits, so two runs in one checkout would interleave their commits.
+    """
+    try:
+        definition = build_review_revise_definition(kind)
+    except ValueError as exc:
+        typer.echo(f"Error: {exc}", err=True)
+        return EXIT_RUN_FAILED
+    with ExitStack() as lock:
+        if pipeline_mutates(definition):
+            try:
+                lock.enter_context(project_run_lock(cwd))
+            except (GitEnvironmentError, RunLockError) as exc:
+                typer.echo(f"Error: {exc}", err=True)
+                return EXIT_RUN_FAILED
+        return asyncio.run(_run(definition, kind, slice_index, reviewer, revise_model, max_rounds, cwd))
 
 
 async def _run(
+    definition: PipelineDefinition,
     kind: BuiltinReviewTemplate,
     slice_index: str,
     reviewer: str,
@@ -190,7 +214,6 @@ async def _run(
     max_rounds: int,
     cwd: str,
 ) -> int:
-    definition = build_review_revise_definition(kind)
     # `model` only when given: otherwise the mapped pipeline's own default applies (D3).
     overrides: dict[str, object] = {
         "slice": slice_index,
@@ -200,6 +223,13 @@ async def _run(
     if revise_model is not None:
         overrides["model"] = revise_model
     params = {k: v for k, v in definition.params.items() if v != "required"} | overrides
+    reviser = params.get(REVISER_PARAM)
+    if reviser is None:
+        typer.echo(
+            f"Error: pipeline {definition.name} has no '{REVISER_PARAM}' param; pass --revise-model",
+            err=True,
+        )
+        return EXIT_RUN_FAILED
     try:
         classification = classify_for_run(definition, model_override=None, params=params, strict=False)
     except ClassificationError as exc:
@@ -207,13 +237,9 @@ async def _run(
         return EXIT_RUN_FAILED
 
     printer = RoundPrinter()
-    printer.header(str(kind), slice_index, reviewer, str(params["model"]), max_rounds)
-    pool_backend = DefaultPoolBackend()
-    resolver = ModelResolver(
-        cli_override=None,
-        pipeline_model=definition.model,
-        pool_backend=pool_backend,
-        profile_source=has_profile_param(params),
+    printer.header(str(kind), slice_index, reviewer, str(reviser), max_rounds)
+    resolver = run_resolver(
+        definition, model_override=None, params=params, pool_backend=DefaultPoolBackend()
     )
     try:
         async with pipeline_session(classification) as session:
@@ -291,5 +317,5 @@ def _require_branch_preconditions(kind: BuiltinReviewTemplate, slice_index: int,
             )
         if kind == BuiltinReviewTemplate.CODE and (paths := dirty_paths(cwd)):
             raise _refuse(f"working tree is not clean: {paths}. Commit or discard these, then rerun.")
-    except GitEnvironmentError as exc:
+    except (GitEnvironmentError, SliceNotInPlanError, NoDesignFileError) as exc:
         raise _refuse(str(exc)) from exc
