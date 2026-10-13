@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
@@ -1897,6 +1898,54 @@ async def test_round_without_a_review_fails_its_commit_and_commits_nothing() -> 
     assert commit_results[0].success is False
     assert commit_results[0].error == "commit scope unknown: no review in round 1"
     commit_action.execute.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("on_exhaust", "expected"),
+    [("fail", ExecutionStatus.FAILED), ("checkpoint", ExecutionStatus.PAUSED)],
+)
+@pytest.mark.asyncio
+async def test_failed_round_commit_ends_the_loop(
+    on_exhaust: str, expected: ExecutionStatus, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A failed round commit runs no later round, so no uncommitted edit is built on."""
+    review_action = _mock_action([_action_result(True, "review", verdict="CONCERNS")] * 3)
+    commit_action = _mock_action(
+        [ActionResult(success=False, action_type="commit", outputs={}, error="hook rejected")]
+    )
+    register_step_type(
+        "_lb_commit_fail", _mock_step_type([("review", {"template": "slice", "slice": "105"})])
+    )
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                "commit-fail-loop",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "on_exhaust": on_exhaust,
+                    "commit_each_iteration": True,
+                    "steps": [{"_lb_commit_fail": {}}],
+                },
+            )
+        ]
+    )
+
+    with caplog.at_level(logging.ERROR, logger="squadron.pipeline.executor"):
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={"review": review_action, "commit": commit_action},
+        )
+
+    step_result = result.step_results[0]
+    assert step_result.status == expected
+    assert step_result.iteration == 1
+    assert step_result.error == "loop commit-fail-loop round 1 commit failed: hook rejected"
+    assert review_action.execute.await_count == 1
+    assert "round 1 commit failed: hook rejected" in caplog.text
 
 
 # ---------------------------------------------------------------------------

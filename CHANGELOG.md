@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A revise loop now stops when a round's commit fails (for example, a rejected pre-commit hook), instead of starting the next round on top of the uncommitted revision.
+
 ## [0.21.6] - 20261012
 
 ### Added

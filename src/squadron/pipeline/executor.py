@@ -1440,8 +1440,7 @@ async def _execute_loop_body(
                 round_commit = round_commit_params(inner_steps, merged_params, iteration)
             except (CommitScopeUnknownError, UnmappedTemplateError) as exc:
                 # A round whose scope is unknown commits nothing: guessing would stage
-                # the wrong files. The failure is visible in the round's results.
-                _logger.warning("loop %s round %d commit failed: %s", step.name, iteration, exc)
+                # the wrong files. The failure ends the loop below.
                 commit_result = ActionResult(
                     success=False, action_type="commit", outputs={}, error=str(exc)
                 )
@@ -1466,6 +1465,23 @@ async def _execute_loop_body(
             # is one past the last real inner_step_index, so it can't collide.
             commit_key = f"{len(inner_steps)}-{commit_result.action_type}-0"
             running_prior[commit_key] = commit_result
+            # A failed round commit ends the loop: continuing would let the next
+            # round revise on top of, and later commit, this round's uncommitted edit.
+            if not commit_result.success:
+                _logger.error(
+                    "loop %s round %d commit failed: %s; ending the loop",
+                    step.name,
+                    iteration,
+                    commit_result.error,
+                )
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=_loop_failure_status(loop_config),
+                    action_results=iteration_action_results,
+                    iteration=iteration,
+                    error=f"loop {step.name} round {iteration} commit failed: {commit_result.error}",
+                )
 
         # Evaluate until condition after all inner steps complete
         if loop_config.until is not None:
