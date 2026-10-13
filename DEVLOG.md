@@ -11,6 +11,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261012
 
+### Slice 941: task breakdown complete (Phase 5)
+
+- Tasks: `user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md`, 21 tasks, effort 3/5. Order: branch, `RunObserver.round_completed` + loop-body call, `pipeline/review_revise.py` builder, CLI runner (validation, `RoundPrinter`, params/exit codes), wiring into `review_slice`/`review_tasks`/`review_code`, integration test, slash doc + CHANGELOG, walkthrough.
+- Next: Phase 6 implementation on `941-slice.review-and-revise-loop-from-sq-review-max`.
+
 ### Slice 941: design complete (Phase 4)
 
 - Design: `user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md`, effort 3/5. `sq review slice|tasks|code <index> --max N [--revise-model M]` composes `[review, <P4/P5/P6 loop>]` from the loaded pipeline (loop found by step type, `on_exhaust` → fail) and runs it with `execute_pipeline`; table `REVISE_PIPELINE_BY_KIND` keyed by `BuiltinReviewTemplate`. No resumable run state (composed definition can't be reloaded by name); rerun is the resume. Incompatible `sq review` options refused with `--max`; `code` requires the slice branch checked out.
