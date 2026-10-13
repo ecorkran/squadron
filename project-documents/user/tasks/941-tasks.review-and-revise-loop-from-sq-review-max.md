@@ -56,6 +56,7 @@ status: not_started
   - [ ] Check `accepted`, then `exhausted`, before run status: an exhausted, unaccepted loop has failed status but exits 2, not 1
   - [ ] Implement the mapping here; do not import or move `_exit_on` (D3, and Task 8's `review.py` diff limit)
   - [ ] On a failed run, print the failing step's `error` to stderr and return 1. For a failed round commit that error is the executor's `loop <name> round N commit failed: <error>` (D5), so the runner prints it as-is and does not build its own text
+  - [ ] Apply no `CLAUDECODE` guard in the runner or the `--max` wiring (D5, "Claude Code sessions"); do not import `_resolve_execution_mode`
   - **Success:** every runner-owned D5 row returns its code
 
 - [ ] **Task 7: Test the runner**

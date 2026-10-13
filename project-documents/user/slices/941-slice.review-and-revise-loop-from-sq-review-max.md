@@ -147,6 +147,8 @@ Exit codes 0, 1 and 2 mean what they mean for `sq review` without `--max` (`_exi
 | Ctrl-C mid-round | Inherited: `KeyboardInterrupt` propagates, and that round is not committed. `slice` and `tasks` commits stage only the artifact and review paths, so on a rerun a leftover artifact edit is reviewed and committed with round 1. | Python's interrupt | non-zero |
 | `code` with a dirty working tree | Refused before any model call. `code` round commits stage everything (`git add -A`), so unrelated changes or a leftover interrupted edit would be swept into a revision commit. | Error listing the dirty paths | 1 |
 
+**Claude Code sessions.** `--max` applies no `CLAUDECODE` guard, unlike `sq run` (`_resolve_execution_mode`). Plain `sq review` already runs on the sdk profile inside Claude Code, and a probe (2026-10-13) ran a one-step haiku dispatch through the pipeline executor inside a session with the `sq run` guard bypassed; it completed with no nesting error. The `sq run` guard is blanket and over-broad (#144), and `/sq:review --max` parity (SC9) depends on `--max` not copying it.
+
 ### D6 — Option validation (fail fast, before any model call)
 
 - The positional argument must be a slice index. Path inputs are refused with `--max requires a slice index`.
