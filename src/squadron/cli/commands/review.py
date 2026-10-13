@@ -20,6 +20,11 @@ from rich.table import Table
 from rich.text import Text
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
+from squadron.cli.commands.review_revise import (
+    refuse_revise_model_without_max,
+    run_review_revise,
+    validate_max_options,
+)
 from squadron.config.manager import get_config
 from squadron.core.models import Effort
 from squadron.integrations.context_forge import (
@@ -74,6 +79,7 @@ from squadron.review.save_target import ArchTarget, SliceTarget
 from squadron.review.task_gate_files import TaskFileReadError, gate_task_files
 from squadron.review.template_inputs import missing_input_files
 from squadron.review.templates import (
+    BuiltinReviewTemplate,
     ReviewTemplate,
     get_template,
     list_templates,
@@ -636,6 +642,34 @@ def _resolve_model(
     return None
 
 
+def _run_revise_loop_if_requested(
+    ctx: typer.Context,
+    kind: BuiltinReviewTemplate,
+    slice_input: str | None,
+    *,
+    model: str | None,
+    revise_model: str | None,
+    max_rounds: int | None,
+    cwd: str | None,
+    verbose: int,
+) -> None:
+    """Without ``--max`` do nothing; with it, run the revise loop and exit (slice 941)."""
+    refuse_revise_model_without_max(max_rounds, revise_model)
+    if max_rounds is None:
+        return
+    review_cwd = resolve_repo_cwd(cwd)
+    validate_max_options(ctx, kind, slice_input, cwd=review_cwd)
+    load_all_templates()
+    reviewer = _resolve_model(model, get_template(kind.value), kind.value)
+    if reviewer is None:
+        rprint("[red]Error: --max needs a reviewer model: pass --model or set default_model.[/red]")
+        raise typer.Exit(code=1)
+    _configure_agent_logging(_resolve_verbosity(verbose))
+    raise typer.Exit(
+        run_review_revise(kind, str(slice_input), reviewer, revise_model, max_rounds, review_cwd)
+    )
+
+
 def _exit_on_missing_inputs(inputs: dict[str, str]) -> None:
     """Exit when input/against name no real file.
 
@@ -830,6 +864,7 @@ async def _execute_review(
 
 @review_app.command("slice")
 def review_slice(
+    ctx: typer.Context,
     input_file: str = typer.Argument(help="Document to review (or slice number)"),
     against: str | None = typer.Option(
         None, "--against", help="Architecture document to review against"
@@ -847,6 +882,12 @@ def review_slice(
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    max_rounds: int | None = typer.Option(
+        None, "--max", help="Revise and re-review up to N rounds (needs a slice index)"
+    ),
+    revise_model: str | None = typer.Option(
+        None, "--revise-model", help="Model that revises between reviews (needs --max)"
+    ),
     output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
     output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
     use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
@@ -854,6 +895,17 @@ def review_slice(
     rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
 ) -> None:
     """Run a slice design review."""
+    _run_revise_loop_if_requested(
+        ctx,
+        BuiltinReviewTemplate.SLICE,
+        input_file,
+        model=model,
+        revise_model=revise_model,
+        max_rounds=max_rounds,
+        cwd=cwd,
+        verbose=verbose,
+    )
+
     slice_info: SliceInfo | None = None
     if input_file.isdigit():
         slice_info = _resolve_slice_number(input_file)
@@ -1023,6 +1075,7 @@ def review_arch(
 
 @review_app.command("tasks")
 def review_tasks(
+    ctx: typer.Context,
     input_file: str = typer.Argument(help="Task breakdown file to review (or slice number)"),
     against: str | None = typer.Option(None, "--against", help="Parent slice design to review against"),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
@@ -1038,6 +1091,12 @@ def review_tasks(
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    max_rounds: int | None = typer.Option(
+        None, "--max", help="Revise and re-review up to N rounds (needs a slice index)"
+    ),
+    revise_model: str | None = typer.Option(
+        None, "--revise-model", help="Model that revises between reviews (needs --max)"
+    ),
     output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
     output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
     use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
@@ -1052,6 +1111,17 @@ def review_tasks(
     persisted under its own ``part-N`` suffix. The command's exit
     code reflects the worst verdict across all parts.
     """
+    _run_revise_loop_if_requested(
+        ctx,
+        BuiltinReviewTemplate.TASKS,
+        input_file,
+        model=model,
+        revise_model=revise_model,
+        max_rounds=max_rounds,
+        cwd=cwd,
+        verbose=verbose,
+    )
+
     slice_info: SliceInfo | None = None
     task_file_paths: list[str] = []
     if input_file.isdigit():
@@ -1147,6 +1217,7 @@ def review_tasks(
 
 @review_app.command("code")
 def review_code(
+    ctx: typer.Context,
     slice_number: str | None = typer.Argument(
         None, help="Optional slice number for context (e.g. 118)"
     ),
@@ -1168,6 +1239,12 @@ def review_code(
         help="Provider profile (e.g. openrouter, openai, local, sdk)",
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
+    max_rounds: int | None = typer.Option(
+        None, "--max", help="Revise and re-review up to N rounds (needs a slice index)"
+    ),
+    revise_model: str | None = typer.Option(
+        None, "--revise-model", help="Model that revises between reviews (needs --max)"
+    ),
     output: str = typer.Option("terminal", "--output", help="Output format: terminal, json, file"),
     output_path: str | None = typer.Option(None, "--output-path", help="File path for --output file"),
     use_json: bool = typer.Option(False, "--json", help="Output and save as JSON instead of markdown"),
@@ -1179,6 +1256,17 @@ def review_code(
     ),
 ) -> None:
     """Run a code review."""
+    _run_revise_loop_if_requested(
+        ctx,
+        BuiltinReviewTemplate.CODE,
+        slice_number,
+        model=model,
+        revise_model=revise_model,
+        max_rounds=max_rounds,
+        cwd=cwd,
+        verbose=verbose,
+    )
+
     if fan is not None:
         rprint("[yellow]--fan is reserved for future fan-out support (slice 182); ignored.[/yellow]")
 

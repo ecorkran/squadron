@@ -10,12 +10,16 @@ import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 
+import click
 import typer
+from click.core import ParameterSource
 
 from squadron.integrations.context_forge import ContextForgeClient
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
+from squadron.pipeline.branch_ops import dirty_paths, slice_facts
 from squadron.pipeline.classification import ClassificationError, has_profile_param
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult, execute_pipeline
+from squadron.pipeline.git_ops import GitEnvironmentError, current_branch
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.loop_config import last_with_verdict
 from squadron.pipeline.models import ActionResult
@@ -26,6 +30,11 @@ from squadron.pipeline.state import ActiveItem
 from squadron.pipeline.steps import StepTypeName
 from squadron.review.models import Verdict
 from squadron.review.templates import BuiltinReviewTemplate
+
+# The only options `--max` honors (D6), by Python parameter name. Any other option given
+# on the command line is refused: the loop's review steps cannot honor it, and silently
+# ignoring it would be a fallback. Options added to `sq review` later are refused by default.
+MAX_SUPPORTED_OPTIONS = frozenset({"max_rounds", "model", "revise_model", "cwd", "verbose"})
 
 EXIT_OK = 0
 EXIT_RUN_FAILED = 1
@@ -208,3 +217,46 @@ async def _run(
     if outcome.final_verdict is not None:
         typer.echo(f"final: {outcome.final_verdict} after {outcome.rounds} rounds")
     return outcome.exit_code
+
+
+def _refuse(message: str) -> typer.Exit:
+    typer.echo(f"Error: {message}", err=True)
+    return typer.Exit(EXIT_RUN_FAILED)
+
+
+def refuse_revise_model_without_max(max_rounds: int | None, revise_model: str | None) -> None:
+    """``--revise-model`` only means something to the revise loop (D6)."""
+    if revise_model is not None and max_rounds is None:
+        raise _refuse("--revise-model requires --max")
+
+
+def validate_max_options(
+    ctx: typer.Context, kind: BuiltinReviewTemplate, slice_input: str | None, *, cwd: str
+) -> None:
+    """Refuse a ``--max`` invocation the loop cannot honor, before any model call (D5, D6).
+
+    Raises ``typer.Exit(1)`` after printing the reason to stderr.
+    """
+    if slice_input is None or not slice_input.isdigit():
+        raise _refuse("--max requires a slice index")
+    for param in ctx.command.params:
+        # The positional index is an Argument and is exempt.
+        if not isinstance(param, click.Option) or param.name is None:
+            continue
+        given = ctx.get_parameter_source(param.name) == ParameterSource.COMMANDLINE
+        if given and param.name not in MAX_SUPPORTED_OPTIONS:
+            raise _refuse(f"{param.opts[0]} is not supported with --max")
+    if kind == BuiltinReviewTemplate.CODE:
+        _require_code_preconditions(int(slice_input), cwd)
+
+
+def _require_code_preconditions(slice_index: int, cwd: str) -> None:
+    """``code`` revisions commit to the checked-out slice branch and stage everything."""
+    try:
+        expected, _ = slice_facts(slice_index, ContextForgeClient())
+        if (actual := current_branch(cwd)) != expected:
+            raise _refuse(f"--max for code must run on branch {expected}, but {actual} is checked out")
+        if paths := dirty_paths(cwd):
+            raise _refuse(f"working tree is not clean: {paths}")
+    except GitEnvironmentError as exc:
+        raise _refuse(str(exc)) from exc
