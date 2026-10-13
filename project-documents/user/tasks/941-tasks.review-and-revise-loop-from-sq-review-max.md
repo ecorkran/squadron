@@ -23,15 +23,15 @@ status: not_started
 
 ## Tasks
 
-- [ ] **Task 1: Branch and observer hook (D7)**
-  - [ ] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `941-slice.review-and-revise-loop-from-sq-review-max` from it
-  - [ ] Add `round_completed(step_name, iteration, results)` to `RunObserver`; no-op on `RunStateRecorder`; recording implementation on `RecordingObserver` (`tests/pipeline/observer_support.py`)
-  - [ ] Pass `observer` into `_execute_loop_body` as `_execute_each_step` receives it, and call `round_completed` after each round's commit, before the `until` check, including a round whose commit failed
+- [x] **Task 1: Branch and observer hook (D7)**
+  - [x] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `941-slice.review-and-revise-loop-from-sq-review-max` from it
+  - [x] Add `round_completed(step_name, iteration, results)` to `RunObserver`; no-op on `RunStateRecorder`; recording implementation on `RecordingObserver` (`tests/pipeline/observer_support.py`)
+  - [x] Pass `observer` into `_execute_loop_body` as `_execute_each_step` receives it, and call `round_completed` after each round's commit, before the `until` check, including a round whose commit failed
   - **Success:** pyright passes with every `RunObserver` implementation
 
-- [ ] **Task 2: Test the observer hook**
-  - [ ] In `tests/pipeline/test_executor_loop_body.py` / `test_loop_round_commits.py`, with `RecordingObserver`: one call per round with that round's iteration and results; the failed-commit round is reported; a loop meeting `until` on round 1 reports exactly one round
-  - [ ] Commit: `feat: report each loop round through RunObserver.round_completed`
+- [x] **Task 2: Test the observer hook**
+  - [x] In `tests/pipeline/test_executor_loop_body.py` / `test_loop_round_commits.py`, with `RecordingObserver`: one call per round with that round's iteration and results; the failed-commit round is reported; a loop meeting `until` on round 1 reports exactly one round
+  - [x] Commit: `feat: report each loop round through RunObserver.round_completed`
   - **Success:** `pytest tests/pipeline -q` passes
 
 - [ ] **Task 3: `pipeline/review_revise.py` (D1, D2, D4)**
