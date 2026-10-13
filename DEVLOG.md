@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261012
 
+### Slice 941: design complete (Phase 4)
+
+- Design: `user/slices/941-slice.review-and-revise-loop-from-sq-review-max.md`, effort 3/5. `sq review slice|tasks|code <index> --max N [--revise-model M]` composes `[review, <P4/P5/P6 loop>]` from the loaded pipeline (loop found by step type, `on_exhaust` → fail) and runs it with `execute_pipeline`; table `REVISE_PIPELINE_BY_KIND` keyed by `BuiltinReviewTemplate`. No resumable run state (composed definition can't be reloaded by name); rerun is the resume. Incompatible `sq review` options refused with `--max`; `code` requires the slice branch checked out.
+- Plan deviation: squadron has no MCP review tool, so parity is CLI + `/sq:review` only.
+- Next: Phase 5 task breakdown.
+
 ### Release 0.21.6
 
 - **Contents:** slice 935 (project rules for every provider: AGENTS.md first, `steps` rule key, `project_rules.max_chars`; #181, #182); fixes #195, #59 (orphaned-run resume, `each` resume skips finished items).
