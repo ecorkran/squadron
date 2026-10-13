@@ -14,47 +14,38 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261012
 dateUpdated: 20261012
-reviewedSha: 4006e4c43d5a16649e575316b68b576fb19b5214
+reviewedSha: d943d1674b9348c3d79d4f1f77bc9bccdaf1a5a3
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 35.8
+durationSeconds: 35.2
 runId: run-20261013-p5-b4b93f69
 squadronVersion: 0.21.6
 findings:
   - id: F001
     severity: concern
-    category: scope-conflict
-    summary: "Task 11 mandates a shared exit helper that contradicts the `review.py` and D3 constraints"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:124"
+    category: completeness
+    summary: "No task invokes the option validator, so SC7 can fail in the real CLI"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:82-91"
   - id: F002
     severity: concern
-    category: underspecified
-    summary: "Task 11 doesn't say where the final verdict, the round count, or \"accepted\" come from"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:122-123"
+    category: sequencing
+    summary: "Task 8 tests behavior that does not exist yet"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:93-103"
   - id: F003
     severity: concern
-    category: correctness-risk
-    summary: "Option allowlist in Task 7 will reject the positional index unless exempted"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:84-86"
-  - id: F004
-    severity: concern
-    category: granularity
-    summary: "Tasks 13–15 are near-identical and should be one task"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:139-152"
-  - id: F005
-    severity: concern
-    category: commit-checkpoints
-    summary: "Commits are batched across long task runs"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:82-134"
-  - id: F006
-    severity: note
     category: proportionality
-    summary: "Minor test and option items go beyond the success criteria"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:75,142,155"
-  - id: F007
+    summary: "Task count and granularity are heavy for a 3/5 slice"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:26-196"
+  - id: F004
     severity: note
+    category: verification
+    summary: "SC9 (slash-command parity) may end up unverified"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:191-196"
+  - id: F005
+    severity: pass
     category: coverage
-    summary: "Criteria 1–9 and the technical requirements trace to tasks"
+    summary: "Success-criteria coverage and traceability"
     location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md"
 ---
 
@@ -65,58 +56,53 @@ findings:
 
 ## Findings
 
-### [CONCERN] Task 11 mandates a shared exit helper that contradicts the `review.py` and D3 constraints
+### [CONCERN] No task invokes the option validator, so SC7 can fail in the real CLI
 
-- Task 11 says to "extract a shared helper if needed" so `_exit_on` logic isn't duplicated.
-- `_exit_on` lives in `cli/commands/review.py`. D3 forbids `review_revise.py` from importing from `review.py`.
-- Task 16 (line 159) requires the `review.py` diff to be "limited to option declarations and the early branches".
-- Extracting the helper breaks one of these constraints. The task needs to say where the helper goes, for example a small neutral module that both files import. It should also say that the move is allowed despite the Task 16 criterion. Otherwise an implementer has to choose between duplicating the logic, breaking the import rule, or breaking the diff-limit criterion.
+Task 7 builds a validator that takes the Click context, because `ParameterSource.COMMANDLINE` can only be read from that context. Task 11 defines `run_review_revise(kind, slice_index, reviewer, revise_model, max_rounds, cwd, verbosity)`, which has no context parameter. Task 13 describes only the `--revise-model requires --max` check and the early branch. None of Tasks 7, 11 or 13 says who calls the validator or passes in the context, and Task 7's own success line says only that refusals raise "before the executor is reached". Success Criterion 7 (an unsupported option is refused, and no model call is made) can therefore pass in unit tests with a stubbed executor and still not be wired in the real CLI. Task 13 should state that the early branch calls the validator with the Click context, or Task 11 should say the runner takes the context. Task 14 should then include a wiring test that `--json` with `--max` is refused through Typer.
 
-### [CONCERN] Task 11 doesn't say where the final verdict, the round count, or "accepted" come from
+### [CONCERN] Task 8 tests behavior that does not exist yet
 
-- D7 says `execute_pipeline` returns a `StepResult` holding only the last round's action results.
-- Task 11 still requires `final: <VERDICT> after N rounds` and the D5 exit mapping, including "accepted by `accept_if`" versus "exhausted-not-accepted".
-- The task never says whether the verdict and round count come from `RoundPrinter` state or from the `StepResult`. It also doesn't say how an accepted exhaustion is told apart from a failed one.
-- A junior implementer would have to guess. Add a sub-item naming the source for each of the three values. Task 12 should test an exhausted loop in both the accepted and not-accepted cases, because the current list (PASS, accepted CONCERNS, FAIL, failed action) doesn't distinguish them.
+Task 8 case 6 asserts that a valid `<index> --max 2 --model X` "reaches the stubbed executor". The runner that calls the executor is built in Task 11, so there is nothing to reach at Task 8. Cases 4 and 5 assert "exit 1", but the mapping from a raised validation error to exit code 1 is not assigned to Task 7, which only says "raises". Task 11 does not own it either, because it only covers the executor outcome. Cases 2 and 3 need a Click context carrying real command-line sources, which needs either a Typer command (Task 13) or a synthetic Click command, and the task does not say which. Either move case 6 and the exit-code assertions to Tasks 12 and 14, or state in Task 7 how errors become exit 1 and what harness Task 8 uses.
 
-### [CONCERN] Option allowlist in Task 7 will reject the positional index unless exempted
+### [CONCERN] Task count and granularity are heavy for a 3/5 slice
 
-- Task 7 refuses any parameter outside `MAX_SUPPORTED_OPTIONS` whose source is `ParameterSource.COMMANDLINE`.
-- The positional index argument is itself a Click parameter with source `COMMANDLINE`, and it isn't in the listed set (`max`, `model`, `revise_model`, `cwd`, `verbose`).
-- A literal implementation would refuse every valid invocation. The task should state that arguments are excluded from the check, or that the positional's parameter name is in the set.
-- Task 8 should also include a positive case. A valid `--max 2 --model X` call must pass validation and reach the stubbed executor. The current cases only assert refusals, so this bug would pass them.
+There are 18 tasks, of which 7 are standalone test tasks (4, 6, 8, 10, 12, 14, 15). Several could be merged:
+- Task 1 (branch creation) can fold into Task 2.
+- Task 17 (full validation) repeats the ruff, pyright and test run that every code task already ends with. It can fold into Task 18, or become a one-line final gate.
+- Tasks 9 and 10 (`RoundPrinter` and its tests) are small enough to be one task with a single commit. The same applies to Tasks 2 and 3 with Task 4. Task 4 already tests both, but Tasks 2 and 3 are left as uncommitted intermediate states.
+- Tasks 5 and 11 spell out the implementation almost line by line (Task 5 has seven numbered steps, Task 11 has five with an ordered exit-code algorithm). This largely restates D1, D2 and D5, even though the Context Summary says tasks "cite decisions by number and do not restate them". Replacing these with D-references plus the success condition would cut size without losing traceability.
 
-### [CONCERN] Tasks 13–15 are near-identical and should be one task
+None of this blocks progress, but trimming would reduce both the checklist overhead and the chance the restated details drift from the design.
 
-- Tasks 14 and 15 are literally "Same as Task 13" for a different kind.
-- Three tasks and three success lines for one repeated edit add overhead and no independent verification. Task 16 tests all three together anyway.
-- Merge them into one wiring task with a per-kind sub-item list, keeping the `review_arch` exclusion.
-- Task 19 (CHANGELOG, two lines) can likewise fold into Task 18, since they already share one commit.
+### [NOTE] SC9 (slash-command parity) may end up unverified
 
-### [CONCERN] Commits are batched across long task runs
+Task 18 allows step 6 (`/sq:review ... --max`) to be recorded as pending for the PM if it cannot be run in-session. That is honest. Task 16 covers only the doc text and a parity test, so SC9 is confirmed by documentation alone until the PM runs it. Make sure the handoff to the PM is explicit when the slice is closed.
 
-- Task 17 already says "Every code task ends with … a commit". In practice the first commit after Task 4 is at Task 6, and the next is Task 12. Tasks 7–12 (validation, tests, `RoundPrinter`, its tests, runner, runner tests) all land in one commit.
-- Tasks 13–16 are the same, with one commit at Task 16.
-- Add a commit at Task 8 (validation plus tests) and at Task 10 (`RoundPrinter` plus tests), so checkpoints follow each implementation-and-test pair.
+### [PASS] Success-criteria coverage and traceability
 
-### [NOTE] Minor test and option items go beyond the success criteria
+- SC1 maps to Tasks 5, 11 and 13, and is tested in Task 15.
+- SC2 and SC3 map to Task 15.
+- SC4 maps to Tasks 11 and 12.
+- SC5 maps to Tasks 6, 13 and 14.
+- SC6 maps to Task 14.
+- SC7 maps to Tasks 7 and 8, subject to the wiring finding above.
+- SC8 maps to Tasks 11 and 12.
+- SC9 maps to Tasks 16 and 18.
 
-- Task 6 item 5 tests that the loaded pipeline definition is unchanged. It is cheap and protects the "copy before overriding" rule, but no success criterion asks for it.
-- Task 13 adds Typer `min 1` on `--max`, and Task 16 tests `--max 0` rejection. The design says "the loop's own `max` validation enforces this".
-- Either is defensible. Pick one enforcement point, because two make it unclear which error message the user sees.
+The design's technical requirements all have tasks:
+- builder error cases (Task 6)
+- the `round_completed` executor test, including a failed-commit round (Task 4)
+- `RoundPrinter` cases (Task 10)
+- dirty-tree refusal (Task 8)
+- the failed-commit stderr line and exit 1 (Task 12)
+- the integration test (Task 15)
+- the CHANGELOG bullet (Task 16)
 
-### [NOTE] Criteria 1–9 and the technical requirements trace to tasks
-
-- Criteria 1–3 map to Tasks 5, 11 and 17.
-- Criterion 4 maps to Tasks 11–12. Criterion 5 maps to Tasks 5–6 and 15–16.
-- Criterion 6 maps to Task 16. Criterion 7 maps to Tasks 7–8.
-- Criterion 8 maps to Tasks 11–12. Criterion 9 maps to Tasks 18 and 21.
-- The observer-hook tests (Task 4), `RoundPrinter` tests (Task 10) and the dirty-tree test (Task 8) cover the remaining technical requirements.
-- Walkthrough step 6 is correctly handled as a possible pending item for the PM. No NFR is restated, so no load test or CI gating task is needed.
+I found no scope creep. No NFR is restated in the slice, so load-test and CI-gating items are not required. No circular dependencies, and every code task ends with a commit checkpoint.
 
 ### Run Digest
 
-- Response length: 5758 chars
+- Response length: 5323 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -128,10 +114,10 @@ findings:
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 35.8 s
+- Duration: 35.2 s
 - `## Summary` located: yes
-- `## Findings` located: no
-- Finding-shaped matches — whole response: 7
+- `## Findings` located: yes
+- Finding-shaped matches — whole response: 5
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 5
+- Finding-shaped matches — surviving validation: 5
