@@ -6,8 +6,8 @@ lld: user/slices/383-slice.pr-keyed-review-persistence.md
 dependencies: [382, 916, 917]
 projectState: "382 merged; `sq review pr` reviews but persists nothing — the save callback is stubbed to always return false. 916 and 917 complete and present on `squadron-pr`. No context-forge dependency (retired at design time, D7)."
 dateCreated: 20260915
-dateUpdated: 20260915
-status: in_progress
+dateUpdated: 20261012
+status: complete
 ---
 
 ## Context Summary

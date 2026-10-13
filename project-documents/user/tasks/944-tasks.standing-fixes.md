@@ -6,9 +6,9 @@ lldReference: project-documents/user/slices/944-slice.standing-fixes.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 projectState: Standing container for multi-step fixes. Add a task group per issue.
-status: in_progress
+status: complete
 dateCreated: 20261011
-dateUpdated: 20261011
+dateUpdated: 20261012
 ---
 
 # Tasks: Standing Fixes
