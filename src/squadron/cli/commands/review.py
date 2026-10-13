@@ -883,7 +883,7 @@ def review_slice(
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
     max_rounds: int | None = typer.Option(
-        None, "--max", help="Revise and re-review up to N rounds (needs a slice index)"
+        None, "--max", min=1, help="Revise and re-review up to N rounds (needs a slice index)"
     ),
     revise_model: str | None = typer.Option(
         None, "--revise-model", help="Model that revises between reviews (needs --max)"
@@ -1092,7 +1092,7 @@ def review_tasks(
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
     max_rounds: int | None = typer.Option(
-        None, "--max", help="Revise and re-review up to N rounds (needs a slice index)"
+        None, "--max", min=1, help="Revise and re-review up to N rounds (needs a slice index)"
     ),
     revise_model: str | None = typer.Option(
         None, "--revise-model", help="Model that revises between reviews (needs --max)"
@@ -1240,7 +1240,7 @@ def review_code(
     ),
     verbose: int = typer.Option(0, "--verbose", "-v", count=True, help="Verbosity level (-v, -vv)"),
     max_rounds: int | None = typer.Option(
-        None, "--max", help="Revise and re-review up to N rounds (needs a slice index)"
+        None, "--max", min=1, help="Revise and re-review up to N rounds (needs a slice index)"
     ),
     revise_model: str | None = typer.Option(
         None, "--revise-model", help="Model that revises between reviews (needs --max)"

@@ -181,3 +181,12 @@ def test_arch_has_no_max_option() -> None:
 
     assert result.exit_code == 2
     assert "No such option" in result.output
+
+
+@pytest.mark.parametrize("command", ["slice", "tasks", "code"])
+def test_max_below_one_is_rejected_before_any_review(command: str, execute: AsyncMock) -> None:
+    result = _invoke(command, "941", "--max", "0", "--model", "sol")
+
+    assert result.exit_code == 2
+    assert "--max" in result.output
+    execute.assert_not_awaited()
