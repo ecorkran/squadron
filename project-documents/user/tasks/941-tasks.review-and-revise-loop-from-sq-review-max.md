@@ -34,20 +34,20 @@ status: not_started
   - [x] Commit: `feat: report each loop round through RunObserver.round_completed`
   - **Success:** `pytest tests/pipeline -q` passes
 
-- [ ] **Task 3: `pipeline/review_revise.py` (D1, D2, D4)**
-  - [ ] `REVISE_PIPELINE_BY_KIND` and `build_review_revise_definition(kind)` as specified in the design ("Technical Scope" items 3–4, Data Flow, D2's three checks, D4's `on_exhaust: fail`)
-  - [ ] Copy the loaded pipeline's steps before overriding; do not mutate them
+- [x] **Task 3: `pipeline/review_revise.py` (D1, D2, D4)**
+  - [x] `REVISE_PIPELINE_BY_KIND` and `build_review_revise_definition(kind)` as specified in the design ("Technical Scope" items 3–4, Data Flow, D2's three checks, D4's `on_exhaust: fail`)
+  - [x] Copy the loaded pipeline's steps before overriding; do not mutate them
   - **Success:** builds `[review, loop]` for all three kinds against the shipped pipelines
 
-- [ ] **Task 4: Test the builder**
-  - [ ] New `tests/pipeline/test_review_revise.py` covering the design's builder requirements: each kind's shape and `on_exhaust=fail`; errors for zero/two loops, zero/two review steps, missing `until`, missing `skip_if_met`; a project override of P4 is picked up; an unmapped kind raises; the loaded pipeline is unchanged after building
-  - [ ] Commit: `feat: compose a review-revise pipeline from P4/P5/P6 loops`
+- [x] **Task 4: Test the builder**
+  - [x] New `tests/pipeline/test_review_revise.py` covering the design's builder requirements: each kind's shape and `on_exhaust=fail`; errors for zero/two loops, zero/two review steps, missing `until`, missing `skip_if_met`; a project override of P4 is picked up; an unmapped kind raises; the loaded pipeline is unchanged after building
+  - [x] Commit: `feat: compose a review-revise pipeline from P4/P5/P6 loops`
   - **Success:** tests pass
 
-- [ ] **Task 5: `RoundPrinter` and its tests (D7)**
-  - [ ] In new `cli/commands/review_revise.py`, implement `RoundPrinter` producing the design's "API Contracts" output: header, review line on `step_completed` for the review step, one line per `round_completed` (`committed <sha>`, `commit failed`, or `no changes`); a missing review result raises
-  - [ ] Tests in new `tests/cli/test_review_revise.py` with constructed `ActionResult`s for each line form and the raise
-  - [ ] Commit: `feat: print review-revise rounds through RoundPrinter`
+- [x] **Task 5: `RoundPrinter` and its tests (D7)**
+  - [x] In new `cli/commands/review_revise.py`, implement `RoundPrinter` producing the design's "API Contracts" output: header, review line on `step_completed` for the review step, one line per `round_completed` (`committed <sha>`, `commit failed`, or `no changes`); a missing review result raises
+  - [x] Tests in new `tests/cli/test_review_revise.py` with constructed `ActionResult`s for each line form and the raise
+  - [x] Commit: `feat: print review-revise rounds through RoundPrinter`
   - **Success:** tests pass
 
 - [ ] **Task 6: `run_review_revise` (D3, D4, D5)**
