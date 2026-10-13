@@ -225,7 +225,8 @@ async def _run(
     if outcome.error is not None:
         typer.echo(outcome.error, err=True)
     if outcome.final_verdict is not None:
-        typer.echo(f"final: {outcome.final_verdict} after {outcome.rounds} rounds")
+        noun = "round" if outcome.rounds == 1 else "rounds"
+        typer.echo(f"final: {outcome.final_verdict} after {outcome.rounds} {noun}")
     return outcome.exit_code
 
 

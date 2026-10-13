@@ -321,3 +321,11 @@ def test_failed_round_commit_prints_the_error_on_stderr_and_exits_one(
 
     assert code == 1
     assert "round 1 commit failed: hook rejected" in capsys.readouterr().err
+
+
+def test_one_round_is_singular(capsys: pytest.CaptureFixture[str]) -> None:
+    loop = _step("loop-1", "loop", _round_results("PASS"), iteration=1)
+
+    _run_with(_result(_leading("CONCERNS"), loop))
+
+    assert "final: PASS after 1 round\n" in capsys.readouterr().out
