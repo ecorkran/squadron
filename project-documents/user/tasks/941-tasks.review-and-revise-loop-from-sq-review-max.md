@@ -55,6 +55,7 @@ status: not_started
   - [ ] Read the outcome from the returned `PipelineResult`: rounds = loop `StepResult.iteration`; final verdict = the review result in the loop's `action_results` when rounds > 0, else the leading review step's; `accepted` / `exhausted` from the loop `StepResult`
   - [ ] Check `accepted`, then `exhausted`, before run status: an exhausted, unaccepted loop has failed status but exits 2, not 1
   - [ ] Implement the mapping here; do not import or move `_exit_on` (D3, and Task 8's `review.py` diff limit)
+  - [ ] On a failed run, print the failing step's `error` to stderr and return 1. For a failed round commit that error is the executor's `loop <name> round N commit failed: <error>` (D5), so the runner prints it as-is and does not build its own text
   - **Success:** every runner-owned D5 row returns its code
 
 - [ ] **Task 7: Test the runner**
@@ -69,6 +70,7 @@ status: not_started
 
 - [ ] **Task 8: Option validation and wiring into `review.py` (D6)**
   - [ ] In `review_revise.py`, define `MAX_SUPPORTED_OPTIONS` and `validate_max_options(ctx, kind, input)` implementing D6. Only `click.Option` parameters are checked, so the positional index is exempt. Each refusal prints its error to stderr and raises `typer.Exit(1)`
+  - [ ] In the same function, for `CODE` only: refuse a dirty working tree (D5 last row), listing the dirty paths (`git status --porcelain` through `run_git`); a failed git call is an error, not a clean tree
   - [ ] In `review.py`, for `review_slice` (`SLICE`), `review_tasks` (`TASKS`) and `review_code` (`CODE`):
     1. add `ctx: typer.Context`, `--max` (int; the range is enforced by the loop's `max` validation, not Typer) and `--revise-model`
     2. refuse `--revise-model` without `--max`

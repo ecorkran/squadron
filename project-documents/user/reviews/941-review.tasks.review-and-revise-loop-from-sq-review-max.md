@@ -96,3 +96,11 @@ Dependencies run in order: observer hook, builder, `RoundPrinter`, runner, CLI w
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 4
 - Finding-shaped matches — surviving validation: 4
+
+## Response (20261012)
+
+- **F001 — fixed.** Task 8 now has an explicit sub-item for the `code` dirty-tree refusal (D5 last row): it lists the dirty paths, and a failed git call is an error, not a clean tree.
+- **F002 — fixed.** Task 6 now says the runner prints the failing step's `error` to stderr and returns 1. For a failed round commit that is the executor's own `loop <name> round N commit failed: <error>` message (fix 85a7f7aa), printed as-is.
+- **F003, F004 — pass, no action.**
+
+**Open question for the PM (not raised by the review):** `sq run` refuses SDK execution inside a Claude Code session (`_resolve_execution_mode`, `cli/commands/run.py`), but `sq review --max` runs the same executor, and Task 12 / design walkthrough step 6 expect `/sq:review --max` to work inside Claude Code (Success Criterion 9). Neither the design nor the tasks say whether the review-revise runner applies that guard. This needs a decision before Task 6: apply the guard (and drop SC9 parity for `--max`), or confirm the guard's reason doesn't apply to a one-shot revise dispatch.
