@@ -20,7 +20,7 @@ A lightweight, append-only record of development activity. Newest entries first.
   1. `conventionsSource: AGENTS.md` (luna). 2. `CLAUDE.md`. 3. `none`.
   4. qwen38-flash implement: `{"conventions":"AGENTS.md","native":false,"skipped":["CLAUDE.md"],"rules":["bug-fixes.md","python.md","shell.md","sql.md","testing.md"],"dropped":[],"chars":37502}`.
   5. `bug-fixes.md` with `steps: [implement]`: bare dispatch `"rules":[]`; code review `projectRules: [python.md, sql.md, testing.md]`.
-  6. Not run here: `sq run` refuses inside Claude Code and the SDK step must not nest; PM to run from a terminal (expect `{"conventions":"sdk-native"}`).
+  6. PM ran from a terminal with the branch's `.venv/bin/sq` (haiku, `sdk-session`): `{"conventions":"sdk-native"}`. The uv-tool `sq` on PATH is released 0.21.5 and records nothing.
   7. Budget 5000: fails with `…/AGENTS.md is 14798 characters, over the 5000-character budget (project_rules.max_chars)`.
   8. luna: `"conventions":"AGENTS.md","native":true`, five rules, `chars` 22731; with `AGENTS.md` removed: `"conventions":"CLAUDE.md","native":false`.
 - The `openai` API-key aliases have no credits by design; use `openai-oauth` aliases (luna/sol/astra).

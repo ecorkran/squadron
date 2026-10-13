@@ -10,7 +10,7 @@ projectState: >
   is on main, unreleased.
 dateCreated: 20261012
 dateUpdated: 20261012
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -194,10 +194,10 @@ status: in_progress
   - [x] Commit: `docs: document project rules selection and steps key`
   - **Success:** a user can learn the `steps` key and the budget from the docs alone
 
-- [ ] **Task 22: Verification walkthrough**
-  - [ ] Run the design's Verification Walkthrough steps 1–8 in a scratch copy. For `<non-sdk-alias>`, pick an alias whose profile is not `sdk` from `sq model list`. Step 8 needs a codex-profile alias. If none is configured, record step 8 as not run and say why.
-  - [ ] Record each step's observed result (frontmatter value or `jq` output) in the DEVLOG entry for this phase
-  - [ ] If a step fails, stop and report the failing step with its output. Do not change code to force a pass.
+- [x] **Task 22: Verification walkthrough**
+  - [x] Run the design's Verification Walkthrough steps 1–8 in a scratch copy. For `<non-sdk-alias>`, pick an alias whose profile is not `sdk` from `sq model list`. Step 8 needs a codex-profile alias. If none is configured, record step 8 as not run and say why.
+  - [x] Record each step's observed result (frontmatter value or `jq` output) in the DEVLOG entry for this phase
+  - [x] If a step fails, stop and report the failing step with its output. Do not change code to force a pass.
   - **Success:** every step matches its expected result, or the failure is reported
 
 - [x] **Task 23: Final validation**
