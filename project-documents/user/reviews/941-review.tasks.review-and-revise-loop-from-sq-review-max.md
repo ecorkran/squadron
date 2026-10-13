@@ -14,38 +14,33 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261012
 dateUpdated: 20261012
-reviewedSha: d943d1674b9348c3d79d4f1f77bc9bccdaf1a5a3
-revision_number: 1
+reviewedSha: 4e11d22d395a184882e77d6bb1267ebdd2a8dd7f
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 35.2
+durationSeconds: 18.6
 runId: run-20261013-p5-b4b93f69
 squadronVersion: 0.21.6
 findings:
   - id: F001
     severity: concern
-    category: completeness
-    summary: "No task invokes the option validator, so SC7 can fail in the real CLI"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:82-91"
+    category: coverage-gap
+    summary: "Dirty-tree refusal for `code` has no implementing task"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:70-77"
   - id: F002
     severity: concern
-    category: sequencing
-    summary: "Task 8 tests behavior that does not exist yet"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:93-103"
+    category: coverage-gap
+    summary: "`round N commit failed` stderr output is tested but not implemented in any task"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:53-58"
   - id: F003
-    severity: concern
-    category: proportionality
-    summary: "Task count and granularity are heavy for a 3/5 slice"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:26-196"
-  - id: F004
-    severity: note
-    category: verification
-    summary: "SC9 (slash-command parity) may end up unverified"
-    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md:191-196"
-  - id: F005
     severity: pass
-    category: coverage
-    summary: "Success-criteria coverage and traceability"
+    category: traceability
+    summary: "Success criteria 1–9 trace to tasks"
+    location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md"
+  - id: F004
+    severity: pass
+    category: sequencing
+    summary: "Sequencing, test-with pattern and commit cadence"
     location: "project-documents/user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md"
 ---
 
@@ -56,53 +51,33 @@ findings:
 
 ## Findings
 
-### [CONCERN] No task invokes the option validator, so SC7 can fail in the real CLI
+### [CONCERN] Dirty-tree refusal for `code` has no implementing task
 
-Task 7 builds a validator that takes the Click context, because `ParameterSource.COMMANDLINE` can only be read from that context. Task 11 defines `run_review_revise(kind, slice_index, reviewer, revise_model, max_rounds, cwd, verbosity)`, which has no context parameter. Task 13 describes only the `--revise-model requires --max` check and the early branch. None of Tasks 7, 11 or 13 says who calls the validator or passes in the context, and Task 7's own success line says only that refusals raise "before the executor is reached". Success Criterion 7 (an unsupported option is refused, and no model call is made) can therefore pass in unit tests with a stubbed executor and still not be wired in the real CLI. Task 13 should state that the early branch calls the validator with the Click context, or Task 11 should say the runner takes the context. Task 14 should then include a wiring test that `--json` with `--max` is refused through Typer.
+The dirty-tree refusal for `code` comes from D5's last row, which requires a refusal before any model call with an error listing the dirty paths and exit 1. Task 8 says `validate_max_options` implements "D6". D6 covers the branch check but not the dirty-tree check. Only Task 9 (item 3) tests the dirty-tree behavior, and no task builds it. A junior implementer reading Task 8 would write the D6 checks and then hit a failing Task 9 test. Name the dirty-tree check in Task 8, or in Task 6, as an explicit sub-item citing D5.
 
-### [CONCERN] Task 8 tests behavior that does not exist yet
+### [CONCERN] `round N commit failed` stderr output is tested but not implemented in any task
 
-Task 8 case 6 asserts that a valid `<index> --max 2 --model X` "reaches the stubbed executor". The runner that calls the executor is built in Task 11, so there is nothing to reach at Task 8. Cases 4 and 5 assert "exit 1", but the mapping from a raised validation error to exit code 1 is not assigned to Task 7, which only says "raises". Task 11 does not own it either, because it only covers the executor outcome. Cases 2 and 3 need a Click context carrying real command-line sources, which needs either a Typer command (Task 13) or a synthetic Click command, and the task does not say which. Either move case 6 and the exit-code assertions to Tasks 12 and 14, or state in Task 7 how errors become exit 1 and what harness Task 8 uses.
+D5 requires `round N commit failed: <error>` on stderr and exit 1, which supports Success Criteria 8 and the technical requirement for a stubbed failed round commit. Task 7 item 5 tests it. Task 6 lists the outcome mapping and the accepted/exhausted ordering but never says the runner emits this line or where the error text comes from. Add a Task 6 sub-item saying who prints it (the runner, from the failed `ActionResult` or run error) and that the exit code is 1.
 
-### [CONCERN] Task count and granularity are heavy for a 3/5 slice
+### [PASS] Success criteria 1–9 trace to tasks
 
-There are 18 tasks, of which 7 are standalone test tasks (4, 6, 8, 10, 12, 14, 15). Several could be merged:
-- Task 1 (branch creation) can fold into Task 2.
-- Task 17 (full validation) repeats the ruff, pyright and test run that every code task already ends with. It can fold into Task 18, or become a one-line final gate.
-- Tasks 9 and 10 (`RoundPrinter` and its tests) are small enough to be one task with a single commit. The same applies to Tasks 2 and 3 with Task 4. Task 4 already tests both, but Tasks 2 and 3 are left as uncommitted intermediate states.
-- Tasks 5 and 11 spell out the implementation almost line by line (Task 5 has seven numbered steps, Task 11 has five with an ordered exit-code algorithm). This largely restates D1, D2 and D5, even though the Context Summary says tasks "cite decisions by number and do not restate them". Replacing these with D-references plus the success condition would cut size without losing traceability.
+- **SC1:** Tasks 3, 6 and 8.
+- **SC2 and SC3:** Task 10.
+- **SC4:** Tasks 6 and 7.
+- **SC5:** Tasks 4 and 9.
+- **SC6 and SC7:** Task 9.
+- **SC8:** Task 7.
+- **SC9:** Task 12, with an explicit "unverified" fallback.
 
-None of this blocks progress, but trimming would reduce both the checklist overhead and the chance the restated details drift from the design.
+The technical requirements are also covered: the builder unit tests, the `round_completed` executor test, the `RoundPrinter` tests, the integration test, the lint/pyright gate, and the CHANGELOG bullet. No task falls outside the design, so there is no scope creep.
 
-### [NOTE] SC9 (slash-command parity) may end up unverified
+### [PASS] Sequencing, test-with pattern and commit cadence
 
-Task 18 allows step 6 (`/sq:review ... --max`) to be recorded as pending for the PM if it cannot be run in-session. That is honest. Task 16 covers only the doc text and a parity test, so SC9 is confirmed by documentation alone until the PM runs it. Make sure the handoff to the PM is explicit when the slice is closed.
-
-### [PASS] Success-criteria coverage and traceability
-
-- SC1 maps to Tasks 5, 11 and 13, and is tested in Task 15.
-- SC2 and SC3 map to Task 15.
-- SC4 maps to Tasks 11 and 12.
-- SC5 maps to Tasks 6, 13 and 14.
-- SC6 maps to Task 14.
-- SC7 maps to Tasks 7 and 8, subject to the wiring finding above.
-- SC8 maps to Tasks 11 and 12.
-- SC9 maps to Tasks 16 and 18.
-
-The design's technical requirements all have tasks:
-- builder error cases (Task 6)
-- the `round_completed` executor test, including a failed-commit round (Task 4)
-- `RoundPrinter` cases (Task 10)
-- dirty-tree refusal (Task 8)
-- the failed-commit stderr line and exit 1 (Task 12)
-- the integration test (Task 15)
-- the CHANGELOG bullet (Task 16)
-
-I found no scope creep. No NFR is restated in the slice, so load-test and CI-gating items are not required. No circular dependencies, and every code task ends with a commit checkpoint.
+Dependencies run in order: observer hook, builder, `RoundPrinter`, runner, CLI wiring, integration test, docs, final gate. There are no cycles. Each implementation task is followed by its tests and a commit (Tasks 1–2, 3–4, 5, 6–7, 8–9). Commits are spread across the run, not batched at the end. Task count and detail fit a 3/5 slice. A single task file is appropriate. No load-test task is needed because the slice states no NFR.
 
 ### Run Digest
 
-- Response length: 5323 chars
+- Response length: 2689 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -114,10 +89,10 @@ I found no scope creep. No NFR is restated in the slice, so load-test and CI-gat
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 35.2 s
+- Duration: 18.6 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 5
+- Finding-shaped matches — whole response: 4
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 5
-- Finding-shaped matches — surviving validation: 5
+- Finding-shaped matches — in findings section: 4
+- Finding-shaped matches — surviving validation: 4
