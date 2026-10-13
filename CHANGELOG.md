@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.6] - 20261012
+
 ### Added
 
 - Non-SDK dispatches (OpenAI-compatible, OpenRouter, codex) now get the project's conventions file and the rule files that apply to the step, capped by `project_rules.max_chars` (#181, #182).

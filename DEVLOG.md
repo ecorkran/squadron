@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261012
 
+### Release 0.21.6
+
+- **Contents:** slice 935 (project rules for every provider: AGENTS.md first, `steps` rule key, `project_rules.max_chars`; #181, #182); fixes #195, #59 (orphaned-run resume, `each` resume skips finished items).
+
 ### Slice 935: implementation complete (Phase 6)
 
 - Branch `935-slice.project-rules-for-every-provider-agents-md-and-relevance-selected-rules` (from `main`), not merged; code review comes before Phase 7. Full suite 6533 passed, 4 skipped; pyright 0 errors.
