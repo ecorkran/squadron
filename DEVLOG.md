@@ -13,7 +13,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 941: task breakdown complete (Phase 5)
 
-- Tasks: `user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md`, 21 tasks, effort 3/5. Order: branch, `RunObserver.round_completed` + loop-body call, `pipeline/review_revise.py` builder, CLI runner (validation, `RoundPrinter`, params/exit codes), wiring into `review_slice`/`review_tasks`/`review_code`, integration test, slash doc + CHANGELOG, walkthrough.
+- Tasks: `user/tasks/941-tasks.review-and-revise-loop-from-sq-review-max.md`, 18 tasks, effort 3/5. Order: branch, `RunObserver.round_completed` + loop-body call, `pipeline/review_revise.py` builder, CLI runner (validation, `RoundPrinter`, params/exit codes), wiring into `review_slice`/`review_tasks`/`review_code`, integration test, slash doc + CHANGELOG, walkthrough.
 - Next: Phase 6 implementation on `941-slice.review-and-revise-loop-from-sq-review-max`.
 
 ### Slice 941: design complete (Phase 4)

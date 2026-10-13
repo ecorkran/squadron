@@ -83,7 +83,7 @@ status: not_started
   - [ ] Define `MAX_SUPPORTED_OPTIONS` (`max`, `model`, `revise_model`, `cwd`, `verbose`) as one constant
   - [ ] Implement a validator taking the Click context, run before any model call:
     1. positional input must be a slice index; otherwise `--max requires a slice index`
-    2. any parameter outside `MAX_SUPPORTED_OPTIONS` whose source is `ParameterSource.COMMANDLINE` → error naming it (e.g. `--json is not supported with --max`)
+    2. any option (`click.Option`; positional arguments are exempt) outside `MAX_SUPPORTED_OPTIONS` whose source is `ParameterSource.COMMANDLINE` → error naming it (e.g. `--json is not supported with --max`)
     3. for `code`: current branch must equal `slice_branch_name(...)` from `pipeline/git_ops.py`; otherwise error naming the expected branch
     4. for `code`: a dirty working tree → error listing the dirty paths
   - [ ] The `--revise-model requires --max` check lives here too, callable when `--max` is absent
@@ -97,7 +97,9 @@ status: not_started
     3. `--revise-model` without `--max` → `--revise-model requires --max`
     4. `code` on the wrong branch → error names the expected branch, exit 1
     5. `code` with a dirty tree → error lists the dirty paths, exit 1
+    6. a valid `<index> --max 2 --model X` passes validation and reaches the stubbed executor
   - [ ] Run the new tests, then ruff and pyright
+  - [ ] Commit: `feat: validate sq review --max options`
   - **Success:** tests pass
 
 - [ ] **Task 9: `RoundPrinter` observer**
@@ -112,6 +114,7 @@ status: not_started
 - [ ] **Task 10: Test `RoundPrinter`**
   - [ ] In `tests/cli/test_review_revise.py`, feed constructed `ActionResult`s and assert lines for: verdict + SHA, `commit failed`, `no changes`, review step line; and that a missing review result raises
   - [ ] Run the tests, then ruff and pyright
+  - [ ] Commit: `feat: print review-revise rounds through RoundPrinter`
   - **Success:** tests pass
 
 - [ ] **Task 11: `run_review_revise` — params, execution, exit codes**
@@ -119,40 +122,42 @@ status: not_started
     1. `build_review_revise_definition(kind)`
     2. params: `slice`, `review-model` = reviewer, `max-revisions` = str(max_rounds), `model` = revise_model only when given (pipeline default otherwise)
     3. `execute_pipeline(definition, params, ..., observer=RoundPrinter(...))`, with no run-state recording (D4)
-    4. print `final: <VERDICT> after N rounds`
-    5. map the outcome to exit codes per D5: 0 for PASS or accepted, 2 for FAIL or exhausted-not-accepted, 1 for a failed run; a failed round commit prints `round N commit failed: <error>` on stderr and returns 1
-  - [ ] Reuse the existing verdict→exit semantics; do not duplicate `_exit_on` logic in a second form (extract a shared helper if needed)
+    4. read the outcome from the returned `PipelineResult`, not from `RoundPrinter` state:
+       - rounds = the loop `StepResult.iteration` (0 when `skip_if_met` skipped the loop)
+       - final verdict = the review `ActionResult` in the loop step's `action_results` when rounds > 0, otherwise the leading review step's
+       - accepted / exhausted = the loop `StepResult.accepted` / `.exhausted`
+    5. print `final: <VERDICT> after N rounds`
+    6. exit codes per D5, checked in this order: `accepted` → 0; `exhausted` and not accepted → 2 (the run status is failed because `on_exhaust: fail`, but this is a FAIL outcome, not a run failure); any other failed status → 1, printing the run error (a failed round commit prints `round N commit failed: <error>` on stderr); otherwise PASS or CONCERNS → 0, FAIL → 2
+  - [ ] Implement the mapping in `review_revise.py`; do not import or move `_exit_on` (D3, and Task 14's `review.py` diff limit)
   - **Success:** returns the D5 code for every row in the D5 table that the runner owns
 
 - [ ] **Task 12: Test params and exit codes**
   - [ ] In `tests/cli/test_review_revise.py`, executor stubbed:
     1. params contain `slice`, `review-model`, `max-revisions`; `model` present only with `--revise-model`
     2. a pool alias passed as reviewer reaches `review-model` unchanged (D3)
-    3. exit 0 for PASS and for accepted CONCERNS; 2 for FAIL; 1 for a failed action
-    4. stubbed failed round commit → stderr `round N commit failed: …` and exit 1
+    3. exit 0 for PASS and for CONCERNS; 2 for FAIL; 1 for a failed action
+    4. exhausted loop: `accepted=True` → 0; `accepted=False` → 2
+    5. zero rounds: `final:` uses the leading review's verdict and reports 0 rounds
+    6. stubbed failed round commit → stderr `round N commit failed: …` and exit 1
   - [ ] Run the tests, then ruff and pyright
-  - [ ] Commit: `feat: add review-revise runner with option checks and round output`
+  - [ ] Commit: `feat: add review-revise runner with params and exit codes`
   - **Success:** tests pass, zero pyright errors
 
 ### Wiring
 
-- [ ] **Task 13: Wire `--max` / `--revise-model` into `review_slice`**
-  - [ ] In `cli/commands/review.py`, add `--max` (int, min 1) and `--revise-model` to `review_slice`
+- [ ] **Task 13: Wire `--max` / `--revise-model` into `review_slice`, `review_tasks` and `review_code`**
+  - [ ] In `cli/commands/review.py`, for each subcommand below:
+    1. `review_slice`, kind `SLICE`
+    2. `review_tasks`, kind `TASKS`
+    3. `review_code`, kind `CODE`
+  - [ ] Add `--max` (int; range enforced by the loop's own `max` validation, not Typer) and `--revise-model`
   - [ ] Resolve the reviewer with the existing `_resolve_model`, then add the early branch: `if max_rounds is not None: raise typer.Exit(run_review_revise(...))`, with the `--revise-model requires --max` check before it
-  - [ ] Convert the literal kind to `BuiltinReviewTemplate` once, here
-  - **Success:** `sq review slice --help` lists both options; `--max 3` and `--max=3` both parse
-
-- [ ] **Task 14: Wire into `review_tasks`**
-  - [ ] Same as Task 13 for `review_tasks`, kind `TASKS`
-  - **Success:** `sq review tasks --help` lists both options
-
-- [ ] **Task 15: Wire into `review_code`**
-  - [ ] Same as Task 13 for `review_code`, kind `CODE`
+  - [ ] Convert the literal kind to `BuiltinReviewTemplate` once, at this boundary
   - [ ] Do not add the options to `review_arch`
-  - **Success:** `sq review code --help` lists both options; `sq review arch 941 --max 1` fails with Typer's unknown-option error
+  - **Success:** `--help` for all three lists both options; `--max 3` and `--max=3` both parse; `sq review arch 941 --max 1` fails with Typer's unknown-option error
 
-- [ ] **Task 16: Test wiring and no-`--max` parity**
-  - [ ] Through Typer's `CliRunner`, executor stubbed: each of `slice`, `tasks`, `code` routes to `run_review_revise` with the right kind; `arch --max` is rejected; `--max 0` is rejected
+- [ ] **Task 14: Test wiring and no-`--max` parity**
+  - [ ] Through Typer's `CliRunner`, executor stubbed: each of `slice`, `tasks`, `code` routes to `run_review_revise` with the right kind; `arch --max` is rejected
   - [ ] Run `pytest tests/cli -q`: all existing review CLI tests pass unchanged (Success Criterion 6)
   - [ ] Run ruff and pyright
   - [ ] Commit: `feat: add --max and --revise-model to sq review slice, tasks and code`
@@ -160,7 +165,7 @@ status: not_started
 
 ### Integration
 
-- [ ] **Task 17: Two-round integration test**
+- [ ] **Task 15: Two-round integration test**
   - [ ] Add an integration test (`tests/pipeline/test_review_revise_integration.py`) running the composed definition through `execute_pipeline` with fake review and dispatch actions: review CONCERNS → round 1 CONCERNS → round 2 PASS
   - [ ] Assert: two `round_completed` calls; each round commits; prior reviews archived under `reviews/archive/`; final verdict PASS
   - [ ] Add a case where the first review is PASS: zero rounds run (Success Criterion 2)
@@ -171,21 +176,19 @@ status: not_started
 
 ### Docs and verification
 
-- [ ] **Task 18: Slash command doc**
+- [ ] **Task 16: Slash command doc and CHANGELOG**
   - [ ] In `commands/sq/review.md`, document `--max N` and `--revise-model` for `slice`, `tasks` and `code`, and confirm they are passed through to `sq review` unchanged
   - [ ] State the restrictions from D6 (slice index only, supported options only, `code` needs the slice branch and a clean tree)
   - [ ] Run any installed-command sync/parity tests that cover `commands/sq/`
+  - [ ] Add an Unreleased `### Added` CHANGELOG bullet: `sq review slice|tasks|code --max N` revises an existing artifact until its review passes, with `--revise-model` for the reviser
+  - [ ] Commit: `docs: document sq review --max in slash command and CHANGELOG`
   - **Success:** doc covers both options for all three kinds
 
-- [ ] **Task 19: CHANGELOG**
-  - [ ] Add an Unreleased `### Added` bullet: `sq review slice|tasks|code --max N` revises an existing artifact until its review passes, with `--revise-model` for the reviser
-  - [ ] Commit: `docs: document sq review --max in slash command and CHANGELOG`
-
-- [ ] **Task 20: Full validation**
+- [ ] **Task 17: Full validation**
   - [ ] Run the full test suite, `ruff format`, `ruff check`, `pyright`
   - **Success:** all pass, zero pyright errors
 
-- [ ] **Task 21: Verification Walkthrough (design steps 1–6)**
+- [ ] **Task 18: Verification Walkthrough (design steps 1–6)**
   - [ ] Install the branch build of `sq` and confirm `sq --version` runs from this checkout
   - [ ] Run walkthrough steps 1–5 against slice 941 from a standard terminal; for step 4, use the slice branch and then `main`
   - [ ] Step 6 (`/sq:review` parity) runs inside Claude Code; if it cannot be run in this session, record it as pending for the PM
