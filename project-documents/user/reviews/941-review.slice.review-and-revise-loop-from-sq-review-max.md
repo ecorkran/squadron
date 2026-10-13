@@ -105,3 +105,10 @@ D1 resolves the "run the loop only" versus "extract the loop" question the plan 
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 5
 - Finding-shaped matches — surviving validation: 5
+
+## Response (20261012)
+
+- **F001 — fixed outside the slice.** The loop commit fix landed on main as a standalone fix (85a7f7aa) with its own regression test. Scope item 6 and the D5 row now treat it as inherited.
+- **F002 — declined.** `MAX_SUPPORTED_OPTIONS` stays: refusing unknown options by default is the project's no-silent-fallback rule, and a deny-list would let new options be silently ignored. The `code` branch check stays because without it revisions commit to whatever branch is checked out, including `main`. The dirty-tree check stays because `code` round commits run `git add -A`. Merging the D2 shape checks into one error is cosmetic.
+- **F003 — fixed.** New D7: `RunObserver.round_completed` is called after each round's commit, and the CLI's `RoundPrinter` builds the per-round lines from it, with defined output for a failed commit and for a round with no changes.
+- **F004, F005 — notes, no action.**

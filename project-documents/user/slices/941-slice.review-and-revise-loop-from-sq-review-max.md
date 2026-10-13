@@ -30,7 +30,7 @@ Included:
 3. **Kind → pipeline table:** `REVISE_PIPELINE_BY_KIND: dict[BuiltinReviewTemplate, str]`, holding `SLICE → "P4"`, `TASKS → "P5"`, `CODE → "P6"`. `sq review arch --max` does not exist as an option. Any other kind missing from the table gets an explicit error.
 4. **Loop runner:** builds a two-step pipeline definition from the mapped pipeline, `[review, <that pipeline's loop>]`, and runs it with `execute_pipeline`.
 5. **`/sq:review` slash command:** documents `--max` and `--revise-model` and passes them through.
-6. **Loop fix:** a failed round commit ends the loop (D5). This is in `_execute_loop_body` and applies to every pipeline loop.
+6. **Per-round progress:** `RunObserver` gains `round_completed`, which the executor calls after each loop round (D7). The CLI's per-round lines come from it.
 
 Excluded:
 
@@ -42,7 +42,7 @@ Excluded:
 
 ### Prerequisites
 
-None. Every piece this slice composes already exists.
+None outstanding. A failed round commit already ends the loop (fix 85a7f7aa); D5 relies on it.
 
 ### Interfaces Required
 
@@ -54,6 +54,7 @@ None. Every piece this slice composes already exists.
 | `StepTypeName.LOOP`, `parse_loop_config`, `ExhaustBehavior` | `pipeline/loop_config.py` | find the loop and override `on_exhaust` |
 | `BuiltinReviewTemplate` | `review/templates/__init__.py` | key the table |
 | `save_review_result` / `archive_existing_review` | `review/persistence.py` | used unchanged by the pipeline review action |
+| `RunObserver` | `pipeline/run_observer.py` | extended with `round_completed` (D7); passed to `execute_pipeline` as `observer` |
 
 ## Architecture
 
@@ -76,20 +77,23 @@ sq review slice 941 --model X --max 3 [--revise-model Y]
                        params=P4.params, steps=[review, loop])
   → params = {slice: 941, review-model: X, max-revisions: "3",
               model: Y if given (else P4's default `model`)}
-  → execute_pipeline(definition, params, resolver, cf_client, cwd)
+  → execute_pipeline(definition, params, resolver, cf_client, cwd,
+                     observer=RoundPrinter)
        review  → saves 941-review.slice.….md (archives any prior one)
        loop    → skip_if_met: PASS on the first review means 0 rounds
                  round: revise (dispatch, feedback: review, in place)
                         → review → commit (commit_each_iteration)
                  stops when `until` is met, or at max (accept_if / fail)
-  → print per-round verdicts and the final verdict; exit code (D5)
+       RoundPrinter prints the review line on step_completed(review)
+       and one line per round on round_completed (D7)
+  → print the final verdict; exit code (D5)
 ```
 
 ### State Management
 
 - **Artifacts and reviews** are on disk and in git. Each round's review goes through `save_review_result` with `revision_number=context.iteration`, which archives the previous review under `reviews/archive/` exactly as pipeline reviews already do. Each revision is committed.
 - **Run state:** none is written (D4).
-- **Summaries:** no summary step. The CLI prints a per-round table and the final verdict to stdout.
+- **Summaries:** no summary step. The CLI prints per-round lines as rounds finish (D7) and the final verdict to stdout.
 
 ## Technical Decisions
 
@@ -139,7 +143,7 @@ Exit codes 0, 1 and 2 mean what they mean for `sq review` without `--max` (`_exi
 | Final verdict PASS, or accepted by `accept_if` | normal finish | per-round lines | 0 |
 | Final verdict FAIL, or loop exhausted and not accepted | normal finish | per-round lines | 2 |
 | Revise dispatch or review fails, including a model call that hangs or times out | Inherited unchanged: the provider and dispatch timeouts apply, and this slice adds none. The loop ends. | The action error is printed | 1 |
-| Round commit fails (hook failure, git timeout, planning commit off the target branch) | The loop stops after that round and ends with the same status a failed revise dispatch gets (`_loop_failure_status`). Today the loop records the failure and continues, which lets the next round sweep an uncommitted revision into a later commit, or revise on top of it. This slice changes `_execute_loop_body` so that a failed round commit ends the loop. P4/P5/P6 get the same fix. | `round N commit failed: <error>` on stderr, logged at WARNING | 1 |
+| Round commit fails (hook failure, git timeout, planning commit off the target branch) | Inherited (fix 85a7f7aa): the loop stops after that round with the status a failed revise dispatch gets, `on_exhaust: fail` here. | `round N commit failed: <error>` on stderr from the run error; the executor logs it at ERROR | 1 |
 | Ctrl-C mid-round | Inherited: `KeyboardInterrupt` propagates, and that round is not committed. `slice` and `tasks` commits stage only the artifact and review paths, so on a rerun a leftover artifact edit is reviewed and committed with round 1. | Python's interrupt | non-zero |
 | `code` with a dirty working tree | Refused before any model call. `code` round commits stage everything (`git add -A`), so unrelated changes or a leftover interrupted edit would be swept into a revision commit. | Error listing the dirty paths | 1 |
 
@@ -149,6 +153,18 @@ Exit codes 0, 1 and 2 mean what they mean for `sq review` without `--max` (`_exi
 - `--revise-model` without `--max` is an error.
 - With `--max`, the only options allowed are those in one constant, `MAX_SUPPORTED_OPTIONS`: `max`, `model`, `revise_model`, `cwd` and `verbose`. Any other parameter whose Click source is `ParameterSource.COMMANDLINE` is refused, and the error names it. The loop's review steps cannot honor other options, and silently ignoring them would be a fallback. Options added to `sq review` later are refused by default.
 - For `code`, the current branch must be the slice branch, because revisions are committed to the checked-out branch. P6 enters the branch itself; this command does not switch branches. When the branch is wrong, the error names the expected branch.
+
+### D7 — Per-round progress through `RunObserver`
+
+`execute_pipeline` returns one `StepResult` per loop, holding only the last round's action results, so the per-round lines cannot be built from the result. `RunObserver` gains one method:
+
+```python
+def round_completed(self, step_name: str, iteration: int, results: list[ActionResult]) -> None: ...
+```
+
+`_execute_loop_body` receives the observer the same way the `each` body does and calls it after each round's commit, before the `until` check, so a round that ends the loop is still reported. `RunStateRecorder` implements it as a no-op, and so does the test double in `tests/pipeline/observer_support.py`.
+
+The CLI's `RoundPrinter` observer reads the round's review verdict and finding count, and the commit's short SHA, from `results`. A round whose commit failed prints `commit failed` in place of the SHA. A round with no commit output (`committed: False`, nothing changed) prints `no changes`. A missing review result is a bug in the loop shape D2 already checks, so it raises.
 
 ### Patterns and Conventions
 
@@ -207,8 +223,9 @@ None.
   - an error is raised for zero or two loops, for zero or two review steps in the loop body, and for a loop without `until` or `skip_if_met`;
   - a project override of P4 is picked up.
 - CLI tests with the executor stubbed cover option validation, param assembly (`review-model`, `model`, `max-revisions`, `slice`) and the D5 exit-code mapping.
-- A stubbed failed round commit produces the stderr line, a WARNING log record and exit 1.
-- An executor test: in a three-round loop, a failed round-1 commit runs no round 2.
+- A stubbed failed round commit produces the stderr line and exit 1.
+- An executor test: `round_completed` is called once per round with that round's iteration and results, including a round whose commit failed.
+- `RoundPrinter` tests: verdict and SHA line, `commit failed`, `no changes`, and a missing review raising.
 - `code` with a dirty tree exits 1 before any executor call.
 - One integration test runs the composed definition with fake review/dispatch actions through two rounds: CONCERNS → PASS.
 - `ruff format`, `ruff check` and `pyright` with zero errors.
@@ -240,11 +257,12 @@ None.
 
 ### Development Approach
 
-1. `pipeline/review_revise.py`: the table, the builder and its unit tests.
-2. `cli/commands/review_revise.py`: validation, params, execution, reporting and exit codes, with tests.
-3. Wire `--max` / `--revise-model` into `review_slice`, `review_tasks` and `review_code`.
-4. The integration test with fake actions.
-5. The slash command doc, CHANGELOG and the walkthrough run.
+1. `RunObserver.round_completed` and the executor call (D7), with tests.
+2. `pipeline/review_revise.py`: the table, the builder and its unit tests.
+3. `cli/commands/review_revise.py`: validation, params, `RoundPrinter`, execution and exit codes, with tests.
+4. Wire `--max` / `--revise-model` into `review_slice`, `review_tasks` and `review_code`.
+5. The integration test with fake actions.
+6. The slash command doc, CHANGELOG and the walkthrough run.
 
 Effort: 3/5.
 
