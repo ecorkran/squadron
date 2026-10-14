@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from squadron.core.models import AgentConfig
+from squadron.pipeline.models import ActionResult
 from squadron.providers.sdk.provider import ClaudeSDKProvider
 
 ConfigBuilder = Callable[[Path], Awaitable[AgentConfig]]
@@ -108,3 +109,20 @@ async def pr_composer(tmp_path: Path) -> AgentConfig:
     from squadron.pr.composer import compose_one_shot
 
     return await capture_config(lambda: compose_one_shot("p", model=None, profile="sdk"))
+
+
+async def dispatch_action(
+    tmp_path: Path,
+    params: dict[str, object],
+    prior_outputs: dict[str, ActionResult] | None = None,
+) -> AgentConfig:
+    """The pipeline ``dispatch`` action, with *params* layered over a minimal prompt."""
+    from squadron.pipeline.actions.dispatch import DispatchAction
+    from tests.pipeline.actions.dispatch_helpers import make_context
+
+    context = make_context(
+        params={"prompt": "p", "profile": "sdk", **params},
+        cwd=str(tmp_path),
+        prior_outputs=prior_outputs or {},
+    )
+    return await capture_config(lambda: DispatchAction().execute(context))

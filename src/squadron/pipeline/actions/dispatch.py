@@ -23,7 +23,9 @@ from squadron.core.models import (
 )
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.dispatch_outcome import assess_tool_outcome
 from squadron.pipeline.actions.dispatch_rules import (
+    dispatch_requires_writes,
     project_rules_for_dispatch,
     rule_step_from_params,
     sdk_native_record,
@@ -36,7 +38,14 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.sdk_session import DispatchStalledError
 from squadron.project_rules.errors import ProjectRulesError
-from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY, ProfileName, ProviderType
+from squadron.providers.base import (
+    FAILED_TOOL_CALLS_KEY,
+    FIRST_TOOL_ERROR_KEY,
+    TOOL_CALLS_MADE_KEY,
+    TOOLS_GIVEN_KEY,
+    ProfileName,
+    ProviderType,
+)
 from squadron.providers.errors import ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile, profile_credentials
@@ -115,6 +124,7 @@ async def one_shot_dispatch_with_telemetry(
     cwd: str | None = None,
     effort: Effort | None = None,
     rule_step: StepTypeName | None = None,
+    requires_writes: bool = False,
 ) -> tuple[str, dict[str, object]]:
     """Spawn a one-shot agent and return its text alongside tool-use telemetry.
 
@@ -193,6 +203,7 @@ async def one_shot_dispatch_with_telemetry(
         setting_sources=setting_sources,
         auto_memory=auto_memory,
         allowed_tools=allowed_tools,
+        requires_writes=requires_writes,
         tools_suppressed_reason=tools_suppressed_reason,
         # Slice 931 D11: no artifact records it here; the provider's own DEBUG log does.
         effort=effort,
@@ -219,6 +230,10 @@ async def one_shot_dispatch_with_telemetry(
             if given is not None:
                 telemetry[TOOLS_GIVEN_KEY] = given
                 telemetry[TOOL_CALLS_MADE_KEY] = response.metadata.get(TOOL_CALLS_MADE_KEY, 0)
+                telemetry[FAILED_TOOL_CALLS_KEY] = response.metadata.get(FAILED_TOOL_CALLS_KEY, 0)
+                # Absent, not None, when no call failed or the provider reports no text (D3).
+                if (first_error := response.metadata.get(FIRST_TOOL_ERROR_KEY)) is not None:
+                    telemetry[FIRST_TOOL_ERROR_KEY] = first_error
             sdk_type = response.metadata.get("sdk_type")
             # An informational RateLimitEvent is a usage-meter notice, not
             # response prose, and is excluded the same way (issue #23 class).
@@ -744,6 +759,7 @@ class DispatchAction:
         )
 
         allowed_tools = resolve_allowed_tools(context, self.action_type)
+        requires_writes = dispatch_requires_writes(context.params)
 
         response_text, tool_telemetry = await one_shot_dispatch_with_telemetry(
             prompt=self._resolve_prompt(context),
@@ -764,22 +780,33 @@ class DispatchAction:
             # it there would change one-shot SDK behavior beyond this slice.
             cwd=context.cwd,
             rule_step=rule_step_from_params(context.params),
+            requires_writes=requires_writes,
         )
 
         if error_result := _check_cli_error(response_text):
             return error_result
 
+        outcome = assess_tool_outcome(requires_writes, tool_telemetry)
+        for warning in outcome.warnings:
+            _logger.warning("Dispatch step '%s': %s", context.step_name, warning)
+
         # tool_telemetry is empty when the run had no tools, so the keys stay absent rather
         # than reporting a misleading zero (design D5).
+        metadata: dict[str, object] = {"model": model_id, "profile": profile_name, **tool_telemetry}
+        if outcome.fail_reason is not None:
+            _logger.warning("Dispatch step '%s' failed: %s", context.step_name, outcome.fail_reason)
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={"response": response_text},
+                error=outcome.fail_reason,
+                metadata=metadata,
+            )
         return ActionResult(
             success=True,
             action_type=self.action_type,
             outputs={"response": response_text},
-            metadata={
-                "model": model_id,
-                "profile": profile_name,
-                **tool_telemetry,
-            },
+            metadata=metadata,
         )
 
 
