@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261014
 
+### Release 0.21.8
+
+- **Contents:** slice 945 Dispatch Outcomes Match What Happened (Codex tool contract and silent success; #211, #202, #212 item 2), default tools for write steps and the bash warning (#213), Codex limited to read-only `allowed_tools`, #144 fix.
+
 ### Slice 945: implementation complete (Phase 6)
 
 - Branch `945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success` (from `main`), not merged; code review comes before Phase 7. Full suite 6670 passed, 4 skipped; pyright 0 errors.

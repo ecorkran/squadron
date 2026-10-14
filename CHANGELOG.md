@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.8] - 20261014
+
 ### Added
 - Provider profiles in `providers.toml` accept `sandbox` (Codex only), to pin a Codex sandbox for every call.
 - Phase and revise steps on OpenAI-compatible models (OpenRouter, local, Gemini) get `read_file`, `write_file`, `list_files`, `grep` and `bash` when the step sets no `allowed_tools`, so built-in pipelines run on any producer. `bash` is not sandboxed; see the README warning.
