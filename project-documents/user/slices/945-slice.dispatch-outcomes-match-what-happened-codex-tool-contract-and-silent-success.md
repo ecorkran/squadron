@@ -3,7 +3,7 @@ docType: slice-design
 slice: dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success
 project: squadron
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
-dependencies: [942, 944]
+dependencies: []
 interfaces: []
 dateCreated: 20261014
 dateUpdated: 20261014
@@ -36,22 +36,40 @@ A dispatch step can report `completed`, `success: True` when the model did nothi
 5. **#202:** `ContextForgeError` from the slice lookup in the dispatch-artifact post-condition, and from dispatch's `existing: keep` lookup, becomes a one-line step failure with no traceback (D5).
 6. **#212 item 2:** a merge refused for unfinished task items ends the step, and therefore the run, `paused` instead of `failed` (D6).
 
+Items 5 and 6 are assigned to this slice by the plan entry. They share no code with items 1–4, so they are implemented and committed separately.
+
 **Excluded**
-- Bare `dispatch` steps with no `allowed_tools`. These are legitimate text-only steps, and squadron cannot tell intent from prose. On a read-only Codex sandbox they log a WARNING (D2) but are not failed. The fake tool-call markup case (#211, deepseek with no tools) is in this class.
+- Failing bare `dispatch` steps that declare no tools (see Plan Reconciliation).
 - Honoring squadron tools inside Codex (for example by exposing them as an MCP server). Codex writes through its own tools when its sandbox allows it.
 - Tool telemetry on the persistent SDK session path. It reports none today, and adding it is a separate change.
 - #212 items 1 and 3 (merge with unchecked tasks; `concerns_or_better` merging CONCERNS). One related finding is recorded for item 1 under Special Considerations.
 - Parsing model prose for refusals.
 
+### Plan Reconciliation
+How each case the plan entry names is handled:
+
+| Plan case | Handling |
+|---|---|
+| Codex ignores `allowed_tools` | D2 refusal (criterion 1) |
+| A dispatch that must write on a read-only Codex sandbox | D2 refusal for write-required dispatches (D1, criterion 2) |
+| A tool call that returned an error (#211 deepseek jail probe) | D3 row 3 fails it (criterion 4); row 4 warns otherwise |
+| `allowed_tools` declared, no tools given | D3 row 1 |
+| Zero tool calls on a step that needs them | D3 row 2; "needs them" means write-required (D1) |
+| #211 luna probe, bare dispatch, no tools | Not failed. WARNING plus `sandbox: read-only` in metadata (criterion 3) |
+| #211 deepseek probe, bare dispatch, no tools, fake tool-call markup | Not failed |
+
+The plan fails a step "where the step cannot have done its job". A bare dispatch that declares no tools has declared no job beyond its text reply, so squadron cannot tell a refusal from an answer without parsing prose, which is excluded. The same two models on a phase or revise step fail: Codex by D2, deepseek by the OpenAI-compatible refusal (D2) or row 5.
+
 ## Dependencies
 
 ### Prerequisites
+None. The plan entry lists no dependencies. This slice builds on completed work:
 - Slice 942 (complete): the checkbox merge gate (`_require_checked_tasks`), the close-out step, and failed-dispatch handling in loops.
 - Slice 944, #200 (complete): a failed dispatch in a multi-step loop body ends the loop with the loop's `on_exhaust` status (`executor.py` `_execute_loop_body`, `_failed_dispatch_error`). Steps failed by this slice use that path unchanged.
 
 ### Interfaces Required
 - `AgentConfig` (`core/models.py`): gains `requires_writes: bool = False`.
-- `ToolDescriptor` (`tools/models.py`): gains `writes: bool = False`. It is set on `write_file` and `bash`.
+- `WRITE_TOOL_NAMES` (`tools/builtin/_shared.py`, re-exported from `tools/builtin`): a frozenset of the existing `WRITE_FILE_NAME` and `BASH_NAME`.
 - Provider response metadata: the existing keys `tools_given`, `tool_calls_made`, and `failed_tool_calls`, plus the new `tool_errors: list[str]`.
 
 ## Architecture
@@ -66,10 +84,10 @@ A dispatch step can report `completed`, `success: True` when the model did nothi
 | Codex agent | `providers/codex/agent.py` | Spawn-time refusals; stamp `sandbox` in metadata |
 | OpenAI-compatible agent | `providers/openai/agent.py` | Write-tool refusal; keep the first `_TOOL_ERROR_LIMIT` error texts as `tool_errors` |
 | SDK agent | `providers/sdk/agent.py` | Count `ToolResultBlock.is_error` inside `UserMessage.content` |
-| Tool registry | `tools/models.py`, `tools/builtin/*` | `ToolDescriptor.writes`; a lookup for write-capable names |
+| Write-capable tools | `tools/builtin/_shared.py` | `WRITE_TOOL_NAMES` constant |
 | Dispatch-artifact post-condition | `events/builtin/dispatch_artifact.py` | Catch `ContextForgeError` and return a one-line failed outcome |
-| Branch merge | `pipeline/branch_ops.py`, `actions/branch.py` | `BranchFailure.UNFINISHED_TASKS`; the action marks the result as needing a decision |
-| Executor | `pipeline/executor.py` | A failed action carrying `NEEDS_DECISION_OUTPUT` gives `PAUSED`, not `FAILED` |
+| Branch merge | `pipeline/branch_ops.py` | `BranchFailure.UNFINISHED_TASKS` |
+| Executor | `pipeline/executor.py` | A failed action whose `failure` output is `UNFINISHED_TASKS` gives `PAUSED`, not `FAILED` |
 
 ### Data Flow
 
@@ -109,8 +127,8 @@ Dispatch keeps a provider-agnostic backstop (D3 row 1) for any provider that ign
 |---|---|---|
 | 1 | `allowed_tools` non-empty after the capability gate, but no `tools_given` in the response | **Fail**: "declared tools were not given to the model" |
 | 2 | Write-required, tools given, `tool_calls_made == 0` | **Fail**: "step must write files but made no tool calls" |
-| 3 | `tool_calls_made > 0` and `failed_tool_calls == tool_calls_made` | **Fail**: "every tool call failed", with the first `tool_errors` entry |
-| 4 | `failed_tool_calls > 0`, some calls succeeded | **Warn**. Models recover from a bad grep or path |
+| 3 | `tool_calls_made > 0`, `failed_tool_calls == tool_calls_made`, and the step is write-required or its tools include one in `WRITE_TOOL_NAMES` | **Fail**: "every tool call failed", with the first `tool_errors` entry |
+| 4 | Any other `failed_tool_calls > 0` | **Warn**. A read-only step can still answer after a failed read or grep |
 | 5 | Tools suppressed by the capability gate (`tools_suppressed_reason`) on a write-required step | **Fail** (it reduces to row 2's situation with no tools at all) |
 
 Every row records its counts in metadata. Fail rows also log at WARNING with the step name. `tools_suppressed_reason` is copied into metadata today only as a log line; it is now copied as a key. Rows 2 and 5 do not apply where no tool telemetry exists: SDK phase steps use native tools and stamp telemetry only when `allowed_tools` is declared. These steps are covered by the #15 post-condition (`design`, `tasks`) and by the merge gate (`implement`).
@@ -126,8 +144,7 @@ In `dispatch_artifact._resolve_paths`, catch `ContextForgeError` next to `(Value
 ### D6 — Unfinished tasks at merge pause the run
 A task-file hard gate is a task that requires an explicit PM confirmation before work proceeds (for example trading-data slice 128, "Hard Gate A — PM-confirmed backup"). The implementing agent stops there by design. Squadron's only deterministic evidence is the unchecked items the merge gate already finds, and the gate currently returns `FAILED`. The work is not wrong; it is waiting for a decision. So:
 - Add `BranchFailure.UNFINISHED_TASKS` and raise it from `_require_checked_tasks` when unchecked items remain. An unreadable task file stays `OTHER`, which still fails.
-- The branch action sets `outputs[NEEDS_DECISION_OUTPUT] = True` on that failure. `NEEDS_DECISION_OUTPUT` is defined once in `pipeline/models.py`.
-- The executor's action-failure branch returns `ExecutionStatus.PAUSED` when a failed action carries that output. The run ends `paused`, exits 0 (existing PAUSED handling), and is resumable.
+- The branch action already puts the failure kind in its `failure` output (`FAILURE_OUTPUT`). The executor's action-failure branch returns `ExecutionStatus.PAUSED` when that output is `UNFINISHED_TASKS`. The run ends `paused`, exits 0 (existing PAUSED handling), and is resumable.
 - Fan-out/batch flag classification (slice 197) maps `UNFINISHED_TASKS` the way it maps `OTHER` today. Batch items have no per-item pause.
 
 **Open item for the PM:** the #212 run (trading-ui, 0.21.7) ended `completed`, and its run state is not on this machine. A `completed` end means the merge gate passed, so either close-out checked off the gated item or cf listed no task files (see Special Considerations). D6 makes the honest-close-out case pause. Phase 6 should confirm the actual path against that run's state file if it can be supplied.
@@ -136,8 +153,6 @@ A task-file hard gate is a task that requires an explicit PM confirmation before
 
 ### Provides to Other Slices
 - `AgentConfig.requires_writes` and the D2 contract. Future providers must refuse a write-required config they cannot serve.
-- `ToolDescriptor.writes`, for any later tool policy.
-- `NEEDS_DECISION_OUTPUT`, a generic way for an action to end its step `paused`.
 
 ### Consumes from Other Slices
 - 944/#200: a failed dispatch inside a multi-step loop body ends the loop with `on_exhaust`. A revise dispatch failed by D3 in P6's `revise-code` therefore ends at `checkpoint`, which is `paused`. In P4/P5 loops it ends with their configured `on_exhaust`. The single-step loop shape (`_execute_loop_step`) still treats an action failure as transient. No built-in pipeline uses that shape for a dispatch, so it stays as is.
@@ -159,7 +174,7 @@ A task-file hard gate is a task that requires an explicit PM confirmation before
 ### Technical Requirements
 - Unit tests for `assess_tool_outcome` cover each D3 row and the no-telemetry case.
 - Provider tests cover each D2 refusal and the bare-dispatch WARNING. The SDK test covers the D4 count.
-- Executor test: a failed action with `NEEDS_DECISION_OUTPUT` gives `PAUSED`, without it `FAILED`. Branch test: unchecked items give `UNFINISHED_TASKS`, an unreadable file gives `OTHER`.
+- Executor test: a failed branch action with `UNFINISHED_TASKS` gives `PAUSED`, with `OTHER` gives `FAILED`. Branch test: unchecked items give `UNFINISHED_TASKS`, an unreadable file gives `OTHER`.
 - Every new failure mode logs at WARNING or ERROR, and at least one test asserts the log record.
 - `ruff format`, `ruff check`, and `pyright` with zero errors. The full test suite passes.
 - CHANGELOG bullets for the user-visible changes (refusals, failed steps, the paused merge, one-line cf error).
@@ -193,13 +208,13 @@ Run inside a scratch clone registered with cf. Probe pipelines are one-step YAML
 ## Implementation Notes
 
 ### Development Approach
-1. Add `ToolDescriptor.writes` and `AgentConfig.requires_writes`, and the `dispatch_requires_writes` predicate.
+1. Add `WRITE_TOOL_NAMES` and `AgentConfig.requires_writes`, and the `dispatch_requires_writes` predicate.
 2. D4: fix the SDK count first, since rows 3 and 4 depend on accurate counts.
 3. OpenAI-compatible agent: `tool_errors` capture and the write-tool refusal.
 4. Codex agent: spawn refusals, the bare-dispatch WARNING, and the `sandbox` metadata.
 5. `dispatch_outcome.py` and its wiring in `_dispatch_via_agent`, including the new metadata keys.
 6. D5: cf one-line errors in the post-condition and the keep path.
-7. D6: `UNFINISHED_TASKS`, `NEEDS_DECISION_OUTPUT`, the executor mapping, and the batch flag mapping.
+7. D6: `UNFINISHED_TASKS`, the executor mapping, and the batch flag mapping.
 8. CHANGELOG, then the walkthrough.
 
 Unit tests for each step mock the provider stream or registry. Walkthrough steps 1–4 use real providers; they are the only proof that the refusals fire on real configs.
