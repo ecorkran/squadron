@@ -128,7 +128,8 @@ class TestUnfinishedSlices:
         items = await _cf_unfinished_slices(["900"], client, {}, cwd=os.getcwd())
 
         assert client.calls == [["list", "slices", "900", "--json"]]
-        assert _indices(items) == ["907", "914", "923", "924", "928", "929"]
+        # 901 is complete, 907 is deferred.
+        assert _indices(items) == ["914", "923", "924", "928", "929"]
 
     @pytest.mark.asyncio
     async def test_no_plan_reads_the_active_plan(self) -> None:
@@ -146,6 +147,33 @@ class TestUnfinishedSlices:
 
         with pytest.raises(ValueError, match="plan must be an architecture index, got"):
             await _cf_unfinished_slices([plan], StubCfClient(), {}, cwd=os.getcwd())
+
+
+class TestDeprecatedSlices:
+    """#208: no source selects a deprecated slice."""
+
+    _SLICES = {
+        "entries": [
+            *_SLICES_900["entries"],  # type: ignore[misc]
+            {"index": 930, "name": "Cancelled", "designFile": None, "status": "deprecated"},
+        ]
+    }
+
+    def test_every_source_shares_the_excluded_set(self) -> None:
+        from squadron.pipeline.sources import _EXCLUDED_STATUSES, CfSliceStatus
+
+        assert CfSliceStatus.DEPRECATED in _EXCLUDED_STATUSES
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("function", ["unfinished_slices", "undesigned_slices"])
+    async def test_deprecated_slice_not_selected(self, function: str) -> None:
+        from squadron.pipeline.sources import SOURCE_REGISTRY
+
+        client = StubCfClient(slices=self._SLICES)
+        items = await SOURCE_REGISTRY[("cf", function)](["900"], client, {}, cwd=os.getcwd())
+
+        assert "930" not in _indices(items)
+        assert "923" in _indices(items)
 
 
 class TestUndesignedSlices:
