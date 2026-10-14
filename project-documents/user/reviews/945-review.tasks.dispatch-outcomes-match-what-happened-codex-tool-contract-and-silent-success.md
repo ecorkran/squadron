@@ -14,44 +14,54 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261014
 dateUpdated: 20261014
-reviewedSha: 4ca6c6e5032b4b397de0b3af47964fb13f67c629
-revision_number: 1
+reviewedSha: 98fe4397109294ea977bb495695ad515117492dd
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-durationSeconds: 32.1
+toolCallsMade: 3
+durationSeconds: 34.5
 runId: run-20261014-p5-5722795e
 squadronVersion: 0.21.7
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Metadata key constants are decided after the first task that needs them"
-    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:101"
-  - id: F002
-    severity: concern
-    category: test-coverage
-    summary: "A failed D3 write-tool check on SDK one-shot has no direct test"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:131"
-  - id: F003
-    severity: concern
-    category: task-structure
-    summary: "Several implementation tasks run back-to-back before their tests"
-    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:127-176"
-  - id: F004
-    severity: note
-    category: consistency
-    summary: "Predicate location differs between the design and the tasks"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:81"
-  - id: F005
-    severity: note
-    category: process
-    summary: "Commit checkpoints are well distributed"
-    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:44"
-  - id: F006
     severity: pass
     category: coverage
-    summary: "Success-criteria traceability"
+    summary: "Success-criteria coverage is complete"
     location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md"
+  - id: F002
+    severity: pass
+    category: sequencing
+    summary: "Sequencing and test-with pattern"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md"
+  - id: F003
+    severity: concern
+    category: proportionality
+    summary: "Task count and impl/test split are heavy for effort 3/5"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md"
+  - id: F004
+    severity: concern
+    category: scope
+    summary: "Task 2 adds metadata key constants that the design does not call for"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md (Task 2, second sub-item)"
+  - id: F005
+    severity: concern
+    category: task-clarity
+    summary: "Task 14 has a vague, conditional step"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md (Task 14, third sub-item)"
+  - id: F006
+    severity: concern
+    category: proportionality
+    summary: "Implementation detail dictated beyond what the design requires"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md (Tasks 6, 11)"
+  - id: F007
+    severity: concern
+    category: verifiability
+    summary: "Task 26 depends on external state and credentials that the task cannot guarantee"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md (Task 26)"
+  - id: F008
+    severity: note
+    category: scope
+    summary: "Tasks 9 and 10 carry an extra WARNING behavior beyond refusal"
+    location: "project-documents/user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md (Tasks 9–10)"
 ---
 
 # Review: tasks — slice 945
@@ -61,47 +71,69 @@ findings:
 
 ## Findings
 
-### [CONCERN] Metadata key constants are decided after the first task that needs them
+### [PASS] Success-criteria coverage is complete
 
-Task 6 stamps `first_tool_error` in the OpenAI agent. Task 11 then says "if the providers do not already share key constants, define them once in this module and use them in Task 13". `dispatch_outcome.py` is in `pipeline/`, so a provider can't import its constants without inverting the layering. The conditional is also vague for a junior AI. As written, the literal `"first_tool_error"` could end up in three modules (`providers/openai/agent.py`, `dispatch_outcome.py`, `dispatch.py`). That breaks the project rule against scattering comparison values. Decide the constants' home (for example `core/` or next to `WRITE_TOOL_NAMES` in Task 2) and say whether `tools_given`, `tool_calls_made` and `failed_tool_calls` already have constants. Task 6 should then use that home.
+- Criterion 1 is covered by Tasks 9–10.
+- Criterion 2 is covered by Tasks 9–10.
+- Criterion 3 is covered by Tasks 9–10.
+- Criterion 4 is covered by Tasks 6, 8, 11–14.
+- Criterion 5 is covered by Tasks 7–8.
+- Criterion 6 is covered by Task 14.
+- Criterion 7 is covered by Tasks 16–19.
+- Criterion 8 is covered by Tasks 20–23.
+- Criterion 9 is covered by Tasks 4–5.
+- The integration requirement (the #200 loop path) is covered by Task 15.
+- The CHANGELOG, validation and walkthrough requirements are covered by Tasks 24–26.
+- No load-test or NFR task is needed.
 
-### [CONCERN] A failed D3 write-tool check on SDK one-shot has no direct test
+### [PASS] Sequencing and test-with pattern
 
-D3 says the rules apply to "SDK one-shot dispatches that declare `allowed_tools`". Criterion 9 covers only the failed-call count (Task 5). Task 14 mocks the registry generically and never says which provider's metadata shape it feeds. Add one case to Task 14 using SDK-shaped metadata (a non-zero `failed_tool_calls` with no `first_tool_error` key). That confirms row 2 and its "when present" handling work when the SDK doesn't supply the error text.
+- Dependencies run in order. The constants and predicate (Task 2) come first. The SDK count fix (Task 4) and the OpenAI `first_tool_error` (Task 6) precede the outcome rules (Task 11) and their wiring (Task 13). The executor flag (Task 20) precedes the branch failure that sets it (Task 22).
+- Each implementation task is followed immediately by its test task.
+- Commits fall at seven points between Tasks 3 and 24 rather than at the end.
+- The D5 and D6 work is committed separately from D1–D4, as the design requires.
+- The `_flag_kind` ordering note in Task 22 is accurate. `_flag_kind` already reads `FAILURE_OUTPUT` and `BranchFailure` (`src/squadron/pipeline/executor.py:1762-1775`), so the executor needs no new coupling.
 
-### [CONCERN] Several implementation tasks run back-to-back before their tests
+### [CONCERN] Task count and impl/test split are heavy for effort 3/5
 
-The test-with pattern is loose in two places:
-- Tasks 15 and 16 are both implemented before Task 17 tests them.
-- Tasks 20 and 21 follow Task 18 and are tested together in Task 22.
+- There are 26 tasks in one file, and many are tiny. Task 1 is branch creation. Tasks 3, 5 and 17 each add a few assertions. Task 15 is a single test that needs no code change.
+- Merge Task 15 into Task 14, since both cover the D3 dispatch behavior. Fold Task 17 into Task 19 as one D5 test task. Fold Task 21 into Task 20, so the flag and its test land together.
+- Task 25's full validation largely repeats the per-task ruff, pyright and pytest runs. Keep it only as a final gate.
 
-Task 21 is a one-function change with an ordering trap (the `PAUSED` check runs first today). It would fit better as a sub-item of Task 20 so the ordering warning sits next to the code that triggers it. Task 14 is the heaviest task: three test files, provider capture sites, an executor loop-body case and a commit. Consider splitting the executor loop-body case into its own task.
+### [CONCERN] Task 2 adds metadata key constants that the design does not call for
 
-### [NOTE] Predicate location differs between the design and the tasks
+- The slice design lists `WRITE_TOOL_NAMES`, `requires_writes` and the predicate. It does not mention new key constants in `providers/base.py`.
+- The constants are justified by the "never scatter comparison values" rule. But the task names `providers/base.py` without saying that the existing literals (`tools_given`, `tool_calls_made`) are being replaced.
+- Either state that the existing literals in the providers are migrated to the constants, or the change is incomplete and leaves duplicates. Also confirm `providers/base.py` is the right home for them.
 
-The design's component table places `dispatch_requires_writes` in `pipeline/actions/dispatch.py`. Task 2 puts it in `pipeline/actions/dispatch_rules.py`. The task's choice is better, because `dispatch.py` is already 786 lines and the predicate sits next to `rule_step_from_params`. Update the design table to match so the implementer isn't confused.
+### [CONCERN] Task 14 has a vague, conditional step
 
-### [NOTE] Commit checkpoints are well distributed
+- "Extend `tests/providers/agent_config_sites.py` captures if they cover this path" leaves the junior agent to decide whether to act.
+- Name the assertion: `requires_writes` is true for a phase-step param and for `feedback`, and false for bare dispatch. Name the file that carries it. Drop the conditional.
+- Task 14 also bundles four distinct scenarios plus a metadata-shape change. Task 13 should say which existing tests assert the full metadata dict, since Task 14's success line says they are the only ones that change.
 
-Commits land after Tasks 3, 5, 8, 10, 14, 17, 19, 22 and 23. D5 and D6 are separate commits from D1–D4, as the design asks. Merge is correctly left to Phase 7. CHANGELOG, full validation and the walkthrough are in the right order. No NFR load tests are implied, so no CI-gating task is needed.
+### [CONCERN] Implementation detail dictated beyond what the design requires
 
-### [PASS] Success-criteria traceability
+- Task 6 suggests a constant name (`_FIRST_TOOL_ERROR_MAX_CHARS`). Task 11 specifies a "frozen dataclass" with a signature and "module under ~100 lines". Task 22 adds an extra code-structure instruction about check ordering.
+- These are mostly harmless, and the design does name `ToolOutcome` and `assess_tool_outcome`. The "for example" constant name is a minor hallucination-trap risk and can be dropped.
+- Drop the line-count target and the constant name. Keep only what a success criterion needs.
 
-- Criteria 1–3 map to Tasks 9–10.
-- Criterion 4 maps to Tasks 6, 11, 13 and 14.
-- Criterion 5 maps to Tasks 7–8.
-- Criterion 6 maps to Task 14.
-- Criterion 7 maps to Tasks 15–17.
-- Criterion 8 maps to Tasks 18–22.
-- Criterion 9 maps to Tasks 4–5.
+### [CONCERN] Task 26 depends on external state and credentials that the task cannot guarantee
 
-Walkthrough steps 1–7 are covered by Task 25.
+- The walkthrough needs a Codex alias, an OpenRouter alias, SDK haiku, a scratch cf clone and a changeable Codex sandbox credential. The task correctly says to stop and ask the Project Manager if any is missing.
+- Walkthrough steps 1–4 are the only proof that the refusals fire on real configs, so a skipped step leaves criteria 1–4 verified only at unit level. State in the success line that a skipped step must be reported as unverified, not passed.
+- The DEVLOG sub-item cites `prompt.ai-project.system.md` without a path. I did not verify that reference.
+
+### [NOTE] Tasks 9 and 10 carry an extra WARNING behavior beyond refusal
+
+- The bare-dispatch WARNING traces to criterion 3, so it is in scope.
+- Task 9 says the agent logs it, while the context summary says "the agents do not log refusals". This is consistent, because the WARNING is not a refusal. Keep the distinction explicit.
 
 ### Run Digest
 
-- Response length: 4389 chars
+- Response length: 6295 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 3
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -111,10 +143,10 @@ Walkthrough steps 1–7 are covered by Task 25.
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 32.1 s
+- Duration: 34.5 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
