@@ -11,7 +11,7 @@ from typing import cast
 
 from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType, register_action
-from squadron.pipeline.actions.judge import Provenance, enforce_judge, resolve_thresholds
+from squadron.pipeline.actions.judge import Provenance, judge_verdict
 from squadron.pipeline.actions.review_fold import fold_review_parts
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
@@ -536,15 +536,9 @@ class ReviewAction:
         step_override = (
             cast(dict[str, object], judge_override) if isinstance(judge_override, dict) else None
         )
-        try:
-            thresholds = resolve_thresholds(settings.template.judge, step_override)
-            verdict, provenance = enforce_judge(result, thresholds, template_name, _logger)
-        except (TypeError, ValueError):
-            _logger.warning(
-                "review: malformed judge threshold override for template '%s'; verdict=UNKNOWN",
-                template_name,
-            )
-            verdict, provenance = "UNKNOWN", Provenance.JUDGE
+        verdict, provenance = judge_verdict(
+            result, template_name, settings.template.judge, step_override, _logger
+        )
         return verdict, provenance, verdict
 
     async def _save_part(

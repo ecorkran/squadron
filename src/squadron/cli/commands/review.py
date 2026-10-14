@@ -41,6 +41,7 @@ from squadron.models.aliases import (
     require_known_model,
     resolve_model_alias,
 )
+from squadron.pipeline.actions.judge import judge_verdict
 from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.errors import ProviderError
 from squadron.review.addressed.judge import JUDGE_TEMPLATE_NAME
@@ -821,6 +822,11 @@ def _run_review_command(
         raise typer.Exit(code=1) from exc
 
     result.project_rules = selected_rules
+    if template.is_judge:
+        # The parse leaves a judge's verdict UNKNOWN; the score decides it. Set it here
+        # so terminal, JSON and the saved artifact all carry the threshold verdict (#140).
+        verdict, _ = judge_verdict(result, template.name, template.judge, None, _logger)
+        result.verdict = Verdict(verdict)
     display_result(result, output, output_path, verbosity)
 
     return result
