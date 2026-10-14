@@ -61,6 +61,8 @@ class BranchAction:
             action_type=self.action_type,
             outputs={FAILURE_OUTPUT: failure},
             error=error,
+            # Unfinished work waits on a person; it is not broken (D6).
+            awaits_human=failure is BranchFailure.UNFINISHED_TASKS,
         )
 
 

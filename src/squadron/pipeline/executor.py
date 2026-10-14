@@ -1762,16 +1762,21 @@ def _pre_flag(item: dict[str, object], flagged: set[int]) -> tuple[str | None, F
 
 def _flag_kind(final: StepResult) -> FlagKind:
     """The flag kind of an item whose body ended on *final*, FAILED or PAUSED (197 D7)."""
+    failed = next((r for r in final.action_results if not r.success), None)
+    branch_failure = (
+        failed.outputs.get(FAILURE_OUTPUT)
+        if failed is not None and failed.action_type == ActionType.BRANCH
+        else None
+    )
+    # Checked before PAUSED: an unfinished-tasks merge refusal pauses the run, but the
+    # item still failed its step, as it did before it paused (D6).
+    if branch_failure == BranchFailure.UNFINISHED_TASKS:
+        return FlagKind.STEP_FAILED
     if final.status is ExecutionStatus.PAUSED:
         return FlagKind.PAUSED
     if final.exhausted:
         return FlagKind.REVIEW_UNRESOLVED
-    failed = next((r for r in final.action_results if not r.success), None)
-    if (
-        failed is not None
-        and failed.action_type == ActionType.BRANCH
-        and failed.outputs.get(FAILURE_OUTPUT) == BranchFailure.CONFLICT
-    ):
+    if branch_failure == BranchFailure.CONFLICT:
         return FlagKind.BRANCH_CONFLICT
     return FlagKind.STEP_FAILED
 

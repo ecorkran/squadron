@@ -656,6 +656,24 @@ class TestFlagKinds:
         assert _record(result, "1").flag_kind == kind
 
     @pytest.mark.asyncio
+    async def test_unfinished_tasks_pauses_the_run_and_flags_step_failed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def outcome(_: str) -> ActionResult:
+            return ActionResult(
+                success=False,
+                action_type="branch",
+                outputs={"failure": "unfinished_tasks"},
+                error="slice 1 not merged: 1 unchecked task item(s)",
+                awaits_human=True,
+            )
+
+        result, _ = await _run(monkeypatch, _items("1"), outcome, "continue")
+
+        assert result.status == ExecutionStatus.PAUSED
+        assert _record(result, "1").flag_kind == "step_failed"
+
+    @pytest.mark.asyncio
     async def test_a_pause_is_paused(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "1")
 
@@ -687,6 +705,8 @@ def _step(status: ExecutionStatus, actions: list[ActionResult], exhausted: bool 
         (_step(ExecutionStatus.FAILED, [_branch_failure("conflict")]), "branch_conflict"),
         (_step(ExecutionStatus.FAILED, [_branch_failure("other")]), "step_failed"),
         (_step(ExecutionStatus.FAILED, [_fail("no arch 999")]), "step_failed"),
+        # Slice 945 D6: the run pauses, but the item still failed its step.
+        (_step(ExecutionStatus.PAUSED, [_branch_failure("unfinished_tasks")]), "step_failed"),
     ],
 )
 def test_flag_kind_classifies_the_final_step(final: StepResult, kind: str) -> None:

@@ -20,6 +20,7 @@ runner = CliRunner()
 SLICE = 105
 DESIGN_FILE = "project-documents/user/slices/105-slice.batch-foo.md"
 BRANCH = "105-slice.batch-foo"
+TASK_FILE = "105-tasks.batch-foo.md"
 
 
 def _cf(design_file: str | None = DESIGN_FILE) -> MagicMock:
@@ -27,7 +28,7 @@ def _cf(design_file: str | None = DESIGN_FILE) -> MagicMock:
     client.list_slices.return_value = [
         SliceEntry(index=SLICE, name="Batch Foo", design_file=design_file, status="in_progress")
     ]
-    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[])]
+    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[TASK_FILE])]
     client.get_project.return_value = ProjectInfo(
         arch_file="a.md", slice_plan="p", phase="Phase 6", slice=str(SLICE), name="squadron"
     )
@@ -66,6 +67,10 @@ def test_enter_again_reports_the_existing_branch(in_repo: Path) -> None:
 def test_merge_reports_the_merge_and_ends_on_the_target(in_repo: Path) -> None:
     runner.invoke(app, ["_branch", "enter", "--slice", "105"])
     (in_repo / "feature.py").write_text("x\n")
+    # The merge gate (slice 945 D6) needs the cf-listed task file, with nothing unchecked.
+    tasks_dir = in_repo / "project-documents/user/tasks"
+    tasks_dir.mkdir(parents=True)
+    (tasks_dir / TASK_FILE).write_text("- [x] done\n")
     run_test_git(in_repo, "add", "-A")
     run_test_git(in_repo, "commit", "-q", "-m", "work")
 

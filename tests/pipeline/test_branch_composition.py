@@ -19,6 +19,7 @@ from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.sources import SOURCE_REGISTRY
 from squadron.pipeline.steps import register_step_type
+from squadron.review.persistence import TASKS_DIR
 from tests.conftest import run_test_git
 
 SLICES = {
@@ -27,13 +28,30 @@ SLICES = {
 }
 
 
+def _task_file(index: int) -> str:
+    return f"{index}-tasks.stub.md"
+
+
+def _commit_finished_task_files(repo: Path) -> None:
+    """The merge gate (slice 945 D6) needs cf-listed task files, here with nothing unchecked.
+
+    Only these files are staged, so a test's deliberate stray file stays untracked.
+    """
+    tasks_dir = repo / TASKS_DIR
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    for index in SLICES:
+        (tasks_dir / _task_file(index)).write_text("- [x] **Task 1: done**\n")
+    run_test_git(repo, "add", str(TASKS_DIR))
+    run_test_git(repo, "commit", "-q", "-m", "chore: add finished task files")
+
+
 def _cf() -> MagicMock:
     client = MagicMock()
     client.list_slices.return_value = [
         SliceEntry(index=i, name=name, design_file=design, status="in_progress")
         for i, (name, design) in SLICES.items()
     ]
-    client.list_tasks.return_value = [TaskEntry(index=i, files=[]) for i in SLICES]
+    client.list_tasks.return_value = [TaskEntry(index=i, files=[_task_file(i)]) for i in SLICES]
     client.get_project.return_value = ProjectInfo(
         arch_file="a.md", slice_plan="p", phase="Phase 6", slice="105", name="squadron"
     )
@@ -57,6 +75,7 @@ async def _run_batch(
         return [{"index": str(i), "name": SLICES[i][0]} for i in SLICES]
 
     monkeypatch.setitem(SOURCE_REGISTRY, ("test", "slices"), source)
+    _commit_finished_task_files(repo)
 
     async def implement_exec(ctx: ActionContext) -> ActionResult:
         index = int(str(ctx.params["index"]))

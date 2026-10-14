@@ -25,6 +25,7 @@ from tests.conftest import run_test_git
 SLICE = 105
 DESIGN_FILE = "project-documents/user/slices/105-slice.batch-foo.md"
 BRANCH = "105-slice.batch-foo"
+TASK_FILE = "105-tasks.batch-foo.md"
 
 
 def _cf() -> MagicMock:
@@ -32,7 +33,7 @@ def _cf() -> MagicMock:
     client.list_slices.return_value = [
         SliceEntry(index=SLICE, name="Batch Foo", design_file=DESIGN_FILE, status="in_progress")
     ]
-    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[])]
+    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[TASK_FILE])]
     client.get_project.return_value = ProjectInfo(
         arch_file="a.md", slice_plan="p", phase="Phase 6", slice=str(SLICE), name="squadron"
     )
@@ -46,11 +47,20 @@ def _commit_file(repo: Path, name: str, text: str = "content\n") -> None:
     run_test_git(repo, "commit", "-q", "-m", f"add {name}")
 
 
+def _commit_tasks(repo: Path, text: str) -> None:
+    tasks_dir = repo / "project-documents/user/tasks"
+    tasks_dir.mkdir(parents=True, exist_ok=True)
+    (tasks_dir / TASK_FILE).write_text(text)
+    run_test_git(repo, "add", "-A")
+    run_test_git(repo, "commit", "-q", "-m", "tasks")
+
+
 @pytest.fixture
 def slice_repo(temp_git_repo: Path) -> Path:
-    """A repo on its slice branch, one commit ahead of main."""
+    """A repo on its slice branch, ahead of main, with a finished task file the gate can read."""
     run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
     _commit_file(temp_git_repo, "feature.py")
+    _commit_tasks(temp_git_repo, "- [x] done\n")
     return temp_git_repo
 
 
@@ -324,22 +334,6 @@ def test_merge_timeout_with_an_unverifiable_state_raises_state_unknown(
 # Task checkbox gate (issue 189): no merge with unchecked task boxes
 # ---------------------------------------------------------------------------
 
-TASK_FILE = "105-tasks.batch-foo.md"
-
-
-def _cf_with_tasks() -> MagicMock:
-    client = _cf()
-    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[TASK_FILE])]
-    return client
-
-
-def _commit_tasks(repo: Path, text: str) -> None:
-    tasks_dir = repo / "project-documents/user/tasks"
-    tasks_dir.mkdir(parents=True, exist_ok=True)
-    (tasks_dir / TASK_FILE).write_text(text)
-    run_test_git(repo, "add", "-A")
-    run_test_git(repo, "commit", "-q", "-m", "tasks")
-
 
 def test_merge_refuses_unchecked_task_boxes_and_leaves_the_branch_unmerged(
     slice_repo: Path,
@@ -348,20 +342,83 @@ def test_merge_refuses_unchecked_task_boxes_and_leaves_the_branch_unmerged(
     before = _snapshot(slice_repo)
 
     with pytest.raises(MergeFailedError, match=r"2 unchecked.*second") as raised:
-        merge_slice_branch(SLICE, str(slice_repo), _cf_with_tasks())
+        merge_slice_branch(SLICE, str(slice_repo), _cf())
 
-    assert raised.value.failure is BranchFailure.OTHER
+    assert raised.value.failure is BranchFailure.UNFINISHED_TASKS
     assert _snapshot(slice_repo) == before  # still on the slice branch, main untouched
 
 
 def test_merge_proceeds_when_every_task_box_is_checked(slice_repo: Path) -> None:
     _commit_tasks(slice_repo, "- [x] first\n  - [x] nested\n")
 
-    result = merge_slice_branch(SLICE, str(slice_repo), _cf_with_tasks())
+    result = merge_slice_branch(SLICE, str(slice_repo), _cf())
 
     assert result.outcome is MergeOutcome.MERGED
 
 
 def test_merge_fails_loudly_when_a_listed_task_file_is_missing(slice_repo: Path) -> None:
-    with pytest.raises(MergeFailedError, match=TASK_FILE):
-        merge_slice_branch(SLICE, str(slice_repo), _cf_with_tasks())
+    run_test_git(slice_repo, "rm", "-q", f"project-documents/user/tasks/{TASK_FILE}")
+    run_test_git(slice_repo, "commit", "-q", "-m", "remove tasks")
+
+    with pytest.raises(MergeFailedError, match=TASK_FILE) as raised:
+        merge_slice_branch(SLICE, str(slice_repo), _cf())
+
+    assert raised.value.failure is BranchFailure.OTHER  # unreadable, not unfinished
+
+
+def test_merge_refuses_when_cf_lists_no_task_files(slice_repo: Path) -> None:
+    """Slice 945 D6: an empty list must not pass the gate as if nothing were unchecked."""
+    client = _cf()
+    client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[])]
+
+    with pytest.raises(MergeFailedError) as raised:
+        merge_slice_branch(SLICE, str(slice_repo), client)
+
+    assert raised.value.failure is BranchFailure.UNFINISHED_TASKS
+    assert str(raised.value) == (
+        "slice 105 not merged: cf lists no task files for this slice, so its work cannot be verified."
+    )
+
+
+def _merge_context(repo: Path, client: MagicMock) -> ActionContext:
+    return ActionContext(
+        pipeline_name="p",
+        run_id="r",
+        params={"op": "merge", "slice": str(SLICE)},
+        step_name="s",
+        step_index=0,
+        prior_outputs={},
+        resolver=MagicMock(),
+        cf_client=client,
+        cwd=str(repo),
+    )
+
+
+@pytest.mark.asyncio
+async def test_unfinished_tasks_failure_awaits_a_person(slice_repo: Path) -> None:
+    _commit_tasks(slice_repo, "- [ ] open\n")
+
+    result = await BranchAction().execute(_merge_context(slice_repo, _cf()))
+
+    assert result.success is False
+    assert result.outputs == {"failure": BranchFailure.UNFINISHED_TASKS}
+    assert result.awaits_human is True
+
+
+@pytest.mark.asyncio
+async def test_other_failures_do_not_await_a_person(slice_repo: Path) -> None:
+    run_test_git(slice_repo, "rm", "-q", f"project-documents/user/tasks/{TASK_FILE}")
+    run_test_git(slice_repo, "commit", "-q", "-m", "remove tasks")
+
+    result = await BranchAction().execute(_merge_context(slice_repo, _cf()))
+
+    assert result.outputs == {"failure": BranchFailure.OTHER}
+    assert result.awaits_human is False
+
+
+@pytest.mark.asyncio
+async def test_a_conflict_does_not_await_a_person(conflicting_repo: Path) -> None:
+    result = await BranchAction().execute(_merge_context(conflicting_repo, _cf()))
+
+    assert result.outputs == {"failure": BranchFailure.CONFLICT}
+    assert result.awaits_human is False

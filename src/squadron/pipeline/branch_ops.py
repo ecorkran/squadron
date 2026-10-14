@@ -48,6 +48,9 @@ class BranchFailure(StrEnum):
     """Why a branch action failed an item, carried in its ``failure`` output (slice 197 D7)."""
 
     CONFLICT = "conflict"  # a merge or catch-up stopped on conflicted paths
+    # A merge refused because the slice's work is unfinished or cannot be verified (D6, #212):
+    # the run pauses for a person instead of failing.
+    UNFINISHED_TASKS = "unfinished_tasks"
     OTHER = "other"  # any other item failure (refused merge, missing design file, …)
 
 
@@ -309,13 +312,21 @@ def _require_checked_tasks(slice_index: int, cwd: str, cf_client: CfClientProtoc
     """Refuse the merge while any of the slice's task files has an unchecked box (issue 189).
 
     A task file cf lists but that cannot be read also refuses: the gate cannot say the
-    work is finished, so it must not say nothing.
+    work is finished, so it must not say nothing. So does a slice cf lists no task files
+    for, which would otherwise pass an empty loop (slice 945 D6).
 
     Raises:
-        MergeFailedError: unchecked items remain or a task file is unreadable. Nothing
+        MergeFailedError: unchecked items remain or cf lists no task files
+            (``UNFINISHED_TASKS``), or a task file is unreadable (``OTHER``). Nothing
             has changed yet, so this is an item failure.
     """
     info = resolve_slice_info(cf_client, slice_index)
+    if not info["task_files"]:
+        raise MergeFailedError(
+            f"slice {slice_index} not merged: cf lists no task files for this slice, "
+            "so its work cannot be verified.",
+            BranchFailure.UNFINISHED_TASKS,
+        )
     unchecked: list[str] = []
     for task_file in info["task_files"]:
         path = Path(cwd) / TASKS_DIR / task_file
@@ -331,7 +342,7 @@ def _require_checked_tasks(slice_index: int, cwd: str, cf_client: CfClientProtoc
         raise MergeFailedError(
             f"slice {slice_index} not merged: {len(unchecked)} unchecked task item(s), "
             f"first: {preview}. Finish or check them off, then rerun the merge.",
-            BranchFailure.OTHER,
+            BranchFailure.UNFINISHED_TASKS,
         )
 
 
