@@ -572,6 +572,9 @@ def _handle_explain(
         key: value for key, value in definition.params.items() if value != "required"
     }
     _apply_param_overrides(explain_params, param)
+    # As in _assemble_params: -m is the `model` param, so "{model}" steps show it (#215).
+    if model_override is not None:
+        explain_params["model"] = model_override
 
     try:
         classification = classify_for_run(

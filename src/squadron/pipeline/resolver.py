@@ -134,10 +134,12 @@ class ModelResolver:
         ``cascade_candidates()`` see it together and the classifier cannot
         silently miss it.
         """
+        # ``-m`` is the run's default model, not a global override: a step or
+        # action that names its own model (e.g. ``"{review-model}"``) keeps it (#215).
         return (
-            self._cli_override,
             action_model,
             step_model,
+            self._cli_override,
             self._pipeline_model,
             self._config_default,
         )
@@ -153,8 +155,7 @@ class ModelResolver:
         after alias resolution.
 
         Args:
-            action_model: Action-level model override (highest priority
-                          after CLI).
+            action_model: Action-level model override (highest priority).
             step_model: Step-level model override.
 
         Returns:

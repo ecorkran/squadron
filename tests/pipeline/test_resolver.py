@@ -15,14 +15,20 @@ from squadron.pipeline.resolver import (
 )
 
 
-def test_cli_override_wins() -> None:
+def test_action_model_beats_cli_model() -> None:
+    # #215: -m must not override a step's own model (e.g. review-model).
     resolver = ModelResolver(
         cli_override="sonnet",
         pipeline_model="opus",
         config_default="haiku",
     )
-    model_id, _ = resolver.resolve(action_model="gpt4o", step_model="opus")
-    # CLI override resolves "sonnet" alias
+    model_id, _ = resolver.resolve(action_model="haiku", step_model="opus")
+    assert "haiku" in model_id.lower()
+
+
+def test_cli_model_beats_pipeline_model() -> None:
+    resolver = ModelResolver(cli_override="sonnet", pipeline_model="opus", config_default="haiku")
+    model_id, _ = resolver.resolve()
     assert "sonnet" in model_id.lower()
 
 

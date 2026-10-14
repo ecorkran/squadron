@@ -1887,3 +1887,16 @@ class TestDryRunClassifies:
         assert _expected_alias_error() in " ".join(result.output.split())
         run_pipeline.assert_not_called()
         assert artifact.read_bytes() == before
+
+
+class TestCliModelScope:
+    """#215: -m replaces "{model}" steps only; review-model steps keep their alias."""
+
+    def test_explain_keeps_review_model(self) -> None:
+        result = runner.invoke(app, ["run", "P4", "-m", "haiku", "--explain"], env={"COLUMNS": "250"})
+        assert result.exit_code == 0, result.output
+        rows = [line for line in result.output.splitlines() if "│" in line]
+        dispatch_rows = [r for r in rows if "dispatch" in r]
+        review_rows = [r for r in rows if "│ review" in r]
+        assert dispatch_rows and all("haiku" in r for r in dispatch_rows)
+        assert review_rows and all("deepseek4-flash" in r for r in review_rows)

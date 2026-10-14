@@ -761,11 +761,13 @@ Review artifacts carry two frontmatter keys next to `rulesSource`:
 
 Squadron resolves the active model for each action through a 5-level cascade, highest priority first:
 
-1. **CLI override** — `sq run P456 152 --model haiku`
-2. **Action-level model** — `review.model` inside a phase step's review config
-3. **Step-level model** — `model:` on a phase, compact, summary, or review step
+1. **Action-level model** — `review.model` inside a phase step's review config
+2. **Step-level model** — `model:` on a phase, compact, summary, or review step
+3. **CLI model** — `sq run P456 152 --model haiku`
 4. **Pipeline-level model** — top-level `model:` in the pipeline definition
 5. **Config default** — `sq config get model.default`
+
+`--model`/`-m` also sets the `model` param, so a step whose model is `"{model}"` runs on it. A step that names a different param (`"{review-model}"`) or a literal alias keeps its own model; set that param to change it.
 
 If all levels are `None`, the run fails with an explicit error. There is no hidden global fallback.
 
