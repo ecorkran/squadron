@@ -16,6 +16,7 @@ from squadron.logging import get_logger
 from squadron.providers.base import ProviderType
 from squadron.providers.codex.auth import OAuthFileStrategy
 from squadron.providers.errors import ProviderError
+from squadron.tools.builtin import WRITE_TOOL_NAMES
 
 if TYPE_CHECKING:
     from openai_codex import AsyncCodex, AsyncThread, AsyncTurnHandle, Sandbox, TurnResult
@@ -28,8 +29,8 @@ _RPC_TIMEOUT_KEY = "codex.account_timeout_s"
 
 # D2 refusals; each names the fix.
 _TOOLS_REFUSAL = (
-    "Codex does not run squadron tools; remove `allowed_tools` (Codex uses its own tools "
-    "when its sandbox allows writes) or use a profile that supports them."
+    "Codex does not run squadron's write tools; remove `write_file`/`bash` from "
+    "`allowed_tools` (Codex writes through its own sandbox) or use a profile that supports them."
 )
 _READ_ONLY_WRITES_REFUSAL = (
     "profile `{profile}` runs Codex with a read-only sandbox; this step must write files. "
@@ -58,9 +59,11 @@ class CodexAgent:
         self._name = name
         self._config = config
         self._state = AgentState.idle
-        # Codex ignores allowed_tools; refusing beats a step that reports success after
-        # running none of them (D2, #211).
-        if config.allowed_tools:
+        # Codex ignores allowed_tools. Read tools are covered by its native file access
+        # (every review template declares them); a write tool is refused, since writing
+        # comes from the sandbox and a step must not report success on a grant it never
+        # got (D2, #211).
+        if config.allowed_tools and not WRITE_TOOL_NAMES.isdisjoint(config.allowed_tools):
             raise ProviderError(_TOOLS_REFUSAL)
         # Slice 924 B2: Codex sends no per-request budget; say so rather than drop it.
         if config.max_output_tokens is not None:

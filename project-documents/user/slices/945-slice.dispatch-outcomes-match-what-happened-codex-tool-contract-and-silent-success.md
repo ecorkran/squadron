@@ -115,7 +115,7 @@ No new pipeline key is added. Phase steps and revise dispatches exist to change 
 
 ### D2 — Providers refuse at spawn
 Provider-specific knowledge stays in the provider. The sandbox, for example, is a Codex credential that dispatch must not read. Refusing at spawn costs nothing, because no model call is made. The refusal messages name the fix:
-- Codex with `allowed_tools`: "Codex does not run squadron tools; remove `allowed_tools` (Codex uses its own tools when its sandbox allows writes) or use a profile that supports them."
+- Codex with a write tool in `allowed_tools`: "Codex does not run squadron's write tools; remove `write_file`/`bash` from `allowed_tools` (Codex writes through its own sandbox) or use a profile that supports them." *Amended after the live P4 check:* the first version refused any `allowed_tools`, which refused every Codex review (each review template declares read tools). Read-only lists are accepted; Codex reads files natively.
 - Codex, read-only, write-required: "profile `<name>` runs Codex with a read-only sandbox; this step must write files. Set `sandbox = "workspace-write"` in the profile credentials."
 - OpenAI-compatible, write-required, no write tool: "step must write files but has no write-capable tool; add `write_file` (or `bash`) to `allowed_tools`."
 - Codex, read-only, not write-required (bare dispatch): no refusal. Log a WARNING.
