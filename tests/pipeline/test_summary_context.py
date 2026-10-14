@@ -148,3 +148,19 @@ def test_header_and_footer_present() -> None:
     output = assemble_dispatch_context(prior)
     assert output.startswith(_HEADER)
     assert output.endswith(_FOOTER)
+
+
+def test_structured_findings_render_as_text() -> None:
+    # #170: review actions store StructuredFinding dicts; no dict repr in the summary.
+    finding = {
+        "id": "F001",
+        "severity": "concern",
+        "category": "design",
+        "summary": "Cache is never invalidated",
+        "location": "src/cache.py:12",
+        "location_verified": True,
+    }
+    prior = {"loop:review-0": _result(ActionType.REVIEW, verdict="CONCERNS", findings=[finding])}
+    text = assemble_dispatch_context(prior)
+    assert "- F001 [concern] Cache is never invalidated (src/cache.py:12)" in text
+    assert "{" not in text

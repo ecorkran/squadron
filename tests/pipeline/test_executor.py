@@ -389,8 +389,8 @@ class TestExecutePipelineHappyPath:
 
         ctx = captured_contexts[0]
         assert isinstance(ctx, ActionContext)
-        # Prior output from step 1 should be keyed as "dispatch-0"
-        assert "dispatch-0" in ctx.prior_outputs
+        # Prior output from step 1 is keyed by its step name (#170)
+        assert "step-a:dispatch-0" in ctx.prior_outputs
 
     @pytest.mark.asyncio
     async def test_observer_step_completed_per_step(self) -> None:

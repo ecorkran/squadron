@@ -569,7 +569,7 @@ class TestLoadPriorOutputs:
             json.dumps(state.model_dump(mode="json"), indent=2),
         )
         prior = state_manager.load_prior_outputs(run_id)
-        assert "cf-op-0" in prior
+        assert "design:cf-op-0" in prior
 
     def test_missing_required_field_skipped_not_raised(self, state_manager: StateManager) -> None:
         """A stored dict missing a required ActionResult field (e.g. from an
@@ -599,8 +599,8 @@ class TestLoadPriorOutputs:
             json.dumps(state.model_dump(mode="json"), indent=2),
         )
         prior = state_manager.load_prior_outputs(run_id)
-        assert "cf-op-0" not in prior
-        assert "review-1" in prior
+        assert "design:cf-op-0" not in prior
+        assert "design:review-1" in prior
 
 
 # ---------------------------------------------------------------------------

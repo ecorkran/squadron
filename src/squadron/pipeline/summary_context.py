@@ -11,6 +11,8 @@ unaffected.
 
 from __future__ import annotations
 
+from typing import cast
+
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.models import ActionResult
 
@@ -111,5 +113,22 @@ def _format_review(result: ActionResult) -> str:
     if result.findings:
         parts.append("Findings:")
         for finding in result.findings:
-            parts.append(f"- {finding}")
+            parts.append(f"- {_format_finding(finding)}")
     return "\n".join(parts)
+
+
+def _format_finding(finding: object) -> str:
+    """One finding as text, not a dict repr (#170).
+
+    Review actions store findings as ``StructuredFinding`` dicts (id, severity,
+    summary, location); anything else is shown as-is.
+    """
+    if not isinstance(finding, dict):
+        return str(finding)
+    fields = cast(dict[str, object], finding)
+    text = f"[{fields.get('severity', '?')}] {fields.get('summary', '')}".strip()
+    if finding_id := fields.get("id"):
+        text = f"{finding_id} {text}"
+    if location := fields.get("location"):
+        text += f" ({location})"
+    return text

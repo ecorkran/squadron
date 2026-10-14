@@ -2261,3 +2261,62 @@ async def test_d3_failed_revise_dispatch_ends_the_loop_with_on_exhaust(
     assert step_result.error is not None
     assert "step must write files but made no tool calls" in step_result.error
     assert review_action.execute.await_count == 1
+
+
+# ---------------------------------------------------------------------------
+# #170 — every round reaches prior_outputs; the step result keeps the final one
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_every_loop_round_reaches_prior_outputs() -> None:
+    reviews = _mock_action(
+        [
+            _action_result(True, "review", verdict="CONCERNS"),
+            _action_result(True, "review", verdict="FAIL"),
+            _action_result(True, "review", verdict="PASS"),
+        ]
+    )
+    captured: list[ActionContext] = []
+
+    async def capture(ctx: ActionContext) -> ActionResult:
+        captured.append(ctx)
+        return _action_result(True, "checkpoint")
+
+    checkpoint = MagicMock()
+    checkpoint.execute = capture
+    register_step_type("_lb_history_review", _mock_step_type([("review", {})]))
+    register_step_type("_lb_history_after", _mock_step_type([("checkpoint", {})]))
+
+    result = await execute_pipeline(
+        _pipeline(
+            [
+                _loop_step(
+                    "rounds",
+                    {"max": 3, "until": "review.pass", "steps": [{"_lb_history_review": {}}]},
+                ),
+                StepConfig(step_type="_lb_history_after", name="after", config={}),
+            ]
+        ),
+        {},
+        resolver=MagicMock(),
+        cf_client=MagicMock(),
+        _action_registry={"review": reviews, "checkpoint": checkpoint},
+    )
+
+    assert result.status == ExecutionStatus.COMPLETED
+    loop_result = result.step_results[0]
+    # Conditions and failure reporting read the final round only.
+    assert [ar.verdict for ar in loop_result.action_results] == ["PASS"]
+    assert [ar.verdict for ar in loop_result.prior_rounds] == ["CONCERNS", "FAIL"]
+    prior = captured[0].prior_outputs
+    assert [k for k in prior if k.startswith("rounds:")] == [
+        "rounds:review-0",
+        "rounds:review-1",
+        "rounds:review-2",
+    ]
+    assert [prior[k].verdict for k in prior if k.startswith("rounds:")] == [
+        "CONCERNS",
+        "FAIL",
+        "PASS",
+    ]

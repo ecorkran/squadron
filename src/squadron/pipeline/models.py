@@ -44,6 +44,15 @@ class ActionResult:
     provenance: str | None = None
 
 
+def prior_output_key(step_name: str, action_type: str, index: int) -> str:
+    """The ``prior_outputs`` key for a step's *index*-th action result.
+
+    Unique per step, so a later step never overwrites an earlier one's entry in
+    place, which would put it out of execution order (#170).
+    """
+    return f"{step_name}:{action_type}-{index}"
+
+
 @dataclass
 class ActionContext:
     """Execution context passed to every action at runtime."""

@@ -16,7 +16,7 @@ import os
 import re
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
@@ -53,7 +53,12 @@ from squadron.pipeline.loop_config import (
     last_with_verdict,
     parse_loop_config,
 )
-from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition
+from squadron.pipeline.models import (
+    ActionContext,
+    ActionResult,
+    PipelineDefinition,
+    prior_output_key,
+)
 from squadron.pipeline.sources import (
     FLAG_KIND_KEY,
     FLAG_REASON_KEY,
@@ -214,6 +219,10 @@ class StepResult:
     exhausted: bool = False
     # Per-item outcomes of an `each` step (slice 195 D9); None for other steps.
     batch_report: BatchReport | None = None
+    # A loop's action results from rounds before the one in ``action_results``, in
+    # order. Read only to build prior_outputs, so a later summary sees every round
+    # (#170); conditions and failure reporting keep reading the final round.
+    prior_rounds: list[ActionResult] = field(default_factory=lambda: [])
 
 
 @dataclass
@@ -623,9 +632,12 @@ async def execute_pipeline(
                 step_results=step_results,
             )
 
-        # Accumulate prior_outputs from this step's action results
-        for idx, action_result in enumerate(step_result.action_results):
-            key = f"{action_result.action_type}-{idx}"
+        # Accumulate prior_outputs from this step's action results, earlier loop
+        # rounds first. Keys carry the step name: a bare type-index key let a later
+        # step overwrite an earlier one in place, out of execution order (#170).
+        step_actions = [*step_result.prior_rounds, *step_result.action_results]
+        for idx, action_result in enumerate(step_actions):
+            key = prior_output_key(step_result.step_name, action_result.action_type, idx)
             prior_outputs[key] = action_result
 
         # Accumulate step_outputs: step-name -> this step's most recent
@@ -1065,6 +1077,7 @@ def _loop_exhaust_result(
     step: Any,
     loop_config: LoopConfig,
     action_results: list[ActionResult],
+    prior_rounds: list[ActionResult],
 ) -> StepResult:
     """Build the exhaustion StepResult: ACCEPTED when the final round meets
     ``accept_if`` (D6), else the configured ``on_exhaust`` mode.
@@ -1079,6 +1092,7 @@ def _loop_exhaust_result(
             step_type=step.step_type,
             status=ExecutionStatus.COMPLETED,
             action_results=action_results,
+            prior_rounds=prior_rounds,
             iteration=max_iter,
             accepted=True,
             exhausted=True,
@@ -1093,6 +1107,7 @@ def _loop_exhaust_result(
         step_type=step.step_type,
         status=status,
         action_results=action_results,
+        prior_rounds=prior_rounds,
         iteration=max_iter,
         error=reason,
         exhausted=True,
@@ -1218,8 +1233,11 @@ async def _execute_loop_step(
         return skipped
 
     last_result: StepResult | None = None
+    earlier_rounds: list[ActionResult] = []
 
     for iteration in range(start_iteration, loop_config.max + 1):
+        if last_result is not None:
+            earlier_rounds.extend(last_result.action_results)
         result = await _execute_step_once(
             step=stripped_step,
             resolved_config=action_config,
@@ -1248,7 +1266,7 @@ async def _execute_loop_step(
                 iteration=iteration,
                 loop_max=loop_config.max,
             )
-            return result
+            return replace(result, prior_rounds=earlier_rounds)
 
         # Check until condition if set
         if loop_config.until is not None:
@@ -1259,16 +1277,22 @@ async def _execute_loop_step(
                     status=ExecutionStatus.COMPLETED,
                     action_results=result.action_results,
                     iteration=iteration,
+                    prior_rounds=earlier_rounds,
                 )
         elif result.status == ExecutionStatus.COMPLETED:
             # No until condition — succeed on first completed iteration
-            return result
+            return replace(result, prior_rounds=earlier_rounds)
 
         # Action failure is transient in loops — continue to next iteration
 
     # Max iterations exhausted
     final_results = last_result.action_results if last_result else []
-    return _loop_exhaust_result(step=step, loop_config=loop_config, action_results=final_results)
+    return _loop_exhaust_result(
+        step=step,
+        loop_config=loop_config,
+        action_results=final_results,
+        prior_rounds=earlier_rounds,
+    )
 
 
 def _unpack_body(resolved_config: dict[str, object]) -> list[Any]:
@@ -1331,6 +1355,8 @@ async def _execute_loop_body(
     # Bound across the loop so the exhaustion path can return the latest
     # iteration's results.  Reassigned at the start of each iteration.
     iteration_action_results: list[ActionResult] = []
+    # Every finished round before the current one, for StepResult.prior_rounds (#170).
+    earlier_rounds: list[ActionResult] = []
 
     # Accumulates each iteration's results so the next iteration's actions
     # (e.g. DispatchAction's findings-feedback) see what the loop has
@@ -1366,6 +1392,7 @@ async def _execute_loop_body(
         return skipped
 
     for iteration in range(start_iteration, loop_config.max + 1):
+        earlier_rounds.extend(iteration_action_results)
         iteration_action_results = []
         iteration_step_outputs: dict[str, ActionResult] = {}
         # What the body's actions resolve step names against this round:
@@ -1432,6 +1459,7 @@ async def _execute_loop_body(
                     step_type=step.step_type,
                     status=ExecutionStatus.PAUSED,
                     action_results=iteration_action_results,
+                    prior_rounds=list(earlier_rounds),
                     iteration=iteration,
                 )
             # A failed dispatch ends the loop (issue 200): that round changed nothing, so
@@ -1450,6 +1478,7 @@ async def _execute_loop_body(
                     step_type=step.step_type,
                     status=_loop_failure_status(loop_config),
                     action_results=iteration_action_results,
+                    prior_rounds=list(earlier_rounds),
                     iteration=iteration,
                     error=f"loop {step.name} round {iteration}: "
                     f"{inner_result.step_name} dispatch failed: {dispatch_error}",
@@ -1510,6 +1539,7 @@ async def _execute_loop_body(
                     step_type=step.step_type,
                     status=_loop_failure_status(loop_config),
                     action_results=iteration_action_results,
+                    prior_rounds=list(earlier_rounds),
                     iteration=iteration,
                     error=f"loop {step.name} round {iteration} commit failed: {commit_result.error}",
                 )
@@ -1524,6 +1554,7 @@ async def _execute_loop_body(
                     step_type=step.step_type,
                     status=ExecutionStatus.COMPLETED,
                     action_results=iteration_action_results,
+                    prior_rounds=list(earlier_rounds),
                     iteration=iteration,
                 )
         else:
@@ -1533,12 +1564,16 @@ async def _execute_loop_body(
                 step_type=step.step_type,
                 status=ExecutionStatus.COMPLETED,
                 action_results=iteration_action_results,
+                prior_rounds=list(earlier_rounds),
                 iteration=iteration,
             )
 
     # Max iterations exhausted
     return _loop_exhaust_result(
-        step=step, loop_config=loop_config, action_results=iteration_action_results
+        step=step,
+        loop_config=loop_config,
+        action_results=iteration_action_results,
+        prior_rounds=earlier_rounds,
     )
 
 
