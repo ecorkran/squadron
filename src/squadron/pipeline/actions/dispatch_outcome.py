@@ -55,7 +55,7 @@ def assess_tool_outcome(requires_writes: bool, telemetry: Mapping[str, object]) 
         reason = "every tool call failed"
         first_error = telemetry.get(FIRST_TOOL_ERROR_KEY)
         if first_error:
-            reason = f"{reason}; first error: {first_error}"
+            reason = f"{reason}: {first_error}"
         return ToolOutcome(fail_reason=reason)
 
     if failed > 0:
