@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Provider profiles in `providers.toml` accept `sandbox` (Codex only), so a Codex profile can run with `workspace-write`.
+
 ### Changed
 - A merge step that finds unchecked task items, or a slice with no task files in Context Forge, now pauses the run instead of failing it.
 

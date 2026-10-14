@@ -211,3 +211,26 @@ def test_profile_credentials_keys_and_values() -> None:
         "default_headers": None,
         "sends_stream_usage": False,
     }
+
+
+# --- sandbox (slice 945) ---
+
+
+def test_user_profile_sandbox_reaches_the_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    toml_file = tmp_path / "providers.toml"
+    toml_file.write_text('[profiles.mine]\nprovider = "openai-oauth"\nsandbox = "workspace-write"\n')
+    monkeypatch.setattr("squadron.providers.profiles.providers_toml_path", lambda: toml_file)
+
+    profile = load_user_profiles()["mine"]
+
+    assert profile.sandbox == "workspace-write"
+    assert profile_credentials(profile)["sandbox"] == "workspace-write"
+
+
+def test_profile_without_sandbox_leaves_the_credential_absent() -> None:
+    profile = BUILT_IN_PROFILES[ProfileName.OPENAI_OAUTH]
+
+    assert profile.sandbox is None
+    assert "sandbox" not in profile_credentials(profile)

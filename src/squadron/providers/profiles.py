@@ -35,6 +35,10 @@ class ProviderProfile:
     # True is the OpenAI spec's behavior; a profile opts out only for a backend that
     # rejects the parameter.
     sends_stream_usage: bool = True
+    # Codex only: the sandbox its agent runs in (``read-only`` when unset). Validated against
+    # the SDK enum by the Codex agent, which refuses write-required steps on a read-only
+    # sandbox (slice 945 D2), so a profile must be able to say ``workspace-write``.
+    sandbox: str | None = None
 
 
 BUILT_IN_PROFILES: dict[str, ProviderProfile] = {
@@ -122,6 +126,7 @@ def load_user_profiles() -> dict[str, ProviderProfile]:
             description=str(fields.get("description", "")),
             auth_type=str(fields.get("auth_type", "api_key")),
             sends_stream_usage=_read_sends_stream_usage(fields, name, path),
+            sandbox=str(fields["sandbox"]) if "sandbox" in fields else None,
         )
     return result
 
@@ -145,11 +150,15 @@ def profile_credentials(profile: ProviderProfile) -> dict[str, object]:
     add their own keys (``hooks``, ``mode``, ...) beside these. ``sends_stream_usage``
     is read only by the OpenAI provider; the others ignore it.
     """
-    return {
+    credentials: dict[str, object] = {
         "api_key_env": profile.api_key_env,
         "default_headers": profile.default_headers,
         "sends_stream_usage": profile.sends_stream_usage,
     }
+    # Absent, not None, when unset: the Codex agent reads absence as its read-only default.
+    if profile.sandbox is not None:
+        credentials["sandbox"] = profile.sandbox
+    return credentials
 
 
 def get_all_profiles() -> dict[str, ProviderProfile]:

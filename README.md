@@ -118,6 +118,15 @@ sq auth login openai-oauth
 sq auth status                    # shows the signed-in account and plan
 ```
 
+Codex runs read-only by default, so a design, tasks or implement step on these aliases is refused with a message naming the fix. To let it write files, override the profile in `~/.config/squadron/providers.toml`:
+
+```toml
+[profiles.openai-oauth]
+provider = "openai-oauth"
+auth_type = "oauth"
+sandbox = "workspace-write"
+```
+
 `OPENAI_API_KEY` isn't used by this profile. The pricing shown for these aliases is what the same call would cost on the API, for comparison.
 
 ## Reviews
