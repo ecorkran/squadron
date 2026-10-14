@@ -153,22 +153,15 @@ def _assemble_params(
 def _resolve_execution_mode(prompt_only: bool) -> ExecutionMode:
     """Determine pipeline execution mode from flags and environment.
 
-    Returns:
-        ``ExecutionMode.PROMPT_ONLY`` when ``--prompt-only`` is set.
-        ``ExecutionMode.SDK`` when running from a standard terminal.
+    SDK mode also runs inside a Claude Code session: the agent SDK starts its
+    own CLI subprocess, so there is no session nesting to refuse (issue #144).
 
-    Raises:
-        typer.Exit(1): When invoked from inside a Claude Code session.
+    Returns:
+        ``ExecutionMode.PROMPT_ONLY`` when ``--prompt-only`` is set, otherwise
+        ``ExecutionMode.SDK``.
     """
     if prompt_only:
         return ExecutionMode.PROMPT_ONLY
-    if os.environ.get("CLAUDECODE"):
-        rprint(
-            "[red]Error: SDK pipeline execution cannot run inside a Claude Code "
-            "session.[/red]\n"
-            "Use [bold]--prompt-only[/bold] mode or run from a standard terminal."
-        )
-        raise typer.Exit(1)
     return ExecutionMode.SDK
 
 
@@ -375,10 +368,9 @@ async def _run_pipeline_sdk(
     at startup.  The default LAZY behaviour skips upfront connection for
     uncertain steps and relies on the mid-run hook instead.
 
-    Raises typer.Exit(1) when running inside a Claude Code session or when
-    pipeline classification fails.  The session is disconnected in a ``finally``
-    block so cleanup happens on success, failure, checkpoint pause, and
-    keyboard interrupt.
+    Raises typer.Exit(1) when pipeline classification fails.  The session is
+    disconnected in a ``finally`` block so cleanup happens on success, failure,
+    checkpoint pause, and keyboard interrupt.
     """
     _resolve_execution_mode(prompt_only=False)
 

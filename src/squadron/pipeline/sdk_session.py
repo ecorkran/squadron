@@ -3,8 +3,8 @@
 Manages a single ClaudeSDKClient connection across all dispatch steps in a
 pipeline run, enabling per-step model switching and compaction configuration.
 
-This module is only used when running pipelines from a standard terminal (not
-inside a Claude Code session). Reviews and non-SDK actions are unaffected.
+This module is used for SDK-mode pipeline runs, from a terminal or inside a
+Claude Code session. Reviews and non-SDK actions are unaffected.
 """
 
 from __future__ import annotations

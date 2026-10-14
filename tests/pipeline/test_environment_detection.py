@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-import typer
 
 from squadron.cli.commands.run import _resolve_execution_mode
 
@@ -19,10 +18,11 @@ def test_normal_environment_returns_sdk(monkeypatch: pytest.MonkeyPatch) -> None
     assert result == "sdk"
 
 
-def test_claudecode_env_raises_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_claudecode_env_returns_sdk(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SDK mode runs inside a Claude Code session (issue #144)."""
     monkeypatch.setenv("CLAUDECODE", "1")
-    with pytest.raises(typer.Exit):
-        _resolve_execution_mode(prompt_only=False)
+    result = _resolve_execution_mode(prompt_only=False)
+    assert result == "sdk"
 
 
 def test_prompt_only_takes_precedence_over_claudecode(

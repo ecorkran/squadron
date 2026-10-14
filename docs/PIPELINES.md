@@ -885,7 +885,6 @@ A design step that writes no design, a provider failure, or any other step failu
 - **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan, the last slice, and the batch's phase. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
 - **Commits land on the integration target.** Planning commits (design, tasks, loop rounds, devlog) are refused anywhere else, so start the batch from the target branch (`main`, or `git.integration_branch`). A batch started on another branch stops at its first commit.
 - **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `slices-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
-- **Run from a terminal.** `sq run` refuses inside a Claude Code session (#144), and these pipelines dispatch through an SDK session.
 - **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.
 - `--prompt-only` doesn't render `each` or `loop:` steps yet (#145).
 - **One mutating run per checkout.** See [Run lock](#run-lock).
@@ -1085,7 +1084,7 @@ steps:
 
 ## Prompt-Only Mode
 
-When running inside a Claude Code session (VS Code extension or terminal), `sq run` cannot execute LLM dispatch directly. Use `--prompt-only` to get step-by-step instructions instead:
+`--prompt-only` hands each step to your interactive Claude Code session instead of dispatching it through the SDK. Squadron emits step-by-step instructions and the session carries them out:
 
 ```bash
 sq run P4 152 --prompt-only                           # returns first step as JSON

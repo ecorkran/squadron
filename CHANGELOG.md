@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq run` now runs pipelines inside a Claude Code session instead of refusing them; `--prompt-only` is no longer required there (#144).
+
 ## [0.21.7] - 20261013
 
 ### Added
