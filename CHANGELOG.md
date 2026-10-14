@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.9] - 20261014
+
 ### Added
 - One `-p` on `sq run` can set several params: `-p review-model=sonnet,max-revisions=3` (#207).
 - After a plan pipeline's `each` step completes, Context Forge is set back to the first slice it worked on (#206).

@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261014
 
+### Release 0.21.9
+
+- **Contents:** slice 946 Run Params and Pipeline Correctness: `-m` sets the default model only (#215), comma-separated `-p` (#207), deprecated slices skipped (#208), every loop round in summaries (#170), cf slice reset after a plan batch (#206), parser warning ids (#141), judge verdict shared with `sq review` (#140).
+
 ### Release 0.21.8
 
 - **Contents:** slice 945 Dispatch Outcomes Match What Happened (Codex tool contract and silent success; #211, #202, #212 item 2), default tools for write steps and the bash warning (#213), Codex limited to read-only `allowed_tools`, #144 fix.
