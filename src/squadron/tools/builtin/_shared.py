@@ -23,6 +23,11 @@ GREP_NAME = "grep"
 # Tools that can change files; a write-required dispatch must be given at least one.
 WRITE_TOOL_NAMES = frozenset({WRITE_FILE_NAME, BASH_NAME})
 
+# What a write-required dispatch on a squadron-tools model gets when its step declares
+# none, matching the SDK producer's own toolset. bash runs in the working directory but is
+# not jailed: the jail covers only the file tools.
+DEFAULT_WRITE_STEP_TOOLS = (READ_FILE_NAME, WRITE_FILE_NAME, LIST_FILES_NAME, GREP_NAME, BASH_NAME)
+
 _logger = logging.getLogger(__name__)
 
 

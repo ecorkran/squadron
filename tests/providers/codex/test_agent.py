@@ -166,10 +166,19 @@ class TestSpawnRefusals:
         with pytest.raises(ProviderError, match="does not run squadron tools"):
             CodexAgent(name="test-codex", config=config)
 
-    def test_read_only_write_required_refused_naming_the_fix(
+    def test_unset_sandbox_write_required_gets_workspace_write(
         self, agent_config: AgentConfig, fake_sdk: FakeSdk
     ) -> None:
         config = agent_config.model_copy(update={"requires_writes": True})
+        _send(CodexAgent(name="test-codex", config=config), "hi")
+        assert fake_sdk.client.thread_start.call_args.kwargs["sandbox"] is Sandbox.workspace_write
+
+    def test_pinned_read_only_write_required_refused_naming_the_fix(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk
+    ) -> None:
+        config = agent_config.model_copy(
+            update={"requires_writes": True, "credentials": {"sandbox": "read-only"}}
+        )
         with pytest.raises(ProviderError) as exc_info:
             _send(CodexAgent(name="test-codex", config=config), "hi")
         message = str(exc_info.value)

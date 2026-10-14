@@ -52,6 +52,7 @@ from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile, profile_credentials
 from squadron.providers.sdk.settings import pipeline_setting_sources
 from squadron.tools import resolve_effective_tools
+from squadron.tools.builtin import DEFAULT_WRITE_STEP_TOOLS
 
 if TYPE_CHECKING:
     from squadron.pipeline.sdk_session import SDKExecutionSession
@@ -143,6 +144,11 @@ async def one_shot_dispatch_with_telemetry(
     means no rules and no record, for dispatches that write no project artifacts.
     """
     profile = get_profile(profile_name)
+    # A write step that declared no tools gets the default set on the squadron-tools
+    # provider, so a stock pipeline works with any producer. The SDK brings its own
+    # tools and Codex refuses squadron tools; both are left alone.
+    if allowed_tools is None and requires_writes and profile.provider == ProviderType.OPENAI:
+        allowed_tools = list(DEFAULT_WRITE_STEP_TOOLS)
     # The capability gate (slice 266), applied before the SDK guard below: a model whose
     # alias sets tool_use = false is not offering tools at all, so it must not trip an
     # error about a vocabulary mismatch for tools it will never receive.

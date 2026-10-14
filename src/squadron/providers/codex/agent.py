@@ -245,12 +245,16 @@ class CodexAgent:
         _log.warning(_READ_ONLY_WARNING, profile)
 
     def _resolve_sandbox(self) -> Sandbox:
-        """Validate ``credentials["sandbox"]`` against the SDK enum (default read-only)."""
+        """Validate ``credentials["sandbox"]`` against the SDK enum.
+
+        Unset, a write-required step gets workspace-write (approvals stay deny-all) and
+        anything else read-only; only a profile that pins read-only refuses a write step.
+        """
         from openai_codex import Sandbox
 
         raw = self._config.credentials.get(_SANDBOX_KEY)
         if raw is None:
-            return Sandbox.read_only
+            return Sandbox.workspace_write if self._config.requires_writes else Sandbox.read_only
         try:
             return Sandbox(raw)
         except ValueError as exc:

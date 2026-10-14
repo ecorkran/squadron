@@ -441,6 +441,23 @@ class TestRequiresWritesRefusal:
             "add `write_file` (or `bash`) to `allowed_tools`."
         )
 
+    def test_suppressed_tools_refusal_names_the_model_not_allowed_tools(self, tmp_path: Any) -> None:
+        with pytest.raises(ProviderError) as excinfo:
+            OpenAICompatibleAgent(
+                name="bot",
+                client=MagicMock(),
+                model=_MODEL,
+                system_prompt=None,
+                allowed_tools=[],
+                cwd=str(tmp_path),
+                requires_writes=True,
+                tools_suppressed_reason="model-capability",
+            )
+
+        message = str(excinfo.value)
+        assert "suppressed (model-capability)" in message
+        assert "allowed_tools" not in message
+
     @pytest.mark.parametrize("write_tool", ["write_file", "bash"])
     def test_write_tool_spawns_and_no_model_call_is_made(self, write_tool: str, tmp_path: Any) -> None:
         _agent, client = self._spawn(

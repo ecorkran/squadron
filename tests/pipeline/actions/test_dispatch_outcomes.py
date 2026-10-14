@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from squadron.core.models import AgentConfig
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.steps import StepTypeName
@@ -17,7 +19,9 @@ from squadron.providers.base import (
     FIRST_TOOL_ERROR_KEY,
     TOOL_CALLS_MADE_KEY,
     TOOLS_GIVEN_KEY,
+    ProviderType,
 )
+from squadron.tools.builtin import DEFAULT_WRITE_STEP_TOOLS
 from tests.pipeline.actions.dispatch_helpers import DISPATCH_MODULE as _P
 from tests.pipeline.actions.dispatch_helpers import make_agent_mock as _make_agent_mock
 from tests.pipeline.actions.dispatch_helpers import make_context as _make_context
@@ -124,3 +128,53 @@ async def test_bare_dispatch_does_not_set_requires_writes(tmp_path: Path) -> Non
     config = await agent_config_sites.dispatch_action(tmp_path, {})
 
     assert config.requires_writes is False
+
+
+# --- default tools for a write step that declared none ---
+
+_PHASE_STEP: dict[str, object] = {RULES_STEP_PARAM: StepTypeName.DESIGN}
+
+
+async def _spawned_config(params: dict[str, object], provider: ProviderType) -> AgentConfig:
+    """The AgentConfig the dispatch hands the registry, for a profile of *provider*."""
+    mock_registry = _make_registry(_make_agent_mock("done"))
+    profile = replace(_openrouter_profile(), provider=provider)
+    ctx = _make_context(params={"prompt": "p", **params}, step_name=_STEP)
+    with (
+        patch(f"{_P}.get_registry", return_value=mock_registry),
+        patch(f"{_P}.get_profile", return_value=profile),
+        patch(f"{_P}.profile_credentials", return_value={}),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(f"{_P}.project_rules_for_dispatch", return_value=("", None)),
+    ):
+        await DispatchAction().execute(ctx)
+    return mock_registry.spawn.call_args.args[0]
+
+
+async def test_openai_write_step_without_tools_gets_the_default_set() -> None:
+    config = await _spawned_config(_PHASE_STEP, ProviderType.OPENAI)
+
+    assert config.allowed_tools == list(DEFAULT_WRITE_STEP_TOOLS)
+
+
+async def test_declared_tools_are_not_replaced_by_the_default() -> None:
+    config = await _spawned_config(
+        {**_PHASE_STEP, "allowed_tools": ["write_file"]}, ProviderType.OPENAI
+    )
+
+    assert config.allowed_tools == ["write_file"]
+
+
+@pytest.mark.parametrize(
+    ("params", "provider"),
+    [
+        ({}, ProviderType.OPENAI),
+        (_PHASE_STEP, ProviderType.SDK),
+        (_PHASE_STEP, ProviderType.OPENAI_OAUTH),
+    ],
+    ids=["bare-dispatch", "sdk", "codex"],
+)
+async def test_default_set_not_applied(params: dict[str, object], provider: ProviderType) -> None:
+    config = await _spawned_config(params, provider)
+
+    assert config.allowed_tools is None

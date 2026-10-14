@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from squadron.tools.builtin._shared import (
     BASH_NAME,
+    DEFAULT_WRITE_STEP_TOOLS,
     GREP_NAME,
     LIST_FILES_NAME,
     READ_FILE_NAME,
@@ -46,6 +47,7 @@ __all__ = [
     "BASH",
     "BASH_NAME",
     "BASH_PARAMETERS",
+    "DEFAULT_WRITE_STEP_TOOLS",
     "GREP",
     "GREP_NAME",
     "GREP_PARAMETERS",

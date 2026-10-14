@@ -53,6 +53,10 @@ _NO_WRITE_TOOL_MESSAGE = (
     "step must write files but has no write-capable tool; "
     "add `write_file` (or `bash`) to `allowed_tools`."
 )
+_TOOLS_SUPPRESSED_MESSAGE = (
+    "step must write files but this model's tools were suppressed ({reason}); "
+    "use a model with tool_use enabled for this step."
+)
 
 # Extra delta field OpenRouter-compatible backends use to stream a reasoning model's
 # thinking. Not part of the OpenAI SDK's typed ChoiceDelta; read via model_extra.
@@ -209,6 +213,8 @@ class OpenAICompatibleAgent:
 
         requested_tools = allowed_tools or []
         if requires_writes and WRITE_TOOL_NAMES.isdisjoint(requested_tools):
+            if tools_suppressed_reason is not None:
+                raise ProviderError(_TOOLS_SUPPRESSED_MESSAGE.format(reason=tools_suppressed_reason))
             raise ProviderError(_NO_WRITE_TOOL_MESSAGE)
         if requested_tools and cwd is None:
             raise ProviderError(
