@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 from claude_agent_sdk import (
     query as sdk_query,
@@ -196,9 +197,12 @@ class ClaudeSDKAgent:
                 and sdk_msg.model not in self._answering_models
             ):
                 self._answering_models.append(sdk_msg.model)
-        elif isinstance(sdk_msg, ToolResultBlock):
-            if sdk_msg.is_error:
-                self._failed_tool_calls += 1
+        elif isinstance(sdk_msg, UserMessage) and isinstance(sdk_msg.content, list):
+            # The SDK delivers tool results inside a UserMessage's content, never as a
+            # top-level message (D4). String content carries no blocks.
+            self._failed_tool_calls += sum(
+                1 for block in sdk_msg.content if isinstance(block, ToolResultBlock) and block.is_error
+            )
 
         translated = translate_sdk_message(sdk_msg, sender=self._name)
         if isinstance(sdk_msg, ResultMessage) and translated:

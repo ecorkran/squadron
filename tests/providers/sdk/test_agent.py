@@ -22,6 +22,7 @@ from claude_agent_sdk import (
     ThinkingBlock,
     ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 
 from squadron.core.models import AgentState, Message, MessageType
@@ -874,8 +875,12 @@ class TestToolTelemetry:
                 ],
                 model="claude",
             )
-            yield ToolResultBlock(tool_use_id="t1", content="file contents", is_error=False)
-            yield ToolResultBlock(tool_use_id="t2", content="match", is_error=False)
+            yield UserMessage(
+                content=[ToolResultBlock(tool_use_id="t1", content="file contents", is_error=False)]
+            )
+            yield UserMessage(
+                content=[ToolResultBlock(tool_use_id="t2", content="match", is_error=False)]
+            )
             yield _make_result(result="done")
 
         with patch(_QUERY, side_effect=gen):
@@ -897,7 +902,9 @@ class TestToolTelemetry:
                 content=[ToolUseBlock(id="t1", name="Read", input={"path": "a.py"})],
                 model="claude",
             )
-            yield ToolResultBlock(tool_use_id="t1", content="boom", is_error=True)
+            yield UserMessage(
+                content=[ToolResultBlock(tool_use_id="t1", content="boom", is_error=True)]
+            )
             yield _make_result(result="done")
 
         with patch(_QUERY, side_effect=gen):
@@ -916,13 +923,46 @@ class TestToolTelemetry:
                 content=[ToolUseBlock(id="t1", name="Read", input={"path": "missing.py"})],
                 model="claude",
             )
-            yield ToolResultBlock(tool_use_id="t1", content="No such file", is_error=True)
+            yield UserMessage(
+                content=[ToolResultBlock(tool_use_id="t1", content="No such file", is_error=True)]
+            )
             yield _make_result(result="done")
 
         with patch(_QUERY, side_effect=gen):
             messages = await _collect(tooled_query_agent.handle_message(input_message))
 
         assert messages[-1].metadata["failed_tool_calls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_only_error_blocks_in_one_user_message_are_counted(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield UserMessage(
+                content=[
+                    ToolResultBlock(tool_use_id="t1", content="boom", is_error=True),
+                    ToolResultBlock(tool_use_id="t2", content="fine", is_error=False),
+                ]
+            )
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["failed_tool_calls"] == 1
+
+    @pytest.mark.asyncio
+    async def test_string_content_user_message_counts_no_failures(
+        self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield UserMessage(content="plain text, no blocks")
+            yield _make_result(result="done")
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(tooled_query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata["failed_tool_calls"] == 0
 
     @pytest.mark.asyncio
     async def test_stop_reason_and_reasoning_chars_stamped_from_result(
@@ -954,7 +994,7 @@ class TestToolTelemetry:
                 content=[ToolUseBlock(id="t1", name="Read", input={"path": "a.py"})],
                 model="claude",
             )
-            yield ToolResultBlock(tool_use_id="t1", content="ok", is_error=False)
+            yield UserMessage(content=[ToolResultBlock(tool_use_id="t1", content="ok", is_error=False)])
             yield _make_result(result="done")
 
         mock_client.receive_response = mock_receive
