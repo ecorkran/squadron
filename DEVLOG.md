@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261014
 
+### Slice 945: task breakdown complete (Phase 5)
+
+- Tasks: `user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md`, 26 tasks, effort 3/5. Order: branch; D1 contract (`WRITE_TOOL_NAMES`, `requires_writes`, predicate); D4 SDK count; OpenAI `first_tool_error` + write-tool refusal; Codex refusals; `dispatch_outcome.py` + wiring; D5 cf one-liners; D6 `awaits_human`, `UNFINISHED_TASKS`, batch mapping; CHANGELOG; walkthrough.
+- D6 note: `_flag_kind` checks PAUSED status first, so the `UNFINISHED_TASKS` → `STEP_FAILED` check must precede it.
+- Next: Phase 6 implementation.
+
 ### Slice 945: design complete (Phase 4)
 
 - Design: `user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md`, effort 3/5. Write-required dispatch (phase steps, revise dispatches) derived, not declared; providers refuse at spawn what they cannot honor (Codex: `allowed_tools`, read-only sandbox on write-required; OpenAI-compatible: no write tool); dispatch outcome table D3 (declared-not-given, zero calls on write-required, all calls failed → fail; partial failures → warn); SDK `failed_tool_calls` never counted (ToolResultBlock arrives in `UserMessage.content`) — fixed in scope; #202 one-line cf errors; #212 item 2: unchecked tasks at merge → `paused`.
