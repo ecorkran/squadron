@@ -16,15 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Provider profiles in `providers.toml` accept `sandbox` (Codex only), so a Codex profile can run with `workspace-write`.
+- Provider profiles in `providers.toml` accept `sandbox` (Codex only), to pin a Codex sandbox for every call.
+- Phase and revise steps on OpenAI-compatible models (OpenRouter, local, Gemini) get `read_file`, `write_file`, `list_files`, `grep` and `bash` when the step sets no `allowed_tools`, so built-in pipelines run on any producer. `bash` is not sandboxed; see the README warning.
 
 ### Changed
 - A merge step that finds unchecked task items, or a slice with no task files in Context Forge, now pauses the run instead of failing it.
 
 ### Fixed
 - `sq run` now runs pipelines inside a Claude Code session instead of refusing them; `--prompt-only` is no longer required there (#144).
-- Codex steps that need squadron tools, or that must write files on a read-only sandbox, now stop at the start and name the fix (`sandbox = "workspace-write"`) instead of reporting success after doing nothing (#211).
-- OpenAI-compatible phase and revise steps now refuse to start without a write tool in `allowed_tools`.
+- Codex phase and revise steps now run with a `workspace-write` sandbox, so they write files instead of reporting success after doing nothing. Codex steps that declare `allowed_tools`, or write steps on a profile pinned to `read-only`, stop at the start and name the fix (#211).
+- OpenAI-compatible phase and revise steps whose `allowed_tools` has no write tool now refuse to start.
 - Dispatch steps now fail when every tool call failed, or when a step that must write files made no tool calls. This covers OpenAI-compatible dispatches and SDK dispatches that declare `allowed_tools`, not the default SDK path (#211).
 - Failed SDK tool calls are now counted; the count was always zero.
 - A missing slice plan in a dispatch step now prints one error line instead of a traceback (#202).

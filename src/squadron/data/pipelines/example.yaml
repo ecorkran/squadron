@@ -6,9 +6,9 @@
 #         sq run example 165 --model opus  # override pipeline-level model
 #
 # Pipelines are loaded from (first match wins):
-#   1. .squadron/pipelines/<name>.yaml   (project-local)
-#   2. ~/.squadron/pipelines/<name>.yaml (user-global)
-#   3. built-in pipelines                (this directory)
+#   1. project-documents/user/pipelines/<name>.yaml  (project-local)
+#   2. ~/.config/squadron/pipelines/<name>.yaml      (user-global)
+#   3. built-in pipelines                            (this directory)
 # ============================================================================
 
 name: example
@@ -43,6 +43,11 @@ steps:
   #   model:      model for the dispatch (LLM generation) action
   #   review:     string (template name) or dict with template + model
   #   checkpoint: when to pause for human — see checkpoint options below
+  #   allowed_tools: squadron tools for a non-Claude, non-Codex model. Omit it
+  #               and the step gets read_file, write_file, list_files, grep and
+  #               bash. Claude models use their own tools; Codex refuses this
+  #               field and writes through its sandbox. bash is NOT sandboxed:
+  #               drop it to keep the model to the project directory.
   #
   # Checkpoint triggers:
   #   always       — always pause after review
@@ -70,6 +75,8 @@ steps:
   - tasks:
       phase: 5
       model: haiku
+      # Only read by non-Claude, non-Codex models; this one drops bash.
+      allowed_tools: [read_file, write_file, list_files, grep]
       review:
         template: tasks
         model: minimax

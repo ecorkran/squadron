@@ -118,13 +118,13 @@ sq auth login openai-oauth
 sq auth status                    # shows the signed-in account and plan
 ```
 
-Codex runs read-only by default, so a design, tasks or implement step on these aliases is refused with a message naming the fix. To let it write files, override the profile in `~/.config/squadron/providers.toml`:
+Steps that must write files (design, tasks, implement, and revise) run Codex with a `workspace-write` sandbox. Everything else runs read-only. To pin a sandbox for every call, set it on the profile in `~/.config/squadron/providers.toml`. A profile pinned to `read-only` refuses write steps.
 
 ```toml
 [profiles.openai-oauth]
 provider = "openai-oauth"
 auth_type = "oauth"
-sandbox = "workspace-write"
+sandbox = "read-only"
 ```
 
 `OPENAI_API_KEY` isn't used by this profile. The pricing shown for these aliases is what the same call would cost on the API, for comparison.
@@ -236,6 +236,10 @@ steps:
 ```
 
 The building blocks are phase steps (`design`, `tasks`, `implement`), `dispatch` (send a prompt to a model), `review`, `gate` (decide from a review or a judge), `loop` (with `until`, `accept_if`, and an exhaustion policy), `each` (fan out over a list), `summary`, `compact`, and `devlog`. Loops can commit each round, so you can see the revision history in git.
+
+**Tools for steps that write.** A phase step or a revise has to change files. Claude models bring their own tools, and Codex uses its sandbox. Other models (OpenRouter, local, Gemini) get squadron's tools: `read_file`, `write_file`, `list_files`, `grep` and `bash`. To narrow that set, give the step an `allowed_tools` list. A step that ends up with no tool able to write is refused before any model call. A write step that makes no tool calls, or whose every call fails, ends `failed` instead of `completed`.
+
+> **Warning: `bash` is not sandboxed.** The file tools refuse paths outside the project directory. `bash` starts in the project directory but can run any command your user account can, anywhere on the machine, network included. Only run write steps on models you'd trust with a shell. To keep a model to the file tools, set `allowed_tools: [read_file, write_file, list_files, grep]` on the step. OS-level containment is tracked in [#213](https://github.com/ecorkran/squadron/issues/213).
 
 **Making your own.** Squadron looks for a pipeline by name in three places, first match wins:
 

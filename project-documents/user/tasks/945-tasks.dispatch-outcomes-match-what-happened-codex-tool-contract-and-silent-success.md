@@ -207,3 +207,21 @@ status: complete
   - [x] Add the results to the Phase 6 DEVLOG entry (required at phase completion by `prompt.ai-project.system.md`, "Session State Summary")
   - [x] **Success:** all seven steps match the design's expectations, or each mismatch is fixed or reported to the Project Manager. A step not run (missing precondition) is reported as unverified, never as passed.
   - *Note:* a defect was found (no profile could set the Codex sandbox) and fixed with `ProviderProfile.sandbox`, committed as "feat: let provider profiles set the Codex sandbox". P6 itself was not run, only its merge step.
+
+### Follow-up: stock pipelines run on any producer
+
+Found after Task 26: the write-required refusals meant `sq run P4 152 -m <openrouter-alias>` or `-m luna` was refused unless the pipeline was copied with `allowed_tools` added, or the Codex profile was overridden. The PM ruled that out; this ships in 945.
+
+- [x] **Task 27: Default tools and Codex sandbox for write steps**
+  - [x] Add `DEFAULT_WRITE_STEP_TOOLS` (`read_file`, `write_file`, `list_files`, `grep`, `bash`) beside `WRITE_TOOL_NAMES`
+  - [x] In `one_shot_dispatch_with_telemetry`, a write-required dispatch on an `openai` provider with no declared `allowed_tools` gets the default set before the capability gate
+  - [x] Codex `_resolve_sandbox`: no profile sandbox plus `requires_writes` gives `workspace-write`; a profile pinned to `read-only` still refuses
+  - [x] OpenAI-compatible refusal names model capability, not `allowed_tools`, when the gate emptied the set
+  - [x] Tests: default applied (openai), declared list kept, not applied for bare dispatch, SDK or Codex; Codex unset sandbox on a write step; suppressed-tools refusal text
+  - [x] **Success:** ruff, pyright, full suite pass
+
+- [x] **Task 28: Docs**
+  - [x] README: write-step tools paragraph, `bash` warning linking #213, Codex sandbox paragraph matches the new default
+  - [x] `example.yaml`: `allowed_tools` documented on phase steps and set on the `tasks` step; pipeline search paths corrected
+  - [x] CHANGELOG bullets updated
+  - [x] File #213 for OS-level `bash` containment
