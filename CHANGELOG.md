@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - `sq run` now runs pipelines inside a Claude Code session instead of refusing them; `--prompt-only` is no longer required there (#144).
-- Codex phase and revise steps now run with a `workspace-write` sandbox, so they write files instead of reporting success after doing nothing. Codex steps that declare a write tool in `allowed_tools`, or write steps on a profile pinned to `read-only`, stop at the start and name the fix (#211).
+- Codex phase and revise steps now run with a `workspace-write` sandbox, so they write files instead of reporting success after doing nothing. Codex steps that declare any tool other than `read_file`, `list_files` or `grep` in `allowed_tools`, or write steps on a profile pinned to `read-only`, stop at the start and name the fix (#211).
 - OpenAI-compatible phase and revise steps whose `allowed_tools` has no write tool now refuse to start.
 - Dispatch steps now fail when every tool call failed, or when a step that must write files made no tool calls. This covers OpenAI-compatible dispatches and SDK dispatches that declare `allowed_tools`, not the default SDK path (#211).
 - Failed SDK tool calls are now counted; the count was always zero.

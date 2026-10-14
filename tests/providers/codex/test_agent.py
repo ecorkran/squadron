@@ -11,8 +11,12 @@ import pytest
 
 from squadron.core.models import AgentConfig, AgentState, Effort, Message, MessageType
 from squadron.core.usage import TokenUsage
+from squadron.data import data_dir
 from squadron.providers.codex.agent import CodexAgent
 from squadron.providers.errors import ProviderError
+from squadron.review.templates import load_template
+from squadron.tools.builtin import READ_FILE_NAME, WRITE_FILE_NAME, WRITE_TOOL_NAMES
+from squadron.tools.cf_tools import CF_SET_PHASE_NAME
 from tests.providers.codex.fake_sdk import (
     ApprovalMode,
     CodexError,
@@ -151,31 +155,40 @@ class TestSandbox:
 class TestSpawnRefusals:
     """Slice 945 D2: refuse what Codex cannot honor, before the runtime starts."""
 
-    @pytest.mark.parametrize("write_tool", ["write_file", "bash"])
-    def test_write_tool_refused_at_spawn(
-        self, agent_config: AgentConfig, fake_sdk: FakeSdk, write_tool: str
+    @pytest.mark.parametrize("tool", [*sorted(WRITE_TOOL_NAMES), CF_SET_PHASE_NAME])
+    def test_non_read_tool_refused_at_spawn(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk, tool: str
     ) -> None:
-        config = agent_config.model_copy(update={"allowed_tools": ["read_file", write_tool]})
-        with pytest.raises(ProviderError, match="Codex does not run squadron's write tools"):
+        config = agent_config.model_copy(update={"allowed_tools": [READ_FILE_NAME, tool]})
+        with pytest.raises(ProviderError, match="Codex does not run squadron's tools") as exc_info:
             CodexAgent(name="test-codex", config=config)
+        assert f"`{tool}`" in str(exc_info.value)
         fake_sdk.async_codex.assert_not_called()
 
-    def test_review_template_read_tools_accepted(
+    def test_every_shipped_review_template_accepted(
         self, agent_config: AgentConfig, fake_sdk: FakeSdk
     ) -> None:
-        """Every review template declares these; Codex reads files natively."""
-        config = agent_config.model_copy(update={"allowed_tools": ["read_file", "list_files", "grep"]})
-        _send(CodexAgent(name="test-codex", config=config), "hi")
-        fake_sdk.client.thread_start.assert_awaited_once()
+        """Codex reads files natively, so no shipped review template is refused."""
+        template_files = sorted((data_dir() / "templates").glob("*.yaml"))
+        assert template_files
+        for template_file in template_files:
+            template = load_template(template_file)
+            config = agent_config.model_copy(update={"allowed_tools": template.allowed_tools})
+            CodexAgent(name=f"test-codex-{template.name}", config=config)
 
     def test_allowed_tools_refused_before_the_sandbox_is_checked(
         self, agent_config: AgentConfig, fake_sdk: FakeSdk
     ) -> None:
+        """A pinned read-only sandbox would refuse too; the tool refusal must win."""
         config = agent_config.model_copy(
-            update={"allowed_tools": ["write_file"], "requires_writes": True}
+            update={
+                "allowed_tools": [WRITE_FILE_NAME],
+                "requires_writes": True,
+                "credentials": {"sandbox": "read-only"},
+            }
         )
-        with pytest.raises(ProviderError, match="does not run squadron's write tools"):
-            CodexAgent(name="test-codex", config=config)
+        with pytest.raises(ProviderError, match="Codex does not run squadron's tools"):
+            _send(CodexAgent(name="test-codex", config=config), "hi")
 
     def test_unset_sandbox_write_required_gets_workspace_write_and_logs_it(
         self, agent_config: AgentConfig, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
