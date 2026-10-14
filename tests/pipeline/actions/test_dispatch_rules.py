@@ -11,11 +11,13 @@ from squadron.pipeline.actions import dispatch_rules
 from squadron.pipeline.actions.dispatch_rules import (
     ProjectRulesContextError,
     build_rule_context,
+    dispatch_requires_writes,
     native_conventions_for,
     rule_step_for,
     tracked_files,
 )
 from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.steps.phase import RULES_STEP_PARAM
 from squadron.project_rules.conventions import ConventionsSource
 from squadron.project_rules.frontmatter import RuleStep
 from squadron.providers.base import ProviderType
@@ -93,3 +95,18 @@ def test_git_refusal_raises(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setattr(dispatch_rules, "run_git", lambda args, *, cwd: refused)
     with pytest.raises(ProjectRulesContextError, match="exit 128.*not a git repository"):
         tracked_files(str(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        ({RULES_STEP_PARAM: StepTypeName.DESIGN}, True),
+        ({RULES_STEP_PARAM: StepTypeName.TASKS}, True),
+        ({RULES_STEP_PARAM: StepTypeName.IMPLEMENT}, True),
+        ({"feedback": "fix the typo"}, True),
+        ({}, False),
+        ({RULES_STEP_PARAM: StepTypeName.DISPATCH}, False),
+    ],
+)
+def test_dispatch_requires_writes(params: dict[str, object], expected: bool) -> None:
+    assert dispatch_requires_writes(params) is expected

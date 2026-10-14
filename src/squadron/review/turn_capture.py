@@ -24,6 +24,7 @@ from squadron.core.models import (
     MessageType,
 )
 from squadron.core.usage import TokenUsage, add_optional
+from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.models import ReviewResult, Verdict
 
@@ -140,10 +141,10 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
     turn_usage: TokenUsage | None = None
     async for response in agent.handle_message(message):
         metadata: dict[str, Any] = response.metadata
-        given = metadata.get("tools_given")
+        given = metadata.get(TOOLS_GIVEN_KEY)
         if given is not None:
             capture.tools_given = given
-            turn_calls = metadata.get("tool_calls_made", 0)
+            turn_calls = metadata.get(TOOL_CALLS_MADE_KEY, 0)
         # Guarded per key rather than on one of them: a later response that stamps nothing
         # must not erase what an earlier one reported. Counts are checked against None, not
         # truthiness — a stamped 0 is a real answer.
@@ -153,8 +154,8 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
             capture.stop_reason = metadata["stop_reason"]
         if metadata.get("reasoning_chars") is not None:
             turn_reasoning = metadata["reasoning_chars"]
-        if metadata.get("failed_tool_calls") is not None:
-            turn_failures = metadata["failed_tool_calls"]
+        if metadata.get(FAILED_TOOL_CALLS_KEY) is not None:
+            turn_failures = metadata[FAILED_TOOL_CALLS_KEY]
         if metadata.get("turns") is not None:
             turn_count = metadata["turns"]
         if metadata.get("usage") is not None:

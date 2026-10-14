@@ -92,6 +92,8 @@ class AgentConfig(BaseModel):
     # SDK and API agents: tool whitelist. Note the vocabularies differ — SDK names
     # (e.g. "Read") vs. squadron registry names — see slice-262 decision D1.
     allowed_tools: list[str] | None = None
+    # Set for phase-step and revise dispatches, which must produce a file (D1, slice 945).
+    requires_writes: bool = False
     # Why allowed_tools was emptied by the slice 266 capability gate, or None if it was
     # not. Carried so the agent can stamp it into telemetry: an empty allowed_tools is
     # otherwise indistinguishable from a run that simply declared no tools.

@@ -22,6 +22,7 @@ from squadron.tools.builtin._shared import (
     LIST_FILES_NAME,
     READ_FILE_NAME,
     WRITE_FILE_NAME,
+    WRITE_TOOL_NAMES,
     contained_in_jail,
     resolve_in_jail,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "WRITE_FILE",
     "WRITE_FILE_NAME",
     "WRITE_FILE_PARAMETERS",
+    "WRITE_TOOL_NAMES",
     "_resolve_in_jail",
     "contained_in_jail",
     "resolve_in_jail",

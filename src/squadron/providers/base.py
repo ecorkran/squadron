@@ -9,6 +9,13 @@ from typing import Protocol, runtime_checkable
 
 from squadron.core.models import AgentConfig, AgentState, Message
 
+# Tool-use telemetry keys providers stamp on a response's metadata. Defined once;
+# every producer and consumer references these.
+TOOLS_GIVEN_KEY = "tools_given"
+TOOL_CALLS_MADE_KEY = "tool_calls_made"
+FAILED_TOOL_CALLS_KEY = "failed_tool_calls"
+FIRST_TOOL_ERROR_KEY = "first_tool_error"
+
 
 class ProviderType(StrEnum):
     """Registered provider type identifiers."""

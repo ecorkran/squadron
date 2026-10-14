@@ -31,6 +31,7 @@ from claude_agent_sdk._errors import (  # pyright: ignore[reportPrivateUsage]
 from squadron.core.models import AgentState, Message
 from squadron.core.teardown import close_best_effort
 from squadron.logging import get_logger
+from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -204,11 +205,11 @@ class ClaudeSDKAgent:
             final = translated[-1]
             final.metadata["stop_reason"] = sdk_msg.stop_reason
             final.metadata["reasoning_chars"] = self._reasoning_chars
-            final.metadata["failed_tool_calls"] = self._failed_tool_calls
+            final.metadata[FAILED_TOOL_CALLS_KEY] = self._failed_tool_calls
             final.metadata["answering_models"] = list(self._answering_models)
             if self._tools_given:
-                final.metadata["tools_given"] = list(self._tools_given)
-                final.metadata["tool_calls_made"] = self._tool_calls_made
+                final.metadata[TOOLS_GIVEN_KEY] = list(self._tools_given)
+                final.metadata[TOOL_CALLS_MADE_KEY] = self._tool_calls_made
         return translated
 
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:

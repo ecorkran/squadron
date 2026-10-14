@@ -25,6 +25,7 @@ from squadron.config.keys import CONFIG_KEYS
 from squadron.core.models import AgentState, Effort, Message
 from squadron.core.usage import RunTelemetry, TokenUsage
 from squadron.logging import get_logger
+from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 from squadron.providers.errors import (
     EmptyFinalTurnError,
     ProviderAPIError,
@@ -698,7 +699,7 @@ class OpenAICompatibleAgent:
         messages[-1].metadata["reasoning_chars"] = self._telemetry.reasoning_chars
         messages[-1].metadata["turns"] = self._telemetry.turns
         messages[-1].metadata["usage"] = self._telemetry.usage
-        messages[-1].metadata["failed_tool_calls"] = failed_tool_calls
+        messages[-1].metadata[FAILED_TOOL_CALLS_KEY] = failed_tool_calls
         # Slice 927 D8: distinct, first-seen-order models reported across this
         # handle_message call's turns. A new key, not a repurposing of the existing
         # metadata["model"] set elsewhere, which holds the requested id.
@@ -707,8 +708,8 @@ class OpenAICompatibleAgent:
             messages[-1].metadata["tools_suppressed_reason"] = self._tools_suppressed_reason
         if not self._tools_given:
             return
-        messages[-1].metadata["tools_given"] = list(self._tools_given)
-        messages[-1].metadata["tool_calls_made"] = tool_calls_made
+        messages[-1].metadata[TOOLS_GIVEN_KEY] = list(self._tools_given)
+        messages[-1].metadata[TOOL_CALLS_MADE_KEY] = tool_calls_made
 
     def _append_history(self, entry: dict[str, Any]) -> None:
         """Append a history entry and update the running character count.

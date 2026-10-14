@@ -64,6 +64,7 @@ from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
+from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -144,9 +145,9 @@ def _log_action_result(action_type: str, result: ActionResult) -> None:
             extras.append(f"model={model}")
         # A step that was offered tools always renders a tools= segment, even at zero calls:
         # "offered three, called none" must read differently from "never had tools" (SC8).
-        given = result.metadata.get("tools_given")
+        given = result.metadata.get(TOOLS_GIVEN_KEY)
         if isinstance(given, list):
-            made = result.metadata.get("tool_calls_made", 0)
+            made = result.metadata.get(TOOL_CALLS_MADE_KEY, 0)
             extras.append(f"tools={len(given)}, calls={made}")  # pyright: ignore[reportUnknownArgumentType]
         suffix = f" ({', '.join(extras)})" if extras else ""
         _logger.info("    -> ok%s", suffix)

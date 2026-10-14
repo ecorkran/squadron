@@ -20,6 +20,9 @@ BASH_NAME = "bash"
 LIST_FILES_NAME = "list_files"
 GREP_NAME = "grep"
 
+# Tools that can change files; a write-required dispatch must be given at least one.
+WRITE_TOOL_NAMES = frozenset({WRITE_FILE_NAME, BASH_NAME})
+
 _logger = logging.getLogger(__name__)
 
 

@@ -18,9 +18,8 @@ from squadron.pipeline.actions.review_outputs import (
     review_response,
 )
 from squadron.pipeline.models import ActionResult
+from squadron.providers.base import TOOL_CALLS_MADE_KEY
 from squadron.review.parts import worst_verdict
-
-_TOOL_CALLS_MADE = "tool_calls_made"
 
 
 def fold_review_parts(parts: list[ActionResult]) -> ActionResult:
@@ -86,9 +85,9 @@ def _outputs(parts: list[ActionResult], paths: list[str], worst: int) -> dict[st
 def _metadata(parts: list[ActionResult]) -> dict[str, object]:
     """First part's metadata (every part shares model and profile), tool calls summed."""
     metadata = dict(parts[0].metadata)
-    if _TOOL_CALLS_MADE in metadata:
-        counts = [part.metadata.get(_TOOL_CALLS_MADE, 0) for part in parts]
-        metadata[_TOOL_CALLS_MADE] = sum(count for count in counts if isinstance(count, int))
+    if TOOL_CALLS_MADE_KEY in metadata:
+        counts = [part.metadata.get(TOOL_CALLS_MADE_KEY, 0) for part in parts]
+        metadata[TOOL_CALLS_MADE_KEY] = sum(count for count in counts if isinstance(count, int))
     return metadata
 
 

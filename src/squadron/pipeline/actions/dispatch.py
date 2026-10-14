@@ -36,7 +36,7 @@ from squadron.pipeline.models import ActionContext, ActionResult, ValidationErro
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.sdk_session import DispatchStalledError
 from squadron.project_rules.errors import ProjectRulesError
-from squadron.providers.base import ProfileName, ProviderType
+from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY, ProfileName, ProviderType
 from squadron.providers.errors import ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, is_sdk_profile, profile_credentials
@@ -215,10 +215,10 @@ async def one_shot_dispatch_with_telemetry(
         async for response in agent.handle_message(message):
             # Read before the sdk_type filter: the message carrying telemetry can be one
             # this loop skips for prose.
-            given = response.metadata.get("tools_given")
+            given = response.metadata.get(TOOLS_GIVEN_KEY)
             if given is not None:
-                telemetry["tools_given"] = given
-                telemetry["tool_calls_made"] = response.metadata.get("tool_calls_made", 0)
+                telemetry[TOOLS_GIVEN_KEY] = given
+                telemetry[TOOL_CALLS_MADE_KEY] = response.metadata.get(TOOL_CALLS_MADE_KEY, 0)
             sdk_type = response.metadata.get("sdk_type")
             # An informational RateLimitEvent is a usage-meter notice, not
             # response prose, and is excluded the same way (issue #23 class).

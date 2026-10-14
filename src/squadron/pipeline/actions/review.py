@@ -21,6 +21,7 @@ from squadron.pipeline.resolver import (
     ModelResolutionError,
     ResolvedModel,
 )
+from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import (
     DiffRangeUnresolvedError,
@@ -684,8 +685,8 @@ class ReviewAction:
                 # "offered and declined" rather than "never offered" (design D5).
                 **(
                     {
-                        "tools_given": result.tools_given,
-                        "tool_calls_made": result.tool_calls_made or 0,
+                        TOOLS_GIVEN_KEY: result.tools_given,
+                        TOOL_CALLS_MADE_KEY: result.tool_calls_made or 0,
                     }
                     if result.tools_given
                     else {}

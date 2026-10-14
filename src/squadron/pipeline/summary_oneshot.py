@@ -83,7 +83,7 @@ async def capture_summary_via_profile_with_telemetry(
         MessageType,
         describe_run_settings,
     )
-    from squadron.providers.base import ProviderType
+    from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY, ProviderType
     from squadron.providers.loader import ensure_provider_loaded
     from squadron.providers.profiles import get_profile, profile_credentials
     from squadron.providers.registry import get_provider
@@ -159,10 +159,10 @@ async def capture_summary_via_profile_with_telemetry(
             # summary prose, and is excluded the same way (issue #23 class).
             # Read before the filter below: the message carrying telemetry can be one this
             # loop skips for prose.
-            given = response.metadata.get("tools_given")
+            given = response.metadata.get(TOOLS_GIVEN_KEY)
             if given is not None:
-                telemetry["tools_given"] = given
-                telemetry["tool_calls_made"] = response.metadata.get("tool_calls_made", 0)
+                telemetry[TOOLS_GIVEN_KEY] = given
+                telemetry[TOOL_CALLS_MADE_KEY] = response.metadata.get(TOOL_CALLS_MADE_KEY, 0)
             if sdk_type in (SDK_RESULT_TYPE, TOOL_USE_TYPE, TOOL_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE):
                 continue
             output_parts.append(response.content)

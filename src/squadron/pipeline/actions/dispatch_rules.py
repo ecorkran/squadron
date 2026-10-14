@@ -93,6 +93,17 @@ def rule_step_from_params(params: Mapping[str, object]) -> StepTypeName:
     return StepTypeName(str(params.get(RULES_STEP_PARAM, StepTypeName.DISPATCH)))
 
 
+_WRITE_REQUIRED_STEPS = frozenset({StepTypeName.DESIGN, StepTypeName.TASKS, StepTypeName.IMPLEMENT})
+
+
+def dispatch_requires_writes(params: Mapping[str, object]) -> bool:
+    """Whether this dispatch must change files: a phase step, or a revise (D1).
+
+    The revise test is the one ``DispatchAction._resolve_prompt`` uses: ``feedback`` is set.
+    """
+    return rule_step_from_params(params) in _WRITE_REQUIRED_STEPS or params.get("feedback") is not None
+
+
 def sdk_native_record() -> dict[str, object]:
     """The record for an SDK dispatch, which loads the project's files itself (D4)."""
     return {"conventions": ConventionsSource.SDK_NATIVE.value}
