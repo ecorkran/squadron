@@ -618,6 +618,22 @@ class TestLocationSoftFail:
         assert "CONCERNS" in message
         assert "unverified" in message
 
+    def test_warning_cites_persisted_id_after_skipped_match(
+        self, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # #141: a skipped match must not advance the id the warning names.
+        monkeypatch.delitem(_parsers_module._SEVERITY_MAP, "NOTE")  # pyright: ignore[reportPrivateUsage]
+        text = (
+            "## Summary\nCONCERNS\n\n### [NOTE] Skipped\nlocation: src/a.py:1\n\n"
+            "### [CONCERN] Kept\nSome detail.\n"
+        )
+        with caplog.at_level("WARNING", logger="squadron.review.parsers"):
+            result = parse_review_output(text, "code", {})
+        assert [f.title for f in result.findings] == ["Kept"]
+        records = [r for r in caplog.records if r.name == "squadron.review.parsers"]
+        assert len(records) == 1
+        assert "F001" in records[0].getMessage()
+
     def test_cited_location_produces_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         # Regression: a fully-cited finding must not trigger the soft-fail warning.
         text = "## Summary\nCONCERNS\n\n### [CONCERN] Bug\nlocation: src/foo.py:45\nSome detail.\n"

@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- One `-p` on `sq run` can set several params: `-p review-model=sonnet,max-revisions=3` (#207).
+- After a plan pipeline's `each` step completes, Context Forge is set back to the first slice it worked on (#206).
+
+### Changed
+- `sq run -m` sets the run's default model only. Steps with their own model param, such as `review-model` and `summary-model`, keep it; set those params to change them (#215).
+- A malformed `-p` pair (no `=` or no key) is now an error instead of an empty value.
+
+### Fixed
+- Plan pipelines no longer pick up slices marked `deprecated`, and `cf.unfinished_slices` no longer picks up `deferred` ones (#208).
+- A summary after a revise loop now sees every round, not just the first and last, and lists review findings as text (#170).
+- `sq review --output json` on a judge template reports the score-derived verdict, matching the saved review (#140).
+- Review parser warnings name the same finding id as the saved review (#141).
+
 ## [0.21.8] - 20261014
 
 ### Added

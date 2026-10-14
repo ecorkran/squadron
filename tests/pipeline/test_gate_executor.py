@@ -78,8 +78,7 @@ class TestStepOutputsReadSurface:
         assert len(captured_contexts) == 1
         ctx = captured_contexts[0]
 
-        # Both source results are recoverable by step name, despite both
-        # having written the same "review-0" key in prior_outputs.
+        # Both source results are recoverable by step name.
         assert ctx.step_outputs["judge-slice"].verdict == "PASS"
         assert ctx.step_outputs["review-slice"].verdict == "CONCERNS"
 
@@ -89,9 +88,9 @@ class TestStepOutputsRegression:
     _find_review_verdict behavior are unchanged."""
 
     @pytest.mark.asyncio
-    async def test_prior_outputs_collision_unchanged(self) -> None:
-        """Two review steps still collide under 'review-0' in prior_outputs —
-        step_outputs does not alter this existing (lossy) behavior."""
+    async def test_same_typed_steps_keep_separate_prior_outputs(self) -> None:
+        """#170: two review steps no longer collide under 'review-0'; each keeps its
+        own entry, in execution order."""
         from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
         from squadron.pipeline.steps import register_step_type
 
@@ -141,10 +140,10 @@ class TestStepOutputsRegression:
         assert result.status == ExecutionStatus.COMPLETED
         ctx = captured_contexts[0]
 
-        # Only one "review-0" key survives — the second review step's result
-        # overwrote the first's, exactly as before this slice.
-        assert list(ctx.prior_outputs.keys()).count("review-0") == 1
-        assert ctx.prior_outputs["review-0"].verdict == "CONCERNS"
+        reviews = [k for k in ctx.prior_outputs if k.endswith(":review-0")]
+        assert reviews == ["judge-slice:review-0", "review-slice:review-0"]
+        assert ctx.prior_outputs["judge-slice:review-0"].verdict == "PASS"
+        assert ctx.prior_outputs["review-slice:review-0"].verdict == "CONCERNS"
 
 
 # ---------------------------------------------------------------------------

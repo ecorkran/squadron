@@ -61,9 +61,13 @@ class CfSliceStatus(StrEnum):
 
     COMPLETE = "complete"
     DEFERRED = "deferred"
+    DEPRECATED = "deprecated"
 
 
-_EXCLUDED_STATUSES = frozenset({CfSliceStatus.COMPLETE, CfSliceStatus.DEFERRED})
+# Every source skips these; one set so the sources cannot drift apart (#208).
+_EXCLUDED_STATUSES = frozenset(
+    {CfSliceStatus.COMPLETE, CfSliceStatus.DEFERRED, CfSliceStatus.DEPRECATED}
+)
 
 
 def _plan_arg(args: list[str]) -> str | None:
@@ -144,9 +148,9 @@ async def _cf_unfinished_slices(
     *,
     cwd: str,
 ) -> list[dict[str, object]]:
-    """Return slices of the plan whose status is not 'complete'."""
+    """Return slices of the plan that are not complete, deferred or deprecated."""
     slices = cf_client.list_slices(_plan_arg(args))
-    return [_slice_item(entry) for entry in slices if entry.status != CfSliceStatus.COMPLETE]
+    return [_slice_item(entry) for entry in slices if entry.status not in _EXCLUDED_STATUSES]
 
 
 async def _cf_undesigned_slices(

@@ -48,6 +48,8 @@ Parameters declared in `params` can be referenced anywhere inside step configs u
 - `param: required` — caller must supply the value positionally or with `--param param=value`
 - `param: sonnet` — default applied automatically when caller does not override
 
+Several params can go in one `--param`/`-p`, comma-separated: `-p review-model=sonnet,max-revisions=3`. A pair without `=` is an error. Because commas separate pairs, a `-p` value cannot contain a comma.
+
 **YAML quoting — mandatory:**
 
 When a placeholder is the entire field value, it must be quoted:
@@ -443,7 +445,7 @@ The verdict is read from the review file's frontmatter. The review clause is lef
 
 | Expression | Returns |
 |---|---|
-| `cf.unfinished_slices("{plan}")` | Slices in the plan whose status is not `complete` |
+| `cf.unfinished_slices("{plan}")` | Slices in the plan that are not `complete`, `deferred` or `deprecated` |
 | `cf.undesigned_slices("{plan}")` | Slices that are not `complete` or `deferred` and have no design file |
 | `cf.slices_needing_tasks("{plan}", "<threshold>")` | Slices that are not `complete` or `deferred`, have a design file, and either have no task file or have one whose tasks review (`{index}-review.tasks.{name}.md`) is missing, has no readable verdict, or falls below the threshold. `<threshold>` is `review.pass` or `review.concerns_or_better`. A slice whose design review (`{index}-review.slice.{name}.md`) is missing, has no readable verdict, or falls below the threshold is returned *pre-flagged* |
 | `cf.slices_ready_to_implement("{plan}", "<threshold>")` | Every open slice with a design file, **in dependency order** (a stable sort; ties keep plan order; a cycle fails the run before any item, naming it). Slices that aren't ready are returned pre-flagged `not_ready`, first hit wins: design review missing or below the threshold, `no task file`, tasks review missing or below the threshold, `all tasks checked but slice not marked complete`. A dependency on an open, undesigned slice in the plan pre-flags `dependency N not designed`; a dependency outside the plan is not checked (WARNING) |
@@ -759,11 +761,13 @@ Review artifacts carry two frontmatter keys next to `rulesSource`:
 
 Squadron resolves the active model for each action through a 5-level cascade, highest priority first:
 
-1. **CLI override** — `sq run P456 152 --model haiku`
-2. **Action-level model** — `review.model` inside a phase step's review config
-3. **Step-level model** — `model:` on a phase, compact, summary, or review step
+1. **Action-level model** — `review.model` inside a phase step's review config
+2. **Step-level model** — `model:` on a phase, compact, summary, or review step
+3. **CLI model** — `sq run P456 152 --model haiku`
 4. **Pipeline-level model** — top-level `model:` in the pipeline definition
 5. **Config default** — `sq config get model.default`
+
+`--model`/`-m` also sets the `model` param, so a step whose model is `"{model}"` runs on it. A step that names a different param (`"{review-model}"`) or a literal alias keeps its own model; set that param to change it.
 
 If all levels are `None`, the run fails with an explicit error. There is no hidden global fallback.
 
@@ -882,7 +886,7 @@ A design step that writes no design, a provider failure, or any other step failu
 
 **Things to know before running one:**
 
-- **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan, the last slice, and the batch's phase. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
+- **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan and the batch's phase. A batch that completes sets cf's slice back to the first slice it selected; a paused or failed batch leaves it on the slice it stopped at. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
 - **Commits land on the integration target.** Planning commits (design, tasks, loop rounds, devlog) are refused anywhere else, so start the batch from the target branch (`main`, or `git.integration_branch`). A batch started on another branch stops at its first commit.
 - **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `slices-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
 - **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.

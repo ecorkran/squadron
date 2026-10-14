@@ -186,6 +186,10 @@ class ContextForgeClient:
             for e in raw_entries
         ]
 
+    def set_slice(self, slice_id: str) -> str:
+        """Make *slice_id* cf's current slice; returns cf's stdout."""
+        return self._run(["set", "slice", slice_id])
+
     def get_project(self) -> ProjectInfo:
         """Return project metadata from ``cf get --json``.
 

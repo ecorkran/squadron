@@ -109,12 +109,27 @@ def _resolve_target(
     return None
 
 
+def _param_pairs(param_list: list[str] | None) -> list[tuple[str, str]]:
+    """Split ``--param`` entries into (key, value) pairs.
+
+    One entry may hold several comma-separated pairs (``-p a=1,b=2``, #207). A pair
+    with no key or no ``=`` is an error, never a silently empty value.
+    """
+    pairs: list[tuple[str, str]] = []
+    for entry in param_list or []:
+        for pair in entry.split(","):
+            key, sep, value = pair.partition("=")
+            if not key.strip() or not sep:
+                raise typer.BadParameter(
+                    f"Invalid --param '{pair.strip()}' in '{entry}': expected key=value"
+                )
+            pairs.append((key.strip(), value.strip()))
+    return pairs
+
+
 def _apply_param_overrides(params: dict[str, object], param_list: list[str] | None) -> None:
     """Apply ``--param key=value`` entries to *params* in place (they override defaults)."""
-    for entry in param_list or []:
-        key, _, value = entry.partition("=")
-        if not key:
-            raise typer.BadParameter(f"Invalid --param format: '{entry}'")
+    for key, value in _param_pairs(param_list):
         if (reserved := reserved_param_error(key)) is not None:
             raise typer.BadParameter(reserved)
         params[key] = value
@@ -525,11 +540,9 @@ def _extract_model_override(model: str | None, param: list[str] | None) -> str |
     """
     if model is not None:
         return model
-    if param:
-        for entry in param:
-            key, _, value = entry.partition("=")
-            if key == "model" and value:
-                return value
+    for key, value in _param_pairs(param):
+        if key == "model" and value:
+            return value
     return None
 
 
@@ -559,6 +572,9 @@ def _handle_explain(
         key: value for key, value in definition.params.items() if value != "required"
     }
     _apply_param_overrides(explain_params, param)
+    # As in _assemble_params: -m is the `model` param, so "{model}" steps show it (#215).
+    if model_override is not None:
+        explain_params["model"] = model_override
 
     try:
         classification = classify_for_run(
@@ -968,7 +984,7 @@ def run(
     ),
     model: str | None = typer.Option(None, "--model", "-m", help="Model override."),
     param: list[str] | None = typer.Option(
-        None, "--param", "-p", help="Additional param as key=value."
+        None, "--param", "-p", help="Param as key=value; several may be comma-separated (a=1,b=2)."
     ),
     from_step: str | None = typer.Option(None, "--from", help="Start execution from this step."),
     resume: str | None = typer.Option(None, "--resume", "-r", help="Resume a paused run by run-id."),

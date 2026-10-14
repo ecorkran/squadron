@@ -83,3 +83,26 @@ def enforce_judge(
         return "UNKNOWN", Provenance.JUDGE
 
     return thresholds.derive_verdict(score), Provenance.JUDGE
+
+
+def judge_verdict(
+    result: ReviewResult,
+    template_name: str,
+    template_judge: dict[str, object] | None,
+    step_override: dict[str, object] | None,
+    logger: logging.Logger,
+) -> tuple[str, str]:
+    """The threshold verdict for a judge result; one function for pipeline and CLI (#140).
+
+    A malformed threshold override degrades to UNKNOWN with a WARNING rather than
+    raising, so an already-successful model call is never discarded (slice 303 F003).
+    """
+    try:
+        thresholds = resolve_thresholds(template_judge, step_override)
+    except (TypeError, ValueError):
+        logger.warning(
+            "review: malformed judge threshold override for template '%s'; verdict=UNKNOWN",
+            template_name,
+        )
+        return "UNKNOWN", Provenance.JUDGE
+    return enforce_judge(result, thresholds, template_name, logger)

@@ -808,7 +808,7 @@ def _extract_findings(
     in_section = _count_finding_matches(scanned)
 
     findings: list[ReviewFinding] = []
-    for index, match in enumerate(_FINDING_RE.finditer(scanned), start=1):
+    for match in _FINDING_RE.finditer(scanned):
         # Groups: (g1,g2) heading, (g3,g4) bold, (g5,g6) bullet
         sev_raw = match.group(1) or match.group(3) or match.group(5) or ""
         severity_str = sev_raw.upper()
@@ -845,8 +845,9 @@ def _extract_findings(
                 raw_location = file_ref
 
         # Soft-fail: normalize missing/placeholder values to UNVERIFIED_LOCATION.
-        # ID matches the F### scheme assigned by ReviewResult.structured_findings.
-        finding_id = f"F{index:03d}"
+        # ID matches the F### scheme assigned by ReviewResult.structured_findings,
+        # which numbers kept findings only, so a skipped match must not count (#141).
+        finding_id = f"F{len(findings) + 1:03d}"
         location = _normalize_location(
             raw_location,
             finding_id=finding_id,

@@ -41,6 +41,7 @@ async def _run(
     observer: RecordingObserver | None = None,
     run_id: str | None = None,
     start_from: str | None = None,
+    cf_client: MagicMock | None = None,
 ) -> tuple[PipelineResult, list[str]]:
     """Run an ``each`` over *items*; return the result and the indices whose body ran."""
 
@@ -78,7 +79,7 @@ async def _run(
         definition,
         {"_project": "test"},
         resolver=MagicMock(),
-        cf_client=MagicMock(),
+        cf_client=cf_client if cf_client is not None else MagicMock(),
         observer=observer,
         run_id=run_id,
         start_from=start_from,
@@ -148,6 +149,48 @@ class TestContinuePolicy:
 
         assert result.status == ExecutionStatus.PAUSED
         assert ran == ["1"]
+
+
+class TestCfSliceReset:
+    """#206: a completed each step leaves cf on the first slice the source yielded."""
+
+    @pytest.mark.asyncio
+    async def test_completed_step_resets_to_first_item(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        cf = MagicMock()
+        await _run(monkeypatch, _items("180", "181", "182"), lambda _: _OK, cf_client=cf)
+        cf.set_slice.assert_called_once_with("180")
+
+    @pytest.mark.asyncio
+    async def test_no_items_leaves_cf_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        cf = MagicMock()
+        await _run(monkeypatch, [], lambda _: _OK, cf_client=cf)
+        cf.set_slice.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_paused_step_leaves_cf_alone(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        cf = MagicMock()
+        await _run(
+            monkeypatch, _items("180", "181"), lambda i: _PAUSE if i == "181" else _OK, cf_client=cf
+        )
+        cf.set_slice.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("error_type", ["error", "not_available"])
+    async def test_failed_reset_warns_and_the_run_completes(
+        self, error_type: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
+
+        cf = MagicMock()
+        cf.set_slice.side_effect = (
+            ContextForgeError("cf set slice 180: boom")
+            if error_type == "error"
+            else ContextForgeNotAvailable("cf is not on PATH")
+        )
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.executor"):
+            result, _ = await _run(monkeypatch, _items("180"), lambda _: _OK, cf_client=cf)
+        assert result.status == ExecutionStatus.COMPLETED
+        assert any("could not reset cf slice to 180" in r.getMessage() for r in caplog.records)
 
 
 class TestStopPolicy:

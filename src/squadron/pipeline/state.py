@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, cast
 from pydantic import BaseModel, ValidationError
 
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
-from squadron.pipeline.models import ActionResult
+from squadron.pipeline.models import ActionResult, prior_output_key
 
 if TYPE_CHECKING:
     from squadron.pipeline.models import PipelineDefinition
@@ -647,8 +647,7 @@ class StateManager:
                         exc_info=True,
                     )
                     continue
-                key = f"{action_type}-{idx}"
-                prior[key] = action_result
+                prior[prior_output_key(step_state.step_name, str(action_type), idx)] = action_result
         return prior
 
     def first_unfinished_step(self, run_id: str, definition: PipelineDefinition) -> str | None:

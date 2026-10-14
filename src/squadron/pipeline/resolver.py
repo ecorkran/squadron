@@ -1,9 +1,9 @@
 """ModelResolver — 5-level cascade model selection for pipeline execution.
 
 Resolution priority (highest to lowest):
-  1. CLI override (--model flag)
-  2. Action-level model (per-action config)
-  3. Step-level model (per-step config)
+  1. Action-level model (per-action config)
+  2. Step-level model (per-step config)
+  3. CLI model (--model flag; the run's default, not a global override, #215)
   4. Pipeline-level model (pipeline definition header)
   5. Config default (squadron.toml / environment default)
 
@@ -134,10 +134,12 @@ class ModelResolver:
         ``cascade_candidates()`` see it together and the classifier cannot
         silently miss it.
         """
+        # ``-m`` is the run's default model, not a global override: a step or
+        # action that names its own model (e.g. ``"{review-model}"``) keeps it (#215).
         return (
-            self._cli_override,
             action_model,
             step_model,
+            self._cli_override,
             self._pipeline_model,
             self._config_default,
         )
@@ -153,8 +155,7 @@ class ModelResolver:
         after alias resolution.
 
         Args:
-            action_model: Action-level model override (highest priority
-                          after CLI).
+            action_model: Action-level model override (highest priority).
             step_model: Step-level model override.
 
         Returns:

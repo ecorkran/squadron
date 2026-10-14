@@ -146,7 +146,8 @@ def test_cascade_candidates_returns_ordered_inputs() -> None:
         config_default="e",
     )
     result = resolver.cascade_candidates(action_model="b", step_model="c")
-    assert result == ("a", "b", "c", "d", "e")
+    # #215: the CLI model sits below the action and step models.
+    assert result == ("b", "c", "a", "d", "e")
 
 
 def test_cascade_candidates_nones_for_unspecified() -> None:
@@ -873,15 +874,25 @@ def test_pool_candidates_are_not_alias_checked() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_label_shows_the_cli_override_alias() -> None:
-    """``--model haiku`` labels the action ``model=haiku``, not the YAML default."""
+def test_label_shows_the_cli_alias_when_the_action_names_none() -> None:
+    """``--model haiku`` labels an action with no model of its own ``model=haiku``."""
+    from squadron.pipeline.executor import (
+        _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    resolver = make_resolver(cli_override="haiku", pipeline_model="sonnet")
+    assert _summarize_action_config("dispatch", {}, resolver, None) == "model=haiku"
+
+
+def test_label_keeps_the_action_model_over_the_cli_alias() -> None:
+    """#215: an action that names its own model (``review-model``) is not overridden."""
     from squadron.pipeline.executor import (
         _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
     )
 
     resolver = make_resolver(cli_override="haiku", pipeline_model="sonnet")
     label = _summarize_action_config("dispatch", {"model": "sonnet"}, resolver, None)
-    assert label == "model=haiku"
+    assert label == "model=sonnet"
 
 
 def test_label_shows_pool_reference() -> None:
