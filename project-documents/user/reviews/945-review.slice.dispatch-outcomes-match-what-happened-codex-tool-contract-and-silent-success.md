@@ -116,3 +116,13 @@ Providers refuse locally and dispatch does not read provider credentials. `Agent
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 6
 - Finding-shaped matches — surviving validation: 6
+
+## Response (20261014)
+
+Design edited in place; accepted at CONCERNS.
+
+- **F001 (#212 item 2 reinterpreted):** PM decided: unchecked items at merge end `paused`, changing 942's status on purpose. D6 now records the decision and states that #212 item 2 is only partly fixed until its run id shows which path it took.
+- **F002 (executor coupled to a branch failure kind):** fixed. `ActionResult` gains `awaits_human`; the branch action sets it for `UNFINISHED_TASKS`, and the executor pauses on the flag without importing `branch_ops`.
+- **F003 (proportionality):** the `sandbox` metadata stamp is cut. `tool_errors` and its limit constant become one `first_tool_error` string. Items 5 and 6 stay in the slice with separate commits.
+- **F004 (default SDK path not covered):** the CHANGELOG requirement now names the covered providers and forbids claiming the default SDK path.
+- D4 (SDK failed-call count) verified against claude-agent-sdk 0.2.162.

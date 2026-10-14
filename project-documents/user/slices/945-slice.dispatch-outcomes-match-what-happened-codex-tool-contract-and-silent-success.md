@@ -31,7 +31,7 @@ A dispatch step can report `completed`, `success: True` when the model did nothi
 **Included**
 1. **Write-required dispatch.** A dispatch is write-required when it comes from a phase step (`design`, `tasks`, `implement`) or has `feedback` set (a revise dispatch). `AgentConfig.requires_writes` carries this to the provider.
 2. **Provider contract: refuse what you cannot honor** (D1, D2). Codex raises `ProviderError` at spawn in two cases: `allowed_tools` is declared, or `requires_writes` is set on a read-only sandbox. The OpenAI-compatible agent raises when `requires_writes` is set and no write-capable tool was given.
-3. **Tool-outcome rules in dispatch** (D3). Copy `failed_tool_calls` and `tool_errors` into step metadata. Log WARNING and fail per the D3 table.
+3. **Tool-outcome rules in dispatch** (D3). Copy `failed_tool_calls` and `first_tool_error` into step metadata. Log WARNING and fail per the D3 table.
 4. **SDK failed-call count fix** (D4). `_translate_and_track` looks for `ToolResultBlock` as a top-level stream message, so the count never increments. Count it inside `UserMessage.content`.
 5. **#202:** `ContextForgeError` from the slice lookup in the dispatch-artifact post-condition, and from dispatch's `existing: keep` lookup, becomes a one-line step failure with no traceback (D5).
 6. **#212 item 2:** a hard-gate stop can no longer pass the merge gate when cf lists no task files, and a merge refused for unfinished task items ends the run `paused` instead of `failed` (D6).
@@ -70,7 +70,7 @@ None. The plan entry lists no dependencies. This slice builds on completed work:
 ### Interfaces Required
 - `AgentConfig` (`core/models.py`): gains `requires_writes: bool = False`.
 - `WRITE_TOOL_NAMES` (`tools/builtin/_shared.py`, re-exported from `tools/builtin`): a frozenset of the existing `WRITE_FILE_NAME` and `BASH_NAME`.
-- Provider response metadata: the existing keys `tools_given`, `tool_calls_made`, and `failed_tool_calls`, plus the new `tool_errors: list[str]`.
+- Provider response metadata: the existing keys `tools_given`, `tool_calls_made`, and `failed_tool_calls`, plus the new `first_tool_error: str | None`.
 
 ## Architecture
 
@@ -79,15 +79,16 @@ None. The plan entry lists no dependencies. This slice builds on completed work:
 | Component | File | Change |
 |---|---|---|
 | Write-required predicate | `pipeline/actions/dispatch.py` | `dispatch_requires_writes(params)`: true for a phase-step rules param or `feedback` set |
-| One-shot dispatch | `pipeline/actions/dispatch.py` `one_shot_dispatch_with_telemetry` | Pass `requires_writes`; copy `failed_tool_calls` and `tool_errors` |
+| One-shot dispatch | `pipeline/actions/dispatch.py` `one_shot_dispatch_with_telemetry` | Pass `requires_writes`; copy `failed_tool_calls` and `first_tool_error` |
 | Outcome rules | new `pipeline/actions/dispatch_outcome.py` | `assess_tool_outcome(declared, requires_writes, telemetry) -> ToolOutcome` (D3) |
-| Codex agent | `providers/codex/agent.py` | Spawn-time refusals; stamp `sandbox` in metadata |
-| OpenAI-compatible agent | `providers/openai/agent.py` | Write-tool refusal; keep the first `_TOOL_ERROR_LIMIT` error texts as `tool_errors` |
+| Codex agent | `providers/codex/agent.py` | Spawn-time refusals |
+| OpenAI-compatible agent | `providers/openai/agent.py` | Write-tool refusal; keep the first failed call's error text as `first_tool_error` |
 | SDK agent | `providers/sdk/agent.py` | Count `ToolResultBlock.is_error` inside `UserMessage.content` |
 | Write-capable tools | `tools/builtin/_shared.py` | `WRITE_TOOL_NAMES` constant |
 | Dispatch-artifact post-condition | `events/builtin/dispatch_artifact.py` | Catch `ContextForgeError` and return a one-line failed outcome |
-| Branch merge | `pipeline/branch_ops.py` | `BranchFailure.UNFINISHED_TASKS` |
-| Executor | `pipeline/executor.py` | A failed action whose `failure` output is `UNFINISHED_TASKS` gives `PAUSED`, not `FAILED` |
+| Action result | `pipeline/models.py` `ActionResult` | `awaits_human: bool = False`: a failed action that is waiting on a person, not broken |
+| Branch merge | `pipeline/branch_ops.py`, branch action | `BranchFailure.UNFINISHED_TASKS`; the branch action sets `awaits_human` for it |
+| Executor | `pipeline/executor.py` | A failed action with `awaits_human` gives `PAUSED`, not `FAILED`. The executor reads no action-specific values |
 
 ### Data Flow
 
@@ -98,7 +99,7 @@ phase/revise step ──params──▶ DispatchAction._dispatch_via_agent
         Codex:  allowed_tools → ProviderError ; requires_writes ∧ read-only → ProviderError
         OpenAI: requires_writes ∧ no write tool given → ProviderError
    (ProviderError → one-line failed step, existing #200 path)
-   handle_message ──▶ final metadata {tools_given, tool_calls_made, failed_tool_calls, tool_errors}
+   handle_message ──▶ final metadata {tools_given, tool_calls_made, failed_tool_calls, first_tool_error}
    assess_tool_outcome(...) ──▶ ToolOutcome(fail_reason | None, warnings)
         warnings → logger.warning
         fail_reason → ActionResult(success=False, error=fail_reason, metadata=…)
@@ -124,15 +125,15 @@ Provider-specific knowledge stays in the provider. The sandbox, for example, is 
 | # | Signal (from final response metadata) | Outcome |
 |---|---|---|
 | 1 | Write-required, tools given, `tool_calls_made == 0` | **Fail**: "step must write files but made no tool calls" |
-| 2 | `tool_calls_made > 0`, `failed_tool_calls == tool_calls_made`, and the step is write-required or its tools include one in `WRITE_TOOL_NAMES` | **Fail**: "every tool call failed", with the first `tool_errors` entry |
+| 2 | `tool_calls_made > 0`, `failed_tool_calls == tool_calls_made`, and the step is write-required or its tools include one in `WRITE_TOOL_NAMES` | **Fail**: "every tool call failed", with `first_tool_error` |
 | 3 | Any other `failed_tool_calls > 0` | **Warn**. A read-only step can still answer after a failed read or grep |
 
-`failed_tool_calls` and `tool_errors` are copied into step metadata so run state records why a step failed (#211 §3). Every row logs at WARNING with the step name. A write-required step whose tools the capability gate suppressed is already refused at spawn (D2), so it needs no row. The rows apply only where tool telemetry exists: OpenAI-compatible dispatches, and SDK one-shot dispatches that declare `allowed_tools`. SDK phase and revise steps on native tools, and the SDK session path, report no telemetry. Those are covered by the #15 post-condition (`design`, `tasks`) and by the merge gate (`implement`).
+`failed_tool_calls` and `first_tool_error` are copied into step metadata so run state records why a step failed (#211 §3). Every row logs at WARNING with the step name. A write-required step whose tools the capability gate suppressed is already refused at spawn (D2), so it needs no row. The rows apply only where tool telemetry exists: OpenAI-compatible dispatches, and SDK one-shot dispatches that declare `allowed_tools`. SDK phase and revise steps on native tools, and the SDK session path, report no telemetry. Those are covered by the #15 post-condition (`design`, `tasks`) and by the merge gate (`implement`).
 
 **#15 check (from the plan entry).** The no-artifact post-condition applies only to `design` and `tasks` (`steps/phase.py` `_EXPECTED_ARTIFACT_KIND`; `implement` maps to `None`). It does not apply to bare dispatch or revise dispatches. It catches a no-op design/tasks step on any provider, but only after the model has run. This slice adds earlier refusal (D2). It covers `implement` and revise dispatches on Codex (D2) and on OpenAI-compatible providers (rows 1–2), but not on the default SDK path, which has no telemetry. The #15 post-condition is unchanged.
 
 ### D4 — SDK failed-tool count
-The claude-agent-sdk delivers `ToolResultBlock` inside `UserMessage.content`. The current `elif isinstance(sdk_msg, ToolResultBlock)` never matches, so `failed_tool_calls` is always 0 on the SDK path. Row 2 needs a real count, so the fix is in scope. A unit test with a `UserMessage` carrying an error `ToolResultBlock` asserts the count.
+The claude-agent-sdk delivers `ToolResultBlock` inside `UserMessage.content`. The current `elif isinstance(sdk_msg, ToolResultBlock)` never matches, so `failed_tool_calls` is always 0 on the SDK path. Verified 20261014 against claude-agent-sdk 0.2.162: its message parser builds `ToolResultBlock` only inside the `"user"` case's `UserMessage`. Row 2 needs a real count, so the fix is in scope. A unit test with a `UserMessage` carrying an error `ToolResultBlock` asserts the count.
 
 ### D5 — cf errors in post-conditions are one line
 In `dispatch_artifact._resolve_paths`, catch `ContextForgeError` next to `(ValueError, TypeError, FileNotFoundError)`. Return a failed `EventOutcome` whose error is the cf message, which already names the fix (for example "No slice plan configured. Set one with: cf set slicePlan <path>"). Use `error_kind` NONE so the executor does not rewrite it to `<action>: raised`. Dispatch's `_kept_artifact_paths` gets the same treatment: `ContextForgeError` becomes `ActionResult(success=False, error=…)` without reaching the generic `_logger.exception` handler. Both paths log the message at ERROR without `exc_info`. This is the same one-line form #200 gave `ProviderError`.
@@ -147,10 +148,12 @@ A run that ended `completed`, as #212 reports, means the merge gate passed. Read
 So:
 - When `resolve_slice_info` returns no `task_files`, refuse the merge with `UNFINISHED_TASKS`: "slice N not merged: cf lists no task files for this slice, so its work cannot be verified."
 - Add `BranchFailure.UNFINISHED_TASKS` and raise it from `_require_checked_tasks` when unchecked items remain. An unreadable task file stays `OTHER`, which still fails.
-- The branch action already puts the failure kind in its `failure` output (`FAILURE_OUTPUT`). The executor's action-failure branch returns `ExecutionStatus.PAUSED` when that output is `UNFINISHED_TASKS`. The run ends `paused`, exits 0 (existing PAUSED handling), and is resumable.
+- The branch action returns `ActionResult(success=False, awaits_human=True)` for `UNFINISHED_TASKS`. The executor's action-failure branch returns `ExecutionStatus.PAUSED` for any failed action with `awaits_human`, and imports nothing from `branch_ops`. A later "pause instead of fail" outcome sets the same flag; the executor does not change. The run ends `paused`, exits 0 (existing PAUSED handling), and is resumable.
 - Fan-out/batch flag classification (slice 197) maps `UNFINISHED_TASKS` the way it maps `OTHER` today. Batch items have no per-item pause.
 
-**Open item for the PM:** the #212 run (trading-ui, 0.21.7) ended `completed`, and its run state is not on this machine. A `completed` end means the merge gate passed, so either close-out checked off the gated item or cf listed no task files (see the two paths above). D6 closes the empty-task-list path and pauses the honest-close-out case. Phase 6 should confirm the actual path against that run's state file if it can be supplied.
+**PM decision (20261014):** unchecked items at merge end the run `paused`, not `failed`. This changes slice 942's merge-gate status on purpose: unchecked work is waiting on a person, not broken.
+
+**Partial fix of #212 item 2.** The #212 run (trading-ui, 0.21.7) has no run id yet, so which of the two paths above it took is unknown. This slice closes the empty-task-list path and pauses the honest-close-out case. If the run turns out to be the close-out path, it belongs to #212 item 1 and stays open there.
 
 ## Integration Points
 
@@ -167,7 +170,7 @@ So:
 1. A Codex-profile dispatch that declares `allowed_tools` fails before any model call, with the D2 message. Run status is `failed`.
 2. A Codex-profile phase step on a read-only sandbox fails before any model call, with the D2 message naming the `sandbox` credential.
 3. A bare Codex dispatch on a read-only sandbox still runs and logs a WARNING.
-4. An OpenRouter dispatch whose only `write_file` call is rejected by the jail fails. The step error contains the jail message, and the run state records `failed_tool_calls` and `tool_errors`.
+4. An OpenRouter dispatch whose only `write_file` call is rejected by the jail fails. The step error contains the jail message, and the run state records `failed_tool_calls` and `first_tool_error`.
 5. An OpenRouter `implement` step with no write-capable tool in `allowed_tools` fails at spawn.
 6. A dispatch with some failed and some successful tool calls completes, with a WARNING and the counts in metadata.
 7. `sq run P4 <slice>` with no cf slice plan prints one line with the cf message and no traceback. The step fails.
@@ -177,10 +180,10 @@ So:
 ### Technical Requirements
 - Unit tests for `assess_tool_outcome` cover each D3 row and the no-telemetry case.
 - Provider tests cover each D2 refusal and the bare-dispatch WARNING. The SDK test covers the D4 count.
-- Executor test: a failed branch action with `UNFINISHED_TASKS` gives `PAUSED`, with `OTHER` gives `FAILED`. Branch test: unchecked items or an empty task-file list give `UNFINISHED_TASKS`, an unreadable file gives `OTHER`.
+- Executor test: a failed action with `awaits_human` gives `PAUSED`, without it gives `FAILED`. Branch action test: `UNFINISHED_TASKS` sets `awaits_human`, `OTHER` does not. Branch test: unchecked items or an empty task-file list give `UNFINISHED_TASKS`, an unreadable file gives `OTHER`.
 - Every new failure mode logs at WARNING or ERROR, and at least one test asserts the log record.
 - `ruff format`, `ruff check`, and `pyright` with zero errors. The full test suite passes.
-- CHANGELOG bullets for the user-visible changes (refusals, failed steps, the paused merge, one-line cf error).
+- CHANGELOG bullets for the user-visible changes (refusals, failed steps, the paused merge, one-line cf error). They name the providers the outcome rules cover (OpenAI-compatible, Codex refusals, SDK one-shot with `allowed_tools`) and do not claim coverage of the default SDK path.
 
 ### Integration Requirements
 - P4/P5/P6 run unchanged on the default SDK profiles.
@@ -197,7 +200,7 @@ Run inside a scratch clone registered with cf. Probe pipelines are one-step YAML
    Expect: exit 1, one line `… Codex does not run squadron tools; remove allowed_tools …`, and no model call in `-v` output.
 2. **Codex read-only phase step** (criterion 2): run a `design` step with `model: luna` on a profile without `sandbox`. Expect a failed step naming `sandbox = "workspace-write"`. Set that credential and rerun; the design file is written.
 3. **Bare Codex dispatch** (criterion 3): `probe-luna-notools.yaml` completes. stderr shows a WARNING about the read-only sandbox.
-4. **Jail-rejected write** (criterion 4): `probe-ds-tools.yaml` (deepseek4-flash, `write_file`, path outside the cwd). Expect exit 1 and step error `every tool call failed: Error: path '…' resolves outside the working directory …`. The run JSON shows `failed_tool_calls: 1` and `tool_errors`.
+4. **Jail-rejected write** (criterion 4): `probe-ds-tools.yaml` (deepseek4-flash, `write_file`, path outside the cwd). Expect exit 1 and step error `every tool call failed: Error: path '…' resolves outside the working directory …`. The run JSON shows `failed_tool_calls: 1` and `first_tool_error`.
 5. **Control** (no regression): `probe-ds-inrepo.yaml` and an SDK haiku probe both complete and write the file.
 6. **#202** (criterion 7): in a cf project with no `slicePlan` set, run `sq run P4 <index>`. Expect one line ending with `cf set slicePlan <path>` and no traceback.
 7. **#212 paused merge** (criterion 8): on a scratch slice, leave one task item unchecked with the text "Hard Gate: PM confirms X" and run P6. Expect the run to end `paused`, exit 0, and the merge message naming the unchecked item. Check the item and run `sq run --resume <run-id>`; the merge completes.
@@ -213,7 +216,7 @@ Run inside a scratch clone registered with cf. Probe pipelines are one-step YAML
 ### Development Approach
 1. Add `WRITE_TOOL_NAMES` and `AgentConfig.requires_writes`, and the `dispatch_requires_writes` predicate.
 2. D4: fix the SDK count first, since rows 2 and 3 depend on accurate counts.
-3. OpenAI-compatible agent: `tool_errors` capture and the write-tool refusal.
+3. OpenAI-compatible agent: `first_tool_error` capture and the write-tool refusal.
 4. Codex agent: spawn refusals and the bare-dispatch WARNING.
 5. `dispatch_outcome.py` and its wiring in `_dispatch_via_agent`, including the new metadata keys.
 6. D5: cf one-line errors in the post-condition and the keep path.
@@ -223,4 +226,4 @@ Run inside a scratch clone registered with cf. Probe pipelines are one-step YAML
 Unit tests for each step mock the provider stream or registry. Walkthrough steps 1–4 use real providers; they are the only proof that the refusals fire on real configs.
 
 ### Special Considerations
-- `tool_errors` stores tool result text, which can include file paths from the working directory. It holds the first `_TOOL_ERROR_LIMIT` (3) entries, each truncated, and is defined once in the OpenAI agent module.
+- `first_tool_error` stores tool result text, which can include file paths from the working directory. It is truncated to a length defined once in the OpenAI agent module.
