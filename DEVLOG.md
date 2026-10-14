@@ -13,7 +13,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 945: task breakdown complete (Phase 5)
 
-- Tasks: `user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md`, 26 tasks, effort 3/5. Order: branch; D1 contract (`WRITE_TOOL_NAMES`, `requires_writes`, predicate); D4 SDK count; OpenAI `first_tool_error` + write-tool refusal; Codex refusals; `dispatch_outcome.py` + wiring; D5 cf one-liners; D6 `awaits_human`, `UNFINISHED_TASKS`, batch mapping; CHANGELOG; walkthrough.
+- Tasks: `user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md`, 25 tasks, effort 3/5. Order: branch; D1 contract (`WRITE_TOOL_NAMES`, `requires_writes`, predicate in `dispatch_rules.py`); D4 SDK count; OpenAI `first_tool_error` + write-tool refusal; Codex refusals; `dispatch_outcome.py` + wiring; D5 cf one-liners; D6 `awaits_human`, `UNFINISHED_TASKS`, batch mapping; CHANGELOG; walkthrough.
 - D6 note: `_flag_kind` checks PAUSED status first, so the `UNFINISHED_TASKS` → `STEP_FAILED` check must precede it.
 - Next: Phase 6 implementation.
 
