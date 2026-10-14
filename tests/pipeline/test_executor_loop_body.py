@@ -2176,3 +2176,88 @@ async def test_failed_dispatch_ends_the_loop_without_running_the_review(
     assert step_result.error is not None
     assert "SDK session unusable" in step_result.error
     review_action.execute.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Slice 945 — a revise dispatch failed by the D3 outcome rules ends the loop
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("on_exhaust", "expected"),
+    [
+        ("fail", ExecutionStatus.FAILED),
+        ("checkpoint", ExecutionStatus.PAUSED),
+        ("skip", ExecutionStatus.SKIPPED),
+    ],
+)
+@pytest.mark.asyncio
+async def test_d3_failed_revise_dispatch_ends_the_loop_with_on_exhaust(
+    on_exhaust: str, expected: ExecutionStatus
+) -> None:
+    """The real dispatch action, whose model made no tool calls on a write-required revise."""
+    from unittest.mock import patch
+
+    from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+    from tests.pipeline.actions.dispatch_helpers import (
+        DISPATCH_MODULE,
+        make_agent_mock,
+        make_context,
+        make_registry,
+        openrouter_profile,
+    )
+
+    review_action = _mock_action(
+        [
+            ActionResult(
+                success=True,
+                action_type="review",
+                outputs={},
+                verdict="CONCERNS",
+                findings=[{"severity": "concern", "summary": "Fix it", "location": "a.md:1"}],
+            )
+        ]
+    )
+    register_step_type("_lb_review_d3", _mock_step_type([("review", {})]))
+    register_step_type(
+        "_lb_revise_d3",
+        _mock_step_type(
+            [("dispatch", {"feedback": "review", "allowed_tools": ["write_file"], "profile": "x"})]
+        ),
+    )
+    pipeline = _pipeline(
+        [
+            _loop_step(
+                f"d3-{on_exhaust}",
+                {
+                    "max": 3,
+                    "until": "review.pass",
+                    "on_exhaust": on_exhaust,
+                    "steps": [{"_lb_review_d3": {}}, {"_lb_revise_d3": {}}],
+                },
+            )
+        ]
+    )
+    agent = make_agent_mock(
+        "did nothing", metadata={TOOLS_GIVEN_KEY: ["write_file"], TOOL_CALLS_MADE_KEY: 0}
+    )
+
+    with (
+        patch(f"{DISPATCH_MODULE}.get_registry", return_value=make_registry(agent)),
+        patch(f"{DISPATCH_MODULE}.get_profile", return_value=openrouter_profile()),
+        patch(f"{DISPATCH_MODULE}.ensure_provider_loaded"),
+    ):
+        result = await execute_pipeline(
+            pipeline,
+            {},
+            resolver=make_context().resolver,
+            cf_client=MagicMock(),
+            _action_registry={"dispatch": DispatchAction(), "review": review_action},
+        )
+
+    step_result = result.step_results[0]
+    assert step_result.status == expected
+    assert step_result.iteration == 1  # no later round ran
+    assert step_result.error is not None
+    assert "step must write files but made no tool calls" in step_result.error
+    assert review_action.execute.await_count == 1

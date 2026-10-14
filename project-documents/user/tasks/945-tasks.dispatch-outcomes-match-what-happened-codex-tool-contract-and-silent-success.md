@@ -95,33 +95,35 @@ status: in_progress
 
 ### Outcome rules (D3)
 
-- [ ] **Task 11: `dispatch_outcome.py`**
-  - [ ] Create `pipeline/actions/dispatch_outcome.py` with a frozen dataclass `ToolOutcome(fail_reason: str | None, warnings: list[str])` and `assess_tool_outcome(declared_tools, requires_writes, telemetry) -> ToolOutcome`
-  - [ ] Implement the three D3 rows in order. Row 2's write-tool check reads `telemetry["tools_given"]` against `WRITE_TOOL_NAMES`. Row 2's reason includes `first_tool_error` when present.
-  - [ ] Telemetry without `tool_calls_made` (no tools ran) returns no failure and no warnings
-  - [ ] Read the metadata keys through the Task 2 constants
-  - [ ] Pure function: no logging, no I/O
-  - **Success:** pyright clean
+- [x] **Task 11: `dispatch_outcome.py`**
+  - [x] Create `pipeline/actions/dispatch_outcome.py` with a frozen dataclass `ToolOutcome(fail_reason: str | None, warnings: list[str])` and `assess_tool_outcome(declared_tools, requires_writes, telemetry) -> ToolOutcome`
+  - [x] Implement the three D3 rows in order. Row 2's write-tool check reads `telemetry["tools_given"]` against `WRITE_TOOL_NAMES`. Row 2's reason includes `first_tool_error` when present.
+  - [x] Telemetry without `tool_calls_made` (no tools ran) returns no failure and no warnings
+  - [x] Read the metadata keys through the Task 2 constants
+  - [x] Pure function: no logging, no I/O
+  - [x] **Success:** pyright clean
+  - **Deviation:** the `declared_tools` parameter was dropped. The signature is `assess_tool_outcome(requires_writes, telemetry)`; telemetry carries `tools_given` only when tools were given.
 
-- [ ] **Task 12: Test `assess_tool_outcome`**
-  - [ ] New `tests/pipeline/actions/test_dispatch_outcome.py`, one test per row: row 1 fails with the D3 text; row 2 fails and includes `first_tool_error`; row 2 not triggered for a read-only step with only read tools (falls to row 3, warns); row 3 partial failure warns, no failure; no-telemetry → empty outcome; clean run → empty outcome
-  - [ ] Run the file, ruff, pyright
-  - **Success:** every D3 row and the no-telemetry case covered (design, Technical Requirements)
+- [x] **Task 12: Test `assess_tool_outcome`**
+  - [x] New `tests/pipeline/actions/test_dispatch_outcome.py`, one test per row: row 1 fails with the D3 text; row 2 fails and includes `first_tool_error`; row 2 not triggered for a read-only step with only read tools (falls to row 3, warns); row 3 partial failure warns, no failure; no-telemetry → empty outcome; clean run → empty outcome
+  - [x] Run the file, ruff, pyright
+  - [x] **Success:** every D3 row and the no-telemetry case covered (design, Technical Requirements)
 
-- [ ] **Task 13: Wire outcomes into `_dispatch_via_agent`**
-  - [ ] Compute `requires_writes = dispatch_requires_writes(context.params)` and pass it to `one_shot_dispatch_with_telemetry`, which sets it on the `AgentConfig` it builds
-  - [ ] In `one_shot_dispatch_with_telemetry`, copy `failed_tool_calls` and `first_tool_error` into `telemetry` beside the existing keys, keeping them absent when the run had no tools
-  - [ ] After `_check_cli_error`, call `assess_tool_outcome`. Log each warning and any fail reason at WARNING with the step name. On a fail reason return `ActionResult(success=False, error=fail_reason, metadata=…)` with the same metadata as the success result.
-  - [ ] Leave `_dispatch_via_session` unchanged (design, Excluded)
-  - **Success:** dispatch.py grows only by the wiring; the rules stay in `dispatch_outcome.py`
+- [x] **Task 13: Wire outcomes into `_dispatch_via_agent`**
+  - [x] Compute `requires_writes = dispatch_requires_writes(context.params)` and pass it to `one_shot_dispatch_with_telemetry`, which sets it on the `AgentConfig` it builds
+  - [x] In `one_shot_dispatch_with_telemetry`, copy `failed_tool_calls` and `first_tool_error` into `telemetry` beside the existing keys, keeping them absent when the run had no tools
+  - [x] After `_check_cli_error`, call `assess_tool_outcome`. Log each warning and any fail reason at WARNING with the step name. On a fail reason return `ActionResult(success=False, error=fail_reason, metadata=…)` with the same metadata as the success result.
+  - [x] Leave `_dispatch_via_session` unchanged (design, Excluded)
+  - [x] **Success:** dispatch.py grows only by the wiring; the rules stay in `dispatch_outcome.py`
 
-- [ ] **Task 14: Test the dispatch wiring**
-  - [ ] In `tests/pipeline/actions/test_dispatch.py` (helpers in `dispatch_helpers.py`), mock the registry to return OpenAI-shaped metadata for: a write-required step with zero calls → failed result, error text from D3, `caplog` WARNING with the step name; all calls failed → failed, metadata holds `failed_tool_calls` and `first_tool_error`; partial failure → success with WARNING and counts (criterion 6)
-  - [ ] Add one SDK-shaped case: `tools_given` with `write_file`, all calls failed, no `first_tool_error` key → failed result whose error is the D3 row 2 text without error detail
-  - [ ] Assert `AgentConfig.requires_writes` reaches the provider for a phase-step param and for `feedback`, and is false for bare dispatch. Add a dispatch entry to `tests/providers/agent_config_sites.py` (it drives a path's real builder and captures the `AgentConfig` at the SDK provider) and make these three assertions against its capture.
-  - [ ] Run `pytest tests/pipeline/actions tests/providers -q`, ruff, pyright
-  - [ ] Commit: `feat: fail dispatch steps whose tool telemetry shows no work done`
-  - **Success:** tests pass; existing dispatch tests unchanged except where they assert the full metadata dict
+- [x] **Task 14: Test the dispatch wiring**
+  - [x] In `tests/pipeline/actions/test_dispatch.py` (helpers in `dispatch_helpers.py`), mock the registry to return OpenAI-shaped metadata for: a write-required step with zero calls → failed result, error text from D3, `caplog` WARNING with the step name; all calls failed → failed, metadata holds `failed_tool_calls` and `first_tool_error`; partial failure → success with WARNING and counts (criterion 6)
+  - [x] Add one SDK-shaped case: `tools_given` with `write_file`, all calls failed, no `first_tool_error` key → failed result whose error is the D3 row 2 text without error detail
+  - [x] Assert `AgentConfig.requires_writes` reaches the provider for a phase-step param and for `feedback`, and is false for bare dispatch. Add a dispatch entry to `tests/providers/agent_config_sites.py` (it drives a path's real builder and captures the `AgentConfig` at the SDK provider) and make these three assertions against its capture.
+  - [x] Run `pytest tests/pipeline/actions tests/providers -q`, ruff, pyright
+  - [x] Commit: `feat: fail dispatch steps whose tool telemetry shows no work done`
+  - [x] **Success:** tests pass; existing dispatch tests unchanged except where they assert the full metadata dict
+  - **Deviation:** the wiring tests live in the new `tests/pipeline/actions/test_dispatch_outcomes.py`, not `test_dispatch.py` (file-size limit). The capture entry is `dispatch_action` in `tests/providers/agent_config_sites.py`.
 
 - [ ] **Task 15: Test the #200 loop path with a D3-failed revise**
   - [ ] In `tests/pipeline/test_executor_loop_body.py`, add a case: a revise dispatch failed by D3 inside a multi-step loop body ends the loop with its `on_exhaust` status (Integration Requirements)
