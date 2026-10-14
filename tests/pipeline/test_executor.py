@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from squadron.pipeline.executor import PipelineResult
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from tests.pipeline.observer_support import RecordingObserver
 
@@ -2678,3 +2679,50 @@ class TestCheckpointDetection:
         assert len(captured_params) == 2
         assert captured_params[0].get("override_instructions") == "fix A"
         assert captured_params[1].get("override_instructions") == "fix B"
+
+
+# ---------------------------------------------------------------------------
+# Slice 945 D6 — a failed action that awaits a person pauses the run
+# ---------------------------------------------------------------------------
+
+
+class TestAwaitsHuman:
+    @staticmethod
+    async def _run(awaits_human: bool) -> PipelineResult:
+        from squadron.pipeline.executor import execute_pipeline
+        from squadron.pipeline.steps import register_step_type
+
+        failed = ActionResult(
+            success=False,
+            action_type="dispatch",
+            outputs={},
+            error="waiting on a decision",
+            awaits_human=awaits_human,
+        )
+        register_step_type("_test_awaits_human", mock_step_type([("dispatch", {})]))
+        return await execute_pipeline(
+            make_pipeline([make_step_config("_test_awaits_human", "gated", {})]),
+            {},
+            resolver=MagicMock(),
+            cf_client=MagicMock(),
+            _action_registry={"dispatch": mock_action([failed])},
+        )
+
+    @pytest.mark.asyncio
+    async def test_failed_action_with_awaits_human_pauses_step_and_run(self) -> None:
+        from squadron.pipeline.executor import ExecutionStatus
+
+        result = await self._run(awaits_human=True)
+
+        assert result.status == ExecutionStatus.PAUSED
+        assert result.paused_at == "gated"
+        assert result.step_results[0].status == ExecutionStatus.PAUSED
+
+    @pytest.mark.asyncio
+    async def test_failed_action_without_the_flag_still_fails(self) -> None:
+        from squadron.pipeline.executor import ExecutionStatus
+
+        result = await self._run(awaits_human=False)
+
+        assert result.status == ExecutionStatus.FAILED
+        assert result.step_results[0].status == ExecutionStatus.FAILED

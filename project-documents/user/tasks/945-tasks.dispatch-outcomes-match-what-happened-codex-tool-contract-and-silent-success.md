@@ -125,35 +125,37 @@ status: in_progress
   - [x] **Success:** tests pass; existing dispatch tests unchanged except where they assert the full metadata dict
   - **Deviation:** the wiring tests live in the new `tests/pipeline/actions/test_dispatch_outcomes.py`, not `test_dispatch.py` (file-size limit). The capture entry is `dispatch_action` in `tests/providers/agent_config_sites.py`.
 
-- [ ] **Task 15: Test the #200 loop path with a D3-failed revise**
-  - [ ] In `tests/pipeline/test_executor_loop_body.py`, add a case: a revise dispatch failed by D3 inside a multi-step loop body ends the loop with its `on_exhaust` status (Integration Requirements)
-  - [ ] Run the file, ruff, pyright
-  - [ ] Commit: `test: cover a D3-failed revise dispatch ending its loop`
-  - **Success:** test passes with no executor change
+- [x] **Task 15: Test the #200 loop path with a D3-failed revise**
+  - [x] In `tests/pipeline/test_executor_loop_body.py`, add a case: a revise dispatch failed by D3 inside a multi-step loop body ends the loop with its `on_exhaust` status (Integration Requirements)
+  - [x] Run the file, ruff, pyright
+  - [x] Commit: `test: cover a D3-failed revise dispatch ending its loop`
+  - [x] **Success:** test passes with no executor change
 
 ### One-line cf errors (D5, #202)
 
-- [ ] **Task 16: Catch `ContextForgeError` in the dispatch-artifact post-condition**
-  - [ ] In `events/builtin/dispatch_artifact.py` `_resolve_paths`, add `ContextForgeError` (from `integrations/context_forge.py`) to the caught exceptions, or catch it separately if the outcome differs
-  - [ ] Return a failed `EventOutcome` whose error is the cf message, with `error_kind` NONE so the executor does not rewrite it to `<action>: raised`
-  - [ ] Log the message at ERROR without `exc_info`
-  - **Success:** no traceback reaches stderr for a missing slice plan
+- [x] **Task 16: Catch `ContextForgeError` in the dispatch-artifact post-condition**
+  - [x] In `events/builtin/dispatch_artifact.py` `_resolve_paths`, add `ContextForgeError` (from `integrations/context_forge.py`) to the caught exceptions, or catch it separately if the outcome differs
+  - [x] Return a failed `EventOutcome` whose error is the cf message, with `error_kind` NONE so the executor does not rewrite it to `<action>: raised`
+  - [x] Log the message at ERROR without `exc_info`
+  - [x] **Success:** no traceback reaches stderr for a missing slice plan
+  - *Note:* logs at ERROR without `exc_info` and returns the cf message as the error string. `error_kind` NONE comes from the dispatcher on a normal return.
 
-- [ ] **Task 17: Test the post-condition**
-  - [ ] In `tests/events/builtin/test_dispatch_artifact.py`: a cf client raising `ContextForgeError("No slice plan configured. Set one with: cf set slicePlan <path>")` gives a failed outcome carrying that text, `error_kind` NONE, and an ERROR record with no `exc_info`
-  - [ ] Run `pytest tests/events -q`, ruff, pyright
-  - **Success:** test passes
+- [x] **Task 17: Test the post-condition**
+  - [x] In `tests/events/builtin/test_dispatch_artifact.py`: a cf client raising `ContextForgeError("No slice plan configured. Set one with: cf set slicePlan <path>")` gives a failed outcome carrying that text, `error_kind` NONE, and an ERROR record with no `exc_info`
+  - [x] Run `pytest tests/events -q`, ruff, pyright
+  - [x] **Success:** test passes
 
-- [ ] **Task 18: Catch `ContextForgeError` in dispatch's keep path**
-  - [ ] In `pipeline/actions/dispatch.py`, catch `ContextForgeError` from `_kept_artifact_paths` (at its call site, before the generic `_logger.exception` handler in `execute`) and return `ActionResult(success=False, error=<cf message>)`
-  - [ ] Log at ERROR without `exc_info`, matching the #200 `ProviderError` handling in `execute`
-  - **Success:** the generic handler no longer sees `ContextForgeError`
+- [x] **Task 18: Catch `ContextForgeError` in dispatch's keep path**
+  - [x] In `pipeline/actions/dispatch.py`, catch `ContextForgeError` from `_kept_artifact_paths` (at its call site, before the generic `_logger.exception` handler in `execute`) and return `ActionResult(success=False, error=<cf message>)`
+  - [x] Log at ERROR without `exc_info`, matching the #200 `ProviderError` handling in `execute`
+  - [x] **Success:** the generic handler no longer sees `ContextForgeError`
+  - *Note:* implemented as an `except ContextForgeError` clause in `DispatchAction.execute`, beside the ProviderError clause. It covers the keep path and is slightly broader than the call site.
 
-- [ ] **Task 19: Test the keep path**
-  - [ ] In `tests/pipeline/test_existing_keep.py`: the same error in the keep path gives a failed `ActionResult` with the cf text and no `_logger.exception` call
-  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
-  - [ ] Commit: `fix: report cf errors in dispatch as one line without a traceback`
-  - **Success:** tests pass (design criterion 7 at unit level)
+- [x] **Task 19: Test the keep path**
+  - [x] In `tests/pipeline/test_existing_keep.py`: the same error in the keep path gives a failed `ActionResult` with the cf text and no `_logger.exception` call
+  - [x] Run `pytest tests/pipeline -q`, ruff, pyright
+  - [x] Commit: `fix: report cf errors in dispatch as one line without a traceback`
+  - [x] **Success:** tests pass (design criterion 7 at unit level)
 
 ### Unfinished tasks pause the run (D6, #212 item 2)
 

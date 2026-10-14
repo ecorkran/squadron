@@ -970,12 +970,12 @@ async def _execute_step_once(
             if decision.override_instructions:
                 merged_params[OVERRIDE_INSTRUCTIONS] = decision.override_instructions
 
-        # Action failure
+        # Action failure; a failure awaiting a person pauses the run instead of failing it.
         if not result.success:
             return StepResult(
                 step_name=step.name,
                 step_type=step.step_type,
-                status=ExecutionStatus.FAILED,
+                status=ExecutionStatus.PAUSED if result.awaits_human else ExecutionStatus.FAILED,
                 action_results=action_results,
                 iteration=iteration,
             )

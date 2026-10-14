@@ -32,6 +32,8 @@ class ActionResult:
     action_type: str
     outputs: dict[str, object]
     error: str | None = None
+    # A failed action that is waiting on a person, not broken: the run pauses instead of failing.
+    awaits_human: bool = False
     metadata: dict[str, object] = field(default_factory=dict[str, object])
     verdict: str | None = None
     findings: list[object] = field(default_factory=list[object])
