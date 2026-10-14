@@ -1,9 +1,9 @@
 """ModelResolver — 5-level cascade model selection for pipeline execution.
 
 Resolution priority (highest to lowest):
-  1. CLI override (--model flag)
-  2. Action-level model (per-action config)
-  3. Step-level model (per-step config)
+  1. Action-level model (per-action config)
+  2. Step-level model (per-step config)
+  3. CLI model (--model flag; the run's default, not a global override, #215)
   4. Pipeline-level model (pipeline definition header)
   5. Config default (squadron.toml / environment default)
 

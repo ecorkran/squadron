@@ -11,6 +11,7 @@ from squadron.pipeline.actions.judge import (
     _DEFAULT_PASS_FLOOR,
     JudgeThresholds,
     enforce_judge,
+    judge_verdict,
     resolve_thresholds,
 )
 from squadron.review.models import ReviewResult, Verdict
@@ -143,3 +144,26 @@ class TestEnforceJudge:
         verdict, provenance = enforce_judge(result, thresholds, "judge.test", logger)
         assert verdict == "PASS"
         assert provenance == "judge"
+
+
+class TestJudgeVerdict:
+    """judge_verdict: the one place pipeline and CLI derive a judge verdict (#140)."""
+
+    def test_uses_template_and_step_thresholds(self) -> None:
+        logger = logging.getLogger("test_judge_verdict")
+        verdict, provenance = judge_verdict(
+            _make_result(score=70.0), "judge.test", {"pass_floor": 90}, {"concerns_floor": 65}, logger
+        )
+        assert (verdict, provenance) == ("CONCERNS", "judge")
+
+    def test_malformed_override_degrades_to_unknown_with_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        # Slice 303 F003: a bad threshold must not discard a successful model call.
+        logger = logging.getLogger("test_judge_verdict")
+        with caplog.at_level(logging.WARNING, logger="test_judge_verdict"):
+            verdict, provenance = judge_verdict(
+                _make_result(score=95.0), "judge.test", None, {"pass_floor": "high"}, logger
+            )
+        assert (verdict, provenance) == ("UNKNOWN", "judge")
+        assert any("malformed judge threshold" in r.getMessage() for r in caplog.records)

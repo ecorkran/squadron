@@ -175,13 +175,18 @@ class TestCfSliceReset:
         cf.set_slice.assert_not_called()
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("error_type", ["error", "not_available"])
     async def test_failed_reset_warns_and_the_run_completes(
-        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+        self, error_type: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
     ) -> None:
-        from squadron.integrations.context_forge import ContextForgeError
+        from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
 
         cf = MagicMock()
-        cf.set_slice.side_effect = ContextForgeError("cf set slice 180: boom")
+        cf.set_slice.side_effect = (
+            ContextForgeError("cf set slice 180: boom")
+            if error_type == "error"
+            else ContextForgeNotAvailable("cf is not on PATH")
+        )
         with caplog.at_level(logging.WARNING, logger="squadron.pipeline.executor"):
             result, _ = await _run(monkeypatch, _items("180"), lambda _: _OK, cf_client=cf)
         assert result.status == ExecutionStatus.COMPLETED

@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any, cast
 from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
-from squadron.integrations.context_forge import ContextForgeError
+from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.batch_report import (
     BatchItemRecord,
@@ -1803,7 +1803,7 @@ def _reset_cf_slice(cf_client: Any, first_item: dict[str, object], step_name: st
         return
     try:
         cf_client.set_slice(slice_id)
-    except ContextForgeError as exc:
+    except (ContextForgeError, ContextForgeNotAvailable) as exc:
         # The batch's work is done and recorded; a failed convenience reset must not
         # fail the run. WARNING so the stale cf slice is visible.
         _logger.warning("each %s: could not reset cf slice to %s: %s", step_name, slice_id, exc)
