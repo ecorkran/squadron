@@ -26,6 +26,20 @@ _SANDBOX_KEY = "sandbox"
 _TURN_TIMEOUT_KEY = "codex.turn_timeout_s"
 _RPC_TIMEOUT_KEY = "codex.account_timeout_s"
 
+# D2 refusals; each names the fix.
+_TOOLS_REFUSAL = (
+    "Codex does not run squadron tools; remove `allowed_tools` (Codex uses its own tools "
+    "when its sandbox allows writes) or use a profile that supports them."
+)
+_READ_ONLY_WRITES_REFUSAL = (
+    "profile `{profile}` runs Codex with a read-only sandbox; this step must write files. "
+    'Set `sandbox = "workspace-write"` in the profile credentials.'
+)
+_READ_ONLY_WARNING = (
+    'Codex profile `%s` runs with a read-only sandbox; set `sandbox = "workspace-write"` '
+    "in the profile credentials if this dispatch should write files"
+)
+
 
 class CodexAgent:
     """Agentic provider backed by the official Codex Python SDK.
@@ -40,6 +54,10 @@ class CodexAgent:
         self._name = name
         self._config = config
         self._state = AgentState.idle
+        # Codex ignores allowed_tools; refusing beats a step that reports success after
+        # running none of them (D2, #211).
+        if config.allowed_tools:
+            raise ProviderError(_TOOLS_REFUSAL)
         # Slice 924 B2: Codex sends no per-request budget; say so rather than drop it.
         if config.max_output_tokens is not None:
             _log.warning(
@@ -187,6 +205,7 @@ class CodexAgent:
         )
 
         sandbox = self._resolve_sandbox()
+        self._check_sandbox_allows_writes(sandbox)
 
         started = time.monotonic()
         codex = AsyncCodex(CodexConfig())
@@ -209,6 +228,21 @@ class CodexAgent:
             await self._close_client()
             raise ProviderError(f"Codex thread start failed: {exc}") from exc
         _log.debug("Codex thread started: model=%s", model)
+
+    def _check_sandbox_allows_writes(self, sandbox: Sandbox) -> None:
+        """Refuse a write-required step on a read-only sandbox; warn on a bare dispatch (D2).
+
+        Runs before the runtime starts, so a refusal costs no model call. The profile name
+        is not on ``AgentConfig``; the provider id stands in for it.
+        """
+        from openai_codex import Sandbox
+
+        if sandbox != Sandbox.read_only:
+            return
+        profile = self._config.provider
+        if self._config.requires_writes:
+            raise ProviderError(_READ_ONLY_WRITES_REFUSAL.format(profile=profile))
+        _log.warning(_READ_ONLY_WARNING, profile)
 
     def _resolve_sandbox(self) -> Sandbox:
         """Validate ``credentials["sandbox"]`` against the SDK enum (default read-only)."""

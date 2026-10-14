@@ -47,36 +47,36 @@ status: in_progress
 
 ### SDK failed-call count (D4)
 
-- [ ] **Task 4: Count `ToolResultBlock` errors inside `UserMessage.content`**
-  - [ ] In `providers/sdk/agent.py` `_translate_and_track`, replace the top-level `isinstance(sdk_msg, ToolResultBlock)` branch: when `sdk_msg` is a `UserMessage` whose `content` is a list, increment `_failed_tool_calls` once per `ToolResultBlock` with `is_error` true
-  - [ ] Keep `content` as a string (no blocks) a no-op
-  - **Success:** the dead top-level branch is gone; the count reaches `final.metadata["failed_tool_calls"]`
+- [x] **Task 4: Count `ToolResultBlock` errors inside `UserMessage.content`**
+  - [x] In `providers/sdk/agent.py` `_translate_and_track`, replace the top-level `isinstance(sdk_msg, ToolResultBlock)` branch: when `sdk_msg` is a `UserMessage` whose `content` is a list, increment `_failed_tool_calls` once per `ToolResultBlock` with `is_error` true
+  - [x] Keep `content` as a string (no blocks) a no-op
+  - [x] **Success:** the dead top-level branch is gone; the count reaches `final.metadata["failed_tool_calls"]`
 
-- [ ] **Task 5: Test the SDK count**
-  - [ ] In `tests/providers/sdk/test_agent.py` (or `test_translation.py`, whichever holds `_translate_and_track` tests), feed a `UserMessage` with one error `ToolResultBlock` and one success block, then a `ResultMessage`; assert `failed_tool_calls == 1` on the final message
-  - [ ] Assert a string-content `UserMessage` leaves the count at 0
-  - [ ] Run `pytest tests/providers/sdk -q`, ruff, pyright
-  - [ ] Commit: `fix: count failed SDK tool calls from UserMessage content`
-  - **Success:** tests pass (design criterion 9)
+- [x] **Task 5: Test the SDK count**
+  - [x] In `tests/providers/sdk/test_agent.py` (or `test_translation.py`, whichever holds `_translate_and_track` tests), feed a `UserMessage` with one error `ToolResultBlock` and one success block, then a `ResultMessage`; assert `failed_tool_calls == 1` on the final message
+  - [x] Assert a string-content `UserMessage` leaves the count at 0
+  - [x] Run `pytest tests/providers/sdk -q`, ruff, pyright
+  - [x] Commit: `fix: count failed SDK tool calls from UserMessage content`
+  - [x] **Success:** tests pass (design criterion 9)
 
 ### OpenAI-compatible agent (D2, D3 inputs)
 
-- [ ] **Task 6: Capture `first_tool_error`**
-  - [ ] In `providers/openai/agent.py`, where `failed_tool_calls += 1` runs in the agentic loop, keep the result text of the first failed call
-  - [ ] Truncate it to a length set by one module-level constant in this module (design, Special Considerations)
-  - [ ] Stamp it under the `first_tool_error` key constant (Task 2) in `_stamp_tool_telemetry` beside `failed_tool_calls`; `None` when no call failed
-  - **Success:** a run with a failed call carries the truncated text; a clean run carries `None`
+- [x] **Task 6: Capture `first_tool_error`**
+  - [x] In `providers/openai/agent.py`, where `failed_tool_calls += 1` runs in the agentic loop, keep the result text of the first failed call
+  - [x] Truncate it to a length set by one module-level constant in this module (design, Special Considerations)
+  - [x] Stamp it under the `first_tool_error` key constant (Task 2) in `_stamp_tool_telemetry` beside `failed_tool_calls`; `None` when no call failed
+  - [x] **Success:** a run with a failed call carries the truncated text; a clean run carries `None`
 
-- [ ] **Task 7: Refuse write-required with no write tool**
-  - [ ] At spawn (where `_tools_given` is set from `allowed_tools`), raise `ProviderError` with the D2 OpenAI-compatible message when `config.requires_writes` is true and `_tools_given` has no name in `WRITE_TOOL_NAMES`
-  - **Success:** no model call is made on refusal
+- [x] **Task 7: Refuse write-required with no write tool**
+  - [x] At spawn (where `_tools_given` is set from `allowed_tools`), raise `ProviderError` with the D2 OpenAI-compatible message when `config.requires_writes` is true and `_tools_given` has no name in `WRITE_TOOL_NAMES`
+  - [x] **Success:** no model call is made on refusal
 
-- [ ] **Task 8: Test the OpenAI-compatible agent**
-  - [ ] In `tests/providers/openai/test_agentic_loop.py`: one rejected `write_file` call → `failed_tool_calls == 1` and `first_tool_error` holds the rejection text; an over-long error is truncated to the constant; a clean run → `first_tool_error is None`
-  - [ ] In `tests/providers/openai/test_agent.py`: `requires_writes=True` with `allowed_tools=["read_file"]` raises `ProviderError` with the D2 text and the fake client is never called; with `write_file` or `bash` it spawns; `requires_writes=False` with no tools spawns
-  - [ ] Run `pytest tests/providers/openai -q`, ruff, pyright
-  - [ ] Commit: `feat: refuse write-required OpenAI-compatible dispatch without a write tool`
-  - **Success:** tests pass (design criterion 5 at unit level)
+- [x] **Task 8: Test the OpenAI-compatible agent**
+  - [x] In `tests/providers/openai/test_agentic_loop.py`: one rejected `write_file` call → `failed_tool_calls == 1` and `first_tool_error` holds the rejection text; an over-long error is truncated to the constant; a clean run → `first_tool_error is None`
+  - [x] In `tests/providers/openai/test_agent.py`: `requires_writes=True` with `allowed_tools=["read_file"]` raises `ProviderError` with the D2 text and the fake client is never called; with `write_file` or `bash` it spawns; `requires_writes=False` with no tools spawns
+  - [x] Run `pytest tests/providers/openai -q`, ruff, pyright
+  - [x] Commit: `feat: refuse write-required OpenAI-compatible dispatch without a write tool`
+  - [x] **Success:** tests pass (design criterion 5 at unit level)
 
 ### Codex agent (D2)
 

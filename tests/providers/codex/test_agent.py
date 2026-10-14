@@ -148,6 +148,56 @@ class TestSandbox:
         fake_sdk.client.thread_start.assert_not_called()
 
 
+class TestSpawnRefusals:
+    """Slice 945 D2: refuse what Codex cannot honor, before the runtime starts."""
+
+    def test_allowed_tools_refused_at_spawn(self, agent_config: AgentConfig, fake_sdk: FakeSdk) -> None:
+        config = agent_config.model_copy(update={"allowed_tools": ["write_file"]})
+        with pytest.raises(ProviderError, match="Codex does not run squadron tools"):
+            CodexAgent(name="test-codex", config=config)
+        fake_sdk.async_codex.assert_not_called()
+
+    def test_allowed_tools_refused_before_the_sandbox_is_checked(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk
+    ) -> None:
+        config = agent_config.model_copy(
+            update={"allowed_tools": ["write_file"], "requires_writes": True}
+        )
+        with pytest.raises(ProviderError, match="does not run squadron tools"):
+            CodexAgent(name="test-codex", config=config)
+
+    def test_read_only_write_required_refused_naming_the_fix(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk
+    ) -> None:
+        config = agent_config.model_copy(update={"requires_writes": True})
+        with pytest.raises(ProviderError) as exc_info:
+            _send(CodexAgent(name="test-codex", config=config), "hi")
+        message = str(exc_info.value)
+        assert 'sandbox = "workspace-write"' in message
+        assert "`openai-oauth`" in message
+        fake_sdk.async_codex.assert_not_called()
+        fake_sdk.client.thread_start.assert_not_called()
+
+    def test_workspace_write_write_required_runs(
+        self, agent_config: AgentConfig, fake_sdk: FakeSdk
+    ) -> None:
+        config = agent_config.model_copy(
+            update={"requires_writes": True, "credentials": {"sandbox": "workspace-write"}}
+        )
+        _send(CodexAgent(name="test-codex", config=config), "hi")
+        fake_sdk.client.thread_start.assert_awaited_once()
+
+    def test_read_only_bare_dispatch_runs_and_warns_once(
+        self, agent: CodexAgent, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.providers.codex.agent"):
+            _send(agent, "hi")
+        fake_sdk.client.thread_start.assert_awaited_once()
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        assert 'sandbox = "workspace-write"' in warnings[0].getMessage()
+
+
 class TestTurnResultChecks:
     """One test per Failure Modes row that applies to a turn (D7, D8)."""
 
