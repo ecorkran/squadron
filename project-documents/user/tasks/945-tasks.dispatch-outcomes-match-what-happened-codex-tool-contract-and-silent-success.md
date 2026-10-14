@@ -80,18 +80,18 @@ status: in_progress
 
 ### Codex agent (D2)
 
-- [ ] **Task 9: Codex spawn refusals and bare-dispatch warning**
-  - [ ] In `providers/codex/agent.py`, before any model call, raise `ProviderError` with the D2 Codex `allowed_tools` message when `config.allowed_tools` is non-empty
-  - [ ] Using the sandbox from `_resolve_sandbox`, raise `ProviderError` with the D2 read-only message (naming the profile) when `requires_writes` is true and the sandbox is read-only. Compare against the SDK `Sandbox` enum member, not a string.
-  - [ ] When the sandbox is read-only and `requires_writes` is false, the agent itself logs a WARNING (not a refusal) naming the profile and the `sandbox = "workspace-write"` fix, and continue
-  - [ ] Check order: `allowed_tools` first, then sandbox
-  - **Success:** refusals happen before the Codex thread starts
+- [x] **Task 9: Codex spawn refusals and bare-dispatch warning**
+  - [x] In `providers/codex/agent.py`, before any model call, raise `ProviderError` with the D2 Codex `allowed_tools` message when `config.allowed_tools` is non-empty
+  - [x] Using the sandbox from `_resolve_sandbox`, raise `ProviderError` with the D2 read-only message (naming the profile) when `requires_writes` is true and the sandbox is read-only. Compare against the SDK `Sandbox` enum member, not a string.
+  - [x] When the sandbox is read-only and `requires_writes` is false, the agent itself logs a WARNING (not a refusal) naming the profile and the `sandbox = "workspace-write"` fix, and continue
+  - [x] Check order: `allowed_tools` first, then sandbox
+  - [x] **Success:** refusals happen before the Codex thread starts
 
-- [ ] **Task 10: Test the Codex refusals**
-  - [ ] In `tests/providers/codex/test_agent.py` using `fake_sdk.py`: `allowed_tools=["write_file"]` → `ProviderError` with the D2 text, fake SDK not called; read-only + `requires_writes` → `ProviderError` naming `sandbox`; `workspace-write` + `requires_writes` → runs; read-only bare → runs and `caplog` holds one WARNING
-  - [ ] Run `pytest tests/providers/codex -q`, ruff, pyright
-  - [ ] Commit: `feat: refuse Codex dispatches it cannot honor at spawn`
-  - **Success:** tests pass (design criteria 1–3 at unit level; one test asserts a log record)
+- [x] **Task 10: Test the Codex refusals**
+  - [x] In `tests/providers/codex/test_agent.py` using `fake_sdk.py`: `allowed_tools=["write_file"]` → `ProviderError` with the D2 text, fake SDK not called; read-only + `requires_writes` → `ProviderError` naming `sandbox`; `workspace-write` + `requires_writes` → runs; read-only bare → runs and `caplog` holds one WARNING
+  - [x] Run `pytest tests/providers/codex -q`, ruff, pyright
+  - [x] Commit: `feat: refuse Codex dispatches it cannot honor at spawn`
+  - [x] **Success:** tests pass (design criteria 1–3 at unit level; one test asserts a log record)
 
 ### Outcome rules (D3)
 
