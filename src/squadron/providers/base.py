@@ -66,6 +66,9 @@ class ProviderCapabilities:
     applies_effort: bool = False
     """Agent sends ``AgentConfig.effort`` on its requests (slice 931 D4)."""
 
+    runs_squadron_tools: bool = False
+    """Agent executes squadron's own tools from ``AgentConfig.allowed_tools`` (slice 945)."""
+
 
 @runtime_checkable
 class Agent(Protocol):

@@ -64,7 +64,7 @@ from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
-from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -135,24 +135,37 @@ def _summarize_action_config(
             return str(config) if config else ""
 
 
+def _tools_segment(metadata: dict[str, object]) -> str | None:
+    """``tools=N, calls=M[, failed=F]``, or None for a step never offered tools.
+
+    A step that was offered tools always renders it, even at zero calls: "offered three,
+    called none" must read differently from "never had tools" (SC8).
+    """
+    given = metadata.get(TOOLS_GIVEN_KEY)
+    if not isinstance(given, list):
+        return None
+    segment = f"tools={len(given)}, calls={metadata.get(TOOL_CALLS_MADE_KEY, 0)}"  # pyright: ignore[reportUnknownArgumentType]
+    if failed := metadata.get(FAILED_TOOL_CALLS_KEY):
+        segment += f", failed={failed}"
+    return segment
+
+
 def _log_action_result(action_type: str, result: ActionResult) -> None:
     """Log action outcome at INFO (success/fail) and DEBUG (details)."""
+    tools = _tools_segment(result.metadata)
     if result.success:
         extras: list[str] = []
         if result.verdict:
             extras.append(f"verdict={result.verdict}")
         if model := result.metadata.get("model"):
             extras.append(f"model={model}")
-        # A step that was offered tools always renders a tools= segment, even at zero calls:
-        # "offered three, called none" must read differently from "never had tools" (SC8).
-        given = result.metadata.get(TOOLS_GIVEN_KEY)
-        if isinstance(given, list):
-            made = result.metadata.get(TOOL_CALLS_MADE_KEY, 0)
-            extras.append(f"tools={len(given)}, calls={made}")  # pyright: ignore[reportUnknownArgumentType]
+        if tools is not None:
+            extras.append(tools)
         suffix = f" ({', '.join(extras)})" if extras else ""
         _logger.info("    -> ok%s", suffix)
     else:
-        _logger.info("    -> FAILED: %s", result.error or "no details")
+        suffix = f" ({tools})" if tools is not None else ""
+        _logger.info("    -> FAILED%s: %s", suffix, result.error or "no details")
 
     _logger.debug("    outputs=%s metadata=%s", result.outputs, result.metadata)
 

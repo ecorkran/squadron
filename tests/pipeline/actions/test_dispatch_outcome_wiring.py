@@ -144,9 +144,9 @@ async def _spawned_config(params: dict[str, object], provider: ProviderType) -> 
         patch(f"{_P}.get_registry", return_value=mock_registry),
         patch(f"{_P}.get_profile", return_value=profile),
         patch(f"{_P}.profile_credentials", return_value={}),
-        patch(f"{_P}.ensure_provider_loaded"),
         patch(f"{_P}.project_rules_for_dispatch", return_value=("", None)),
     ):
+        # The real provider is loaded: its declared capability decides the default.
         await DispatchAction().execute(ctx)
     return mock_registry.spawn.call_args.args[0]
 

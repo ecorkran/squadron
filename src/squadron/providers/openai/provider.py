@@ -35,6 +35,7 @@ class OpenAICompatibleProvider:
             supports_streaming=True,
             applies_output_budget=True,
             applies_effort=True,
+            runs_squadron_tools=True,
         )
 
     async def create_agent(self, config: AgentConfig) -> OpenAICompatibleAgent:

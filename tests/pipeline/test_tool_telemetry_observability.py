@@ -70,6 +70,21 @@ def test_log_line_omits_tools_segment_when_no_tools_configured(
     assert "model=gpt-4o-mini" in line
 
 
+def test_failed_step_log_line_shows_tool_counts(caplog: pytest.LogCaptureFixture) -> None:
+    """Slice 945: the counts matter most on the failure path."""
+    result = ActionResult(
+        success=False,
+        action_type="dispatch",
+        outputs={},
+        error="every tool call failed: Error: outside the jail",
+        metadata={"tools_given": ["write_file"], "tool_calls_made": 3, "failed_tool_calls": 3},
+    )
+
+    line = _capture_log(result, caplog)
+
+    assert "-> FAILED (tools=1, calls=3, failed=3): every tool call failed" in line
+
+
 def test_log_line_defaults_missing_call_count_to_zero(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

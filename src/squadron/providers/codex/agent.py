@@ -39,6 +39,10 @@ _READ_ONLY_WARNING = (
     'Codex profile `%s` runs with a read-only sandbox; set `sandbox = "workspace-write"` '
     "in the profile credentials if this dispatch should write files"
 )
+_WRITE_STEP_SANDBOX_INFO = (
+    "Codex profile `%s` sets no sandbox; this write step runs with workspace-write "
+    '(set `sandbox = "read-only"` in the profile to refuse write steps instead)'
+)
 
 
 class CodexAgent:
@@ -254,7 +258,10 @@ class CodexAgent:
 
         raw = self._config.credentials.get(_SANDBOX_KEY)
         if raw is None:
-            return Sandbox.workspace_write if self._config.requires_writes else Sandbox.read_only
+            if not self._config.requires_writes:
+                return Sandbox.read_only
+            _log.info(_WRITE_STEP_SANDBOX_INFO, self._config.provider)
+            return Sandbox.workspace_write
         try:
             return Sandbox(raw)
         except ValueError as exc:

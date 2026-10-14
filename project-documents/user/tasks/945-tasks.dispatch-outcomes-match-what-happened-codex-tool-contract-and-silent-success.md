@@ -105,7 +105,7 @@ status: complete
   - **Deviation:** the `declared_tools` parameter was dropped. The signature is `assess_tool_outcome(requires_writes, telemetry)`; telemetry carries `tools_given` only when tools were given.
 
 - [x] **Task 12: Test `assess_tool_outcome`**
-  - [x] New `tests/pipeline/actions/test_dispatch_outcome.py`, one test per row: row 1 fails with the D3 text; row 2 fails and includes `first_tool_error`; row 2 not triggered for a read-only step with only read tools (falls to row 3, warns); row 3 partial failure warns, no failure; no-telemetry → empty outcome; clean run → empty outcome
+  - [x] New `tests/pipeline/actions/test_dispatch_outcome_rules.py`, one test per row: row 1 fails with the D3 text; row 2 fails and includes `first_tool_error`; row 2 not triggered for a read-only step with only read tools (falls to row 3, warns); row 3 partial failure warns, no failure; no-telemetry → empty outcome; clean run → empty outcome
   - [x] Run the file, ruff, pyright
   - [x] **Success:** every D3 row and the no-telemetry case covered (design, Technical Requirements)
 
@@ -123,7 +123,7 @@ status: complete
   - [x] Run `pytest tests/pipeline/actions tests/providers -q`, ruff, pyright
   - [x] Commit: `feat: fail dispatch steps whose tool telemetry shows no work done`
   - [x] **Success:** tests pass; existing dispatch tests unchanged except where they assert the full metadata dict
-  - **Deviation:** the wiring tests live in the new `tests/pipeline/actions/test_dispatch_outcomes.py`, not `test_dispatch.py` (file-size limit). The capture entry is `dispatch_action` in `tests/providers/agent_config_sites.py`.
+  - **Deviation:** the wiring tests live in the new `tests/pipeline/actions/test_dispatch_outcome_wiring.py`, not `test_dispatch.py` (file-size limit). The capture entry is `dispatch_action` in `tests/providers/agent_config_sites.py`.
 
 - [x] **Task 15: Test the #200 loop path with a D3-failed revise**
   - [x] In `tests/pipeline/test_executor_loop_body.py`, add a case: a revise dispatch failed by D3 inside a multi-step loop body ends the loop with its `on_exhaust` status (Integration Requirements)

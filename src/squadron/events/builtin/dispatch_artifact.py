@@ -27,7 +27,7 @@ _logger = logging.getLogger(__name__)
 
 
 def _resolve_paths(kind: ArtifactKind, scope: str, resolve: Callable[[], list[str]]) -> list[str] | str:
-    """Run *resolve*; the paths, or a failure message (logged at WARNING)."""
+    """Run *resolve*; the paths, or a failure message (logged at WARNING, or ERROR for a cf error)."""
     try:
         paths = resolve()
     except ContextForgeError as exc:
@@ -99,7 +99,8 @@ def _dispatch_artifact_post_condition_error(
     """Resolve the dispatch artifact post-condition for one dispatch action.
 
     Returns None if satisfied, else the failure message. Every branch fails
-    closed and is logged at WARNING (see docstrings on the helpers it calls).
+    closed and is logged at WARNING, or ERROR for a Context Forge error (see the
+    helpers it calls).
     """
     if run_state_error is not None:
         return run_state_error
