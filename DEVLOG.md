@@ -2,12 +2,21 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261013'
+dateUpdated: '20261014'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261014
+
+### Slice 945: design complete (Phase 4)
+
+- Design: `user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md`, effort 3/5. Write-required dispatch (phase steps, revise dispatches) derived, not declared; providers refuse at spawn what they cannot honor (Codex: `allowed_tools`, read-only sandbox on write-required; OpenAI-compatible: no write tool); dispatch outcome table D3 (declared-not-given, zero calls on write-required, all calls failed → fail; partial failures → warn); SDK `failed_tool_calls` never counted (ToolResultBlock arrives in `UserMessage.content`) — fixed in scope; #202 one-line cf errors; #212 item 2: unchecked tasks at merge → `paused`.
+- #15 check: no-artifact post-condition covers `design`/`tasks` only, not `implement`, revise, or bare dispatch. Bare text-only dispatch stays out of scope (warn on read-only Codex only).
+- Open: #212 trading-ui run state not on this machine; finding for #212 item 1 — merge gate passes when cf lists no task files.
+- Next: Phase 5 task breakdown.
 
 ## 20261013
 
