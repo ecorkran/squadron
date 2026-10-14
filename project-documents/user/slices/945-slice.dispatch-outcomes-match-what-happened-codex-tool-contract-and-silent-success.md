@@ -78,7 +78,7 @@ None. The plan entry lists no dependencies. This slice builds on completed work:
 
 | Component | File | Change |
 |---|---|---|
-| Write-required predicate | `pipeline/actions/dispatch.py` | `dispatch_requires_writes(params)`: true for a phase-step rules param or `feedback` set |
+| Write-required predicate | `pipeline/actions/dispatch_rules.py` | `dispatch_requires_writes(params)`: true for a phase-step rules param or `feedback` set |
 | One-shot dispatch | `pipeline/actions/dispatch.py` `one_shot_dispatch_with_telemetry` | Pass `requires_writes`; copy `failed_tool_calls` and `first_tool_error` |
 | Outcome rules | new `pipeline/actions/dispatch_outcome.py` | `assess_tool_outcome(declared, requires_writes, telemetry) -> ToolOutcome` (D3) |
 | Codex agent | `providers/codex/agent.py` | Spawn-time refusals |
