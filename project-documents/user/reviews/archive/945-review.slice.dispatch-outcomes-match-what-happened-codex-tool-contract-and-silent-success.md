@@ -14,48 +14,44 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261014
 dateUpdated: 20261014
-reviewedSha: c86635980ba75bce310397562e194983a76a63d9
+reviewedSha: e068f9852a12930b2fa431f48482555530d26197
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 4
-durationSeconds: 35.9
+toolCallsMade: 6
+durationSeconds: 35.2
 runId: run-20261014-p4-dcdd93aa
 squadronVersion: 0.21.7
 findings:
   - id: F001
-    severity: concern
-    category: scope
-    summary: "Plan-assigned silent-success cases are excluded without reconciling against the plan entry"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:40-41"
+    severity: pass
+    category: architecture-alignment
+    summary: "Scope and layering match the maintenance architecture"
+    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md#Technical Scope"
   - id: F002
     severity: concern
-    category: correctness
-    summary: "D3 row 3 can fail legitimate read-only steps; the rule is broader than the stated intent"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:112"
+    category: scope-alignment
+    summary: "D6 may not fix the bug the plan assigns (#212 item 2)"
+    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:144-150"
   - id: F003
     severity: concern
-    category: proportionality
-    summary: "Generic `NEEDS_DECISION_OUTPUT` mechanism and `ToolDescriptor.writes` are larger than the one consumer needs"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:128-131, 138-141"
+    category: failure-modes
+    summary: "The claim to cover `implement` and revise dispatches is inconsistent with the doc's own telemetry limits"
+    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:134-136"
   - id: F004
     severity: concern
     category: proportionality
-    summary: "Bundled scope: #202 and #212 item 2 are unrelated to the dispatch-outcome core"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:36-37"
+    summary: "Backstops and metadata with no current consumer make the design heavier than needed"
+    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:122-134"
   - id: F005
     severity: note
-    category: documentation
-    summary: "Frontmatter dependencies differ from the plan entry"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:6"
+    category: scope-alignment
+    summary: "Bare dispatch with no tools (deepseek fake-markup case) is deliberately not failed"
+    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:48-61"
   - id: F006
     severity: note
     category: error-handling
-    summary: "Failure modes for the new refusal paths are explicit"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:98-104, 116"
-  - id: F007
-    severity: pass
-    category: architecture
-    summary: "Layering and dependency direction"
-    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md#Technical Decisions"
+    summary: "Failure modes for new paths are mostly enumerated and observable"
+    location: "project-documents/user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md:141-142"
 ---
 
 # Review: slice — slice 945
@@ -65,63 +61,46 @@ findings:
 
 ## Findings
 
-### [CONCERN] Plan-assigned silent-success cases are excluded without reconciling against the plan entry
+### [PASS] Scope and layering match the maintenance architecture
 
-The plan entry for 945 describes four probe cases. All four used bare `dispatch` steps. It also lists "zero tool calls on a step that needs them" among the signals that should fail a step. The design excludes bare dispatch with no `allowed_tools`. That leaves the fake tool-call markup case (deepseek, no tools) and a bare Codex dispatch on a read-only sandbox still ending `completed`, `success: True`. These are the plan's headline symptom, and they now only log a WARNING.
+The slice is bug-fix and operational work that spans subsystems, which 900 names as in scope. Items 5 and 6 are explicitly split into separate commits, which satisfies the "grouped slice … can be reverted without touching the others" guideline. D2 keeps the sandbox knowledge inside the Codex provider. The new `dispatch_outcome.py` sits in the pipeline layer and reads only response metadata. Dependency direction is correct, and prerequisites 942 and 944 are complete.
 
-The reasoning is sound: squadron cannot tell intent from prose. But the plan entry says "a dispatch that must write on a read-only sandbox fails loudly", and the design's only handling for bare dispatch is a WARNING plus a metadata stamp.
+### [CONCERN] D6 may not fix the bug the plan assigns (#212 item 2)
 
-The Overview says the slice fixes "three things" after listing four cases. No success criterion covers the fake-markup case. Dropping or deferring plan-assigned scope is a CONCERN. Do one of these:
-- Record the exclusion back on the plan entry and issue #211 as a deliberate deferral.
-- State explicitly that this slice closes only the declared-`allowed_tools` and phase-step cases.
-- Add an opt-in way to mark a bare dispatch as write-required. The design rejected a per-step `writes: true` key (D1), but that key would be the only route to covering `close-out`-style steps.
+The plan entry says a run stopped by a hard gate ends `completed` and should end `paused`. The slice's own Open Item admits that a `completed` end means the merge gate passed. So the gate was not what stopped the run in #212, and the cause is unconfirmed. D6 only converts an existing `FAILED` (unchecked items at merge) into `PAUSED`, so it does not address the reported `completed` outcome. The slice has no step that reproduces or diagnoses the actual path. The repo guidelines require concrete evidence before a fix. Options:
+- Make obtaining the #212 run state a gate before D6 is implemented.
+- Re-scope D6 and state plainly that it is not the #212 fix.
 
-### [CONCERN] D3 row 3 can fail legitimate read-only steps; the rule is broader than the stated intent
+### [CONCERN] The claim to cover `implement` and revise dispatches is inconsistent with the doc's own telemetry limits
 
-The design says to fail "where the step cannot have done its job". Row 3 (`failed_tool_calls == tool_calls_made`) applies to any step with declared tools, not only write-required ones. A read-only analysis step that makes a single `grep` or `read_file` call, gets one error and then answers from context would be failed, even though it could have done its job. Row 4 already treats partial failure as recoverable.
+D3 says rows 2 and 5 "do not apply where no tool telemetry exists", and that SDK phase steps stamp telemetry only when `allowed_tools` is declared. D3's #15 note then says this slice "covers `implement` and revise dispatches (rows 2–3)". On the default SDK profiles that coverage is absent:
+- The only backstop for an SDK `implement` that does nothing is the merge gate.
+- The Special Considerations section records that the merge gate passes when cf lists no task files.
+- The persistent-session path is excluded.
 
-Either scope row 3 to write-required steps, or require a minimum call count. If it stays as written, say why a failed read on a non-write step is fatal. The Risk Assessment covers only row 2's false-failure risk.
+The silent-success class named in the title therefore remains open for the default provider. Either state this residual gap explicitly in Excluded and Risk, or correct the coverage claim.
 
-### [CONCERN] Generic `NEEDS_DECISION_OUTPUT` mechanism and `ToolDescriptor.writes` are larger than the one consumer needs
+### [CONCERN] Backstops and metadata with no current consumer make the design heavier than needed
 
-D6 needs one thing: an unfinished-tasks merge refusal ends `paused`. The design adds three pieces for that:
-- a new `BranchFailure.UNFINISHED_TASKS` kind
-- a new action output flag, `NEEDS_DECISION_OUTPUT`, defined in `models.py`
-- an executor branch that reads the flag
+- **Row 1:** it backstops "any provider that ignores `allowed_tools` without raising". After D2, the SDK and OpenAI-compatible agents honor `allowed_tools` and Codex refuses it, so no provider needs it. It is speculative; cut it or defer it until a provider needs it.
+- **Row 5 and `tools_suppressed_reason`:** these add a new metadata key and a fail rule for a case the doc says "reduces to row 2's situation".
+- **`tool_warnings`:** it duplicates the WARNING log and the counts already recorded in metadata.
 
-Integration Points then advertises the flag as "a generic way for an action to end its step paused", which is speculative. A lighter option is for the branch action to return the existing failure kind. The executor would map it to `PAUSED` directly, with no new cross-layer output channel. If the flag is kept, justify it against that lighter option.
+Together these make `assess_tool_outcome` carry five rules where rows 2 and 3, plus the D2 refusals, meet the plan's cases.
 
-Likewise, `ToolDescriptor.writes` is listed as "for any later tool policy". Keep only what D2's write-tool lookup needs. Also consider dropping `metadata["tool_warnings"]`, since WARNING logging already carries it.
+### [NOTE] Bare dispatch with no tools (deepseek fake-markup case) is deliberately not failed
 
-### [CONCERN] Bundled scope: #202 and #212 item 2 are unrelated to the dispatch-outcome core
+The plan lists the no-tools deepseek probe among the four recorded cases. The slice reconciles it as "not failed" and gives a reasoned basis: squadron cannot tell a refusal from an answer without parsing prose. This is a documented, justified narrowing of "fail where the step cannot have done its job". It is visible to the PM, so no change is required. Confirm that the PM accepts it.
 
-The component table touches about ten modules across providers, tools, events, branch ops, the executor and dispatch. Items 5 and 6 touch different subsystems from items 1-4 and are independent of them. The plan does assign them to this slice, so this is not scope creep. The 900 guideline allows grouped slices only when "each item commits separately and can be reverted without touching the others".
+### [NOTE] Failure modes for new paths are mostly enumerated and observable
 
-The Implementation Notes order does keep them separable (steps 6 and 7), but the design never states that independence. Add a sentence saying D5 and D6 commit and revert independently. Otherwise the slice's review and revert cost exceeds the plan's 3/5 effort.
-
-### [NOTE] Frontmatter dependencies differ from the plan entry
-
-Frontmatter lists `dependencies: [942, 944]`. The plan entry says "Dependencies: none". The design's list is more accurate, since it builds on 942's merge gate and 944's #200 loop path, but the plan should be updated to match.
-
-### [NOTE] Failure modes for the new refusal paths are explicit
-
-The design handles each new failure path explicitly:
-- Spawn-time `ProviderError` refusals, with messages that name the fix.
-- Each D3 row's outcome, with a WARNING log and a metadata record.
-- The no-telemetry case on SDK phase steps, which are covered by the #15 post-condition and the merge gate.
-- A required test asserting that a log record is produced.
-
-No new network I/O or message type is introduced, so the parent's failure-mode enumeration requirement is met. The parent architecture states no NFR on these paths, so nothing needs restating.
-
-### [PASS] Layering and dependency direction
-
-Provider-specific knowledge, such as the Codex sandbox credential, stays in the provider (D2). Dispatch holds only the provider-agnostic backstop and outcome rules. It consumes 942's merge gate and 944's loop-exit behavior without changing them beyond the failure kind. The slice also fits the 900 scope: operational error-handling and bug fixes that span subsystems.
+The slice adds no new I/O or message types. The new failure paths are spawn refusals, D3 failures, D5 one-line errors, and D6 pauses. Each has a named outcome, and the Technical Requirements require a WARNING or ERROR log and a test asserting the log record. No NFR in the parent architecture applies to these paths.
 
 ### Run Digest
 
-- Response length: 6773 chars
+- Response length: 5065 chars
 - Response is newline-free: no
-- Tool calls made: 4
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -131,10 +110,10 @@ Provider-specific knowledge, such as the Codex sandbox credential, stays in the 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 35.9 s
+- Duration: 35.2 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
