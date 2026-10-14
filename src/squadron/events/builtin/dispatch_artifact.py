@@ -16,6 +16,7 @@ from pathlib import Path
 from squadron.events import EventType, register_event_action
 from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
+from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions.dispatch import SKIPPED_KEY
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
@@ -29,6 +30,11 @@ def _resolve_paths(kind: ArtifactKind, scope: str, resolve: Callable[[], list[st
     """Run *resolve*; the paths, or a failure message (logged at WARNING)."""
     try:
         paths = resolve()
+    except ContextForgeError as exc:
+        # Expected, named failure (D5, #202): the cf message already says what to fix, so
+        # it is the whole error: logged at ERROR without a traceback.
+        _logger.error("dispatch post-condition: %s", exc)
+        return str(exc)
     except (ValueError, TypeError, FileNotFoundError) as exc:
         msg = f"could not resolve expected {kind.value} artifact path for {scope}: {exc}"
         _logger.warning("dispatch post-condition: %s", msg)

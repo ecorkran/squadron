@@ -21,6 +21,7 @@ from squadron.core.models import (
     describe_run_settings,
     describe_setting_sources,
 )
+from squadron.integrations.context_forge import ContextForgeError
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.dispatch_outcome import assess_tool_outcome
@@ -390,6 +391,16 @@ class DispatchAction:
             # Slice 935: a rules problem the message names (budget, unreadable file, bad
             # `steps` value, git failure). One ERROR line, no traceback; the step fails.
             _logger.error("dispatch: step %s: project rules: %s", context.step_name, exc)
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=str(exc),
+            )
+        except ContextForgeError as exc:
+            # A cf failure (e.g. no slice plan) from resolving a kept artifact (D5, #202):
+            # the message names the fix, so one ERROR line and no traceback.
+            _logger.error("dispatch: step %s: %s", context.step_name, exc)
             return ActionResult(
                 success=False,
                 action_type=self.action_type,

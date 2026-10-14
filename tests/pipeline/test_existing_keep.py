@@ -14,7 +14,12 @@ from squadron.events import EventType
 from squadron.events.builtin.dispatch_artifact import DispatchArtifactAction
 from squadron.events.builtin.revision_stamp import RevisionStampAction
 from squadron.events.contexts import PostActionContext
-from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
+from squadron.integrations.context_forge import (
+    ContextForgeError,
+    ProjectInfo,
+    SliceEntry,
+    TaskEntry,
+)
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.git_ops import GitStateUnknownError
 from squadron.pipeline.models import ActionContext, ActionResult, StepConfig
@@ -188,6 +193,25 @@ async def test_default_create_dispatches_even_when_the_artifact_exists(tmp_path:
         await DispatchAction().execute(context)
 
     agent.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_keep_with_a_cf_error_fails_in_one_line_without_a_traceback(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Slice 945 D5 (#202): a missing slice plan is a named failure, not an unexpected one."""
+    message = "No slice plan configured. Set one with: cf set slicePlan <path>"
+    context = _dispatch_context(tmp_path, **_KEEP)
+    context.cf_client.list_slices.side_effect = ContextForgeError(message)  # type: ignore[attr-defined]
+
+    with caplog.at_level(logging.ERROR):
+        result = await DispatchAction().execute(context)
+
+    assert result.success is False
+    assert result.error == message
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any(message in r.getMessage() for r in errors)
+    assert all(r.exc_info is None for r in errors)
 
 
 # ---------------------------------------------------------------------------
