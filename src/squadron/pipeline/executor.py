@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any, cast
 from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
+from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.batch_report import (
     BatchItemRecord,
@@ -1745,6 +1746,8 @@ async def _execute_each_step(
         raise
     finally:
         await _finish_each_report(report, runs_dir, step.name, in_flight, halt, items, item_rerun)
+    if status is ExecutionStatus.COMPLETED and item_rerun is None and items:
+        _reset_cf_slice(cf_client, items[0], step.name)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,
@@ -1752,6 +1755,23 @@ async def _execute_each_step(
         action_results=all_action_results,
         batch_report=report,
     )
+
+
+def _reset_cf_slice(cf_client: Any, first_item: dict[str, object], step_name: str) -> None:
+    """Point cf back at the first slice the source yielded (#206).
+
+    Only after a completed step: a paused or failed item may resume past its own
+    set-slice step, so moving cf then would point the resume at the wrong slice.
+    """
+    slice_id = str(first_item.get("index", ""))
+    if not slice_id:
+        return
+    try:
+        cf_client.set_slice(slice_id)
+    except ContextForgeError as exc:
+        # The batch's work is done and recorded; a failed convenience reset must not
+        # fail the run. WARNING so the stale cf slice is visible.
+        _logger.warning("each %s: could not reset cf slice to %s: %s", step_name, slice_id, exc)
 
 
 def _active_item(item: dict[str, object], position: int, total: int) -> ActiveItem:

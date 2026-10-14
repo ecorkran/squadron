@@ -111,7 +111,7 @@ class CfOpAction:
                     stdout = cf_client._run(["set", "phase", str(phase)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.SET_SLICE:
                     slice_id = context.params["slice"]
-                    stdout = cf_client._run(["set", "slice", str(slice_id)])  # pyright: ignore[reportPrivateUsage]
+                    stdout = cf_client.set_slice(str(slice_id))
                 case CfOperation.BUILD_CONTEXT:
                     build_args = ["build", "--json"]
                     # Use --embed when the step model can't read files natively,
