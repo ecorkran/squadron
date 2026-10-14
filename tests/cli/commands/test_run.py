@@ -17,6 +17,7 @@ from squadron.cli.app import app
 from squadron.cli.commands.run import (
     _assemble_params,
     _check_cf,
+    _extract_model_override,
     _resolve_target,
 )
 from squadron.cli.commands.run_dry_run import (
@@ -151,10 +152,20 @@ class TestAssembleParams:
         result = _assemble_params(defn, "191", None, ["template=arch", "phase=4"])
         assert result == {"slice": "191", "template": "arch", "phase": "4"}
 
-    def test_invalid_param_format_raises(self) -> None:
+    @pytest.mark.parametrize("entry", ["=nope", "a=1,b", "a=1,,b=2", "bare"])
+    def test_invalid_param_format_raises(self, entry: str) -> None:
         defn = _make_definition(params={})
-        with pytest.raises(typer.BadParameter, match="Invalid --param format"):
-            _assemble_params(defn, None, None, ["=nope"])
+        with pytest.raises(typer.BadParameter, match="Invalid --param"):
+            _assemble_params(defn, None, None, [entry])
+
+    def test_comma_separated_pairs_in_one_entry(self) -> None:
+        # #207: one -p carries several pairs; repeated -p still works alongside it.
+        defn = _make_definition(params={"slice": "required"})
+        result = _assemble_params(defn, "191", None, ["a=1,b=2", "c=3", "d=4, e=5"])
+        assert result == {"slice": "191", "a": "1", "b": "2", "c": "3", "d": "4", "e": "5"}
+
+    def test_model_inside_comma_entry_is_the_override(self) -> None:
+        assert _extract_model_override(None, ["a=1,model=luna"]) == "luna"
 
 
 # ---------------------------------------------------------------------------

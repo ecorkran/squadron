@@ -48,6 +48,8 @@ Parameters declared in `params` can be referenced anywhere inside step configs u
 - `param: required` — caller must supply the value positionally or with `--param param=value`
 - `param: sonnet` — default applied automatically when caller does not override
 
+Several params can go in one `--param`/`-p`, comma-separated: `-p review-model=sonnet,max-revisions=3`. A pair without `=` is an error.
+
 **YAML quoting — mandatory:**
 
 When a placeholder is the entire field value, it must be quoted:
