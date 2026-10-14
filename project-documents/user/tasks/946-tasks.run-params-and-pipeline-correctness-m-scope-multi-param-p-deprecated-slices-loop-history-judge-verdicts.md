@@ -7,7 +7,7 @@ dependencies: []
 projectState: 0.21.8 released; slice 946 design complete
 dateCreated: 20261014
 dateUpdated: 20261014
-status: in_progress
+status: complete
 ---
 
 # Tasks: Run Params and Pipeline Correctness
@@ -55,5 +55,5 @@ status: in_progress
 - [x] Commit
 
 ## Close-out
-- [ ] ruff format, ruff check, pyright (zero errors), full suite
+- [x] ruff format, ruff check, pyright (zero errors), full suite
 - [x] CHANGELOG bullets under Unreleased
