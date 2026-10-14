@@ -407,3 +407,63 @@ class TestOutputBudget:
         await _collect(agent, _USER_MSG)
 
         assert client.chat.completions.create.call_args.kwargs["max_completion_tokens"] is omit
+
+
+class TestRequiresWritesRefusal:
+    """Slice 945 D2: a write-required step with no write-capable tool is refused at spawn."""
+
+    def _spawn(
+        self, *, requires_writes: bool, allowed_tools: list[str] | None, cwd: str | None
+    ) -> tuple[OpenAICompatibleAgent, Any]:
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock()
+        client.close = AsyncMock()
+        agent = OpenAICompatibleAgent(
+            name="bot",
+            client=client,
+            model=_MODEL,
+            system_prompt=None,
+            allowed_tools=allowed_tools,
+            cwd=cwd,
+            requires_writes=requires_writes,
+        )
+        return agent, client
+
+    @pytest.mark.parametrize("allowed_tools", [["read_file"], None, []])
+    def test_no_write_tool_raises_with_the_fix_named(
+        self, allowed_tools: list[str] | None, tmp_path: Any
+    ) -> None:
+        with pytest.raises(ProviderError) as excinfo:
+            self._spawn(requires_writes=True, allowed_tools=allowed_tools, cwd=str(tmp_path))
+
+        assert str(excinfo.value) == (
+            "step must write files but has no write-capable tool; "
+            "add `write_file` (or `bash`) to `allowed_tools`."
+        )
+
+    @pytest.mark.parametrize("write_tool", ["write_file", "bash"])
+    def test_write_tool_spawns_and_no_model_call_is_made(self, write_tool: str, tmp_path: Any) -> None:
+        _agent, client = self._spawn(
+            requires_writes=True, allowed_tools=["read_file", write_tool], cwd=str(tmp_path)
+        )
+
+        client.chat.completions.create.assert_not_called()
+
+    def test_refusal_makes_no_model_call(self, tmp_path: Any) -> None:
+        client = MagicMock()
+        client.chat.completions.create = AsyncMock()
+        with pytest.raises(ProviderError):
+            OpenAICompatibleAgent(
+                name="bot",
+                client=client,
+                model=_MODEL,
+                system_prompt=None,
+                allowed_tools=["read_file"],
+                cwd=str(tmp_path),
+                requires_writes=True,
+            )
+
+        client.chat.completions.create.assert_not_called()
+
+    def test_not_write_required_spawns_without_tools(self) -> None:
+        self._spawn(requires_writes=False, allowed_tools=None, cwd=None)

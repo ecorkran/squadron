@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from openai import omit
 
+import squadron.providers.openai.agent as agent_module
 from squadron.core.models import Message, MessageType
 from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.openai.agent import (
@@ -853,6 +854,52 @@ class TestStopReasonEvidence:
 
         assert msgs[-1].metadata["tool_calls_made"] == 2
         assert msgs[-1].metadata["failed_tool_calls"] == 2
+
+    @pytest.mark.asyncio
+    async def test_first_tool_error_holds_first_failed_result_text(self, tmp_path: Path) -> None:
+        missing_a = tool_chunk(0, "call_a", "read_file", json.dumps({"path": "nope_a.txt"}))
+        missing_b = tool_chunk(1, "call_b", "read_file", json.dumps({"path": "nope_b.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[
+                _async_stream(missing_a, missing_b),
+                _async_stream(text_chunk("could not read anything")),
+            ]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        first_error = msgs[-1].metadata["first_tool_error"]
+        assert "nope_a.txt" in first_error
+        assert "nope_b.txt" not in first_error
+
+    @pytest.mark.asyncio
+    async def test_first_tool_error_is_truncated_to_the_module_constant(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(agent_module, "_FIRST_TOOL_ERROR_MAX_CHARS", 5)
+        missing = tool_chunk(0, "call_a", "read_file", json.dumps({"path": "nope_a.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[_async_stream(missing), _async_stream(text_chunk("done"))]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert len(msgs[-1].metadata["first_tool_error"]) == 5
+
+    @pytest.mark.asyncio
+    async def test_clean_run_stamps_first_tool_error_none(self, tmp_path: Path) -> None:
+        (tmp_path / "a.txt").write_text("hi")
+        read = tool_chunk(0, "call_a", "read_file", json.dumps({"path": "a.txt"}))
+        client = _make_client()
+        client.chat.completions.create = AsyncMock(
+            side_effect=[_async_stream(read), _async_stream(text_chunk("done"))]
+        )
+        agent = _make_agent(allowed_tools=["read_file"], cwd=str(tmp_path), client=client)
+        msgs = await _collect(agent, _USER_MSG)
+
+        assert msgs[-1].metadata["first_tool_error"] is None
 
     @pytest.mark.asyncio
     async def test_unknown_tool_and_bad_arguments_count_as_failures(self, tmp_path: Path) -> None:

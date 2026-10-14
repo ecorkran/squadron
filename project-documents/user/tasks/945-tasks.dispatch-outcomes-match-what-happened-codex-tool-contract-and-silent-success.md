@@ -35,14 +35,14 @@ status: in_progress
 - [x] **Task 2: `WRITE_TOOL_NAMES`, `AgentConfig.requires_writes`, and the predicate**
   - [x] In `tools/builtin/_shared.py`, add `WRITE_TOOL_NAMES: frozenset[str]` built from the existing `WRITE_FILE_NAME` and `BASH_NAME`. Re-export it from `tools/builtin/__init__.py`.
   - [x] In `providers/base.py`, add key constants for the tool telemetry metadata: `tools_given`, `tool_calls_made`, `failed_tool_calls`, `first_tool_error`. None exist today; the keys are string literals. Replace every existing literal of these keys under `src/squadron` with the constants (find them with `grep -rn '"tools_given"\|"tool_calls_made"\|"failed_tool_calls"' src/squadron`), so no duplicate literal remains. New code in this slice uses only the constants.
-  - [ ] In `core/models.py` `AgentConfig`, add `requires_writes: bool = False` with a one-line comment: set for phase-step and revise dispatches (D1)
-  - [ ] In `pipeline/actions/dispatch_rules.py`, next to `rule_step_from_params`, add `dispatch_requires_writes(params) -> bool`: true when `rule_step_from_params(params)` is `StepTypeName.DESIGN`, `TASKS` or `IMPLEMENT`, or when `params.get("feedback") is not None` (the same test `DispatchAction._resolve_prompt` uses)
+  - [x] In `core/models.py` `AgentConfig`, add `requires_writes: bool = False` with a one-line comment: set for phase-step and revise dispatches (D1)
+  - [x] In `pipeline/actions/dispatch_rules.py`, next to `rule_step_from_params`, add `dispatch_requires_writes(params) -> bool`: true when `rule_step_from_params(params)` is `StepTypeName.DESIGN`, `TASKS` or `IMPLEMENT`, or when `params.get("feedback") is not None` (the same test `DispatchAction._resolve_prompt` uses)
   - **Success:** the predicate is the only place D1's rule is written; no existing test changes behavior
 
-- [ ] **Task 3: Test the D1 predicate**
-  - [ ] In `tests/pipeline/actions/test_dispatch_rules.py`: `design`, `tasks`, `implement` rules params → true; `feedback` set → true; bare params and a `dispatch` rules param → false
-  - [ ] Run `pytest tests/pipeline/actions -q`, ruff, pyright
-  - [ ] Commit: `feat: add write-required dispatch contract to AgentConfig`
+- [x] **Task 3: Test the D1 predicate**
+  - [x] In `tests/pipeline/actions/test_dispatch_rules.py`: `design`, `tasks`, `implement` rules params → true; `feedback` set → true; bare params and a `dispatch` rules param → false
+  - [x] Run `pytest tests/pipeline/actions -q`, ruff, pyright
+  - [x] Commit: `feat: add write-required dispatch contract to AgentConfig`
   - **Success:** tests pass, zero pyright errors
 
 ### SDK failed-call count (D4)

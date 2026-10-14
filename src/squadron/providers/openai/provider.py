@@ -91,6 +91,7 @@ class OpenAICompatibleProvider:
             model=config.model,
             system_prompt=config.instructions,
             allowed_tools=config.allowed_tools,
+            requires_writes=config.requires_writes,
             tools_suppressed_reason=config.tools_suppressed_reason,
             max_output_tokens=config.max_output_tokens,
             cwd=config.cwd,

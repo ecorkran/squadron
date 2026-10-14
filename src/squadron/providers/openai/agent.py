@@ -25,7 +25,12 @@ from squadron.config.keys import CONFIG_KEYS
 from squadron.core.models import AgentState, Effort, Message
 from squadron.core.usage import RunTelemetry, TokenUsage
 from squadron.logging import get_logger
-from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+from squadron.providers.base import (
+    FAILED_TOOL_CALLS_KEY,
+    FIRST_TOOL_ERROR_KEY,
+    TOOL_CALLS_MADE_KEY,
+    TOOLS_GIVEN_KEY,
+)
 from squadron.providers.errors import (
     EmptyFinalTurnError,
     ProviderAPIError,
@@ -36,8 +41,18 @@ from squadron.providers.errors import (
 from squadron.providers.openai import translation
 from squadron.providers.openai.usage import read_chunk_usage
 from squadron.tools import ToolExecutor, ToolResult, limits
+from squadron.tools.builtin import WRITE_TOOL_NAMES
 
 _log = get_logger("squadron.providers.openai.agent")
+
+# Longest slice of the first failed tool result kept in telemetry (slice 945 D3).
+_FIRST_TOOL_ERROR_MAX_CHARS = 500
+
+# D2: the refusal names the fix.
+_NO_WRITE_TOOL_MESSAGE = (
+    "step must write files but has no write-capable tool; "
+    "add `write_file` (or `bash`) to `allowed_tools`."
+)
 
 # Extra delta field OpenRouter-compatible backends use to stream a reasoning model's
 # thinking. Not part of the OpenAI SDK's typed ChoiceDelta; read via model_extra.
@@ -154,6 +169,7 @@ class OpenAICompatibleAgent:
         max_tool_result_chars: int | None = None,
         sends_stream_usage: bool = True,
         effort: Effort | None = None,
+        requires_writes: bool = False,
     ) -> None:
         self._name = name
         self._client = client
@@ -192,6 +208,8 @@ class OpenAICompatibleAgent:
         )
 
         requested_tools = allowed_tools or []
+        if requires_writes and WRITE_TOOL_NAMES.isdisjoint(requested_tools):
+            raise ProviderError(_NO_WRITE_TOOL_MESSAGE)
         if requested_tools and cwd is None:
             raise ProviderError(
                 f"allowed_tools {requested_tools!r} configured but cwd is None; "
@@ -505,6 +523,7 @@ class OpenAICompatibleAgent:
         budget_guard_fired = False
         tool_calls_made = 0
         failed_tool_calls = 0
+        first_tool_error: str | None = None
 
         for _iteration in range(max_iterations):
             # Tools are withdrawn once either budget is spent: each notice asks the
@@ -556,6 +575,7 @@ class OpenAICompatibleAgent:
                     tool_calls_made=tool_calls_made,
                     turn=turn,
                     failed_tool_calls=failed_tool_calls,
+                    first_tool_error=first_tool_error,
                 )
                 return messages
 
@@ -581,6 +601,8 @@ class OpenAICompatibleAgent:
                 tool_calls_made += 1
                 if tool_call_failed:
                     failed_tool_calls += 1
+                    if first_tool_error is None:
+                        first_tool_error = content[:_FIRST_TOOL_ERROR_MAX_CHARS]
                 # Capped per result, before the append: the whole-conversation budget guard
                 # below is a backstop for accumulated history, and a single tool result must
                 # not be able to exhaust it on its own (SC9). Read as a module attribute at
@@ -671,6 +693,7 @@ class OpenAICompatibleAgent:
         tool_calls_made: int,
         turn: TurnResult,
         failed_tool_calls: int,
+        first_tool_error: str | None = None,
     ) -> None:
         """Stamp tool-use telemetry and stop-reason evidence on the final Message.
 
@@ -700,6 +723,7 @@ class OpenAICompatibleAgent:
         messages[-1].metadata["turns"] = self._telemetry.turns
         messages[-1].metadata["usage"] = self._telemetry.usage
         messages[-1].metadata[FAILED_TOOL_CALLS_KEY] = failed_tool_calls
+        messages[-1].metadata[FIRST_TOOL_ERROR_KEY] = first_tool_error
         # Slice 927 D8: distinct, first-seen-order models reported across this
         # handle_message call's turns. A new key, not a repurposing of the existing
         # metadata["model"] set elsewhere, which holds the requested id.
