@@ -159,45 +159,46 @@ status: in_progress
 
 ### Unfinished tasks pause the run (D6, #212 item 2)
 
-- [ ] **Task 20: `ActionResult.awaits_human` and the executor mapping**
-  - [ ] In `pipeline/models.py` `ActionResult`, add `awaits_human: bool = False` with a one-line comment: a failed action waiting on a person, not broken
-  - [ ] In `pipeline/executor.py`'s "Action failure" branch (`if not result.success:` in the step's action loop), return `ExecutionStatus.PAUSED` when `result.awaits_human`, else `FAILED`. Import nothing from `branch_ops`.
-  - [ ] Confirm the existing PAUSED handling writes the checkpoint state and exits 0; change nothing there
-  - **Success:** the executor reads only the flag
+- [x] **Task 20: `ActionResult.awaits_human` and the executor mapping**
+  - [x] In `pipeline/models.py` `ActionResult`, add `awaits_human: bool = False` with a one-line comment: a failed action waiting on a person, not broken
+  - [x] In `pipeline/executor.py`'s "Action failure" branch (`if not result.success:` in the step's action loop), return `ExecutionStatus.PAUSED` when `result.awaits_human`, else `FAILED`. Import nothing from `branch_ops`.
+  - [x] Confirm the existing PAUSED handling writes the checkpoint state and exits 0; change nothing there
+  - [x] **Success:** the executor reads only the flag
 
-- [ ] **Task 21: Test the executor mapping**
-  - [ ] In `tests/pipeline/test_executor.py`: a fake action returning `success=False, awaits_human=True` → step and run `PAUSED`; the same without the flag → `FAILED`
-  - [ ] Run the file, ruff, pyright
-  - [ ] Commit: `feat: pause the run on a failed action that awaits a person`
-  - **Success:** tests pass
+- [x] **Task 21: Test the executor mapping**
+  - [x] In `tests/pipeline/test_executor.py`: a fake action returning `success=False, awaits_human=True` → step and run `PAUSED`; the same without the flag → `FAILED`
+  - [x] Run the file, ruff, pyright
+  - [x] Commit: `feat: pause the run on a failed action that awaits a person`
+  - [x] **Success:** tests pass
 
-- [ ] **Task 22: `BranchFailure.UNFINISHED_TASKS` and the batch flag mapping**
-  - [ ] In `pipeline/branch_ops.py`, add `UNFINISHED_TASKS` to `BranchFailure` with a comment
-  - [ ] In `_require_checked_tasks`, raise `MergeFailedError` with `UNFINISHED_TASKS` when unchecked items remain (existing message), and when `info["task_files"]` is empty, with the D6 message ("slice N not merged: cf lists no task files for this slice, so its work cannot be verified.")
-  - [ ] Keep an unreadable task file as `OTHER`; update the docstring
-  - [ ] In `pipeline/actions/branch.py`, set `awaits_human=True` on the failure `ActionResult` when the failure is `UNFINISHED_TASKS`, and only then
-  - [ ] In `executor.py` `_flag_kind`, an item whose failed branch action carries `UNFINISHED_TASKS` returns `FlagKind.STEP_FAILED`, the kind `OTHER` gives today (design D6). With `awaits_human` the item now ends `PAUSED`, and the `PAUSED` status check runs first, so the `UNFINISHED_TASKS` check must come before it.
-  - **Success:** the merge refusal for unfinished work carries the new kind; other refusals and batch flags unchanged
+- [x] **Task 22: `BranchFailure.UNFINISHED_TASKS` and the batch flag mapping**
+  - [x] In `pipeline/branch_ops.py`, add `UNFINISHED_TASKS` to `BranchFailure` with a comment
+  - [x] In `_require_checked_tasks`, raise `MergeFailedError` with `UNFINISHED_TASKS` when unchecked items remain (existing message), and when `info["task_files"]` is empty, with the D6 message ("slice N not merged: cf lists no task files for this slice, so its work cannot be verified.")
+  - [x] Keep an unreadable task file as `OTHER`; update the docstring
+  - [x] In `pipeline/actions/branch.py`, set `awaits_human=True` on the failure `ActionResult` when the failure is `UNFINISHED_TASKS`, and only then
+  - [x] In `executor.py` `_flag_kind`, an item whose failed branch action carries `UNFINISHED_TASKS` returns `FlagKind.STEP_FAILED`, the kind `OTHER` gives today (design D6). With `awaits_human` the item now ends `PAUSED`, and the `PAUSED` status check runs first, so the `UNFINISHED_TASKS` check must come before it.
+  - [x] **Success:** the merge refusal for unfinished work carries the new kind; other refusals and batch flags unchanged
 
-- [ ] **Task 23: Test D6 branch and batch behavior**
-  - [ ] In `tests/pipeline/test_branch_merge.py`: unchecked items → `UNFINISHED_TASKS`; cf returns no task files → `UNFINISHED_TASKS` with the D6 message; unreadable file → `OTHER`. Update existing assertions that expected `OTHER` for unchecked items.
-  - [ ] Branch action test: `UNFINISHED_TASKS` sets `awaits_human`, `OTHER` and `CONFLICT` do not
-  - [ ] In `tests/pipeline/test_executor_each.py` (or the file holding `_flag_kind` tests): an item failed by `UNFINISHED_TASKS` flags `STEP_FAILED`
-  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
-  - [ ] Commit: `fix: pause the run when the merge finds unfinished tasks`
-  - **Success:** tests pass (design criterion 8 at unit level; Technical Requirements branch tests)
+- [x] **Task 23: Test D6 branch and batch behavior**
+  - [x] In `tests/pipeline/test_branch_merge.py`: unchecked items → `UNFINISHED_TASKS`; cf returns no task files → `UNFINISHED_TASKS` with the D6 message; unreadable file → `OTHER`. Update existing assertions that expected `OTHER` for unchecked items.
+  - [x] Branch action test: `UNFINISHED_TASKS` sets `awaits_human`, `OTHER` and `CONFLICT` do not
+  - [x] In `tests/pipeline/test_executor_each.py` (or the file holding `_flag_kind` tests): an item failed by `UNFINISHED_TASKS` flags `STEP_FAILED`
+  - [x] Run `pytest tests/pipeline -q`, ruff, pyright
+  - [x] Commit: `fix: pause the run when the merge finds unfinished tasks`
+  - [x] **Success:** tests pass (design criterion 8 at unit level; Technical Requirements branch tests)
+  - *Note:* existing fixtures in `tests/pipeline/test_branch_merge.py`, `tests/pipeline/test_branch_composition.py` and `tests/cli/test_branch_run.py` had cf listing no task files (the gap D6 closes), so they now supply a committed, fully checked task file.
 
 ### Close-out
 
-- [ ] **Task 24: CHANGELOG**
-  - [ ] Add short user-facing bullets under the unreleased section: Codex refuses `allowed_tools` and write-required steps on a read-only sandbox (names the fix); OpenAI-compatible steps refuse without a write tool; dispatch steps fail when every tool call failed or a write-required step made no calls (OpenAI-compatible, SDK one-shot with `allowed_tools`); a merge with unfinished tasks ends `paused`; cf errors in dispatch print one line
-  - [ ] Do not claim coverage of the default SDK path
-  - [ ] Commit: `docs: add CHANGELOG entries for slice 945`
-  - **Success:** bullets match design Technical Requirements
+- [x] **Task 24: CHANGELOG**
+  - [x] Add short user-facing bullets under the unreleased section: Codex refuses `allowed_tools` and write-required steps on a read-only sandbox (names the fix); OpenAI-compatible steps refuse without a write tool; dispatch steps fail when every tool call failed or a write-required step made no calls (OpenAI-compatible, SDK one-shot with `allowed_tools`); a merge with unfinished tasks ends `paused`; cf errors in dispatch print one line
+  - [x] Do not claim coverage of the default SDK path
+  - [x] Commit: `docs: add CHANGELOG entries for slice 945`
+  - [x] **Success:** bullets match design Technical Requirements
 
-- [ ] **Task 25: Full validation**
-  - [ ] Run `ruff format`, `ruff check`, `pyright`, and the full `pytest` suite; fix and commit any failure
-  - **Success:** full suite passes, zero pyright errors
+- [x] **Task 25: Full validation**
+  - [x] Run `ruff format`, `ruff check`, `pyright`, and the full `pytest` suite; fix and commit any failure
+  - [x] **Success:** full suite passes, zero pyright errors
 
 - [ ] **Task 26: Verification walkthrough**
   - [ ] Precondition: a scratch clone registered with cf; `models.toml` aliases for a Codex model, an OpenRouter model (the #211 probe aliases) and SDK haiku (step 5); and a Codex profile whose `sandbox` credential you may change (step 2). If any is missing, stop and ask the Project Manager; do not substitute a model.
