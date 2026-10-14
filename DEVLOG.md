@@ -11,6 +11,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261014
 
+### Slice 945: implementation complete (Phase 6)
+
+- Branch `945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success` (from `main`), not merged; code review comes before Phase 7. Full suite 6670 passed, 4 skipped; pyright 0 errors.
+- Shipped: write-required contract (`AgentConfig.requires_writes`, `dispatch_requires_writes`, `WRITE_TOOL_NAMES`, telemetry key constants in `providers/base.py`); spawn refusals (Codex `allowed_tools`, Codex read-only on write-required; OpenAI-compatible without a write tool); `pipeline/actions/dispatch_outcome.py` wired into `_dispatch_via_agent`; SDK failed-call count fixed; one-line cf errors in the dispatch-artifact post-condition and the keep path (#202); `ActionResult.awaits_human` + `BranchFailure.UNFINISHED_TASKS` pause the run at a merge with unchecked tasks or no cf task files (#212 item 2).
+- Found during the walkthrough: no profile could set a Codex `sandbox`, so the refusal's fix was unreachable. Added `ProviderProfile.sandbox` (providers.toml), passed through `profile_credentials`; README and CHANGELOG updated.
+- Existing merge fixtures (`test_branch_merge`, `test_branch_composition`, `tests/cli/test_branch_run`) relied on cf listing no task files, the gap D6 closes; they now supply a finished task file.
+- Walkthrough (steps 1-7) ran in a scratch repo registered with `cf init --lite` at `~/source/repos/manta/temp/scratch-945`; results are in the slice design. Caveats: step 6's error continues with the agent's final text; the P4 design agent on the stub slice declined to write, so step 2's file write was checked with a bare probe; P6 was not run, only its merge step.
+- Not fixed: a bare Codex dispatch on a read-only sandbox still completes without writing (WARNING only, by design); the default SDK path has no tool telemetry; #212 item 1 stays open until the trading-ui run id is found. The Codex refusal names the provider id, not the profile name (`AgentConfig` lacks it).
+- Next: code review, then Phase 7; then #210 item 1.
+
 ### Slice 945: task breakdown complete (Phase 5)
 
 - Tasks: `user/tasks/945-tasks.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md`, 26 tasks, effort 3/5. Order: branch; D1 contract (`WRITE_TOOL_NAMES`, `requires_writes`, predicate in `dispatch_rules.py`); D4 SDK count; OpenAI `first_tool_error` + write-tool refusal; Codex refusals; `dispatch_outcome.py` + wiring; D5 cf one-liners; D6 `awaits_human`, `UNFINISHED_TASKS`, batch mapping; CHANGELOG; walkthrough.

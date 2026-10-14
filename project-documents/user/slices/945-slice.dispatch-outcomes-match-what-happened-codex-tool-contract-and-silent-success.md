@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20261014
 dateUpdated: 20261014
-status: not_started
+status: complete
 ---
 
 # Slice Design: Dispatch Outcomes Match What Happened — Codex Tool Contract and Silent Success
@@ -120,6 +120,8 @@ Provider-specific knowledge stays in the provider. The sandbox, for example, is 
 - OpenAI-compatible, write-required, no write tool: "step must write files but has no write-capable tool; add `write_file` (or `bash`) to `allowed_tools`."
 - Codex, read-only, not write-required (bare dispatch): no refusal. Log a WARNING.
 
+The fix those messages name needed a way to set it: before this slice no profile could carry a `sandbox` value. `ProviderProfile.sandbox` (read from `providers.toml`, passed in `profile_credentials` only when set) is added here. The Codex message names the provider id where `<name>` stands, because `AgentConfig` does not carry the profile name.
+
 ### D3 — Which signals fail a step and which warn
 
 | # | Signal (from final response metadata) | Outcome |
@@ -191,19 +193,35 @@ So:
 
 ### Verification Walkthrough
 
-Run inside a scratch clone registered with cf. Probe pipelines are one-step YAML files, as in #211. Paths and aliases below are the ones used in the #211 probes; adjust to the local `models.toml`.
+Verified 20261014 on `squadron` 945 branch (`.venv/bin/sq`, 0.21.7 plus this slice) in a scratch git repo registered with cf (`cf init --name scratch-945 --lite`, then `cf guides install`). Probe pipelines are one-step YAML files of this shape (aliases `luna`, `deepseek4-flash`, `haiku` come from the packaged `models.toml`):
 
-1. **Codex refuses declared tools** (criterion 1):
-   ```bash
-   sq run probe-luna-tools.yaml      # dispatch, model: luna, allowed_tools: [write_file]
-   ```
-   Expect: exit 1, one line `… Codex does not run squadron tools; remove allowed_tools …`, and no model call in `-v` output.
-2. **Codex read-only phase step** (criterion 2): run a `design` step with `model: luna` on a profile without `sandbox`. Expect a failed step naming `sandbox = "workspace-write"`. Set that credential and rerun; the design file is written.
-3. **Bare Codex dispatch** (criterion 3): `probe-luna-notools.yaml` completes. stderr shows a WARNING about the read-only sandbox.
-4. **Jail-rejected write** (criterion 4): `probe-ds-tools.yaml` (deepseek4-flash, `write_file`, path outside the cwd). Expect exit 1 and step error `every tool call failed: Error: path '…' resolves outside the working directory …`. The run JSON shows `failed_tool_calls: 1` and `first_tool_error`.
-5. **Control** (no regression): `probe-ds-inrepo.yaml` and an SDK haiku probe both complete and write the file.
-6. **#202** (criterion 7): in a cf project with no `slicePlan` set, run `sq run P4 <index>`. Expect one line ending with `cf set slicePlan <path>` and no traceback.
-7. **#212 paused merge** (criterion 8): on a scratch slice, leave one task item unchecked with the text "Hard Gate: PM confirms X" and run P6. Expect the run to end `paused`, exit 0, and the merge message naming the unchecked item. Check the item and run `sq run --resume <run-id>`; the merge completes.
+```yaml
+name: probe-luna-tools
+params: {}
+steps:
+  - dispatch: { name: probe, model: luna, allowed_tools: [write_file], prompt: "Write the text hi to a file named out.txt." }
+```
+
+OpenRouter steps need `OPENROUTER_API_KEY` in the environment of that command. Each step below ran as `sq run <file> -v`; "exit" is the process exit code.
+
+1. **Codex refuses declared tools** (criterion 1): `probe-luna-tools.yaml`. Exit 1. Output: `dispatch: step probe failed: Codex does not run squadron tools; remove `allowed_tools` (Codex uses its own tools when its sandbox allows writes) or use a profile that supports them.` No Codex runtime started.
+2. **Codex read-only phase step** (criterion 2):
+   - `sq run P4 105 -m luna` on the default profile. Exit 1, `profile `openai-oauth` runs Codex with a read-only sandbox; this step must write files. Set `sandbox = "workspace-write"` in the profile credentials.`
+   - Set the credential in `~/.config/squadron/providers.toml` (new in this slice; the key is `sandbox`, valid for a Codex profile):
+     ```toml
+     [profiles.openai-oauth]
+     provider = "openai-oauth"
+     auth_type = "oauth"
+     sandbox = "workspace-write"
+     ```
+     Rerun: the refusal is gone and the dispatch runs (`-> ok (model=gpt-6-luna)`).
+   - File-write check with a bare probe (`probe-luna-write.yaml`, prompt "Create a file named out-luna.txt containing the text hi."): read-only completes with the sandbox WARNING and writes nothing; `workspace-write` writes `out-luna.txt`.
+   - Caveat: on the stub slice the P4 design agent declined to write ("waiting for the slice scope"), so a P4 design file was not produced; that is model behavior on an empty slice, not a squadron fault.
+3. **Bare Codex dispatch** (criterion 3): `probe-luna-notools.yaml`. Exit 0, `completed`, and a WARNING: `Codex profile `openai-oauth` runs with a read-only sandbox; set `sandbox = "workspace-write"` in the profile credentials if this dispatch should write files`. Note a bare dispatch is not failed even though it cannot write (design, Excluded).
+4. **Jail-rejected write** (criterion 4): `probe-ds-tools.yaml` (`deepseek4-flash`, `write_file`, prompt names `/tmp/outside-945.txt`). Exit 1, `every tool call failed: Error: path '/tmp/outside-945.txt' resolves outside the working directory and was rejected.` The run JSON (`~/.config/squadron/runs/run-*-probe-ds-tools-*.json`) holds `tools_given: ['write_file']`, `tool_calls_made: 1`, `failed_tool_calls: 1` and `first_tool_error`. The file was not created.
+5. **Controls** (no regression): `probe-ds-inrepo.yaml` and an SDK `haiku` probe (no `allowed_tools`; an SDK step on the session path may not declare them) both exit 0 and write `out-ds.txt` / `out-haiku.txt`. `sq run P4 105 -m deepseek4-flash` is refused with `step must write files but has no write-capable tool; add `write_file` (or `bash`) to `allowed_tools`.` (criterion 5): the built-in phase steps give an OpenAI-compatible model no tools, so they could never write; they previously reported `completed`.
+6. **#202** (criterion 7): in a cf project with no slice plan but a slice file `105-slice.stub.md`, `sq run P4 105 -m haiku`. Exit 1, no `Traceback` in the output (0 matches). The step error contains `No slice plan configured. Set one with: cf set slicePlan <path>`. The agent's final text is appended after it (design 909 D7), so the line does not end at the cf text. Without a slice file the run stops earlier at `cf set slice`; that error is cf's own.
+7. **#212 paused merge** (criterion 8): a minimal pipeline `probe-merge.yaml` (`branch enter` then `branch merge`, slice 105) with a task file holding one unchecked item `**Task 2: Hard Gate: PM confirms X**` (cf set up with `cf set arch 100`, a slice plan listing slice 105). Exit 0, `Pipeline 'probe-merge' — paused`, step `branch-1: paused`, error `slice 105 not merged: 1 unchecked task item(s), first: **Task 2: Hard Gate: PM confirms X**. Finish or check them off, then rerun the merge.` Check the item, commit it on the slice branch, `sq run --resume <run-id>`: exit 0, `completed`, HEAD `merge: slice 105 — Stub` on `main`. P6 itself was not run; the merge step is the part D6 changes.
 
 ## Risk Assessment
 

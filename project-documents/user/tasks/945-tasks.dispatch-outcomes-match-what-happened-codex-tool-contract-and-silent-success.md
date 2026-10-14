@@ -5,12 +5,12 @@ project: squadron
 lld: user/slices/945-slice.dispatch-outcomes-match-what-happened-codex-tool-contract-and-silent-success.md
 dependencies: []
 projectState: >
-  Slice design 945 complete after three review rounds (20261014). No code written. Builds on
+  Slice 945 implemented and walkthrough verified (20261014); awaiting code review. Builds on
   942 (checkbox merge gate) and 944/#200 (failed dispatch ends a loop with on_exhaust).
   Fixes #211, #202, and #212 item 2.
 dateCreated: 20261014
 dateUpdated: 20261014
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -200,9 +200,10 @@ status: in_progress
   - [x] Run `ruff format`, `ruff check`, `pyright`, and the full `pytest` suite; fix and commit any failure
   - [x] **Success:** full suite passes, zero pyright errors
 
-- [ ] **Task 26: Verification walkthrough**
-  - [ ] Precondition: a scratch clone registered with cf; `models.toml` aliases for a Codex model, an OpenRouter model (the #211 probe aliases) and SDK haiku (step 5); and a Codex profile whose `sandbox` credential you may change (step 2). If any is missing, stop and ask the Project Manager; do not substitute a model.
-  - [ ] Run walkthrough steps 1–7 from the slice design, recording each command, exit code and the line that matches the expectation
-  - [ ] Fix any failure with a test, re-run ruff, pyright and the touched tests, and commit each fix
-  - [ ] Add the results to the Phase 6 DEVLOG entry (required at phase completion by `prompt.ai-project.system.md`, "Session State Summary")
-  - **Success:** all seven steps match the design's expectations, or each mismatch is fixed or reported to the Project Manager. A step not run (missing precondition) is reported as unverified, never as passed.
+- [x] **Task 26: Verification walkthrough**
+  - [x] Precondition: a scratch clone registered with cf; `models.toml` aliases for a Codex model, an OpenRouter model (the #211 probe aliases) and SDK haiku (step 5); and a Codex profile whose `sandbox` credential you may change (step 2). If any is missing, stop and ask the Project Manager; do not substitute a model.
+  - [x] Run walkthrough steps 1–7 from the slice design, recording each command, exit code and the line that matches the expectation
+  - [x] Fix any failure with a test, re-run ruff, pyright and the touched tests, and commit each fix
+  - [x] Add the results to the Phase 6 DEVLOG entry (required at phase completion by `prompt.ai-project.system.md`, "Session State Summary")
+  - [x] **Success:** all seven steps match the design's expectations, or each mismatch is fixed or reported to the Project Manager. A step not run (missing precondition) is reported as unverified, never as passed.
+  - *Note:* a defect was found (no profile could set the Codex sandbox) and fixed with `ProviderProfile.sandbox`, committed as "feat: let provider profiles set the Codex sandbox". P6 itself was not run, only its merge step.
