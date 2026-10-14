@@ -34,7 +34,7 @@ status: not_started
 
 - [ ] **Task 2: `WRITE_TOOL_NAMES`, `AgentConfig.requires_writes`, and the predicate**
   - [ ] In `tools/builtin/_shared.py`, add `WRITE_TOOL_NAMES: frozenset[str]` built from the existing `WRITE_FILE_NAME` and `BASH_NAME`. Re-export it from `tools/builtin/__init__.py`.
-  - [ ] In `providers/base.py`, add key constants for the tool telemetry metadata: `tools_given`, `tool_calls_made`, `failed_tool_calls`, `first_tool_error`. None exist today; the keys are string literals. The modules this slice touches (`providers/sdk/agent.py`, `providers/openai/agent.py`, `pipeline/actions/dispatch.py`, `dispatch_outcome.py`) use these constants.
+  - [ ] In `providers/base.py`, add key constants for the tool telemetry metadata: `tools_given`, `tool_calls_made`, `failed_tool_calls`, `first_tool_error`. None exist today; the keys are string literals. Replace every existing literal of these keys under `src/squadron` with the constants (find them with `grep -rn '"tools_given"\|"tool_calls_made"\|"failed_tool_calls"' src/squadron`), so no duplicate literal remains. New code in this slice uses only the constants.
   - [ ] In `core/models.py` `AgentConfig`, add `requires_writes: bool = False` with a one-line comment: set for phase-step and revise dispatches (D1)
   - [ ] In `pipeline/actions/dispatch_rules.py`, next to `rule_step_from_params`, add `dispatch_requires_writes(params) -> bool`: true when `rule_step_from_params(params)` is `StepTypeName.DESIGN`, `TASKS` or `IMPLEMENT`, or when `params.get("feedback") is not None` (the same test `DispatchAction._resolve_prompt` uses)
   - **Success:** the predicate is the only place D1's rule is written; no existing test changes behavior
@@ -63,7 +63,7 @@ status: not_started
 
 - [ ] **Task 6: Capture `first_tool_error`**
   - [ ] In `providers/openai/agent.py`, where `failed_tool_calls += 1` runs in the agentic loop, keep the result text of the first failed call
-  - [ ] Truncate it to a module-level constant (for example `_FIRST_TOOL_ERROR_MAX_CHARS`) defined once in this module (design, Special Considerations)
+  - [ ] Truncate it to a length set by one module-level constant in this module (design, Special Considerations)
   - [ ] Stamp it under the `first_tool_error` key constant (Task 2) in `_stamp_tool_telemetry` beside `failed_tool_calls`; `None` when no call failed
   - **Success:** a run with a failed call carries the truncated text; a clean run carries `None`
 
@@ -101,7 +101,7 @@ status: not_started
   - [ ] Telemetry without `tool_calls_made` (no tools ran) returns no failure and no warnings
   - [ ] Read the metadata keys through the Task 2 constants
   - [ ] Pure function: no logging, no I/O
-  - **Success:** module under ~100 lines; pyright clean
+  - **Success:** pyright clean
 
 - [ ] **Task 12: Test `assess_tool_outcome`**
   - [ ] New `tests/pipeline/actions/test_dispatch_outcome.py`, one test per row: row 1 fails with the D3 text; row 2 fails and includes `first_tool_error`; row 2 not triggered for a read-only step with only read tools (falls to row 3, warns); row 3 partial failure warns, no failure; no-telemetry → empty outcome; clean run → empty outcome
@@ -118,7 +118,7 @@ status: not_started
 - [ ] **Task 14: Test the dispatch wiring**
   - [ ] In `tests/pipeline/actions/test_dispatch.py` (helpers in `dispatch_helpers.py`), mock the registry to return OpenAI-shaped metadata for: a write-required step with zero calls → failed result, error text from D3, `caplog` WARNING with the step name; all calls failed → failed, metadata holds `failed_tool_calls` and `first_tool_error`; partial failure → success with WARNING and counts (criterion 6)
   - [ ] Add one SDK-shaped case: `tools_given` with `write_file`, all calls failed, no `first_tool_error` key → failed result whose error is the D3 row 2 text without error detail
-  - [ ] Assert `AgentConfig.requires_writes` reaches the provider for a phase-step param and for `feedback`, and is false for bare dispatch. Extend `tests/providers/agent_config_sites.py` captures if they cover this path.
+  - [ ] Assert `AgentConfig.requires_writes` reaches the provider for a phase-step param and for `feedback`, and is false for bare dispatch. Add a dispatch entry to `tests/providers/agent_config_sites.py` (it drives a path's real builder and captures the `AgentConfig` at the SDK provider) and make these three assertions against its capture.
   - [ ] Run `pytest tests/pipeline/actions tests/providers -q`, ruff, pyright
   - [ ] Commit: `feat: fail dispatch steps whose tool telemetry shows no work done`
   - **Success:** tests pass; existing dispatch tests unchanged except where they assert the full metadata dict
@@ -200,4 +200,4 @@ status: not_started
   - [ ] Run walkthrough steps 1–7 from the slice design, recording each command, exit code and the line that matches the expectation
   - [ ] Fix any failure with a test, re-run ruff, pyright and the touched tests, and commit each fix
   - [ ] Add the results to the Phase 6 DEVLOG entry (required at phase completion by `prompt.ai-project.system.md`, "Session State Summary")
-  - **Success:** all seven steps match the design's expectations, or each mismatch is fixed or reported to the Project Manager
+  - **Success:** all seven steps match the design's expectations, or each mismatch is fixed or reported to the Project Manager. A step not run (missing precondition) is reported as unverified, never as passed.

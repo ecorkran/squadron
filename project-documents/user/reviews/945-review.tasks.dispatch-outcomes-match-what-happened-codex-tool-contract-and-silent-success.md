@@ -150,3 +150,13 @@ findings:
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 8
 - Finding-shaped matches — surviving validation: 8
+
+## Response (20261014)
+
+Task file edited in place; accepted at CONCERNS.
+
+- **Task count:** kept. Merging small tasks would not change the work.
+- **Task 2 constants:** fixed. The task now replaces every existing literal of the telemetry keys under `src/squadron` with the constants.
+- **Task 14 conditional:** fixed. It adds a dispatch entry to `agent_config_sites.py` and names the three assertions.
+- **Dictated detail:** the example constant name (Task 6) and the line-count target (Task 11) are removed.
+- **Task 26:** a walkthrough step not run is reported as unverified, never as passed.
