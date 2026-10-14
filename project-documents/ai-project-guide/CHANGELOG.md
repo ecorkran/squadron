@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.11] - 2026-10-13
+
+### Added
+- `lint/typescript/required-rules.mjs`: the required ESLint rules as a block to spread into an existing flat config (e.g. Next.js), so a project with its own config can meet the requirement without replacing it. The TypeScript `required` list accepts the import (context-forge #115)
+
+### Removed
+- `scripts/setup-ide-lint.sh` and `scripts/validate-slice-design`, and the body of `scripts/setup-ide`. context-forge 0.19.6 does this work itself: `cf setup-ide` installs IDE files and lint configs, and `cf validate design` checks slice designs. **Requires cf 0.19.6 or later.** `scripts/setup-ide` is now a stub that tells older cf to run `cf update`; it will be removed in a later release
+- The dev-only setup-ide behavior tests (`tests/`), `ruff.toml` and `.githooks/`. The test suite now lives in context-forge as the spec for its port
+
+### Changed
+- Docs, guides, the system prompt and the npm-scripts snippet use `cf setup-ide` and `cf validate design` instead of the script paths
+
 ## [0.20.10] - 2026-10-11
 
 ### Added
