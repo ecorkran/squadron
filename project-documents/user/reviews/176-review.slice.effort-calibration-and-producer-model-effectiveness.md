@@ -14,17 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261015
 dateUpdated: 20261015
-reviewedSha: 39032f2d4e462cce36ea9b7b932112addc0d16e2
-revision_number: 1
+reviewedSha: c8f0e2b64b721a17e1e4f7b2db4fe52bb8ef80fe
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
-turns: 6
-promptTokens: 362912
-cachedTokens: 267831
-cacheWriteTokens: 95071
-completionTokens: 4772
-durationSeconds: 44.2
-costUsd: 0.455471
+toolCallsMade: 4
+turns: 5
+promptTokens: 278547
+cachedTokens: 183111
+cacheWriteTokens: 95428
+completionTokens: 5273
+durationSeconds: 46.3
+costUsd: 0.453433
 costBasis: provider
 runId: run-20261015-p4-08d36a4f
 squadronVersion: 0.22.0
@@ -32,38 +32,48 @@ findings:
   - id: F001
     severity: pass
     category: architecture-alignment
-    summary: "Layering and dependency direction match the architecture"
-    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#Architecture"
+    summary: "Alignment with the slice plan entry and the architecture boundaries"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#Technical Decisions"
   - id: F002
-    severity: pass
-    category: scope
-    summary: "Split of #210 is consistent with the slice plan and scope boundaries"
-    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D1"
-  - id: F003
-    severity: concern
-    category: architectural-principles
-    summary: "Task attribution anchors on commit subject text, against the project rule on user-accessible labels"
-    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D5"
-  - id: F004
     severity: concern
     category: error-handling
-    summary: "The \"one git log pass\" bound contradicts the per-slice git calls D5 and D6 require"
-    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D6"
+    summary: "D3 does not say what happens to rounds spent in a loop that never completes"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D3 — Persist every loop round"
+  - id: F003
+    severity: concern
+    category: under-specification
+    summary: "`--json` contract is promised in the criteria but deferred in the design"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md:244"
+  - id: F004
+    severity: concern
+    category: hidden-dependency
+    summary: "Prerequisites 321 and 941 are not declared in frontmatter or the plan entry"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md:6"
   - id: F005
     severity: concern
-    category: integration
-    summary: "Phase-step-to-loop-step join in the producer report is under-specified"
-    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D8"
-  - id: F006
-    severity: concern
     category: proportionality
-    summary: "Heavier than the slice needs; candidates to cut or defer"
-    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#Technical-Scope"
+    summary: "Weight to cut or defer"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D5 / #D2 / #Technical Scope"
+  - id: F006
+    severity: note
+    category: architecture-alignment
+    summary: "Commit-subject matching is a justified exception to the label-as-structure rule"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D5 — Task attribution through prescribed commit subjects"
   - id: F007
     severity: note
-    category: nfr
-    summary: "No NFR in the parent architecture applies"
+    category: failure-modes
+    summary: "Git call count is bounded per report but grows with history"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D6 — Review rounds come from git, not run state"
+  - id: F008
+    severity: note
+    category: scope
+    summary: "Parent architecture does not yet describe effort or producer reporting"
     location: "project-documents/user/architecture/140-arch.pipeline-foundation.md"
+  - id: F009
+    severity: pass
+    category: error-handling
+    summary: "Failure modes, NFR restatement and testability"
+    location: "project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md#D9 — Failure modes"
 ---
 
 # Review: slice — slice 176
@@ -73,52 +83,71 @@ findings:
 
 ## Findings
 
-### [PASS] Layering and dependency direction match the architecture
+### [PASS] Alignment with the slice plan entry and the architecture boundaries
 
-The report cores sit in `stats/`, take injected inputs (`StateManager`, `GitHistory`) and import no Typer. `stats/git_history.py` is the only module that runs git. The only persisted-schema change is three defaulted `StepState` fields, and the doc commits to updating the state-file section of `140-arch.pipeline-foundation.md` when it lands. That matches the arch's State Manager responsibility and 175's no-version-bump precedent.
+- The design delivers (a), `sq stats runs`, and the observed half of (b) from plan entry 32.
+- It moves the replay runner, pairwise judge and metrology record to entry 33, which the plan entry already records.
+- It answers both questions the plan left open: whether (b) splits, and whether to adopt an eval tool. The rationale for borrowing only the method is concrete.
+- Dependency direction is correct. The slice reads run state, git and planning docs, adds no executor, action or step-type machinery, and writes nothing (success criterion 9).
+- The change to `StepState` follows the architecture's state model and uses the same additive, no-version-bump pattern as 175.
 
-### [PASS] Split of #210 is consistent with the slice plan and scope boundaries
+### [CONCERN] D3 does not say what happens to rounds spent in a loop that never completes
 
-Slice plan entry 32 leaves two questions to the design: whether (b) splits, and whether an eval tool is adopted. D1 answers both. Entry 33 exists and carries the replay and judge scope, and the arch's "cost optimization" exclusion still holds because this slice only reports cost. The slice plan entry already reflects the split and the lowered effort (3/5).
+- D3 persists rounds in `_append_step`, so earlier rounds are saved only when the loop step is written to state.
+- The Value section claims "Loop cost becomes correct". The doc does not say what is recorded for a loop that is interrupted, stalled, paused at a checkpoint, or resumed (`sq run --resume`) partway through its rounds.
+- If `prior_rounds` lives only in the executor's memory, the rounds spent before the interruption are lost. Those are the runs most likely to have spent extra.
+- D9 lists no row for this, so the undercount stays and no signal reports it.
+- Fix: either state that the partial-loop case is out of scope and make the reports say `partial loop not recorded`, or persist per-round progress at round boundaries. Add a D9 row and a test either way.
 
-### [CONCERN] Task attribution anchors on commit subject text, against the project rule on user-accessible labels
+### [CONCERN] `--json` contract is promised in the criteria but deferred in the design
 
-D5 makes exact commit-subject matches the structural anchors for task groups. Window selection and the `merge: slice {index}…` lookup match message text in the same way. Project guidance says never to use user-accessible labels as logical structure, and to prefer lenient parsing over exact matching. The doc acknowledges the heuristic (Risk Assessment), but it doesn't say why a more robust anchor doesn't work, or whether this is a deliberate exception. A commit message reworded during a rebase turns into `marker not found`. Add an explicit justification and exception to D5. Or key groups on something structural, such as a `Task-Id:` trailer going forward, and use subjects only as a fallback for older slices.
+- Success criterion 8 says `--json` "emits the D7 / API Contracts keys". D7 defines no JSON keys, and the API Contracts section gives only the planning-doc and git dataclasses.
+- Line 244 says a fixed cross-project key contract waits until something consumes pooled data.
+- The Value section sells "Data that can be pooled" as a benefit of this slice. Dataclass-field serialization with no stable keys does not deliver that.
+- Fix: either specify the top-level keys per report (the verification walkthrough already assumes `levels[].measures`), or reword criterion 8 and the Value bullet to say the JSON mirrors the table and is unstable until a consumer exists.
 
-### [CONCERN] The "one git log pass" bound contradicts the per-slice git calls D5 and D6 require
+### [CONCERN] Prerequisites 321 and 941 are not declared in frontmatter or the plan entry
 
-D6 says one report invocation runs one `git log --name-status` pass plus one `git show` per review version. D5, though, needs the following for each slice, and `sq stats slices` runs it across every completed slice:
-- a branch lookup
-- the commit that added the task file
-- a `first-parent` range log
-- a merge-commit search
-- the commit that first added the review artifact
+- The frontmatter and plan entry say `dependencies: [175]`.
+- The Prerequisites section also relies on 321, for the `metrology.min_evidence_n` config key, and on 941, for the committed-rounds guarantee that D6 depends on.
+- Both are marked complete, so nothing is blocked. The declared dependency list is still incomplete, and the D1 change that dropped 320 removed only one of the related entries.
+- Fix: add 321 and 941 to the frontmatter. Alternatively state that completed slices are listed as prerequisites only, and apply that rule consistently.
 
-That is O(slices) git calls, each with its own timeout. The doc never says how many calls this makes. The tested bound ("a test asserts the count") therefore can't be met as written, and D9's "never a partial report" means one hung call on one old slice kills the whole rollup. Restate the bound honestly, for example a fixed number of whole-history passes with the window derived in memory. Alternatively, state the per-slice call count and an overall time or call budget.
+### [CONCERN] Weight to cut or defer
 
-### [CONCERN] Phase-step-to-loop-step join in the producer report is under-specified
+- **Per-task `Effort` parsing and summing (D2).** The doc says no task file from 160–175 has per-task effort. If the plan entry makes it mandatory, keep it, but record that it is exercised only by old `100`-band fixtures.
+- **`--since`, `--pipeline`, and `sq stats runs`' separate renderer.** They add surface that nothing in the plan entry requires beyond `--slice` filtering. Consider deferring them.
+- **Task groups and extra-commit counts (D5.2).** This is the heaviest mechanism: first-parent window walking, marker matching and group boundaries. It works only for the few slices since 174 that prescribe commit subjects (the doc cites 175 and 16 markers), while D5.3–D5.5 give slice-level numbers for everyone. The plan entry does assign per-task grouping, so keep it. Say plainly in Risk that the heavy path covers a small share of history.
+- None of these is a blocker.
 
-The unit is "a phase step together with the loop step that follows it in the same run." The architecture defines a phase step as expanding to cf-op → dispatch → review → checkpoint → commit, with the loop declared as step config. The doc doesn't say whether the loop is a separate `StepState` or fields on the phase step. Nor does it say how "follows" is determined across `each` collections or `--from` adoption, or how the reviewer model is taken from "the phase step's review action" when rounds live in `prior_round_results`. This join determines the producer config key and every rate in the report. Specify the exact linkage and add a failure row for a phase step with no resolvable review action or a missing follower.
+### [NOTE] Commit-subject matching is a justified exception to the label-as-structure rule
 
-### [CONCERN] Heavier than the slice needs; candidates to cut or defer
+- D5 explains why exact subject text is the only task-to-commit link in existing history. A non-match surfaces as `marker not found` and is counted in the footer, never silently misattributed. That satisfies the intent of the rule.
+- The same applies to review artifact names (D6) and to `status: complete` read from frontmatter (D4).
 
-The slice delivers D3 persistence, three parsers, a git reader, four subcommands with `--json`, and a 12-row failure table. That is a lot for 3/5. Named cuts that don't drop plan-assigned scope:
-- **`merge` window source.** Local slice branches are never deleted per project rules, so `branch` covers the main case. Drop `merge` and mark that slice `none`.
-- **Shallow-clone handling.** This is a warning plus footer for a case this single-developer repo doesn't have.
-- **`schema_version` on every JSON report.** The doc itself says the cross-project contract waits until something consumes it.
-- **Per-task `Effort` summing (D2).** It is parsed, summed and rendered, but the doc says none of 160–175 carry per-task effort. Keep it only if it is cheap.
+### [NOTE] Git call count is bounded per report but grows with history
 
-Also reconsider the two partial-failure contradictions in D9. A shallow clone yields a report, yet a single missing object on `git show` aborts the entire rollup, while an unreadable frontmatter merely skips a round. Choose one policy, skip with a counted WARNING or fail, for old review versions.
+- The "2 + V" bound is honest. `sq stats slices` covers every completed slice, so V (one `git show` per review artifact version) can reach hundreds of subprocess calls, each with its own timeout.
+- The parent architecture states no latency NFR for reports, so this is not a violation. Consider either stating an expected V for this repo, or batching reads with `git cat-file --batch`, to keep a hang from stacking timeouts.
+- The failure rows already say a skipped round is a WARNING plus a footer count.
 
-### [NOTE] No NFR in the parent architecture applies
+### [NOTE] Parent architecture does not yet describe effort or producer reporting
 
-The architecture states no latency or throughput targets for reporting paths, so there is nothing to restate. Given the O(slices) git behavior noted above, the slice may want to set its own target for `sq stats slices` on this repo's history.
+- The architecture's out-of-scope section says cost and usage reporting are in scope as of slice 175. Nothing there mentions reading git history or planning documents, or reporting producer effectiveness.
+- The slice commits to updating the run-state section with three `StepState` fields on landing. Add a one-line scope note about the 176 reports in the same edit, so the architecture and slice do not drift.
+
+### [PASS] Failure modes, NFR restatement and testability
+
+- D9 lists a handling strategy and an observable signal (WARNING, footer count, or exit 1) for each new git call and parser path.
+- Hang, timeout and missing-object cases go through `run_git` rather than being implicit.
+- Success criteria require a test for every row and a test of the call count.
+- The parent architecture states no NFR for this path, so none needs restating.
 
 ### Run Digest
 
-- Response length: 6367 chars
+- Response length: 7576 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 4
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -126,13 +155,13 @@ The architecture states no latency or throughput targets for reporting paths, so
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 362912 / 267831 / 95071 / 4772 / not computed
-- Duration: 44.2 s
-- Cost: $0.46 (provider)
+- Turns: 5
+- Tokens — prompt / cached / cache write / completion / reasoning: 278547 / 183111 / 95428 / 5273 / not computed
+- Duration: 46.3 s
+- Cost: $0.45 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9
