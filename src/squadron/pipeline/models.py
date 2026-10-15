@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from squadron.pipeline.resolver import ModelResolver
     from squadron.pipeline.sdk_session import SDKExecutionSession
+    from squadron.pipeline.usage_capture import UsageCapture
     from squadron.review.persistence import CfClientProtocol
 
 
@@ -81,6 +82,10 @@ class ActionContext:
     prior_iteration_step_outputs: dict[str, ActionResult] = field(
         default_factory=dict[str, ActionResult]
     )
+    # The run's usage-record builder (slice 175 D4), set by the executor for every step.
+    # None means a context with no LLM run (standalone branch_run / commit_run); an LLM
+    # action that finds None raises rather than skipping capture.
+    usage_capture: UsageCapture | None = None
 
 
 @dataclass

@@ -70,6 +70,7 @@ from squadron.pipeline.steps.collection import ItemFailurePolicy
 from squadron.pipeline.steps.phase import PhaseStepType
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 
 if TYPE_CHECKING:
@@ -545,6 +546,9 @@ async def execute_pipeline(
 
     skipping = start_from is not None
 
+    # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
+    usage_capture = UsageCapture(set())
+
     # Resume: seed the session with the most recent applicable compact summary.
     # A connected session is rotated now; a lazy one gets the seed at connect.
     resume_seed = (
@@ -599,6 +603,7 @@ async def execute_pipeline(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=sdk_session,
+            usage_capture=usage_capture,
             get_step_type_fn=get_step_type,
             get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
             runs_dir=runs_dir,
@@ -759,6 +764,7 @@ async def _execute_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None,
+    usage_capture: UsageCapture | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None,
@@ -789,6 +795,7 @@ async def _execute_step(
         "resolver": resolver,
         "cf_client": cf_client,
         "sdk_session": sdk_session,
+        "usage_capture": usage_capture,
         "get_step_type_fn": get_step_type_fn,
         "get_action_fn": get_action_fn,
         "runs_dir": runs_dir,
@@ -849,6 +856,7 @@ async def _execute_step_once(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
+    usage_capture: UsageCapture | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
@@ -921,6 +929,7 @@ async def _execute_step_once(
             cf_client=cf_client,
             cwd=cwd,
             sdk_session=sdk_session,
+            usage_capture=usage_capture,
             step_outputs=step_outputs if step_outputs is not None else {},
             iteration=iteration,
             prior_iteration_step_outputs=(
@@ -1195,6 +1204,7 @@ async def _execute_loop_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
+    usage_capture: UsageCapture | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1251,6 +1261,7 @@ async def _execute_loop_step(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=sdk_session,
+            usage_capture=usage_capture,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             iteration=iteration,
@@ -1330,6 +1341,7 @@ async def _execute_loop_body(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
+    usage_capture: UsageCapture | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1418,6 +1430,7 @@ async def _execute_loop_body(
                 resolver=resolver,
                 cf_client=cf_client,
                 sdk_session=sdk_session,
+                usage_capture=usage_capture,
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
                 iteration=iteration,
@@ -1515,6 +1528,7 @@ async def _execute_loop_body(
                     cf_client=cf_client,
                     cwd=cwd,
                     sdk_session=sdk_session,
+                    usage_capture=usage_capture,
                     step_outputs=visible_step_outputs,
                     iteration=iteration,
                 )
@@ -1688,6 +1702,7 @@ async def _execute_each_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
+    usage_capture: UsageCapture | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1751,6 +1766,7 @@ async def _execute_each_step(
                     resolver=resolver,
                     cf_client=cf_client,
                     sdk_session=sdk_session,
+                    usage_capture=usage_capture,
                     get_step_type_fn=get_step_type_fn,
                     get_action_fn=get_action_fn,
                     runs_dir=runs_dir,
@@ -1952,6 +1968,7 @@ async def _execute_fan_out_step(
     resolver: Any,
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
+    usage_capture: UsageCapture | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -2026,6 +2043,7 @@ async def _execute_fan_out_step(
             resolver=resolver,
             cf_client=cf_client,
             sdk_session=None,  # never propagate session into branches
+            usage_capture=usage_capture,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             runs_dir=runs_dir,
