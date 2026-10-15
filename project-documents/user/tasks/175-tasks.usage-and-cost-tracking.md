@@ -316,13 +316,13 @@ status: in_progress
   - [x] Commit: `docs: add sq stats and cost basis to README and CHANGELOG`
   - **Success:** both files updated
 
-- [ ] **Task 33: Full validation**
-  - [ ] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full `pytest` suite
-  - [ ] Run the design's Verification Walkthrough steps 1–7 in a scratch project registered with cf. Record each step's outcome in the DEVLOG entry. If a step cannot run (for example, no OpenRouter alias with pricing for step 2), stop and report it to the Project Manager rather than marking it done.
-  - [ ] Commit any fixes: `fix: address 175 walkthrough findings`
+- [x] **Task 33: Full validation**
+  - [x] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full `pytest` suite
+  - [x] Run the design's Verification Walkthrough steps 1–7 in a scratch project registered with cf. Record each step's outcome in the DEVLOG entry. If a step cannot run (for example, no OpenRouter alias with pricing for step 2), stop and report it to the Project Manager rather than marking it done.
+  - [x] Commit any fixes: `fix: address 175 walkthrough findings`
   - **Success:** suite green; walkthrough steps pass
 
-- [ ] **Task 34: Draft issue closure comments**
+- [x] **Task 34: Draft issue closure comments**
   - [x] Draft, without posting, one-line closing comments for #172, #36, #154, #151 naming what landed; one for #158 noting 931 implemented it and 175 added the `cache_write` field (always `None` on OpenAI-compatible, D2); and a non-closing comment on #33 that SDK capture landed and `AuditRun` persistence remains open
-  - [ ] Give the drafts to the Project Manager. Posting and closing happen at Phase 7 closure, after code review, and only on the Project Manager's go-ahead.
+  - [x] Give the drafts to the Project Manager. Posting and closing happen at Phase 7 closure, after code review, and only on the Project Manager's go-ahead. (Done: PM said post them; posted 2026-10-14.)
   - **Success:** drafts delivered; no issue posted to or closed in Phase 6
