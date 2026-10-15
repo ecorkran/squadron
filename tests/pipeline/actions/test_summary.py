@@ -10,6 +10,7 @@ from squadron.pipeline.actions.summary import SummaryAction
 from squadron.pipeline.emit import EmitDestination, EmitKind, EmitResult
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from tests.pipeline.conftest import session_reply
 
 
 def _make_action() -> SummaryAction:
@@ -98,7 +99,7 @@ async def test_execute_summary_stdout_emit_calls_capture_and_emit() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY TEXT")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY TEXT"))
     ctx = _make_context(sdk_session=session)
 
     dests = [EmitDestination(kind=EmitKind.STDOUT)]
@@ -124,7 +125,7 @@ async def test_execute_summary_multiple_emits_in_order() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(sdk_session=session)
 
     call_order: list[str] = []
@@ -200,7 +201,7 @@ async def test_execute_summary_non_rotate_emit_failure_still_succeeds() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(sdk_session=session)
 
     async def bad_emit(text: str, dest: EmitDestination, c: object) -> EmitResult:
@@ -228,7 +229,7 @@ async def test_execute_summary_rotate_failure_fails_action() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(sdk_session=session)
 
     async def rotate_fail(text: str, dest: EmitDestination, c: object) -> EmitResult:
@@ -255,7 +256,7 @@ async def test_execute_summary_captures_once_for_stdout_and_rotate() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SHARED SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SHARED SUMMARY"))
     ctx = _make_context(sdk_session=session)
 
     received_texts: list[str] = []
@@ -287,7 +288,7 @@ async def test_execute_summary_resolves_model_alias() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(sdk_session=session)
     ctx.resolver.resolve.return_value = ("haiku-resolved", None)
     ctx.resolver.resolve_full.return_value = ResolvedModel("haiku-resolved", None)
@@ -312,7 +313,7 @@ async def test_execute_summary_outputs_include_step_info() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(sdk_session=session, step_index=3, step_name="my-step")
 
     with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
@@ -336,7 +337,7 @@ async def test_execute_summary_extensibility_custom_emit_fn() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="CUSTOM SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("CUSTOM SUMMARY"))
     ctx = _make_context(sdk_session=session)
 
     captured_text: list[str] = []
@@ -377,7 +378,7 @@ async def test_execute_summary_extensibility_custom_emit_fn() -> None:
 async def test_execute_loads_template_and_passes_instructions() -> None:
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(params={"template": "minimal-sdk"}, sdk_session=session)
 
     with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
@@ -406,7 +407,7 @@ async def test_execute_missing_template_returns_failure() -> None:
 async def test_execute_default_emit_is_stdout() -> None:
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SUMMARY"))
     ctx = _make_context(params={}, sdk_session=session)
 
     emitted_to: list[str] = []
@@ -541,7 +542,7 @@ async def test_execute_summary_sdk_profile_path_unchanged() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SDK SUMMARY"))
     ctx = _make_context(sdk_session=session)
     ctx.resolver.resolve.return_value = ("haiku-resolved", "sdk")
     ctx.resolver.resolve_full.return_value = ResolvedModel("haiku-resolved", "sdk")
@@ -566,7 +567,7 @@ async def test_execute_summary_unannotated_alias_uses_sdk_path() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SDK SUMMARY"))
     ctx = _make_context(sdk_session=session)
     ctx.resolver.resolve.return_value = ("some-resolved-id", None)
     ctx.resolver.resolve_full.return_value = ResolvedModel("some-resolved-id", None)
@@ -640,7 +641,7 @@ async def test_sdk_summary_does_not_inject_context() -> None:
     )
     session = AsyncMock()
     session.current_model = "haiku-id"
-    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SDK SUMMARY"))
 
     ctx = _make_context(
         sdk_session=session,
@@ -1012,7 +1013,7 @@ async def test_sdk_summary_path_has_no_tools_keys() -> None:
 
     session = AsyncMock()
     session.current_model = "sonnet-id"
-    session.capture_summary = AsyncMock(return_value="SDK SUMMARY")
+    session.capture_summary = AsyncMock(return_value=session_reply("SDK SUMMARY"))
     ctx = _make_context(sdk_session=session)
 
     with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):

@@ -10,6 +10,7 @@ import pytest
 
 from squadron.pipeline.actions.compact import CompactAction
 from squadron.pipeline.models import ActionContext
+from tests.pipeline.conftest import session_reply
 
 _MOD = "squadron.pipeline.actions.compact"
 _SDK = "claude_agent_sdk"
@@ -80,7 +81,7 @@ def test_validate_model_non_string(action: CompactAction) -> None:
 async def test_true_cli_calls_sdk_compact(action: CompactAction) -> None:
     session = MagicMock()
     session.current_model = "claude-sonnet-4-20250514"
-    session.compact = AsyncMock(return_value="summary text")
+    session.compact = AsyncMock(return_value=session_reply("summary text"))
     ctx = _make_context(sdk_session=session)
 
     result = await action.execute(ctx)
@@ -93,7 +94,7 @@ async def test_true_cli_calls_sdk_compact(action: CompactAction) -> None:
 async def test_true_cli_forwards_instructions(action: CompactAction) -> None:
     session = MagicMock()
     session.current_model = None
-    session.compact = AsyncMock(return_value="summary")
+    session.compact = AsyncMock(return_value=session_reply("summary"))
     ctx = _make_context(sdk_session=session, params={"instructions": "keep recent work"})
 
     await action.execute(ctx)
@@ -106,7 +107,7 @@ async def test_true_cli_forwards_instructions(action: CompactAction) -> None:
 async def test_true_cli_forwards_model(action: CompactAction) -> None:
     session = MagicMock()
     session.current_model = "claude-opus-4"
-    session.compact = AsyncMock(return_value="summary")
+    session.compact = AsyncMock(return_value=session_reply("summary"))
     ctx = _make_context(sdk_session=session, params={"model": "haiku"})
 
     await action.execute(ctx)
@@ -119,7 +120,7 @@ async def test_true_cli_forwards_model(action: CompactAction) -> None:
 async def test_true_cli_passes_restore_model(action: CompactAction) -> None:
     session = MagicMock()
     session.current_model = "claude-sonnet-4"
-    session.compact = AsyncMock(return_value="summary")
+    session.compact = AsyncMock(return_value=session_reply("summary"))
     ctx = _make_context(sdk_session=session)
 
     await action.execute(ctx)

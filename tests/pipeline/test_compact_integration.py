@@ -24,6 +24,7 @@ from squadron.pipeline.state import (
     StateManager,
 )
 from squadron.pipeline.steps import register_step_type
+from tests.pipeline.conftest import session_reply
 
 
 class _FakeStepType:
@@ -145,7 +146,7 @@ def _make_session_mock() -> MagicMock:
     session.seed_context = AsyncMock()
     session.connect = AsyncMock()
     session.disconnect = AsyncMock()
-    session.dispatch = AsyncMock(return_value="ok")
+    session.dispatch = AsyncMock(return_value=session_reply("ok"))
     session.set_model = AsyncMock()
     session.current_model = None
     return session

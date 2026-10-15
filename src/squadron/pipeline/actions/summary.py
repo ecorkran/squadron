@@ -262,11 +262,12 @@ async def _execute_summary(
         if is_sdk_profile(profile):
             assert context.sdk_session is not None  # narrowed above
             restore_model = context.sdk_session.current_model
-            summary = await context.sdk_session.capture_summary(
+            reply = await context.sdk_session.capture_summary(
                 instructions=instructions,
                 summary_model=model_id,
                 restore_model=restore_model,
             )
+            summary = reply.text
         else:
             assert profile is not None  # narrowed by is_sdk_profile False
             from squadron.pipeline.summary_context import assemble_dispatch_context

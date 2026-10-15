@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from claude_agent_sdk import ClaudeAgentOptions
 
+from squadron.core.usage import TokenUsage
 from squadron.pipeline.sdk_session import SDKExecutionSession
 from tests.pipeline.conftest import (
     ScriptedClient,
@@ -154,7 +155,7 @@ async def test_dispatch_sends_query_and_collects_response() -> None:
     gen_mock.__aiter__ = lambda self: _gen()
     client.receive_response.return_value = gen_mock
 
-    result = await session.dispatch("do something")
+    result = (await session.dispatch("do something")).text
 
     client.query.assert_called_once_with("do something")
     assert "Hello world" in result
@@ -202,7 +203,7 @@ async def test_dispatch_excludes_tool_call_noise() -> None:
     gen_mock.__aiter__ = lambda self: _gen()
     client.receive_response.return_value = gen_mock
 
-    result = await session.dispatch("review this")
+    result = (await session.dispatch("review this")).text
 
     assert "Using tool:" not in result
     assert "<diff output>" not in result
@@ -240,7 +241,7 @@ async def test_dispatch_excludes_informational_rate_limit_event() -> None:
     gen_mock.__aiter__ = lambda self: _gen()
     client.receive_response.return_value = gen_mock
 
-    result = await session.dispatch("review this")
+    result = (await session.dispatch("review this")).text
 
     assert "rate_limit" not in result.lower()
     assert result == "Looks good."
@@ -277,7 +278,7 @@ async def test_dispatch_retries_on_rate_limit() -> None:
     gen_mock.__aiter__ = lambda self: _gen()
     client.receive_response.return_value = gen_mock
 
-    result = await session.dispatch("test")
+    result = (await session.dispatch("test")).text
     assert "done" in result
     assert call_count == 3
 
@@ -416,7 +417,7 @@ async def test_dispatch_does_not_double_text_from_result_message() -> None:
     client = _make_client()
     client.receive_response.return_value = _result_message_gen("one and only", session_id="sess-x")
     session = _make_session(client)
-    result = await session.dispatch("hi")
+    result = (await session.dispatch("hi")).text
     assert result == "one and only"
 
 
@@ -537,7 +538,7 @@ class TestCompactSessionRotate:
         session = _make_session(old)
 
         with patch(f"{_MOD}.ClaudeSDKClient", return_value=new) as client_ctor:
-            result = await session.compact(instructions="Keep X")
+            result = (await session.compact(instructions="Keep X")).text
 
         assert result == "SUMMARY"
         old.set_model.assert_not_called()
@@ -587,7 +588,7 @@ class TestCompactSessionRotate:
         session = _make_session(old)
 
         with patch(f"{_MOD}.ClaudeSDKClient", return_value=new) as client_ctor:
-            result = await session.compact(instructions="Keep X")
+            result = (await session.compact(instructions="Keep X")).text
 
         from squadron.pipeline.sdk_session import frame_summary_for_seed
 
@@ -605,7 +606,7 @@ class TestCompactSessionRotate:
         session = _make_session(old)
 
         with patch(f"{_MOD}.ClaudeSDKClient", return_value=new) as client_ctor:
-            result = await session.compact(instructions="x", summary="pre-made")
+            result = (await session.compact(instructions="x", summary="pre-made")).text
 
         old.query.assert_not_called()
         new.query.assert_not_called()
@@ -634,7 +635,7 @@ class TestCompactSessionRotate:
         session = _make_session(old)
 
         with patch(f"{_MOD}.ClaudeSDKClient", return_value=new):
-            result = await session.compact(instructions="x", summary="pre-made")
+            result = (await session.compact(instructions="x", summary="pre-made")).text
 
         assert result == "pre-made"
 
@@ -682,7 +683,7 @@ class TestCaptureSummary:
         client.receive_response.return_value = _result_message_gen("SUMMARY")
         session = _make_session(client)
 
-        result = await session.capture_summary("summarize this")
+        result = (await session.capture_summary("summarize this")).text
 
         client.query.assert_called_once_with("summarize this")
         assert result == "SUMMARY"
@@ -944,7 +945,7 @@ class TestDispatchWaitsForBackgroundAgents:
         session = scripted_session(client)
 
         with caplog.at_level(logging.INFO, logger=_MOD):
-            response = await session.dispatch("design it")  # type: ignore[attr-defined]
+            response = (await session.dispatch("design it")).text  # type: ignore[attr-defined]
 
         assert response == "Waiting for the agent.\nWrote the design."
         assert session.background_tasks_waited == 1  # type: ignore[attr-defined]
@@ -965,7 +966,7 @@ class TestDispatchWaitsForBackgroundAgents:
         )
         session = scripted_session(client)
 
-        response = await session.dispatch("p")  # type: ignore[attr-defined]
+        response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
 
         assert response == "Agent was killed."
         assert client.receive_calls == 2
@@ -977,7 +978,7 @@ class TestDispatchWaitsForBackgroundAgents:
         )
         session = scripted_session(client)
 
-        response = await session.dispatch("p")  # type: ignore[attr-defined]
+        response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
 
         assert response == "done"
         assert session.background_tasks_waited == 0  # type: ignore[attr-defined]
@@ -988,7 +989,7 @@ class TestDispatchWaitsForBackgroundAgents:
         client = ScriptedClient([sdk_text("hello"), sdk_result()])
         session = scripted_session(client)
 
-        assert await session.dispatch("p") == "hello"  # type: ignore[attr-defined]
+        assert (await session.dispatch("p")).text == "hello"  # type: ignore[attr-defined]
         assert client.receive_calls == 1
 
     @pytest.mark.asyncio
@@ -1017,7 +1018,7 @@ class TestDispatchWaitsForBackgroundAgents:
         session = scripted_session(client)
 
         with caplog.at_level(logging.WARNING, logger=_MOD):
-            response = await session.dispatch("p")  # type: ignore[attr-defined]
+            response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
 
         assert response == "This step's answer."
         warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
@@ -1042,7 +1043,7 @@ class TestBackgroundIdleTimeout:
             patch(f"{_MOD}.get_typed_config", return_value=0.05),
             caplog.at_level(logging.WARNING, logger=_MOD),
         ):
-            response = await session.dispatch("p")  # type: ignore[attr-defined]
+            response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
 
         assert response == "Waiting."
         client.stop_task.assert_awaited_once_with("t1")
@@ -1084,7 +1085,7 @@ class TestBackgroundIdleTimeout:
         session = scripted_session(client)
 
         with patch(f"{_MOD}.get_typed_config", return_value=0.05) as config:
-            response = await session.dispatch("p")  # type: ignore[attr-defined]
+            response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
 
         assert response == "slow answer"
         config.assert_not_called()
@@ -1151,7 +1152,7 @@ async def test_subagent_prose_is_not_part_of_the_response() -> None:
     )
     session = scripted_session(client)
 
-    assert await session.dispatch("p") == "Waiting.\nDONE"  # type: ignore[attr-defined]
+    assert (await session.dispatch("p")).text == "Waiting.\nDONE"  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
@@ -1215,7 +1216,7 @@ class TestForegroundStall:
         with _stall_patches(), caplog.at_level(logging.WARNING, logger=_MOD):  # type: ignore[attr-defined]
             with pytest.raises(DispatchStalledError) as raised:
                 await session.dispatch("run the tests")  # type: ignore[attr-defined]
-            follow_up = await session.dispatch("ping")  # type: ignore[attr-defined]
+            follow_up = (await session.dispatch("ping")).text  # type: ignore[attr-defined]
 
         client.interrupt.assert_awaited_once()
         assert raised.value.session_usable is True
@@ -1281,3 +1282,92 @@ class TestForegroundStall:
         assert raised.value.session_usable is False
         assert session.unusable_reason is not None  # type: ignore[attr-defined]
         assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+# ---------------------------------------------------------------------------
+# Usage telemetry (slice 175 D2, D5)
+# ---------------------------------------------------------------------------
+
+
+def _usage(prompt: int, completion: int) -> dict[str, int]:
+    return {"input_tokens": prompt, "output_tokens": completion}
+
+
+class TestSessionTelemetry:
+    @pytest.mark.asyncio
+    async def test_own_result_and_injected_follow_up_both_count(self) -> None:
+        client = ScriptedClient(
+            [
+                sdk_task_started("t1", "local_agent"),
+                sdk_result(usage=_usage(10, 2), num_turns=2, total_cost_usd=0.1),
+            ],
+            [
+                sdk_task_notification("t1"),
+                sdk_result(injected=True, usage=_usage(5, 1), num_turns=1, total_cost_usd=0.05),
+            ],
+        )
+        session = scripted_session(client)
+
+        reply = await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert reply.telemetry.turns == 3
+        assert reply.telemetry.usage == TokenUsage(prompt=15, completion=3)
+        assert reply.telemetry.cost_usd == pytest.approx(0.15)
+
+    @pytest.mark.asyncio
+    async def test_stall_with_drain_carries_the_drained_result(self) -> None:
+        from squadron.pipeline.sdk_session import DispatchStalledError
+
+        client = ScriptedClient(
+            [sdk_text("Running."), _SILENT],
+            [sdk_result(interrupted=True, usage=_usage(7, 3), num_turns=1)],
+        )
+        session = scripted_session(client)
+
+        with _stall_patches(), pytest.raises(DispatchStalledError) as raised:  # type: ignore[attr-defined]
+            await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert raised.value.session_usable is True
+        telemetry = raised.value.telemetry
+        assert telemetry is not None
+        assert telemetry.usage == TokenUsage(prompt=7, completion=3)
+
+    @pytest.mark.asyncio
+    async def test_stall_whose_drain_has_no_result_keeps_only_completed(self) -> None:
+        from squadron.pipeline.sdk_session import DispatchStalledError
+
+        client = ScriptedClient([sdk_text("Running."), _SILENT], [])
+        session = scripted_session(client)
+
+        with _stall_patches(drain_s=0.05), pytest.raises(DispatchStalledError) as raised:  # type: ignore[attr-defined]
+            await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert raised.value.session_usable is False
+        telemetry = raised.value.telemetry
+        assert telemetry is not None
+        assert telemetry.turns == 0
+        assert not telemetry.usage.reported
+
+    @pytest.mark.asyncio
+    async def test_compact_with_supplied_summary_spends_nothing(self) -> None:
+        session = _make_session(_make_client())
+
+        with patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()):
+            reply = await session.compact(instructions="x", summary="x")
+
+        assert reply.telemetry.turns == 0
+
+    @pytest.mark.asyncio
+    async def test_results_without_usage_warn_once_per_dispatch(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        client = ScriptedClient(
+            [sdk_task_started("t1", "local_agent"), sdk_result()],
+            [sdk_task_notification("t1"), sdk_result(injected=True)],
+        )
+        session = scripted_session(client)
+
+        with caplog.at_level(logging.WARNING, logger="squadron.pipeline.sdk_turns"):
+            await session.dispatch("p")  # type: ignore[attr-defined]
+
+        assert len([r for r in caplog.records if "no token usage" in r.getMessage()]) == 1

@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
+from squadron.core.usage import RunTelemetry
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult, PipelineDefinition
+from squadron.pipeline.sdk_turns import SessionReply
 from squadron.pipeline.state import StateManager
 
 # Test-only pipelines; kept out of the shipped data/pipelines directory.
@@ -118,7 +121,15 @@ def sdk_text(text: str, *, parent_tool_use_id: str | None = None) -> object:
     )
 
 
-def sdk_result(text: str = "", *, injected: bool = False, interrupted: bool = False) -> object:
+def sdk_result(
+    text: str = "",
+    *,
+    injected: bool = False,
+    interrupted: bool = False,
+    usage: dict[str, Any] | None = None,
+    num_turns: int = 1,
+    total_cost_usd: float | None = None,
+) -> object:
     """A real ResultMessage; ``injected`` marks a task-notification turn.
 
     ``interrupted`` gives the shape the CLI sends after ``interrupt()`` (slice
@@ -131,9 +142,11 @@ def sdk_result(text: str = "", *, injected: bool = False, interrupted: bool = Fa
         duration_ms=1,
         duration_api_ms=1,
         is_error=interrupted,
-        num_turns=1,
+        num_turns=num_turns,
         session_id="sess-1",
         result=text,
+        usage=usage,
+        total_cost_usd=total_cost_usd,
         origin={"kind": "task-notification"} if injected else None,
     )
 
@@ -245,3 +258,8 @@ def typed_config(values: dict[str, object]) -> object:
         return values[key]
 
     return _get
+
+
+def session_reply(text: str) -> SessionReply:
+    """An ``SDKExecutionSession`` reply carrying ``text`` and no spend (slice 175)."""
+    return SessionReply(text=text, telemetry=RunTelemetry())

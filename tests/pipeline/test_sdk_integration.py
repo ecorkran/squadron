@@ -15,7 +15,7 @@ from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.sdk_session import SDKExecutionSession
-from tests.pipeline.conftest import FIXTURE_PIPELINES_DIR, phase_artifact_cf_client
+from tests.pipeline.conftest import FIXTURE_PIPELINES_DIR, phase_artifact_cf_client, session_reply
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,7 +37,7 @@ def _init_run_state(tmp_path: Path, pipeline_name: str, params: dict[str, object
 def _make_mock_session() -> AsyncMock:
     session = AsyncMock(spec=SDKExecutionSession)
     session.set_model = AsyncMock()
-    session.dispatch = AsyncMock(return_value="mock response")
+    session.dispatch = AsyncMock(return_value=session_reply("mock response"))
     session.configure_compaction = MagicMock()
     session.connect = AsyncMock()
     session.disconnect = AsyncMock()

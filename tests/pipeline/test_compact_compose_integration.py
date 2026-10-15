@@ -12,7 +12,7 @@ import pytest
 
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.models import ActionResult
-from tests.pipeline.conftest import load_fixture_pipeline
+from tests.pipeline.conftest import load_fixture_pipeline, session_reply
 
 _SDK = "claude_agent_sdk"
 
@@ -179,7 +179,7 @@ async def test_compact_compose_true_cli_all_steps_complete() -> None:
 
     session = MagicMock()
     session.current_model = "claude-sonnet-4"
-    session.compact = AsyncMock(return_value="captured summary for rotation")
+    session.compact = AsyncMock(return_value=session_reply("captured summary for rotation"))
     session.seed_context = AsyncMock()
 
     dispatch_result = ActionResult(

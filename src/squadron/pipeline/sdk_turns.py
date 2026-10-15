@@ -30,7 +30,7 @@ from squadron.logging import get_logger
 from squadron.providers.sdk.translation import translate_sdk_message
 from squadron.providers.sdk.usage import read_result_usage
 
-__all__ = ["WAITED_TASK_TYPES", "BackgroundLedger", "DispatchTurns", "is_own_result"]
+__all__ = ["WAITED_TASK_TYPES", "BackgroundLedger", "DispatchTurns", "SessionReply", "is_own_result"]
 
 # Background task types a dispatch waits for. Mirrors the SDK's private
 # DEFERRING_TASK_TYPES (claude_agent_sdk/_internal/query.py), redeclared on
@@ -94,6 +94,14 @@ def is_own_result(msg: ResultMessage) -> bool:
     The SDK says to treat any unrecognized origin kind as "not human".
     """
     return msg.origin is None or msg.origin.get("kind") == "human"
+
+
+@dataclass(frozen=True)
+class SessionReply:
+    """A session call's response text and what it spent (slice 175 D4)."""
+
+    text: str
+    telemetry: RunTelemetry
 
 
 @dataclass

@@ -33,8 +33,9 @@ from claude_agent_sdk.types import SystemPromptPreset
 from squadron.config.keys import FOREGROUND_IDLE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config, get_typed_config
 from squadron.core.teardown import close_best_effort
+from squadron.core.usage import RunTelemetry
 from squadron.pipeline.background_shell_guard import pipeline_hooks
-from squadron.pipeline.sdk_turns import DispatchTurns, is_own_result
+from squadron.pipeline.sdk_turns import DispatchTurns, SessionReply, is_own_result
 from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
     ProviderAPIError,
@@ -204,7 +205,7 @@ class SDKExecutionSession:
         self.current_model = model_id
         _logger.debug("SDKExecutionSession: switched model to %s", model_id)
 
-    async def dispatch(self, prompt: str) -> str:
+    async def dispatch(self, prompt: str) -> SessionReply:
         """Send a prompt and collect the full response text.
 
         Reads past the turn's result while background agents the turn started
@@ -227,13 +228,14 @@ class SDKExecutionSession:
         turns = DispatchTurns()
         self.background_tasks_stopped = 0
         try:
-            return await self._query_and_collect(prompt, turns)
+            text = await self._query_and_collect(prompt, turns)
         except ProviderError as exc:
             # What the dispatch spent before it failed rides the error (slice 175 D5).
             exc.telemetry = turns.telemetry.snapshot()
             raise
         finally:
             self.background_tasks_waited = turns.ledger.seen_count
+        return SessionReply(text=text, telemetry=turns.telemetry.snapshot())
 
     async def _query_and_collect(self, prompt: str, turns: DispatchTurns) -> str:
         """Send ``prompt`` and read its turns, mapping SDK errors to provider errors."""
@@ -443,7 +445,7 @@ class SDKExecutionSession:
         instructions: str,
         summary_model: str | None = None,
         restore_model: str | None = None,
-    ) -> str:
+    ) -> SessionReply:
         """Generate a summary of the live session without rotating.
 
         Switches to summary_model if provided, dispatches instructions,
@@ -454,10 +456,10 @@ class SDKExecutionSession:
         if summary_model is not None and summary_model != self.current_model:
             await self.set_model(summary_model)
         _logger.debug("SDKExecutionSession.capture_summary: dispatching instructions")
-        summary = await self.dispatch(instructions)
+        reply = await self.dispatch(instructions)
         if restore_model is not None and restore_model != self.current_model:
             await self.set_model(restore_model)
-        return summary
+        return reply
 
     async def compact(
         self,
@@ -465,8 +467,11 @@ class SDKExecutionSession:
         summary_model: str | None = None,
         restore_model: str | None = None,
         summary: str | None = None,
-    ) -> str:
-        """Perform session-rotate compaction. Returns the summary text.
+    ) -> SessionReply:
+        """Perform session-rotate compaction. Returns the summary and its capture's spend.
+
+        With ``summary`` supplied nothing is captured, so the reply's telemetry is empty
+        (``turns == 0``).
 
         Flow (when ``summary`` is None):
           1. Optionally switch to a cheap summarization model.
@@ -485,16 +490,18 @@ class SDKExecutionSession:
         """
         await self._ensure_usable()
         if summary is None:
-            summary = await self.capture_summary(
+            reply = await self.capture_summary(
                 instructions, summary_model=summary_model, restore_model=None
             )
+        else:
+            reply = SessionReply(text=summary, telemetry=RunTelemetry())
 
-        await self._reconnect(summary, SeedSource.COMPACT)
+        await self._reconnect(reply.text, SeedSource.COMPACT)
 
         if restore_model is not None:
             await self.set_model(restore_model)
 
-        return summary
+        return reply
 
     async def seed_context(self, text: str, source: SeedSource) -> None:
         """Replace the session with a fresh one seeded with ``text``.

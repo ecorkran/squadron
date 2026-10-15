@@ -540,7 +540,8 @@ class DispatchAction:
         await session.set_model(model_id)
 
         prompt = self._resolve_prompt(context)
-        response_text = await session.dispatch(prompt)
+        reply = await session.dispatch(prompt)
+        response_text = reply.text
 
         if error_result := _check_cli_error(response_text):
             return error_result

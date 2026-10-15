@@ -12,6 +12,7 @@ from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
 from squadron.pipeline.sdk_session import DispatchStalledError, SDKExecutionSession
 from squadron.providers.errors import ProviderError
+from tests.pipeline.conftest import session_reply
 
 
 def _make_resolver(model_id: str = "claude-haiku-4-5-20251001") -> MagicMock:
@@ -24,7 +25,7 @@ def _make_resolver(model_id: str = "claude-haiku-4-5-20251001") -> MagicMock:
 def _make_session(response: str = "session response") -> AsyncMock:
     session = AsyncMock(spec=SDKExecutionSession)
     session.set_model = AsyncMock()
-    session.dispatch = AsyncMock(return_value=response)
+    session.dispatch = AsyncMock(return_value=session_reply(response))
     session.background_tasks_waited = 0
     session.background_tasks_stopped = 0
     return session

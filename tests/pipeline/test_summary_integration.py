@@ -10,6 +10,7 @@ import pytest
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import StateManager
+from tests.pipeline.conftest import session_reply
 
 
 def _make_definition(steps: list[StepConfig]) -> PipelineDefinition:
@@ -25,7 +26,7 @@ def _make_definition(steps: list[StepConfig]) -> PipelineDefinition:
 def _make_session(capture_return: str = "SUMMARY TEXT") -> MagicMock:
     session = MagicMock()
     session.current_model = "claude-sonnet-4-6"
-    session.capture_summary = AsyncMock(return_value=capture_return)
+    session.capture_summary = AsyncMock(return_value=session_reply(capture_return))
     session.compact = AsyncMock()
     session.set_model = AsyncMock()
     session.connect = AsyncMock()
