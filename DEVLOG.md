@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261015
 
+### Slice 176: Effort Calibration and Producer Model Effectiveness — Tasks Complete
+
+- Tasks: `project-documents/user/tasks/176-tasks.effort-calibration-and-producer-model-effectiveness.md`, 31 tasks, test-with pairs, commit per checkpoint. Effort 3/5.
+- Choices fixed in the task file: renderers split into `cli/stats_effort_views.py` and `cli/stats_producer_views.py` (`stats_views.py` is 242 lines); `parse_frontmatter(text)` extracted for `git show` content; `SLICES_DIR`/`ARCHITECTURE_DIR` beside `TASKS_DIR`; split task files read as one list; `GitHistory(project_root, run=run_git)` so tests count git calls.
+- Surprises: `StepResult.prior_rounds` is a flat list, so Task 1 checks whether round boundaries survive and regroups it if not. 941 was fast-forwarded (no merge commit), so the rounds lower-bound cutoff is a date constant (20261013). No `173-slice.*` branch exists, which matches the design's `unavailable` case for 173. `/sq:stats` and `sq-stats` list subcommands in prose and need doc updates.
+
 ### Slice 176: Effort Calibration and Producer Model Effectiveness — Design Complete
 
 - Design: `project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md` (`cf validate design` PASS). Effort 3/5, depends on [175].
