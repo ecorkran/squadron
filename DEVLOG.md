@@ -16,7 +16,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 - Design: `user/slices/175-slice.usage-and-cost-tracking.md`, effort 4/5; `cf validate design` passes.
 - Finding: 931 already built `core/usage.py`, OpenAI/Codex usage, alias effort, review frontmatter keys; only reviews consume it. SDK agent and `SDKExecutionSession` discard `ResultMessage` usage/cost; dispatch, summary, compact record nothing; `estimate_cost` has no callers; #158 implemented by 931 but still open.
 - Decisions: `prompt` = all input incl. cached and new `cache_write` (D1); read `ResultMessage` only, sum per result incl. drains (D2); cost = provider-reported > alias pricing > none, partial price → none + WARNING (D3); `UsageRecord` built once in `pipeline/usage_capture.py`, stored in `ActionResult.metadata["usage"]`, no run-state schema bump; `StepState.duration_seconds`; `sq stats run|runs|reviews` read-only.
-- Scoped out: MCP tool (squadron has no MCP server), #34 fix (measure only), SDK session effort application (recorded as `None` + WARNING), #214/#210 split to a follow-on slice (needs a slice plan entry). #173 is a precondition-gated probe.
+- Scoped out: MCP tool (squadron has no MCP server), #34 fix (measure only), SDK session effort application (#216 filed; recorded as `None` + WARNING), #214/#210 split to a follow-on slice (needs a slice plan entry). #173 is a precondition-gated probe.
 
 ### Release 0.21.9
 

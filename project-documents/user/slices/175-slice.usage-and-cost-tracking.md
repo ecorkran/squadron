@@ -48,7 +48,7 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 
 - **MCP tool.** Squadron has no MCP server (`tools/mcp_bridge.py` is a client to context-forge). The core is shaped so a tool can wrap it, following the metrology precedent. A server is its own feature; it is logged as an issue when this design is approved.
 - **Fixing #34.** This slice measures it (D10). A fix depends on what the measurement shows.
-- **Applying effort on the SDK session path.** `open_pipeline_session` builds options without the alias effort, and `set_model` changes only the model. This slice records the gap truthfully (D7) but does not apply effort there. Logged as an issue.
+- **Applying effort on the SDK session path.** `open_pipeline_session` builds options without the alias effort, and `set_model` changes only the model. This slice records the gap truthfully (D7) but does not apply effort there ([#216](https://github.com/ecorkran/squadron/issues/216)).
 - **#214 and #210 reports** (D12).
 - **The PR composer** (`pr/composer.py`) and the addressed-findings judge. Neither has a run or artifact to attach a record to. The judge's review already passes through `review_client`.
 - **Budgets or limits** ("stop when cost exceeds X").
