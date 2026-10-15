@@ -11,7 +11,7 @@ projectState: >
   `sq stats`. Closes #172, #36, #154, #151, #158.
 dateCreated: 20261014
 dateUpdated: 20261014
-status: in_progress
+status: complete
 ---
 
 ## Context Summary

@@ -2,18 +2,24 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261014'
+dateUpdated: '20261015'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20261015
+
+### Release 0.22.0
+
+- **Contents:** slice 175 Usage and Cost Tracking — `sq stats run|reviews`, `/sq:stats`, usage and cost on SDK reviews and every pipeline LLM step, alias output budget on dispatch and summary (#172, #36, #154, #151, #158; #33 partial). Code review fixes: a failed review part stops the step, `--json` on a missing reviews dir, run-wide pricing-warning dedupe.
+
 ## 20261014
 
 ### Slice 175: Usage and Cost Tracking — implementation (Phase 6 complete)
 
-- Branch `175-slice.usage-and-cost-tracking` (from `main`), not merged. Tasks 1–33 done; Task 34 issue comments posted (#172, #36, #154, #151, #158 closed; #33 commented, left open).
+- Branch `175-slice.usage-and-cost-tracking` (from `main`), merged 20261015. Tasks 1–33 done; Task 34 issue comments posted (#172, #36, #154, #151, #158 closed; #33 commented, left open).
 - Shipped: `UsageRecord`/`CostBasis`/`cache_write` in `core/usage.py`; `price_usage` + `resolve_cost` (D3) replace `estimate_cost`; SDK `ResultMessage` reader (`providers/sdk/usage.py`) used by the SDK agent and `SDKExecutionSession` (own result, injected turns, drains; errors carry telemetry); `SessionReply` from dispatch/capture_summary/compact; `pipeline/usage_capture.py` builds every record, one per run via `ActionContext.usage_capture`; dispatch, summary, compact, review stamp `metadata.usage`; review artifacts gain `cacheWriteTokens`/`costUsd`/`costBasis` and a `Cost:` digest line; dispatch and summary send alias `max_output_tokens` (#151); `sq stats run|reviews` (+ `--json`), `/sq:stats`, `sq-stats` skill.
 - Gaps the design missed, fixed here: `ResolvedModel` gained `alias` and `run_review_with_profile` an `alias` argument (no alias name reached pricing); review frontmatter `slice` holds the slice name, so `--slice` also matches the file name's leading index; the one-shot runners report the effort they sent through `usage_metadata` (keeps provider lookups inside the mocked boundary).
 - Found: real CLI results carry `usage.output_tokens_details.thinking_tokens`; D1 assumed no reasoning split, so SDK `reasoning` stays `None` (possible follow-up).
