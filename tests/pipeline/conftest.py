@@ -24,6 +24,19 @@ def load_fixture_pipeline(name: str) -> PipelineDefinition:
     return load_pipeline(str(FIXTURE_PIPELINES_DIR / f"{name}.yaml"))
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _load_providers() -> None:  # pyright: ignore[reportUnusedFunction]
+    """Register the providers whose capabilities dispatch reads (slice 175 #151, D7).
+
+    Action tests patch ``ensure_provider_loaded`` out, so a provider they name must
+    already be registered for the real ``get_provider`` lookup to succeed.
+    """
+    from squadron.providers.loader import ensure_provider_loaded
+
+    for provider in ("sdk", "openai", "openai-oauth"):
+        ensure_provider_loaded(provider)
+
+
 @pytest.fixture
 def state_manager(tmp_path):  # type: ignore[no-untyped-def]
     """StateManager backed by a temp directory — never touches real ~/.config."""

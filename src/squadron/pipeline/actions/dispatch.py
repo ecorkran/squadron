@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -21,6 +22,7 @@ from squadron.core.models import (
     describe_run_settings,
     describe_setting_sources,
 )
+from squadron.core.usage import UsageRecord
 from squadron.integrations.context_forge import ContextForgeError
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
@@ -36,8 +38,15 @@ from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError, ResolvedModel
 from squadron.pipeline.sdk_session import DispatchStalledError
+from squadron.pipeline.usage_capture import (
+    copy_usage_metadata,
+    note_effort_sent,
+    read_effort_sent,
+    require_capture,
+    stamp,
+)
 from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.base import (
     FAILED_TOOL_CALLS_KEY,
@@ -128,6 +137,8 @@ async def one_shot_dispatch_with_telemetry(
     effort: Effort | None = None,
     rule_step: StepTypeName | None = None,
     requires_writes: bool = False,
+    max_output_tokens: int | None = None,
+    usage_metadata: dict[str, object] | None = None,
 ) -> tuple[str, dict[str, object]]:
     """Spawn a one-shot agent and return its text alongside tool-use telemetry.
 
@@ -143,6 +154,11 @@ async def one_shot_dispatch_with_telemetry(
     ``rule_step`` names the dispatching step kind, which selects the project rules
     appended to the instructions and recorded as ``project_rules`` (slice 935). ``None``
     means no rules and no record, for dispatches that write no project artifacts.
+
+    ``max_output_tokens`` is sent only when the provider applies a budget (#151).
+    ``usage_metadata``, when given, receives the turns, tokens, and cost the agent stamped
+    (slice 175 D4); it is separate from the returned telemetry, which callers splat into
+    ``ActionResult.metadata``.
     """
     profile = get_profile(profile_name)
     ensure_provider_loaded(profile.provider)
@@ -203,6 +219,8 @@ async def one_shot_dispatch_with_telemetry(
     auto_memory = is_sdk and get_typed_config("pipeline.auto_memory", bool, cwd=config_cwd)
 
     branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
+    capabilities = get_provider(profile.provider).capabilities
+    note_effort_sent(usage_metadata, effort, capabilities.applies_effort)
     config = AgentConfig(
         name=f"dispatch-{step_name}{branch_suffix}-{run_id[:8]}",
         agent_type=profile.provider,
@@ -217,8 +235,9 @@ async def one_shot_dispatch_with_telemetry(
         allowed_tools=allowed_tools,
         requires_writes=requires_writes,
         tools_suppressed_reason=tools_suppressed_reason,
-        # Slice 931 D11: no artifact records it here; the provider's own DEBUG log does.
+        # Slice 175 (#154): the action's usage record says whether this effort was sent.
         effort=effort,
+        max_output_tokens=max_output_tokens if capabilities.applies_output_budget else None,
         credentials=profile_credentials(profile),
     )
 
@@ -238,6 +257,8 @@ async def one_shot_dispatch_with_telemetry(
         async for response in agent.handle_message(message):
             # Read before the sdk_type filter: the message carrying telemetry can be one
             # this loop skips for prose.
+            if usage_metadata is not None:
+                copy_usage_metadata(response.metadata, usage_metadata)
             given = response.metadata.get(TOOLS_GIVEN_KEY)
             if given is not None:
                 telemetry[TOOLS_GIVEN_KEY] = given
@@ -380,17 +401,8 @@ class DispatchAction:
         except GitEnvironmentError:
             # An unknown git state ends the run; it is never one item's dispatch failure.
             raise
-        except DispatchStalledError as exc:
-            # An expected, named failure (slice 174 D7): the session already logged
-            # the interrupt, so no traceback; the step fails through its result.
-            _logger.warning("dispatch: step %s stalled: %s", context.step_name, exc)
-            return ActionResult(
-                success=False,
-                action_type=self.action_type,
-                outputs={},
-                error=f"dispatch stalled: {exc}",
-                metadata={"stalled": True, "session_usable": exc.session_usable},
-            )
+        except ProviderError as exc:
+            return self._provider_failure(context, exc, None)
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
             return ActionResult(
                 success=False,
@@ -418,16 +430,6 @@ class DispatchAction:
                 outputs={},
                 error=str(exc),
             )
-        except ProviderError as exc:
-            # A named provider failure (issue 200): the message says what happened, so
-            # one ERROR line and no traceback. The step fails through its result.
-            _logger.error("dispatch: step %s failed: %s", context.step_name, exc)
-            return ActionResult(
-                success=False,
-                action_type=self.action_type,
-                outputs={},
-                error=str(exc),
-            )
         except Exception as exc:
             _logger.exception("dispatch: unexpected error in step %s", context.step_name)
             return ActionResult(
@@ -436,6 +438,31 @@ class DispatchAction:
                 outputs={},
                 error=str(exc),
             )
+
+    def _provider_failure(
+        self, context: ActionContext, exc: ProviderError, usage: UsageRecord | None
+    ) -> ActionResult:
+        """The failed result for a provider error, carrying what the call spent (D5)."""
+        metadata: dict[str, object] = {}
+        stamp(metadata, usage)
+        if isinstance(exc, DispatchStalledError):
+            # An expected, named failure (slice 174 D7): the session already logged
+            # the interrupt, so no traceback; the step fails through its result.
+            _logger.warning("dispatch: step %s stalled: %s", context.step_name, exc)
+            metadata.update({"stalled": True, "session_usable": exc.session_usable})
+            error = f"dispatch stalled: {exc}"
+        else:
+            # A named provider failure (issue 200): the message says what happened, so
+            # one ERROR line and no traceback. The step fails through its result.
+            _logger.error("dispatch: step %s failed: %s", context.step_name, exc)
+            error = str(exc)
+        return ActionResult(
+            success=False,
+            action_type=self.action_type,
+            outputs={},
+            error=error,
+            metadata=metadata,
+        )
 
     async def _dispatch(self, context: ActionContext) -> ActionResult:
         """Route to session or agent dispatch path based on resolved profile.
@@ -533,36 +560,62 @@ class DispatchAction:
                 ),
             )
 
+        capture = require_capture(context.usage_capture, self.action_type)
         action_model = str(context.params["model"]) if "model" in context.params else None
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
-        model_id, _ = context.resolver.resolve(action_model, step_model)
+        resolved = context.resolver.resolve_full(action_model, step_model)
+        model_id = resolved.model_id
 
         await session.set_model(model_id)
 
         prompt = self._resolve_prompt(context)
-        reply = await session.dispatch(prompt)
+        effort_sent = capture.effort_for_session(resolved)
+        started = time.monotonic()
+        try:
+            reply = await session.dispatch(prompt)
+        except ProviderError as exc:
+            stalled_unusable = isinstance(exc, DispatchStalledError) and not exc.session_usable
+            record = None
+            if exc.telemetry is not None:
+                record = capture.record_from_telemetry(
+                    resolved,
+                    exc.telemetry,
+                    started=started,
+                    model=model_id,
+                    effort_sent=effort_sent,
+                    partial=stalled_unusable,
+                    run_id=context.run_id,
+                    step_name=context.step_name,
+                )
+            return self._provider_failure(context, exc, record)
+        record = capture.record_from_telemetry(
+            resolved, reply.telemetry, started=started, model=model_id, effort_sent=effort_sent
+        )
         response_text = reply.text
 
         if error_result := _check_cli_error(response_text):
+            stamp(error_result.metadata, record)
             return error_result
 
+        metadata: dict[str, object] = {
+            "model": model_id,
+            "profile": "sdk-session",
+            "background_tasks_waited": session.background_tasks_waited,
+            "background_tasks_stopped": session.background_tasks_stopped,
+            # The session always runs the preset; a rotation seed rides as its append.
+            "system_prompt_mode": (
+                SystemPromptMode.PRESET_APPEND if session.seeded else SystemPromptMode.PRESET
+            ).value,
+            "setting_sources": describe_setting_sources(session.setting_sources, is_sdk=True),
+            "auto_memory": session.auto_memory,
+            "project_rules": sdk_native_record(),
+        }
+        stamp(metadata, record)
         return ActionResult(
             success=True,
             action_type=self.action_type,
             outputs={"response": response_text},
-            metadata={
-                "model": model_id,
-                "profile": "sdk-session",
-                "background_tasks_waited": session.background_tasks_waited,
-                "background_tasks_stopped": session.background_tasks_stopped,
-                # The session always runs the preset; a rotation seed rides as its append.
-                "system_prompt_mode": (
-                    SystemPromptMode.PRESET_APPEND if session.seeded else SystemPromptMode.PRESET
-                ).value,
-                "setting_sources": describe_setting_sources(session.setting_sources, is_sdk=True),
-                "auto_memory": session.auto_memory,
-                "project_rules": sdk_native_record(),
-            },
+            metadata=metadata,
         )
 
     def _resolve_prompt(self, context: ActionContext) -> str:
@@ -783,12 +836,80 @@ class DispatchAction:
 
         allowed_tools = resolve_allowed_tools(context, self.action_type)
         requires_writes = dispatch_requires_writes(context.params)
+        capture = require_capture(context.usage_capture, self.action_type)
+        usage_metadata: dict[str, object] = {}
+        prompt = self._resolve_prompt(context)
 
-        response_text, tool_telemetry = await one_shot_dispatch_with_telemetry(
-            prompt=self._resolve_prompt(context),
-            model_id=model_id,
+        started = time.monotonic()
+        try:
+            response_text, tool_telemetry = await self._one_shot(
+                context, resolved, profile_name, prompt, allowed_tools, requires_writes, usage_metadata
+            )
+        except ProviderError as exc:
+            record = None
+            if exc.telemetry is not None:
+                record = capture.record_from_telemetry(
+                    resolved,
+                    exc.telemetry,
+                    started=started,
+                    model=model_id,
+                    effort_sent=read_effort_sent(usage_metadata),
+                )
+            return self._provider_failure(context, exc, record)
+        record = capture.record_from_message(
+            resolved,
+            usage_metadata,
+            started=started,
+            model=model_id,
+            effort_sent=read_effort_sent(usage_metadata),
+        )
+
+        if error_result := _check_cli_error(response_text):
+            stamp(error_result.metadata, record)
+            return error_result
+
+        outcome = assess_tool_outcome(requires_writes, tool_telemetry)
+        for warning in outcome.warnings:
+            _logger.warning("Dispatch step '%s': %s", context.step_name, warning)
+
+        # tool_telemetry is empty when the run had no tools, so the keys stay absent rather
+        # than reporting a misleading zero (design D5).
+        metadata: dict[str, object] = {"model": model_id, "profile": profile_name, **tool_telemetry}
+        stamp(metadata, record)
+        if outcome.fail_reason is not None:
+            _logger.warning("Dispatch step '%s' failed: %s", context.step_name, outcome.fail_reason)
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={"response": response_text},
+                error=outcome.fail_reason,
+                metadata=metadata,
+            )
+        return ActionResult(
+            success=True,
+            action_type=self.action_type,
+            outputs={"response": response_text},
+            metadata=metadata,
+        )
+
+    async def _one_shot(
+        self,
+        context: ActionContext,
+        resolved: ResolvedModel,
+        profile_name: str,
+        prompt: str,
+        allowed_tools: list[str] | None,
+        requires_writes: bool,
+        usage_metadata: dict[str, object],
+    ) -> tuple[str, dict[str, object]]:
+        """Run the one-shot agent for this step, collecting its usage into ``usage_metadata``."""
+        return await one_shot_dispatch_with_telemetry(
+            prompt=prompt,
+            model_id=resolved.model_id,
             model_allows_tools=resolved.allows_tools,
             effort=resolved.effort,
+            max_output_tokens=resolved.max_output_tokens,
+            usage_metadata=usage_metadata,
             profile_name=profile_name,
             system_prompt=str(context.params.get("system_prompt", "")),
             step_name=context.step_name,
@@ -804,32 +925,6 @@ class DispatchAction:
             cwd=context.cwd,
             rule_step=rule_step_from_params(context.params),
             requires_writes=requires_writes,
-        )
-
-        if error_result := _check_cli_error(response_text):
-            return error_result
-
-        outcome = assess_tool_outcome(requires_writes, tool_telemetry)
-        for warning in outcome.warnings:
-            _logger.warning("Dispatch step '%s': %s", context.step_name, warning)
-
-        # tool_telemetry is empty when the run had no tools, so the keys stay absent rather
-        # than reporting a misleading zero (design D5).
-        metadata: dict[str, object] = {"model": model_id, "profile": profile_name, **tool_telemetry}
-        if outcome.fail_reason is not None:
-            _logger.warning("Dispatch step '%s' failed: %s", context.step_name, outcome.fail_reason)
-            return ActionResult(
-                success=False,
-                action_type=self.action_type,
-                outputs={"response": response_text},
-                error=outcome.fail_reason,
-                metadata=metadata,
-            )
-        return ActionResult(
-            success=True,
-            action_type=self.action_type,
-            outputs={"response": response_text},
-            metadata=metadata,
         )
 
 

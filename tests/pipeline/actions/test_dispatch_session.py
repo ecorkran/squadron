@@ -11,6 +11,7 @@ from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
 from squadron.pipeline.sdk_session import DispatchStalledError, SDKExecutionSession
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.errors import ProviderError
 from tests.pipeline.conftest import session_reply
 
@@ -45,6 +46,7 @@ def _make_context(
         prior_outputs={},
         resolver=_make_resolver(model_id),
         cf_client=MagicMock(),
+        usage_capture=UsageCapture(set()),
         cwd="/tmp/test",
         sdk_session=session,
     )
@@ -152,6 +154,7 @@ async def test_session_dispatch_uses_model_and_step_model_params(
         prior_outputs={},
         resolver=resolver,
         cf_client=MagicMock(),
+        usage_capture=UsageCapture(set()),
         cwd="/tmp",
         sdk_session=session,
     )

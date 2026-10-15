@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 from squadron.core.models import Message
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.base import ProfileName
 from squadron.providers.profiles import ProviderProfile
 
@@ -29,6 +30,7 @@ def make_context(**overrides: object) -> ActionContext:
         "resolver": resolver,
         "cf_client": MagicMock(),
         "cwd": "/tmp/test",
+        "usage_capture": UsageCapture(set()),
     }
     defaults.update(overrides)
     return ActionContext(**defaults)  # type: ignore[arg-type]

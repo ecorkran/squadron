@@ -143,61 +143,61 @@ status: in_progress
 
 ### SDK session telemetry (D2, D5; criterion 3)
 
-- [ ] **Task 13: `DispatchTurns` telemetry and error telemetry**
-  - [ ] In `pipeline/sdk_turns.py`, `DispatchTurns` gains `telemetry: RunTelemetry`. `collect()` folds every `ResultMessage` it sees with `read_result_usage` and `fold_result`: the own result, injected follow-up turns, and results read during `_interrupt_and_drain` all pass through `collect`. Warn once per dispatch when a result has `usage is None`.
-  - [ ] On every raise path in `SDKExecutionSession.dispatch` (including `DispatchStalledError` after the drain), set the error's `telemetry` to `turns.telemetry.snapshot()` before it propagates. Return types do not change in this task.
-  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
-  - [ ] Commit: `feat: fold SDK session result usage into dispatch telemetry`
+- [x] **Task 13: `DispatchTurns` telemetry and error telemetry**
+  - [x] In `pipeline/sdk_turns.py`, `DispatchTurns` gains `telemetry: RunTelemetry`. `collect()` folds every `ResultMessage` it sees with `read_result_usage` and `fold_result`: the own result, injected follow-up turns, and results read during `_interrupt_and_drain` all pass through `collect`. Warn once per dispatch when a result has `usage is None`.
+  - [x] On every raise path in `SDKExecutionSession.dispatch` (including `DispatchStalledError` after the drain), set the error's `telemetry` to `turns.telemetry.snapshot()` before it propagates. Return types do not change in this task.
+  - [x] Run `pytest tests/pipeline -q`, ruff, pyright
+  - [x] Commit: `feat: fold SDK session result usage into dispatch telemetry`
   - **Success:** existing tests pass unchanged; zero pyright errors
 
-- [ ] **Task 14: `SessionReply` return type and caller migration**
-  - [ ] Add frozen `SessionReply(text: str, telemetry: RunTelemetry)` in `sdk_turns.py`; `SDKExecutionSession.dispatch` returns it
-  - [ ] `capture_summary` returns the `SessionReply` from its dispatch. `compact` returns a `SessionReply` with the summary text and the capture's telemetry; when `summary` is passed in (no capture), telemetry is an empty `RunTelemetry` with `turns == 0`.
-  - [ ] Update callers to read `.text`: `pipeline/actions/dispatch.py:543`, `pipeline/actions/summary.py:265`, `pipeline/actions/compact.py:73`, `pipeline/emit.py:155`. Recording usage at those sites is Tasks 18–21; `emit.py` only reads `.text` (not an action in scope).
-  - [ ] Migrate existing fakes and mocks of `dispatch`, `capture_summary`, and `compact` under `tests/` that return a `str` to return `SessionReply` (find them with `grep -rn 'dispatch\|capture_summary\|compact' tests/pipeline | grep -i 'return_value\|async def'`)
-  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
+- [x] **Task 14: `SessionReply` return type and caller migration**
+  - [x] Add frozen `SessionReply(text: str, telemetry: RunTelemetry)` in `sdk_turns.py`; `SDKExecutionSession.dispatch` returns it
+  - [x] `capture_summary` returns the `SessionReply` from its dispatch. `compact` returns a `SessionReply` with the summary text and the capture's telemetry; when `summary` is passed in (no capture), telemetry is an empty `RunTelemetry` with `turns == 0`.
+  - [x] Update callers to read `.text`: `pipeline/actions/dispatch.py:543`, `pipeline/actions/summary.py:265`, `pipeline/actions/compact.py:73`, `pipeline/emit.py:155`. Recording usage at those sites is Tasks 18–21; `emit.py` only reads `.text` (not an action in scope).
+  - [x] Migrate existing fakes and mocks of `dispatch`, `capture_summary`, and `compact` under `tests/` that return a `str` to return `SessionReply` (find them with `grep -rn 'dispatch\|capture_summary\|compact' tests/pipeline | grep -i 'return_value\|async def'`)
+  - [x] Run `pytest tests/pipeline -q`, ruff, pyright
   - **Success:** no caller or test fake treats the reply as `str`; existing tests pass; zero pyright errors
 
-- [ ] **Task 15: Test session telemetry**
-  - [ ] In the existing SDK session tests under `tests/pipeline` (the ones that drive `dispatch` with a fake client): own result plus one injected follow-up turn → telemetry sums both
-  - [ ] Stall with a successful drain → `DispatchStalledError.telemetry` includes the drained result, `session_usable` true
-  - [ ] Stall whose drain ends with no result → `telemetry` holds only completed results, `session_usable` false
-  - [ ] `compact(summary="x")` → `turns == 0`
-  - [ ] Two results with `usage=None` in one `dispatch()` → exactly one WARNING
-  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
-  - [ ] Commit: `feat: return SDK session usage from dispatch, summary, and compact`
+- [x] **Task 15: Test session telemetry**
+  - [x] In the existing SDK session tests under `tests/pipeline` (the ones that drive `dispatch` with a fake client): own result plus one injected follow-up turn → telemetry sums both
+  - [x] Stall with a successful drain → `DispatchStalledError.telemetry` includes the drained result, `session_usable` true
+  - [x] Stall whose drain ends with no result → `telemetry` holds only completed results, `session_usable` false
+  - [x] `compact(summary="x")` → `turns == 0`
+  - [x] Two results with `usage=None` in one `dispatch()` → exactly one WARNING
+  - [x] Run `pytest tests/pipeline -q`, ruff, pyright
+  - [x] Commit: `feat: return SDK session usage from dispatch, summary, and compact`
   - **Success:** tests pass
 
 ### Action capture (D4–D7; #151, #154)
 
-- [ ] **Task 16: `pipeline/usage_capture.py`**
-  - [ ] Add a `UsageCapture` class constructed with the run's `warned: set[str]`. It is the only place a `UsageRecord` is built (D4).
-  - [ ] `record_from_message(resolved, message_metadata, *, started, model, effort_sent) -> UsageRecord | None` for `Agent` paths: reads the three `providers/base.py` keys
-  - [ ] `record_from_telemetry(resolved, telemetry, *, started, model, effort_sent, partial=False)` for the session path and for `ProviderError.telemetry`
-  - [ ] `record_from_review(result: ReviewResult, resolved, effort_sent)` reuses the review's already-resolved cost and basis and its `duration_seconds` (measured by `review_client`, 931 D9); no re-pricing, no `started`
-  - [ ] `record_from_error(resolved, exc: ProviderError, *, model, effort_sent)` for a failed review: tokens from `exc.telemetry`, duration from `exc.duration_seconds` (set by `review_client.py:307`); `None` when `exc.telemetry` is `None`
-  - [ ] `record_from_message` and `record_from_telemetry` compute `duration_seconds = time.monotonic() - started` at call time (D6). Every builder fills `alias`/`profile` from `ResolvedModel` (alias `None` for a bare model id), and calls `resolve_cost`
-  - [ ] Return `None` when there is nothing to record: no turns, no usage, and no cost reported (a provider that reports nothing)
-  - [ ] `partial=True` logs the D5 WARNING verbatim with run id and step name (passed in)
-  - [ ] `stamp(metadata, record)` writes `metadata[USAGE_KEY] = record.to_dict()` only when `record` is not `None`. Every action writes the key through it, never directly.
-  - [ ] `effort_for_session(resolved) -> None` returns `None` (D7) and, when `resolved.effort` is set, logs the D7 DEBUG line the first time per `UsageCapture`. One `UsageCapture` per run and one run per `sq run` process makes this once per process.
-  - [ ] Holds no state beyond `warned` and the D7 logged flag; catches no exceptions (failure table, `CancelledError` row)
-  - [ ] Wire construction: the executor creates one `UsageCapture` per run; `ActionContext` gains `usage_capture: UsageCapture | None = None`, set by the executor for every step. `None` means a context with no LLM run: the standalone `branch_run` and `commit_run` commands and non-LLM tests, so those constructors and the ~35 test files are untouched. Each LLM action (dispatch, summary, compact, review) raises a clear error when it finds `None` rather than skipping capture. Tests that drive those four actions get the capture through the shared `ActionContext` test helper (find it with `grep -rn 'ActionContext(' tests/ | head`), updated once in Task 17
+- [x] **Task 16: `pipeline/usage_capture.py`**
+  - [x] Add a `UsageCapture` class constructed with the run's `warned: set[str]`. It is the only place a `UsageRecord` is built (D4).
+  - [x] `record_from_message(resolved, message_metadata, *, started, model, effort_sent) -> UsageRecord | None` for `Agent` paths: reads the three `providers/base.py` keys
+  - [x] `record_from_telemetry(resolved, telemetry, *, started, model, effort_sent, partial=False)` for the session path and for `ProviderError.telemetry`
+  - [x] `record_from_review(result: ReviewResult, resolved, effort_sent)` reuses the review's already-resolved cost and basis and its `duration_seconds` (measured by `review_client`, 931 D9); no re-pricing, no `started`
+  - [x] `record_from_error(resolved, exc: ProviderError, *, model, effort_sent)` for a failed review: tokens from `exc.telemetry`, duration from `exc.duration_seconds` (set by `review_client.py:307`); `None` when `exc.telemetry` is `None`
+  - [x] `record_from_message` and `record_from_telemetry` compute `duration_seconds = time.monotonic() - started` at call time (D6). Every builder fills `alias`/`profile` from `ResolvedModel` (alias `None` for a bare model id), and calls `resolve_cost`
+  - [x] Return `None` when there is nothing to record: no turns, no usage, and no cost reported (a provider that reports nothing)
+  - [x] `partial=True` logs the D5 WARNING verbatim with run id and step name (passed in)
+  - [x] `stamp(metadata, record)` writes `metadata[USAGE_KEY] = record.to_dict()` only when `record` is not `None`. Every action writes the key through it, never directly.
+  - [x] `effort_for_session(resolved) -> None` returns `None` (D7) and, when `resolved.effort` is set, logs the D7 DEBUG line the first time per `UsageCapture`. One `UsageCapture` per run and one run per `sq run` process makes this once per process.
+  - [x] Holds no state beyond `warned` and the D7 logged flag; catches no exceptions (failure table, `CancelledError` row)
+  - [x] Wire construction: the executor creates one `UsageCapture` per run; `ActionContext` gains `usage_capture: UsageCapture | None = None`, set by the executor for every step. `None` means a context with no LLM run: the standalone `branch_run` and `commit_run` commands and non-LLM tests, so those constructors and the ~35 test files are untouched. Each LLM action (dispatch, summary, compact, review) raises a clear error when it finds `None` rather than skipping capture. Tests that drive those four actions get the capture through the shared `ActionContext` test helper (find it with `grep -rn 'ActionContext(' tests/ | head`), updated once in Task 17
   - **Success:** stdlib + squadron imports only; no Typer; under ~150 lines
 
-- [ ] **Task 17: Test `usage_capture`**
-  - [ ] New `tests/pipeline/test_usage_capture.py`, one test per provider shape: SDK agent metadata (provider cost → `provider`); OpenAI metadata with a priced alias (→ `alias_pricing`); Codex metadata (`turns: 1`); session telemetry; telemetry from a `ProviderError`
+- [x] **Task 17: Test `usage_capture`**
+  - [x] New `tests/pipeline/test_usage_capture.py`, one test per provider shape: SDK agent metadata (provider cost → `provider`); OpenAI metadata with a priced alias (→ `alias_pricing`); Codex metadata (`turns: 1`); session telemetry; telemetry from a `ProviderError`
   - [ ] Update the shared `ActionContext` test helper to supply a `UsageCapture`; a test per LLM action asserts the clear error when `usage_capture` is `None`
-  - [ ] Bare model id → `alias` `None`, provider cost kept, no WARNING
-  - [ ] `partial=True` → record flag set, D5 WARNING contains run id and step
-  - [ ] Pricing WARNING fires once across two records on the same `UsageCapture`, again on a fresh one
-  - [ ] `duration_seconds` equals the patched `time.monotonic` delta
-  - [ ] Nothing reported → `None`; `stamp` with `None` leaves `metadata` without `USAGE_KEY`
-  - [ ] `effort_for_session` with alias effort logs the D7 DEBUG line once across two calls on one `UsageCapture`
-  - [ ] `record_from_review` takes `ReviewResult.duration_seconds`; `record_from_error` takes `exc.duration_seconds`
-  - [ ] Executor wiring: run a two-step pipeline through the executor with stub actions that capture `context.usage_capture`; assert both steps received the same instance, and a pricing WARNING triggered from both steps fires once
-  - [ ] Run `pytest tests/pipeline/test_usage_capture.py -q`, ruff, pyright
-  - [ ] Commit: `feat: add usage_capture to build UsageRecords for actions`
+  - [x] Bare model id → `alias` `None`, provider cost kept, no WARNING
+  - [x] `partial=True` → record flag set, D5 WARNING contains run id and step
+  - [x] Pricing WARNING fires once across two records on the same `UsageCapture`, again on a fresh one
+  - [x] `duration_seconds` equals the patched `time.monotonic` delta
+  - [x] Nothing reported → `None`; `stamp` with `None` leaves `metadata` without `USAGE_KEY`
+  - [x] `effort_for_session` with alias effort logs the D7 DEBUG line once across two calls on one `UsageCapture`
+  - [x] `record_from_review` takes `ReviewResult.duration_seconds`; `record_from_error` takes `exc.duration_seconds`
+  - [x] Executor wiring: run a two-step pipeline through the executor with stub actions that capture `context.usage_capture`; assert both steps received the same instance, and a pricing WARNING triggered from both steps fires once
+  - [x] Run `pytest tests/pipeline/test_usage_capture.py -q`, ruff, pyright
+  - [x] Commit: `feat: add usage_capture to build UsageRecords for actions`
   - **Success:** tests pass
 
 - [ ] **Task 18: Wire dispatch (one-shot and session)**

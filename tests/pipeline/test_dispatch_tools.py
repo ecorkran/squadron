@@ -24,6 +24,7 @@ from squadron.pipeline.actions.dispatch import (
 )
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.profiles import ProviderProfile
 from tests.providers.openai.conftest import text_chunk, tool_chunk
 
@@ -79,6 +80,7 @@ def _make_context(cwd: Path) -> ActionContext:
         prior_outputs={},
         resolver=resolver,
         cf_client=MagicMock(),
+        usage_capture=UsageCapture(set()),
         cwd=str(cwd),
     )
 
@@ -157,6 +159,7 @@ def _tool_less_context(cwd: Path) -> ActionContext:
         prior_outputs={},
         resolver=resolver,
         cf_client=MagicMock(),
+        usage_capture=UsageCapture(set()),
         cwd=str(cwd),
     )
 

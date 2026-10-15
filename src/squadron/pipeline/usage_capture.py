@@ -38,6 +38,24 @@ def copy_usage_metadata(metadata: Mapping[str, object], into: dict[str, object])
             into[key] = value
 
 
+#: The ``usage_metadata`` key a one-shot runner sets to the effort it actually sent.
+EFFORT_SENT_KEY = "effort_sent"
+
+
+def note_effort_sent(
+    usage_metadata: dict[str, object] | None, effort: Effort | None, applies_effort: bool
+) -> None:
+    """Record the effort a one-shot agent sends: the alias value only if applied (D7)."""
+    if usage_metadata is not None:
+        usage_metadata[EFFORT_SENT_KEY] = effort if applies_effort else None
+
+
+def read_effort_sent(usage_metadata: Mapping[str, object]) -> Effort | None:
+    """The effort ``note_effort_sent`` recorded; ``None`` when none was sent."""
+    value = usage_metadata.get(EFFORT_SENT_KEY)
+    return value if isinstance(value, Effort) else None
+
+
 class UsageCapture:
     """Builds usage records for one run's LLM actions."""
 
