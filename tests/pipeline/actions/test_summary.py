@@ -6,10 +6,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from squadron.core.models import Effort
+from squadron.core.usage import TokenUsage, UsageRecord
 from squadron.pipeline.actions.summary import SummaryAction
 from squadron.pipeline.emit import EmitDestination, EmitKind, EmitResult
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import EFFORT_SENT_KEY, UsageCapture
+from squadron.providers.base import TURNS_KEY, USAGE_KEY
 from tests.pipeline.conftest import session_reply
 
 
@@ -35,6 +39,8 @@ def _make_context(
     ctx.resolver = MagicMock()
     ctx.resolver.resolve.return_value = ("resolved-model-id", None)
     ctx.resolver.resolve_full.return_value = ResolvedModel("resolved-model-id", None)
+    ctx.usage_capture = UsageCapture(set())
+    ctx.run_id = "run-test"
     return ctx
 
 
@@ -473,6 +479,8 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
         model_allows_tools=True,
         cwd=ctx.cwd,
         effort=None,
+        max_output_tokens=None,
+        usage_metadata={},
     )
 
 
@@ -1090,3 +1098,125 @@ async def test_restore_reconnect_failure_fails_action() -> None:
 
     assert result.success is False
     assert "E2BIG" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# Usage records (slice 175 D4–D7, #151)
+# ---------------------------------------------------------------------------
+
+
+def _summary_record(result: object) -> UsageRecord:
+    from squadron.pipeline.models import ActionResult
+
+    assert isinstance(result, ActionResult)
+    return UsageRecord.from_dict(result.metadata[USAGE_KEY])  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_one_shot_summary_records_usage_and_passes_budget() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve_full.return_value = ResolvedModel(
+        "minimax-01", "openrouter", max_output_tokens=2048, effort=Effort.low, alias="minimax"
+    )
+
+    async def _oneshot(**kwargs: object) -> tuple[str, dict[str, object]]:
+        usage_metadata = kwargs["usage_metadata"]
+        assert isinstance(usage_metadata, dict)
+        usage_metadata.update(
+            {TURNS_KEY: 1, USAGE_KEY: TokenUsage(prompt=30, completion=5), EFFORT_SENT_KEY: Effort.low}
+        )
+        return "S", {}
+
+    oneshot = AsyncMock(side_effect=_oneshot)
+    with (
+        patch(
+            "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry", new=oneshot
+        ),
+        patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok),
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    assert oneshot.call_args.kwargs["max_output_tokens"] == 2048
+    record = _summary_record(result)
+    assert (record.turns, record.effort, record.alias) == (1, "low", "minimax")
+    assert record.duration_seconds is not None
+
+
+@pytest.mark.asyncio
+async def test_session_summary_records_unsent_effort() -> None:
+    from squadron.core.usage import RunTelemetry
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.sdk_turns import SessionReply
+
+    session = MagicMock()
+    session.current_model = "m"
+    session.capture_summary = AsyncMock(
+        return_value=SessionReply("S", RunTelemetry(turns=2, usage=TokenUsage(prompt=9), cost_usd=0.01))
+    )
+    ctx = _make_context(sdk_session=session)
+    ctx.resolver.resolve_full.return_value = ResolvedModel("m", "sdk", effort=Effort.high)
+    with patch("squadron.pipeline.actions.summary.get_emit", return_value=_fake_emit_ok):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="opus",
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    record = _summary_record(result)
+    assert record.effort is None
+    assert (record.turns, record.cost_usd) == (2, 0.01)
+
+
+@pytest.mark.asyncio
+async def test_failed_summary_records_error_telemetry() -> None:
+    from squadron.core.usage import RunTelemetry
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.providers.errors import ProviderAPIError
+
+    raised = ProviderAPIError("boom")
+    raised.telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=4, completion=1))
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve_full.return_value = ResolvedModel("minimax-01", "openrouter")
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(side_effect=raised),
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[],
+            action_type="summary",
+        )
+
+    assert result.success is False
+    record = _summary_record(result)
+    assert record.usage == TokenUsage(prompt=4, completion=1)
+    assert record.duration_seconds is not None
+
+
+@pytest.mark.asyncio
+async def test_summary_without_capture_is_a_clear_error() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.usage_capture import UsageCaptureMissingError
+
+    ctx = _make_context(sdk_session=None)
+    ctx.usage_capture = None
+    with pytest.raises(UsageCaptureMissingError, match="summary"):
+        await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[],
+            action_type="summary",
+        )

@@ -14,6 +14,7 @@ import pytest
 
 from squadron.core.models import Effort
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from tests.providers.agent_config_sites import capture_config
 
 
@@ -63,6 +64,7 @@ async def test_summary_action_passes_the_resolved_effort(tmp_path: Path) -> None
         resolver=resolver,
         cf_client=MagicMock(),
         cwd=str(tmp_path),
+        usage_capture=UsageCapture(set()),
     )
 
     with patch.object(summary_action, "capture_summary_via_profile_with_telemetry", capture):

@@ -66,8 +66,13 @@ async def capture_summary_via_profile_with_telemetry(
     model_allows_tools: bool = True,
     cwd: str | None = None,
     effort: Effort | None = None,
+    max_output_tokens: int | None = None,
+    usage_metadata: dict[str, object] | None = None,
 ) -> tuple[str, dict[str, object]]:
     """Run the one-shot summary and return its text alongside tool-use telemetry.
+
+    ``max_output_tokens`` is sent only when the provider applies a budget (#151);
+    ``usage_metadata`` receives the agent's usage keys and the effort sent (slice 175).
 
     The tool keys are absent when the run had no tools, so a caller can splat the dict
     into ``ActionResult.metadata`` without inventing keys (design D5). The prompt and
@@ -83,6 +88,7 @@ async def capture_summary_via_profile_with_telemetry(
         MessageType,
         describe_run_settings,
     )
+    from squadron.pipeline.usage_capture import copy_usage_metadata, note_effort_sent
     from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY, ProviderType
     from squadron.providers.loader import ensure_provider_loaded
     from squadron.providers.profiles import get_profile, profile_credentials
@@ -105,6 +111,8 @@ async def capture_summary_via_profile_with_telemetry(
     provider_profile = get_profile(profile)
     ensure_provider_loaded(provider_profile.provider)
     provider = get_provider(provider_profile.provider)
+    capabilities = provider.capabilities
+    note_effort_sent(usage_metadata, effort, capabilities.applies_effort)
 
     config = AgentConfig(
         name="summary-oneshot",
@@ -121,6 +129,7 @@ async def capture_summary_via_profile_with_telemetry(
         allowed_tools=allowed_tools,
         tools_suppressed_reason=tools_suppressed_reason,
         effort=effort,
+        max_output_tokens=max_output_tokens if capabilities.applies_output_budget else None,
         permission_mode="default",
         setting_sources=[],
         credentials={
@@ -159,6 +168,8 @@ async def capture_summary_via_profile_with_telemetry(
             # summary prose, and is excluded the same way (issue #23 class).
             # Read before the filter below: the message carrying telemetry can be one this
             # loop skips for prose.
+            if usage_metadata is not None:
+                copy_usage_metadata(response.metadata, usage_metadata)
             given = response.metadata.get(TOOLS_GIVEN_KEY)
             if given is not None:
                 telemetry[TOOLS_GIVEN_KEY] = given

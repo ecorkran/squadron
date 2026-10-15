@@ -65,7 +65,7 @@ class UsageCapture:
 
     def record_from_message(
         self,
-        resolved: ResolvedModel,
+        resolved: ResolvedModel | None,
         message_metadata: Mapping[str, object],
         *,
         started: float,
@@ -91,7 +91,7 @@ class UsageCapture:
 
     def record_from_telemetry(
         self,
-        resolved: ResolvedModel,
+        resolved: ResolvedModel | None,
         telemetry: RunTelemetry,
         *,
         started: float,
@@ -140,7 +140,7 @@ class UsageCapture:
 
     def record_from_error(
         self,
-        resolved: ResolvedModel,
+        resolved: ResolvedModel | None,
         exc: ProviderError,
         *,
         model: str | None,
@@ -160,9 +160,9 @@ class UsageCapture:
             provider_cost=telemetry.cost_usd,
         )
 
-    def effort_for_session(self, resolved: ResolvedModel) -> None:
+    def effort_for_session(self, resolved: ResolvedModel | None) -> None:
         """The effort the SDK session path sends: none (D7, #216); log the gap once."""
-        if resolved.effort is not None and not self._effort_gap_logged:
+        if resolved is not None and resolved.effort is not None and not self._effort_gap_logged:
             self._effort_gap_logged = True
             _logger.debug(
                 "SDK session path does not apply alias effort %s; records show effort not sent (#216)",
@@ -171,7 +171,7 @@ class UsageCapture:
 
     def _build(
         self,
-        resolved: ResolvedModel,
+        resolved: ResolvedModel | None,
         *,
         model: str | None,
         effort: Effort | None,
@@ -184,11 +184,12 @@ class UsageCapture:
         tokens = usage if usage is not None else TokenUsage()
         if not turns and not tokens.reported and provider_cost is None:
             return None
-        cost, basis = resolve_cost(resolved.alias, tokens, provider_cost, self._warned)
+        alias = None if resolved is None else resolved.alias
+        cost, basis = resolve_cost(alias, tokens, provider_cost, self._warned)
         return UsageRecord(
             model=model,
-            alias=resolved.alias,
-            profile=resolved.profile,
+            alias=alias,
+            profile=None if resolved is None else resolved.profile,
             effort=None if effort is None else effort.value,
             turns=turns,
             duration_seconds=duration,

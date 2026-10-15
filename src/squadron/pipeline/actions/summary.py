@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+from squadron.pipeline.resolver import ResolvedModel
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
+from squadron.pipeline.usage_capture import read_effort_sent, require_capture, stamp
 from squadron.providers.errors import ProviderError
 from squadron.providers.profiles import is_sdk_profile
 
@@ -214,7 +217,9 @@ async def _execute_summary(
             outputs={"skipped": "no SDK session to rotate"},
         )
 
+    capture = require_capture(context.usage_capture, action_type)
     # Resolve model alias and profile.
+    resolved: ResolvedModel | None = None
     model_id: str | None = None
     profile: str | None = None
     # No alias means no alias metadata to read, so the capability defaults to allow —
@@ -258,16 +263,31 @@ async def _execute_summary(
 
     # Empty unless a non-SDK run was given tools; splatted into metadata below.
     tool_telemetry: dict[str, object] = {}
+    # Slice 175: what the capture call spent, stamped on every result below.
+    usage_metadata: dict[str, object] = {}
+    usage_metadata_out: dict[str, object] = {}
+    started = time.monotonic()
     try:
         if is_sdk_profile(profile):
             assert context.sdk_session is not None  # narrowed above
             restore_model = context.sdk_session.current_model
+            session_effort = capture.effort_for_session(resolved)
             reply = await context.sdk_session.capture_summary(
                 instructions=instructions,
                 summary_model=model_id,
                 restore_model=restore_model,
             )
             summary = reply.text
+            stamp(
+                usage_metadata_out,
+                capture.record_from_telemetry(
+                    resolved,
+                    reply.telemetry,
+                    started=started,
+                    model=model_id,
+                    effort_sent=session_effort,
+                ),
+            )
         else:
             assert profile is not None  # narrowed by is_sdk_profile False
             from squadron.pipeline.summary_context import assemble_dispatch_context
@@ -284,15 +304,39 @@ async def _execute_summary(
                 model_allows_tools=model_allows_tools,
                 cwd=context.cwd,
                 effort=effort,
+                max_output_tokens=None if resolved is None else resolved.max_output_tokens,
+                usage_metadata=usage_metadata,
+            )
+            stamp(
+                usage_metadata_out,
+                capture.record_from_message(
+                    resolved,
+                    usage_metadata,
+                    started=started,
+                    model=model_id,
+                    effort_sent=read_effort_sent(usage_metadata),
+                ),
             )
     except ProviderError as exc:
         # A named provider failure (issue 200): one ERROR line, no traceback.
         _logger.error("summary action: failed to capture summary: %s", exc)
+        if exc.telemetry is not None:
+            stamp(
+                usage_metadata_out,
+                capture.record_from_telemetry(
+                    resolved,
+                    exc.telemetry,
+                    started=started,
+                    model=model_id,
+                    effort_sent=read_effort_sent(usage_metadata),
+                ),
+            )
         return ActionResult(
             success=False,
             action_type=action_type,
             outputs={},
             error=str(exc),
+            metadata=usage_metadata_out,
         )
     except Exception as exc:  # noqa: BLE001
         # Boundary by design: this wraps SDK session dispatch (capture_summary)
@@ -331,6 +375,7 @@ async def _execute_summary(
                     ]
                 },
                 error=res.detail,
+                metadata=usage_metadata_out,
             )
 
     return ActionResult(
@@ -346,7 +391,7 @@ async def _execute_summary(
             "source_step_name": context.step_name,
             "summary_model": model_id,
         },
-        metadata={"summary_model": model_id or "", **tool_telemetry},
+        metadata={"summary_model": model_id or "", **tool_telemetry, **usage_metadata_out},
     )
 
 
