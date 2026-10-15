@@ -18,7 +18,7 @@ Squadron records what each run step and review spends (tokens by class, turns, w
 
 Slice 931 built part of this. It added the neutral `TokenUsage` / `RunTelemetry` types in `core/usage.py`, OpenAI-compatible per-turn usage, Codex usage, alias `effort`, and review frontmatter keys. Only reviews consume that data. The Claude SDK paths, which carry most of the volume, throw usage away at `providers/sdk/translation.py:102-127`. Dispatch, summary, and compact record nothing on any provider. Alias pricing exists, but `estimate_cost` (`models/aliases.py:322`) has no callers. This slice closes those gaps and adds the reporting surface.
 
-The two payoff reports, #214 (planned vs actual effort per slice) and #210 (producer model effectiveness per phase), are split into a follow-on slice (D12).
+The two payoff reports, #214 (planned vs actual effort per slice) and #210 (producer model effectiveness per phase), are split into a follow-on slice (D10).
 
 ## Value
 
@@ -37,10 +37,8 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 4. **Cost.** One pricing function replaces `estimate_cost`. A cost the provider reports takes precedence over a cost computed from alias pricing.
 5. **Review artifacts.** `RunCost` adds `cacheWriteTokens`, `costUsd`, and `costBasis`. SDK reviews now populate every token key.
 6. **#151.** dispatch and summary pass the alias `max_output_tokens`.
-7. **#158 closure.** 931 implemented #158's ask: per-turn usage summed across the loop, and reasoning totalled. The issue was not closed. This slice adds `cache_write` to the OpenAI reader's output (always `None` there; see D2) and closes #158.
-8. **#154 closure.** Effort sent is now recorded on dispatch and summary steps, not only reviews (931 D11 left those as a DEBUG log).
-9. **`sq stats`.** `run`, `runs`, and `reviews` subcommands with `--slice` and `--json`. Core logic is Typer-free. The slash command and agents skill wrap the CLI.
-10. **#173.** A probe of Gemini's endpoint, gated on a precondition (D11).
+7. **#154 closure.** Effort sent is now recorded on dispatch and summary steps, not only reviews (931 D11 left those as a DEBUG log).
+8. **`sq stats`.** `run` and `reviews` subcommands with `--json`; `reviews` also takes `--slice`. Core logic is Typer-free. The slash command and agents skill wrap the CLI and carry no logic (D8).
 
 **Architecture scope.** `140-arch` lists "Cost tracking and optimization across providers" as out of scope. The slice plan entry brings cost *reporting* into scope with this slice. Cross-provider cost *optimization* (for example, pool ranking by cost) stays out.
 
@@ -48,10 +46,12 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 
 - **MCP tool** ([#217](https://github.com/ecorkran/squadron/issues/217)). The plan entry asks for CLI, slash command, and MCP parity. Squadron has no MCP server (`tools/mcp_bridge.py` is a client to context-forge), so MCP is deferred, and the plan entry records the deferral. The core is shaped so a tool can wrap it, following the metrology precedent.
 - **Step duration** (`StepState.duration_seconds`), deferred to [#210](https://github.com/ecorkran/squadron/issues/210), its only consumer. Each `UsageRecord` still carries the LLM call's own duration (D6).
-- **Persisting usage on `AuditRun`, and the #34 measurement**, deferred to [#33](https://github.com/ecorkran/squadron/issues/33), which stays open for that item, and to [#34](https://github.com/ecorkran/squadron/issues/34). After this slice, the SDK agent stamps audit usage on the message, so persisting it is a small change. The measurement needs an operator on a Max account. D10 settles how #34 is investigated.
+- **Persisting usage on `AuditRun`, and the #34 measurement**, deferred to [#33](https://github.com/ecorkran/squadron/issues/33), which stays open for that item, and to [#34](https://github.com/ecorkran/squadron/issues/34). After this slice, the SDK agent stamps audit usage on the message, so persisting it is a small change. The investigation compares `cache_write`, `cached`, and turns between `sq metrology audit run` and raw `claude -p --output-format json` on the same audit. It needs an operator on a Max account.
 - **Fixing #34.** A fix depends on what the measurement shows.
 - **Applying effort on the SDK session path.** `open_pipeline_session` builds options without the alias effort, and `set_model` changes only the model. This slice records the gap truthfully (D7) but does not apply effort there ([#216](https://github.com/ecorkran/squadron/issues/216)).
-- **#214 and #210 reports** (D12).
+- **#214 and #210 reports** (D10).
+- **`sq stats runs`** (aggregation across runs, filtered by slice), deferred to [#214](https://github.com/ecorkran/squadron/issues/214), which asks for per-slice rollups of run records. No requirement in this slice needs a cross-run total. `sq stats run` covers a run's cost.
+- **#173** (Gemini `sends_stream_usage`). It is a manual probe plus a one-line flag flip with no shared code path, so it is handled as a standing fix (slice 944) on [#173](https://github.com/ecorkran/squadron/issues/173).
 - **The PR composer** (`pr/composer.py`) and the addressed-findings judge. Neither has a run or artifact to attach a record to. The judge's review already passes through `review_client`.
 - **Budgets or limits** ("stop when cost exceeds X").
 
@@ -61,14 +61,13 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 
 - **174** (complete): run-state v5, `SDKExecutionSession` stall interrupts and drains. Results drained during an interrupt must be counted (D4).
 - **931** (complete): `core/usage.py`, `RunCost`, `Effort`, and the OpenAI and Codex usage readers.
-- **claude-agent-sdk ≥ 0.2.162** (current pin). `ResultMessage` has `usage: dict | None`, `num_turns`, `duration_ms`, `total_cost_usd: float | None`, and `model_usage: dict[str, ModelUsage] | None` (`types.py:1340-1356`). `ModelUsage` has `inputTokens`, `outputTokens`, `cacheReadInputTokens`, `cacheCreationInputTokens`, and `costUSD`.
+- **claude-agent-sdk ≥ 0.2.162** (current pin): `ResultMessage` and `ModelUsage` in the SDK's `types.py` (`ResultMessage` at line 1340).
 
 ### Interfaces Required
 
 - `ActionResult.metadata: dict[str, object]` (`pipeline/models.py:28-44`), already persisted through `dataclasses.asdict` in `_append_step` (`pipeline/state.py:482-536`).
 - `ResolvedModel` (`pipeline/resolver.py:61-85`): alias name, profile, `effort`, `max_output_tokens`.
 - `read_frontmatter` for review artifacts, used by `sq stats reviews`.
-- `StateManager` listing (`pipeline/run_listing.list_run_summaries`) for `sq stats runs`.
 
 ## Architecture
 
@@ -86,7 +85,7 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 | Actions | `pipeline/actions/{dispatch,summary,compact,review}.py`, `pipeline/summary_oneshot.py` | stamp `metadata[USAGE_KEY]`. dispatch and summary also pass `max_output_tokens` |
 | Review rendering | `review/run_cost.py`, `review/models.py` | cache write, cost, cost basis |
 | Stats core | `stats/usage_report.py` (new package, no Typer) | read run state and review artifacts, aggregate |
-| Stats CLI | `cli/commands/stats.py` | `sq stats run|runs|reviews` |
+| Stats CLI | `cli/commands/stats.py` | `sq stats run|reviews` |
 | Slash / skill | `commands/sq/stats.md`, `commands/agents/sq-stats/SKILL.md` | wrap the CLI |
 
 ### Data Flow
@@ -97,12 +96,14 @@ provider seam                     action                         persistence    
 OpenAI _stream_turn  ─┐
 Codex _turn_usage    ─┼─ Message.metadata[USAGE/TURNS/COST] ─┐
 SDK agent ResultMsg  ─┘                                      ├─ usage_capture ─► ActionResult.metadata["usage"]
-SDKExecutionSession ResultMsgs ─► DispatchTurns.telemetry ───┘   + ResolvedModel   ─► StepState.action_results ─► sq stats run/runs
+SDKExecutionSession ResultMsgs ─► DispatchTurns.telemetry ───┘   + ResolvedModel   ─► StepState.action_results ─► sq stats run
                                                                   + price_usage       (~/.config/squadron/runs)
 review_client ─► ReviewResult.usage/cost ─► RunCost ─► review artifact frontmatter ─────────────────────────► sq stats reviews
 ```
 
-Totals for a step, a run, or a set of runs are computed at read time and never stored. That leaves one source of truth per action.
+Totals for a step or a run are computed at read time and never stored. That leaves one source of truth per action.
+
+**Hot-path cost.** Capture adds no I/O to a run. The record is a small dict in `ActionResult.metadata`, saved by the existing `_append_step` write. There is no extra state save and no network call. `price_usage` is an in-memory lookup on the already-loaded alias table.
 
 ### State Management
 
@@ -168,10 +169,11 @@ A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry
 Subcommands:
 
 - `sq stats run <run_id>`: one row per step and action, plus a total.
-- `sq stats runs [--slice INDEX]`: one row per run, plus a grand total.
-- `sq stats reviews [--slice INDEX]`: reads the review directory (`REVIEWS_DIR`). It shows one row per review artifact, plus a total. It covers standalone `sq review` runs. Pipeline reviews appear here and also under their run, so the two views are never summed together.
+- `sq stats reviews [--slice INDEX]`: one row per standalone review artifact, plus a total. It reads the top-level `*.md` files in `REVIEWS_DIR` and parses only their frontmatter, so its cost is one frontmatter parse per artifact. An artifact whose frontmatter has `runId` came from a pipeline run (the review action stamps it). Such artifacts are excluded, and a footer says `N pipeline review(s) excluded; see sq stats run <id>`. Each review's spend is therefore counted in exactly one view.
 
-All subcommands take `--json`. `--slice` matches `RunState.params[SLICE_PARAM]` for runs (the constant from `pipeline/commit_plan.py`), and the frontmatter `slice` key for reviews.
+Both subcommands take `--json`. `--slice` matches the frontmatter `slice` key.
+
+**Wrappers.** `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md` contain only the instruction to run `sq stats $ARGUMENTS`, the same as every existing slash command. They have no logic of their own that could diverge, so parity is by construction. If `sq` is missing or too old to have `stats`, the error is the shell's or Typer's own (`command not found` / `No such command 'stats'`), which the harness shows unchanged. The existing `tests/cli/test_install_commands.py` asserts that `sq install-commands` installs both files.
 
 The core (`stats/usage_report.py`) returns typed summaries. `cli/commands/stats.py` renders them as tables or JSON. The slash command and skill run `sq stats $ARGUMENTS`, which is how every existing slash command reaches parity. An MCP tool, when a server exists, calls the core functions.
 
@@ -184,15 +186,7 @@ The name is `stats`, not `usage`, because #214 asked for `sq stats slice`. The f
 - Actions recorded before this slice, or non-LLM actions, have no record. Each report states the number of LLM actions with no usage recorded. Non-LLM action types (cf op, commit, gate, checkpoint) are identified by `ActionType` enum membership, not by string matching.
 - A malformed `metadata["usage"]` in a state file is skipped. The row shows `unreadable`, and a WARNING names the run and step.
 
-### D10 — #34: investigate after capture, fix separately
-
-This slice delivers the capture that #34 needs: SDK `cache_write`, `cached`, and turns. The investigation runs the same audit through `sq metrology audit run` and through raw `claude -p --output-format json`, and compares those fields. That needs the audit record to carry usage (deferred to #33) and an operator on a Max account, so it is tracked on #34 and not done in this slice. The fix gets its own design once the cause is known.
-
-### D11 — #173 is a precondition-gated probe
-
-Flipping `sends_stream_usage` on gemini needs a live probe that succeeds. When `GEMINI_API_KEY` is set and the probe streams a `usage` chunk, the one-line flip and its test flip are made, and #173 is closed. If the probe returns 503/429, or no key is available, #173 stays open with the result posted. The slice does not wait on it.
-
-### D12 — #214 and #210 split into a follow-on slice
+### D10 — #214 and #210 split into a follow-on slice
 
 The capture layer and `sq stats` are enough for one release. #214 also needs git commit attribution per task and a task-kind tag that depends on context-forge. #210 needs a replay runner and scorers under the 320 store. Neither changes the capture schema here. #210's own "item 1 first" is exactly this slice. Both issues stay open and are referenced by the follow-on slice plan entry.
 
@@ -263,7 +257,7 @@ Total                                          96   6.01M     5.62M   151.3k    
 2 LLM actions have no usage recorded.
 ```
 
-`sq stats runs` uses one row per run with the same token and cost columns, plus pipeline, target, status, and start date. Width handling reuses 174's `cli/columns.py` (`fit_widths`). `sq stats reviews` uses one row per artifact: date, slice, review type, model, verdict, then the token and cost columns.
+Width handling reuses 174's `cli/columns.py` (`fit_widths`). `sq stats reviews` uses one row per artifact: date, slice, review type, model, verdict, then the token and cost columns.
 
 ## Integration Points
 
@@ -290,9 +284,9 @@ Total                                          96   6.01M     5.62M   151.3k    
 5. Cost follows D3 precedence. A partial price yields `None` and a WARNING. Nothing is ever reported as $0 by default.
 6. Dispatch and summary agents receive the alias `max_output_tokens` (#151).
 7. `effort` on dispatch and summary records equals the level sent. The SDK session path records `None` and warns when the alias sets one.
-8. `sq stats run`, `runs`, and `reviews` print the layouts in UI Specifications. `--json` emits the same data. `--slice` filters as specified in D8.
+8. `sq stats run` and `reviews` print the layouts in UI Specifications. `--json` emits the same data. `reviews` excludes pipeline artifacts and `--slice` filters as specified in D8.
 9. Run files from before this slice load and report "no usage recorded" without error.
-10. `/sq:stats` and the `sq-stats` skill produce output identical to the CLI.
+10. `sq install-commands` installs `/sq:stats` and the `sq-stats` skill (D8 wrappers).
 
 ### Technical Requirements
 
@@ -312,11 +306,9 @@ Total                                          96   6.01M     5.62M   151.3k    
 | Interrupt drain yields no `ResultMessage` | record keeps completed turns and tokens | WARNING naming run and step (D5) |
 | `sq stats run <id>` with an unknown id | nothing printed | error naming the id and runs directory, exit 1 |
 | `sq stats run <id>` whose file is invalid JSON, truncated, or an unsupported schema | nothing printed | error naming the file and the parse or schema error, exit 1 |
-| `sq stats runs` meets an unreadable or unsupported-schema file | file skipped, listing continues | one WARNING per file (from `scan_runs`'s `UnreadableRun`), plus a footer `N run file(s) unreadable` |
 | A run file is read while a live run writes it | no torn read: `StateManager` writes by atomic replace (`state.py:307-311`), so the reader sees the old or the new file | none needed. A test asserts the reader goes through `StateManager`, not a raw `open` |
 | `sq stats reviews`: artifact with no readable frontmatter (`read_frontmatter` returns `None` for a YAML error as for a missing block) | artifact skipped | one WARNING per file naming it, plus a footer `N artifact(s) skipped` |
 | `sq stats reviews`: review directory missing | empty listing | message `No review directory at <path>`, exit 0 (a project with no reviews is valid) |
-| #173 probe returns 429/503, times out, or returns 400 naming `stream_options` | flag stays off | the curl output itself, posted on #173. Manual probe with no squadron code path, so no test |
 
 - ruff format, ruff check, pyright with zero errors. Full suite green.
 - Stubbed `ResultMessage` fixtures use the real field shape from `claude-agent-sdk` 0.2.162 (`usage` dict keys as the CLI emits them), including one captured from a real run.
@@ -339,10 +331,9 @@ Run in a scratch project registered with cf (as in 945), unless noted.
 3. **A pipeline run records every LLM action.**
    `sq run P4 <slice>`, then `sq stats run <run_id>`. Each dispatch and review row has tokens, a model/effort column, and time. The total line shows "N of M priced". Open `~/.config/squadron/runs/<run_id>.json` and confirm `metadata.usage`, including `duration_seconds`, on each LLM action.
 4. **Budget reaches dispatch (#151).** Run a dispatch step with an alias that sets `max_output_tokens`, using `-vv`. The OpenAI provider's DEBUG line shows `max_completion_tokens` sent.
-5. **Old runs degrade honestly.** `sq stats runs` lists pre-slice runs with `—` token cells and the "no usage recorded" line, and no traceback.
-6. **Filters and JSON.** `sq stats runs --slice 175 --json | python -m json.tool` returns the same rows as the table. `sq stats reviews --slice 175` lists the steps 1–2 artifacts.
-7. **Slash parity.** In Claude Code, `/sq:stats runs --slice 175` prints the same table as step 6.
-8. **#173 probe (precondition: `GEMINI_API_KEY`; D11).** Run the curl from #173. If the last chunk before `[DONE]` carries `usage`, flip the gemini profile and its test, then rerun step 2 with a gemini alias. Otherwise post the response on #173.
+5. **Old runs degrade honestly.** `sq stats run <a pre-slice run id>` shows the run with `—` token cells and the "no usage recorded" line, and no traceback.
+6. **Filters and JSON.** `sq stats run <run_id> --json | python -m json.tool` returns the same rows as step 3's table. `sq stats reviews --slice 175` lists the steps 1–2 artifacts, and its footer counts step 3's pipeline review as excluded.
+7. **Slash parity.** In Claude Code, `/sq:stats reviews --slice 175` prints the same table as step 6.
 
 ## Risk Assessment
 
@@ -367,12 +358,12 @@ Run in a scratch project registered with cf (as in 945), unless noted.
 5. `SDKExecutionSession` telemetry on `DispatchTurns`, `capture_summary`, `compact`, including drains.
 6. `usage_capture.py`. Wire dispatch (both paths), summary (both), compact, review. #151 budget. D7 effort rule. D6 timing on every exit path.
 7. `stats/usage_report.py`, then `cli/commands/stats.py`, then slash command and skill. Run `sq install-commands`.
-8. CHANGELOG, README. Close #172, #36, #158, #154, #151 with a line naming what landed. Comment on #33 that the SDK capture landed and `AuditRun` persistence remains. Walkthrough step 8 updates #173.
+8. CHANGELOG, README. Close #172, #36, #154, #151 with a line naming what landed. Close #158: 931 implemented it, and this slice adds the always-`None` `cache_write` to the OpenAI reader (D2). Comment on #33 that the SDK capture landed and `AuditRun` persistence remains.
 
-Testing: unit tests per reader with stubbed messages, `usage_capture` across providers, `price_usage` table tests, state round-trip with old fixture files (no usage, schema v3/v4/v5), and CLI snapshot tests for the three `stats` tables and JSON.
+Testing: unit tests per reader with stubbed messages, `usage_capture` across providers, `price_usage` table tests, state round-trip with old fixture files (no usage, schema v3/v4/v5), and CLI snapshot tests for the two `stats` tables and JSON.
 
 ### Special Considerations
 
 - **Release.** The slice plan calls this a minor-release feature. The new `sq stats` command group qualifies under the versioning rule (a new user-facing feature).
 - **Privacy.** Records hold counts, model ids, and costs only, with no prompt or response content.
-- **Open item for the Project Manager.** The #214/#210 follow-on needs a slice plan entry (D12).
+- **Open item for the Project Manager.** The #214/#210 follow-on needs a slice plan entry (D10).
