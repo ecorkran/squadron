@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261015
 
+### Slice 176: Effort Calibration and Producer Model Effectiveness — Design Complete
+
+- Design: `project-documents/user/slices/176-slice.effort-calibration-and-producer-model-effectiveness.md` (`cf validate design` PASS). Effort 3/5, depends on [175].
+- D1 split: replay runner, pairwise judge and the metrology record move to new slice plan entry 33 (Producer Replay and Pairwise Judging, depends on 176 and 320). 176 keeps an observed-runs report, `sq stats producers`. No eval tool is adopted (promptfoo and inspect_ai bring their own provider layers); only the method is borrowed.
+- Surprises: run state persists only a loop's final round, so 175's `sq stats run` undercounts revised runs. D3 persists `prior_round_results`, `accepted` and `exhausted`. Recent task files (160–175) have no per-task `Effort`, so planned effort comes from the slice plan entry and is reported as an ordinal distribution, not a ratio (D2). Commits never cite task numbers, but the task files' prescribed `Commit:` subjects match git verbatim (16/16 in 175), and they are the attribution anchors (D5). Per-round review verdicts come from the committed versions of review artifacts (D6).
+- The task-kind tag is already tracked as ai-project-guide#42 (`**Kind**: <value>`).
+
 ### Release 0.22.0
 
 - **Contents:** slice 175 Usage and Cost Tracking — `sq stats run|reviews`, `/sq:stats`, usage and cost on SDK reviews and every pipeline LLM step, alias output budget on dispatch and summary (#172, #36, #154, #151, #158; #33 partial). Code review fixes: a failed review part stops the step, `--json` on a missing reviews dir, run-wide pricing-warning dedupe.
