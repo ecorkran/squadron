@@ -1,0 +1,42 @@
+{
+  "schema_version": 3,
+  "run_id": "run-20260601-p4-v3fixture",
+  "pipeline": "p4",
+  "params": {
+    "slice": "175"
+  },
+  "started_at": "2026-06-01T10:00:00+00:00",
+  "updated_at": "2026-06-01T10:05:00+00:00",
+  "status": "completed",
+  "completed_steps": [
+    {
+      "step_name": "design",
+      "step_type": "phase",
+      "status": "completed",
+      "outputs": {},
+      "iteration": 0,
+      "completed_at": "2026-06-01T10:05:00+00:00",
+      "action_results": [
+        {
+          "success": true,
+          "action_type": "cf-op",
+          "outputs": {},
+          "error": null,
+          "metadata": {}
+        },
+        {
+          "success": true,
+          "action_type": "dispatch",
+          "outputs": {
+            "response": "ok"
+          },
+          "error": null,
+          "metadata": {
+            "model": "claude-opus",
+            "profile": "sdk-session"
+          }
+        }
+      ]
+    }
+  ]
+}
