@@ -8,6 +8,7 @@ read (D2): only the result's top-level ``usage`` is authoritative.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 from claude_agent_sdk import ResultMessage
@@ -24,7 +25,10 @@ _OUTPUT = "output_tokens"
 
 
 def read_result_usage(msg: ResultMessage) -> tuple[TokenUsage | None, int | None, float | None]:
-    """Return ``(tokens, turns, cost_usd)`` from one result; each ``None`` when unreported.
+    """Return ``(tokens, turns, total_cost_usd)`` from one result; each ``None`` when unreported.
+
+    The cost is the session's running total, not this result's spend: pass it through
+    the connection's ``SessionCostMeter``.
 
     D1 mapping: ``prompt`` counts every input token, so it is ``input_tokens`` plus both
     cache classes; ``prompt`` is ``None`` only when ``input_tokens`` is missing. The SDK
@@ -53,6 +57,28 @@ def read_result_usage(msg: ResultMessage) -> tuple[TokenUsage | None, int | None
         completion=_usage_int(usage, _OUTPUT),
     )
     return tokens, turns, cost
+
+
+@dataclass
+class SessionCostMeter:
+    """Turns ``total_cost_usd``, a running total for the CLI session, into per-result cost.
+
+    One meter per SDK connection; replace it whenever the connection is replaced. A
+    total below the last one means the CLI zeroed its totals (conversation reset), so
+    the new total is charged in full.
+    """
+
+    last_total: float = 0.0
+
+    def charge(self, total: float | None) -> float | None:
+        """Cost spent since the previous result on this connection; ``None`` when unreported."""
+        if total is None:
+            return None
+        if total < self.last_total:
+            self.last_total = 0.0
+        spent = total - self.last_total
+        self.last_total = total
+        return spent
 
 
 def _usage_int(usage: dict[str, Any], key: str) -> int | None:

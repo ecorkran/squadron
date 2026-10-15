@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 
 from squadron.core.usage import TokenUsage
-from squadron.providers.sdk.usage import read_result_usage
+from squadron.providers.sdk.usage import SessionCostMeter, read_result_usage
 from tests.providers.sdk.result_fixture import real_result_fields, real_result_message
 
 
@@ -83,3 +83,24 @@ def test_wrong_typed_turns_and_cost_read_as_none() -> None:
     _, turns, cost = read_result_usage(msg)
 
     assert turns is None and cost is None
+
+
+class TestSessionCostMeter:
+    def test_charges_the_increase_since_the_last_total(self) -> None:
+        meter = SessionCostMeter()
+
+        assert meter.charge(4.73) == pytest.approx(4.73)
+        assert meter.charge(5.34) == pytest.approx(0.61)
+
+    def test_unreported_total_charges_nothing_and_keeps_the_baseline(self) -> None:
+        meter = SessionCostMeter()
+        meter.charge(1.0)
+
+        assert meter.charge(None) is None
+        assert meter.charge(1.5) == pytest.approx(0.5)
+
+    def test_a_lower_total_is_a_reset_and_is_charged_in_full(self) -> None:
+        meter = SessionCostMeter()
+        meter.charge(3.0)
+
+        assert meter.charge(0.4) == pytest.approx(0.4)

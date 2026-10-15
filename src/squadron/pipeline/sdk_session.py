@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import NoReturn
@@ -54,6 +54,7 @@ from squadron.providers.sdk.settings import (
     pipeline_setting_sources,
     sdk_settings_options,
 )
+from squadron.providers.sdk.usage import SessionCostMeter
 
 _logger = logging.getLogger(__name__)
 
@@ -165,6 +166,8 @@ class SDKExecutionSession:
     background_tasks_stopped: int = 0
     # Whether the live client carries a seed in its system prompt.
     seeded: bool = False
+    # Per-result cost from the live client's running total; replaced with the client.
+    cost_meter: SessionCostMeter = field(default_factory=SessionCostMeter)
 
     @property
     def setting_sources(self) -> list[str] | None:
@@ -225,7 +228,7 @@ class SDKExecutionSession:
                 if the stream ends while a background agent is still running.
         """
         await self._ensure_usable()
-        turns = DispatchTurns()
+        turns = DispatchTurns(cost_meter=self.cost_meter)
         self.background_tasks_stopped = 0
         try:
             text = await self._query_and_collect(prompt, turns)
@@ -533,6 +536,7 @@ class SDKExecutionSession:
         """Disconnect and connect a fresh client seeded via the system prompt."""
         await self.disconnect()
         self.client = ClaudeSDKClient(options=_seeded_options(self.base_options, seed))
+        self.cost_meter = SessionCostMeter()
         self.current_model = None
         self.session_id = None
         self.seeded = seed is not None

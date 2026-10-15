@@ -1136,7 +1136,8 @@ class TestUsageTelemetry:
 
         final = messages[-1].metadata
         assert final[TURNS_KEY] == 5
-        assert final[COST_USD_KEY] == 0.75
+        # total_cost_usd is the CLI session's running total: 0.25, then 0.5 overall.
+        assert final[COST_USD_KEY] == 0.5
         assert final[USAGE_KEY] == TokenUsage(prompt=19, cached=4, completion=3)
 
     @pytest.mark.asyncio

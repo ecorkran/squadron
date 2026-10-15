@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- SDK step and review costs no longer include earlier steps in the same session. A summary step showed $5.35 instead of about $0.61.
+
 ## [0.22.0] - 20261015
 
 ### Added

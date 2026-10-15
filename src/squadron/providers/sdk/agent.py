@@ -58,7 +58,7 @@ from squadron.providers.sdk.rate_limit import (
     rate_limit_backoff_s,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
-from squadron.providers.sdk.usage import read_result_usage
+from squadron.providers.sdk.usage import SessionCostMeter, read_result_usage
 
 # The Claude Code CLI's placeholder assistant messages carry this model id
 # (slice 927 D8) — not a real answering model, so it is excluded from
@@ -104,6 +104,8 @@ class ClaudeSDKAgent:
         # call (slice 175 D2); never per-message usage.
         self._telemetry = RunTelemetry()
         self._usage_warned = False
+        # Results report the CLI session's running cost total; one meter per connection.
+        self._cost_meter = SessionCostMeter()
 
     # -- Protocol properties ------------------------------------------------
 
@@ -252,7 +254,7 @@ class ClaudeSDKAgent:
         if usage is None and not self._usage_warned:
             self._usage_warned = True
             self._log.warning("SDK result reported no token usage; usage will not be recorded")
-        self._telemetry.fold_result(turns=turns, usage=usage, cost_usd=cost)
+        self._telemetry.fold_result(turns=turns, usage=usage, cost_usd=self._cost_meter.charge(cost))
 
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:
         """One-shot execution via ``sdk_query``.
@@ -266,6 +268,7 @@ class ClaudeSDKAgent:
         retries = 0
         while True:
             try:
+                self._cost_meter = SessionCostMeter()  # each query is a new CLI process
                 stream = sdk_query(prompt=message.content, options=self._options)
                 async for sdk_msg in self._skip_unparseable(stream):
                     for translated in self._translate_and_track(sdk_msg):
@@ -309,6 +312,7 @@ class ClaudeSDKAgent:
         try:
             if self._client is None:
                 self._client = ClaudeSDKClient(options=self._options)
+                self._cost_meter = SessionCostMeter()
                 await self._client.connect()
             await self._client.query(prompt=message.content)
             retries = 0

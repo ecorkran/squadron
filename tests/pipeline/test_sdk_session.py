@@ -1303,7 +1303,7 @@ class TestSessionTelemetry:
             ],
             [
                 sdk_task_notification("t1"),
-                sdk_result(injected=True, usage=_usage(5, 1), num_turns=1, total_cost_usd=0.05),
+                sdk_result(injected=True, usage=_usage(5, 1), num_turns=1, total_cost_usd=0.15),
             ],
         )
         session = scripted_session(client)
@@ -1313,6 +1313,20 @@ class TestSessionTelemetry:
         assert reply.telemetry.turns == 3
         assert reply.telemetry.usage == TokenUsage(prompt=15, completion=3)
         assert reply.telemetry.cost_usd == pytest.approx(0.15)
+
+    @pytest.mark.asyncio
+    async def test_cost_is_the_delta_of_the_session_running_total(self) -> None:
+        client = ScriptedClient(
+            [sdk_result(usage=_usage(10, 2), num_turns=1, total_cost_usd=4.0)],
+            [sdk_result(usage=_usage(5, 1), num_turns=1, total_cost_usd=4.6)],
+        )
+        session = scripted_session(client)
+
+        first = await session.dispatch("p")  # type: ignore[attr-defined]
+        second = await session.dispatch("q")  # type: ignore[attr-defined]
+
+        assert first.telemetry.cost_usd == pytest.approx(4.0)
+        assert second.telemetry.cost_usd == pytest.approx(0.6)
 
     @pytest.mark.asyncio
     async def test_stall_with_drain_carries_the_drained_result(self) -> None:

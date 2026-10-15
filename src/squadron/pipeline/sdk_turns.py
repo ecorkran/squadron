@@ -28,7 +28,7 @@ from squadron.core.models import (
 from squadron.core.usage import RunTelemetry
 from squadron.logging import get_logger
 from squadron.providers.sdk.translation import translate_sdk_message
-from squadron.providers.sdk.usage import read_result_usage
+from squadron.providers.sdk.usage import SessionCostMeter, read_result_usage
 
 __all__ = ["WAITED_TASK_TYPES", "BackgroundLedger", "DispatchTurns", "SessionReply", "is_own_result"]
 
@@ -119,6 +119,8 @@ class DispatchTurns:
     # injected follow-up turns, and interrupt drains (slice 175 D2). Each is real spend.
     telemetry: RunTelemetry = field(default_factory=RunTelemetry)
     usage_warned: bool = False
+    # The connection's meter: results report the session's running cost total.
+    cost_meter: SessionCostMeter = field(default_factory=SessionCostMeter)
 
     def collect(self, msg: object) -> str | None:
         """Record one message; return the session id it carries, if any."""
@@ -144,7 +146,7 @@ class DispatchTurns:
         if usage is None and not self.usage_warned:
             self.usage_warned = True
             _logger.warning("SDK session result reported no token usage; usage will not be recorded")
-        self.telemetry.fold_result(turns=turns, usage=usage, cost_usd=cost)
+        self.telemetry.fold_result(turns=turns, usage=usage, cost_usd=self.cost_meter.charge(cost))
 
     @property
     def waiting(self) -> bool:
