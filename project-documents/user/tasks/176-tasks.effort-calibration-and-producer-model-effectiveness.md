@@ -131,7 +131,7 @@ status: not_started
 - [ ] **Task 12: Review rounds from committed versions**
   - [ ] `review_rounds(index, review_type) -> list[ReviewRound]` and `rounds_to_accept(rounds)` per D6, reading each version through `run` and `parse_frontmatter`
   - [ ] An unreadable version follows the D9 `git show` / unreadable-frontmatter rows; the result carries a skipped count for the footer
-  - [ ] Lower-bound flag ("Consumes from Other Slices"): set when the earliest round is authored before the cutoff, stored as one module constant with a comment citing 941. Read the cutoff with `git log -1 --format=%aI 941-slice.review-and-revise-loop-from-sq-review-max` (the 941 branch tip; 941 was fast-forwarded, so there is no merge commit). If that branch is missing, stop and ask the Project Manager for the date.
+  - [ ] Lower-bound flag ("Consumes from Other Slices"): set when the earliest round is authored before the cutoff, stored as one module constant with a comment citing 941. Read the cutoff with `git log -1 --format=%aI 941-slice.review-and-revise-loop-from-sq-review-max` (the author date of the 941 branch tip). If that branch is missing, stop and ask the Project Manager for the date.
   - [ ] Commit: `feat: read per-round review verdicts from git`
   - **Success:** the call count for a report is `2 + V` (V = versions read)
 
