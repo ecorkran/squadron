@@ -153,6 +153,18 @@ class TestPartLoop:
         assert "provider failed in step review-tasks part 2/2" in caplog.text
 
     @pytest.mark.asyncio
+    async def test_provider_failure_on_part_one_stops_the_step(
+        self, project: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger=_P):
+            result, run_review = await run(project, ProviderError("model went away"), review_result())
+
+        assert result.success is False
+        assert result.error == "model went away"
+        assert run_review.call_count == 1
+        assert "unexpected error" not in caplog.text
+
+    @pytest.mark.asyncio
     async def test_save_failure_on_part_two_is_logged_and_not_fatal(
         self, project: Path, caplog: pytest.LogCaptureFixture
     ) -> None:

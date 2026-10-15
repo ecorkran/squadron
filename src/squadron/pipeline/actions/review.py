@@ -117,6 +117,15 @@ def _save_failure_artifact(
     )
 
 
+class _PartProviderFailure(Exception):
+    """A review part's ProviderError, carrying what the call spent (slice 175 D5)."""
+
+    def __init__(self, error: ProviderError, record: UsageRecord | None) -> None:
+        super().__init__(str(error))
+        self.error = error
+        self.record = record
+
+
 @dataclass(frozen=True)
 class _PartSettings:
     """What every part of one review shares: template, model, rules, target."""
@@ -177,6 +186,10 @@ class ReviewAction:
                 exc,
             )
             return self._exception_result(context, exc)
+        except _PartProviderFailure as failure:
+            # A named failure: one ERROR line, no traceback (as dispatch and summary do).
+            _logger.error("review: step %s failed: %s", context.step_name, failure.error)
+            return self._exception_result(context, failure.error, usage_record=failure.record)
         except Exception as exc:
             _logger.exception("review: unexpected error in step %s", context.step_name)
             return self._exception_result(context, exc)
@@ -444,6 +457,7 @@ class ReviewAction:
                 max_output_tokens=settings.resolved.max_output_tokens,
                 effort=settings.resolved.effort,
                 alias=settings.resolved.alias,
+                pricing_warned=capture.warned,
             )
         except ProviderError as exc:
             # For a pipeline run the artifact is the whole durable record, so a
@@ -483,14 +497,16 @@ class ReviewAction:
                     context.step_name,
                     artifact,
                 )
-            _logger.exception("review: unexpected error in step %s", context.step_name)
             record = capture.record_from_error(
                 settings.resolved,
                 exc,
                 model=settings.resolved.model_id,
+                # The call already resolved this profile, so the lookup cannot mask exc.
                 effort_sent=effort_sent_by_profile(settings.profile_name, settings.resolved.effort),
             )
-            return self._exception_result(context, exc, usage_record=record)
+            # Raised, not returned: a failed part must stop the step before later
+            # parts run or the fold sees a part with no verdict.
+            raise _PartProviderFailure(exc, record) from exc
 
         # Traceability (slice 195 D12, #139): the run that wrote this review.
         result.run_id = context.run_id

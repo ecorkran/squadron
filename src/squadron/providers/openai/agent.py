@@ -26,6 +26,7 @@ from squadron.core.models import AgentState, Effort, Message
 from squadron.core.usage import RunTelemetry, TokenUsage
 from squadron.logging import get_logger
 from squadron.providers.base import (
+    ANSWERING_MODELS_KEY,
     FAILED_TOOL_CALLS_KEY,
     FIRST_TOOL_ERROR_KEY,
     TOOL_CALLS_MADE_KEY,
@@ -735,7 +736,7 @@ class OpenAICompatibleAgent:
         # Slice 927 D8: distinct, first-seen-order models reported across this
         # handle_message call's turns. A new key, not a repurposing of the existing
         # metadata["model"] set elsewhere, which holds the requested id.
-        messages[-1].metadata["answering_models"] = list(self._answering_models)
+        messages[-1].metadata[ANSWERING_MODELS_KEY] = list(self._answering_models)
         if self._tools_suppressed_reason is not None:
             messages[-1].metadata["tools_suppressed_reason"] = self._tools_suppressed_reason
         if not self._tools_given:

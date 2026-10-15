@@ -21,6 +21,7 @@ FIRST_TOOL_ERROR_KEY = "first_tool_error"
 USAGE_KEY = "usage"
 TURNS_KEY = "turns"
 COST_USD_KEY = "cost_usd"
+ANSWERING_MODELS_KEY = "answering_models"
 
 
 class ProviderType(StrEnum):

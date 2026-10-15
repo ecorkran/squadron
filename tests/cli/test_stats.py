@@ -200,3 +200,13 @@ def test_reviews_missing_dir_exits_0_with_message(
 
     assert result.exit_code == 0
     assert "No review directory at" in result.output
+
+
+def test_reviews_missing_dir_json_is_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["stats", "reviews", "--json"])
+
+    assert result.exit_code == 0
+    payload = json.loads(result.output)
+    assert payload["missing_dir"] is True and payload["rows"] == []

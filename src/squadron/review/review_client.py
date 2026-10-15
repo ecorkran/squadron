@@ -109,11 +109,14 @@ async def run_review_with_profile(
     max_output_tokens: int | None = None,
     effort: Effort | None = None,
     alias: str | None = None,
+    pricing_warned: set[str] | None = None,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
 
     ``alias`` is the model alias the caller resolved, used only to price the run when
     the provider reports no cost (slice 175 D3); ``None`` prices nothing.
+    ``pricing_warned`` is the caller's once-per-alias pricing WARNING set (a pipeline
+    run passes its run-wide set); ``None`` makes this call its own dedupe scope.
 
     All reviews go through the same path:
     1. Look up profile → get provider from registry
@@ -293,6 +296,7 @@ async def run_review_with_profile(
     # provider. A failure carries it on the error to its artifact.
     started = time.monotonic()
     capture = TurnCapture()
+    warned = pricing_warned if pricing_warned is not None else set[str]()
     try:
         agent = await provider.create_agent(config)
         try:
@@ -312,13 +316,13 @@ async def run_review_with_profile(
         exc.duration_seconds = time.monotonic() - started
         failed = exc.telemetry
         if failed is not None:
-            exc.cost_usd, exc.cost_basis = resolve_cost(alias, failed.usage, failed.cost_usd, set())
+            exc.cost_usd, exc.cost_basis = resolve_cost(alias, failed.usage, failed.cost_usd, warned)
         raise
     # Read after shutdown, as the failure path's is, so the two artifacts measure one span.
     result.duration_seconds = time.monotonic() - started
     result.turns = capture.turns
     result.usage = capture.usage
-    result.cost_usd, result.cost_basis = resolve_cost(alias, capture.usage, capture.cost_usd, set())
+    result.cost_usd, result.cost_basis = resolve_cost(alias, capture.usage, capture.cost_usd, warned)
 
     result.recovery_turn_used = recovery_turn_used
     result.output_budget_exhausted = budget_exhausted(capture.stop_reason)

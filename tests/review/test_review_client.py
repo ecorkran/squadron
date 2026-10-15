@@ -1680,3 +1680,23 @@ class TestOutputBudgetCoverage:
 
         assert result.verdict is Verdict.PASS
         assert result.verdict_source is not VerdictSource.IMPOSED
+
+
+@pytest.mark.asyncio
+async def test_pricing_warned_set_is_the_callers() -> None:
+    """Slice 175: a pipeline's run-wide set dedupes pricing WARNINGs across reviews."""
+    from squadron.providers.profiles import ProviderProfile
+
+    provider = TestReviewResultToolTelemetry()._provider_yielding(None)  # pyright: ignore[reportPrivateUsage]
+    run_warned: set[str] = set()
+    with (
+        patch(f"{_P}.get_profile", return_value=ProviderProfile(name="p", provider="openai")),
+        patch(f"{_P}.get_provider", return_value=provider),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(f"{_P}.resolve_cost", return_value=(None, None)) as resolve,
+    ):
+        await run_review_with_profile(
+            _make_template(), {"input": "file.md"}, profile="p", pricing_warned=run_warned
+        )
+
+    assert resolve.call_args.args[3] is run_warned

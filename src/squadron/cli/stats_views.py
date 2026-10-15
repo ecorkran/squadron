@@ -27,6 +27,8 @@ PARTIAL_FOOTER = "* partial: an interrupted turn's spend is not recorded"
 UNREADABLE = "unreadable"
 #: The ``cost_tier`` that marks a provider cost as API-rate equivalent, not money (D3).
 SUBSCRIPTION_TIER = "subscription"
+API_RATE_EQUIV_LABEL = "api-rate equiv."
+DEFAULT_EFFORT_LABEL = "default"
 _BASIS_LABELS = {CostBasis.PROVIDER: "prov", CostBasis.ALIAS_PRICING: "alias"}
 
 _USAGE_COLUMNS = [
@@ -82,6 +84,7 @@ def reviews_report_json(report: ReviewsUsageReport) -> dict[str, object]:
     """The reviews report as JSON-ready data."""
     return {
         "reviews_dir": str(report.reviews_dir),
+        "missing_dir": report.missing_dir,
         "rows": [
             {
                 "file": row.path.name,
@@ -168,7 +171,7 @@ def cost_cell(record: UsageRecord) -> str:
         return UNREPORTED
     label = _BASIS_LABELS[record.cost_basis]
     if record.cost_basis is CostBasis.PROVIDER and _is_subscription(record.alias):
-        label = "api-rate equiv."
+        label = API_RATE_EQUIV_LABEL
     return f"{format_usd(record.cost_usd)} {label}"
 
 
@@ -193,7 +196,7 @@ def _usage_cells(record: UsageRecord) -> list[str]:
 
 def _model_cell(record: UsageRecord) -> str:
     name = record.alias or record.model or UNREPORTED
-    return f"{name} / {record.effort or 'default'}"
+    return f"{name} / {record.effort or DEFAULT_EFFORT_LABEL}"
 
 
 def _time(record: UsageRecord) -> str:

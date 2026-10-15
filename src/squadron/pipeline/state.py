@@ -313,7 +313,9 @@ class StateManager:
     def _load_raw(self, path: Path) -> RunState:
         """Read, parse, and validate a state file. Raises on version mismatch."""
         raw = json.loads(path.read_text(encoding="utf-8"))
-        version = raw.get("schema_version")
+        if not isinstance(raw, dict):
+            raise ValueError(f"run state {path} is not a JSON object")
+        version = cast(dict[str, object], raw).get("schema_version")
         if version not in _SUPPORTED_SCHEMA_VERSIONS:
             raise SchemaVersionError(version)
         return RunState.model_validate(raw)

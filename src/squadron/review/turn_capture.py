@@ -25,6 +25,7 @@ from squadron.core.models import (
 )
 from squadron.core.usage import TokenUsage, add_optional, add_optional_float
 from squadron.providers.base import (
+    ANSWERING_MODELS_KEY,
     COST_USD_KEY,
     FAILED_TOOL_CALLS_KEY,
     TOOL_CALLS_MADE_KEY,
@@ -173,7 +174,7 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
             turn_usage = metadata[USAGE_KEY]
         if metadata.get(COST_USD_KEY) is not None:
             turn_cost = metadata[COST_USD_KEY]
-        for model in metadata.get("answering_models") or ():
+        for model in metadata.get(ANSWERING_MODELS_KEY) or ():
             if model not in capture.answering_models:
                 capture.answering_models.append(model)
         if metadata.get("sdk_type") in _NON_PROSE_SDK_TYPES:

@@ -20,7 +20,7 @@ from squadron.core.models import Effort
 from squadron.core.usage import RunTelemetry, TokenUsage, UsageRecord
 from squadron.models.aliases import resolve_cost
 from squadron.pipeline.resolver import ResolvedModel
-from squadron.providers.base import COST_USD_KEY, TURNS_KEY, USAGE_KEY
+from squadron.providers.base import ANSWERING_MODELS_KEY, COST_USD_KEY, TURNS_KEY, USAGE_KEY
 from squadron.providers.errors import ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile
@@ -30,7 +30,7 @@ from squadron.review.models import ReviewResult
 _logger = logging.getLogger(__name__)
 
 #: Message-metadata keys a one-shot caller copies for ``record_from_message``.
-USAGE_METADATA_KEYS = (TURNS_KEY, USAGE_KEY, COST_USD_KEY, "answering_models")
+USAGE_METADATA_KEYS = (TURNS_KEY, USAGE_KEY, COST_USD_KEY, ANSWERING_MODELS_KEY)
 
 
 def copy_usage_metadata(metadata: Mapping[str, object], into: dict[str, object]) -> None:
@@ -76,6 +76,11 @@ class UsageCapture:
         self._warned = warned
         self._effort_gap_logged = False
 
+    @property
+    def warned(self) -> set[str]:
+        """The run's once-per-alias pricing WARNING set, shared with review pricing."""
+        return self._warned
+
     def record_from_message(
         self,
         resolved: ResolvedModel | None,
@@ -89,7 +94,7 @@ class UsageCapture:
         usage = message_metadata.get(USAGE_KEY)
         turns = message_metadata.get(TURNS_KEY)
         cost = message_metadata.get(COST_USD_KEY)
-        answering = message_metadata.get("answering_models")
+        answering = message_metadata.get(ANSWERING_MODELS_KEY)
         if isinstance(answering, list) and answering:
             model = str(answering[-1])  # pyright: ignore[reportUnknownArgumentType]
         return self._build(

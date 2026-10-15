@@ -34,6 +34,7 @@ from squadron.core.teardown import close_best_effort
 from squadron.core.usage import RunTelemetry
 from squadron.logging import get_logger
 from squadron.providers.base import (
+    ANSWERING_MODELS_KEY,
     COST_USD_KEY,
     FAILED_TOOL_CALLS_KEY,
     TOOL_CALLS_MADE_KEY,
@@ -234,7 +235,7 @@ class ClaudeSDKAgent:
             final.metadata["stop_reason"] = sdk_msg.stop_reason
             final.metadata["reasoning_chars"] = self._reasoning_chars
             final.metadata[FAILED_TOOL_CALLS_KEY] = self._failed_tool_calls
-            final.metadata["answering_models"] = list(self._answering_models)
+            final.metadata[ANSWERING_MODELS_KEY] = list(self._answering_models)
             final.metadata[TURNS_KEY] = self._telemetry.turns
             final.metadata[USAGE_KEY] = (
                 self._telemetry.usage if self._telemetry.usage.reported else None

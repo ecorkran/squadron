@@ -104,9 +104,9 @@ def run_usage_report(run_id: str, state_manager: StateManager) -> RunUsageReport
         raise RunUsageLoadError(
             f"no run {run_id!r} in {state_manager.runs_dir}", run_id=run_id, path=path
         ) from exc
-    except (OSError, ValueError, AttributeError, SchemaVersionError) as exc:
-        # ValueError covers invalid JSON, undecodable text, and a failed model validation;
-        # AttributeError a top-level value that is not an object.
+    except (OSError, ValueError, SchemaVersionError) as exc:
+        # ValueError covers invalid JSON, undecodable text, a top-level value that is not
+        # an object, and a failed model validation.
         raise RunUsageLoadError(f"cannot read {path}: {exc}", run_id=run_id, path=path) from exc
 
     rows: list[ActionUsageRow] = []

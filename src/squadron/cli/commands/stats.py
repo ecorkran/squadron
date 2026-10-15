@@ -57,10 +57,10 @@ def stats_reviews(
     """One row per standalone review artifact, plus totals."""
     reviews_dir = Path.cwd() / REVIEWS_DIR
     report = reviews_usage_report(reviews_dir, slice_filter)
-    if report.missing_dir:
-        typer.echo(f"No review directory at {reviews_dir}")
-        return
     if as_json:
         typer.echo(json.dumps(reviews_report_json(report), indent=2))
+        return
+    if report.missing_dir:
+        typer.echo(f"No review directory at {reviews_dir}")
         return
     render_reviews_report(report, get_console())
