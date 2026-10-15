@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from squadron.core.models import Effort
+from squadron.core.usage import CostBasis, TokenUsage
 
 _logger = logging.getLogger(__name__)
 
@@ -319,36 +320,76 @@ def model_effort(name: str | None) -> Effort | None:
     return alias.get("effort")
 
 
-def estimate_cost(
-    alias_name: str,
-    input_tokens: int,
-    output_tokens: int,
-    cached_tokens: int = 0,
-) -> float | None:
-    """Estimate USD cost for a model given token counts.
+def price_usage(alias_name: str | None, usage: TokenUsage, warned: set[str]) -> float | None:
+    """Price ``usage`` from ``alias_name``'s pricing table, in USD (slice 175 D3 rule 2).
 
-    Returns None if the alias has no pricing data or insufficient
-    pricing fields for the calculation.
+    Uncached input is ``prompt - cached - cache_write``; each class is priced at its own
+    ``ModelPricing`` key. Reasoning is inside ``completion`` (D1) and not priced apart.
+    Returns ``None`` rather than a partial total when the alias is unknown or unpriced,
+    a class with a nonzero count has no price, or the counts are missing or inconsistent.
+    The missing-price and inconsistent-count cases log one WARNING per alias per
+    ``warned`` set (the caller's dedupe set).
     """
-    aliases = get_all_aliases()
-    alias = aliases.get(alias_name)
+    if alias_name is None:
+        return None
+    alias = get_all_aliases().get(alias_name)
     if alias is None:
         return None
-
     pricing = alias.get("pricing")
-    if pricing is None:
+    if pricing is None or usage.prompt is None or usage.completion is None:
         return None
-
-    input_price = pricing.get("input")
-    output_price = pricing.get("output")
-    if input_price is None or output_price is None:
+    cached = usage.cached or 0
+    cache_write = usage.cache_write or 0
+    uncached = usage.prompt - cached - cache_write
+    if uncached < 0:
+        _warn_once(
+            alias_name,
+            warned,
+            "Cannot price alias '%s': cached (%d) + cache_write (%d) exceeds prompt (%d)",
+            cached,
+            cache_write,
+            usage.prompt,
+        )
         return None
-
-    total = input_tokens / 1_000_000 * input_price + output_tokens / 1_000_000 * output_price
-
-    if cached_tokens > 0:
-        cache_read_price = pricing.get("cache_read")
-        if cache_read_price is not None:
-            total += cached_tokens / 1_000_000 * cache_read_price
-
+    classes: tuple[tuple[str, int], ...] = (
+        ("input", uncached),
+        ("cache_read", cached),
+        ("cache_write", cache_write),
+        ("output", usage.completion),
+    )
+    total = 0.0
+    for key, count in classes:
+        if count == 0:
+            continue
+        price = pricing.get(key)
+        if price is None:
+            _warn_once(alias_name, warned, "Cannot price alias '%s': no '%s' price", key)
+            return None
+        total += count / 1_000_000 * price
     return total
+
+
+def _warn_once(alias_name: str, warned: set[str], fmt: str, *args: object) -> None:
+    """Log ``fmt`` once per alias per ``warned`` set."""
+    if alias_name in warned:
+        return
+    warned.add(alias_name)
+    _logger.warning(fmt, alias_name, *args)
+
+
+def resolve_cost(
+    alias_name: str | None,
+    usage: TokenUsage,
+    provider_cost: float | None,
+    warned: set[str],
+) -> tuple[float | None, CostBasis | None]:
+    """Apply D3 precedence: provider-reported cost, else alias pricing, else none.
+
+    The one place the precedence lives; a reported ``0.0`` is a real provider cost.
+    """
+    if provider_cost is not None:
+        return provider_cost, CostBasis.PROVIDER
+    priced = price_usage(alias_name, usage, warned)
+    if priced is not None:
+        return priced, CostBasis.ALIAS_PRICING
+    return None, None

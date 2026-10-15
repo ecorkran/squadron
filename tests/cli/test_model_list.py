@@ -5,12 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.models.aliases import (
-    estimate_cost,
     load_builtin_aliases,
     load_user_aliases,
 )
@@ -253,85 +251,6 @@ def test_existing_toml_backward_compat(tmp_path: Path) -> None:
     for name in ("old", "also_old"):
         alias = aliases[name]
         assert set(alias.keys()) == {"profile", "model"}
-
-
-# --- T8: estimate_cost() tests ---
-
-
-def test_estimate_cost_full_pricing() -> None:
-    """Known alias with pricing returns correct USD result."""
-    pricing = load_builtin_aliases()["kimi27"]["pricing"]
-    with patch(
-        "squadron.models.aliases.models_toml_path",
-        return_value=Path("/nonexistent/models.toml"),
-    ):
-        result = estimate_cost("kimi27", input_tokens=1000, output_tokens=500)
-    assert result is not None
-    expected = 1000 / 1_000_000 * pricing["input"] + 500 / 1_000_000 * pricing["output"]
-    assert result == pytest.approx(expected)
-
-
-def test_estimate_cost_with_cache() -> None:
-    """Cache cost is included when cached_tokens > 0 and cache_read present."""
-    pricing = load_builtin_aliases()["kimi27"]["pricing"]
-    with patch(
-        "squadron.models.aliases.models_toml_path",
-        return_value=Path("/nonexistent/models.toml"),
-    ):
-        result = estimate_cost(
-            "kimi27",
-            input_tokens=1000,
-            output_tokens=500,
-            cached_tokens=2000,
-        )
-    assert result is not None
-    expected = (
-        1000 / 1_000_000 * pricing["input"]
-        + 500 / 1_000_000 * pricing["output"]
-        + 2000 / 1_000_000 * pricing["cache_read"]
-    )
-    assert result == pytest.approx(expected)
-
-
-def test_estimate_cost_no_pricing() -> None:
-    """Subscription model (opus) with no pricing returns None."""
-    with patch(
-        "squadron.models.aliases.models_toml_path",
-        return_value=Path("/nonexistent/models.toml"),
-    ):
-        result = estimate_cost("opus", input_tokens=1000, output_tokens=500)
-    assert result is None
-
-
-def test_estimate_cost_unknown_alias() -> None:
-    """Unknown alias returns None."""
-    with patch(
-        "squadron.models.aliases.models_toml_path",
-        return_value=Path("/nonexistent/models.toml"),
-    ):
-        result = estimate_cost("nonexistent", input_tokens=1000, output_tokens=500)
-    assert result is None
-
-
-def test_estimate_cost_zero_tokens() -> None:
-    """Zero tokens with pricing returns 0.0, not None."""
-    with patch(
-        "squadron.models.aliases.models_toml_path",
-        return_value=Path("/nonexistent/models.toml"),
-    ):
-        result = estimate_cost("kimi27", input_tokens=0, output_tokens=0)
-    assert result == 0.0
-
-
-def test_estimate_cost_known_model() -> None:
-    """Known model with pricing returns a positive float."""
-    with patch(
-        "squadron.models.aliases.models_toml_path",
-        return_value=Path("/nonexistent/models.toml"),
-    ):
-        result = estimate_cost("gpt54", input_tokens=1_000_000, output_tokens=1_000_000)
-    assert result is not None
-    assert result > 0.0
 
 
 # --- T10: Verbose display and compact default tests ---
