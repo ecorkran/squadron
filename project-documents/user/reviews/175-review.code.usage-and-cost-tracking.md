@@ -139,4 +139,4 @@ The SDK reader treats `bool` as not an int and treats malformed values as `None`
 - **F004 fixed.** `StateManager._load_raw` raises `ValueError` for a non-object top level; `run_usage_report` no longer catches `AttributeError`. The existing `not-an-object` test covers it.
 - **F005 declined.** The executor always supplies `usage_capture`, and a missing one fails fast with `UsageCaptureMissingError`. Making it required would change every non-LLM action's test context for no runtime gain.
 - **F006 partly fixed.** `answering_models` is now `ANSWERING_MODELS_KEY` in `providers/base.py`, used everywhere it was a bare string. The two dict names stay; they are the runner's input and the stamped output, and the names say so.
-- **F007 fixed.** `api-rate equiv.` and `default` are module constants. `ruff format`/`ruff check` are clean (the project line length is 100, not 88).
+- **F007 fixed.** `api-rate equiv.` and `default` are module constants. `ruff format`/`ruff check` are clean (the project line length is 104, not 88).
