@@ -165,3 +165,10 @@ findings:
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 9
 - Finding-shaped matches — surviving validation: 9
+
+## Response
+
+- **F002 fixed.** D3 states the partial-loop case is out of scope (rounds persist only when the loop step is written). Reports mark such runs `partial loop not recorded` and exclude them from `producers`. New D9 row; the D9 test rule covers it.
+- **F003 fixed.** `--json` mirrors the table, keyed by dataclass fields, and is not a stable contract. Value bullet, line 244 and criterion 8 reworded to match.
+- **F004 fixed.** Frontmatter and plan entry dependencies are `[175, 321, 941]`.
+- **F005 not acted on.** Left to the task breakdown.

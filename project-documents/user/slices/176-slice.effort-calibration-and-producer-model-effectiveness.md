@@ -3,7 +3,7 @@ docType: slice-design
 slice: effort-calibration-and-producer-model-effectiveness
 project: squadron
 parent: project-documents/user/architecture/140-slices.pipeline-foundation.md
-dependencies: [175]
+dependencies: [175, 321, 941]
 interfaces: []
 dateCreated: 20261015
 dateUpdated: 20261015
@@ -27,7 +27,7 @@ The replay runner and pairwise judge in #210 (regenerating past artifacts per co
 - **Estimates get checked.** Planning assigns an `Effort` to every slice and nothing ever compares it with the outcome. `sq stats slices` shows, for each planned effort level, what slices at that level actually took, with n.
 - **Model choice per phase becomes evidence.** P4 and P5 pipeline runs already record the producer model, the reviewer's verdict per round, and (since 175) the cost. `sq stats producers` shows which config gets accepted in fewer rounds for less money, using runs that happened anyway.
 - **Loop cost becomes correct.** Run state keeps only a loop's final round today, so 175's `sq stats run` undercounts any run that revised. This slice persists every round (D3), which fixes that report too.
-- **Data that can be pooled.** Every report has `--json`, so results from several projects can be combined later.
+- **Machine-readable output.** Every report has `--json`, mirroring the table. Its keys are not a stable cross-project contract until something consumes pooled data.
 
 ## Technical Scope
 
@@ -123,6 +123,8 @@ The slice plan leaves two questions to this design: whether (b) splits again, an
 
 `run_usage_report` emits rows for earlier rounds with a `round` value (1-based; the final round is the highest). `UsageTotals` then cover every round, which corrects 175's loop undercount. The size cost is one more copy of each round's action dicts, in a file that already holds the final round's.
 
+**A loop that never completes.** Rounds are persisted only when the loop step is written to state. A run that fails, stalls, pauses at a checkpoint, or is orphaned partway through a loop keeps no record of the rounds spent before it stopped, and a resumed run records only the rounds after the resume. This is out of scope: per-round persistence at round boundaries is a run-state change this slice does not need. The gap is reported, not hidden: a run whose status is not `completed` and whose current step is a loop step gets the row note `partial loop not recorded` in `sq stats run` and `sq stats runs`, and is excluded from `producers` (D9).
+
 ### D4 — Lenient planning-document parsing, anchored on real files
 
 Formats vary across the repo's own history, so each field is parsed by its meaning, not its layout (CLAUDE.md parsing rules):
@@ -199,6 +201,7 @@ Each review artifact is rewritten every round, but every round is committed (941
 | Non-numeric `Effort` | effort `None` | WARNING naming file and line |
 | A review artifact version with unreadable frontmatter | that round skipped | WARNING naming sha and path; footer count (shared with the `git show` row) |
 | Unreadable or schema-obsolete run file | run skipped | footer `N run file(s) unreadable` (from `scan_runs`) |
+| Run stopped or resumed inside a loop step (status not `completed`, current step is a loop) | earlier rounds not counted; run excluded from `producers` | row note `partial loop not recorded`; footer count |
 | Malformed `prior_round_results` entry | that round's rows `unreadable` | WARNING naming run and step (same handling as 175 D9) |
 | No completed slices / no phase runs | empty table | message saying which, exit 0 |
 
@@ -241,7 +244,7 @@ class ReviewRound:
 
 The core functions are `slice_effort_report(index, *, project_root, history, state_manager)`, `slices_effort_report(*, since, ...)`, `producer_report(*, phase, state_manager, min_n)` and `runs_usage_report(*, slice_index, pipeline, state_manager)`. Each one returns a frozen report dataclass that has a `to_json_dict()`.
 
-**JSON.** Each report's `to_json_dict()` serializes its dataclass fields, the same way 175's `stats_views` serializers do. The table and the JSON read the same values. A fixed cross-project key contract waits until something consumes pooled data.
+**JSON.** Each report's `to_json_dict()` serializes its dataclass fields, the same way 175's `stats_views` serializers do. The table and the JSON read the same values. The keys are the dataclass field names and are not a stable contract; a fixed cross-project key set waits until something consumes pooled data.
 
 ### UI Specifications
 
@@ -294,7 +297,7 @@ Width handling reuses `cli/columns.py` (`fit_widths`), as in 175.
 5. `sq stats slices` groups completed slices by planned effort with n and median (min–max) per measure. `--since` filters by the slice design's `dateCreated`.
 6. `sq stats producers --phase design|tasks` reports the D8 columns. Cells below `metrology.min_evidence_n` are marked and not ranked, and the observational footer is printed.
 7. `sq stats runs --slice INDEX` lists that slice's runs and totals under 175 D9 rules.
-8. Every new subcommand's `--json` emits the D7 / API Contracts keys. `/sq:stats slices` in Claude Code prints the same table as the CLI.
+8. Every new subcommand's `--json` emits the same values as its table, keyed by the report dataclass fields. `/sq:stats slices` in Claude Code prints the same table as the CLI.
 9. No subcommand writes a file, a git ref, or run state.
 
 ### Technical Requirements
