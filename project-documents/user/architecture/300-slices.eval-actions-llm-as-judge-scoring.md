@@ -3,8 +3,8 @@ docType: slice-plan
 parent: 300-arch.eval-actions-llm-as-judge-scoring.md
 project: squadron
 dateCreated: 20260604
-dateUpdated: 20260802
-status: complete
+dateUpdated: 20261014
+status: in_progress
 ---
 
 # Slice Plan: Intrinsic LLM Judging & Scoring
@@ -122,6 +122,8 @@ The architecture's "Anticipated Slices" section sketches four slices. This plan 
    - **Dependencies:** [305 (the derivation and the evidence-artifact shape), 300 frontmatter contract]. Coordination dependency on Context Forge for anything `workflow_check` reads.
    - **Risk Level:** Medium — the risk is not implementation, it is designing a field that agents will not casually write
    - **Relative Effort:** 3/5
+
+8. [ ] **(307) Review Quality: Grounding, Citations, and Loop Weight** *(added 20261014)* — Patch-release work after 175 (Usage and Cost Tracking, in the 140 plan), one coherent pass over how reviews are fed and judged. **Costliest first:** [#196](https://github.com/ecorkran/squadron/issues/196) (line citations are model-counted; `read_file` and injected bodies carry no line numbers) and [#178](https://github.com/ecorkran/squadron/issues/178) (review loop re-reviews multi-part documents that already passed). **Input to the reviewer:** [#159](https://github.com/ecorkran/squadron/issues/159) (preload predictable reads), [#157](https://github.com/ecorkran/squadron/issues/157) (`read_file` takes a list of paths), [#181](https://github.com/ecorkran/squadron/issues/181) (AGENTS.md never injected as project conventions), [#137](https://github.com/ecorkran/squadron/issues/137) (order a truncated diff, source first), [#138](https://github.com/ecorkran/squadron/issues/138) (truncation leaves no trace in the artifact). **Output and persistence:** [#114](https://github.com/ecorkran/squadron/issues/114) (findings do not record what they were checked against), [#142](https://github.com/ecorkran/squadron/issues/142) (file-path review does not save), [#90](https://github.com/ecorkran/squadron/issues/90) (no artifact naming for slice-less reviews). **Loop weight:** [#203](https://github.com/ecorkran/squadron/issues/203) (proportionality does not trim an overweight first-round design). The design groups these into parts and may drop any that prove already fixed or not reproducible. Dependencies: [175] (usage data shows which reviews cost most). Risk: Med (changes review prompts and artifact format). Effort: 4/5
 
 ---
 
