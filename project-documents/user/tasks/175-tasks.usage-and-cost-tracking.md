@@ -87,7 +87,7 @@ status: not_started
 - [ ] **Task 6: Capture a real `ResultMessage` fixture**
   - [ ] Run `claude -p --output-format json "Reply with the word ok."` once (a live call that spends real tokens). Its JSON result object is what the SDK parses into `ResultMessage` (the `usage` dict is passed through unchanged).
   - [ ] Save it as `tests/providers/sdk/fixtures/result_message_real.json`. Replace `result` with `"ok"` and `session_id` with a placeholder; keep `usage`, `num_turns`, `total_cost_usd`, `subtype`, `is_error`, `duration_ms` exactly as emitted. Add a sibling `README.md` (with frontmatter) recording the `claude` CLI version and `claude-agent-sdk` version (0.2.162 pin) and the capture command.
-  - [ ] Add a test helper that builds a `ResultMessage` from this JSON (`ResultMessage(**fields)` with the SDK's field names), for Tasks 7–10 and 14
+  - [ ] Add a test helper that builds a `ResultMessage` from this JSON (`ResultMessage(**fields)` with the SDK's field names), for Tasks 7–10 and 15
   - [ ] If the command fails or its output has no `usage` object, stop and report to the Project Manager; do not write a fixture by hand
   - **Success:** the fixture's `usage` keys are exactly the keys the CLI emitted; no prompt or response content
 
@@ -142,16 +142,22 @@ status: not_started
 
 ### SDK session telemetry (D2, D5; criterion 3)
 
-- [ ] **Task 13: `DispatchTurns` telemetry and `SessionReply`**
+- [ ] **Task 13: `DispatchTurns` telemetry and error telemetry**
   - [ ] In `pipeline/sdk_turns.py`, `DispatchTurns` gains `telemetry: RunTelemetry`. `collect()` folds every `ResultMessage` it sees with `read_result_usage` and `fold_result`: the own result, injected follow-up turns, and results read during `_interrupt_and_drain` all pass through `collect`. Warn once per dispatch when a result has `usage is None`.
-  - [ ] Add frozen `SessionReply(text: str, telemetry: RunTelemetry)` in `sdk_turns.py`
-  - [ ] `SDKExecutionSession.dispatch` returns `SessionReply`. On every raise path in `dispatch` (including `DispatchStalledError` after the drain), set the error's `telemetry` to `turns.telemetry.snapshot()` before it propagates.
-  - [ ] `capture_summary` returns the `SessionReply` from its dispatch. `compact` returns a `SessionReply` with the summary text and the capture's telemetry; when `summary` is passed in (no capture), telemetry is an empty `RunTelemetry` with `turns == 0`.
-  - [ ] Update callers to read `.text`: `pipeline/actions/dispatch.py:543`, `pipeline/actions/summary.py:265`, `pipeline/actions/compact.py:73`, `pipeline/emit.py:155`. Recording usage at those sites is Tasks 17–20; `emit.py` only reads `.text` (not an action in scope).
-  - [ ] Migrate existing fakes and mocks of `dispatch`, `capture_summary`, and `compact` under `tests/` that return a `str` to return `SessionReply` (find them with `grep -rn 'dispatch\|capture_summary\|compact' tests/pipeline | grep -i 'return_value\|async def'`)
-  - **Success:** no caller or test fake treats the reply as `str`; pyright clean
+  - [ ] On every raise path in `SDKExecutionSession.dispatch` (including `DispatchStalledError` after the drain), set the error's `telemetry` to `turns.telemetry.snapshot()` before it propagates. Return types do not change in this task.
+  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
+  - [ ] Commit: `feat: fold SDK session result usage into dispatch telemetry`
+  - **Success:** existing tests pass unchanged; zero pyright errors
 
-- [ ] **Task 14: Test session telemetry**
+- [ ] **Task 14: `SessionReply` return type and caller migration**
+  - [ ] Add frozen `SessionReply(text: str, telemetry: RunTelemetry)` in `sdk_turns.py`; `SDKExecutionSession.dispatch` returns it
+  - [ ] `capture_summary` returns the `SessionReply` from its dispatch. `compact` returns a `SessionReply` with the summary text and the capture's telemetry; when `summary` is passed in (no capture), telemetry is an empty `RunTelemetry` with `turns == 0`.
+  - [ ] Update callers to read `.text`: `pipeline/actions/dispatch.py:543`, `pipeline/actions/summary.py:265`, `pipeline/actions/compact.py:73`, `pipeline/emit.py:155`. Recording usage at those sites is Tasks 18–21; `emit.py` only reads `.text` (not an action in scope).
+  - [ ] Migrate existing fakes and mocks of `dispatch`, `capture_summary`, and `compact` under `tests/` that return a `str` to return `SessionReply` (find them with `grep -rn 'dispatch\|capture_summary\|compact' tests/pipeline | grep -i 'return_value\|async def'`)
+  - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
+  - **Success:** no caller or test fake treats the reply as `str`; existing tests pass; zero pyright errors
+
+- [ ] **Task 15: Test session telemetry**
   - [ ] In the existing SDK session tests under `tests/pipeline` (the ones that drive `dispatch` with a fake client): own result plus one injected follow-up turn → telemetry sums both
   - [ ] Stall with a successful drain → `DispatchStalledError.telemetry` includes the drained result, `session_usable` true
   - [ ] Stall whose drain ends with no result → `telemetry` holds only completed results, `session_usable` false
@@ -163,12 +169,13 @@ status: not_started
 
 ### Action capture (D4–D7; #151, #154)
 
-- [ ] **Task 15: `pipeline/usage_capture.py`**
+- [ ] **Task 16: `pipeline/usage_capture.py`**
   - [ ] Add a `UsageCapture` class constructed with the run's `warned: set[str]`. It is the only place a `UsageRecord` is built (D4).
   - [ ] `record_from_message(resolved, message_metadata, *, started, model, effort_sent) -> UsageRecord | None` for `Agent` paths: reads the three `providers/base.py` keys
   - [ ] `record_from_telemetry(resolved, telemetry, *, started, model, effort_sent, partial=False)` for the session path and for `ProviderError.telemetry`
-  - [ ] `record_from_review(result: ReviewResult, resolved, effort_sent)` reuses the review's already-resolved cost and basis; no re-pricing
-  - [ ] Each computes `duration_seconds = time.monotonic() - started` at call time (D6), fills `alias`/`profile` from `ResolvedModel` (alias `None` for a bare model id), and calls `resolve_cost`
+  - [ ] `record_from_review(result: ReviewResult, resolved, effort_sent)` reuses the review's already-resolved cost and basis and its `duration_seconds` (measured by `review_client`, 931 D9); no re-pricing, no `started`
+  - [ ] `record_from_error(resolved, exc: ProviderError, *, model, effort_sent)` for a failed review: tokens from `exc.telemetry`, duration from `exc.duration_seconds` (set by `review_client.py:307`); `None` when `exc.telemetry` is `None`
+  - [ ] `record_from_message` and `record_from_telemetry` compute `duration_seconds = time.monotonic() - started` at call time (D6). Every builder fills `alias`/`profile` from `ResolvedModel` (alias `None` for a bare model id), and calls `resolve_cost`
   - [ ] Return `None` when there is nothing to record: no turns, no usage, and no cost reported (a provider that reports nothing)
   - [ ] `partial=True` logs the D5 WARNING verbatim with run id and step name (passed in)
   - [ ] `stamp(metadata, record)` writes `metadata[USAGE_KEY] = record.to_dict()` only when `record` is not `None`. Every action writes the key through it, never directly.
@@ -177,7 +184,7 @@ status: not_started
   - [ ] Wire construction: the executor creates one `UsageCapture` per run; `ActionContext` gains a `usage_capture: UsageCapture` field set by the executor for every step
   - **Success:** stdlib + squadron imports only; no Typer; under ~150 lines
 
-- [ ] **Task 16: Test `usage_capture`**
+- [ ] **Task 17: Test `usage_capture`**
   - [ ] New `tests/pipeline/test_usage_capture.py`, one test per provider shape: SDK agent metadata (provider cost → `provider`); OpenAI metadata with a priced alias (→ `alias_pricing`); Codex metadata (`turns: 1`); session telemetry; telemetry from a `ProviderError`
   - [ ] Bare model id → `alias` `None`, provider cost kept, no WARNING
   - [ ] `partial=True` → record flag set, D5 WARNING contains run id and step
@@ -185,11 +192,13 @@ status: not_started
   - [ ] `duration_seconds` equals the patched `time.monotonic` delta
   - [ ] Nothing reported → `None`; `stamp` with `None` leaves `metadata` without `USAGE_KEY`
   - [ ] `effort_for_session` with alias effort logs the D7 DEBUG line once across two calls on one `UsageCapture`
+  - [ ] `record_from_review` takes `ReviewResult.duration_seconds`; `record_from_error` takes `exc.duration_seconds`
+  - [ ] Executor wiring: run a two-step pipeline through the executor with stub actions that capture `context.usage_capture`; assert both steps received the same instance, and a pricing WARNING triggered from both steps fires once
   - [ ] Run `pytest tests/pipeline/test_usage_capture.py -q`, ruff, pyright
   - [ ] Commit: `feat: add usage_capture to build UsageRecords for actions`
   - **Success:** tests pass
 
-- [ ] **Task 17: Wire dispatch (one-shot and session)**
+- [ ] **Task 18: Wire dispatch (one-shot and session)**
   - [ ] In `pipeline/actions/dispatch.py`, take `started = time.monotonic()` immediately before the LLM call on both paths
   - [ ] One-shot: pass the alias `max_output_tokens` (`ResolvedModel.max_output_tokens`) into the agent config when the provider's `applies_output_budget` is true, as `review_client.py:283` does (#151). On success, `stamp` the record from `record_from_message`.
   - [ ] Session: `record_from_telemetry(reply.telemetry, ...)`. On `DispatchStalledError`, `partial = not exc.session_usable`.
@@ -199,7 +208,7 @@ status: not_started
   - [ ] Keep the action's added lines to the calls; any branching beyond picking `record_from_message` vs `record_from_telemetry` goes in `usage_capture.py`
   - **Success:** every dispatch exit path with an LLM call (success, `ProviderError`, stall) records usage when the provider reported any
 
-- [ ] **Task 18: Test dispatch capture**
+- [ ] **Task 19: Test dispatch capture**
   - [ ] In `tests/pipeline/test_dispatch.py` (or a new `test_dispatch_usage.py` if that file is over size): one-shot success has `metadata["usage"]` with the persisted shape; the agent config received `max_output_tokens`; one-shot `ProviderError` with telemetry → failed result has a record; session success; session stall with failed drain → `partial: true`; SDK session with alias effort → `effort` `None` and the D7 DEBUG line logged once across two session dispatches in one run
   - [ ] The failed one-shot result and the stalled session result each carry a non-`None` `duration_seconds` (criterion 4)
   - [ ] `asyncio.CancelledError` from the agent propagates and no `usage` key is written (failure table)
@@ -208,33 +217,33 @@ status: not_started
   - [ ] Commit: `feat: record usage and pass output budget on dispatch steps`
   - **Success:** tests pass (criteria 2, 4, 6, 7 for dispatch)
 
-- [ ] **Task 19: Wire summary (one-shot and session)**
-  - [ ] In `pipeline/actions/summary.py` and `pipeline/summary_oneshot.py`: same pattern as Task 17. One-shot passes `max_output_tokens` under the same `applies_output_budget` rule (#151) and records from message metadata; session records from `reply.telemetry` with effort from `effort_for_session` (D7).
+- [ ] **Task 20: Wire summary (one-shot and session)**
+  - [ ] In `pipeline/actions/summary.py` and `pipeline/summary_oneshot.py`: same pattern as Task 18. One-shot passes `max_output_tokens` under the same `applies_output_budget` rule (#151) and records from message metadata; session records from `reply.telemetry` with effort from `effort_for_session` (D7).
   - [ ] `summary_oneshot.py` returns the final message metadata (or the record inputs) to the action; the action stamps `metadata[USAGE_KEY]`
   - [ ] Failure path with telemetry records (D5)
   - **Success:** summary steps record usage on both paths
 
-- [ ] **Task 20: Test summary capture**
-  - [ ] In the existing summary action tests: one-shot record with `max_output_tokens` passed and effort per D7; session record with effort `None`; a failure with telemetry records
+- [ ] **Task 21: Test summary capture**
+  - [ ] In the existing summary action tests: one-shot record with `max_output_tokens` passed and effort per D7; session record with effort `None`; a failure with telemetry records, with non-`None` `duration_seconds`
   - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
   - [ ] Commit: `feat: record usage and pass output budget on summary steps`
   - **Success:** tests pass
 
-- [ ] **Task 21: Wire compact and review**
-  - [ ] In `pipeline/actions/compact.py`, `stamp` the record from the `compact` `SessionReply.telemetry`, effort from `effort_for_session`. A compact with a supplied summary (turns 0, nothing reported) records nothing.
+- [ ] **Task 22: Wire compact and review**
+  - [ ] In `pipeline/actions/compact.py`, take `started = time.monotonic()` immediately before `sdk_session.compact(...)`, then `stamp` the record from the `compact` `SessionReply.telemetry`, effort from `effort_for_session`. A compact with a supplied summary (turns 0, nothing reported) records nothing.
   - [ ] In `pipeline/actions/review.py`, after the review returns, `stamp` `usage_capture.record_from_review(...)`. `effort_sent` is `ReviewResult.effort`, which `review_client.py:317` already sets to the effort sent.
-  - [ ] Failed review (D5): the `ProviderError` re-raised at `review.py:439` reaches `_exception_result`. There, when `exc` is a `ProviderError` with `telemetry`, `stamp` `record_from_telemetry(exc.telemetry, ...)` on the failed result.
-  - [ ] No pricing or duration logic in either action
+  - [ ] Failed review (D5): in the `except ProviderError` handler at `review.py:439`, where `settings.resolved` is in scope, build `record_from_error(settings.resolved, exc, ...)` (effort sent per D7). Replace that handler's bare re-raise with `_logger.exception` (the message `execute`'s catch-all logs today) and `return self._exception_result(context, exc, usage_record=record)`; `_exception_result` gains an optional `usage_record` and `stamp`s it.
+  - [ ] No pricing or duration arithmetic in either action
   - **Success:** compact steps that ran a capture turn record usage; a pipeline review records the same tokens and cost its artifact shows; a failed review with telemetry records it
 
-- [ ] **Task 22: Test compact and review capture**
-  - [ ] Compact: capture turn → record; supplied summary → no `usage` key
-  - [ ] Review: action metadata `usage.tokens` and `cost_usd` equal the `ReviewResult` values; a review raising `ProviderError` with telemetry → failed result has `usage`
+- [ ] **Task 23: Test compact and review capture**
+  - [ ] Compact: capture turn → record with non-`None` `duration_seconds`; supplied summary → no `usage` key
+  - [ ] Review: action metadata `usage.tokens` and `cost_usd` equal the `ReviewResult` values; a review raising `ProviderError` with telemetry → failed result has `usage` with `duration_seconds` equal to the error's, and the ERROR log still fires
   - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
   - [ ] Commit: `feat: record usage on compact and review steps`
   - **Success:** tests pass (criterion 2 complete)
 
-- [ ] **Task 23: State round-trip**
+- [ ] **Task 24: State round-trip**
   - [ ] In `tests/pipeline` state tests: a run with usage records saves and loads with `metadata["usage"]` intact; checked-in pre-slice run files at schema v3, v4, v5 (add minimal files under `tests/pipeline/fixtures/state/`; none exist today) load without error
   - [ ] Run `pytest tests/pipeline -q`, ruff, pyright
   - [ ] Commit: `test: cover usage records through run-state round-trip`
@@ -242,52 +251,53 @@ status: not_started
 
 ### Stats core (D8, D9)
 
-- [ ] **Task 24: `stats/usage_report.py` — run report**
+- [ ] **Task 25: `stats/usage_report.py` — run report**
   - [ ] New package `src/squadron/stats/` (`__init__.py`, `usage_report.py`). No Typer, no Rich.
   - [ ] Typed results: `ActionUsageRow` (step, action type, record or `None`, `unreadable` flag), `RunUsageReport` (run header fields, rows, totals, priced count, LLM action count, unrecorded count, any-partial flag)
   - [ ] `run_usage_report(run_id, state_manager) -> RunUsageReport` loads through `StateManager.load` (never raw `open`). An unknown id or a load error raises a typed error carrying the id, runs directory, file, and parse/schema message.
   - [ ] Per action: `UsageRecord.from_dict`; `ValueError` → row `unreadable` + WARNING naming run and step (D9)
   - [ ] Non-LLM actions are identified by `ActionType` enum membership (one module constant set), not string matching. LLM actions with no record count toward "no usage recorded".
-  - [ ] Totals computed at read time by one helper, `usage_totals(records)`: tokens with `add_optional`, turns summed, cost with `add_optional_float` over priced rows only, plus the priced count (D9). Nothing is stored. The reviews report (Task 26) reuses this helper.
+  - [ ] Totals computed at read time by one helper, `usage_totals(records)`: tokens with `add_optional`, turns summed, cost with `add_optional_float` over priced rows only, plus the priced count (D9). Nothing is stored. The reviews report (Task 27) reuses this helper.
   - **Success:** under ~300 lines; returns data only
 
-- [ ] **Task 25: Test the run report**
+- [ ] **Task 26: Test the run report**
   - [ ] New `tests/stats/test_usage_report.py`: mixed run (priced, unpriced, non-LLM, pre-slice) → totals, `N of M priced`, unrecorded count; malformed usage → `unreadable` row + WARNING; partial record → flag set; unknown id and corrupt file → typed error with the id/file; a test asserts loading goes through `StateManager`
   - [ ] Run `pytest tests/stats -q`, ruff, pyright
   - [ ] Commit: `feat: add run usage report core`
   - **Success:** tests pass
 
-- [ ] **Task 26: Reviews report**
+- [ ] **Task 27: Reviews report**
   - [ ] New `stats/reviews_report.py`: `reviews_usage_report(reviews_dir, slice_filter) -> ReviewsUsageReport` reads top-level `*.md` in `REVIEWS_DIR` with `read_frontmatter` only (no body reads)
   - [ ] `None` frontmatter → skipped, one WARNING per file, counted for the footer
   - [ ] `runId` present → excluded, counted, run ids kept for the footer hint (D8)
   - [ ] `slice_filter` compares against frontmatter `slice`
   - [ ] Missing directory → empty report with a `missing_dir` flag (not an error)
-  - [ ] Rows: date, slice, review type, model, verdict, token and cost keys from the 931/175 frontmatter table; totals from `usage_totals` (Task 24)
+  - [ ] Rows: date, slice, review type, model, verdict, token and cost keys from the 931/175 frontmatter table; totals from `usage_totals` (Task 25)
+  - [ ] Map each artifact to a `UsageRecord` for `usage_totals`: `promptTokens`, `cachedTokens`, `cacheWriteTokens`, `completionTokens`, `reasoningTokens`, `turns` → ints; `durationSeconds`, `costUsd` → floats (an int is accepted); `costBasis` → `CostBasis`; `requestedModel` → `alias` when it is a known alias, else `None`; `aiProfile` → `profile`; `effort` → `effort`. A missing key is `None`. A wrong type (bool counts as wrong for ints) or an unknown `costBasis` makes that field `None` and logs a WARNING naming the file and key; the row stays. The CLI's `api-rate equiv.` label then reads the alias the same way as for run rows.
   - **Success:** one frontmatter parse per artifact; each `stats` module under ~300 lines
 
-- [ ] **Task 27: Test the reviews report**
-  - [ ] New `tests/stats/test_reviews_report.py`, using a temp dir: standalone, pipeline (`runId`), unreadable-frontmatter, and other-slice artifacts → correct rows, excluded and skipped counts, filter; missing dir → `missing_dir`; patch the body reader to assert no body read
+- [ ] **Task 28: Test the reviews report**
+  - [ ] New `tests/stats/test_reviews_report.py`, using a temp dir: standalone, pipeline (`runId`), unreadable-frontmatter, and other-slice artifacts → correct rows, excluded and skipped counts, filter; `promptTokens: "abc"` and `costBasis: guess` → those fields `None` with a WARNING naming file and key, row kept, totals exclude them; `requestedModel` that is not an alias → `alias` `None`; missing dir → `missing_dir`; patch the body reader to assert no body read
   - [ ] Run `pytest tests/stats -q`, ruff, pyright
   - [ ] Commit: `feat: add reviews usage report core`
   - **Success:** tests pass
 
 ### `sq stats` CLI and wrappers (D8; criteria 8, 10)
 
-- [ ] **Task 28: `cli/commands/stats.py`**
+- [ ] **Task 29: `cli/commands/stats.py`**
   - [ ] Typer group `stats` with `run <run_id> [--json]` and `reviews [--slice INDEX] [--json]`; register in `cli/app.py` with `app.add_typer(stats_app, name="stats")`
   - [ ] Render the design's UI Specifications layout with `cli/columns.py` `fit_widths`. `—` for `None` cells; cost suffix `prov`/`alias`; `api-rate equiv.` label when the record's alias has `cost_tier == "subscription"` (read from the alias table, D3); `*` on partial rows plus the D5 footer; `N LLM actions have no usage recorded.`; reviews footer `N pipeline review(s) excluded; see sq stats run <id>` and `N artifact(s) skipped`
   - [ ] `--json` emits the same rows and totals as the table (one serializer over the report dataclasses)
   - [ ] Errors: unknown id / unreadable file → message naming id and runs dir, or file and error, exit 1. Missing reviews dir → `No review directory at <path>`, exit 0.
   - **Success:** no aggregation logic in the CLI module
 
-- [ ] **Task 29: Test the CLI**
+- [ ] **Task 30: Test the CLI**
   - [ ] New `tests/cli/test_stats.py` with `CliRunner`: snapshot of each table; `--json` rows equal the table rows; old run shows `—` cells and the unrecorded line; unknown id and corrupt file exit 1 with the named id/file; missing reviews dir exits 0 with the message; subscription alias shows `api-rate equiv.`
   - [ ] Run `pytest tests/cli/test_stats.py -q`, ruff, pyright
   - [ ] Commit: `feat: add sq stats run and reviews commands`
   - **Success:** tests pass
 
-- [ ] **Task 30: Slash command and agents skill**
+- [ ] **Task 31: Slash command and agents skill**
   - [ ] Add `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md`, modeled on `commands/sq/summary.md` and `commands/agents/sq-summary/SKILL.md`, containing only the instruction to run `sq stats $ARGUMENTS` and print its output
   - [ ] Extend `tests/cli/test_install_commands.py` to assert both files install
   - [ ] Run `sq install-commands` locally
@@ -297,19 +307,20 @@ status: not_started
 
 ### Docs and closure
 
-- [ ] **Task 31: CHANGELOG and README**
+- [ ] **Task 32: CHANGELOG and README**
   - [ ] CHANGELOG (user-facing bullets): `sq stats`; SDK reviews and every pipeline LLM step now record tokens, turns, time, and cost; review artifacts gain cache-write and cost keys; dispatch and summary honor alias `max_output_tokens`
   - [ ] README: a `sq stats` section and the cost-basis meaning (`provider` vs `alias_pricing`, and that `api-rate equiv.` on a subscription is not money spent)
+  - [ ] Propose the minor version bump to the Project Manager in one line with the reason (new `sq stats` command group); change no version files
   - [ ] Commit: `docs: add sq stats and cost basis to README and CHANGELOG`
   - **Success:** both files updated
 
-- [ ] **Task 32: Full validation**
+- [ ] **Task 33: Full validation**
   - [ ] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full `pytest` suite
   - [ ] Run the design's Verification Walkthrough steps 1–7 in a scratch project registered with cf. Record each step's outcome in the DEVLOG entry. If a step cannot run (for example, no OpenRouter alias with pricing for step 2), stop and report it to the Project Manager rather than marking it done.
   - [ ] Commit any fixes: `fix: address 175 walkthrough findings`
   - **Success:** suite green; walkthrough steps pass
 
-- [ ] **Task 33: Draft issue closure comments**
+- [ ] **Task 34: Draft issue closure comments**
   - [ ] Draft, without posting, one-line closing comments for #172, #36, #154, #151 naming what landed; one for #158 noting 931 implemented it and 175 added the `cache_write` field (always `None` on OpenAI-compatible, D2); and a non-closing comment on #33 that SDK capture landed and `AuditRun` persistence remains open
   - [ ] Give the drafts to the Project Manager. Posting and closing happen at Phase 7 closure, after code review, and only on the Project Manager's go-ahead.
   - **Success:** drafts delivered; no issue posted to or closed in Phase 6
