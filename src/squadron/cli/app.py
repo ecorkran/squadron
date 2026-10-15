@@ -38,6 +38,7 @@ from squadron.cli.commands.setup import setup
 from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.skills import skills_app
 from squadron.cli.commands.spawn import spawn
+from squadron.cli.commands.stats import stats_app
 from squadron.cli.commands.summary_instructions import summary_instructions
 from squadron.cli.commands.summary_run import summary_run
 from squadron.cli.commands.task import task
@@ -66,6 +67,7 @@ app.add_typer(auth_app, name="auth")
 app.add_typer(skills_app, name="skills")
 app.add_typer(events_app, name="events")
 app.add_typer(pr_app, name="pr")
+app.add_typer(stats_app, name="stats")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
 app.command("setup")(setup)
