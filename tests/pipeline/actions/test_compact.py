@@ -10,6 +10,7 @@ import pytest
 
 from squadron.pipeline.actions.compact import CompactAction
 from squadron.pipeline.models import ActionContext
+from squadron.pipeline.usage_capture import UsageCapture, UsageCaptureMissingError
 from tests.pipeline.conftest import session_reply
 
 _MOD = "squadron.pipeline.actions.compact"
@@ -36,6 +37,7 @@ def _make_context(
         cf_client=MagicMock(),
         cwd="/tmp",
         sdk_session=sdk_session,
+        usage_capture=UsageCapture(set()),
     )
 
 
@@ -265,3 +267,51 @@ async def test_compact_reconnect_failure_fails_step(action: CompactAction) -> No
 
     assert result.success is False
     assert "E2BIG" in (result.error or "")
+
+
+# ---------------------------------------------------------------------------
+# Usage records (slice 175 D4, D6)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_capture_turn_records_usage(action: CompactAction) -> None:
+    from squadron.core.usage import RunTelemetry, TokenUsage, UsageRecord
+    from squadron.pipeline.sdk_turns import SessionReply
+    from squadron.providers.base import USAGE_KEY
+
+    telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=80, completion=8), cost_usd=0.02)
+    session = MagicMock()
+    session.current_model = None
+    session.compact = AsyncMock(return_value=SessionReply("summary", telemetry))
+
+    result = await action.execute(_make_context(sdk_session=session, params={"model": "haiku"}))
+
+    record = UsageRecord.from_dict(result.metadata[USAGE_KEY])  # type: ignore[arg-type]
+    assert (record.turns, record.cost_usd, record.model) == (1, 0.02, "haiku")
+    assert record.effort is None
+    assert record.duration_seconds is not None
+
+
+@pytest.mark.asyncio
+async def test_compact_with_nothing_spent_records_nothing(action: CompactAction) -> None:
+    from squadron.providers.base import USAGE_KEY
+
+    session = MagicMock()
+    session.current_model = None
+    session.compact = AsyncMock(return_value=session_reply("supplied summary"))
+
+    result = await action.execute(_make_context(sdk_session=session))
+
+    assert USAGE_KEY not in result.metadata
+
+
+@pytest.mark.asyncio
+async def test_compact_without_capture_is_a_clear_error(action: CompactAction) -> None:
+    session = MagicMock()
+    session.current_model = None
+    ctx = _make_context(sdk_session=session)
+    ctx.usage_capture = None
+
+    with pytest.raises(UsageCaptureMissingError, match="compact"):
+        await action.execute(ctx)

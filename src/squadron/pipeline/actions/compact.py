@@ -12,12 +12,14 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import time
 
 import claude_agent_sdk
 from claude_agent_sdk import SystemMessage
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
+from squadron.pipeline.usage_capture import require_capture, stamp
 
 _logger = logging.getLogger(__name__)
 
@@ -68,9 +70,11 @@ class CompactAction:
         model_raw = context.params.get("model")
         summary_model = str(model_raw) if model_raw is not None else None
         restore_model = context.sdk_session.current_model  # type: ignore[union-attr]
+        capture = require_capture(context.usage_capture, self.action_type)
 
+        started = time.monotonic()
         try:
-            await context.sdk_session.compact(  # type: ignore[union-attr]
+            reply = await context.sdk_session.compact(  # type: ignore[union-attr]
                 instructions=instructions,
                 summary_model=summary_model,
                 restore_model=restore_model,
@@ -84,10 +88,20 @@ class CompactAction:
                 error=str(exc),
             )
 
+        # The compact model is the alias the step named; no resolution is needed to
+        # attribute spend the SDK already priced (slice 175 D3). Effort is never sent (D7).
+        metadata: dict[str, object] = {}
+        stamp(
+            metadata,
+            capture.record_from_telemetry(
+                None, reply.telemetry, started=started, model=summary_model, effort_sent=None
+            ),
+        )
         return ActionResult(
             success=True,
             action_type=self.action_type,
             outputs={},
+            metadata=metadata,
         )
 
     async def _execute_prompt_only(self, context: ActionContext, instructions: str) -> ActionResult:

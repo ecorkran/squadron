@@ -33,6 +33,7 @@ from squadron.pipeline.executor import (
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
+from squadron.pipeline.usage_capture import UsageCapture
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -314,6 +315,7 @@ class TestDispatchActionGuard:
             cf_client=MagicMock(),
             cwd="/tmp",
             sdk_session=sdk_session,
+            usage_capture=UsageCapture(set()),
         )
 
     @pytest.mark.asyncio

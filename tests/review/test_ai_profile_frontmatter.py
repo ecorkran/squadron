@@ -18,6 +18,7 @@ from squadron.documents.frontmatter import read_frontmatter
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.errors import ProviderAPIError
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import (
@@ -116,6 +117,7 @@ async def test_pipeline_review_artifact_carries_the_resolved_profile(tmp_path: P
         resolver=resolver,
         cf_client=MagicMock(),
         cwd=str(tmp_path),
+        usage_capture=UsageCapture(set()),
     )
     stub = _result(None)  # the client did not stamp a profile; the action does
 

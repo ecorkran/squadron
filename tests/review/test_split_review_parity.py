@@ -25,6 +25,7 @@ from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.executor import execute_pipeline
 from squadron.pipeline.models import ActionContext, PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import REVIEWS_DIR, TASKS_DIR
 
@@ -104,6 +105,7 @@ def _context(root: Path, cf_client: MagicMock) -> ActionContext:
         resolver=resolver,
         cf_client=cf_client,
         cwd=str(root),
+        usage_capture=UsageCapture(set()),
     )
 
 

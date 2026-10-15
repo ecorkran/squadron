@@ -16,6 +16,7 @@ from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolutionError, ModelResolver, ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.base import ProfileName
 from squadron.review.models import (
     ReviewFinding,
@@ -50,6 +51,7 @@ def _make_context(**overrides: object) -> ActionContext:
         "resolver": resolver,
         "cf_client": MagicMock(),
         "cwd": "/tmp/test",
+        "usage_capture": UsageCapture(set()),
     }
     defaults.update(overrides)
     return ActionContext(**defaults)  # type: ignore[arg-type]
@@ -1657,6 +1659,89 @@ class TestProviderFailureArtifact:
         body = written.read_text()
         assert "## Provider Failure" in body
         assert "slice 0" not in body
+
+
+class TestReviewUsageRecord:
+    """Slice 175 D4, D5: a pipeline review records what its artifact shows."""
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_review_record_matches_review_result(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        from squadron.core.usage import CostBasis, TokenUsage, UsageRecord
+        from squadron.providers.base import USAGE_KEY
+
+        review = _make_review_result()
+        review.turns = 3
+        review.usage = TokenUsage(prompt=900, cached=500, cache_write=100, completion=40)
+        review.cost_usd, review.cost_basis = 0.12, CostBasis.PROVIDER
+        review.duration_seconds = 21.0
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = review
+
+        result = await ReviewAction().execute(_make_context(cwd=str(tmp_path)))
+
+        record = UsageRecord.from_dict(result.metadata[USAGE_KEY])  # type: ignore[arg-type]
+        assert record.usage == review.usage
+        assert (record.cost_usd, record.cost_basis) == (0.12, CostBasis.PROVIDER)
+        assert record.duration_seconds == 21.0
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_failed_review_records_error_telemetry_and_logs(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        tmp_path: Path,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        from squadron.core.usage import RunTelemetry, TokenUsage, UsageRecord
+        from squadron.providers.base import USAGE_KEY
+        from squadron.providers.errors import ProviderError
+
+        raised = ProviderError(_PROVIDER_FAILURE)
+        raised.telemetry = RunTelemetry(turns=2, usage=TokenUsage(prompt=60, completion=6))
+        raised.duration_seconds = 9.25
+        (tmp_path / "project-documents/user/reviews").mkdir(parents=True)
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.side_effect = raised
+
+        with caplog.at_level(logging.ERROR, logger=_P):
+            result = await ReviewAction().execute(_make_context(cwd=str(tmp_path)))
+
+        assert result.success is False
+        record = UsageRecord.from_dict(result.metadata[USAGE_KEY])  # type: ignore[arg-type]
+        assert record.duration_seconds == 9.25
+        assert record.usage == TokenUsage(prompt=60, completion=6)
+        assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_missing_capture_is_a_clear_error(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+
+        result = await ReviewAction().execute(_make_context(usage_capture=None))
+
+        assert result.success is False
+        assert result.error is not None and "usage capture" in result.error
 
 
 class TestUnknownAliasBackstop:

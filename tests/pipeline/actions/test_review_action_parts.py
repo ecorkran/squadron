@@ -15,6 +15,7 @@ from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey, finding_input_file
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.providers.errors import ProviderError
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 from squadron.review.persistence import REVIEWS_DIR, TASKS_DIR, save_review_result
@@ -82,6 +83,7 @@ def context(cwd: Path, **params: object) -> ActionContext:
         resolver=resolver,
         cf_client=MagicMock(),
         cwd=str(cwd),
+        usage_capture=UsageCapture(set()),
     )
 
 

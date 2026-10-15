@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from squadron.pipeline.models import ActionContext, ActionResult
+from squadron.pipeline.usage_capture import UsageCapture
 
 
 def _make_context(
@@ -22,6 +23,7 @@ def _make_context(
         cf_client=MagicMock(),
         cwd="/tmp",
         sdk_session=None,
+        usage_capture=UsageCapture(set()),
     )
 
 

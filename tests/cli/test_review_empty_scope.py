@@ -18,6 +18,7 @@ from typer.testing import CliRunner
 from squadron.cli.app import app
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.git_utils import EmptyScopeCase, EmptyScopeError
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.rules import RulesSource
@@ -208,6 +209,7 @@ def _pipeline_context(cwd: str) -> ActionContext:
         resolver=resolver,
         cf_client=MagicMock(),
         cwd=cwd,
+        usage_capture=UsageCapture(set()),
     )
 
 
@@ -276,6 +278,7 @@ class TestPipelineNormalizesDiff:
             resolver=resolver,
             cf_client=MagicMock(),
             cwd=str(repo),
+            usage_capture=UsageCapture(set()),
         )
 
         with (
@@ -317,6 +320,7 @@ class TestPipelineExplicitDiffWins:
             resolver=resolver,
             cf_client=MagicMock(),
             cwd=str(healthy_repo),
+            usage_capture=UsageCapture(set()),
         )
 
         slice_info = {

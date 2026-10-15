@@ -22,6 +22,7 @@ from squadron.metrology.models import ProjectId, ProjectIdSource
 from squadron.metrology.preemption import render_fragment, write_fragment
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionContext, ActionResult
+from squadron.pipeline.usage_capture import UsageCapture
 
 _FRAGMENT_OPEN = "--- Pre-emption: known issue classes for this project ---\n"
 _FRAGMENT_CLOSE = "--- End pre-emption ---\n\n"
@@ -43,6 +44,7 @@ def _make_context(
         cf_client=MagicMock(),
         cwd="/tmp",
         sdk_session=None,
+        usage_capture=UsageCapture(set()),
     )
 
 

@@ -14,6 +14,7 @@ import pytest
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import REVIEWS_DIR
 
@@ -35,6 +36,7 @@ def _context(cwd: Path, params: dict[str, object]) -> ActionContext:
         resolver=resolver,
         cf_client=MagicMock(),
         cwd=str(cwd),
+        usage_capture=UsageCapture(set()),
     )
 
 

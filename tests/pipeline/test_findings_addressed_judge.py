@@ -15,6 +15,7 @@ import pytest
 
 from squadron.pipeline.actions.findings_addressed import judge_residue
 from squadron.pipeline.models import ActionContext
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.addressed import (
     derive_addressed_verdict,
     is_parse_failure,
@@ -64,6 +65,7 @@ def _context(**params: object) -> ActionContext:
         cf_client=MagicMock(),
         cwd="/repo",
         iteration=2,
+        usage_capture=UsageCapture(set()),
     )
 
 

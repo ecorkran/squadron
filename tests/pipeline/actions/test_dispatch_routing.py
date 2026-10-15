@@ -12,6 +12,7 @@ import pytest
 
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionContext, ActionResult
+from squadron.pipeline.usage_capture import UsageCapture
 
 _P = "squadron.pipeline.actions.dispatch"
 
@@ -39,6 +40,7 @@ def _make_context(
         cf_client=MagicMock(),
         cwd="/tmp/test",
         sdk_session=sdk_session,
+        usage_capture=UsageCapture(set()),
     )
 
 

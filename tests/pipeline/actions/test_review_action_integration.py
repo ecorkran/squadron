@@ -10,6 +10,7 @@ import pytest
 
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.models import ReviewFinding, ReviewResult, Severity, Verdict
 from squadron.review.templates import ReviewTemplate
 
@@ -39,6 +40,7 @@ def _make_context(params: dict[str, object]) -> ActionContext:
         resolver=resolver,
         cf_client=MagicMock(),
         cwd="/tmp/test",
+        usage_capture=UsageCapture(set()),
     )
 
 

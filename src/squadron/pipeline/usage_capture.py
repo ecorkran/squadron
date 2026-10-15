@@ -22,6 +22,9 @@ from squadron.models.aliases import resolve_cost
 from squadron.pipeline.resolver import ResolvedModel
 from squadron.providers.base import COST_USD_KEY, TURNS_KEY, USAGE_KEY
 from squadron.providers.errors import ProviderError
+from squadron.providers.loader import ensure_provider_loaded
+from squadron.providers.profiles import get_profile
+from squadron.providers.registry import get_provider
 from squadron.review.models import ReviewResult
 
 _logger = logging.getLogger(__name__)
@@ -48,6 +51,16 @@ def note_effort_sent(
     """Record the effort a one-shot agent sends: the alias value only if applied (D7)."""
     if usage_metadata is not None:
         usage_metadata[EFFORT_SENT_KEY] = effort if applies_effort else None
+
+
+def effort_sent_by_profile(profile_name: str, effort: Effort | None) -> Effort | None:
+    """The effort a call on ``profile_name`` sends: the alias value only if applied (D7).
+
+    For paths that have no ``usage_metadata`` to read it from (a failed review).
+    """
+    provider = get_profile(profile_name).provider
+    ensure_provider_loaded(provider)
+    return effort if get_provider(provider).capabilities.applies_effort else None
 
 
 def read_effort_sent(usage_metadata: Mapping[str, object]) -> Effort | None:

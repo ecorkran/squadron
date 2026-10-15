@@ -34,6 +34,7 @@ from squadron.pipeline.intelligence.pools.models import (
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
 from squadron.pipeline.steps.collection import EachStepType
+from squadron.pipeline.usage_capture import UsageCapture
 
 # ---------------------------------------------------------------------------
 # T1 — SpyPoolBackend and definition builders
@@ -1040,6 +1041,7 @@ async def test_run_time_unknown_template_fails_through_the_review_action() -> No
         resolver=make_resolver(pipeline_model="sonnet"),
         cf_client=MagicMock(),
         cwd="/tmp/test",
+        usage_capture=UsageCapture(set()),
     )
     label = action_model_label(context.resolver, "review", dict(context.params), None)
     assert label == "model=sonnet"

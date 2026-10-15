@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from squadron.integrations.context_forge import ProjectInfo, SliceEntry, TaskEntry
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import REVIEWS_DIR, TASKS_DIR
 
@@ -83,4 +84,5 @@ def action_context(root: Path, client: MagicMock, template: str = "tasks") -> Ac
         resolver=resolver,
         cf_client=client,
         cwd=str(root),
+        usage_capture=UsageCapture(set()),
     )

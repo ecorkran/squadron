@@ -14,6 +14,7 @@ from squadron.models.aliases import resolve_model_alias
 from squadron.pipeline.actions.review import ReviewAction
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.profile_resolution import ReviewProfileSource
 from squadron.review.templates import ReviewTemplate
@@ -61,6 +62,7 @@ async def _pipeline_profile(explicit: str | None, model: str | None, template: R
         resolver=resolver,
         cf_client=MagicMock(),
         cwd="/tmp/test",
+        usage_capture=UsageCapture(set()),
     )
     result_stub = ReviewResult(
         verdict=Verdict.PASS,

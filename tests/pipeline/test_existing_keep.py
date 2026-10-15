@@ -29,6 +29,7 @@ from squadron.pipeline.steps.phase import (
     KeepCheck,
     PhaseStepType,
 )
+from squadron.pipeline.usage_capture import UsageCapture
 from tests.conftest import run_test_git
 
 SLICE = 105
@@ -132,6 +133,7 @@ def _dispatch_context(cwd: Path, **extra: object) -> ActionContext:
         resolver=MagicMock(),
         cf_client=_cf(),
         cwd=str(cwd),
+        usage_capture=UsageCapture(set()),
     )
 
 
