@@ -8,7 +8,7 @@ from enum import StrEnum
 
 from squadron import __version__
 from squadron.core.models import Effort, SystemPromptMode
-from squadron.core.usage import TokenUsage
+from squadron.core.usage import CostBasis, TokenUsage
 from squadron.models.snapshot import answers_as_requested
 from squadron.project_rules.conventions import ConventionsSource
 from squadron.review.run_cost import RunCost
@@ -255,9 +255,24 @@ class ReviewResult:
     # that did not reach the model.
     effort: Effort | None = None
     duration_seconds: float | None = None
+    # The resolved cost and where it came from (slice 175 D3), set by review_client.
+    # None when neither the provider nor alias pricing produced one: never $0.
+    cost_usd: float | None = None
+    cost_basis: CostBasis | None = None
     # The provider profile the review ran through (slice 940 D6). None on a hand-built
     # result: the artifact omits aiProfile rather than naming a profile nobody chose.
     profile: str | None = None
+
+    @property
+    def run_cost(self) -> RunCost:
+        """What this run cost, for the artifact's three renderings (slice 931 D10)."""
+        return RunCost(
+            turns=self.turns,
+            usage=self.usage,
+            duration_seconds=self.duration_seconds,
+            cost_usd=self.cost_usd,
+            cost_basis=self.cost_basis,
+        )
 
     @property
     def model_substituted(self) -> bool:
@@ -366,7 +381,7 @@ class ReviewResult:
             # Slice 940 D6: always present, null on a hand-built result. Mirrors
             # frontmatter's aiProfile.
             "profile": self.profile,
-            **RunCost(self.turns, self.usage, self.duration_seconds).json_fields(),
+            **self.run_cost.json_fields(),
         }
         # Slice 266: added only when the gate fired, matching the markdown frontmatter, so
         # an un-gated run's JSON is unchanged.

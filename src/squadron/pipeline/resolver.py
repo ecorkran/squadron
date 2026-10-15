@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from squadron.core.models import Effort
 from squadron.models.aliases import (
+    get_all_aliases,
     model_allows_tools,
     model_effort,
     model_max_output_tokens,
@@ -65,6 +66,9 @@ class ResolvedModel(NamedTuple):
     max_output_tokens: int | None = None
     # Slice 931 D1, D11: the alias's reasoning effort; None sends none.
     effort: Effort | None = None
+    # Slice 175 D3, D4: the alias name, for pricing and usage records. None when the
+    # name resolved was a bare model id rather than an alias.
+    alias: str | None = None
 
 
 def _resolved(alias: str, *, profile_source: bool = False) -> ResolvedModel:
@@ -82,6 +86,7 @@ def _resolved(alias: str, *, profile_source: bool = False) -> ResolvedModel:
         model_allows_tools(alias),
         model_max_output_tokens(alias),
         model_effort(alias),
+        alias if alias in get_all_aliases() else None,
     )
 
 

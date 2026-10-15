@@ -110,7 +110,8 @@ async def test_effort_and_usage_reach_the_artifact(codex_sdk: FakeSdk) -> None:
     assert "promptTokens: 1200" in frontmatter
     assert "reasoningTokens: 90" in frontmatter
     assert "- Effort: high" in md
-    assert "- Tokens — prompt / cached / completion / reasoning: 1200 / 300 / 450 / 90" in md
+    tokens = f"1200 / 300 / {NOT_COMPUTED} / 450 / 90"
+    assert f"- Tokens — prompt / cached / cache write / completion / reasoning: {tokens}" in md
 
 
 @pytest.mark.asyncio
@@ -124,5 +125,5 @@ async def test_turn_without_usage_persists_no_figures(codex_sdk: FakeSdk) -> Non
     frontmatter = md.split("---")[1]
     for key in ("promptTokens", "cachedTokens", "completionTokens", "reasoningTokens"):
         assert key not in frontmatter
-    unreported = " / ".join([NOT_COMPUTED] * 4)
-    assert f"- Tokens — prompt / cached / completion / reasoning: {unreported}" in md
+    unreported = " / ".join([NOT_COMPUTED] * 5)
+    assert f"- Tokens — prompt / cached / cache write / completion / reasoning: {unreported}" in md

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from squadron.core.usage import RunTelemetry
+from squadron.core.usage import CostBasis, RunTelemetry
 
 
 class ProviderError(Exception):
@@ -16,6 +16,8 @@ class ProviderError(Exception):
     ``telemetry`` and ``duration_seconds`` carry what the run cost before it failed
     (slice 931 D12): the agent attaches the first, ``review_client`` the second, so a
     failure artifact records turns, tokens, and wall-clock like a success does.
+    ``cost_usd`` and ``cost_basis`` are the run's resolved cost (slice 175 D3), set by
+    ``review_client`` beside ``duration_seconds``; ``None`` when no cost is known.
     """
 
     def __init__(
@@ -29,6 +31,8 @@ class ProviderError(Exception):
         self.tool_calls_made = tool_calls_made
         self.telemetry = telemetry
         self.duration_seconds = duration_seconds
+        self.cost_usd: float | None = None
+        self.cost_basis: CostBasis | None = None
 
 
 class EmptyFinalTurnError(ProviderError):

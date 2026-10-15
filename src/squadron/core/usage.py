@@ -30,6 +30,13 @@ def add_optional_float(total: float | None, value: float | None) -> float | None
     return (total or 0.0) + value
 
 
+def format_usd(amount: float) -> str:
+    """``$0.41``; four places under a cent so a small real cost never reads as ``$0.00``."""
+    if 0 < abs(amount) < 0.01:
+        return f"${amount:.4f}"
+    return f"${amount:.2f}"
+
+
 @dataclass(frozen=True)
 class TokenUsage:
     """Token counts for one turn or a whole run; each ``None`` when not reported (175 D1).

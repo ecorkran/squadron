@@ -12,12 +12,12 @@ from pathlib import Path
 
 import yaml
 
-from squadron.core.usage import RunTelemetry, TokenUsage
+from squadron.core.usage import CostBasis, RunTelemetry, TokenUsage
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.providers.errors import ProviderAPIError, ProviderError
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import format_provider_failure_markdown, format_review_markdown
-from squadron.review.run_cost import NOT_COMPUTED
+from squadron.review.run_cost import COST_NOT_REPORTED, NOT_COMPUTED
 
 _SLICE_INFO = {
     "index": 931,
@@ -28,7 +28,7 @@ _SLICE_INFO = {
     "project": "squadron",
 }
 
-_TOKEN_LINE = "- Tokens — prompt / cached / completion / reasoning: "
+_TOKEN_LINE = "- Tokens — prompt / cached / cache write / completion / reasoning: "
 
 
 def _result(**cost: object) -> ReviewResult:
@@ -69,7 +69,7 @@ def test_success_frontmatter_digest_and_json_agree() -> None:
     assert front["cachedTokens"] == payload["cached_tokens"] == 380112
     assert front["completionTokens"] == payload["completion_tokens"] == 9214
     assert front["reasoningTokens"] == payload["reasoning_tokens"] == 6120
-    assert _digest_value(md, _TOKEN_LINE) == "412803 / 380112 / 9214 / 6120"
+    assert _digest_value(md, _TOKEN_LINE) == f"412803 / 380112 / {NOT_COMPUTED} / 9214 / 6120"
     assert front["durationSeconds"] == 214.3
     assert payload["duration_seconds"] == 214.34
     assert _digest_value(md, "- Duration: ") == "214.3 s"
@@ -87,7 +87,8 @@ def test_unreported_fields_are_absent_sentinel_and_null_never_zero() -> None:
     assert payload["cached_tokens"] is None
     assert payload["reasoning_tokens"] is None
     assert payload["duration_seconds"] is None
-    assert _digest_value(md, _TOKEN_LINE) == f"10 / {NOT_COMPUTED} / 3 / {NOT_COMPUTED}"
+    unset = NOT_COMPUTED
+    assert _digest_value(md, _TOKEN_LINE) == f"10 / {unset} / {unset} / 3 / {unset}"
     assert _digest_value(md, "- Duration: ") == NOT_COMPUTED
 
 
@@ -124,7 +125,7 @@ def test_failure_frontmatter_and_digest_agree_from_one_error() -> None:
     assert (front["turns"], _digest_value(md, "- Turns: ")) == (2, "2")
     assert (front["promptTokens"], front["cachedTokens"], front["completionTokens"]) == (30, 6, 3)
     assert "reasoningTokens" not in front
-    assert _digest_value(md, _TOKEN_LINE) == f"30 / 6 / 3 / {NOT_COMPUTED}"
+    assert _digest_value(md, _TOKEN_LINE) == f"30 / 6 / {NOT_COMPUTED} / 3 / {NOT_COMPUTED}"
     assert front["durationSeconds"] == 12.0
     assert _digest_value(md, "- Duration: ") == "12.0 s"
 
@@ -162,3 +163,63 @@ def test_unsent_effort_is_absent_backend_default_and_null() -> None:
     assert "effort" not in _frontmatter(md)
     assert _digest_value(md, "- Effort: ") == "backend default"
     assert result.to_dict()["effort"] is None
+
+
+# --- Cache write and cost (slice 175 D3) ---
+
+
+def test_provider_cost_renders_every_key() -> None:
+    result = _result(
+        turns=3,
+        usage=TokenUsage(prompt=500, cached=300, cache_write=100, completion=20),
+        cost_usd=0.41,
+        cost_basis=CostBasis.PROVIDER,
+    )
+
+    md = format_review_markdown(result, "code", _SLICE_INFO)  # type: ignore[arg-type]
+    front = _frontmatter(md)
+    payload = result.to_dict()
+
+    assert front["cacheWriteTokens"] == payload["cache_write_tokens"] == 100
+    assert front["costUsd"] == payload["cost_usd"] == 0.41
+    assert front["costBasis"] == payload["cost_basis"] == "provider"
+    assert _digest_value(md, _TOKEN_LINE) == f"500 / 300 / 100 / 20 / {NOT_COMPUTED}"
+    assert _digest_value(md, "- Cost: ") == "$0.41 (provider)"
+
+
+def test_alias_priced_openai_usage_has_no_cache_write_key() -> None:
+    result = _result(
+        usage=TokenUsage(prompt=500, cached=300, completion=20),
+        cost_usd=0.003,
+        cost_basis=CostBasis.ALIAS_PRICING,
+    )
+
+    md = format_review_markdown(result, "code", _SLICE_INFO)  # type: ignore[arg-type]
+    front = _frontmatter(md)
+
+    assert front["costBasis"] == "alias_pricing"
+    assert "cacheWriteTokens" not in front
+    assert _digest_value(md, "- Cost: ") == "$0.0030 (alias_pricing)"
+
+
+def test_no_cost_has_no_key_and_says_not_reported() -> None:
+    result = _result(usage=TokenUsage(prompt=5, completion=1))
+
+    md = format_review_markdown(result, "code", _SLICE_INFO)  # type: ignore[arg-type]
+    front = _frontmatter(md)
+    payload = result.to_dict()
+
+    assert "costUsd" not in front and "costBasis" not in front
+    assert _digest_value(md, "- Cost: ") == COST_NOT_REPORTED
+    for key in ("cache_write_tokens", "cost_usd", "cost_basis"):
+        assert key in payload and payload[key] is None
+
+
+def test_failure_artifact_renders_resolved_cost() -> None:
+    exc = _failed(RunTelemetry(turns=1, usage=TokenUsage(prompt=5, completion=1)), 1.0)
+    exc.cost_usd, exc.cost_basis = 0.02, CostBasis.PROVIDER
+
+    md = format_provider_failure_markdown(exc, "code", _SLICE_INFO)  # type: ignore[arg-type]
+
+    assert _frontmatter(md)["costUsd"] == 0.02
+    assert _digest_value(md, "- Cost: ") == "$0.02 (provider)"

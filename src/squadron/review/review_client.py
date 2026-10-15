@@ -26,6 +26,7 @@ from squadron.core.models import (
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.integrations.context_forge import DOCS_ROOT
 from squadron.models.aliases import model_allows_tools as _alias_allows_tools
+from squadron.models.aliases import resolve_cost
 from squadron.project_rules.conventions import ConventionsSource, find_conventions
 from squadron.project_rules.render import demote_headings
 from squadron.providers.base import ProviderType
@@ -107,8 +108,12 @@ async def run_review_with_profile(
     setting_sources_override: list[str] | None = None,
     max_output_tokens: int | None = None,
     effort: Effort | None = None,
+    alias: str | None = None,
 ) -> ReviewResult:
     """Execute a review through the specified provider profile.
+
+    ``alias`` is the model alias the caller resolved, used only to price the run when
+    the provider reports no cost (slice 175 D3); ``None`` prices nothing.
 
     All reviews go through the same path:
     1. Look up profile → get provider from registry
@@ -305,11 +310,15 @@ async def run_review_with_profile(
             await agent.shutdown()
     except ProviderError as exc:
         exc.duration_seconds = time.monotonic() - started
+        failed = exc.telemetry
+        if failed is not None:
+            exc.cost_usd, exc.cost_basis = resolve_cost(alias, failed.usage, failed.cost_usd, set())
         raise
     # Read after shutdown, as the failure path's is, so the two artifacts measure one span.
     result.duration_seconds = time.monotonic() - started
     result.turns = capture.turns
     result.usage = capture.usage
+    result.cost_usd, result.cost_basis = resolve_cost(alias, capture.usage, capture.cost_usd, set())
 
     result.recovery_turn_used = recovery_turn_used
     result.output_budget_exhausted = budget_exhausted(capture.stop_reason)

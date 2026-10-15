@@ -49,8 +49,9 @@ No test covers the loop exit.
 - Reasoning characters: not computed
 - Effort: backend default
 - Turns: not computed
-- Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
+- Tokens — prompt / cached / cache write / completion / reasoning: not computed / not computed / not computed / not computed / not computed
 - Duration: not computed
+- Cost: not reported
 - `## Summary` located: not computed
 - `## Findings` located: not computed
 - Finding-shaped matches — whole response: not computed

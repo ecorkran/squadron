@@ -786,6 +786,7 @@ def _run_review_command(
                 setting_sources_override=setting_sources_override,
                 max_output_tokens=max_output_tokens,
                 effort=effort,
+                alias=alias_name,
             )
         )
     except RateLimitError as exc:
@@ -845,6 +846,7 @@ async def _execute_review(
     setting_sources_override: list[str] | None = None,
     max_output_tokens: int | None = None,
     effort: Effort | None = None,
+    alias: str | None = None,
 ) -> ReviewResult:
     """Execute the review asynchronously."""
     return await run_review_with_profile(
@@ -860,6 +862,7 @@ async def _execute_review(
         setting_sources_override=setting_sources_override,
         max_output_tokens=max_output_tokens,
         effort=effort,
+        alias=alias,
     )
 
 

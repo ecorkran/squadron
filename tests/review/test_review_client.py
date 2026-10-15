@@ -1491,6 +1491,58 @@ class TestRunCost:
         assert raised.duration_seconds == pytest.approx(2.25)
         agent.shutdown.assert_awaited_once()
 
+    @pytest.mark.asyncio
+    async def test_sdk_reported_cost_lands_with_provider_basis(self) -> None:
+        from squadron.core.usage import CostBasis, TokenUsage
+
+        agent = MagicMock()
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            yield Message(
+                sender="a",
+                recipients=[],
+                content=_SAMPLE_REVIEW_OUTPUT,
+                message_type=MessageType.chat,
+                metadata={
+                    "turns": 2,
+                    "usage": TokenUsage(prompt=100, cache_write=40, completion=9),
+                    "cost_usd": 0.41,
+                },
+            )
+
+        agent.handle_message = _handle
+
+        result = await self._run("sdk", agent, clock=[0.0, 1.0])
+
+        assert result.cost_usd == 0.41
+        assert result.cost_basis is CostBasis.PROVIDER
+        assert result.usage.cache_write == 40
+
+    @pytest.mark.asyncio
+    async def test_provider_error_telemetry_cost_reaches_failure_run_cost(self) -> None:
+        from squadron.core.usage import CostBasis, RunTelemetry, TokenUsage
+        from squadron.providers.errors import ProviderAPIError
+        from squadron.review.run_cost import RunCost
+
+        raised = ProviderAPIError("boom", status_code=500)
+        raised.telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=5), cost_usd=0.07)
+        agent = MagicMock()
+        agent.shutdown = AsyncMock()
+
+        async def _handle(message: Message) -> AsyncIterator[Message]:
+            raise raised
+            yield  # pragma: no cover - makes this an async generator
+
+        agent.handle_message = _handle
+
+        with pytest.raises(ProviderAPIError):
+            await self._run("sdk", agent, clock=[10.0, 11.0])
+
+        run_cost = RunCost.from_error(raised)
+        assert run_cost.cost_usd == 0.07
+        assert run_cost.cost_basis is CostBasis.PROVIDER
+
 
 class TestEffortThreading:
     """Slice 931 D4: effort reaches AgentConfig; the result records it only if sent."""

@@ -282,7 +282,7 @@ def _run_digest_lines(result: ReviewResult) -> list[str]:
         f"- Reasoning characters: {_render_optional(result.reasoning_chars)}",
         # Slice 931 D10: always present, so every artifact says what it ran with and cost.
         f"- Effort: {describe_effort(result.effort)}",
-        *RunCost(result.turns, result.usage, result.duration_seconds).digest_lines(),
+        *result.run_cost.digest_lines(),
         f"- `## Summary` located: {_render_tristate(result.summary_section_located)}",
         f"- `## Findings` located: {_render_tristate(result.findings_section_located)}",
         f"- Finding-shaped matches — whole response: {scan.total if scan else _NOT_COMPUTED}",
@@ -609,7 +609,7 @@ def format_review_markdown(
         recovery_turn=result.recovery_turn_used,
         run_id=result.run_id,
         squadron_version=squadron_version,
-        run_cost=RunCost(result.turns, result.usage, result.duration_seconds),
+        run_cost=result.run_cost,
         effort=result.effort,
         profile=result.profile,
     )
