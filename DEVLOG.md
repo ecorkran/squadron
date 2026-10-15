@@ -11,6 +11,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261014
 
+### Slice 175: Usage and Cost Tracking — implementation (Phase 6, walkthrough partial)
+
+- Branch `175-slice.usage-and-cost-tracking` (from `main`), not merged. Tasks 1–32 done; Task 33 walkthrough partial; Task 34 drafts written, not posted.
+- Shipped: `UsageRecord`/`CostBasis`/`cache_write` in `core/usage.py`; `price_usage` + `resolve_cost` (D3) replace `estimate_cost`; SDK `ResultMessage` reader (`providers/sdk/usage.py`) used by the SDK agent and `SDKExecutionSession` (own result, injected turns, drains; errors carry telemetry); `SessionReply` from dispatch/capture_summary/compact; `pipeline/usage_capture.py` builds every record, one per run via `ActionContext.usage_capture`; dispatch, summary, compact, review stamp `metadata.usage`; review artifacts gain `cacheWriteTokens`/`costUsd`/`costBasis` and a `Cost:` digest line; dispatch and summary send alias `max_output_tokens` (#151); `sq stats run|reviews` (+ `--json`), `/sq:stats`, `sq-stats` skill.
+- Gaps the design missed, fixed here: `ResolvedModel` gained `alias` and `run_review_with_profile` an `alias` argument (no alias name reached pricing); review frontmatter `slice` holds the slice name, so `--slice` also matches the file name's leading index; the one-shot runners report the effort they sent through `usage_metadata` (keeps provider lookups inside the mocked boundary).
+- Found: real CLI results carry `usage.output_tokens_details.thinking_tokens`; D1 assumed no reasoning split, so SDK `reasoning` stays `None` (possible follow-up).
+- Tests: `ActionContext` constructions for LLM-action tests now pass a `UsageCapture` (no single shared helper existed); byte-identity review fixtures regenerated for the token-line and `Cost:` changes (383 pre/post sets together, so their diff is still the two 383 keys). pytest's metrology variance tests sleep the 60 s default cooldown, which dominates suite time.
+- Walkthrough: steps 1, 5, 6, 7 pass; step 2 blocked (no `OPENROUTER_API_KEY` in session); steps 3–4 need a live pipeline run. Details in the slice design.
+- Next: PM runs or waives walkthrough steps 2–4, then code review, Phase 7, minor release. Follow-on #214/#210 slice still needs a slice plan entry.
+
 ### Slice 175: Usage and Cost Tracking — task breakdown complete (Phase 5)
 
 - Tasks: `user/tasks/175-tasks.usage-and-cost-tracking.md`, 34 tasks, 326 lines, effort 4/5. Test-with ordering; commits at each section. Revised per task review (CONCERNS): `usage_capture.stamp` guard, D7 flag on `UsageCapture`, reviews report in its own module, issue closure drafted for PM at Phase 7.

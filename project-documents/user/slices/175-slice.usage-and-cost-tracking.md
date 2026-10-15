@@ -7,7 +7,7 @@ dependencies: [174]
 interfaces: []
 dateCreated: 20261014
 dateUpdated: 20261014
-status: not_started
+status: in_progress
 ---
 
 # Slice Design: Usage and Cost Tracking
@@ -323,19 +323,33 @@ Width handling reuses 174's `cli/columns.py` (`fit_widths`). `sq stats reviews` 
 
 ### Verification Walkthrough
 
-Run in a scratch project registered with cf (as in 945), unless noted.
+Run in a scratch project registered with cf (as in 945), unless noted. Use `.venv/bin/sq` from the squadron checkout (editable install) so the branch code runs.
 
 1. **SDK review records usage.**
-   `sq review slice 175 --model sonnet -v`
-   Open the artifact. Frontmatter has `promptTokens`, `cachedTokens`, `cacheWriteTokens`, `completionTokens`, `turns`, `costUsd`, and `costBasis: provider`. The digest has the `Tokens —` and `Cost:` lines with values, not `not reported`.
+   `sq review slice <index> --model sonnet -v`
+   Open the artifact. Frontmatter has `promptTokens`, `cachedTokens`, `cacheWriteTokens`, `completionTokens`, `turns`, `costUsd`, and `costBasis: provider`. The digest has `- Tokens — prompt / cached / cache write / completion / reasoning: …` and `- Cost: $… (provider)`. The `reasoning` cell reads `not computed` on the SDK (see caveat below).
 2. **OpenAI-compatible review prices from the alias.**
-   `sq review slice 175 --model <an openrouter alias with pricing>`. Frontmatter has `costBasis: alias_pricing` and no `cacheWriteTokens`.
+   `sq review slice <index> --model <an openrouter alias with a pricing table>`. Frontmatter has `costBasis: alias_pricing` and no `cacheWriteTokens`. If the alias lacks a price for a class the run used, the cost is absent and one WARNING names the alias and the missing key.
 3. **A pipeline run records every LLM action.**
-   `sq run P4 <slice>`, then `sq stats run <run_id>`. Each dispatch and review row has tokens, a model/effort column, and time. The total line shows "N of M priced". Open `~/.config/squadron/runs/<run_id>.json` and confirm `metadata.usage`, including `duration_seconds`, on each LLM action.
-4. **Budget reaches dispatch (#151).** Run a dispatch step with an alias that sets `max_output_tokens`, using `-vv`. The OpenAI provider's DEBUG line shows `max_completion_tokens` sent.
-5. **Old runs degrade honestly.** `sq stats run <a pre-slice run id>` shows the run with `—` token cells and the "no usage recorded" line, and no traceback.
-6. **Filters and JSON.** `sq stats run <run_id> --json | python -m json.tool` returns the same rows as step 3's table. `sq stats reviews --slice 175` lists the steps 1–2 artifacts, and its footer counts step 3's pipeline review as excluded.
-7. **Slash parity.** In Claude Code, `/sq:stats reviews --slice 175` prints the same table as step 6.
+   `sq run P4 <index>`, then `sq stats run <run_id>`. Each dispatch and review row has a `Model / effort` cell, token cells, a `prov`/`alias` cost, and a time. The `Total` line reads `$X (N of M priced)`. In `~/.config/squadron/runs/<run_id>.json`, each LLM action's `metadata.usage` has `duration_seconds`.
+4. **Budget reaches dispatch (#151).** Run a dispatch step with an alias that sets `max_output_tokens`, using `-vv`. The OpenAI provider's DEBUG line shows `max_completion_tokens` sent. SDK providers do not apply a budget, so none is sent there.
+5. **Old runs degrade honestly.** `sq stats run <a pre-slice run id>` prints every row with `—` cells, a `Total` line of `—`, and `N LLM action(s) have no usage recorded.`, with no traceback. Verified during implementation against `run-20261015-p4-a9dbf112` (11 actions, 5 LLM actions unrecorded).
+6. **Filters and JSON.** `sq stats run <run_id> --json | python -m json.tool` returns the same rows as step 3's table (`rows[].step`, `rows[].action`, `rows[].usage`, `totals`, `llm_actions`, `unrecorded`). `sq stats reviews --slice <index>` lists the steps 1–2 artifacts, and its footer reads `N pipeline review(s) excluded; see sq stats run <run_id>` for step 3's reviews. Verified during implementation in this repo: `sq stats reviews --slice 175` printed `2 pipeline review(s) excluded; see sq stats run run-20261015-p4-733c0a5c`.
+7. **Slash parity.** In Claude Code, `/sq:stats reviews --slice <index>` prints the same table as step 6. `sq install-commands` installs `~/.claude/commands/sq/stats.md` and the `sq-stats` agents skill.
+
+Results from implementation (scratch project `~/source/repos/manta/temp/scratch-945`, slice 107):
+
+- Step 1 passed. `sq review slice 107 --model sonnet -v` wrote `turns: 4`, `promptTokens: 142881`, `cachedTokens: 94025`, `cacheWriteTokens: 48850`, `completionTokens: 1033`, `durationSeconds: 11.6`, `costUsd: 0.225631`, `costBasis: provider`; digest `- Cost: $0.23 (provider)`.
+- Step 2 not run: `OPENROUTER_API_KEY` was not set in the implementing session (`sq review slice 107 --model glm-flash` failed with "No API key found"). Its failure artifact replaced step 1's, which moved to `archive/`; `sq stats reviews` reads top-level artifacts only, so archived reviews are not listed.
+- Steps 3 and 4 not run (they need a live pipeline run); left for the Project Manager.
+- Steps 5 and 6 passed on existing runs in the squadron repo (noted inline above).
+- Step 7 passed: `/sq:stats reviews --slice 107` in Claude Code printed the same table as the CLI.
+
+Caveats found during implementation:
+
+- `--slice` matches the frontmatter `slice` value **or** the artifact file name's leading index. Review frontmatter carries the slice *name* (for example `usage-and-cost-tracking`), so matching on the key alone would never match an index.
+- The real `claude -p --output-format json` result (CLI 2.1.296) includes `usage.output_tokens_details.thinking_tokens`. D1 assumed the SDK reports no reasoning split, so `reasoning` stays `None` on SDK paths; reading that key is a possible follow-up.
+- `ResolvedModel` had no alias name; it gained `alias` (set only when the resolved name is a known alias), and `run_review_with_profile` gained an `alias` argument, so the review and pipeline paths can price from the alias.
 
 ## Risk Assessment
 
