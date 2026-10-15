@@ -141,7 +141,7 @@ status: not_started
   - [ ] Each version read with `git show <sha>:<path>` through `run`, parsed with `parse_frontmatter`: `verdict`, `aiModel`, `revision_number`, `runId`, cost keys
   - [ ] `git show` failure or unreadable frontmatter → that round skipped, WARNING naming sha, path (and git stderr when present), and a skipped count on the result for the footer
   - [ ] `rounds_to_accept(rounds)`: count up to and including the first verdict `LoopCondition.REVIEW_CONCERNS_OR_BETTER.met_by_verdict` accepts; later rounds listed, not counted; `None` when none accepted
-  - [ ] A flag on the result when the earliest round is authored before 941 landed (footer: rounds are a lower bound). 941 was fast-forwarded onto `main` (no merge commit) and its branch exists only in this repo, so the cutoff is one module constant, the date 941 reached `main` (20261013), with a comment citing 941 and design "Consumes from Other Slices"
+  - [ ] A flag on the result when the earliest round is authored before 20261013, the date slice 941 shipped (footer: rounds are a lower bound). The cutoff is one module constant, not a git lookup, since 941's branch exists only in this repo, with a comment citing 941 and design "Consumes from Other Slices"
   - **Success:** the call count for a report is `2 + V` (V = versions read)
 
 - [ ] **Task 14: Test review rounds**
