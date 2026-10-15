@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq stats run <run_id>` and `sq stats reviews [--slice]` report the tokens, turns, time, and cost of a pipeline run's steps or of review artifacts, with `--json`. `/sq:stats` and the `sq-stats` skill wrap it.
+- Claude SDK reviews and every pipeline LLM step (dispatch, summary, compact, review) now record tokens, turns, time, effort sent, and cost, including steps that failed.
+- Review artifacts gain `cacheWriteTokens`, `costUsd`, and `costBasis`, and the digest has a `Cost:` line.
+
+### Fixed
+- Dispatch and summary steps now send the alias's `max_output_tokens` (#151).
+
 ## [0.21.9] - 20261014
 
 ### Added

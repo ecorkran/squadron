@@ -273,6 +273,23 @@ sq config set compact.instructions "Keep slice {slice} design and tasks only." -
 
 Named templates come from `~/.config/squadron/compaction/`, then the built-ins. `compact.instructions` wins if both keys are set.
 
+## Usage and cost (`sq stats`)
+
+```bash
+sq stats run <run_id>              # one row per step action: model, turns, tokens, cost, time
+sq stats reviews --slice 175       # one row per standalone review artifact
+sq stats run <run_id> --json       # the same rows and totals as JSON
+/sq:stats reviews --slice 175      # Claude Code; $sq-stats in Codex
+```
+
+Every pipeline LLM step (dispatch, summary, compact, review) records what it spent in the run's state file, and every review artifact records it in its frontmatter. A value the provider did not report shows as `—`, never as 0. A cost total says how many actions it covers, for example `$1.84 (7 of 9 priced)`. Pipeline reviews appear under `sq stats run`, not `sq stats reviews`, so nothing is counted twice. Runs from before this feature show "no usage recorded".
+
+The cost column says where each figure came from:
+
+- `prov`: the provider reported it (the Claude SDK does).
+- `alias`: computed from the `pricing` table of the model alias, when the provider reports no cost.
+- `api-rate equiv.`: a provider cost on a subscription alias (`cost_tier = "subscription"`). This is what the tokens would cost at API rates, not money you were charged.
+
 ## Claude Code and Codex
 
 `sq setup` installs the `/sq:` and `/cf:` commands into `~/.claude/commands` for every project. To refresh them later: `sq install-commands`.
