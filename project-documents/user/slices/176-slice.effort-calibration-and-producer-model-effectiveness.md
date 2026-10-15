@@ -158,7 +158,7 @@ Spans use author dates (`%aI`), which survive rebases. A span is wall-clock time
 
 Each review artifact is rewritten every round, but every round is committed (941). The rounds for slice `N`, review type `T`, are the committed versions of `N-review.T.*.md`, at top level and in `archive/`. The archive holds timestamped copies of earlier versions, so versions are deduplicated by blob id and ordered by commit date. Each version is read with `git show <sha>:<path>` through `run_git`, so every git call has its timeout and its WARNING. The version's frontmatter gives `verdict`, `aiModel`, `revision_number`, `runId`, and cost. Rounds-to-accept for a type is the number of versions up to and including the first one that `LoopCondition.REVIEW_CONCERNS_OR_BETTER.met_by_verdict` accepts. Any rounds after it are listed but not counted. This covers pipeline loops, `sq review --max`, and manual reviews in the same way.
 
-**Bound.** A report invocation runs exactly two whole-history git calls: `git for-each-ref refs/heads` for branch tips, and one `git log --all --name-status --format=<sha, parents, author date, subject>`. Everything D5 needs comes from this in-memory graph, without further git calls: the commit that added the task file, the first-parent windows, implementation commits, and the commit that first added the code review artifact. The only other calls are one `git show` per review artifact version, for the slices the report covers. The total is therefore 2 + V, where V is the number of versions read. A test asserts that count.
+**Bound.** A report invocation runs exactly two whole-history git calls: `git for-each-ref refs/heads` for branch tips, and one `git log --all --raw --no-abbrev --no-renames --format=<sha, parents, author date, subject>`. `--raw` supplies the blob id of each changed file, which version dedupe needs; `--no-renames` keeps every change a single `(status, path)`, so a move into `archive/` reads as a delete plus an add. Everything D5 needs comes from this in-memory graph, without further git calls: the commit that added the task file, the first-parent windows, implementation commits, and the commit that first added the code review artifact. The only other calls are one `git show` per review artifact version, for the slices the report covers. The total is therefore 2 + V, where V is the number of versions read. A test asserts that count.
 
 ### D7 — Report shapes
 
@@ -284,7 +284,7 @@ Width handling reuses `cli/columns.py` (`fit_widths`), as in 175.
 ### Consumes from Other Slices
 
 - **175** usage records and report cores. A pre-175 run has no usage and reports `not recorded`, never $0.
-- **941** committed rounds. A slice reviewed before `commit_each_iteration` existed shows only its committed versions, and the rounds count is a lower bound (stated in the footer when the earliest round predates 941's merge).
+- **941** committed rounds. A slice reviewed before `commit_each_iteration` existed shows only its committed versions, and the rounds count is a lower bound (stated in the footer when the earliest round predates the author date of 941's branch tip).
 
 ## Success Criteria
 

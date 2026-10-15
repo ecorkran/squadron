@@ -113,8 +113,8 @@ status: not_started
 ### Git history (D5, D6)
 
 - [ ] **Task 10: `GitHistory` log pass**
-  - [ ] New `stats/git_history.py`, the only `stats/` module that runs git. `WindowSource` and `ReviewRound` as in the API Contracts, plus a frozen `Commit` (sha, parents, authored_at, subject, `(status, path)` changes)
-  - [ ] `GitHistory(project_root, run=run_git)`; `load()` runs the two whole-history calls in D6 "Bound" and builds the in-memory graph
+  - [ ] New `stats/git_history.py`, the only `stats/` module that runs git. `WindowSource` and `ReviewRound` as in the API Contracts, plus a frozen `Commit` (sha, parents, authored_at, subject, changes as `(status, path, blob_id)`)
+  - [ ] `GitHistory(project_root, run=run_git)`; `load()` runs the two whole-history calls in D6 "Bound" and builds the in-memory graph. The log call is `git log --all --raw --no-abbrev --no-renames`: `--raw` gives each change's blob id (needed by Task 12 dedupe), `--no-renames` keeps every change a single path
   - [ ] Failures per the first two D9 rows, as typed errors; never a partial graph
   - [ ] In-memory query helpers: branch tip for `refs/heads/{index}-slice.*`, first-parent chain, commit that added a path, commits touching a path glob
   - [ ] Commit: `feat: add git history log pass for stats`
@@ -122,21 +122,22 @@ status: not_started
 
 - [ ] **Task 11: Test the log pass**
   - [ ] `tests/stats/conftest.py`: a fixture that builds a temp git repo with `main`, a `NNN-slice.x` branch, a task-file commit, code and document commits, and controlled author dates. It serves Tasks 11–19.
-  - [ ] Graph contents: parents, `%aI` dates, subjects, name-status changes
+  - [ ] Graph contents: parents, `%aI` dates, subjects, changes with blob ids; a file moved into `archive/` appears as a delete plus an add, never a rename
   - [ ] A counting wrapper around `run_git` sees exactly 2 calls for `load()`
   - [ ] Temp dir without git → error naming cwd; a `run` stub returning `None` for the log call → error naming the command and no graph
   - [ ] Commit: `test: cover git history log pass`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 12: Review rounds from committed versions**
-  - [ ] `review_rounds(index, review_type) -> list[ReviewRound]` and `rounds_to_accept(rounds)` per D6, reading each version through `run` and `parse_frontmatter`
+  - [ ] `review_rounds(index, review_type) -> list[ReviewRound]` and `rounds_to_accept(rounds)` per D6, reading each version through `run` and `parse_frontmatter`. Dedupe happens before any `git show`: collect the commits that touched `N-review.T.*.md` (top level and `archive/`), drop versions whose blob id was already seen (keep the earliest commit), then order by commit date
   - [ ] An unreadable version follows the D9 `git show` / unreadable-frontmatter rows; the result carries a skipped count for the footer
-  - [ ] Lower-bound flag ("Consumes from Other Slices"): set when the earliest round is authored before the cutoff, stored as one module constant with a comment citing 941. Read the cutoff with `git log -1 --format=%aI 941-slice.review-and-revise-loop-from-sq-review-max` (the author date of the 941 branch tip). If that branch is missing, stop and ask the Project Manager for the date.
+  - [ ] Lower-bound flag ("Consumes from Other Slices"): set when the earliest round is authored before the cutoff, stored as one module constant with a comment citing 941. Read the cutoff with `git log -1 --format=%aI 941-slice.review-and-revise-loop-from-sq-review-max` (the author date of the 941 branch tip, the same cutoff the design footer text names). If that branch is missing, stop and ask the Project Manager for the date.
   - [ ] Commit: `feat: read per-round review verdicts from git`
   - **Success:** the call count for a report is `2 + V` (V = versions read)
 
 - [ ] **Task 13: Test review rounds**
   - [ ] In the temp repo: three committed versions (FAIL, CONCERNS, PASS) plus an archive copy of round 1 → three rounds after dedupe, rounds-to-accept 2
+  - [ ] Lower-bound flag: earliest round authored before the cutoff → set; after the cutoff → unset (one case each, cutoff constant monkeypatched)
   - [ ] A version with broken frontmatter, and a `run` stub failing one `git show` → each skipped with WARNING naming sha and path; skipped count 2
   - [ ] Call count `2 + V` asserted with the counting wrapper
   - [ ] Commit: `test: cover per-round review verdicts`
@@ -278,17 +279,18 @@ status: not_started
   - [ ] Confirm slice plan entry 177 in `140-slices.pipeline-foundation.md` still matches what this slice provides (D8 config key, D3 rounds); edit only if it does not
   - [ ] CHANGELOG: short user-facing bullets under Unreleased (new subcommands; `sq stats run` now counts every loop round)
   - [ ] Commit: `docs: document sq stats slice, slices, producers, and runs`
-  - **Success:** each D9 row note and footer text appears in code exactly once (grep)
+  - **Success:** the README documents all four subcommands; both wrappers list them
 
 - [ ] **Task 32: Full validation**
   - [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full `pytest` green
-  - [ ] Map each D9 failure-table row to a passing test; list the test name per row in the commit body
+  - [ ] Map each D9 failure-table row to a passing test; list the test name per row (recorded in the task file notes below)
+  - [ ] `grep` confirms each D9 row note and footer text appears in code exactly once
   - [ ] `grep` confirms no Typer import under `stats/`, no `run_git` use in `stats/` outside `git_history.py`, and no bare-string comparison of step types, verdicts or window sources
-  - [ ] Commit: `test: map slice 176 failure table to tests`
-  - **Success:** full suite green; every D9 row has a named test
+  - [ ] Record the D9 row-to-test map under a `## Verification Notes` heading at the end of this task file, then commit that file with `docs: map slice 176 failure table to tests`
+  - **Success:** full suite green; every D9 row has a named test in the task file notes
 
 - [ ] **Task 33: Verification walkthrough and issue comments**
-  - [ ] Run design Verification Walkthrough steps 2–7 with `.venv/bin/sq` in this repo; record each output in the commit body. Step 1 (scratch project live run) and step 8 (slash parity) need a live model run and Claude Code respectively: run them if available, otherwise list them as not run.
-  - [ ] Comment on #214 and #210 with what landed (subcommands, the observed-only scope for #210, slice 177 for replay)
-  - [ ] Commit: `test: verify slice 176 reports against this repo`
-  - **Success:** walkthrough results recorded; issues commented
+  - [ ] Run design Verification Walkthrough steps 2–7 with `.venv/bin/sq` in this repo; record each output under `## Verification Notes` in this task file. Step 1 (scratch project live run) and step 8 (slash parity) need a live model run and Claude Code respectively: run them if available, otherwise list them as not run.
+  - [ ] Commit the task file notes: `docs: record slice 176 verification walkthrough`
+  - [ ] Draft the #214 and #210 comments (subcommands, the observed-only scope for #210, slice 177 for replay) under `## Verification Notes`. Post them only after the Project Manager confirms; this task does not post.
+  - **Success:** walkthrough results recorded; comments drafted
