@@ -14,7 +14,7 @@ status: not_started
 
 ## Overview
 
-Squadron records what each run step, review, and audit spends (tokens by class, turns, wall time, effort sent, and cost when one is known), keeps the record in run state and review artifacts, and reports it with a new `sq stats` command.
+Squadron records what each run step and review spends (tokens by class, turns, wall time, effort sent, and cost when one is known), keeps the record in run state and review artifacts, and reports it with a new `sq stats` command.
 
 Slice 931 built part of this. It added the neutral `TokenUsage` / `RunTelemetry` types in `core/usage.py`, OpenAI-compatible per-turn usage, Codex usage, alias `effort`, and review frontmatter keys. Only reviews consume that data. The Claude SDK paths, which carry most of the volume, throw usage away at `providers/sdk/translation.py:102-127`. Dispatch, summary, and compact record nothing on any provider. Alias pricing exists, but `estimate_cost` (`models/aliases.py:322`) has no callers. This slice closes those gaps and adds the reporting surface.
 
@@ -24,30 +24,32 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 
 - **Cost visibility.** An API-key user can see what a run, step, or review cost before the bill arrives. A subscription user sees token volume, which is what draws down the session pool.
 - **A baseline for reduction.** Reviews are the most frequent SDK path. A regression in prompt size or turn count shows up in `sq stats` instead of going unnoticed (#36).
-- **Diagnosis of #34.** Per-run cache read and cache write tokens and turn counts let us measure the 3x session-draw gap instead of inferring it from a session meter that reports whole percentages.
-- **Data for 214/210.** Every normal run from now on records effort, tokens, cost, and step duration. The follow-on reports have history to read on the day they ship.
+- **Diagnosis of #34.** Per-action cache read and cache write tokens and turn counts are the data #34 needs to measure the 3x session-draw gap, instead of inferring it from a session meter that reports whole percentages.
+- **Data for 214/210.** Every normal run from now on records effort, tokens, cost, and LLM call duration. The follow-on reports have history to read on the day they ship.
 
 ## Technical Scope
 
 **Included:**
 
 1. **Neutral record.** `TokenUsage` gains `cache_write`. New `UsageRecord` (model, alias, profile, effort sent, turns, duration, tokens, cost, cost basis) in `core/usage.py`.
-2. **SDK capture (#172, #33, #36).** `ClaudeSDKAgent` and `SDKExecutionSession` read `ResultMessage.usage`, `num_turns`, and `total_cost_usd`.
+2. **SDK capture (#172, #36, and #33's capture item).** `ClaudeSDKAgent` and `SDKExecutionSession` read `ResultMessage.usage`, `num_turns`, and `total_cost_usd`.
 3. **Action capture.** dispatch (one-shot and session), summary (one-shot and session), compact (SDK session), and review stamp a `UsageRecord` into `ActionResult.metadata`, so it persists in run state through the existing `asdict` path.
-4. **Step duration.** `StepState.duration_seconds`, an additive field with no schema bump.
-5. **Cost.** One pricing function replaces `estimate_cost`. A cost the provider reports takes precedence over a cost computed from alias pricing.
-6. **Review artifacts.** `RunCost` adds `cacheWriteTokens`, `costUsd`, and `costBasis`. SDK reviews now populate every token key.
-7. **Metrology audit (#33).** `AuditRun` gains an optional `usage` field.
-8. **#151.** dispatch and summary pass the alias `max_output_tokens`.
-9. **#158 closure.** 931 implemented #158's ask: per-turn usage summed across the loop, and reasoning totalled. The issue was not closed. This slice adds `cache_write` to the OpenAI reader's output (always `None` there; see D2) and closes #158.
-10. **#154 closure.** Effort sent is now recorded on dispatch and summary steps, not only reviews (931 D11 left those as a DEBUG log).
-11. **`sq stats`.** `run`, `runs`, and `reviews` subcommands with `--json`. Core logic is Typer-free. The slash command and agents skill wrap the CLI.
-12. **#173.** A probe of Gemini's endpoint, gated on a precondition (D11).
+4. **Cost.** One pricing function replaces `estimate_cost`. A cost the provider reports takes precedence over a cost computed from alias pricing.
+5. **Review artifacts.** `RunCost` adds `cacheWriteTokens`, `costUsd`, and `costBasis`. SDK reviews now populate every token key.
+6. **#151.** dispatch and summary pass the alias `max_output_tokens`.
+7. **#158 closure.** 931 implemented #158's ask: per-turn usage summed across the loop, and reasoning totalled. The issue was not closed. This slice adds `cache_write` to the OpenAI reader's output (always `None` there; see D2) and closes #158.
+8. **#154 closure.** Effort sent is now recorded on dispatch and summary steps, not only reviews (931 D11 left those as a DEBUG log).
+9. **`sq stats`.** `run`, `runs`, and `reviews` subcommands with `--slice` and `--json`. Core logic is Typer-free. The slash command and agents skill wrap the CLI.
+10. **#173.** A probe of Gemini's endpoint, gated on a precondition (D11).
+
+**Architecture scope.** `140-arch` lists "Cost tracking and optimization across providers" as out of scope. The slice plan entry brings cost *reporting* into scope with this slice. Cross-provider cost *optimization* (for example, pool ranking by cost) stays out.
 
 **Excluded:**
 
-- **MCP tool.** Squadron has no MCP server (`tools/mcp_bridge.py` is a client to context-forge). The core is shaped so a tool can wrap it, following the metrology precedent. A server is its own feature; it is logged as an issue when this design is approved.
-- **Fixing #34.** This slice measures it (D10). A fix depends on what the measurement shows.
+- **MCP tool** ([#217](https://github.com/ecorkran/squadron/issues/217)). The plan entry asks for CLI, slash command, and MCP parity. Squadron has no MCP server (`tools/mcp_bridge.py` is a client to context-forge), so MCP is deferred, and the plan entry records the deferral. The core is shaped so a tool can wrap it, following the metrology precedent.
+- **Step duration** (`StepState.duration_seconds`), deferred to [#210](https://github.com/ecorkran/squadron/issues/210), its only consumer. Each `UsageRecord` still carries the LLM call's own duration (D6).
+- **Persisting usage on `AuditRun`, and the #34 measurement**, deferred to [#33](https://github.com/ecorkran/squadron/issues/33), which stays open for that item, and to [#34](https://github.com/ecorkran/squadron/issues/34). After this slice, the SDK agent stamps audit usage on the message, so persisting it is a small change. The measurement needs an operator on a Max account. D10 settles how #34 is investigated.
+- **Fixing #34.** A fix depends on what the measurement shows.
 - **Applying effort on the SDK session path.** `open_pipeline_session` builds options without the alias effort, and `set_model` changes only the model. This slice records the gap truthfully (D7) but does not apply effort there ([#216](https://github.com/ecorkran/squadron/issues/216)).
 - **#214 and #210 reports** (D12).
 - **The PR composer** (`pr/composer.py`) and the addressed-findings judge. Neither has a run or artifact to attach a record to. The judge's review already passes through `review_client`.
@@ -82,9 +84,7 @@ The two payoff reports, #214 (planned vs actual effort per slice) and #210 (prod
 | Pricing | `models/aliases.py` | `price_usage(alias, usage)` replaces `estimate_cost` |
 | Action capture helper | `pipeline/usage_capture.py` (new) | builds a `UsageRecord` from agent metadata or session telemetry plus `ResolvedModel` |
 | Actions | `pipeline/actions/{dispatch,summary,compact,review}.py`, `pipeline/summary_oneshot.py` | stamp `metadata[USAGE_KEY]`. dispatch and summary also pass `max_output_tokens` |
-| Step timing | `pipeline/executor.py`, `pipeline/state.py` | `StepState.duration_seconds` |
 | Review rendering | `review/run_cost.py`, `review/models.py` | cache write, cost, cost basis |
-| Audit | `metrology/audit.py`, `metrology/models.py` | `AuditRun.usage: dict | None` |
 | Stats core | `stats/usage_report.py` (new package, no Typer) | read run state and review artifacts, aggregate |
 | Stats CLI | `cli/commands/stats.py` | `sq stats run|runs|reviews` |
 | Slash / skill | `commands/sq/stats.md`, `commands/agents/sq-stats/SKILL.md` | wrap the CLI |
@@ -100,16 +100,14 @@ SDK agent ResultMsg  ─┘                                      ├─ usage_ca
 SDKExecutionSession ResultMsgs ─► DispatchTurns.telemetry ───┘   + ResolvedModel   ─► StepState.action_results ─► sq stats run/runs
                                                                   + price_usage       (~/.config/squadron/runs)
 review_client ─► ReviewResult.usage/cost ─► RunCost ─► review artifact frontmatter ─────────────────────────► sq stats reviews
-metrology audit ─► AuditRun.usage ─► metrology store
 ```
 
 Totals for a step, a run, or a set of runs are computed at read time and never stored. That leaves one source of truth per action.
 
 ### State Management
 
-- **Run state.** No schema version bump. `metadata["usage"]` lives inside the existing `action_results` dicts. `StepState.duration_seconds: float | None = None` follows the slice 940 precedent: pydantic ignores fields it does not know, so older builds still read new files. Files written before this slice have no usage, and reports show them as "not recorded" (D9).
+- **Run state.** No schema version bump. `metadata["usage"]` lives inside the existing `action_results` dicts. Files written before this slice have no usage, and reports show them as "not recorded" (D9).
 - **Review artifacts.** New keys appear only when they have a value (931 D10 convention). cf does not reject unknown keys.
-- **Metrology store.** `AuditRun.usage` is optional and defaults to `None`, so record schema 1 is unchanged. #33's reason for deferring this was the 323 noise-floor campaign, and slice 323 is complete.
 
 ## Technical Decisions
 
@@ -155,11 +153,11 @@ Providers report what they measured (tokens, turns, cost) on the final `Message.
 
 ### D5 — Failed actions record what they spent
 
-A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry` (OpenAI today; SDK after this slice, set in the agent's existing failure path), the failed `ActionResult` gets a `UsageRecord` too. A stalled SDK session turn (174) folds the results drained during the interrupt, so the record covers them. Run totals include failed attempts. The cost of a loop is the whole loop (#210).
+A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry` (OpenAI today; SDK after this slice, set in the agent's existing failure path), the failed `ActionResult` gets a `UsageRecord` too. A stalled SDK session turn (174) folds the results drained during the interrupt, so the record covers them. If an interrupt drain ends with no `ResultMessage`, the interrupted turn's spend is unknown. The record keeps the turns and tokens that completed, and a WARNING says `"SDK session interrupt drained no result; spend for the interrupted turn is not recorded (run %s, step %s)"`. Run totals include failed attempts. The cost of a loop is the whole loop (#210).
 
-### D6 — Step duration in run state, action duration in the record
+### D6 — Duration is the LLM call's own time, on every exit path
 
-`StepState.duration_seconds` is measured with `time.monotonic()` in the executor around one step's actions. It includes non-LLM actions (cf ops, commits) and answers #210's "wall time per step". `UsageRecord.duration_seconds` is the LLM call's own time (the review path already measures it, 931 D9). Both are kept because they answer different questions: where the time goes inside a step.
+`UsageRecord.duration_seconds` is the LLM call's own time, measured with `time.monotonic()` (reviews already measure it this way, 931 D9). `usage_capture` takes the start time before the call and reads the end time on every exit: success, a `ProviderError`, and a 174 stall interrupt (the end time is read after the drain). A failed or interrupted action therefore has tokens and a time. Paused and checkpointed steps run no LLM call at the pause, so they get no record. Step-level wall time, including non-LLM actions, is deferred to #210.
 
 ### D7 — Effort recorded is effort sent
 
@@ -170,8 +168,8 @@ A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry
 Subcommands:
 
 - `sq stats run <run_id>`: one row per step and action, plus a total.
-- `sq stats runs [--pipeline NAME] [--slice INDEX] [--since YYYYMMDD] [--status S]`: one row per run, plus a grand total.
-- `sq stats reviews [--slice INDEX] [--since YYYYMMDD] [--dir PATH]`: one row per review artifact, plus a total. It covers standalone `sq review` runs. Pipeline reviews appear here and also under their run, so the two views are never summed together.
+- `sq stats runs [--slice INDEX]`: one row per run, plus a grand total.
+- `sq stats reviews [--slice INDEX]`: reads the review directory (`REVIEWS_DIR`). It shows one row per review artifact, plus a total. It covers standalone `sq review` runs. Pipeline reviews appear here and also under their run, so the two views are never summed together.
 
 All subcommands take `--json`. `--slice` matches `RunState.params[SLICE_PARAM]` for runs (the constant from `pipeline/commit_plan.py`), and the frontmatter `slice` key for reviews.
 
@@ -186,9 +184,9 @@ The name is `stats`, not `usage`, because #214 asked for `sq stats slice`. The f
 - Actions recorded before this slice, or non-LLM actions, have no record. Each report states the number of LLM actions with no usage recorded. Non-LLM action types (cf op, commit, gate, checkpoint) are identified by `ActionType` enum membership, not by string matching.
 - A malformed `metadata["usage"]` in a state file is skipped. The row shows `unreadable`, and a WARNING names the run and step.
 
-### D10 — #34: measure, don't fix
+### D10 — #34: investigate after capture, fix separately
 
-The slice makes the measurement possible and runs it once as a walkthrough step: the same audit through `sq metrology audit run` and through raw `claude -p --output-format json`, comparing `cache_write`, `cached`, and turns. The numbers are posted on #34. #34 stays open, and the fix gets its own design once the cause is known. The operator needs a Max account and the same repo and commit as #34's measurements, so this is a walkthrough step and not a task gate.
+This slice delivers the capture that #34 needs: SDK `cache_write`, `cached`, and turns. The investigation runs the same audit through `sq metrology audit run` and through raw `claude -p --output-format json`, and compares those fields. That needs the audit record to carry usage (deferred to #33) and an operator on a Max account, so it is tracked on #34 and not done in this slice. The fix gets its own design once the cause is known.
 
 ### D11 — #173 is a precondition-gated probe
 
@@ -279,7 +277,7 @@ Total                                          96   6.01M     5.62M   151.3k    
 ### Consumes from Other Slices
 
 - 931's `RunCost`/`ReviewResult` usage path, extended rather than replaced.
-- 174's interrupt and drain behavior in `SDKExecutionSession`. If a drain yields no `ResultMessage`, the record has the turns that completed and tokens stay as reported. That is not a failure.
+- 174's interrupt and drain behavior in `SDKExecutionSession`. If a drain yields no `ResultMessage`, the record keeps what completed and a WARNING fires (D5).
 
 ## Success Criteria
 
@@ -288,14 +286,13 @@ Total                                          96   6.01M     5.62M   151.3k    
 1. An SDK review artifact carries `turns`, `promptTokens`, `cachedTokens`, `cacheWriteTokens`, `completionTokens`, `costUsd`, and `costBasis: provider`. The digest shows them (#172, #36).
 2. Every dispatch, summary, compact (SDK session), and review action in a pipeline run has `metadata.usage` in the run state file, on every provider that reports usage (SDK agent, SDK session, OpenAI-compatible, Codex). This includes failed actions whose error carries telemetry.
 3. SDK session totals include injected follow-up turns and interrupt drains.
-4. `StepState.duration_seconds` is set for every completed step.
+4. `UsageRecord.duration_seconds` is set on success, failure, and stall interrupt (D6).
 5. Cost follows D3 precedence. A partial price yields `None` and a WARNING. Nothing is ever reported as $0 by default.
 6. Dispatch and summary agents receive the alias `max_output_tokens` (#151).
 7. `effort` on dispatch and summary records equals the level sent. The SDK session path records `None` and warns when the alias sets one.
-8. `sq stats run`, `runs`, and `reviews` print the layouts in UI Specifications. `--json` emits the same data. Filters work as specified in D8.
+8. `sq stats run`, `runs`, and `reviews` print the layouts in UI Specifications. `--json` emits the same data. `--slice` filters as specified in D8.
 9. Run files from before this slice load and report "no usage recorded" without error.
-10. `sq metrology audit run` stores usage on `AuditRun`, and old audit records still load.
-11. `/sq:stats` and the `sq-stats` skill produce output identical to the CLI.
+10. `/sq:stats` and the `sq-stats` skill produce output identical to the CLI.
 
 ### Technical Requirements
 
@@ -312,6 +309,14 @@ Total                                          96   6.01M     5.62M   151.3k    
 | Malformed `metadata.usage` in a state file | row `unreadable` | WARNING naming run and step |
 | Unknown alias (bare model id) | alias `None`, provider cost only | none |
 | SDK session with alias effort | effort `None` | WARNING per step (D7) |
+| Interrupt drain yields no `ResultMessage` | record keeps completed turns and tokens | WARNING naming run and step (D5) |
+| `sq stats run <id>` with an unknown id | nothing printed | error naming the id and runs directory, exit 1 |
+| `sq stats run <id>` whose file is invalid JSON, truncated, or an unsupported schema | nothing printed | error naming the file and the parse or schema error, exit 1 |
+| `sq stats runs` meets an unreadable or unsupported-schema file | file skipped, listing continues | one WARNING per file (from `scan_runs`'s `UnreadableRun`), plus a footer `N run file(s) unreadable` |
+| A run file is read while a live run writes it | no torn read: `StateManager` writes by atomic replace (`state.py:307-311`), so the reader sees the old or the new file | none needed. A test asserts the reader goes through `StateManager`, not a raw `open` |
+| `sq stats reviews`: artifact with no readable frontmatter (`read_frontmatter` returns `None` for a YAML error as for a missing block) | artifact skipped | one WARNING per file naming it, plus a footer `N artifact(s) skipped` |
+| `sq stats reviews`: review directory missing | empty listing | message `No review directory at <path>`, exit 0 (a project with no reviews is valid) |
+| #173 probe returns 429/503, times out, or returns 400 naming `stream_options` | flag stays off | the curl output itself, posted on #173. Manual probe with no squadron code path, so no test |
 
 - ruff format, ruff check, pyright with zero errors. Full suite green.
 - Stubbed `ResultMessage` fixtures use the real field shape from `claude-agent-sdk` 0.2.162 (`usage` dict keys as the CLI emits them), including one captured from a real run.
@@ -332,13 +337,12 @@ Run in a scratch project registered with cf (as in 945), unless noted.
 2. **OpenAI-compatible review prices from the alias.**
    `sq review slice 175 --model <an openrouter alias with pricing>`. Frontmatter has `costBasis: alias_pricing` and no `cacheWriteTokens`.
 3. **A pipeline run records every LLM action.**
-   `sq run P4 <slice>`, then `sq stats run <run_id>`. Each dispatch and review row has tokens, a model/effort column, and time. The total line shows "N of M priced". Open `~/.config/squadron/runs/<run_id>.json` and confirm `metadata.usage` on each LLM action and `duration_seconds` on each step.
+   `sq run P4 <slice>`, then `sq stats run <run_id>`. Each dispatch and review row has tokens, a model/effort column, and time. The total line shows "N of M priced". Open `~/.config/squadron/runs/<run_id>.json` and confirm `metadata.usage`, including `duration_seconds`, on each LLM action.
 4. **Budget reaches dispatch (#151).** Run a dispatch step with an alias that sets `max_output_tokens`, using `-vv`. The OpenAI provider's DEBUG line shows `max_completion_tokens` sent.
-5. **Old runs degrade honestly.** `sq stats runs --since 20261001` lists pre-slice runs with `—` token cells and the "no usage recorded" line, and no traceback.
+5. **Old runs degrade honestly.** `sq stats runs` lists pre-slice runs with `—` token cells and the "no usage recorded" line, and no traceback.
 6. **Filters and JSON.** `sq stats runs --slice 175 --json | python -m json.tool` returns the same rows as the table. `sq stats reviews --slice 175` lists the steps 1–2 artifacts.
 7. **Slash parity.** In Claude Code, `/sq:stats runs --slice 175` prints the same table as step 6.
-8. **#34 measurement (operator, Max account; D10).** On migratory-viewer @5788a99a, run `sq metrology audit run` and the raw-CLI equivalent with `--output-format json`. Compare `cache_write`, `cached`, and turns from the audit record (`sq metrology list`) against the raw result. Post the table on #34.
-9. **#173 probe (precondition: `GEMINI_API_KEY`; D11).** Run the curl from #173. If the last chunk before `[DONE]` carries `usage`, flip the gemini profile and its test, then rerun step 2 with a gemini alias. Otherwise post the response on #173.
+8. **#173 probe (precondition: `GEMINI_API_KEY`; D11).** Run the curl from #173. If the last chunk before `[DONE]` carries `usage`, flip the gemini profile and its test, then rerun step 2 with a gemini alias. Otherwise post the response on #173.
 
 ## Risk Assessment
 
@@ -361,11 +365,9 @@ Run in a scratch project registered with cf (as in 945), unless noted.
 3. SDK reader and `ClaudeSDKAgent` stamping, including failure telemetry. Gives SDK reviews (#172) through the existing `review_client` path.
 4. `RunCost` / `ReviewResult` additions, fixture regeneration.
 5. `SDKExecutionSession` telemetry on `DispatchTurns`, `capture_summary`, `compact`, including drains.
-6. `usage_capture.py`. Wire dispatch (both paths), summary (both), compact, review. #151 budget. D7 effort rule.
-7. `StepState.duration_seconds` in the executor.
-8. `AuditRun.usage`.
-9. `stats/usage_report.py`, then `cli/commands/stats.py`, then slash command and skill. Run `sq install-commands`.
-10. CHANGELOG, README. Close #172, #36, #33, #158, #154, #151 with a line naming what landed. Walkthrough steps 8–9 update #34 and #173.
+6. `usage_capture.py`. Wire dispatch (both paths), summary (both), compact, review. #151 budget. D7 effort rule. D6 timing on every exit path.
+7. `stats/usage_report.py`, then `cli/commands/stats.py`, then slash command and skill. Run `sq install-commands`.
+8. CHANGELOG, README. Close #172, #36, #158, #154, #151 with a line naming what landed. Comment on #33 that the SDK capture landed and `AuditRun` persistence remains. Walkthrough step 8 updates #173.
 
 Testing: unit tests per reader with stubbed messages, `usage_capture` across providers, `price_usage` table tests, state round-trip with old fixture files (no usage, schema v3/v4/v5), and CLI snapshot tests for the three `stats` tables and JSON.
 
