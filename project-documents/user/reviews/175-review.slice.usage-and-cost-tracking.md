@@ -125,3 +125,10 @@ The slice consumes 174's interrupt and drain behavior in `SDKExecutionSession`, 
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 6
 - Finding-shaped matches — surviving validation: 6
+
+## Response (20261015)
+
+- **F001 (proportionality):** partly accepted. Cut the `model_usage` fallback (D2) and downgraded the per-step effort WARNING to a once-per-process DEBUG (D7). Kept the `sq stats reviews` pipeline-artifact exclusion, #151, and the failure-table rows: each is small and tested, and moving #151 would touch six sections of the design for no risk reduction.
+- **F002 (arch scope):** fixed. `140-arch` out-of-scope line now says cost optimization is out and cost reporting is in as of 175.
+- **F003 (NFR):** fixed. Two testable bounds added to the hot-path paragraph (zero extra state saves per action; `sq stats reviews` reads frontmatter only).
+- **F004 (observation hooks):** fixed. Dedupe set is owned by the capture helper and passed to `price_usage`; `UsageRecord.partial` marks an interrupted turn and `sq stats` shows `*`; cancellation row added (propagates, no record written).

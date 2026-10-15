@@ -103,7 +103,7 @@ review_client ─► ReviewResult.usage/cost ─► RunCost ─► review artifa
 
 Totals for a step or a run are computed at read time and never stored. That leaves one source of truth per action.
 
-**Hot-path cost.** Capture adds no I/O to a run. The record is a small dict in `ActionResult.metadata`, saved by the existing `_append_step` write. There is no extra state save and no network call. `price_usage` is an in-memory lookup on the already-loaded alias table.
+**Hot-path cost.** Capture adds no I/O to a run. The record is a small dict in `ActionResult.metadata`, saved by the existing `_append_step` write. There is no extra state save and no network call. `price_usage` is an in-memory lookup on the already-loaded alias table. Bounds, each asserted by a test: capture adds zero state saves per action, and `sq stats reviews` reads frontmatter only (no body reads).
 
 ### State Management
 
@@ -128,7 +128,7 @@ SDK mapping: `prompt = input_tokens + cache_read_input_tokens + cache_creation_i
 
 Per-message `usage` repeats a snapshot within a turn. Summing it gave 7.08M cache-read tokens where the authoritative figure was 2.17M (#33). Only `ResultMessage` is read. Within one `handle_message` or one session `dispatch()`, each `ResultMessage` covers one query or turn, and those are summed with `add_optional`. In `SDKExecutionSession`, that covers the own result, injected follow-up turns (`sdk_session.py:270-282`), and results drained during an interrupt (`387-407`). Each is real spend.
 
-`model_usage` is not stored per model. The answering model is already recorded (`answering_models`). The top-level `usage` is the total, and a per-model split has no consumer yet. When a result has no top-level `usage` but has `model_usage`, the per-model entries are summed as the fallback. That is the only use of `model_usage`.
+`model_usage` is not read. The answering model is already recorded (`answering_models`). The top-level `usage` is the total, and a per-model split has no consumer yet. A result with no top-level `usage` yields `None` tokens and a WARNING (failure table).
 
 The OpenAI-compatible reader never sees a cache-write count (OpenAI does not report one), so `cache_write` stays `None` there. Codex likewise.
 
@@ -154,7 +154,7 @@ Providers report what they measured (tokens, turns, cost) on the final `Message.
 
 ### D5 — Failed actions record what they spent
 
-A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry` (OpenAI today; SDK after this slice, set in the agent's existing failure path), the failed `ActionResult` gets a `UsageRecord` too. A stalled SDK session turn (174) folds the results drained during the interrupt, so the record covers them. If an interrupt drain ends with no `ResultMessage`, the interrupted turn's spend is unknown. The record keeps the turns and tokens that completed, and a WARNING says `"SDK session interrupt drained no result; spend for the interrupted turn is not recorded (run %s, step %s)"`. Run totals include failed attempts. The cost of a loop is the whole loop (#210).
+A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry` (OpenAI today; SDK after this slice, set in the agent's existing failure path), the failed `ActionResult` gets a `UsageRecord` too. A stalled SDK session turn (174) folds the results drained during the interrupt, so the record covers them. If an interrupt drain ends with no `ResultMessage`, the interrupted turn's spend is unknown. The record keeps the turns and tokens that completed and sets `partial: true` (a `UsageRecord` field, omitted when false); `sq stats` marks such a row with `*` and a footer line says `* partial: an interrupted turn's spend is not recorded`. A WARNING says `"SDK session interrupt drained no result; spend for the interrupted turn is not recorded (run %s, step %s)"`. Run totals include failed attempts. The cost of a loop is the whole loop (#210).
 
 ### D6 — Duration is the LLM call's own time, on every exit path
 
@@ -162,7 +162,7 @@ A failed dispatch still spent tokens. Where a `ProviderError` carries `telemetry
 
 ### D7 — Effort recorded is effort sent
 
-`UsageRecord.effort` is the value actually sent: `ResolvedModel.effort` when the provider's `applies_effort` is true and the path applies it, otherwise `None` ("backend default"). The SDK session path does not apply alias effort. When the alias sets one there, the record says `None`, and one WARNING per step says `"SDK session does not apply alias effort=%s for %s; the backend default applies"`. A record never claims a level that was not sent (931 D4 rule).
+`UsageRecord.effort` is the value actually sent: `ResolvedModel.effort` when the provider's `applies_effort` is true and the path applies it, otherwise `None` ("backend default"). The SDK session path does not apply alias effort. When the alias sets one there, the record says `None`. The gap is a known, deferred limitation (#216), so it is logged once per process at DEBUG, not warned per step. A record never claims a level that was not sent (931 D4 rule).
 
 ### D8 — `sq stats` reads; it never writes
 
@@ -220,6 +220,7 @@ class UsageRecord:
     usage: TokenUsage
     cost_usd: float | None
     cost_basis: CostBasis | None
+    partial: bool = False      # an interrupted turn's spend is missing (D5)
     def to_dict(self) -> dict[str, object]: ...
     @classmethod
     def from_dict(cls, raw: Mapping[str, object]) -> UsageRecord: ...  # raises ValueError on a malformed record
@@ -227,7 +228,7 @@ class UsageRecord:
 
 `RunTelemetry` gains `cost_usd: float | None`, summed by a float version of `add_optional`.
 
-**Pricing:** `price_usage(alias_name: str | None, usage: TokenUsage) -> float | None` in `models/aliases.py`.
+**Pricing:** `price_usage(alias_name: str | None, usage: TokenUsage, warned: set[str]) -> float | None` in `models/aliases.py`. `warned` is the caller's once-per-alias dedupe set.
 
 **Persisted shape** (inside `StepState.action_results[i].metadata`):
 
@@ -283,7 +284,7 @@ Width handling reuses 174's `cli/columns.py` (`fit_widths`). `sq stats reviews` 
 4. `UsageRecord.duration_seconds` is set on success, failure, and stall interrupt (D6).
 5. Cost follows D3 precedence. A partial price yields `None` and a WARNING. Nothing is ever reported as $0 by default.
 6. Dispatch and summary agents receive the alias `max_output_tokens` (#151).
-7. `effort` on dispatch and summary records equals the level sent. The SDK session path records `None` and warns when the alias sets one.
+7. `effort` on dispatch and summary records equals the level sent. The SDK session path records `None` when the alias sets one (D7).
 8. `sq stats run` and `reviews` print the layouts in UI Specifications. `--json` emits the same data. `reviews` excludes pipeline artifacts and `--slice` filters as specified in D8.
 9. Run files from before this slice load and report "no usage recorded" without error.
 10. `sq install-commands` installs `/sq:stats` and the `sq-stats` skill (D8 wrappers).
@@ -296,14 +297,15 @@ Width handling reuses 174's `cli/columns.py` (`fit_widths`). `sq stats reviews` 
 
 | Failure | Behavior | Signal |
 |---|---|---|
-| `ResultMessage.usage` is `None` and `model_usage` is absent | tokens `None` | WARNING once per `handle_message` / `dispatch()` (mirrors 931's OpenAI warning) |
+| `ResultMessage.usage` is `None` | tokens `None` | WARNING once per `handle_message` / `dispatch()` (mirrors 931's OpenAI warning) |
 | A usage value is a non-int | that field `None`, siblings read | WARNING naming the field and value, `%.200r` |
 | `total_cost_usd` is absent | falls back to alias pricing (D3) | none (expected on non-SDK) |
-| Partial alias pricing, or inconsistent counts | cost `None` | WARNING once per alias |
+| Partial alias pricing, or inconsistent counts | cost `None` | WARNING once per alias. The "once" set is owned by the capture helper and passed to `price_usage` (not a module global), so tests get a fresh one |
 | Malformed `metadata.usage` in a state file | row `unreadable` | WARNING naming run and step |
 | Unknown alias (bare model id) | alias `None`, provider cost only | none |
-| SDK session with alias effort | effort `None` | WARNING per step (D7) |
-| Interrupt drain yields no `ResultMessage` | record keeps completed turns and tokens | WARNING naming run and step (D5) |
+| SDK session with alias effort | effort `None` | the record's `effort: null` (D7); DEBUG log once per process |
+| Interrupt drain yields no `ResultMessage` | record keeps completed turns and tokens, `partial: true` | WARNING naming run and step (D5); `*` marker in `sq stats` |
+| Action cancelled (`asyncio.CancelledError`) mid-call | `usage_capture` holds no state that outlives the call and swallows nothing; the cancellation propagates unchanged and no record is written for that action | a test asserts `CancelledError` propagates and no partial record is persisted |
 | `sq stats run <id>` with an unknown id | nothing printed | error naming the id and runs directory, exit 1 |
 | `sq stats run <id>` whose file is invalid JSON, truncated, or an unsupported schema | nothing printed | error naming the file and the parse or schema error, exit 1 |
 | A run file is read while a live run writes it | no torn read: `StateManager` writes by atomic replace (`state.py:307-311`), so the reader sees the old or the new file | none needed. A test asserts the reader goes through `StateManager`, not a raw `open` |

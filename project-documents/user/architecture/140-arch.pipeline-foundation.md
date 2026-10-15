@@ -707,7 +707,7 @@ The `ContextForgeClient` (slice 126, complete) wraps CF CLI subprocess calls beh
 
 - GUI/web interface for pipeline monitoring
 - Cross-slice parallelism (run multiple slices simultaneously)
-- Cost tracking and optimization across providers
+- Cost *optimization* across providers (for example, ranking pool choices by cost). Cost and usage *reporting* is in scope as of slice 175.
 - Pipeline sharing/marketplace
 - CI/CD integration *for pipeline execution* — running pipelines as CI jobs, reporting step results back to a CI system. Repo-level CI steps that invoke squadron's own commands (lint, tests, `sq validate docs`) are ordinary project hygiene and are not excluded here.
 - Automated complexity estimation for model selection
