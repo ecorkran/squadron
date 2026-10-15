@@ -135,6 +135,7 @@ status: not_started
 
 - [ ] **Task 12: Test review rendering and regenerate the fixture**
   - [ ] In the existing `RunCost` / review persistence tests under `tests/review`: all keys present with provider cost; OpenAI-style usage (no cache write) priced from alias → `costBasis: alias_pricing`, no `cacheWriteTokens`; no cost → no `costUsd`, digest says `not reported`; `to_dict()` always has the three new keys
+  - [ ] `review_client` glue (criterion 1 depends on it): one test with an SDK-style capture carrying `cost_usd` → result has that cost and `costBasis: provider`; one test where a `ProviderError` carries `telemetry.cost_usd` → the error-path `RunCost` has that cost and basis
   - [ ] Regenerate `tests/review/fixtures/clean_pass_artifact.md` once for the digest token-line change; confirm with `git diff` that only the token line and the new `Cost:` line changed
   - [ ] Run `pytest tests/review tests/cli -q`, ruff, pyright
   - [ ] Commit: `feat: add cache write and cost to review artifacts`
@@ -181,11 +182,12 @@ status: not_started
   - [ ] `stamp(metadata, record)` writes `metadata[USAGE_KEY] = record.to_dict()` only when `record` is not `None`. Every action writes the key through it, never directly.
   - [ ] `effort_for_session(resolved) -> None` returns `None` (D7) and, when `resolved.effort` is set, logs the D7 DEBUG line the first time per `UsageCapture`. One `UsageCapture` per run and one run per `sq run` process makes this once per process.
   - [ ] Holds no state beyond `warned` and the D7 logged flag; catches no exceptions (failure table, `CancelledError` row)
-  - [ ] Wire construction: the executor creates one `UsageCapture` per run; `ActionContext` gains a `usage_capture: UsageCapture` field set by the executor for every step
+  - [ ] Wire construction: the executor creates one `UsageCapture` per run; `ActionContext` gains `usage_capture: UsageCapture | None = None`, set by the executor for every step. `None` means a context with no LLM run: the standalone `branch_run` and `commit_run` commands and non-LLM tests, so those constructors and the ~35 test files are untouched. Each LLM action (dispatch, summary, compact, review) raises a clear error when it finds `None` rather than skipping capture. Tests that drive those four actions get the capture through the shared `ActionContext` test helper (find it with `grep -rn 'ActionContext(' tests/ | head`), updated once in Task 17
   - **Success:** stdlib + squadron imports only; no Typer; under ~150 lines
 
 - [ ] **Task 17: Test `usage_capture`**
   - [ ] New `tests/pipeline/test_usage_capture.py`, one test per provider shape: SDK agent metadata (provider cost → `provider`); OpenAI metadata with a priced alias (→ `alias_pricing`); Codex metadata (`turns: 1`); session telemetry; telemetry from a `ProviderError`
+  - [ ] Update the shared `ActionContext` test helper to supply a `UsageCapture`; a test per LLM action asserts the clear error when `usage_capture` is `None`
   - [ ] Bare model id → `alias` `None`, provider cost kept, no WARNING
   - [ ] `partial=True` → record flag set, D5 WARNING contains run id and step
   - [ ] Pricing WARNING fires once across two records on the same `UsageCapture`, again on a fresh one

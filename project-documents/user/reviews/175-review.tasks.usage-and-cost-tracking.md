@@ -135,3 +135,9 @@ There are 34 tasks in one file, which fits effort 4/5 and a slice spanning provi
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 8
 - Finding-shaped matches — surviving validation: 8
+
+## Response (20261015)
+
+- **F001:** fixed. Task 16: `ActionContext.usage_capture` is `UsageCapture | None = None`. `None` marks a context with no LLM run (standalone `branch_run`/`commit_run`, non-LLM tests), so no constructor migration; the four LLM actions raise a clear error on `None` instead of skipping capture. Task 17 updates the shared test helper and tests the error.
+- **F002:** fixed. Task 12 gains two `review_client` tests (provider cost; `ProviderError` telemetry cost).
+- **F003, F004, F005:** accepted as notes; no change. Guidelines, not gates.
