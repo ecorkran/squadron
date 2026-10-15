@@ -13,8 +13,8 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 175: Usage and Cost Tracking — task breakdown complete (Phase 5)
 
-- Tasks: `user/tasks/175-tasks.usage-and-cost-tracking.md`, 36 tasks, 317 lines, effort 4/5. Test-with ordering; commits at each section.
-- Choices the design left open, fixed in the task file: D3 precedence in one `resolve_cost` beside `price_usage` (shared by `review_client` and `usage_capture`); pricing-warning set owned per run by the executor (`ActionContext.usage_capture`) and per call by `review_client`; `SDKExecutionSession.dispatch/capture_summary/compact` return `SessionReply(text, telemetry)`, errors carry telemetry, D5 `partial` = stall with `session_usable False`.
+- Tasks: `user/tasks/175-tasks.usage-and-cost-tracking.md`, 33 tasks, 315 lines, effort 4/5. Test-with ordering; commits at each section. Revised per task review (CONCERNS): `usage_capture.stamp` guard, D7 flag on `UsageCapture`, reviews report in its own module, issue closure drafted for PM at Phase 7.
+- Choices the design left open, fixed in the task file: D3 precedence in one `resolve_cost` beside `price_usage` (shared by `review_client` and `usage_capture`); pricing-warning set and D7 DEBUG flag owned per run by the executor (`ActionContext.usage_capture`) and per call by `review_client`; `SDKExecutionSession.dispatch/capture_summary/compact` return `SessionReply(text, telemetry)`, errors carry telemetry, D5 `partial` = stall with `session_usable False`.
 - #151 budget follows the existing `applies_output_budget` capability. Real `ResultMessage` fixture is captured from `claude -p --output-format json` (Task 8).
 
 ### Slice 175: Usage and Cost Tracking — Design Complete
