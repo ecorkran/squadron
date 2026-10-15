@@ -14,43 +14,54 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261014
 dateUpdated: 20261014
-reviewedSha: 8e310f5db337ab9676d8dd7683a79fe4205ad049
+reviewedSha: 8155373526c47ff6169111e7625e0518bd598c98
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 6
-durationSeconds: 33.1
+toolCallsMade: 5
+durationSeconds: 32.1
 runId: run-20261015-p4-733c0a5c
 squadronVersion: 0.21.9
 findings:
   - id: F001
-    severity: concern
-    category: scope-alignment
-    summary: "Plan-assigned MCP parity is dropped, and the architecture still lists cost tracking as out of scope"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
+    severity: pass
+    category: architecture
+    summary: "Layering and dependency directions follow 140-arch"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Architecture"
   - id: F002
-    severity: concern
-    category: proportionality
-    summary: "The design is heavy for one slice and has cuttable scope"
+    severity: pass
+    category: scope
+    summary: "Scope boundary against \"Cost tracking and optimization across providers\" is stated explicitly"
     location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
   - id: F003
     severity: concern
-    category: error-handling
-    summary: "Failure modes for the new `sq stats` read paths are not enumerated"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Requirements"
+    category: proportionality
+    summary: "Design is heavy for what the slice must deliver; several items can be cut or deferred"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
   - id: F004
     severity: concern
-    category: error-handling
-    summary: "Failure and interrupt paths for step duration and session telemetry are underspecified"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#D6"
+    category: integration
+    summary: "Slash command and skill parity is assigned to this slice but the failure and ownership story for the wrappers is thin"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
   - id: F005
-    severity: pass
-    category: architecture-alignment
-    summary: "Layering and dependency direction match the architecture"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Component Structure"
-  - id: F006
-    severity: note
+    severity: concern
     category: nfr
-    summary: "No architecture NFR applies to these paths"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md"
+    summary: "Duration NFR and timing semantics are defined, but no overhead or write-path constraint is restated for the hot path"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#D6"
+  - id: F006
+    severity: concern
+    category: error-handling
+    summary: "Failure handling for the new `sq stats reviews` directory scan is specified, but the aggregate \"not recorded\" count is under-specified for pipeline reviews"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#D8"
+  - id: F007
+    severity: note
+    category: dependencies
+    summary: "Hidden dependency on `AuditRun` persistence is acknowledged and correctly bounded"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Excluded"
+  - id: F008
+    severity: note
+    category: error-handling
+    summary: "Failure modes are enumerated well for the new I/O paths"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Requirements"
 ---
 
 # Review: slice — slice 175
@@ -60,50 +71,49 @@ findings:
 
 ## Findings
 
-### [CONCERN] Plan-assigned MCP parity is dropped, and the architecture still lists cost tracking as out of scope
+### [PASS] Layering and dependency directions follow 140-arch
 
-The slice plan entry (item 31) tells the design to settle "a reporting surface (`sq stats` or similar, CLI, slash command, and MCP identical)". The design excludes the MCP tool and defers it to an issue "logged when this design is approved". It gives a reason (no MCP server exists). Even so, dropping plan-assigned scope is a CONCERN. The plan entry or the PM should record the deferral, so the plan and the design don't disagree.
+Providers report raw telemetry, and `pipeline/usage_capture.py` is the only place a `UsageRecord` is built. That is the right boundary: the Model Resolver owns alias, effort and budget, and the `dispatch` action owns "token tracking" (140-arch Core Action Types). `core/usage.py` stays a stdlib-only leaf. Persistence reuses the existing `ActionResult.metadata` → `asdict` path, so there is no new state schema and no change to the `Action` protocol. Capture is wired into the actions and does not add to `RunObserver` or the events dispatcher, which respects the "two notification paths" boundary.
 
-The architecture (`140-arch`, "Out of Scope (future, unscheduled)") lists "Cost tracking and optimization across providers". The architecture's `dispatch` row only owns "token tracking". This slice adds cost computation, pricing precedence, and a stats command group. The plan entry authorizes this, but the architecture document was not updated, and the design never acknowledges the conflict. Add one line to the slice, or amend the architecture, saying that cost reporting is now in scope and that cross-provider cost *optimization* (pool ranking) remains out.
+### [PASS] Scope boundary against "Cost tracking and optimization across providers" is stated explicitly
 
-### [CONCERN] The design is heavy for one slice and has cuttable scope
+140-arch lists cost tracking as future and unscheduled. The slice acknowledges this, points to the slice plan entry that brought cost *reporting* in, and keeps optimization out (pool ranking, budgets). The MCP deferral (#217) and the #214/#210 split (D12) match the slice plan entry's own notes.
 
-The slice bundles 12 items across every provider seam, the executor, run state, review artifacts, metrology, three CLI subcommands, a slash command, a skill, two live-probe/measurement walkthroughs, and a README/CHANGELOG pass. The plan itself rates it Risk Med and Effort 4/5, and D12 already split off the payoff reports.
+### [CONCERN] Design is heavy for what the slice must deliver; several items can be cut or deferred
 
-Candidates to cut or defer:
-- `sq stats runs` filter set (`--pipeline`, `--status`, `--since`, `--slice`) plus `reviews --dir`. Nothing downstream consumes these yet, and one filter or two would meet the stated value.
-- The separate slash command and agents skill. Both only wrap `sq stats $ARGUMENTS`, and the MCP parity they stand in for is already deferred.
-- `AuditRun.usage` (item 7). Its only consumer is the D10 #34 walkthrough, which is an operator measurement and not a task gate. It could ride with the #34 follow-up.
-- The #173 gemini probe (D11). It is conditional on an API key and has no dependency on the capture layer.
-- `StepState.duration_seconds` alongside `UsageRecord.duration_seconds` (D6). Two durations are kept "because they answer different questions", but the step-level one serves only the deferred #210 report.
+The slice has twelve decisions and ten included items. Four are tracking or closure work that the capture layer does not need:
+- **#173 Gemini probe (item 10, D11).** It is a manual curl and a one-line flag flip with no shared code path. It is a separate chore and does not belong in a design that "touches every provider seam". Cut it from Included, or move it to a standalone fix under slice 944.
+- **D10 (#34 investigation).** It is a decision section that only says "do it later, elsewhere". Fold it into the Excluded bullet that already covers #34.
+- **#158 closure (item 7)** is a code-less issue close plus an always-`None` `cache_write` on the OpenAI reader. Fold it into the CHANGELOG/issue-closing step. It does not need an Included item.
+- **Per-run `runs` and `reviews` subcommands plus `--slice` and `--json` on all three.** `run` and `reviews` cover the stated payoffs (#36, #172, #34 diagnosis). `runs` with `--slice` is the aggregation that #214 consumes, and #214 is deferred. Consider deferring `runs` to the follow-on slice, or justify it by naming a requirement it meets in this slice.
 
-### [CONCERN] Failure modes for the new `sq stats` read paths are not enumerated
+The slice also restates material from other documents: the full 931 D10 frontmatter table reference, the SDK `ResultMessage` field list and the `ModelUsage` fields. Link to those instead.
 
-The failure table covers usage parsing, pricing, and one malformed `metadata.usage`. It does not cover the new I/O paths the slice adds:
-- `sq stats run <run_id>` with an unknown id, or a state file that is not valid JSON or is truncated.
-- Reading a state file while a live run is writing it (the architecture's run-state storage is a plain JSON file per run).
-- `sq stats reviews` hitting an artifact with unparseable frontmatter, or a `--dir` that does not exist.
-- A run state file that is unreadable in `runs`, where it needs to be skipped with a signal and not abort the whole listing.
+### [CONCERN] Slash command and skill parity is assigned to this slice but the failure and ownership story for the wrappers is thin
 
-The "must be observable and tested" rule needs a row for each. The same applies to D11's live probe (timeout and 429/503 are mentioned, but the signal and the test are not).
+Item 9 adds `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md`. Success criterion 10 requires "output identical to the CLI". The doc defines no test or mechanism that could check this, since the wrappers just run `sq stats $ARGUMENTS`. The failure table also has no row for a wrapper invoked when `sq` is not installed or is the wrong version. Either drop criterion 10 as untestable and rely on the existing install-commands convention, or state how identity is verified.
 
-### [CONCERN] Failure and interrupt paths for step duration and session telemetry are underspecified
+### [CONCERN] Duration NFR and timing semantics are defined, but no overhead or write-path constraint is restated for the hot path
 
-Success criterion 4 sets `duration_seconds` only for "every completed step". D6 does not say what happens for a step that fails, is checkpointed or paused, or is interrupted by the 174 stall handling. D5 says failed actions record spend, and run totals include failed attempts. The step-level timing needs to follow the same rule, or the stats rows for failed loop iterations will show tokens with no time. Likewise, "a drain yields no `ResultMessage`" is called "not a failure" with no observable signal, so spend can be lost silently. Add at least a DEBUG or WARNING line and a test for it.
+The slice adds a record to every action. It also adds a read-and-parse of every run file for `sq stats runs`, which loads every run in `~/.config/squadron/runs`. 140-arch states no latency target for either path, and 174 (already a prerequisite) set listing and rendering behavior for run files. The slice should say that `sq stats runs` reuses `scan_runs` and 174's listing bounds (or name a limit), so a large run history does not make the command unbounded. Without that, the new read path has no stated cost bound.
 
-### [PASS] Layering and dependency direction match the architecture
+### [CONCERN] Failure handling for the new `sq stats reviews` directory scan is specified, but the aggregate "not recorded" count is under-specified for pipeline reviews
 
-`core/usage.py` stays a stdlib-only leaf. Providers report raw telemetry through shared metadata constants, and only `pipeline/usage_capture.py` attributes it to a model alias. Providers never build the alias-aware record. Capture rides the existing `ActionResult.metadata` and `asdict` persistence, and it reuses the `Action` protocol and the `ResolvedModel` resolver without changing them. The stats core is Typer-free and sits behind a thin CLI. Totals are computed at read time, so there is one source of truth. None of this violates the architecture's action, resolver, or state boundaries, and the events and `RunObserver` paths are untouched.
+D8 says pipeline reviews appear in `sq stats reviews` and also under their run, so the two views are never summed together. That makes `sq stats reviews` totals and `sq stats runs` totals overlap by design. No de-duplication or marker lets a reader tell a pipeline-originated artifact from a standalone one. The doc does not say what `reviews` total means to a user who ran both. Either add a column or a flag to separate them, or restrict `reviews` to standalone `sq review` runs. The doc already describes it as covering "standalone `sq review` runs".
 
-### [NOTE] No architecture NFR applies to these paths
+### [NOTE] Hidden dependency on `AuditRun` persistence is acknowledged and correctly bounded
 
-`140-arch` states no latency or throughput targets for the dispatch, review, or state paths this slice touches, so nothing needs restating. If `sq stats runs` is expected to scan many files in `~/.config/squadron/runs`, a rough size or time expectation would help the cutting decision above. It is not required.
+The deferral to #33 and #34 is explicit. The SDK agent stamps audit usage on the message, so the later change is small. This is a clean boundary, not an under-specification.
+
+### [NOTE] Failure modes are enumerated well for the new I/O paths
+
+The failure table covers missing or malformed usage, partial pricing, an unknown run id, torn reads (via atomic replace), a missing review directory and unreadable frontmatter. Each row has a signal and a stated test requirement. The interrupt-drain case (D5) ties into 174's behavior with a named WARNING. This meets the Failure-Mode Enumeration rule.
 
 ### Run Digest
 
-- Response length: 5700 chars
+- Response length: 6379 chars
 - Response is newline-free: no
-- Tool calls made: 6
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -113,10 +123,10 @@ Success criterion 4 sets `duration_seconds` only for "every completed step". D6 
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 33.1 s
+- Duration: 32.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 6
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 6
-- Finding-shaped matches — surviving validation: 6
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8

@@ -14,54 +14,44 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261014
 dateUpdated: 20261014
-reviewedSha: 8155373526c47ff6169111e7625e0518bd598c98
-revision_number: 1
+reviewedSha: 1c51a68b8305c30d1be14cbad64fc03a30ba4afb
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 5
-durationSeconds: 32.1
+durationSeconds: 36.4
 runId: run-20261015-p4-733c0a5c
 squadronVersion: 0.21.9
 findings:
   - id: F001
-    severity: pass
-    category: architecture
-    summary: "Layering and dependency directions follow 140-arch"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Architecture"
+    severity: concern
+    category: proportionality
+    summary: "Design is heavier than the slice requires; several mechanisms can be cut or deferred"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Decisions"
   - id: F002
-    severity: pass
+    severity: concern
     category: scope
-    summary: "Scope boundary against \"Cost tracking and optimization across providers\" is stated explicitly"
+    summary: "Architecture doc still lists cost tracking as out of scope; the slice relies on the plan entry alone"
     location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
   - id: F003
     severity: concern
-    category: proportionality
-    summary: "Design is heavy for what the slice must deliver; several items can be cut or deferred"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
+    category: nfr
+    summary: "Hot-path NFR is asserted but not stated as a target"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Data Flow"
   - id: F004
     severity: concern
-    category: integration
-    summary: "Slash command and skill parity is assigned to this slice but the failure and ownership story for the wrappers is thin"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Scope"
-  - id: F005
-    severity: concern
-    category: nfr
-    summary: "Duration NFR and timing semantics are defined, but no overhead or write-path constraint is restated for the hot path"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#D6"
-  - id: F006
-    severity: concern
     category: error-handling
-    summary: "Failure handling for the new `sq stats reviews` directory scan is specified, but the aggregate \"not recorded\" count is under-specified for pipeline reviews"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#D8"
-  - id: F007
-    severity: note
-    category: dependencies
-    summary: "Hidden dependency on `AuditRun` persistence is acknowledged and correctly bounded"
-    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Excluded"
-  - id: F008
-    severity: note
-    category: error-handling
-    summary: "Failure modes are enumerated well for the new I/O paths"
+    summary: "Failure table rows lack a defined observation hook for some signals"
     location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Technical Requirements"
+  - id: F005
+    severity: note
+    category: architecture
+    summary: "Layering and dependency direction are sound"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Architecture"
+  - id: F006
+    severity: note
+    category: integration
+    summary: "Integration with 174 and prior slices matches what they provide"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md#Dependencies"
 ---
 
 # Review: slice — slice 175
@@ -71,47 +61,52 @@ findings:
 
 ## Findings
 
-### [PASS] Layering and dependency directions follow 140-arch
+### [CONCERN] Design is heavier than the slice requires; several mechanisms can be cut or deferred
 
-Providers report raw telemetry, and `pipeline/usage_capture.py` is the only place a `UsageRecord` is built. That is the right boundary: the Model Resolver owns alias, effort and budget, and the `dispatch` action owns "token tracking" (140-arch Core Action Types). `core/usage.py` stays a stdlib-only leaf. Persistence reuses the existing `ActionResult.metadata` → `asdict` path, so there is no new state schema and no change to the `Action` protocol. Capture is wired into the actions and does not add to `RunObserver` or the events dispatcher, which respects the "two notification paths" boundary.
+The slice plan entry asks for a neutral record, capture at provider seams, persistence, and a reporting surface. This design adds all of that plus these items:
+- **`model_usage` fallback (D2).** The design says per-model split "has no consumer yet" and then specifies a summing fallback for results with no top-level `usage`. Nothing says the SDK emits such a result. Cut the fallback. A missing top-level `usage` already produces `None` plus a WARNING.
+- **Per-step effort WARNING (D7).** `effort=None` already records the gap truthfully, and #216 tracks the fix. A per-step warning on a known, deferred limitation adds a mechanism and a test row. Log it once per process at DEBUG, or drop it.
+- **Pipeline-artifact exclusion and footer in `sq stats reviews` (D8).** The `runId` exclusion exists to avoid double counting between two views. Neither view totals across the other. List the artifacts and let `runId` show as a column, or defer the dedupe with `sq stats runs` (#214).
+- **Bundled items.** #151 (`max_output_tokens`) is a dispatch and summary parameter change that does not depend on usage capture. It could be a standing fix (slice 944), as the design already does for #173. #154 is only a field on a record this slice already builds, so keep that one.
+- **Unconsumed provisions.** "Provides to Other Slices" lists `price_usage` for pool ranking and an MCP-ready core. Both are speculative; the deferred MCP tool is the only stated consumer.
+- **Failure table.** It has 13 rows, each with a mandated test. Several are speculative (non-int usage value, inconsistent counts). Keep the rows for new I/O paths and collapse the rest.
 
-### [PASS] Scope boundary against "Cost tracking and optimization across providers" is stated explicitly
+### [CONCERN] Architecture doc still lists cost tracking as out of scope; the slice relies on the plan entry alone
 
-140-arch lists cost tracking as future and unscheduled. The slice acknowledges this, points to the slice plan entry that brought cost *reporting* in, and keeps optimization out (pool ranking, budgets). The MCP deferral (#217) and the #214/#210 split (D12) match the slice plan entry's own notes.
+`140-arch` lists "Cost tracking and optimization across providers" under "Out of Scope (future, unscheduled)". The slice acknowledges this and cites the slice plan entry (line 116 of `140-slices.pipeline-foundation.md`). The plan entry does bring cost reporting in. The architecture doc is the parent for this review, and it still says the opposite. Its `dispatch` row already "owns" token tracking, so that part is covered.
 
-### [CONCERN] Design is heavy for what the slice must deliver; several items can be cut or deferred
+Either update the arch scope boundary to say that cost reporting is in scope and cost optimization is out, or add an explicit amendment note to the slice. The follow-on #214/#210 slice will otherwise hit the same contradiction.
 
-The slice has twelve decisions and ten included items. Four are tracking or closure work that the capture layer does not need:
-- **#173 Gemini probe (item 10, D11).** It is a manual curl and a one-line flag flip with no shared code path. It is a separate chore and does not belong in a design that "touches every provider seam". Cut it from Included, or move it to a standalone fix under slice 944.
-- **D10 (#34 investigation).** It is a decision section that only says "do it later, elsewhere". Fold it into the Excluded bullet that already covers #34.
-- **#158 closure (item 7)** is a code-less issue close plus an always-`None` `cache_write` on the OpenAI reader. Fold it into the CHANGELOG/issue-closing step. It does not need an Included item.
-- **Per-run `runs` and `reviews` subcommands plus `--slice` and `--json` on all three.** `run` and `reviews` cover the stated payoffs (#36, #172, #34 diagnosis). `runs` with `--slice` is the aggregation that #214 consumes, and #214 is deferred. Consider deferring `runs` to the follow-on slice, or justify it by naming a requirement it meets in this slice.
+### [CONCERN] Hot-path NFR is asserted but not stated as a target
 
-The slice also restates material from other documents: the full 931 D10 frontmatter table reference, the SDK `ResultMessage` field list and the `ModelUsage` fields. Link to those instead.
+The slice touches every `dispatch`, `summary`, `compact`, and `review` execution and the `_append_step` state write, which are the executor's hot path. It states "Capture adds no I/O" and "no extra state save", which is a qualitative claim.
 
-### [CONCERN] Slash command and skill parity is assigned to this slice but the failure and ownership story for the wrappers is thin
+The state write is atomic-replace, so it grows with each persisted record. The `sq stats reviews` cost is described only as "one frontmatter parse per artifact". The arch doc states no numeric NFR for these paths, so this is not a violation. The slice should still give a concrete bound that tests can check. For example: capture adds zero extra state saves per action, and `sq stats reviews` parses frontmatter only, with no body reads. A test should assert the first of those.
 
-Item 9 adds `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md`. Success criterion 10 requires "output identical to the CLI". The doc defines no test or mechanism that could check this, since the wrappers just run `sq stats $ARGUMENTS`. The failure table also has no row for a wrapper invoked when `sq` is not installed or is the wrong version. Either drop criterion 10 as untestable and rely on the existing install-commands convention, or state how identity is verified.
+### [CONCERN] Failure table rows lack a defined observation hook for some signals
 
-### [CONCERN] Duration NFR and timing semantics are defined, but no overhead or write-path constraint is restated for the hot path
+The failure table is thorough, but three rows are underspecified:
+- **"WARNING once per alias per process" (D3).** Process-level state makes the "once" behavior hard to test in isolation. The design does not say how the dedupe set is scoped or reset, and a module-level global would break test independence.
+- **D5 interrupt drain with no `ResultMessage`.** The record keeps "turns and tokens that completed" but gets no marker that it is partial. `sq stats` would show it as a complete figure. A partial flag, or at minimum a note in the report, is needed to meet D9's honest-totals goal.
+- **D6 end time on every exit path.** `usage_capture` must handle `asyncio.CancelledError` and resume, but the table has no cancellation row.
 
-The slice adds a record to every action. It also adds a read-and-parse of every run file for `sq stats runs`, which loads every run in `~/.config/squadron/runs`. 140-arch states no latency target for either path, and 174 (already a prerequisite) set listing and rendering behavior for run files. The slice should say that `sq stats runs` reuses `scan_runs` and 174's listing bounds (or name a limit), so a large run history does not make the command unbounded. Without that, the new read path has no stated cost bound.
+Specify the dedupe scope, add a partial-record indicator, and add a cancellation row.
 
-### [CONCERN] Failure handling for the new `sq stats reviews` directory scan is specified, but the aggregate "not recorded" count is under-specified for pipeline reviews
+### [NOTE] Layering and dependency direction are sound
 
-D8 says pipeline reviews appear in `sq stats reviews` and also under their run, so the two views are never summed together. That makes `sq stats reviews` totals and `sq stats runs` totals overlap by design. No de-duplication or marker lets a reader tell a pipeline-originated artifact from a standalone one. The doc does not say what `reviews` total means to a user who ran both. Either add a column or a flag to separate them, or restrict `reviews` to standalone `sq review` runs. The doc already describes it as covering "standalone `sq review` runs".
+- Providers emit raw telemetry on `Message.metadata`, and only `pipeline/usage_capture.py` attributes it to an alias and step (D4).
+- `stats/` has no Typer dependency, and the CLI, slash command, and skill wrap it.
+- No schema bump is needed because the data lives in `ActionResult.metadata`, which already round-trips through `asdict`.
+- The slice does not touch the `Action` protocol, the `ActionContext` shape, or the events dispatcher, which matches the arch doc's boundaries.
+- The executor-owned `RunObserver` and events paths are not used for usage, which is correct. Capture happens in the action that has the data.
 
-### [NOTE] Hidden dependency on `AuditRun` persistence is acknowledged and correctly bounded
+### [NOTE] Integration with 174 and prior slices matches what they provide
 
-The deferral to #33 and #34 is explicit. The SDK agent stamps audit usage on the message, so the later change is small. This is a clean boundary, not an under-specification.
-
-### [NOTE] Failure modes are enumerated well for the new I/O paths
-
-The failure table covers missing or malformed usage, partial pricing, an unknown run id, torn reads (via atomic replace), a missing review directory and unreadable frontmatter. Each row has a signal and a stated test requirement. The interrupt-drain case (D5) ties into 174's behavior with a named WARNING. This meets the Failure-Mode Enumeration rule.
+The slice consumes 174's interrupt and drain behavior in `SDKExecutionSession`, 931's `RunCost` and `core/usage.py`, and `StateManager` atomic writes. It reuses `cli/columns.py`. The deferral of `AuditRun` persistence, step duration, and `sq stats runs` is documented with issue links, and none of it is silently dropped. The MCP deferral (#217) is recorded in the plan entry, so it does not count as dropped assigned scope.
 
 ### Run Digest
 
-- Response length: 6379 chars
+- Response length: 6523 chars
 - Response is newline-free: no
 - Tool calls made: 5
 - Tool calls failed: 0
@@ -123,10 +118,10 @@ The failure table covers missing or malformed usage, partial pricing, an unknown
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 32.1 s
+- Duration: 36.4 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
