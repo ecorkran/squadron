@@ -14,54 +14,50 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261014
 dateUpdated: 20261014
-reviewedSha: e87fe4e5e121d4de58e41b697cf0272673e7821f
+reviewedSha: 73ca0db651df0c246a1a5c5012ed35ae90ecb42c
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
-durationSeconds: 46.8
+durationSeconds: 49.1
 runId: run-20261015-p5-e75c92b8
 squadronVersion: 0.21.9
 findings:
   - id: F001
     severity: concern
-    category: sequencing
-    summary: "Task 15 changes return types without fixing existing mocks"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:151-166"
+    category: completeness
+    summary: "Duration (D6, criterion 4) is unspecified for review, compact, and the failed-review path"
+    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:166-178"
   - id: F002
     severity: concern
-    category: consistency
-    summary: "Task 17 and Task 19 contradict each other on module state"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:178, 198"
+    category: completeness
+    summary: "Task 26 does not say how frontmatter rows feed `usage_totals`"
+    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:251,260-267"
   - id: F003
     severity: concern
-    category: test-coverage
-    summary: "Failure-table signals and criterion 4 are not fully asserted by tests"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:159-166, 203-209"
+    category: testing
+    summary: "Executor wiring for `UsageCapture` is untested"
+    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:177,184"
   - id: F004
     severity: concern
-    category: correctness
-    summary: "Tasks 19 and 24 call `.to_dict()` on a value that may be `None`"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:172-176, 195, 228"
-  - id: F005
-    severity: concern
     category: scope
-    summary: "`stats/usage_report.py` will exceed the project's file-size guideline"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:247-269"
-  - id: F006
-    severity: concern
-    category: process
-    summary: "Task 36 closes issues before code review and integration"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:314-317"
-  - id: F007
-    severity: concern
-    category: proportionality
-    summary: "Task granularity is slightly heavy for the slice"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:32-36, 64-67, 223-230"
-  - id: F008
+    summary: "Task 13 mixes too many concerns"
+    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:145-152"
+  - id: F005
     severity: note
-    category: prompt-hygiene
-    summary: "Task 8 pairs a retrieval step with example values"
-    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:98"
-  - id: F009
+    category: nfr
+    summary: "No load-test task is required"
+    location: "unverified"
+  - id: F006
+    severity: note
+    category: process
+    summary: "Release bump is not tasked"
+    location: "project-documents/user/slices/175-slice.usage-and-cost-tracking.md:369"
+  - id: F007
+    severity: note
+    category: verification
+    summary: "Walkthrough step 7 cannot be run by an agent"
+    location: "project-documents/user/tasks/175-tasks.usage-and-cost-tracking.md:308"
+  - id: F008
     severity: pass
     category: coverage
     summary: "Success-criteria coverage and sequencing"
@@ -75,64 +71,73 @@ findings:
 
 ## Findings
 
-### [CONCERN] Task 15 changes return types without fixing existing mocks
+### [CONCERN] Duration (D6, criterion 4) is unspecified for review, compact, and the failed-review path
 
-Task 15 makes `dispatch`, `capture_summary` and `compact` return `SessionReply` instead of `str`. It changes four callers to read `.text`. Task 16 then requires `pytest tests/pipeline -q` to pass. Existing action and session tests that stub these methods to return a `str` will break, and no step updates them. Add an explicit step to Task 16, or a new sub-item in Task 15, to migrate the existing fakes and mocks to `SessionReply`, so the test run is expected to be green.
+Task 15 says each builder "computes `duration_seconds = time.monotonic() - started`". But `record_from_review(result, resolved, effort_sent)` (line 170) takes no `started`. Nothing says whether it reads the duration already on `ReviewResult` (931 D9) or measures it.
+- Task 17 says to take `started` before the LLM call, and Task 19 says "same pattern". Task 21 (compact and review) never mentions `started`.
+- The failed-review path in Task 21 calls `record_from_telemetry(exc.telemetry, ...)` from `_exception_result`. That function is outside the call scope, so `started` is not obviously available there.
+- Criterion 4 (duration on success, failure, and stall) is asserted only for dispatch (Task 18, line 204). Tasks 20 and 22 never assert `duration_seconds`.
 
-### [CONCERN] Task 17 and Task 19 contradict each other on module state
+Fix:
+1. State the duration source for `record_from_review`.
+2. Say where `started` is captured for compact and review, and how it reaches `_exception_result`.
+3. Add a duration assertion to Tasks 20 and 22 for the failure paths.
 
-Task 17 says `usage_capture` "holds no state beyond `warned`". The design's `CancelledError` row also relies on it holding no state. Task 19 then adds a module-level once-per-process flag in `usage_capture.py` for the D7 DEBUG line. A mutable module global also needs a reset hook for tests, and no task provides one. Reconcile the two. Either carry the flag on `UsageCapture` (once per run is acceptable for a DEBUG line, if the PM agrees), or amend Task 17 and add a test reset.
+### [CONCERN] Task 26 does not say how frontmatter rows feed `usage_totals`
 
-### [CONCERN] Failure-table signals and criterion 4 are not fully asserted by tests
+Task 24 defines `usage_totals(records)` over `UsageRecord`s, and Task 26 says it reuses that helper for review totals. Review artifacts hold only frontmatter keys (`promptTokens`, `cachedTokens`, `costUsd`, `costBasis`, and so on). They have no `alias`, `profile`, or `partial` fields.
+- No task states the mapping from frontmatter to `TokenUsage`/cost. That covers key names, type leniency, and a `costUsd` that is missing or the wrong type.
+- No task says how the `api-rate equiv.` label (Task 28) is derived for reviews.
+- Task 27 does not test malformed token or cost values in frontmatter.
 
-The design requires every failure-table row to have a test asserting its signal. Several have none:
-- **D7 DEBUG log.** The "once per process" log for an SDK session with alias effort is never asserted. Task 20 only checks that `effort` is `None`.
-- **Session `usage is None` WARNING.** The "once per `dispatch()`" warning that Task 15 implements has no test in Task 16. Task 12 covers only the agent path.
-- **Criterion 4.** `duration_seconds` on failure and on stall is only unit-tested through the patched `monotonic` in Task 18. Task 20 does not assert that the failed and stalled dispatch results carry a duration.
+Fix: add one sub-item to Task 26 for the frontmatter-to-totals-input mapping, and a matching case to Task 27.
 
-Add these assertions to Tasks 16 and 20.
+### [CONCERN] Executor wiring for `UsageCapture` is untested
 
-### [CONCERN] Tasks 19 and 24 call `.to_dict()` on a value that may be `None`
+Task 15 has the executor create one `UsageCapture` per run and set `ActionContext.usage_capture` for every step. The "once per alias per process" pricing warning and the once-per-process D7 DEBUG line depend on that sharing. Task 16 tests dedupe only on a hand-built `UsageCapture`. Tasks 18 and 20 likely build their own contexts. Nothing asserts that two steps in one executor run share the same instance.
 
-Task 17 says each `record_*` method returns `None` when nothing was reported. Task 19 writes `metadata[USAGE_KEY] = record.to_dict()`, and Task 24 chains `record_from_review(...).to_dict()`. For a provider that reports nothing, the chain raises `AttributeError` inside the action. Specify that the actions write the key only when a record is returned. Better, make a single `usage_capture` helper own that guard so it isn't repeated in four actions. Task 24 also does not say how a review that fails with telemetry reaches the "failed actions record usage" requirement (criterion 2, D5). State which path covers it.
+Fix: add one executor-level test to Task 16 or Task 18. It should check that two steps in a run see the same `UsageCapture`, so the pricing warning fires once.
 
-### [CONCERN] `stats/usage_report.py` will exceed the project's file-size guideline
+### [CONCERN] Task 13 mixes too many concerns
 
-Task 27 gives `usage_report.py` a "~300 lines" success bound. Task 29 then adds the reviews report, with its own row types, frontmatter parsing and skip and exclude counters, to the same file. The CLAUDE.md guideline is about 300 lines. Put the reviews report in its own module (for example `stats/reviews_report.py`), or relax the Task 27 bound. The shared totals logic should be a small helper used by both, so it isn't duplicated.
+Task 13 covers four kinds of change:
+- `DispatchTurns` telemetry folding.
+- A new `SessionReply` return type.
+- Error-telemetry attachment on every raise path.
+- Caller migration across four modules plus an unbounded sweep of test fakes found by grep.
 
-### [CONCERN] Task 36 closes issues before code review and integration
+The caller and fake migration is mechanical but could touch many files. Consider splitting it into 13a (telemetry folding, `SessionReply`, error telemetry) and 13b (caller and fake migration, with a pyright-clean checkpoint). That gives a junior a smaller blast radius and a commit between the two.
 
-Task 36 closes #172, #36, #154, #151 and #158 at the end of Phase 6. Under the project's git rules, review and merge happen later, in Phase 7. Closing the issues now is outward-facing and hard to reverse, and it asserts completion before the slice has passed review. Either move it to the Phase 7 closure, or change it to "prepare comments and ask the PM before posting or closing".
+### [NOTE] No load-test task is required
 
-### [CONCERN] Task granularity is slightly heavy for the slice
+The slice states no performance NFR that needs a load test. Its hot-path bounds (zero extra state saves, frontmatter-only reads) are covered by unit assertions in Task 18 and Task 27. No `tests/load/` or CI-gating task is needed.
 
-The checklist has 36 tasks. Some could be merged without losing a checkpoint:
-- **Tasks 1 and 5.** Task 1 (branch) and Task 5 (verify and commit) are standalone tasks with no deliverable of their own. Fold Task 1 into Task 2 and Task 5 into Task 4.
-- **Tasks 23 and 24.** Compact and review wiring are each a few lines and are tested together in Task 25. Merge them into one "wire compact and review" task.
+### [NOTE] Release bump is not tasked
 
-### [NOTE] Task 8 pairs a retrieval step with example values
+The slice design calls this a minor-release feature. Under the project's versioning rule, the Project Manager must confirm a minor bump before any files change. No task covers the bump, which is acceptable if the bump happens at Phase 7. Task 31 could add a one-line "propose version bump to the Project Manager" item.
 
-The Task 8 success text lists example usage keys followed by "or whatever the CLI emitted". The fixture must come from the real CLI output. Reword it to say "the keys the CLI actually emitted", and to stop and report if the capture fails or returns no `usage` object. That avoids the hallucination-trap pattern from CLAUDE.md. The task also spends real tokens on a live `claude` call, which is fine but worth stating.
+### [NOTE] Walkthrough step 7 cannot be run by an agent
+
+The `/sq:stats` check in Claude Code is interactive. Task 32 already says to stop and report any step that cannot run, so this is handled.
 
 ### [PASS] Success-criteria coverage and sequencing
 
-Each criterion maps to tasks:
-- **Criterion 1:** Tasks 4, 11, 13, 14.
-- **Criterion 2:** Tasks 17-25.
-- **Criterion 3:** Tasks 15, 16.
-- **Criterion 4:** Tasks 17, 19, 20.
-- **Criterion 5:** Tasks 6, 7.
-- **Criterion 6:** Tasks 19, 21.
-- **Criterion 7:** Tasks 19-22.
-- **Criterion 8:** Tasks 27-32.
-- **Criterion 9:** Tasks 26, 28, 32.
-- **Criterion 10:** Task 33.
+- **Criterion 1:** Tasks 9, 11, 12.
+- **Criterion 2:** Tasks 15–22.
+- **Criterion 3:** Tasks 13, 14.
+- **Criterion 4:** Tasks 17, 18 (see the concern above for the gaps).
+- **Criterion 5:** Tasks 4, 5.
+- **Criterion 6:** Tasks 17–20.
+- **Criterion 7:** Tasks 15–20.
+- **Criterion 8:** Tasks 24–29.
+- **Criterion 9:** Tasks 23, 29.
+- **Criterion 10:** Task 30.
 
-Dependencies run forward only, with no cycles. `resolve_cost` (Task 6) exists before its callers in Tasks 13 and 17. No task writes a merge. No NFR is restated, so no load test or CI gating task is needed. The walkthrough in Task 35 covers the slice design's verification steps. I did not check the file paths and line numbers cited in the tasks against the source tree.
+No task is scope creep. Each traces to a criterion, a failure-table row, or the design's closure steps. `resolve_cost` and `usage_capture` are justified by the DRY and 300-line constraints. Test tasks directly follow their implementation tasks, with commits at roughly every second task. No task writes a merge.
 
 ### Run Digest
 
-- Response length: 6585 chars
+- Response length: 5725 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -144,10 +149,10 @@ Dependencies run forward only, with no cycles. `resolve_cost` (Task 6) exists be
 - Effort: backend default
 - Turns: not computed
 - Tokens — prompt / cached / completion / reasoning: not computed / not computed / not computed / not computed
-- Duration: 46.8 s
+- Duration: 49.1 s
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
