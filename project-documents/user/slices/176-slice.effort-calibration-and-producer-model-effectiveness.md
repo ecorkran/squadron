@@ -115,7 +115,7 @@ The slice plan leaves two questions to this design: whether (b) splits again, an
 
 ### D2 — Planned effort is ordinal; report distributions, not ratios
 
-`Effort` is a 1–5 rank, not a quantity, so "actual divided by planned" means nothing. `sq stats slices` groups completed slices by planned slice effort and reports, for each level, the median and range of each actual measure along with n. Per-task planned effort is shown where the task file has it, and a task group's planned effort is the sum of its tasks' values. Most task files do not have per-task effort: none of 160–175 do, and 95 of 159 files in this repo have no effort marker at all. The slice-level `Effort: N/5` in the slice plan entry is therefore the primary planned figure.
+`Effort` is a 1–5 rank, not a quantity, so "actual divided by planned" means nothing. `sq stats slices` groups completed slices by planned slice effort and reports, for each level, the median and range of each actual measure along with n. Per-task planned effort is shown where the task file has it, and a task group's planned effort is the sum of its tasks' values. The plan entry asks for per-task `Effort`, and it costs one parser pattern and one sum, so it stays. Most task files do not have per-task effort: none of 160–175 do, and 95 of 159 files in this repo have no effort marker at all. The slice-level `Effort: N/5` in the slice plan entry is therefore the primary planned figure.
 
 ### D3 — Persist every loop round
 
@@ -142,12 +142,13 @@ Code commits do not cite task numbers, but task files written since 174 prescrib
 
 1. **Marker commits.** Each prescribed subject is matched exactly against commits in the slice window (below). A subject that matches more than one commit takes the earliest one inside the window. A subject with no match is reported as `marker not found`, and that group's actuals are `unknown`.
 2. **Task groups.** A group runs from the task after the previous marker task through the marker task. Its commits are the window's commits after the previous marker, up to and including this one. Commits that are not the marker are counted as `extra` commits in the group, which is the rework signal per task.
-3. **Slice window.** The window is resolved in this order, and the source is printed:
-   - `branch`: the local branch `{index}-slice.*` exists. The window is `git log --first-parent <commit that added the task file>..<branch>`.
-   - `merge`: a merge commit `merge: slice {index}…` exists. The window is `M^1..M^2`.
-   - `none`: neither exists. Implementation actuals and task groups are `unavailable`, and the slice still reports planned effort, review rounds, and spend.
+3. **Slice window.** The source is printed:
+   - `branch`: the local branch `{index}-slice.*` exists. The window is the branch tip's first-parent chain back to (not including) the commit that added the task file. It is computed in memory from the D6 history pass.
+   - `none`: there is no such branch. Project rules keep slice branches, so this is the exception. Implementation actuals and task groups are `unavailable`, and the slice still reports planned effort, review rounds, and spend.
 4. **Implementation commit**: a commit in the window that touches any path outside `project-documents/`. Planning and review commits touch only documents.
 5. **Post-review fix-up**: an implementation commit dated after the commit that first added the slice's `{index}-review.code.*` artifact.
+
+**Why subject text, as a deliberate exception.** The rule against using user-visible labels as logical structure is meant for labels the code itself writes and then reads back. A prescribed subject is different. The planner writes it into the task file as the commit's identity, and history contains no other link between a task and its commit: no trailer, no task number, and no hash in the task file. A structural anchor, such as a `Task-Id:` trailer, could only help slices planned after it exists, and #214 has to work on existing history. The match is exact by design, because a lenient match could bind a group to the wrong commit. A subject reworded during a rebase shows up as `marker not found` and is counted in the footer, so it is never silently misattributed. The branch name is a structural ref (`refs/heads/{index}-slice.*`), not message text.
 
 Spans use author dates (`%aI`), which survive rebases. A span is wall-clock time and includes idle time. The report labels it `span`, not `time worked`.
 
@@ -155,7 +156,7 @@ Spans use author dates (`%aI`), which survive rebases. A span is wall-clock time
 
 Each review artifact is rewritten every round, but every round is committed (941). The rounds for slice `N`, review type `T`, are the committed versions of `N-review.T.*.md`, at top level and in `archive/`. The archive holds timestamped copies of earlier versions, so versions are deduplicated by blob id and ordered by commit date. Each version is read with `git show <sha>:<path>` through `run_git`, so every git call has its timeout and its WARNING. The version's frontmatter gives `verdict`, `aiModel`, `revision_number`, `runId`, and cost. Rounds-to-accept for a type is the number of versions up to and including the first one that `LoopCondition.REVIEW_CONCERNS_OR_BETTER.met_by_verdict` accepts. Any rounds after it are listed but not counted. This covers pipeline loops, `sq review --max`, and manual reviews in the same way.
 
-**Bound.** One report invocation runs one `git log --name-status` pass, plus one `git show` per review artifact version it reads. Versions are read only for the slices the report covers. A test asserts the count.
+**Bound.** A report invocation runs exactly two whole-history git calls: `git for-each-ref refs/heads` for branch tips, and one `git log --all --name-status --format=<sha, parents, author date, subject>`. Everything D5 needs comes from this in-memory graph, without further git calls: the commit that added the task file, the first-parent windows, implementation commits, and the commit that first added the code review artifact. The only other calls are one `git show` per review artifact version, for the slices the report covers. The total is therefore 2 + V, where V is the number of versions read. A test asserts that count.
 
 ### D7 — Report shapes
 
@@ -169,9 +170,9 @@ Each review artifact is rewritten every round, but every round is committed (941
 
 ### D8 — Observed producer effectiveness
 
-**Unit.** A pipeline run's phase step (`StepTypeName.DESIGN` or `TASKS`), together with the loop step that follows it in the same run, if any.
+**Unit.** A top-level `StepState` in `completed_steps` whose `step_type` is `StepTypeName.DESIGN` or `TASKS`. A phase step and its loop are separate `StepState`s (P4, P5 and P456 run files show `design, loop` and `tasks, loop`). The loop belongs to the phase step when it is the next entry in `completed_steps` (index i+1) and its `step_type` is `loop`. Anything else means the unit has no loop. Phase work inside an `each` step is not a top-level phase `StepState`, so it is not counted. A loop with no phase step directly before it (for example, a run adopted with `--from` past the phase step) is not a unit.
 
-**Producer config key.** The phase step's dispatch metadata gives model (answering, else requested), profile, and the `usage.effort` that was sent (175 D7). The key adds the reviewer's model from the phase step's review action, because rounds-to-accept depends on the reviewer (#210, "under a fixed reviewer"). Pipeline name is shown as a column but is not part of the key.
+**Producer config key.** The phase step's own `action_results` (its final round; a phase step has no `prior_round_results`) give the dispatch action's metadata: model (answering, else requested), profile, and the `usage.effort` that was sent (175 D7). The key adds the reviewer's model from the review action in those same `action_results`, because rounds-to-accept depends on the reviewer (#210, "under a fixed reviewer"). Pipeline name is shown as a column but is not part of the key.
 
 **Per config, per phase:**
 - n runs
@@ -188,15 +189,15 @@ Each review artifact is rewritten every round, but every round is committed (941
 | Failure | Behavior | Signal |
 |---|---|---|
 | Not a git repo, or git missing | report not produced | error naming the cwd, exit 1 |
-| `run_git` returns `None` for `git log` or `git show` (hang past the timeout, cannot run) | report not produced | `run_git`'s timeout WARNING, then an error naming the git command, exit 1; never a partial report |
-| `git show <sha>:<path>` exits non-zero (missing object, e.g. in a shallow clone) | report not produced | error naming the sha, path, and git's stderr, exit 1 |
+| `run_git` returns `None` or non-zero for `for-each-ref` or the history pass (hang past the timeout, cannot run) | report not produced | `run_git`'s timeout WARNING, then an error naming the git command, exit 1; never a partial report |
+| `git show <sha>:<path>` returns `None` or non-zero for a review version (timeout, missing object) | that round skipped, same as unreadable frontmatter below | WARNING naming sha, path, and git's stderr; footer count |
 | `metrology.min_evidence_n` is not an integer | `producers` not produced | error naming the key and value, exit 1 |
-| Shallow clone | report produced | WARNING plus footer `history is shallow; commit counts may be incomplete` |
+| Phase step with no dispatch or no review action in its `action_results` | unit excluded from `producers` | footer `N phase step(s) without a dispatch or review` |
 | `sq stats slice` with an unknown index | nothing printed | error naming the index and the plan files searched, exit 1 |
 | Task file missing for a slice | slice row has no task groups | row note `no task file`; included in `slices` |
 | Prescribed subject not found | group actuals `unknown` | row `marker not found`; footer count |
 | Non-numeric `Effort` | effort `None` | WARNING naming file and line |
-| A review artifact version with unreadable frontmatter | that round skipped | WARNING naming sha and path; footer count |
+| A review artifact version with unreadable frontmatter | that round skipped | WARNING naming sha and path; footer count (shared with the `git show` row) |
 | Unreadable or schema-obsolete run file | run skipped | footer `N run file(s) unreadable` (from `scan_runs`) |
 | Malformed `prior_round_results` entry | that round's rows `unreadable` | WARNING naming run and step (same handling as 175 D9) |
 | No completed slices / no phase runs | empty table | message saying which, exit 0 |
@@ -226,7 +227,7 @@ class PlannedSlice:
 
 # stats/git_history.py
 class WindowSource(StrEnum):
-    BRANCH = "branch"; MERGE = "merge"; NONE = "none"
+    BRANCH = "branch"; NONE = "none"
 
 @dataclass(frozen=True)
 class ReviewRound:
@@ -240,7 +241,7 @@ class ReviewRound:
 
 The core functions are `slice_effort_report(index, *, project_root, history, state_manager)`, `slices_effort_report(*, since, ...)`, `producer_report(*, phase, state_manager, min_n)` and `runs_usage_report(*, slice_index, pipeline, state_manager)`. Each one returns a frozen report dataclass that has a `to_json_dict()`.
 
-**JSON.** Each report's `to_json_dict()` serializes its dataclass fields, the same way 175's `stats_views` serializers do, and adds `schema_version: 1`. The table and the JSON read the same values. A fixed cross-project key contract waits until something consumes pooled data.
+**JSON.** Each report's `to_json_dict()` serializes its dataclass fields, the same way 175's `stats_views` serializers do. The table and the JSON read the same values. A fixed cross-project key contract waits until something consumes pooled data.
 
 ### UI Specifications
 
