@@ -25,7 +25,10 @@ from squadron.core.models import (
     TOOL_RESULT_TYPE,
     TOOL_USE_TYPE,
 )
+from squadron.core.usage import RunTelemetry
+from squadron.logging import get_logger
 from squadron.providers.sdk.translation import translate_sdk_message
+from squadron.providers.sdk.usage import read_result_usage
 
 __all__ = ["WAITED_TASK_TYPES", "BackgroundLedger", "DispatchTurns", "is_own_result"]
 
@@ -43,6 +46,8 @@ WAITED_TASK_TYPES: Final = frozenset({"local_agent", "local_workflow"})
 _NON_PROSE_TYPES: Final = frozenset(
     {SDK_RESULT_TYPE, TOOL_USE_TYPE, TOOL_RESULT_TYPE, RATE_LIMIT_EVENT_TYPE}
 )
+
+_logger = get_logger(__name__)
 
 
 class BackgroundLedger:
@@ -102,11 +107,17 @@ class DispatchTurns:
     # Per read attempt: set once any non-rejected message arrives, so the
     # rate-limit retry budget bounds consecutive failures only.
     progressed: bool = False
+    # Turns, tokens, and cost of every ResultMessage this dispatch read: its own,
+    # injected follow-up turns, and interrupt drains (slice 175 D2). Each is real spend.
+    telemetry: RunTelemetry = field(default_factory=RunTelemetry)
+    usage_warned: bool = False
 
     def collect(self, msg: object) -> str | None:
         """Record one message; return the session id it carries, if any."""
         self.progressed = True
         self.ledger.observe(msg)
+        if isinstance(msg, ResultMessage):
+            self.fold_result(msg)
         # A subagent's own messages stream through too (parent_tool_use_id set); its
         # report reaches the main agent as a tool result, so its prose is not ours.
         is_subagent = isinstance(msg, AssistantMessage) and msg.parent_tool_use_id is not None
@@ -118,6 +129,14 @@ class DispatchTurns:
             if isinstance(sid, str) and sid:
                 session_id = sid
         return session_id
+
+    def fold_result(self, msg: ResultMessage) -> None:
+        """Add one result's usage; warn once per dispatch when it reported none."""
+        usage, turns, cost = read_result_usage(msg)
+        if usage is None and not self.usage_warned:
+            self.usage_warned = True
+            _logger.warning("SDK session result reported no token usage; usage will not be recorded")
+        self.telemetry.fold_result(turns=turns, usage=usage, cost_usd=cost)
 
     @property
     def waiting(self) -> bool:

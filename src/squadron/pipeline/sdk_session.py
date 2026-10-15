@@ -227,6 +227,17 @@ class SDKExecutionSession:
         turns = DispatchTurns()
         self.background_tasks_stopped = 0
         try:
+            return await self._query_and_collect(prompt, turns)
+        except ProviderError as exc:
+            # What the dispatch spent before it failed rides the error (slice 175 D5).
+            exc.telemetry = turns.telemetry.snapshot()
+            raise
+        finally:
+            self.background_tasks_waited = turns.ledger.seen_count
+
+    async def _query_and_collect(self, prompt: str, turns: DispatchTurns) -> str:
+        """Send ``prompt`` and read its turns, mapping SDK errors to provider errors."""
+        try:
             await self.client.query(prompt)
             return await self._collect_turns(turns)
         except CLINotFoundError as exc:
@@ -235,8 +246,6 @@ class SDKExecutionSession:
             raise ProviderAPIError(str(exc), status_code=getattr(exc, "exit_code", None)) from exc
         except (CLIConnectionError, CLIJSONDecodeError, ClaudeSDKError) as exc:
             raise ProviderError(str(exc)) from exc
-        finally:
-            self.background_tasks_waited = turns.ledger.seen_count
 
     async def _collect_turns(self, turns: DispatchTurns) -> str:
         """Read turns until our own result arrives with no agent running."""
@@ -349,6 +358,7 @@ class SDKExecutionSession:
             # reaches the caller or _check_cli_error.
             if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error and not accept_error:
                 turns.progressed = True
+                turns.fold_result(sdk_msg)  # an error result still spent tokens (D5)
                 raise ProviderAPIError(
                     f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
                 )

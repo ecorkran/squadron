@@ -84,61 +84,61 @@ status: in_progress
 
 ### SDK capture (D1, D2; #172, #36)
 
-- [ ] **Task 6: Capture a real `ResultMessage` fixture**
-  - [ ] Run `claude -p --output-format json "Reply with the word ok."` once (a live call that spends real tokens). Its JSON result object is what the SDK parses into `ResultMessage` (the `usage` dict is passed through unchanged).
-  - [ ] Save it as `tests/providers/sdk/fixtures/result_message_real.json`. Replace `result` with `"ok"` and `session_id` with a placeholder; keep `usage`, `num_turns`, `total_cost_usd`, `subtype`, `is_error`, `duration_ms` exactly as emitted. Add a sibling `README.md` (with frontmatter) recording the `claude` CLI version and `claude-agent-sdk` version (0.2.162 pin) and the capture command.
-  - [ ] Add a test helper that builds a `ResultMessage` from this JSON (`ResultMessage(**fields)` with the SDK's field names), for Tasks 7–10 and 15
-  - [ ] If the command fails or its output has no `usage` object, stop and report to the Project Manager; do not write a fixture by hand
+- [x] **Task 6: Capture a real `ResultMessage` fixture**
+  - [x] Run `claude -p --output-format json "Reply with the word ok."` once (a live call that spends real tokens). Its JSON result object is what the SDK parses into `ResultMessage` (the `usage` dict is passed through unchanged).
+  - [x] Save it as `tests/providers/sdk/fixtures/result_message_real.json`. Replace `result` with `"ok"` and `session_id` with a placeholder; keep `usage`, `num_turns`, `total_cost_usd`, `subtype`, `is_error`, `duration_ms` exactly as emitted. Add a sibling `README.md` (with frontmatter) recording the `claude` CLI version and `claude-agent-sdk` version (0.2.162 pin) and the capture command.
+  - [x] Add a test helper that builds a `ResultMessage` from this JSON (`ResultMessage(**fields)` with the SDK's field names), for Tasks 7–10 and 15
+  - [x] If the command fails or its output has no `usage` object, stop and report to the Project Manager; do not write a fixture by hand
   - **Success:** the fixture's `usage` keys are exactly the keys the CLI emitted; no prompt or response content
 
-- [ ] **Task 7: SDK result reader**
-  - [ ] New `providers/sdk/usage.py`: `read_result_usage(msg: ResultMessage) -> tuple[TokenUsage | None, int | None, float | None]` (tokens, turns, cost)
-  - [ ] Map per D1. `prompt` is `None` only if `input_tokens` is missing; a missing cache key adds nothing and leaves that field `None`; never substitute 0. `reasoning` is always `None`.
-  - [ ] `msg.usage is None` → tokens `None` (the caller warns, Task 8); turns and cost still read
-  - [ ] A non-int usage value (bool counts as non-int) → that field `None`, siblings read, WARNING naming the field and value with `%.200r`
-  - [ ] `num_turns` and `total_cost_usd` read only when the type matches, else `None`
-  - [ ] Do not read `model_usage` or per-message usage (D2)
+- [x] **Task 7: SDK result reader**
+  - [x] New `providers/sdk/usage.py`: `read_result_usage(msg: ResultMessage) -> tuple[TokenUsage | None, int | None, float | None]` (tokens, turns, cost)
+  - [x] Map per D1. `prompt` is `None` only if `input_tokens` is missing; a missing cache key adds nothing and leaves that field `None`; never substitute 0. `reasoning` is always `None`.
+  - [x] `msg.usage is None` → tokens `None` (the caller warns, Task 8); turns and cost still read
+  - [x] A non-int usage value (bool counts as non-int) → that field `None`, siblings read, WARNING naming the field and value with `%.200r`
+  - [x] `num_turns` and `total_cost_usd` read only when the type matches, else `None`
+  - [x] Do not read `model_usage` or per-message usage (D2)
   - **Success:** the reader is the only code that knows SDK usage key names
 
-- [ ] **Task 8: Test the SDK reader**
-  - [ ] New `tests/providers/sdk/test_usage.py`: the real fixture maps to the D1 sums (assert against values computed from the fixture's own dict, not hard-coded numbers)
-  - [ ] Stubs: no cache keys → `cached`/`cache_write` `None`, `prompt == input_tokens`; missing `input_tokens` → `prompt` `None`; `usage=None` → tokens `None`, turns and cost read; `cache_read_input_tokens="12"` → that field `None`, siblings read, one WARNING containing the field name
-  - [ ] Run `pytest tests/providers/sdk -q`, ruff, pyright
+- [x] **Task 8: Test the SDK reader**
+  - [x] New `tests/providers/sdk/test_usage.py`: the real fixture maps to the D1 sums (assert against values computed from the fixture's own dict, not hard-coded numbers)
+  - [x] Stubs: no cache keys → `cached`/`cache_write` `None`, `prompt == input_tokens`; missing `input_tokens` → `prompt` `None`; `usage=None` → tokens `None`, turns and cost read; `cache_read_input_tokens="12"` → that field `None`, siblings read, one WARNING containing the field name
+  - [x] Run `pytest tests/providers/sdk -q`, ruff, pyright
   - **Success:** tests pass; an SDK upgrade that renames a usage key fails the fixture test
 
-- [ ] **Task 9: `ClaudeSDKAgent` stamps usage**
-  - [ ] In `providers/sdk/agent.py`, hold a `RunTelemetry` per `handle_message` call. In `_translate_and_track`, for every `ResultMessage`, `fold_result` with `read_result_usage`'s output (D2: sum across results in one call, never per-message usage).
-  - [ ] Stamp `TURNS_KEY`, `USAGE_KEY`, and `COST_USD_KEY` on the final message, where tool telemetry is already stamped. `USAGE_KEY` is `None` when no result reported usage.
-  - [ ] When a `ResultMessage` has `usage is None`, log the WARNING once per `handle_message` (mirror the OpenAI agent's 931 wording, naming the SDK)
-  - [ ] In the agent's existing failure path, attach `telemetry.snapshot()` to the raised `ProviderError` (D5)
-  - [ ] Leave `providers/sdk/translation.py` `_translate_result` unchanged: the agent reads the raw `ResultMessage`, the translator stays content-only
+- [x] **Task 9: `ClaudeSDKAgent` stamps usage**
+  - [x] In `providers/sdk/agent.py`, hold a `RunTelemetry` per `handle_message` call. In `_translate_and_track`, for every `ResultMessage`, `fold_result` with `read_result_usage`'s output (D2: sum across results in one call, never per-message usage).
+  - [x] Stamp `TURNS_KEY`, `USAGE_KEY`, and `COST_USD_KEY` on the final message, where tool telemetry is already stamped. `USAGE_KEY` is `None` when no result reported usage.
+  - [x] When a `ResultMessage` has `usage is None`, log the WARNING once per `handle_message` (mirror the OpenAI agent's 931 wording, naming the SDK)
+  - [x] In the agent's existing failure path, attach `telemetry.snapshot()` to the raised `ProviderError` (D5)
+  - [x] Leave `providers/sdk/translation.py` `_translate_result` unchanged: the agent reads the raw `ResultMessage`, the translator stays content-only
   - **Success:** SDK reviews get usage through the existing `review_client` / `turn_capture` path with no review-side change beyond Task 3
 
-- [ ] **Task 10: Test the SDK agent**
-  - [ ] In `tests/providers/sdk/test_agent.py`: feed messages ending in the real-fixture `ResultMessage`; assert the final message's three keys equal the reader's output
-  - [ ] Two `ResultMessage`s in one call → turns, tokens, and cost summed; a preceding `AssistantMessage` carrying its own `usage` is not counted
-  - [ ] `usage=None` → `USAGE_KEY` is `None`, exactly one WARNING for the call
-  - [ ] A failing call after one result → the raised `ProviderError.telemetry` holds that result's tokens
-  - [ ] Run `pytest tests/providers/sdk tests/review -q`, ruff, pyright
-  - [ ] Commit: `feat: capture Claude SDK result usage, turns, and cost`
+- [x] **Task 10: Test the SDK agent**
+  - [x] In `tests/providers/sdk/test_agent.py`: feed messages ending in the real-fixture `ResultMessage`; assert the final message's three keys equal the reader's output
+  - [x] Two `ResultMessage`s in one call → turns, tokens, and cost summed; a preceding `AssistantMessage` carrying its own `usage` is not counted
+  - [x] `usage=None` → `USAGE_KEY` is `None`, exactly one WARNING for the call
+  - [x] A failing call after one result → the raised `ProviderError.telemetry` holds that result's tokens
+  - [x] Run `pytest tests/providers/sdk tests/review -q`, ruff, pyright
+  - [x] Commit: `feat: capture Claude SDK result usage, turns, and cost`
   - **Success:** tests pass
 
 ### Review artifacts (D3; criterion 1)
 
-- [ ] **Task 11: `ReviewResult` and `RunCost` carry cache write and cost**
-  - [ ] `ReviewResult` (`review/models.py`) gains `cost_usd: float | None = None` and `cost_basis: CostBasis | None = None`. `to_dict()` gains `cache_write_tokens`, `cost_usd`, `cost_basis`, always present, `null` when not reported.
-  - [ ] In `review/review_client.py`, where `result.usage` is set (line ~312), call `resolve_cost(alias, capture.usage, capture.cost_usd, warned)` with a `warned` set created for this call; set both fields. Apply the same on the `ProviderError` path where `RunCost.from_error` is used, using the error's `telemetry.cost_usd`.
-  - [ ] `RunCost` (`review/run_cost.py`) gains `cost_usd` and `cost_basis`, filled from `ReviewResult` and from `from_error`
-  - [ ] `frontmatter_lines` adds `cacheWriteTokens`, `costUsd`, `costBasis` (each only when set; `costBasis` as its string value)
-  - [ ] `digest_lines`: token line becomes `prompt / cached / cache write / completion / reasoning`; add the `Cost: $0.41 (provider)` line, or `Cost: not reported` when `cost_usd` is `None`
+- [x] **Task 11: `ReviewResult` and `RunCost` carry cache write and cost**
+  - [x] `ReviewResult` (`review/models.py`) gains `cost_usd: float | None = None` and `cost_basis: CostBasis | None = None`. `to_dict()` gains `cache_write_tokens`, `cost_usd`, `cost_basis`, always present, `null` when not reported.
+  - [x] In `review/review_client.py`, where `result.usage` is set (line ~312), call `resolve_cost(alias, capture.usage, capture.cost_usd, warned)` with a `warned` set created for this call; set both fields. Apply the same on the `ProviderError` path where `RunCost.from_error` is used, using the error's `telemetry.cost_usd`.
+  - [x] `RunCost` (`review/run_cost.py`) gains `cost_usd` and `cost_basis`, filled from `ReviewResult` and from `from_error`
+  - [x] `frontmatter_lines` adds `cacheWriteTokens`, `costUsd`, `costBasis` (each only when set; `costBasis` as its string value)
+  - [x] `digest_lines`: token line becomes `prompt / cached / cache write / completion / reasoning`; add the `Cost: $0.41 (provider)` line, or `Cost: not reported` when `cost_usd` is `None`
   - **Success:** an artifact with no cost renders `Cost: not reported` and has no `costUsd` key
 
-- [ ] **Task 12: Test review rendering and regenerate the fixture**
-  - [ ] In the existing `RunCost` / review persistence tests under `tests/review`: all keys present with provider cost; OpenAI-style usage (no cache write) priced from alias → `costBasis: alias_pricing`, no `cacheWriteTokens`; no cost → no `costUsd`, digest says `not reported`; `to_dict()` always has the three new keys
-  - [ ] `review_client` glue (criterion 1 depends on it): one test with an SDK-style capture carrying `cost_usd` → result has that cost and `costBasis: provider`; one test where a `ProviderError` carries `telemetry.cost_usd` → the error-path `RunCost` has that cost and basis
-  - [ ] Regenerate `tests/review/fixtures/clean_pass_artifact.md` once for the digest token-line change; confirm with `git diff` that only the token line and the new `Cost:` line changed
-  - [ ] Run `pytest tests/review tests/cli -q`, ruff, pyright
-  - [ ] Commit: `feat: add cache write and cost to review artifacts`
+- [x] **Task 12: Test review rendering and regenerate the fixture**
+  - [x] In the existing `RunCost` / review persistence tests under `tests/review`: all keys present with provider cost; OpenAI-style usage (no cache write) priced from alias → `costBasis: alias_pricing`, no `cacheWriteTokens`; no cost → no `costUsd`, digest says `not reported`; `to_dict()` always has the three new keys
+  - [x] `review_client` glue (criterion 1 depends on it): one test with an SDK-style capture carrying `cost_usd` → result has that cost and `costBasis: provider`; one test where a `ProviderError` carries `telemetry.cost_usd` → the error-path `RunCost` has that cost and basis
+  - [x] Regenerate `tests/review/fixtures/clean_pass_artifact.md` once for the digest token-line change; confirm with `git diff` that only the token line and the new `Cost:` line changed
+  - [x] Run `pytest tests/review tests/cli -q`, ruff, pyright
+  - [x] Commit: `feat: add cache write and cost to review artifacts`
   - **Success:** tests pass; an existing artifact without the new keys still parses
 
 ### SDK session telemetry (D2, D5; criterion 3)
