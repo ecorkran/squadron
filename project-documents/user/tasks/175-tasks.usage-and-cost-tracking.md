@@ -11,7 +11,7 @@ projectState: >
   `sq stats`. Closes #172, #36, #154, #151, #158.
 dateCreated: 20261014
 dateUpdated: 20261014
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -31,55 +31,55 @@ status: not_started
 
 ### Neutral record (D1, D3, D5, D6)
 
-- [ ] **Task 1: Extend `core/usage.py`**
-  - [ ] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `175-slice.usage-and-cost-tracking` from it
-  - [ ] `TokenUsage` gains `cache_write: int | None = None` (after `cached`). Include it in `plus()` and `reported`. Update the D1 field comments.
-  - [ ] Add `add_optional_float(total, value)` with the same `None` rule as `add_optional`
-  - [ ] `RunTelemetry` gains `cost_usd: float | None = None`. Add a `fold_result(*, turns, usage, cost_usd)` method for providers that report a whole query at once (SDK): adds `turns` to `turns`, `usage` through `plus`, `cost_usd` through `add_optional_float`. `fold_turn` stays unchanged.
-  - [ ] Add `CostBasis(StrEnum)` and the frozen `UsageRecord` dataclass exactly as in the design's API Contracts, including `partial: bool = False`
-  - [ ] `UsageRecord.to_dict()` emits the design's persisted shape: tokens nested under `"tokens"`, `cost_basis` as its string value, `partial` only when true
-  - [ ] `UsageRecord.from_dict()` is the inverse. It raises `ValueError` naming the offending key when a field has the wrong type or `tokens` is not a mapping. Missing optional keys read as `None`.
-  - [ ] The module stays stdlib-only
+- [x] **Task 1: Extend `core/usage.py`**
+  - [x] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `175-slice.usage-and-cost-tracking` from it
+  - [x] `TokenUsage` gains `cache_write: int | None = None` (after `cached`). Include it in `plus()` and `reported`. Update the D1 field comments.
+  - [x] Add `add_optional_float(total, value)` with the same `None` rule as `add_optional`
+  - [x] `RunTelemetry` gains `cost_usd: float | None = None`. Add a `fold_result(*, turns, usage, cost_usd)` method for providers that report a whole query at once (SDK): adds `turns` to `turns`, `usage` through `plus`, `cost_usd` through `add_optional_float`. `fold_turn` stays unchanged.
+  - [x] Add `CostBasis(StrEnum)` and the frozen `UsageRecord` dataclass exactly as in the design's API Contracts, including `partial: bool = False`
+  - [x] `UsageRecord.to_dict()` emits the design's persisted shape: tokens nested under `"tokens"`, `cost_basis` as its string value, `partial` only when true
+  - [x] `UsageRecord.from_dict()` is the inverse. It raises `ValueError` naming the offending key when a field has the wrong type or `tokens` is not a mapping. Missing optional keys read as `None`.
+  - [x] The module stays stdlib-only
   - **Success:** `tests/test_import_purity.py` still passes; `from_dict(to_dict(r)) == r` for any record
 
-- [ ] **Task 2: Test the neutral record**
-  - [ ] In `tests/core/test_usage.py`: `cache_write` sums through `plus` and keeps `None` when no side reported; `reported` is true when only `cache_write` is set
-  - [ ] `add_optional_float`: `None + None → None`, `None + 0.5 → 0.5`, `0.25 + 0.5 → 0.75`
-  - [ ] `fold_result` across two results sums turns, tokens, and cost; a `None` cost on both stays `None`
-  - [ ] `UsageRecord` round-trip: a full record, an all-`None` record, `partial=True` (key present) and `partial=False` (key absent from `to_dict`)
-  - [ ] `from_dict` raises `ValueError` for `tokens` as a list, `turns` as a string, and an unknown `cost_basis` value
-  - [ ] Run `pytest tests/core tests/test_import_purity.py -q`, ruff, pyright
+- [x] **Task 2: Test the neutral record**
+  - [x] In `tests/core/test_usage.py`: `cache_write` sums through `plus` and keeps `None` when no side reported; `reported` is true when only `cache_write` is set
+  - [x] `add_optional_float`: `None + None → None`, `None + 0.5 → 0.5`, `0.25 + 0.5 → 0.75`
+  - [x] `fold_result` across two results sums turns, tokens, and cost; a `None` cost on both stays `None`
+  - [x] `UsageRecord` round-trip: a full record, an all-`None` record, `partial=True` (key present) and `partial=False` (key absent from `to_dict`)
+  - [x] `from_dict` raises `ValueError` for `tokens` as a list, `turns` as a string, and an unknown `cost_basis` value
+  - [x] Run `pytest tests/core tests/test_import_purity.py -q`, ruff, pyright
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 3: Metadata key constants**
-  - [ ] In `providers/base.py`, beside the existing tool-telemetry keys, add `USAGE_KEY = "usage"`, `TURNS_KEY = "turns"`, `COST_USD_KEY = "cost_usd"`
-  - [ ] Replace the literals in `providers/codex/agent.py:109`, `providers/openai/agent.py:729-730`, and `review/turn_capture.py:159-162` with the constants. Find any others with `grep -rn '"usage"\|"turns"' --include='*.py' src/squadron`. Keys in `review/run_cost.py` that name frontmatter/JSON fields (`"turns"` at lines 43, 68) are output-format keys, not message metadata; leave them.
-  - [ ] In `review/turn_capture.py`, also read `COST_USD_KEY` from the final message metadata and keep it on the capture result beside `usage` and `turns`
-  - [ ] Run `pytest tests/core tests/providers tests/review -q`, ruff, pyright
-  - [ ] Commit: `feat: add UsageRecord, cache_write, and usage metadata constants`
+- [x] **Task 3: Metadata key constants**
+  - [x] In `providers/base.py`, beside the existing tool-telemetry keys, add `USAGE_KEY = "usage"`, `TURNS_KEY = "turns"`, `COST_USD_KEY = "cost_usd"`
+  - [x] Replace the literals in `providers/codex/agent.py:109`, `providers/openai/agent.py:729-730`, and `review/turn_capture.py:159-162` with the constants. Find any others with `grep -rn '"usage"\|"turns"' --include='*.py' src/squadron`. Keys in `review/run_cost.py` that name frontmatter/JSON fields (`"turns"` at lines 43, 68) are output-format keys, not message metadata; leave them.
+  - [x] In `review/turn_capture.py`, also read `COST_USD_KEY` from the final message metadata and keep it on the capture result beside `usage` and `turns`
+  - [x] Run `pytest tests/core tests/providers tests/review -q`, ruff, pyright
+  - [x] Commit: `feat: add UsageRecord, cache_write, and usage metadata constants`
   - **Success:** the grep finds no message-metadata `"usage"`/`"turns"` literal under `src/squadron`; tests pass, zero pyright errors
 
 ### Pricing (D3)
 
-- [ ] **Task 4: `price_usage` and `resolve_cost`; delete `estimate_cost`**
-  - [ ] In `models/aliases.py`, add `price_usage(alias_name, usage, warned) -> float | None` per the design signature and D3 rule 2: uncached input `prompt − cached − cache_write`, each class at its own `ModelPricing` key (`input`, `cache_read`, `cache_write`, `output`). Reasoning is inside `completion` (D1) and is not priced separately.
-  - [ ] Return `None` when the alias is `None` or unknown, has no `pricing`, a class with a nonzero count has no price, `prompt` or `completion` is `None`, or `cached + cache_write > prompt`
-  - [ ] For the missing-price and inconsistent-count cases only, log one WARNING per alias per `warned` set naming the alias and the missing key (or the counts), then add the alias to `warned`. An alias with no `pricing` table at all is not warned (expected).
-  - [ ] Add `resolve_cost(alias_name, usage, provider_cost, warned) -> tuple[float | None, CostBasis | None]`: `provider_cost` not `None` → `(provider_cost, PROVIDER)`; else a priced value → `(value, ALIAS_PRICING)`; else `(None, None)`
-  - [ ] Delete `estimate_cost`, its export, and the `estimate_cost` tests in `tests/cli/test_model_list.py` (T8 block from line 258). `grep -rn estimate_cost src tests` returns nothing.
-  - [ ] No price literal appears in Python (design D3)
+- [x] **Task 4: `price_usage` and `resolve_cost`; delete `estimate_cost`**
+  - [x] In `models/aliases.py`, add `price_usage(alias_name, usage, warned) -> float | None` per the design signature and D3 rule 2: uncached input `prompt − cached − cache_write`, each class at its own `ModelPricing` key (`input`, `cache_read`, `cache_write`, `output`). Reasoning is inside `completion` (D1) and is not priced separately.
+  - [x] Return `None` when the alias is `None` or unknown, has no `pricing`, a class with a nonzero count has no price, `prompt` or `completion` is `None`, or `cached + cache_write > prompt`
+  - [x] For the missing-price and inconsistent-count cases only, log one WARNING per alias per `warned` set naming the alias and the missing key (or the counts), then add the alias to `warned`. An alias with no `pricing` table at all is not warned (expected).
+  - [x] Add `resolve_cost(alias_name, usage, provider_cost, warned) -> tuple[float | None, CostBasis | None]`: `provider_cost` not `None` → `(provider_cost, PROVIDER)`; else a priced value → `(value, ALIAS_PRICING)`; else `(None, None)`
+  - [x] Delete `estimate_cost`, its export, and the `estimate_cost` tests in `tests/cli/test_model_list.py` (T8 block from line 258). `grep -rn estimate_cost src tests` returns nothing.
+  - [x] No price literal appears in Python (design D3)
   - **Success:** one function holds D3 precedence; `estimate_cost` is gone
 
-- [ ] **Task 5: Test pricing**
-  - [ ] New `tests/models/test_price_usage.py`, patching `get_all_aliases` as the deleted T8 tests did. One table-driven test per D3 branch:
+- [x] **Task 5: Test pricing**
+  - [x] New `tests/models/test_price_usage.py`, patching `get_all_aliases` as the deleted T8 tests did. One table-driven test per D3 branch:
     1. Full pricing with cached and cache_write → exact sum per class
     2. No cache tokens → input and output only
     3. `cache_write > 0` and no `cache_write` price → `None` + one WARNING naming the alias and `cache_write`; a second call with the same `warned` set logs nothing
     4. `cached + cache_write > prompt` → `None` + WARNING
     5. Alias without `pricing`, unknown alias, `None` alias → `None`, no WARNING
-  - [ ] `resolve_cost`: provider cost wins over alias pricing; alias pricing when provider cost is `None`; `(None, None)` when neither; provider cost `0.0` is kept as `0.0` with basis `provider` (a reported zero is not "none")
-  - [ ] Run `pytest tests/models tests/cli/test_model_list.py -q`, ruff, pyright
-  - [ ] Commit: `feat: replace estimate_cost with price_usage and D3 cost precedence`
+  - [x] `resolve_cost`: provider cost wins over alias pricing; alias pricing when provider cost is `None`; `(None, None)` when neither; provider cost `0.0` is kept as `0.0` with basis `provider` (a reported zero is not "none")
+  - [x] Run `pytest tests/models tests/cli/test_model_list.py -q`, ruff, pyright
+  - [x] Commit: `feat: replace estimate_cost with price_usage and D3 cost precedence`
   - **Success:** tests pass (design criterion 5 at unit level)
 
 ### SDK capture (D1, D2; #172, #36)

@@ -31,8 +31,16 @@ from claude_agent_sdk._errors import (  # pyright: ignore[reportPrivateUsage]
 
 from squadron.core.models import AgentState, Message
 from squadron.core.teardown import close_best_effort
+from squadron.core.usage import RunTelemetry
 from squadron.logging import get_logger
-from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+from squadron.providers.base import (
+    COST_USD_KEY,
+    FAILED_TOOL_CALLS_KEY,
+    TOOL_CALLS_MADE_KEY,
+    TOOLS_GIVEN_KEY,
+    TURNS_KEY,
+    USAGE_KEY,
+)
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
@@ -49,6 +57,7 @@ from squadron.providers.sdk.rate_limit import (
     rate_limit_backoff_s,
 )
 from squadron.providers.sdk.translation import translate_sdk_message
+from squadron.providers.sdk.usage import read_result_usage
 
 # The Claude Code CLI's placeholder assistant messages carry this model id
 # (slice 927 D8) — not a real answering model, so it is excluded from
@@ -90,6 +99,10 @@ class ClaudeSDKAgent:
         # Distinct top-level answering model ids, in first-seen order (slice 927 D8,
         # D12). Reset per handle_message call, like the counters above.
         self._answering_models: list[str] = []
+        # Turns, tokens, and cost summed over every ResultMessage in one handle_message
+        # call (slice 175 D2); never per-message usage.
+        self._telemetry = RunTelemetry()
+        self._usage_warned = False
 
     # -- Protocol properties ------------------------------------------------
 
@@ -119,12 +132,21 @@ class ClaudeSDKAgent:
         self._tool_calls_made = 0
         self._failed_tool_calls = 0
         self._answering_models = []
-        if self._mode == "client":
-            async for msg in self._handle_client_mode(message):
+        self._telemetry = RunTelemetry()
+        self._usage_warned = False
+        stream = (
+            self._handle_client_mode(message)
+            if self._mode == "client"
+            else self._handle_query_mode(message)
+        )
+        try:
+            async for msg in stream:
                 yield msg
-        else:
-            async for msg in self._handle_query_mode(message):
-                yield msg
+        except ProviderError as exc:
+            # A failed call still spent what its completed results reported (D5).
+            if exc.telemetry is None:
+                exc.telemetry = self._telemetry.snapshot()
+            raise
 
     async def _skip_unparseable(self, stream: AsyncIterator[Any]) -> AsyncIterator[Any]:
         """Yield SDK messages, handling two distinct concerns.
@@ -204,6 +226,8 @@ class ClaudeSDKAgent:
                 1 for block in sdk_msg.content if isinstance(block, ToolResultBlock) and block.is_error
             )
 
+        if isinstance(sdk_msg, ResultMessage):
+            self._fold_result(sdk_msg)
         translated = translate_sdk_message(sdk_msg, sender=self._name)
         if isinstance(sdk_msg, ResultMessage) and translated:
             final = translated[-1]
@@ -211,10 +235,23 @@ class ClaudeSDKAgent:
             final.metadata["reasoning_chars"] = self._reasoning_chars
             final.metadata[FAILED_TOOL_CALLS_KEY] = self._failed_tool_calls
             final.metadata["answering_models"] = list(self._answering_models)
+            final.metadata[TURNS_KEY] = self._telemetry.turns
+            final.metadata[USAGE_KEY] = (
+                self._telemetry.usage if self._telemetry.usage.reported else None
+            )
+            final.metadata[COST_USD_KEY] = self._telemetry.cost_usd
             if self._tools_given:
                 final.metadata[TOOLS_GIVEN_KEY] = list(self._tools_given)
                 final.metadata[TOOL_CALLS_MADE_KEY] = self._tool_calls_made
         return translated
+
+    def _fold_result(self, sdk_msg: ResultMessage) -> None:
+        """Add one result's turns, tokens, and cost to this call's telemetry."""
+        usage, turns, cost = read_result_usage(sdk_msg)
+        if usage is None and not self._usage_warned:
+            self._usage_warned = True
+            self._log.warning("SDK result reported no token usage; usage will not be recorded")
+        self._telemetry.fold_result(turns=turns, usage=usage, cost_usd=cost)
 
     async def _handle_query_mode(self, message: Message) -> AsyncIterator[Message]:
         """One-shot execution via ``sdk_query``.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
@@ -26,12 +27,16 @@ from claude_agent_sdk import (
 )
 
 from squadron.core.models import AgentState, Message, MessageType
+from squadron.core.usage import TokenUsage
+from squadron.providers.base import COST_USD_KEY, TURNS_KEY, USAGE_KEY
 from squadron.providers.errors import (
     ProviderAPIError,
     ProviderAuthError,
     ProviderError,
 )
 from squadron.providers.sdk.agent import ClaudeSDKAgent
+from squadron.providers.sdk.usage import read_result_usage
+from tests.providers.sdk.result_fixture import real_result_message
 
 # Patch target for the SDK query function.
 _QUERY = "squadron.providers.sdk.agent.sdk_query"
@@ -1073,3 +1078,94 @@ class TestAnsweringModels:
 
         assert first[-1].metadata["answering_models"] == ["claude-sonnet-5"]
         assert second[-1].metadata["answering_models"] == ["claude-haiku-4-5"]
+
+
+# ---------------------------------------------------------------------------
+# Usage, turns, and cost (slice 175 D2, D5)
+# ---------------------------------------------------------------------------
+
+
+def _usage_gen(*items: object, raise_after: Exception | None = None):
+    """A query function yielding ``items``, then optionally raising ``raise_after``."""
+
+    async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+        for item in items:
+            yield item
+        if raise_after is not None:
+            raise raise_after
+
+    return gen
+
+
+class TestUsageTelemetry:
+    @pytest.mark.asyncio
+    async def test_real_result_stamps_reader_output(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        result = real_result_message()
+        expected_usage, expected_turns, expected_cost = read_result_usage(result)
+
+        with patch(_QUERY, side_effect=_usage_gen(_make_sdk_assistant("ok"), result)):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        final = messages[-1].metadata
+        assert final[USAGE_KEY] == expected_usage
+        assert final[TURNS_KEY] == expected_turns
+        assert final[COST_USD_KEY] == expected_cost
+
+    @pytest.mark.asyncio
+    async def test_two_results_sum_and_assistant_usage_is_ignored(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        assistant = AssistantMessage(
+            content=[TextBlock(text="hi")],
+            model="claude",
+            usage={"input_tokens": 999_999, "output_tokens": 999_999},
+        )
+        first = _make_result(
+            num_turns=2, total_cost_usd=0.25, usage={"input_tokens": 10, "output_tokens": 1}
+        )
+        second = _make_result(
+            num_turns=3,
+            total_cost_usd=0.5,
+            usage={"input_tokens": 5, "cache_read_input_tokens": 4, "output_tokens": 2},
+        )
+
+        with patch(_QUERY, side_effect=_usage_gen(assistant, first, second)):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        final = messages[-1].metadata
+        assert final[TURNS_KEY] == 5
+        assert final[COST_USD_KEY] == 0.75
+        assert final[USAGE_KEY] == TokenUsage(prompt=19, cached=4, completion=3)
+
+    @pytest.mark.asyncio
+    async def test_missing_usage_stamps_none_and_warns_once(
+        self,
+        query_agent: ClaudeSDKAgent,
+        input_message: Message,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        gen = _usage_gen(_make_result(usage=None), _make_result(usage=None))
+
+        with caplog.at_level(logging.WARNING), patch(_QUERY, side_effect=gen):
+            messages = await _collect(query_agent.handle_message(input_message))
+
+        assert messages[-1].metadata[USAGE_KEY] is None
+        warnings = [r for r in caplog.records if "no token usage" in r.getMessage()]
+        assert len(warnings) == 1
+
+    @pytest.mark.asyncio
+    async def test_failure_after_a_result_carries_its_telemetry(
+        self, query_agent: ClaudeSDKAgent, input_message: Message
+    ) -> None:
+        first = _make_result(num_turns=1, usage={"input_tokens": 7, "output_tokens": 2})
+        gen = _usage_gen(first, raise_after=ClaudeSDKError("boom"))
+
+        with patch(_QUERY, side_effect=gen), pytest.raises(ProviderError) as info:
+            await _collect(query_agent.handle_message(input_message))
+
+        telemetry = info.value.telemetry
+        assert telemetry is not None
+        assert telemetry.turns == 1
+        assert telemetry.usage == TokenUsage(prompt=7, completion=2)
