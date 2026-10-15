@@ -30,6 +30,8 @@ from squadron.providers.base import (
     FIRST_TOOL_ERROR_KEY,
     TOOL_CALLS_MADE_KEY,
     TOOLS_GIVEN_KEY,
+    TURNS_KEY,
+    USAGE_KEY,
 )
 from squadron.providers.errors import (
     EmptyFinalTurnError,
@@ -726,8 +728,8 @@ class OpenAICompatibleAgent:
         # Slice 931 D8: the run's total, not the final turn's, beside the requests sent
         # and the tokens they cost.
         messages[-1].metadata["reasoning_chars"] = self._telemetry.reasoning_chars
-        messages[-1].metadata["turns"] = self._telemetry.turns
-        messages[-1].metadata["usage"] = self._telemetry.usage
+        messages[-1].metadata[TURNS_KEY] = self._telemetry.turns
+        messages[-1].metadata[USAGE_KEY] = self._telemetry.usage
         messages[-1].metadata[FAILED_TOOL_CALLS_KEY] = failed_tool_calls
         messages[-1].metadata[FIRST_TOOL_ERROR_KEY] = first_tool_error
         # Slice 927 D8: distinct, first-seen-order models reported across this

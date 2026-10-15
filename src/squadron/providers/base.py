@@ -16,6 +16,12 @@ TOOL_CALLS_MADE_KEY = "tool_calls_made"
 FAILED_TOOL_CALLS_KEY = "failed_tool_calls"
 FIRST_TOOL_ERROR_KEY = "first_tool_error"
 
+# Usage telemetry keys stamped on a call's final message (slices 931 D8, 175 D4):
+# requests sent, ``TokenUsage``, and the provider-reported cost in USD.
+USAGE_KEY = "usage"
+TURNS_KEY = "turns"
+COST_USD_KEY = "cost_usd"
+
 
 class ProviderType(StrEnum):
     """Registered provider type identifiers."""

@@ -23,8 +23,15 @@ from squadron.core.models import (
     Message,
     MessageType,
 )
-from squadron.core.usage import TokenUsage, add_optional
-from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+from squadron.core.usage import TokenUsage, add_optional, add_optional_float
+from squadron.providers.base import (
+    COST_USD_KEY,
+    FAILED_TOOL_CALLS_KEY,
+    TOOL_CALLS_MADE_KEY,
+    TOOLS_GIVEN_KEY,
+    TURNS_KEY,
+    USAGE_KEY,
+)
 from squadron.providers.errors import EmptyFinalTurnError
 from squadron.review.models import ReviewResult, Verdict
 
@@ -83,9 +90,11 @@ class TurnCapture:
     # which sum — a model id is identity, not a quantity to add.
     answering_models: list[str] = field(default_factory=list[str])
     # Requests sent and tokens spent, summed across calls (slice 931 D8). Only
-    # providers that stamp them (openai) report them; the rest leave None.
+    # providers that stamp them report them; the rest leave None. ``cost_usd`` is
+    # the provider-reported cost (SDK, slice 175 D3).
     turns: int | None = None
     usage: TokenUsage = field(default_factory=TokenUsage)
+    cost_usd: float | None = None
 
     @property
     def raw_output(self) -> str:
@@ -116,6 +125,7 @@ def fold_empty_turn(capture: TurnCapture, error: EmptyFinalTurnError) -> None:
         capture.reasoning_chars = add_optional(capture.reasoning_chars, telemetry.reasoning_chars)
         capture.turns = add_optional(capture.turns, telemetry.turns)
         capture.usage = capture.usage.plus(telemetry.usage)
+        capture.cost_usd = add_optional_float(capture.cost_usd, telemetry.cost_usd)
     capture.tool_calls_made = add_optional(capture.tool_calls_made, error.tool_calls_made)
     capture.failed_tool_calls = add_optional(capture.failed_tool_calls, error.failed_tool_calls)
 
@@ -139,6 +149,7 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
     turn_reasoning: int | None = None
     turn_count: int | None = None
     turn_usage: TokenUsage | None = None
+    turn_cost: float | None = None
     async for response in agent.handle_message(message):
         metadata: dict[str, Any] = response.metadata
         given = metadata.get(TOOLS_GIVEN_KEY)
@@ -156,10 +167,12 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
             turn_reasoning = metadata["reasoning_chars"]
         if metadata.get(FAILED_TOOL_CALLS_KEY) is not None:
             turn_failures = metadata[FAILED_TOOL_CALLS_KEY]
-        if metadata.get("turns") is not None:
-            turn_count = metadata["turns"]
-        if metadata.get("usage") is not None:
-            turn_usage = metadata["usage"]
+        if metadata.get(TURNS_KEY) is not None:
+            turn_count = metadata[TURNS_KEY]
+        if metadata.get(USAGE_KEY) is not None:
+            turn_usage = metadata[USAGE_KEY]
+        if metadata.get(COST_USD_KEY) is not None:
+            turn_cost = metadata[COST_USD_KEY]
         for model in metadata.get("answering_models") or ():
             if model not in capture.answering_models:
                 capture.answering_models.append(model)
@@ -171,5 +184,6 @@ async def collect_turn(agent: Any, *, content: str, recipient: str, capture: Tur
     capture.failed_tool_calls = add_optional(capture.failed_tool_calls, turn_failures)
     capture.reasoning_chars = add_optional(capture.reasoning_chars, turn_reasoning)
     capture.turns = add_optional(capture.turns, turn_count)
+    capture.cost_usd = add_optional_float(capture.cost_usd, turn_cost)
     if turn_usage is not None:
         capture.usage = capture.usage.plus(turn_usage)

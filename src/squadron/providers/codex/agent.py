@@ -13,7 +13,7 @@ from squadron.core.models import AgentConfig, AgentState, Message, MessageType
 from squadron.core.teardown import close_best_effort
 from squadron.core.usage import TokenUsage
 from squadron.logging import get_logger
-from squadron.providers.base import ProviderType
+from squadron.providers.base import TURNS_KEY, USAGE_KEY, ProviderType
 from squadron.providers.codex.auth import OAuthFileStrategy
 from squadron.providers.errors import ProviderError
 from squadron.tools.builtin import READ_TOOL_NAMES
@@ -106,7 +106,7 @@ class CodexAgent:
                 recipients=[],
                 content=response_text,
                 message_type=MessageType.chat,
-                metadata={"turns": 1, "usage": usage},
+                metadata={TURNS_KEY: 1, USAGE_KEY: usage},
             )
         except ProviderError:
             raise
