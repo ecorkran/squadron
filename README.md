@@ -298,6 +298,23 @@ The cost column says where each figure came from:
 - `alias`: computed from the `pricing` table of the model alias, when the provider reports no cost.
 - `api-rate equiv.`: a provider cost on a subscription alias (`cost_tier = "subscription"`). This is what the tokens would cost at API rates, not money you were charged.
 
+## Comparing producer models (`sq replay`)
+
+```bash
+sq replay run --phase design --slice 176 --config sonnet --config haiku --reviewer opus --max-revisions 1
+sq replay judge --phase design --slice 176 --judge opus
+sq replay report --phase design
+/sq:replay report --phase design   # Claude Code; $sq-replay in Codex
+```
+
+`sq stats producers` reports what happened on past runs, where each model saw different slices. `sq replay` is the controlled version: it regenerates one past slice design (`--phase design`) or task breakdown (`--phase tasks`) under each `--config`, from the commit before the original existed, with the same fixed `--reviewer` and revision cap for all of them. Aliases are whatever you have in `models.toml`; there are no built-in producers, reviewers or judges, and `--reviewer`, `--max-revisions` and `--judge` have no defaults.
+
+Each config runs in its own history-free sandbox under `~/.config/squadron/replays/` (one commit, no ref to the original artifact), registered with Context Forge for the run and removed afterwards. The commands print the plan and an upper bound on model calls, then ask to confirm; `--yes` skips the prompt, and without a terminal `--yes` is required. A config that fails is recorded as data (`failed`, with a failure class) and the others still run.
+
+`sq replay judge` compares the first drafts of every pair of configs, plus the original, with a blind judge. Each pair is judged twice with the drafts swapped; a judge that follows position rather than content counts as a tie. Pairs already judged are skipped, so adding a config costs only its new pairs. Each judge call is bounded by `metrology.judge_timeout_s`.
+
+`sq replay report` prints one table per phase, reviewer and judge: failed and accepted counts, median rounds, cost, and time per config, with a Bradley-Terry strength and win-loss-tie record from the pairwise results. Every figure carries its n, and configs with fewer judged pairs than `metrology.min_evidence_n` show `below floor` and get no rank. The footer gives the slices covered, how often the judge agreed with itself across orders, and the prompt versions seen. A judge that is also one of the contestants is flagged. The ranking is only as good as the judge: it measures the judge's preference on first drafts, not whether the artifact worked out downstream.
+
 ## Claude Code and Codex
 
 `sq setup` installs the `/sq:` and `/cf:` commands into `~/.claude/commands` for every project. To refresh them later: `sq install-commands`.

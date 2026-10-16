@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq stats slice <index>` compares a slice's planned effort with what happened: commits, fix-ups, review rounds, task groups, and recorded spend. `sq stats slices [--since YYYYMMDD]` groups completed slices by planned effort with the median and range of each measure.
 - `sq stats producers [--phase design|tasks]` shows how each producer model config has done on this machine's pipeline runs: verdicts, revise rounds, accepted and failed counts, and cost per accepted artifact.
 - `sq stats runs [--slice INDEX] [--pipeline NAME]` totals usage and cost across runs.
+- `sq replay run|judge|report` compares producer model configs on a past slice. `run` regenerates its design or task breakdown under each config in a sandbox with a fixed reviewer, `judge` compares the first drafts pairwise in both orders, and `report` shows quality, cost, time, and failure rate per config with a Bradley-Terry strength.
+- `sq stats producers` now ends with how many runs record the prompt they used (`k of n units carry prompt identity; m guide versions`). Every pipeline dispatch now records its prompt's hash, source, and the squadron, Context Forge, and guide versions.
+- `metrology.judge_timeout_s` (default 600) bounds each pairwise judge call.
 
 ### Fixed
 - `sq stats run` now counts every round of a review-revise loop. Earlier rounds were left out of the totals, so loop steps looked cheaper than they were.

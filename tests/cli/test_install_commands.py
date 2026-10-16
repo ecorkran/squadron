@@ -22,6 +22,7 @@ EXPECTED_FILES = {
     "auth.md",
     "list.md",
     "pr.md",
+    "replay.md",
     "review.md",
     "run.md",
     "shutdown.md",
@@ -169,6 +170,7 @@ EXPECTED_COMMANDS = {
     "summary.md": "sq _summary-instructions",
     "pr.md": "sq pr",
     "stats.md": "sq stats",
+    "replay.md": "sq replay",
 }
 
 
