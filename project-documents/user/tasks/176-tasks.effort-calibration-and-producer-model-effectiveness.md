@@ -208,17 +208,17 @@ status: in_progress
 
 ### Producer effectiveness (D8)
 
-- [ ] **Task 22: Producer units and config keys**
-  - [ ] New `stats/producer_report.py`: extract units and their producer config keys from `StateManager.scan_runs()` per D8 "Unit" and "Producer config key"; `phase` is `StepTypeName.DESIGN` or `TASKS`
-  - [ ] Excluded with a count each: loops with no phase step before them, phase work inside `each`, partial-loop runs, phase steps without a dispatch or review action (D9)
-  - [ ] Commit: `feat: extract producer units and config keys from run state`
+- [x] **Task 22: Producer units and config keys**
+  - [x] New `stats/producer_report.py`: extract units and their producer config keys from `StateManager.scan_runs()` per D8 "Unit" and "Producer config key"; `phase` is `StepTypeName.DESIGN` or `TASKS`
+  - [x] Excluded with a count each: loops with no phase step before them, phase work inside `each`, partial-loop runs, phase steps without a dispatch or review action (D9) (code is stats/producer_units.py. Refined against this machine's real run history: only a phase step with NO dispatch is excluded, because 9 of 24 failed phase steps have a dispatch but no review and dropping them would bias the failure rate down; they are kept with reviewer shown as a dash. Phase steps paused at a checkpoint are also excluded and counted. Design D8 and the D9 table updated to match. The reviewer is the review action's requested_model, else model, since the mechanical task gate reports itself as model).
+  - [x] Commit: `feat: extract producer units and config keys from run state`
   - **Success:** units come only from top-level phase steps, compared through `StepTypeName`
 
-- [ ] **Task 23: Test producer units and keys**
-  - [ ] Run files with `design, loop` and `tasks, loop` pairs → one unit each, with the loop attached
-  - [ ] Same dispatch model with two reviewer models → two config keys
-  - [ ] Each exclusion case above → excluded and counted
-  - [ ] Commit: `test: cover producer units and config keys`
+- [x] **Task 23: Test producer units and keys**
+  - [x] Run files with `design, loop` and `tasks, loop` pairs → one unit each, with the loop attached
+  - [x] Same dispatch model with two reviewer models → two config keys
+  - [x] Each exclusion case above → excluded and counted
+  - [x] Commit: `test: cover producer units and config keys`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 24: Producer aggregation**
