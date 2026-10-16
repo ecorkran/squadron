@@ -8,6 +8,7 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
+from squadron.core.usage import CostBasis, TokenUsage, UsageRecord
 from squadron.review.git_utils import run_git
 
 
@@ -75,18 +76,17 @@ class CountingRunner:
 
 def write_run_file(runs_dir: Path, run_id: str, slice_index: int | str, cost_usd: float = 0.5) -> None:
     """A completed one-dispatch run file for ``slice_index`` whose dispatch cost ``cost_usd``."""
-    usage = {
-        "model": "m",
-        "alias": None,
-        "profile": "sdk",
-        "effort": None,
-        "turns": 2,
-        "duration_seconds": 3.0,
-        "usage": {"prompt": 100, "completion": 10},
-        "cost_usd": cost_usd,
-        "cost_basis": "provider",
-        "partial": False,
-    }
+    usage = UsageRecord(
+        model="m",
+        alias=None,
+        profile="sdk",
+        effort=None,
+        turns=2,
+        duration_seconds=3.0,
+        usage=TokenUsage(prompt=100, completion=10),
+        cost_usd=cost_usd,
+        cost_basis=CostBasis.PROVIDER,
+    ).to_dict()
     action = {"success": True, "action_type": "dispatch", "outputs": {}, "metadata": {"usage": usage}}
     state = {
         "schema_version": 5,

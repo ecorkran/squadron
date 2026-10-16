@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
+from squadron.core.usage import CostBasis, TokenUsage, UsageRecord
 from squadron.pipeline.state import RunState, StepState
 
 _NOW = datetime(2026, 11, 1, 12, tzinfo=UTC)
@@ -13,19 +14,18 @@ _NOW = datetime(2026, 11, 1, 12, tzinfo=UTC)
 def usage(
     *, alias: str | None = "opus", effort: str | None = None, cost: float | None = None
 ) -> dict[str, object]:
-    """A ``UsageRecord.to_dict()`` shape for an action's ``metadata["usage"]``."""
-    return {
-        "model": "m",
-        "alias": alias,
-        "profile": "sdk",
-        "effort": effort,
-        "turns": 1,
-        "duration_seconds": 1.0,
-        "usage": {"prompt": 10, "completion": 1},
-        "cost_usd": cost,
-        "cost_basis": None if cost is None else "provider",
-        "partial": False,
-    }
+    """A ``UsageRecord.to_dict()`` for an action's ``metadata["usage"]``."""
+    return UsageRecord(
+        model="m",
+        alias=alias,
+        profile="sdk",
+        effort=effort,
+        turns=1,
+        duration_seconds=1.0,
+        usage=TokenUsage(prompt=10, completion=1),
+        cost_usd=cost,
+        cost_basis=None if cost is None else CostBasis.PROVIDER,
+    ).to_dict()
 
 
 def action(
@@ -84,12 +84,13 @@ def run(
     status: str = "completed",
     current_step: str | None = None,
     slice_index: int | None = 176,
+    started_at: datetime = _NOW,
 ) -> RunState:
     return RunState(
         run_id=run_id,
         pipeline=pipeline,
         params={} if slice_index is None else {"slice": slice_index},
-        started_at=_NOW,
+        started_at=started_at,
         updated_at=_NOW,
         status=status,
         current_step=current_step,

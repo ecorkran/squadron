@@ -209,8 +209,8 @@ status: in_progress
 ### Producer effectiveness (D8)
 
 - [x] **Task 22: Producer units and config keys**
-  - [x] New `stats/producer_report.py`: extract units and their producer config keys from `StateManager.scan_runs()` per D8 "Unit" and "Producer config key"; `phase` is `StepTypeName.DESIGN` or `TASKS`
-  - [x] Excluded with a count each: loops with no phase step before them, phase work inside `each`, partial-loop runs, phase steps without a dispatch or review action (D9) (code is stats/producer_units.py. Refined against this machine's real run history: only a phase step with NO dispatch is excluded, because 9 of 24 failed phase steps have a dispatch but no review and dropping them would bias the failure rate down; they are kept with reviewer shown as a dash. Phase steps paused at a checkpoint are also excluded and counted. Design D8 and the D9 table updated to match. The reviewer is the review action's requested_model, else model, since the mechanical task gate reports itself as model).
+  - [x] New `stats/producer_units.py`: extract units and their producer config keys from `StateManager.scan_runs()` per D8 "Unit" and "Producer config key"; `phase` is `StepTypeName.DESIGN` or `TASKS`
+  - [x] Excluded with a count each: loops with no phase step before them, phase work inside `each`, partial-loop runs, phase steps without a dispatch (D9, refined) (code is stats/producer_units.py. Refined against this machine's real run history: only a phase step with NO dispatch is excluded, because 9 of 24 failed phase steps have a dispatch but no review and dropping them would bias the failure rate down; they are kept with reviewer shown as a dash. Phase steps paused at a checkpoint are also excluded and counted. Design D8 and the D9 table updated to match. The reviewer is the review action's requested_model, else model, since the mechanical task gate reports itself as model).
   - [x] Commit: `feat: extract producer units and config keys from run state`
   - **Success:** units come only from top-level phase steps, compared through `StepTypeName`
 
@@ -221,31 +221,31 @@ status: in_progress
   - [x] Commit: `test: cover producer units and config keys`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 24: Producer aggregation**
-  - [ ] `producer_report(*, phase, state_manager, min_n)` computes the D8 per-config metrics, the `below floor` rule, and the D8 "Honesty" footer flags; unreadable run file count from `scan_runs`
-  - [ ] `to_json_dict()`
-  - [ ] Commit: `feat: add observed producer effectiveness report core`
+- [x] **Task 24: Producer aggregation**
+  - [x] `producer_report(*, phase, state_manager, min_n)` computes the D8 per-config metrics, the `below floor` rule, and the D8 "Honesty" footer flags; unreadable run file count from `scan_runs` (accepted is a completed phase step whose loop completed with accepted set or an acceptable final verdict, so a loop whose until was met counts, as does a pre-176 file; unpriced means no priced record, not no record)
+  - [x] `to_json_dict()`
+  - [x] Commit: `feat: add observed producer effectiveness report core`
   - **Success:** the report reads run state only through `StateManager.scan_runs()`
 
-- [ ] **Task 25: Test producer aggregation**
-  - [ ] Two configs across several runs: first-round counts, median rounds, accepted and failure rates, cost per accepted with priced counts
-  - [ ] n below `min_n` → `below floor`; a pre-176 run file uses loop `iteration` for rounds
-  - [ ] An unreadable run file → footer count (D9)
-  - [ ] Commit: `test: cover producer aggregation`
+- [x] **Task 25: Test producer aggregation**
+  - [x] Two configs across several runs: first-round counts, median rounds, accepted and failure rates, cost per accepted with priced counts
+  - [x] n below `min_n` → `below floor`; a pre-176 run file uses loop `iteration` for rounds
+  - [x] An unreadable run file → footer count (D9)
+  - [x] Commit: `test: cover producer aggregation`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 26: `sq stats producers` CLI**
-  - [ ] `producers [--phase design|tasks]` with `--json`; `--phase` parsed into `StepTypeName`, other values rejected with an error naming the allowed ones. Without `--phase`, report both phases.
-  - [ ] `min_n` read in the CLI; a non-integer value → error naming the key and value, exit 1 (D9)
-  - [ ] New `cli/stats_producer_views.py` renders the design's layout; no phase runs → message, exit 0
-  - [ ] Commit: `feat: add sq stats producers`
+- [x] **Task 26: `sq stats producers` CLI**
+  - [x] `producers [--phase design|tasks]` with `--json`; `--phase` parsed into `StepTypeName`, other values rejected with an error naming the allowed ones. Without `--phase`, report both phases. (new cli/stats_producer_views.py; the floor key is read once as MIN_EVIDENCE_KEY in cli/commands/stats.py)
+  - [x] `min_n` read in the CLI; a non-integer value → error naming the key and value, exit 1 (D9)
+  - [x] New `cli/stats_producer_views.py` renders the design's layout; no phase runs → message, exit 0
+  - [x] Commit: `feat: add sq stats producers`
   - **Success:** `sq stats producers --phase design` renders in this repo
 
-- [ ] **Task 27: Test the producers CLI**
-  - [ ] Table and `--json` agree on values; `--phase` filtering; invalid `--phase` → nonzero exit with the allowed values
-  - [ ] Non-integer `metrology.min_evidence_n` in a temp project config → exit 1 naming key and value
-  - [ ] No phase runs → message, exit 0; nothing written to the runs dir
-  - [ ] Commit: `test: cover sq stats producers`
+- [x] **Task 27: Test the producers CLI**
+  - [x] Table and `--json` agree on values; `--phase` filtering; invalid `--phase` → nonzero exit with the allowed values
+  - [x] Non-integer `metrology.min_evidence_n` in a temp project config → exit 1 naming key and value
+  - [x] No phase runs → message, exit 0; nothing written to the runs dir
+  - [x] Commit: `test: cover sq stats producers`
   - **Success:** tests pass, zero pyright errors
 
 ### Cross-run totals
