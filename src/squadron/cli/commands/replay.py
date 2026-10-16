@@ -16,6 +16,7 @@ from rich import get_console
 
 from squadron.cli.commands import replay_common as common
 from squadron.cli.commands.replay_judge import replay_judge
+from squadron.cli.commands.replay_report import replay_report_command
 from squadron.cli.replay_views import (
     DECLINED,
     render_plan,
@@ -79,6 +80,7 @@ def _exit_code(summary: ReplaySetSummary) -> int:
 
 
 replay_app.command("judge")(replay_judge)
+replay_app.command("report")(replay_report_command)
 
 
 @replay_app.command("run")
