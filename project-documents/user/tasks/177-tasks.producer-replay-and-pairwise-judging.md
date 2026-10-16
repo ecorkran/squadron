@@ -47,7 +47,7 @@ status: not_started
   - **Result:** start sha `bca771926e89d9ac7c753d9c88a84aa4b1f83ac7` (first parent of `f3d652e0`, the commit that first added the 176 design). `sq run P4 176 -m haiku -p review-model=haiku -p max-revisions=1` **resolved the slice and completed** (design-0 PASS, loop-1, summary-2) once two sandbox settings were in place. The 176 plan entry exists at the start point, so cf resolves `176` from the plan and the missing design file does not matter. Two failures on the bare sandbox, each fixed by one setting:
     1. `cf set slice 176: No file matching index '176' for field 'fileSlice'. No slice plan is set.` — a fresh `cf init --lite` project has no slice plan. Fix: `cf set arch 140` (the initiative index) before the run.
     2. `planning commit for slice 176 on replay/spike; expected main` — the git-environment guard compares the branch to `git.integration_branch`. Fix: `cf config set git.integration_branch replay/<id>` in the sandbox.
-  - **Resolving step:** the `set_slice` cf operation (`cf set slice <index>`). Dispatch-free pre-check for Task 21, run in the sandbox after `cf set arch <initiative>`: `cf set slice <index>`; exit 0 and a `Updated slice =` line mean resolved. Neither setting is in the slice design (D3/D4); Task 15 adds both to the sandbox setup. The initiative index comes from the slice plan file name (`<initiative>-slices.*`) at the start point.
+  - **Resolving step:** the `set_slice` cf operation (`cf set slice <index>`). Dispatch-free pre-check for Task 21, run in the sandbox after `cf set arch <initiative>`: `cf set slice <index>`; exit 0 means resolved (cf prints its `Updated slice =` confirmation on stderr, not stdout). Neither setting is in the slice design (D3/D4); Task 15 adds both to the sandbox setup. The initiative index comes from the slice plan file name (`<initiative>-slices.*`) at the start point.
   - **Success:** `Result:` line records a resolved slice at slice 176's real start point
 
 ### Prompt identity (D8)
@@ -146,31 +146,31 @@ status: not_started
 
 ### Sandbox (D3)
 
-- [ ] **Task 14: Extract the process lock to `core/process_lock.py`** (effort 2)
-  - [ ] Move the five helpers named in the Context Summary to `core/process_lock.py` under public names; `codehost/worktree.py` imports them; no behavior change
-  - [ ] Move their existing tests beside the new module if they test the helpers directly
-  - [ ] Run `pytest tests/codehost tests/core -q`
-  - [ ] Commit: `refactor: extract process lock liveness to core`
+- [x] **Task 14: Extract the process lock to `core/process_lock.py`** (effort 2)
+  - [x] Move the five helpers named in the Context Summary to `core/process_lock.py` under public names; `codehost/worktree.py` imports them; no behavior change (public names: ProcessLock, process_start_time, current_process_lock, read_lock, is_orphan, plus write via ProcessLock.to_json(); worktree.py keeps a thin _current_process_lock that re-raises the core ProcessIdentityUnresolvable as the codehost ProcessIdentityUnresolvableError; WorktreeLock is removed in favor of ProcessLock; helper tests live in tests/core/test_process_lock.py and the worktree tests were updated for the new names)
+  - [x] Move their existing tests beside the new module if they test the helpers directly
+  - [x] Run `pytest tests/codehost tests/core -q`
+  - [x] Commit: `refactor: extract process lock liveness to core`
   - **Success:** existing worktree and lock tests pass unchanged
 
-- [ ] **Task 15: `ReplaySandbox` and `sweep_orphans`** (effort 3)
-  - [ ] Create `replay/sandbox.py`: `ReplaySandbox(start_sha, replay_id, repo_root, runner)` context manager running the D3 git commands, then `cf init --lite --no-ide --name replay-<replay_id>`, with the `<dir>.lock` written first; root `~/.config/squadron/replays/` defined once
-  - [ ] After `cf init`, the sandbox runs `cf config set git.integration_branch replay/<replay_id>` (the planning-commit guard otherwise halts `sq run`) and `cf set arch <initiative>`, the initiative index read from the single `*-slices.*.md` plan at the start point (zero or several raise `SandboxError`); both from the Task 1 spike, defined once as the sandbox's cf setup
-  - [ ] A start point containing `.gitmodules` raises an error naming it (D10)
-  - [ ] Failed `git fetch` / `cf init` raises `SandboxError` carrying the command's stderr; the partial sandbox is removed
-  - [ ] On exit (normal, error, `KeyboardInterrupt`): `cf project rm`, delete the directory and lock; a cleanup failure logs WARNING naming the path or project and does not raise
-  - [ ] A `keep()` method suppresses cleanup (used by the runner on store-write failure, D4)
-  - [ ] `sweep_orphans(runner)` per D3: removes dirs with a missing or dead lock and `replay-*` cf projects whose path is gone; skips live locks; never raises; WARNING per removal or failed removal
-  - [ ] Commit: `feat: add history-free replay sandbox with orphan sweep`
+- [x] **Task 15: `ReplaySandbox` and `sweep_orphans`** (effort 3)
+  - [x] Create `replay/sandbox.py`: `ReplaySandbox(start_sha, replay_id, repo_root, runner)` context manager running the D3 git commands, then `cf init --lite --no-ide --name replay-<replay_id>`, with the `<dir>.lock` written first; root `~/.config/squadron/replays/` defined once
+  - [x] After `cf init`, the sandbox runs `cf config set git.integration_branch replay/<replay_id>` (the planning-commit guard otherwise halts `sq run`) and `cf set arch <initiative>`, the initiative index is the file-name prefix of the slice plan (`planning_docs.plan_file_for`) that lists the slice at the start point, since a project has many plans; no plan lists it → `SandboxError` naming the slice and start sha, before anything is registered with cf. Both from the Task 1 spike, defined once as the sandbox's cf setup. `ReplaySandbox` therefore also takes `slice_index`
+  - [x] A start point containing `.gitmodules` raises an error naming it (D10). Refined: only a `.gitmodules` that declares a `[submodule` entry raises, because squadron tracks an empty `.gitmodules` and a bare file check would refuse every squadron replay
+  - [x] Failed `git fetch` / `cf init` raises `SandboxError` carrying the command's stderr; the partial sandbox is removed
+  - [x] On exit (normal, error, `KeyboardInterrupt`): `cf project rm`, delete the directory and lock; a cleanup failure logs WARNING naming the path or project and does not raise
+  - [x] A `keep()` method suppresses cleanup (used by the runner on store-write failure, D4)
+  - [x] `sweep_orphans(runner)` per D3: removes dirs with a missing or dead lock and `replay-*` cf projects whose path is gone; skips live locks; never raises; WARNING per removal or failed removal
+  - [x] Commit: `feat: add history-free replay sandbox with orphan sweep`
   - **Success:** a sandbox holds exactly one commit and is gone after exit
 
-- [ ] **Task 16: Test the sandbox** (effort 2)
-  - [ ] Against a real fixture repo with a fake `cf` via the injected runner: the sandbox has one commit, `git log --all` shows nothing later, the branch is `replay/<replay_id>`
-  - [ ] Cleanup runs on normal exit, on a raised error, and on `KeyboardInterrupt`; `keep()` leaves the directory
-  - [ ] `.gitmodules` at the start point → error; failed fetch → `SandboxError` with stderr, no directory left
-  - [ ] Failed `cf project rm` → WARNING, no raise
-  - [ ] Sweep: dead lock removed, missing lock removed, live lock kept, stale `replay-*` project removed, each with a WARNING
-  - [ ] Commit: `test: cover replay sandbox and orphan sweep`
+- [x] **Task 16: Test the sandbox** (effort 2)
+  - [x] Against a real fixture repo with a fake `cf` via the injected runner: the sandbox has one commit, `git log --all` shows nothing later, the branch is `replay/<replay_id>`
+  - [x] Cleanup runs on normal exit, on a raised error, and on `KeyboardInterrupt`; `keep()` leaves the directory
+  - [x] `.gitmodules` at the start point → error; failed fetch → `SandboxError` with stderr, no directory left
+  - [x] Failed `cf project rm` → WARNING, no raise
+  - [x] Sweep: dead lock removed, missing lock removed, live lock kept, stale `replay-*` project removed, each with a WARNING
+  - [x] Commit: `test: cover replay sandbox and orphan sweep`
   - **Success:** tests pass, zero pyright errors
 
 ### Hidden `--run-id` (D4)
