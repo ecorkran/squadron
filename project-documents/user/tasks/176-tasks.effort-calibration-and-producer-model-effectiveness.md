@@ -112,20 +112,20 @@ status: in_progress
 
 ### Git history (D5, D6)
 
-- [ ] **Task 10: `GitHistory` log pass**
-  - [ ] New `stats/git_history.py`, the only `stats/` module that runs git. `WindowSource` and `ReviewRound` as in the API Contracts, plus a frozen `Commit` (sha, parents, authored_at, subject, changes as `(status, path, blob_id)`)
-  - [ ] `GitHistory(project_root, run=run_git)`; `load()` runs the two whole-history calls in D6 "Bound" and builds the in-memory graph. The log call is `git log --all --raw --no-abbrev --no-renames`: `--raw` gives each change's blob id (needed by Task 12 dedupe), `--no-renames` keeps every change a single path
-  - [ ] Failures per the first two D9 rows, as typed errors; never a partial graph
-  - [ ] In-memory query helpers: branch tip for `refs/heads/{index}-slice.*`, first-parent chain, commit that added a path, commits touching a path glob
-  - [ ] Commit: `feat: add git history log pass for stats`
+- [x] **Task 10: `GitHistory` log pass**
+  - [x] New `stats/git_history.py`, the only `stats/` module that runs git. `WindowSource` and `ReviewRound` as in the API Contracts, plus a frozen `Commit` (sha, parents, authored_at, subject, changes as `(status, path, blob_id)`)
+  - [x] `GitHistory(project_root, run=run_git)`; `load()` runs the two whole-history calls in D6 "Bound" and builds the in-memory graph. The log call is `git log --all --raw --no-abbrev --no-renames`: `--raw` gives each change's blob id (needed by Task 12 dedupe), `--no-renames` keeps every change a single path
+  - [x] Failures per the first two D9 rows, as typed errors; never a partial graph
+  - [x] In-memory query helpers: branch tip for `refs/heads/{index}-slice.*`, first-parent chain, commit that added a path, commits touching a path glob (also `GitHistory.commit(sha)` and `GitHistory.show(sha, path)`, the latter being the only other git call, used by Task 12)
+  - [x] Commit: `feat: add git history log pass for stats`
   - **Success:** two git calls build the graph; failures raise, never return partial data
 
-- [ ] **Task 11: Test the log pass**
-  - [ ] `tests/stats/conftest.py`: a fixture that builds a temp git repo with `main`, a `NNN-slice.x` branch, a task-file commit, code and document commits, and controlled author dates. It serves Tasks 11–19.
-  - [ ] Graph contents: parents, `%aI` dates, subjects, changes with blob ids; a file moved into `archive/` appears as a delete plus an add, never a rename
-  - [ ] A counting wrapper around `run_git` sees exactly 2 calls for `load()`
-  - [ ] Temp dir without git → error naming cwd; a `run` stub returning `None` for the log call → error naming the command and no graph
-  - [ ] Commit: `test: cover git history log pass`
+- [x] **Task 11: Test the log pass**
+  - [x] `tests/stats/conftest.py`: a fixture that builds a temp git repo with `main`, a `NNN-slice.x` branch, a task-file commit, code and document commits, and controlled author dates. It serves Tasks 11–19. (the helper is `tests/stats/repo_support.py` `StatsRepo`, exposed as the `stats_repo` fixture in `tests/stats/conftest.py`)
+  - [x] Graph contents: parents, `%aI` dates, subjects, changes with blob ids; a file moved into `archive/` appears as a delete plus an add, never a rename
+  - [x] A counting wrapper around `run_git` sees exactly 2 calls for `load()`
+  - [x] Temp dir without git → error naming cwd; a `run` stub returning `None` for the log call → error naming the command and no graph
+  - [x] Commit: `test: cover git history log pass`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 12: Review rounds from committed versions**

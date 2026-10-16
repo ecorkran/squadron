@@ -28,6 +28,7 @@ GitRunner = Callable[..., "CompletedProcess[str] | None"]
 BRANCH_REF_PREFIX = "refs/heads/"
 #: `git add` status letter for a path first appearing in a commit.
 STATUS_ADDED = "A"
+STATUS_DELETED = "D"
 
 # The history pass: a header line per commit, then its `--raw` change lines. \x01 starts
 # a header and \x1f separates its fields, so no subject text can be mistaken for either.
@@ -140,13 +141,15 @@ class GitHistory:
     def commits_touching(self, pattern: str) -> list[Commit]:
         """Commits changing any path matching the glob ``pattern``, newest first."""
         self._graph()
-        return [c for c in self._ordered if any(_matches(ch.path, pattern) for ch in c.changes)]
+        return [c for c in self._ordered if any(path_matches(ch.path, pattern) for ch in c.changes)]
 
     def first_added(self, pattern: str) -> Commit | None:
         """The earliest commit that added a path matching ``pattern``."""
         self._graph()
         for commit in reversed(self._ordered):
-            if any(ch.status == STATUS_ADDED and _matches(ch.path, pattern) for ch in commit.changes):
+            if any(
+                ch.status == STATUS_ADDED and path_matches(ch.path, pattern) for ch in commit.changes
+            ):
                 return commit
         return None
 
@@ -173,7 +176,8 @@ class GitHistory:
         return result.stdout
 
 
-def _matches(path: str, pattern: str) -> bool:
+def path_matches(path: str, pattern: str) -> bool:
+    """Whether ``path`` matches the glob ``pattern`` (``*`` also crosses ``/``)."""
     return fnmatch.fnmatchcase(path, pattern)
 
 
