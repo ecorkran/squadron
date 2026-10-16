@@ -1,0 +1,3 @@
+Draft A is better. In one sentence it gets right what a bloom filter does: it is a probabilistic structure for testing set membership, and it never gives false negatives. Draft B ("a thing for data") is so vague that it says nothing about what a bloom filter does. A could be stronger if it also said that false positives are possible and that the payoff is saving space, but it is still accurate and useful. B gives the reader no information at all.
+
+WINNER: A

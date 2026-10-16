@@ -1,12 +1,15 @@
 """The pairwise judge's verdict parser, order-swap rule and frontmatter strip (slice 177 D5).
 
-The replies below are constructed to exercise each documented form. Replies captured from
-a real judge are added during slice verification (Task 37), not invented here.
+The inline replies are constructed to exercise each documented form. The files in
+``fixtures/judge_replies/`` are replies captured from a real judge (opus, via the production
+dispatcher) during slice verification: ``plain`` as the prompt produces it, and the other
+four provoked by adding a format instruction to a short two-draft comparison.
 """
 
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -115,3 +118,36 @@ def test_the_prompt_hash_is_the_sha256_of_the_packaged_file() -> None:
 
     assert judge_prompt_hash() == hashlib.sha256(path.read_bytes()).hexdigest()
     assert "WINNER" in judge_prompt()
+
+
+_REAL_REPLIES = Path(__file__).parent / "fixtures" / "judge_replies"
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("plain", A),
+        ("bold", A),
+        ("lowercase", A),
+        ("trailing_whitespace", A),
+        ("no_verdict", INVALID),
+    ],
+)
+def test_real_judge_replies_parse(name: str, expected: JudgePick) -> None:
+    reply = (_REAL_REPLIES / f"{name}.txt").read_text(encoding="utf-8")
+
+    call = parse_verdict(reply)
+
+    assert call.pick is expected
+    assert call.raw_tail  # the tail is kept for every reply, valid or not
+
+
+def test_the_real_reply_fixtures_still_show_the_variant_they_stand_for() -> None:
+    """A fixture that drifted to a plain reply would stop testing its variant."""
+    read = {p.stem: p.read_text(encoding="utf-8") for p in _REAL_REPLIES.glob("*.txt")}
+
+    assert read["plain"].rstrip().endswith("WINNER: A")
+    assert "**WINNER: A**" in read["bold"]
+    assert read["lowercase"].rstrip().endswith("winner: a")
+    assert read["trailing_whitespace"].endswith("WINNER: A   ")
+    assert "winner" not in read["no_verdict"].lower().replace("the winner", "")

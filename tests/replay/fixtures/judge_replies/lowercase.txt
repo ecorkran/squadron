@@ -1,0 +1,3 @@
+Draft A states what a bloom filter is for: probabilistic set-membership testing. It also gives the defining property that it produces no false negatives, which means false positives are possible. Draft B is too vague to be useful, since "a thing for data" describes almost any data structure. Both are one sentence, but only A answers the task correctly.
+
+winner: a
