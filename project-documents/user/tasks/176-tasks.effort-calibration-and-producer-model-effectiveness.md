@@ -250,24 +250,24 @@ status: in_progress
 
 ### Cross-run totals
 
-- [ ] **Task 28: `runs_usage_report`**
-  - [ ] In `stats/usage_report.py`: `runs_usage_report(*, slice_index, pipeline, state_manager)` over `scan_runs()`, one D7 row per run plus `partial_loop`, built from `run_usage_report`'s row logic, not a copy of it
-  - [ ] Filters on `params["slice"]` and pipeline name; total via `usage_totals` (175 D9); unreadable file count from `scan_runs`
-  - [ ] `to_json_dict()`; `usage_report.py` stays under ~300 lines
-  - [ ] Commit: `feat: add cross-run usage report core`
+- [x] **Task 28: `runs_usage_report`**
+  - [x] In `stats/usage_report.py`: `runs_usage_report(*, slice_index, pipeline, state_manager)` over `scan_runs()`, one D7 row per run plus `partial_loop`, built from `run_usage_report`'s row logic, not a copy of it
+  - [x] Filters on `params["slice"]` and pipeline name; total via `usage_totals` (175 D9); unreadable file count from `scan_runs`
+  - [x] `to_json_dict()`; `usage_report.py` stays under ~300 lines
+  - [x] Commit: `feat: add cross-run usage report core`
   - **Success:** one report covers every readable run
 
-- [ ] **Task 29: Test `runs_usage_report`**
-  - [ ] Three runs across two slices and two pipelines: each filter, both together, and no filter
-  - [ ] Totals equal the sum of per-run totals including loop rounds; a pre-175 run counts as unpriced, not $0
-  - [ ] An unreadable run file → footer count; a partial-loop run → row note
-  - [ ] Commit: `test: cover cross-run usage report`
+- [x] **Task 29: Test `runs_usage_report`**
+  - [x] Three runs across two slices and two pipelines: each filter, both together, and no filter
+  - [x] Totals equal the sum of per-run totals including loop rounds; a pre-175 run counts as unpriced, not $0
+  - [x] An unreadable run file → footer count; a partial-loop run → row note
+  - [x] Commit: `test: cover cross-run usage report`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 30: `sq stats runs` CLI**
-  - [ ] `runs [--slice INDEX] [--pipeline NAME]` with `--json`; renderer in new `cli/stats_runs_views.py` with the `Total` row in the `$X (k of m priced)` form; no matching runs → message, exit 0
-  - [ ] Tests: table/JSON parity, filters, empty case, nothing written
-  - [ ] Commit: `feat: add sq stats runs`
+- [x] **Task 30: `sq stats runs` CLI**
+  - [x] `runs [--slice INDEX] [--pipeline NAME]` with `--json`; renderer in new `cli/stats_runs_views.py` with the `Total` row in the `$X (k of m priced)` form; no matching runs → message, exit 0 (new cli/stats_runs_views.py; the started-time format is now the public STARTED_FORMAT in cli/run_views.py, shared with `sq runs list`)
+  - [x] Tests: table/JSON parity, filters, empty case, nothing written
+  - [x] Commit: `feat: add sq stats runs`
   - **Success:** tests pass, zero pyright errors; `cli/commands/stats.py` under ~300 lines
 
 ### Documentation and verification

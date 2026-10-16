@@ -114,3 +114,30 @@ def test_no_phase_runs_prints_a_message_and_writes_nothing(project: Path, tmp_pa
 
     assert result.exit_code == 0 and "no phase runs" in result.output
     assert list(project.iterdir()) == []
+
+
+def test_footers_count_exclusions_and_unreadable_run_files(project: Path) -> None:
+    extra = [
+        run("no-dispatch", [step("design-0", "design", [action("cf-op")])]),
+        run(
+            "paused", [step("design-0", "design", producer_actions(), status="paused")], status="paused"
+        ),
+        run(
+            "partial",
+            [step("design-0", "design", producer_actions()), step("loop-1", "loop", status="failed")],
+            status="failed",
+            current_step="loop-1",
+        ),
+    ]
+    for state in extra:
+        (project / f"{state.run_id}.json").write_text(state.model_dump_json())
+    (project / "run-corrupt.json").write_text("{not json")
+
+    result = runner.invoke(app, ["stats", "producers"])
+
+    lines = result.output.splitlines()
+    assert result.exit_code == 0, result.output
+    assert "1 phase step(s) without a dispatch" in lines
+    assert "1 phase step(s) paused" in lines
+    assert "1 run(s): partial loop not recorded" in lines
+    assert "1 run file(s) unreadable" in lines

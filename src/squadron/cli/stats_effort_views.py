@@ -13,7 +13,7 @@ from rich.text import Text
 
 from squadron.cli.columns import Column, available_width, render_rows
 from squadron.cli.run_views import print_lines
-from squadron.cli.stats_views import UNREPORTED
+from squadron.cli.stats_views import UNREADABLE_RUNS_TEXT, UNREPORTED
 from squadron.core.usage import format_usd
 from squadron.pipeline.run_liveness import format_duration
 from squadron.stats.effort_report import (
@@ -27,6 +27,7 @@ from squadron.stats.effort_report import (
 )
 from squadron.stats.effort_rollup import LevelRow, Measure, MeasureStat, SlicesEffortReport
 from squadron.stats.slice_spend import SliceSpend
+from squadron.stats.task_attribution import GroupStatus
 from squadron.stats.usage_report import PARTIAL_LOOP_NOTE
 
 UNPLANNED_LABEL = "unplanned"
@@ -134,11 +135,11 @@ def _print_slice_footer(report: SliceEffortReport, console: Console) -> None:
 def _count_footers(markers_not_found: int, rounds_skipped: int, unreadable_runs: int) -> list[str]:
     footers: list[str] = []
     if markers_not_found:
-        footers.append(f"{markers_not_found} task group(s): marker not found")
+        footers.append(f"{markers_not_found} task group(s): {GroupStatus.MARKER_NOT_FOUND.value}")
     if rounds_skipped:
         footers.append(f"{rounds_skipped} review round(s) skipped (unreadable)")
     if unreadable_runs:
-        footers.append(f"{unreadable_runs} run file(s) unreadable")
+        footers.append(f"{unreadable_runs} {UNREADABLE_RUNS_TEXT}")
     return footers
 
 

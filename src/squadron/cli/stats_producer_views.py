@@ -11,7 +11,7 @@ from rich.text import Text
 
 from squadron.cli.columns import Column, available_width, render_rows
 from squadron.cli.run_views import print_lines
-from squadron.cli.stats_views import UNREPORTED
+from squadron.cli.stats_views import UNREADABLE_RUNS_TEXT, UNREPORTED
 from squadron.core.usage import format_usd
 from squadron.stats.producer_report import FirstRound, PhaseSection, ProducerReport, ProducerRow
 from squadron.stats.usage_report import PARTIAL_LOOP_NOTE
@@ -95,7 +95,7 @@ def _count_footers(report: ProducerReport) -> list[str]:
         (excluded.partial_loop_runs, f"run(s): {PARTIAL_LOOP_NOTE}"),
         (excluded.without_dispatch, "phase step(s) without a dispatch"),
         (excluded.paused, "phase step(s) paused"),
-        (report.unreadable_runs, "run file(s) unreadable"),
+        (report.unreadable_runs, UNREADABLE_RUNS_TEXT),
         (report.rounds_unrecorded, "run(s) with loop rounds that were not recorded"),
         (report.unpriced_runs, "run(s) with no recorded cost"),
     ]

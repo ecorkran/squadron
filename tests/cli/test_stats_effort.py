@@ -13,24 +13,30 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.pipeline.state import StateManager
-from tests.stats.effort_project import build_project
+from tests.stats.effort_project import SLICE_REVIEW, build_project, commit_date
 from tests.stats.repo_support import StatsRepo, write_run_file
 
 runner = CliRunner()
 
 
 @pytest.fixture
-def project(
+def workdir(
     stats_repo: StatsRepo, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[StatsRepo]:
-    """Slice 176 in a temp repo that is the working directory, with its own runs dir."""
-    build_project(stats_repo)
+    """An empty temp repo that is the working directory, with a runs dir holding slice 176's run."""
     runs = tmp_path / "runs"
     runs.mkdir()
     write_run_file(runs, "run-176", 176, cost_usd=0.5)
     monkeypatch.chdir(stats_repo.root)
     with patch("squadron.cli.commands.stats.StateManager", lambda: StateManager(runs_dir=runs)):
         yield stats_repo
+
+
+@pytest.fixture
+def project(workdir: StatsRepo) -> StatsRepo:
+    """Slice 176 built in the working directory."""
+    build_project(workdir)
+    return workdir
 
 
 def _json(*args: str) -> dict[str, object]:
@@ -119,3 +125,28 @@ def test_the_commands_write_no_file_ref_or_run_state(project: StatsRepo, tmp_pat
         assert runner.invoke(app, ["stats", *args]).exit_code == 0
 
     assert _snapshot(project, runs) == before
+
+
+def test_footers_count_missing_markers_skipped_rounds_and_unreadable_runs(
+    project: StatsRepo, tmp_path: Path
+) -> None:
+    project.commit("review: broken", {SLICE_REVIEW: "no frontmatter at all\n"}, commit_date(9))
+    (tmp_path / "runs" / "run-corrupt.json").write_text("{not json")
+
+    result = runner.invoke(app, ["stats", "slice", "176"])
+
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    assert "1 task group(s): marker not found" in lines
+    assert "1 review round(s) skipped (unreadable)" in lines
+    assert "1 run file(s) unreadable" in lines
+
+
+def test_a_slice_without_a_task_file_prints_the_row_note(workdir: StatsRepo) -> None:
+    build_project(workdir, tasks=False)
+
+    result = runner.invoke(app, ["stats", "slice", "176"])
+
+    assert result.exit_code == 0, result.output
+    assert "no task file" in result.output.splitlines()
+    assert "Group" not in result.output  # no task groups table

@@ -57,13 +57,17 @@ class Project:
         created: str = "20261105",
         impl_days: int | None = 2,
         slice_verdicts: tuple[str, ...] = ("PASS",),
+        with_tasks: bool = True,
     ) -> None:
         repo = self.repo
         repo.checkout("main")
         tasks = f"project-documents/user/tasks/{index}-tasks.s{index}.md"
-        repo.commit(
-            "docs: tasks", {tasks: f"### Task 1: T\n\n- [ ] Commit: `feat: s{index}`\n"}, self._next()
-        )
+        if with_tasks:
+            repo.commit(
+                "docs: tasks",
+                {tasks: f"### Task 1: T\n\n- [ ] Commit: `feat: s{index}`\n"},
+                self._next(),
+            )
         if impl_days is not None:
             repo.branch(f"{index}-slice.s{index}")
             repo.commit(f"feat: s{index}", {f"src/s{index}.py": "1\n"}, self._next())
@@ -192,3 +196,16 @@ def test_json_has_levels_with_measures(project: Project, runs_dir: Path) -> None
     assert [level["level"] for level in levels] == [2, 4, None]
     assert levels[0]["measures"]["design_rounds"]["median"] == 1.0
     assert levels[0]["n"] == 3
+
+
+def test_a_slice_without_a_task_file_is_still_in_the_rollup(
+    stats_repo: StatsRepo, runs_dir: Path
+) -> None:
+    built = Project(stats_repo, {307: 3})
+    built.add(307, impl_days=None, with_tasks=False, slice_verdicts=("FAIL", "PASS"))
+
+    report = _report(stats_repo, runs_dir)
+
+    assert [(row.level, row.n) for row in report.levels] == [(3, 1)]
+    assert report.levels[0].measures[Measure.DESIGN_ROUNDS].median == 2  # rounds still count
+    assert report.levels[0].measures[Measure.SPAN].n == 0  # no task file, no commit window

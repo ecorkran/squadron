@@ -112,3 +112,12 @@ def test_the_command_writes_nothing(runs_dir: Path) -> None:
         assert runner.invoke(app, ["stats", *args]).exit_code == 0
 
     assert sorted(path.name for path in runs_dir.iterdir()) == before
+
+
+def test_an_unreadable_run_file_is_counted_in_the_footer(runs_dir: Path) -> None:
+    (runs_dir / "run-corrupt.json").write_text("{not json")
+
+    result = runner.invoke(app, ["stats", "runs"])
+
+    assert result.exit_code == 0
+    assert "1 run file(s) unreadable" in result.output.splitlines()

@@ -11,7 +11,7 @@ from rich.text import Text
 
 from squadron.cli.columns import Column, available_width, render_rows
 from squadron.cli.run_views import STARTED_FORMAT, print_lines
-from squadron.cli.stats_views import UNREPORTED, count_cell
+from squadron.cli.stats_views import UNREADABLE_RUNS_TEXT, UNREPORTED, count_cell
 from squadron.core.usage import format_usd
 from squadron.stats.usage_report import PARTIAL_LOOP_NOTE, RunsUsageReport, RunTotalsRow, UsageTotals
 
@@ -47,7 +47,7 @@ def render_runs_report(report: RunsUsageReport, console: Console) -> None:
 
 def _print_unreadable(report: RunsUsageReport, console: Console) -> None:
     if report.unreadable_runs:
-        console.print(Text(f"{report.unreadable_runs} run file(s) unreadable"))
+        console.print(Text(f"{report.unreadable_runs} {UNREADABLE_RUNS_TEXT}"))
 
 
 def _run_cells(row: RunTotalsRow) -> list[str]:

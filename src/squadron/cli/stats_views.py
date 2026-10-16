@@ -24,6 +24,8 @@ from squadron.stats.usage_report import PARTIAL_LOOP_NOTE, RunUsageReport, Usage
 UNREPORTED = "—"
 PARTIAL_MARK = "*"
 PARTIAL_FOOTER = "* partial: an interrupted turn's spend is not recorded"
+#: The footer text after the count of run-state files `scan_runs` could not read (176 D9).
+UNREADABLE_RUNS_TEXT = "run file(s) unreadable"
 UNREADABLE = "unreadable"
 #: The ``cost_tier`` that marks a provider cost as API-rate equivalent, not money (D3).
 SUBSCRIPTION_TIER = "subscription"
