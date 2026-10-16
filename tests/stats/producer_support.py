@@ -37,10 +37,16 @@ def action(
     verdict: str | None = None,
     usage_record: dict[str, object] | None = None,
     prompt_identity: dict[str, object] | None = None,
+    success: bool = True,
+    error: str | None = None,
+    outputs: dict[str, object] | None = None,
+    failure_kind: str | None = None,
 ) -> dict[str, object]:
     metadata: dict[str, object] = {}
     if prompt_identity is not None:
         metadata["prompt"] = prompt_identity
+    if failure_kind is not None:
+        metadata["failure_kind"] = failure_kind
     if model is not None:
         metadata["model"] = model
     if requested is not None:
@@ -49,7 +55,14 @@ def action(
         metadata["profile"] = profile
     if usage_record is not None:
         metadata["usage"] = usage_record
-    return {"success": True, "action_type": action_type, "verdict": verdict, "metadata": metadata}
+    return {
+        "success": success,
+        "action_type": action_type,
+        "verdict": verdict,
+        "outputs": outputs or {},
+        "error": error,
+        "metadata": metadata,
+    }
 
 
 def step(
