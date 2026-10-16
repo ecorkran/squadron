@@ -246,25 +246,25 @@ status: not_started
 
 ### Judge (D5)
 
-- [ ] **Task 25: `metrology.judge_timeout_s` config key** (effort 1)
-  - [ ] Define it in `config/keys.py` beside `metrology.audit_timeout_s`, same pattern, `int`, default 600 in the definition only
-  - [ ] Test: the key resolves to its default and accepts an override
-  - [ ] Commit: `feat: add metrology.judge_timeout_s config key`
+- [x] **Task 25: `metrology.judge_timeout_s` config key** (effort 1)
+  - [x] Define it in `config/keys.py` beside `metrology.audit_timeout_s`, same pattern, `int`, default 600 in the definition only
+  - [x] Test: the key resolves to its default and accepts an override
+  - [x] Commit: `feat: add metrology.judge_timeout_s config key`
   - **Success:** `sq config get metrology.judge_timeout_s` shows 600
 
-- [ ] **Task 26: Judge prompt, verdict parser and pair outcome** (effort 2)
-  - [ ] Write `data/replay/pairwise-judge.md`: compare two drafts of the same task for quality, short rationale, final line `WINNER: A`, `WINNER: B` or `WINNER: TIE`. No example verdicts outside that instruction. Confirm the file ships in the wheel like `data/pipelines/`
-  - [ ] In `replay/judge.py`: `judge_prompt_hash()` (SHA-256 of the packaged file); `parse_verdict(reply) -> JudgeCall` per D5 (last matching line, case-insensitive, tolerant of whitespace and markdown emphasis; otherwise `INVALID` with the raw tail); `combine(first, second_swapped) -> PairOutcome` per the D5 order-swap table
-  - [ ] `strip_frontmatter(text)` removes a leading YAML block
-  - [ ] Commit: `feat: add pairwise judge prompt and verdict parsing`
+- [x] **Task 26: Judge prompt, verdict parser and pair outcome** (effort 2)
+  - [x] Write `data/replay/pairwise-judge.md`: compare two drafts of the same task for quality, short rationale, final line `WINNER: A`, `WINNER: B` or `WINNER: TIE`. No example verdicts outside that instruction. Confirm the file ships in the wheel like `data/pipelines/`
+  - [x] In `replay/judge.py`: `judge_prompt_hash()` (SHA-256 of the packaged file); `parse_verdict(reply) -> JudgeCall` per D5 (last matching line, case-insensitive, tolerant of whitespace and markdown emphasis; otherwise `INVALID` with the raw tail); `combine(first, second_swapped) -> PairOutcome` per the D5 order-swap table (strip_frontmatter and the verdict logic live in replay/judge.py; combine(first, second_swapped) takes the second call's pick as the judge made it, with swapped labels, and swaps it back itself)
+  - [x] `strip_frontmatter(text)` removes a leading YAML block
+  - [x] Commit: `feat: add pairwise judge prompt and verdict parsing`
   - **Success:** parser and combiner cover every D5 table row
 
-- [ ] **Task 27: Test verdict parsing and pair outcome** (effort 2)
-  - [ ] `parse_verdict`: plain, `**WINNER: B**`, lowercase, trailing whitespace, `winner = tie`, an earlier matching line superseded by the last, no verdict → `INVALID` with tail
-  - [ ] Do not invent "real" replies; captured replies are added in Task 37
-  - [ ] `combine`: one test per D5 table row, remembering the second call's labels are swapped
-  - [ ] `strip_frontmatter`: with and without frontmatter
-  - [ ] Commit: `test: cover judge verdict parsing and order swap`
+- [x] **Task 27: Test verdict parsing and pair outcome** (effort 2)
+  - [x] `parse_verdict`: plain, `**WINNER: B**`, lowercase, trailing whitespace, `winner = tie`, an earlier matching line superseded by the last, no verdict → `INVALID` with tail
+  - [x] Do not invent "real" replies; captured replies are added in Task 37
+  - [x] `combine`: one test per D5 table row, remembering the second call's labels are swapped
+  - [x] `strip_frontmatter`: with and without frontmatter
+  - [x] Commit: `test: cover judge verdict parsing and order swap`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 28: `judge_replay_set`** (effort 3)
