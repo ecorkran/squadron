@@ -7,7 +7,7 @@ dependencies: [176, 320]
 interfaces: []
 dateCreated: 20261016
 dateUpdated: 20261016
-status: not_started
+status: complete
 ---
 
 # Slice Design: Producer Replay and Pairwise Judging
@@ -410,19 +410,28 @@ The values are illustrative.
 
 ### Verification Walkthrough
 
-These commands do not exist yet. Model aliases are examples from this repo's `models.toml`; pick any, except `sol` until #224 is fixed. The run makes real dispatches.
+Run on 20261016 against slice 176's real history, with real dispatches (Claude Max subscription for `sonnet`, `haiku` and `opus`; `sol` was not used, see #224). Model aliases are examples from this repo's `models.toml`; pick any. Use `--yes` when there is no terminal. Commands are run from the repository root.
 
 1. Replay slice 176's design with two configs, one revision allowed:
    ```
    sq replay run --phase design --slice 176 --config sonnet --config haiku --reviewer opus --max-revisions 1
    ```
-   The plan prints the start commit (the parent of the commit that added `176-slice.effort-calibration-and-producer-model-effectiveness.md`) and the dispatch bound, then asks for confirmation. Each config prints its outcome when it finishes.
-2. Confirm cleanup: `ls ~/.config/squadron/replays/` is empty, and `cf project list | grep replay-` prints nothing.
-3. Inspect a record: `ls ~/.config/squadron/metrology/replay-*.json`, then open one and confirm `start_sha`, `outcome`, `rounds`, `cost_usd`, `prompt` and a non-empty `first_draft`.
-4. Judge: `sq replay judge --phase design --slice 176 --judge opus`. With two configs plus `original` there are 3 pairs and 6 calls. Run it again: it reports 0 pairs to judge.
-5. Report: `sq replay report --phase design`. Expect the table with three rows, `below floor` on every row (n is below 5), and the self-preference warning absent (opus is not a contestant).
-6. Prompt identity: `sq stats run <latest run id> --json` shows `metadata.prompt` on the dispatch actions, and `sq stats producers` shows the prompt-identity footer.
-7. Failure path: replay with an alias that has no credentials configured. The record shows `outcome: failed` with a failure class, and the other config still runs.
+   The plan prints the start commit and the call bound, then asks for confirmation (`--yes` skips it):
+   ```
+   Replay design for slice 176 (effort-calibration-and-producer-model-effectiveness)
+     start commit   bca771926e89d9ac7c753d9c88a84aa4b1f83ac7
+     reviewer       opus (claude-opus-5-5)
+     max revisions  1
+     configs        sonnet (claude-sonnet-5-5, sdk), haiku (claude-haiku-4-5-20251001, sdk)
+     upper bound    8 LLM calls at most (2 configs x 2 x (1 + 1))
+   ```
+   `bca77192…` is the first parent of `f3d652e0`, the commit that added the 176 design. Each config prints its outcome as it finishes. Observed: `sonnet: accepted  rounds 2  $2.94 (4 of 4 priced)  377s`, `haiku: accepted  rounds 2  $2.49 (4 of 4 priced)  449s`, then `2 replay record(s) written`. Each config takes several minutes. The spend is the Claude SDK's API-rate equivalent, not money charged on a subscription.
+2. Confirm cleanup: `ls ~/.config/squadron/replays/` prints nothing, and `cf project list | grep -c replay-` prints `0`.
+3. Inspect a record: `ls ~/.config/squadron/metrology/replay-*.json`, then open one. Observed: `start_sha` `bca77192…`, `outcome` `accepted`, `rounds` 2, `cost_usd` 2.94, `priced` `[4, 4]`, `first_verdict` `CONCERNS`, a `prompt` with `source` `build_context` and `squadron_version`, `cf_version` and `guide_version` set, and `first_draft`, `final_text` and `task_prompt` all non-empty. `config.effort_sent` is `null` because no effort was sent.
+4. Judge: `sq replay judge --phase design --slice 176 --judge opus`. Observed: `3 pair(s) to judge: 6 judge calls with opus (prompt 1d37ac)`, then `3 pair(s) judged`. Run it again: `Every pair has already been judged by this judge.` and exit 0.
+5. Report: `sq replay report --phase design`. Observed: three rows (`sonnet`, `haiku`, `original`) under `Producer replay - design   reviewer: opus   judge: opus (prompt 1d37ac)`. `below floor` is on both config rows (n is below 5). The `original` row is not marked, as in the UI Specifications: it has no n to compare with the floor. The self-preference warning is absent (opus is not a contestant). A strength shows as `—` with a line saying why: `haiku` never won ("no wins, so its strength is zero") and the original never lost ("never lost, so its strength is unbounded"). With so few pairs the Bradley-Terry fit has little to say; the footer reads `position consistency 100% (3 of 3)`.
+6. Prompt identity: the run state of any run started by step 1 (`~/.config/squadron/runs/<run id>.json`) holds `metadata.prompt` on each dispatch action: the phase dispatch with `source: build_context` and the `cf_version` and `guide_version`, and the revise dispatch with `source: feedback` and both versions `null`. (`sq stats run --json` shows only the usage record of each action, not `metadata`.) `sq stats producers` ends with `2 of 39 units carry prompt identity; 1 guide versions`.
+7. Failure path: replay with a config that fails. The first attempt of this walkthrough did it by accident: `sq` was passed to the sandbox as a relative path, the child process never started, and each config was recorded as `failed` with `failure_class: no_run_state` and the exit code and stderr tail in `failure_detail` (fixed; see Task 37). For a failure of the pipeline itself: `sq replay run --phase design --slice 176 --config glm-flash --config haiku --reviewer opus --max-revisions 1`. Observed: `glm-flash: failed [no_artifact]  rounds -  $0.10 (1 of 1 priced)  182s` (the model said it had written the design and had not), then `haiku: accepted  rounds 2  $2.70 (4 of 4 priced)  601s`. Unsetting `OPENROUTER_API_KEY` for the command did not remove that alias's credentials, so this was not a missing-credentials failure. A real missing-credentials run was not reproduced; the `dispatch_error` and `stall` classes are covered by unit tests only.
 
 ## Risk Assessment
 

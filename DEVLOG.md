@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261016
 
+### Slice 177: Producer Replay and Pairwise Judging — implementation (Phase 6 complete)
+
+- Branch `177-slice.producer-replay-and-pairwise-judging` (from `main`). All 39 tasks done; the merge waits for Phase 7. Full suite 7198 passed, 4 skipped; ruff and pyright clean.
+- Shipped: `sq replay run|judge|report` (also `/sq:replay` and the Codex `sq-replay` skill), `metadata["prompt"]` on every dispatch, `cf_version` and `guide_version` on `build_context`, the prompt-identity footer in `sq stats producers`, the hidden `sq run --run-id`, `metrology.judge_timeout_s`, and the `producer_replay` and `pairwise_judgment` record types. New package `squadron/replay/`: `start_point`, `sandbox`, `runner`, `outcome`, `drafts`, `judge`, `judging`, `judge_jobs`, `judge_dispatch`, `bradley_terry`, `report`, `report_models`. `core/process_lock.py` is the lock shared with the PR-review worktree.
+- Task 1 spike: slice 176 resolves at its start point, but only with two sandbox settings the design did not name: `cf set arch <initiative>` (a fresh `cf init --lite` project has no slice plan) and `cf config set git.integration_branch replay/<id>` (the planning-commit guard). Both are in the sandbox setup.
+- Real run on slice 176's design (sonnet and haiku, opus reviewing and judging): both accepted in 2 rounds, about $2.5–2.9 each at API rates; 3 pairs judged in 6 calls and a re-run judged 0. Details are under Task 37 and in the design's Verification Walkthrough.
+- Defects found and fixed along the way: `sq stats producers` counted a clean first-draft pass as not accepted whenever P4's loop was skipped (changelog bullet added); failed dispatches had no structured failure kind, so a `failure_kind` is now stamped; the sandbox's `sq` path was relative; the report's group key was an unhashable pydantic model; the stats JSON helper did not serialize pydantic models.
+- Design deviations: an empty tracked `.gitmodules` (squadron has one) must not refuse a replay, so only a file that declares a submodule does; `read_outcome` is pure over run state and the drafts are read by `replay/drafts.py`; `sq stats run --json` does not expose dispatch `metadata`, so the walkthrough reads the run state file.
+- Spend note: step 7 of the walkthrough ran an OpenRouter alias for real ($0.10) because unsetting its key in the environment did not remove its credentials.
+- Open: #227 downstream-outcome scorer, #228 human check of pairwise picks, #229 `sq stats producers` counts replay runs. #224 still blocks `sol` as judge. `/tmp/replay-spike` (the Task 1 scratch directory) is for the PM to delete.
+
 ### Slice 177: Producer Replay and Pairwise Judging — Tasks Complete
 
 - Tasks: `project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md`, 39 tasks (353 lines), test-with pairs, commit per task. Effort 4/5.

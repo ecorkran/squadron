@@ -11,7 +11,7 @@ projectState: >
   and prompt identity on every dispatch. Controlled half of #210.
 dateCreated: 20261016
 dateUpdated: 20261016
-status: not_started
+status: complete
 ---
 
 ## Context Summary
@@ -34,7 +34,7 @@ status: not_started
 
 ### Spike: slice resolution at a design start point (D2 risk)
 
-- [x] **Task 1: Run `sq run P4 176` in a hand-built sandbox** (effort 2)
+- [ ] **Task 1: Run `sq run P4 176` in a hand-built sandbox** (effort 2)
   - [x] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `177-slice.producer-replay-and-pairwise-judging` from it
   - [x] Find the commit that first added `project-documents/user/slices/176-slice.*.md` (`git log --diff-filter=A --format=%H -- <path>`) and its first parent
   - [x] Build the sandbox by hand with the four D3 git commands in a scratch directory under `/tmp`; register it with `cf init --lite --no-ide --name replay-spike`
@@ -43,7 +43,7 @@ status: not_started
   - [x] Also record which step resolves the slice (the `set_slice` cf operation or earlier) and the cheapest command that reproduces that resolution without a dispatch. Task 21 runs it as its pre-dispatch check
   - [ ] Clean up: `cf project rm replay-spike`, delete the directory (cf project removed; /tmp/replay-spike directory deletion left to PM)
   - [x] If the slice did not resolve: STOP and return the evidence to the Project Manager. Do not start Task 2.
-  - [ ] Commit (task file only): `docs: record slice 177 start-point resolution spike`
+  - [x] Commit (task file only): `docs: record slice 177 start-point resolution spike`
   - **Result:** start sha `bca771926e89d9ac7c753d9c88a84aa4b1f83ac7` (first parent of `f3d652e0`, the commit that first added the 176 design). `sq run P4 176 -m haiku -p review-model=haiku -p max-revisions=1` **resolved the slice and completed** (design-0 PASS, loop-1, summary-2) once two sandbox settings were in place. The 176 plan entry exists at the start point, so cf resolves `176` from the plan and the missing design file does not matter. Two failures on the bare sandbox, each fixed by one setting:
     1. `cf set slice 176: No file matching index '176' for field 'fileSlice'. No slice plan is set.` — a fresh `cf init --lite` project has no slice plan. Fix: `cf set arch 140` (the initiative index) before the run.
     2. `planning commit for slice 176 on replay/spike; expected main` — the git-environment guard compares the branch to `git.integration_branch`. Fix: `cf config set git.integration_branch replay/<id>` in the sandbox.
@@ -329,34 +329,44 @@ status: not_started
   - [x] Commit: `test: cover replay report`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 36: `sq replay report` command and views** (effort 2)
-  - [ ] `cli/replay_views.py` renders the D7 / UI Specifications layout, reusing `stats_views` cells (count, cost) rather than copying; `—` with the reason for `None` strengths; self-preference warning line
-  - [ ] `report` subcommand with `--phase`, `--judge`, `--json` (mirrors the table); reads `metrology.min_evidence_n`; empty → message, exit 0
-  - [ ] Test: rendered text contains each column header, `below floor`, the `original` row and the footer; `--json` keys match the table; empty store message
-  - [ ] Commit: `feat: add sq replay report`
+- [x] **Task 36: `sq replay report` command and views** (effort 2)
+  - [x] `cli/replay_views.py` renders the D7 / UI Specifications layout, reusing `stats_views` cells (count, cost) rather than copying; `—` with the reason for `None` strengths; self-preference warning line (views are in cli/replay_views.py, the command in cli/commands/replay_report.py)
+  - [x] `report` subcommand with `--phase`, `--judge`, `--json` (mirrors the table); reads `metrology.min_evidence_n`; empty → message, exit 0
+  - [x] Test: rendered text contains each column header, `below floor`, the `original` row and the footer; `--json` keys match the table; empty store message
+  - [x] Commit: `feat: add sq replay report`
   - **Success:** tests pass, zero pyright errors; touched CLI modules stay near 300 lines
 
 ### Docs and verification
 
-- [ ] **Task 37: Verification walkthrough** (effort 3)
-  - [ ] Run the design's Verification Walkthrough steps 1–7 with real dispatches; record each step's result under this task
-  - [ ] Save one real judge reply per design variant as a parser fixture in the Task 27 test file: plain, markdown-bold, lowercase, trailing whitespace, no verdict
-  - [ ] For a variant the walkthrough does not produce, make a real judge call with an instruction that provokes it, and note under this task which fixtures were provoked
-  - [ ] Any defect found: fix it, add a test, then continue
-  - [ ] Each defect fix found here gets its own `fix:` commit naming the defect, before the fixture commit
-  - [ ] Commit: `test: add captured judge replies to verdict parser tests`
+- [x] **Task 37: Verification walkthrough** (effort 3)
+  - [x] Run the design's Verification Walkthrough steps 1–7 with real dispatches; record each step's result under this task
+  - [x] Save one real judge reply per design variant as a parser fixture in the Task 27 test file: plain, markdown-bold, lowercase, trailing whitespace, no verdict
+  - [x] For a variant the walkthrough does not produce, make a real judge call with an instruction that provokes it, and note under this task which fixtures were provoked
+  - [x] Any defect found: fix it, add a test, then continue
+  - [x] Each defect fix found here gets its own `fix:` commit naming the defect, before the fixture commit (the absolute sq path fix preceded the fixture commit; two smaller fixes, the missing strength reason in the report and the test console width, were found later and committed after it)
+  - [x] Commit: `test: add captured judge replies to verdict parser tests`
   - **Success:** all seven steps match the walkthrough's expectations
+  - **Result (20261016, real dispatches, Claude Max subscription plus one OpenRouter alias):**
+    1. Step 1 passed on the second attempt: sonnet accepted, rounds 2, $2.94 (4 of 4 priced), 377s; haiku accepted, rounds 2, $2.49, 449s. The first attempt failed both configs with `no_run_state` (exit 127): `shutil.which(".venv/bin/sq")` returned a relative path that does not exist from the sandbox directory. Fixed in `fix: pass sq replay run an absolute sq executable path` (with a regression test), after deleting the two failed records the attempt wrote to the real metrology store.
+    2. Step 2 passed: `~/.config/squadron/replays/` empty, 0 `replay-*` cf projects, after both runs.
+    3. Step 3 passed: `start_sha` `bca77192…`, `outcome`, `rounds` 2, `cost_usd`, `priced` `[4, 4]`, `prompt` (build_context, versions set), non-empty `first_draft` (21,544 and 24,730 chars), `final_text`, `task_prompt`.
+    4. Step 4 passed: 3 pairs and 6 calls, then 0 pairs on the second invocation, exit 0.
+    5. Step 5 passed with one correction: `below floor` marks the config rows, not the `original` row (no n; matches the UI Specifications). The report also gained a reason for a row that has no strength because every opponent lacked one (`fix: say why a replay report row has no strength…`), found by looking at this step's table.
+    6. Step 6 passed with one correction: `metadata.prompt` is in the run state file on every dispatch; `sq stats run --json` shows only the usage record, not metadata. The footer read `2 of 39 units carry prompt identity; 1 guide versions`.
+    7. Step 7 passed in spirit, not as written: unsetting `OPENROUTER_API_KEY` did not remove that alias's credentials, so `glm-flash` ran (182s, **$0.10 of real OpenRouter spend**) and failed with `no_artifact`; haiku still ran to `accepted`. The `no_run_state` class was exercised by the step 1 accident. A real missing-credentials failure was not reproduced.
+  - **Fixtures:** `tests/replay/fixtures/judge_replies/` holds one real opus reply per variant. `plain` was produced by the unmodified prompt. `bold`, `lowercase`, `trailing_whitespace` and `no_verdict` were **provoked**: a short two-draft comparison with a format instruction appended, which the model followed in every case. The six replies from step 4 all ended in the plain `WINNER: X` form.
+  - **Noted, not fixed (follow-on issue in Task 39):** the replay runs are ordinary P4 runs in the shared runs directory, so `sq stats producers` (which reports observed runs) now includes them. Their 2 of 39 units are the only ones with prompt identity.
 
-- [ ] **Task 38: Docs and slash command** (effort 1)
-  - [ ] Add `commands/sq/replay.md` passing `$ARGUMENTS` to `sq replay`, in the pattern of `commands/sq/stats.md`
-  - [ ] README: a `sq replay` section (run, judge, report; cost bound; aliases are user-chosen)
-  - [ ] CHANGELOG: one user-facing bullet for `sq replay` and one for prompt identity in `sq stats producers`
-  - [ ] Commit: `docs: document sq replay`
+- [x] **Task 38: Docs and slash command** (effort 1)
+  - [x] Add `commands/sq/replay.md` passing `$ARGUMENTS` to `sq replay`, in the pattern of `commands/sq/stats.md` (also added the Codex skill commands/agents/sq-replay/SKILL.md and updated the install tests' expected command list)
+  - [x] README: a `sq replay` section (run, judge, report; cost bound; aliases are user-chosen)
+  - [x] CHANGELOG: one user-facing bullet for `sq replay` and one for prompt identity in `sq stats producers`
+  - [x] Commit: `docs: document sq replay`
   - **Success:** slash command installs with the others; docs describe the shipped options
 
-- [ ] **Task 39: #210 comment and follow-on issues** (effort 1)
-  - [ ] File issues for the downstream-outcome scorer and for the human blind check of pairwise picks (design Excluded); record their numbers here
-  - [ ] Comment on #210 with the walkthrough's report table and the two issue numbers
-  - [ ] Final pass: `ruff format`, `ruff check`, `pyright`, full `pytest`
-  - [ ] Commit: `docs: link slice 177 follow-on issues`
+- [x] **Task 39: #210 comment and follow-on issues** (effort 1)
+  - [x] File issues for the downstream-outcome scorer and for the human blind check of pairwise picks (design Excluded); record their numbers here (filed #227 downstream-outcome scorer, #228 human blind check of pairwise picks, and #229 sq stats producers counting replay runs, found during verification)
+  - [x] Comment on #210 with the walkthrough's report table and the two issue numbers (comment posted on #210)
+  - [x] Final pass: `ruff format`, `ruff check`, `pyright`, full `pytest` (7198 passed, 4 skipped)
+  - [x] Commit: `docs: link slice 177 follow-on issues`
   - **Success:** issues exist and are linked; full suite green, zero pyright errors
