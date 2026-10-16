@@ -274,6 +274,7 @@ async def _run_pipeline(
     pool_backend: PoolBackend | None = None,
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     item_rerun: ItemRerun | None = None,
+    new_run_id: str | None = None,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
 
@@ -284,9 +285,15 @@ async def _run_pipeline(
     When *run_id* is provided the existing state file is reused (resume path);
     ``init_run`` is skipped so no new state file is created.
 
+    When *new_run_id* is provided a fresh run is created under that id (the replay
+    runner picks its ids); an existing file for it raises ``FileExistsError``. It
+    cannot be combined with *run_id*.
+
     Raises ``FileNotFoundError`` when the pipeline cannot be found — the
     caller is responsible for printing the message and exiting.
     """
+    if new_run_id is not None and run_id is not None:
+        raise ValueError("new_run_id and run_id cannot both be given")
     definition = load_pipeline(pipeline_name)
 
     errors = validate_pipeline(definition)
@@ -306,7 +313,12 @@ async def _run_pipeline(
         owner = RunOwner.current(interval) if interval is not None else None
         run_name, run_path = _run_record_identity(pipeline_name)
         run_id = state_mgr.init_run(
-            run_name, params, execution_mode=execution_mode, owner=owner, pipeline_path=run_path
+            run_name,
+            params,
+            new_run_id,
+            execution_mode=execution_mode,
+            owner=owner,
+            pipeline_path=run_path,
         )
 
     _run_id = run_id  # capture for closure below
@@ -368,6 +380,7 @@ async def _run_pipeline_sdk(
     run_id: str | None = None,
     strict: bool = False,
     item_rerun: ItemRerun | None = None,
+    new_run_id: str | None = None,
 ) -> PipelineResult:
     """Create an SDK session if needed, run the pipeline, and disconnect on exit.
 
@@ -439,6 +452,7 @@ async def _run_pipeline_sdk(
                 pool_backend=pool_backend,
                 pool_policy=classification.policy,
                 item_rerun=item_rerun,
+                new_run_id=new_run_id,
             )
         except LazySessionConnectError as exc:
             # State is already saved by _run_pipeline's BaseException handler.
@@ -1039,10 +1053,19 @@ def run(
     instructions: str | None = typer.Option(
         None, "--instructions", help="With --item: instructions prepended to its dispatches."
     ),
+    new_run_id: str | None = typer.Option(
+        None,
+        "--run-id",
+        hidden=True,
+        help="Create the run under this id; fails if it exists. For replay runs; not --resume.",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
     check_item_flags(resume, item, decision, instructions)
+    if resume is not None and new_run_id is not None:
+        rprint("[red]Error: --resume and --run-id cannot be used together.[/red]")
+        raise typer.Exit(1)
     if resume is not None and from_step is not None:
         rprint("[red]Error: --resume and --from cannot be used together.[/red]")
         raise typer.Exit(1)
@@ -1344,10 +1367,14 @@ def run(
                 model_override=model,
                 from_step=from_step,
                 strict=strict,
+                new_run_id=new_run_id,
             ),
         )
     except FileNotFoundError:
         # Already printed by _run_pipeline
+        raise typer.Exit(1) from None
+    except FileExistsError as exc:
+        rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
     except ValueError as exc:
         rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)

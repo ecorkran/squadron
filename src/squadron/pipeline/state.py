@@ -345,6 +345,10 @@ class StateManager:
         the owner, so no v5 ``running`` file is ever ownerless (slice 174 D13).
         With *pipeline_path*, the absolute source file of a path run is kept so
         resume reloads that file rather than a same-named pipeline (slice 940 D4).
+
+        A given *run_id* names a new run: an existing file for it raises
+        ``FileExistsError`` rather than being overwritten (slice 177 D4). Resuming
+        an existing run is ``claim``, not ``init_run``.
         """
         pipeline_name = pipeline_name.lower()
         now = datetime.now(UTC)
@@ -352,6 +356,8 @@ class StateManager:
             date = now.strftime("%Y%m%d")
             slug = _SLUG_RE.sub("-", pipeline_name).strip("-")
             run_id = f"run-{date}-{slug}-{uuid.uuid4().hex[:8]}"
+        elif self._state_path(run_id).exists():
+            raise FileExistsError(f"run state for '{run_id}' already exists")
 
         state = RunState(
             run_id=run_id,
