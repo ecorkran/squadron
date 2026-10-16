@@ -252,6 +252,15 @@ def _plan_entries(project_root: Path) -> tuple[dict[int, _PlanEntry], list[Path]
     return entries, files, repeated
 
 
+def plan_file_for(index: int, project_root: Path) -> Path:
+    """The first slice plan listing ``index``; raises ``UnknownSliceError`` when none does."""
+    files = _plan_files(project_root)
+    for path in files:
+        if any(entry.index == index for entry in _parse_plan(path)):
+            return path
+    raise UnknownSliceError(index, files)
+
+
 def slice_status(index: int, project_root: Path) -> tuple[bool, str | None]:
     """``(complete, dateCreated)`` from slice ``index``'s design frontmatter (D4).
 
