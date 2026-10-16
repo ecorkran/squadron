@@ -14,7 +14,7 @@ from squadron.stats.effort_report import SliceEffortReport, slice_effort_report
 from squadron.stats.git_history import GitHistory, WindowSource
 from squadron.stats.planning_docs import UnknownSliceError
 from squadron.stats.task_attribution import GroupStatus
-from tests.stats.repo_support import CountingRunner, StatsRepo
+from tests.stats.repo_support import CountingRunner, StatsRepo, write_run_file
 
 _ARCH = "project-documents/user/architecture/140-slices.x.md"
 _TASKS = "project-documents/user/tasks/176-tasks.x.md"
@@ -69,47 +69,12 @@ def _build_project(repo: StatsRepo, *, branch: bool = True, tasks: bool = True) 
     repo.commit("fix: after review", {"src/two.py": "2b\n"}, _date(8))
 
 
-def _write_run(runs_dir: Path, run_id: str, slice_index: int | str) -> None:
-    usage = {
-        "model": "m",
-        "alias": None,
-        "profile": "sdk",
-        "effort": None,
-        "turns": 2,
-        "duration_seconds": 3.0,
-        "usage": {"prompt": 100, "completion": 10},
-        "cost_usd": 0.5,
-        "cost_basis": "provider",
-        "partial": False,
-    }
-    action = {"success": True, "action_type": "dispatch", "outputs": {}, "metadata": {"usage": usage}}
-    state = {
-        "schema_version": 5,
-        "run_id": run_id,
-        "pipeline": "p4",
-        "params": {"slice": slice_index},
-        "started_at": "2026-10-04T10:00:00+00:00",
-        "updated_at": "2026-10-04T11:00:00+00:00",
-        "status": "completed",
-        "completed_steps": [
-            {
-                "step_name": "design",
-                "step_type": "phase",
-                "status": "completed",
-                "completed_at": "2026-10-04T10:30:00+00:00",
-                "action_results": [action],
-            }
-        ],
-    }
-    (runs_dir / f"{run_id}.json").write_text(json.dumps(state))
-
-
 @pytest.fixture
 def runs_dir(tmp_path: Path) -> Path:
     directory = tmp_path / "runs"
     directory.mkdir()
-    _write_run(directory, "run-this-slice", 176)
-    _write_run(directory, "run-other-slice", 999)
+    write_run_file(directory, "run-this-slice", 176)
+    write_run_file(directory, "run-other-slice", 999)
     (directory / "run-corrupt.json").write_text("{not json")
     return directory
 

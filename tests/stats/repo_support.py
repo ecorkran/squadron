@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import Mapping
@@ -70,3 +71,39 @@ class CountingRunner:
     def __call__(self, args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
         self.calls.append(args)
         return run_git(args, cwd=cwd)
+
+
+def write_run_file(runs_dir: Path, run_id: str, slice_index: int | str, cost_usd: float = 0.5) -> None:
+    """A completed one-dispatch run file for ``slice_index`` whose dispatch cost ``cost_usd``."""
+    usage = {
+        "model": "m",
+        "alias": None,
+        "profile": "sdk",
+        "effort": None,
+        "turns": 2,
+        "duration_seconds": 3.0,
+        "usage": {"prompt": 100, "completion": 10},
+        "cost_usd": cost_usd,
+        "cost_basis": "provider",
+        "partial": False,
+    }
+    action = {"success": True, "action_type": "dispatch", "outputs": {}, "metadata": {"usage": usage}}
+    state = {
+        "schema_version": 5,
+        "run_id": run_id,
+        "pipeline": "p4",
+        "params": {"slice": slice_index},
+        "started_at": "2026-10-04T10:00:00+00:00",
+        "updated_at": "2026-10-04T11:00:00+00:00",
+        "status": "completed",
+        "completed_steps": [
+            {
+                "step_name": "design",
+                "step_type": "phase",
+                "status": "completed",
+                "completed_at": "2026-10-04T10:30:00+00:00",
+                "action_results": [action],
+            }
+        ],
+    }
+    (runs_dir / f"{run_id}.json").write_text(json.dumps(state))
