@@ -26,11 +26,11 @@ from squadron.codehost.worktree import (
     SubmoduleTimeoutError,
     SubmoduleUnfetchableError,
     WorktreeCreationError,
-    WorktreeLock,
-    _current_process_start_time,
+    _current_process_lock,
     _worktree_root,
     sweep_orphans,
 )
+from squadron.core.process_lock import ProcessLock
 from squadron.core.process_runner import ProcessResult, ProcessTimedOutError
 from tests.codehost.fake_runner import FakeProcessRunner, UnscriptedCallError
 
@@ -112,20 +112,20 @@ def test_worktree_root_is_under_config_squadron() -> None:
 
 
 # ---------------------------------------------------------------------------
-# _current_process_start_time
+# _current_process_lock (the lock helpers themselves are tested in tests/core/test_process_lock.py)
 # ---------------------------------------------------------------------------
 
 
-def test_current_process_start_time_parses_ps_output() -> None:
+def test_current_process_lock_is_owned_by_this_process() -> None:
     runner = FakeProcessRunner([(["ps", "-o", "lstart=", "-p", str(os.getpid())], _ps_ok())])
-    result = _current_process_start_time(runner)
-    assert result > 0
+    lock = _current_process_lock(runner)
+    assert lock.pid == os.getpid() and lock.started_at > 0
 
 
-def test_current_process_start_time_raises_when_ps_cannot_resolve_it() -> None:
+def test_current_process_lock_raises_the_worktree_error_when_ps_cannot_resolve_it() -> None:
     runner = FakeProcessRunner([(["ps", "-o", "lstart=", "-p", str(os.getpid())], _ps_ok(lstart=""))])
     with pytest.raises(ProcessIdentityUnresolvableError):
-        _current_process_start_time(runner)
+        _current_process_lock(runner)
 
 
 # ---------------------------------------------------------------------------
@@ -249,10 +249,10 @@ def test_sweep_spares_a_worktree_whose_claim_hands_off_to_its_lock_mid_sweep(
     owner = json.dumps({"pid": my_pid, "started_at": _lstart_epoch()})
     claim.write_text(owner)
 
-    real_read_lock = worktree._read_lock  # pyright: ignore[reportPrivateUsage]
+    real_read_lock = worktree.read_lock
     reads: list[Path] = []
 
-    def _read_then_hand_off(path: Path) -> WorktreeLock | None:
+    def _read_then_hand_off(path: Path) -> ProcessLock | None:
         result = real_read_lock(path)
         reads.append(path)
         if len(reads) == 1:
@@ -260,7 +260,7 @@ def test_sweep_spares_a_worktree_whose_claim_hands_off_to_its_lock_mid_sweep(
             claim.unlink()
         return result
 
-    monkeypatch.setattr(worktree, "_read_lock", _read_then_hand_off)
+    monkeypatch.setattr(worktree, "read_lock", _read_then_hand_off)
     runner = FakeProcessRunner(
         [
             (["ps", "-o", "lstart=", "-p", str(my_pid)], _ps_ok(_LSTART)),

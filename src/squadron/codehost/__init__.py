@@ -54,7 +54,6 @@ from squadron.codehost.worktree import (
     SubmoduleUnfetchableError,
     WorktreeCreationError,
     WorktreeError,
-    WorktreeLock,
     sweep_orphans,
 )
 
@@ -101,7 +100,6 @@ __all__ = [
     "TargetUnresolvableError",
     "WorktreeCreationError",
     "WorktreeError",
-    "WorktreeLock",
     # Sorted uppercase-first above; the functions trail by convention.
     "build_github_host",
     "list_remotes",

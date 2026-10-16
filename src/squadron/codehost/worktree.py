@@ -19,20 +19,22 @@ The lock lives in ``metadata_lock.py`` and is POSIX-only: on a platform without
 
 from __future__ import annotations
 
-import json
 import logging
-import os
 import shutil
 from collections.abc import Sequence
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import cast
 
 from squadron.codehost.errors import CodeHostError
 from squadron.codehost.git_refs import GIT_FETCH_TIMEOUT_SECONDS, GIT_QUERY_TIMEOUT_SECONDS
 from squadron.codehost.metadata_lock import MetadataLockError, git_metadata_lock
 from squadron.codehost.models import PullRequestRecord
+from squadron.core.process_lock import (
+    ProcessIdentityUnresolvable,
+    ProcessLock,
+    current_process_lock,
+    is_orphan,
+    read_lock,
+)
 from squadron.core.process_runner import ProcessRunner, ProcessTimedOutError
 
 _logger = logging.getLogger(__name__)
@@ -87,17 +89,12 @@ class ProcessIdentityUnresolvableError(WorktreeError):
         self.pid = pid
 
 
-@dataclass(frozen=True)
-class WorktreeLock:
-    """The lock a live ``ScratchWorktree`` writes to its directory.
-
-    ``started_at`` is the *process's* start time, not the moment the lock was written — a
-    pid the OS has since recycled for an unrelated process must not read as still owning
-    this worktree.
-    """
-
-    pid: int
-    started_at: float
+def _current_process_lock(runner: ProcessRunner) -> ProcessLock:
+    """The current process's lock, with an unresolvable identity reported as a worktree error."""
+    try:
+        return current_process_lock(runner)
+    except ProcessIdentityUnresolvable as exc:
+        raise ProcessIdentityUnresolvableError(exc.pid) from exc
 
 
 def _worktree_root() -> Path:
@@ -110,72 +107,6 @@ def _worktree_root() -> Path:
     return Path.home() / ".config" / "squadron" / "worktrees"
 
 
-def _current_process_start_time(runner: ProcessRunner) -> float:
-    """The current process's start time, as epoch seconds.
-
-    No stdlib call returns this portably (Linux has ``/proc``, macOS does not), so this
-    shells out to ``ps -o lstart=``, whose output ``lstart`` format both BSD (macOS) and
-    GNU (Linux) ``ps`` accept. Parsed as local time, matching the host clock the same
-    ``ps`` invocation reads — always same-host, since a lock is only ever read back by a
-    process on the machine that wrote it.
-
-    Unlike ``_process_start_time`` (used for other processes, where "gone" is an expected,
-    handled outcome), the *current* process is always running — a failure to resolve its
-    own start time means ``ps`` itself is broken or missing, which is an environment fault
-    this must surface loudly rather than write a lock that can never match on readback.
-    """
-    pid = os.getpid()
-    start_time = _process_start_time(runner, pid)
-    if start_time is None:
-        raise ProcessIdentityUnresolvableError(pid)
-    return start_time
-
-
-def _process_start_time(runner: ProcessRunner, pid: int) -> float | None:
-    """The start time of *pid*, as epoch seconds, or ``None`` if it is not running."""
-    result = runner.run(
-        ["ps", "-o", "lstart=", "-p", str(pid)],
-        cwd=None,
-        timeout=GIT_QUERY_TIMEOUT_SECONDS,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return None
-    try:
-        return datetime.strptime(result.stdout.strip(), "%a %b %d %H:%M:%S %Y").timestamp()
-    except ValueError:
-        # A ps output format this parser does not recognize is not evidence the process
-        # is dead — treat as "cannot determine", the same as a missing pid, so a live
-        # owner is never mistaken for an orphan due to a parsing gap.
-        _logger.warning("Could not parse 'ps' start-time output for pid %d: %r", pid, result.stdout)
-        return None
-
-
-def _read_lock(lock_path: Path) -> WorktreeLock | None:
-    """Parse *lock_path*, or ``None`` for any of: missing, unreadable, malformed, incomplete.
-
-    Every one of these reasons is a single treat-as-orphan path (see ``sweep_orphans``) —
-    this function never raises.
-    """
-    try:
-        raw = lock_path.read_text()
-    except OSError:
-        return None
-    try:
-        parsed: object = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(parsed, dict):
-        return None
-    data = cast(dict[str, object], parsed)
-    if "pid" not in data or "started_at" not in data:
-        return None
-    raw_pid = data["pid"]
-    raw_started_at = data["started_at"]
-    if not isinstance(raw_pid, int) or not isinstance(raw_started_at, (int, float)):
-        return None
-    return WorktreeLock(pid=raw_pid, started_at=float(raw_started_at))
-
-
 def _claim_path(worktree_path: Path) -> Path:
     """The claim file for *worktree_path*, as a sibling rather than a child.
 
@@ -186,14 +117,14 @@ def _claim_path(worktree_path: Path) -> Path:
     return worktree_path.parent / f"{worktree_path.name}{_CLAIM_SUFFIX}"
 
 
-def _write_claim(path: Path, lock: WorktreeLock) -> None:
+def _write_claim(path: Path, lock: ProcessLock) -> None:
     """Record *lock*'s owner as the creator of *path*, before the worktree exists.
 
-    Same payload as the lock, so ``_read_lock``/``_is_orphan`` interpret both with one
+    Same payload as the lock, so ``read_lock``/``is_orphan`` interpret both with one
     set of rules: a claim whose writer died is swept exactly like a dead lock.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"pid": lock.pid, "started_at": lock.started_at}))
+    path.write_text(lock.to_json())
 
 
 def _unlink_claim(path: Path) -> None:
@@ -202,20 +133,6 @@ def _unlink_claim(path: Path) -> None:
         path.unlink(missing_ok=True)
     except OSError as exc:
         _logger.warning("Failed to remove worktree claim %s: %s", path, exc)
-
-
-def _is_orphan(runner: ProcessRunner, lock: WorktreeLock | None) -> bool:
-    """Whether the owner recorded by *lock* is gone, or a different process entirely."""
-    if lock is None:
-        return True
-    live_start = _process_start_time(runner, lock.pid)
-    if live_start is None:
-        return True
-    # A tight tolerance, not exact equality: `ps` truncates to whole seconds, so a lock
-    # written and re-read within the same second is byte-identical, but any real
-    # cross-process comparison stays well outside a 2-second window unless the pid was
-    # actually recycled.
-    return abs(live_start - lock.started_at) > 2.0
 
 
 def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = None) -> None:
@@ -244,11 +161,11 @@ def sweep_orphans(runner: ProcessRunner, checkout_cwd: str, root: Path | None = 
         # the lock *before* unlinking the claim, so reading in the same order means a
         # live worktree always shows at least one of the two. Lock-first let the
         # handoff fall between the reads, and a live worktree read as an orphan.
-        claim = _read_lock(_claim_path(entry))
-        if claim is not None and not _is_orphan(runner, claim):
+        claim = read_lock(_claim_path(entry))
+        if claim is not None and not is_orphan(runner, claim):
             continue  # live creator, still setting up
-        lock = _read_lock(entry / _LOCK_FILENAME)
-        if lock is not None and not _is_orphan(runner, lock):
+        lock = read_lock(entry / _LOCK_FILENAME)
+        if lock is not None and not is_orphan(runner, lock):
             continue  # live owner, matching pid and start time — leave it alone
 
         reason = "no readable/parseable lock" if lock is None else "owner process is gone"
@@ -363,7 +280,7 @@ class ScratchWorktree:
         # lock write, the directory is real but unlocked, and a concurrent run's sweep
         # would read it as an unclaimed orphan and remove it mid-setup. The claim closes
         # that window from the outside, since `add` will not accept an existing directory.
-        lock = WorktreeLock(pid=os.getpid(), started_at=_current_process_start_time(self._runner))
+        lock = _current_process_lock(self._runner)
         claim_path = _claim_path(path)
         _write_claim(claim_path, lock)
 
@@ -380,9 +297,7 @@ class ScratchWorktree:
 
             # The lock must exist before any submodule work — it is what the sweep uses to
             # tell "worktree exists, still being set up" from "worktree exists, abandoned."
-            (path / _LOCK_FILENAME).write_text(
-                json.dumps({"pid": lock.pid, "started_at": lock.started_at})
-            )
+            (path / _LOCK_FILENAME).write_text(lock.to_json())
         # Unlike the sweep and exit paths, __enter__ may raise: a lock failure is a failed
         # creation, reported as one (929 D4). Must precede the BaseException clause below.
         except MetadataLockError as exc:
