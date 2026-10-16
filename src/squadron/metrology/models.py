@@ -18,6 +18,9 @@ from enum import StrEnum
 from pydantic import BaseModel
 
 from squadron.metrology.levels import ArtifactLevel
+from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
+from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
+from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
 from squadron.review.models import Verdict
 
 #: Record types the store envelope may carry. ``sample`` is written by 320;
@@ -29,29 +32,9 @@ RECORD_TYPE_SAMPLE = "sample"
 RECORD_TYPE_GRADUATED_CONFIG = "graduated_config"
 RECORD_TYPE_AUDIT_FINDING = "audit_finding"
 RECORD_TYPE_AUDIT_NOISE_FLOOR = "audit_noise_floor"
-
-
-class ProjectIdSource(StrEnum):
-    """Where a ``ProjectId``'s canonical value came from.
-
-    ``remote`` — derived from the git remote URL.
-    ``recorded`` — read from ``.squadron.toml`` (``metrology.project_id``).
-    """
-
-    REMOTE = "remote"
-    RECORDED = "recorded"
-
-
-class ProjectId(BaseModel):
-    """A stable, explicit project identity — never a filesystem path.
-
-    ``value`` is the canonical identity string (git-remote-derived or a
-    recorded id). ``source`` marks which it is, so downstream slices can
-    reason about identity provenance.
-    """
-
-    value: str
-    source: ProjectIdSource
+#: Written by 177's producer replay and pairwise judge, behind the same discriminator.
+RECORD_TYPE_PRODUCER_REPLAY = "producer_replay"
+RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
 
 
 class JudgeResultRef(BaseModel):
@@ -292,3 +275,5 @@ class MetrologyRecord(BaseModel):
     graduated_config: GraduatedConfig | None = None
     audit_run: AuditRun | None = None
     audit_noise_floor: AuditNoiseFloor | None = None
+    producer_replay: ProducerReplay | None = None
+    pairwise_judgment: PairwiseJudgment | None = None
