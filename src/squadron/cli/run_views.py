@@ -48,7 +48,7 @@ RESUME_PROBLEM_MARKERS: dict[ResumeProblem, str] = {
     ResumeProblem.REPORT_UNREADABLE: "<report unreadable>",
 }
 
-_STARTED_FORMAT = "%Y-%m-%d %H:%M"
+STARTED_FORMAT = "%Y-%m-%d %H:%M"
 _RESUME_HINTS = (
     "Resume a step:  sq run --resume <run-id>",
     "Resume an item: sq run --resume <run-id> --item N --decision retry",
@@ -228,7 +228,7 @@ _RUN_COLUMNS: tuple[_RunColumn, ...] = (
     _RunColumn(Column("Target", shrinkable=True), lambda s: Text(target_cell(s.params))),
     _RunColumn(Column("Status", shrinkable=False), _status_text),
     _RunColumn(Column("At", shrinkable=True), lambda s: Text(at_cell(s))),
-    _RunColumn(Column("Started", shrinkable=True), lambda s: Text(f"{s.started_at:{_STARTED_FORMAT}}")),
+    _RunColumn(Column("Started", shrinkable=True), lambda s: Text(f"{s.started_at:{STARTED_FORMAT}}")),
     _RunColumn(Column("Activity", shrinkable=True), lambda s: Text(activity_cell(s))),
 )
 

@@ -15,6 +15,7 @@ from rich import get_console
 
 from squadron.cli.stats_effort_views import render_slice_report, render_slices_report
 from squadron.cli.stats_producer_views import render_producers_report
+from squadron.cli.stats_runs_views import render_runs_report
 from squadron.cli.stats_views import (
     render_reviews_report,
     render_run_report,
@@ -33,7 +34,7 @@ from squadron.stats.planning_docs import UnknownSliceError
 from squadron.stats.producer_report import producer_report
 from squadron.stats.producer_units import PHASE_TYPES
 from squadron.stats.reviews_report import reviews_usage_report
-from squadron.stats.usage_report import RunUsageLoadError, run_usage_report
+from squadron.stats.usage_report import RunUsageLoadError, run_usage_report, runs_usage_report
 
 stats_app = typer.Typer(
     name="stats",
@@ -178,3 +179,17 @@ def stats_producers(
         typer.echo(json.dumps(report.to_json_dict(), indent=2))
         return
     render_producers_report(report, get_console())
+
+
+@stats_app.command("runs")
+def stats_runs(
+    slice_index: int | None = typer.Option(None, "--slice", help="Only runs for this slice index."),
+    pipeline: str | None = typer.Option(None, "--pipeline", help="Only runs of this pipeline."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the rows and totals as JSON."),
+) -> None:
+    """One row per run, with totals across every matching run."""
+    report = runs_usage_report(slice_index=slice_index, pipeline=pipeline, state_manager=StateManager())
+    if as_json:
+        typer.echo(json.dumps(report.to_json_dict(), indent=2))
+        return
+    render_runs_report(report, get_console())
