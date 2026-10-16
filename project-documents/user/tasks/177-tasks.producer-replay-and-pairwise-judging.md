@@ -192,22 +192,23 @@ status: not_started
 ### Runner (D4)
 
 - [ ] **Task 19: Read a replay outcome from run state** (effort 3)
-  - [ ] In `replay/runner.py`, a pure `read_outcome(state, sandbox_git, artifact_pattern)` maps run state to the D4 table's `outcome`, `rounds`, `failure_class` and `first_verdict`; acceptance uses `LoopCondition.REVIEW_CONCERNS_OR_BETTER`, not a verdict literal
-  - [ ] Failure classes (`dispatch_error`, `stall`, `no_artifact`, `other`, `no_run_state`) are an enum or constants defined once
-  - [ ] First draft from the sandbox commit that first added the artifact; final text from the working file
-  - [ ] Cost, priced k of m and LLM-action counts from `action_usage_row` / `usage_totals` over every round of the phase and loop steps
-  - [ ] Prompt identity and `task_prompt` (`build_context` stdout) from the run state; effort sent from the producer dispatch's `UsageRecord.effort`
-  - [ ] Commit: `feat: read replay outcomes from run state`
+  - [x] In `replay/runner.py`, a pure `read_outcome(state, sandbox_git, artifact_pattern)` maps run state to the D4 table's `outcome`, `rounds`, `failure_class` and `first_verdict`; acceptance uses `LoopCondition.REVIEW_CONCERNS_OR_BETTER`, not a verdict literal (lives in replay/outcome.py as read_outcome(state) -> OutcomeReading, with no sandbox_git or pattern arguments, because it is pure over run state; failure kinds come from a new failure_kind stamp, commit 5ff784c3, since failures had no structured signal; this task also found and fixed a stats defect, commit bf636819)
+  - [x] Failure classes (`dispatch_error`, `stall`, `no_artifact`, `other`, `no_run_state`) are an enum or constants defined once
+  - [ ] First draft from the sandbox commit that first added the artifact; final text from the working file. Moved to Task 21: it needs git and the sandbox files, and `read_outcome` is pure over run state
+  - [x] Cost, priced k of m and LLM-action counts from `action_usage_row` / `usage_totals` over every round of the phase and loop steps
+  - [x] Prompt identity and `task_prompt` (`build_context` stdout) from the run state; effort sent from the producer dispatch's `UsageRecord.effort`
+  - [x] Commit: `feat: read replay outcomes from run state`
   - **Success:** each D4 table row maps to the right outcome
 
-- [ ] **Task 20: Test outcome reading** (effort 2)
-  - [ ] One test per D4 table row, including paused-at-exhaust-checkpoint → `exhausted` with rounds = cap + 1
-  - [ ] Failed step with a stall error → `stall`; 945 post-condition failure → `no_artifact`
-  - [ ] Cost sums every round; an unpriced model gives `priced` k < m and no $0
-  - [ ] Commit: `test: cover replay outcome reading`
+- [x] **Task 20: Test outcome reading** (effort 2)
+  - [x] One test per D4 table row, including paused-at-exhaust-checkpoint → `exhausted` with rounds = cap + 1
+  - [x] Failed step with a stall error → `stall`; 945 post-condition failure → `no_artifact`
+  - [x] Cost sums every round; an unpriced model gives `priced` k < m and no $0
+  - [x] Commit: `test: cover replay outcome reading`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 21: `run_replay_set`** (effort 3)
+  - [ ] Read the drafts (moved from Task 19): the first draft is the artifact's text at the sandbox commit that first added it, via `resolve_start_point(phase, index, <GitHistory of the sandbox>)`; the final text is the same file(s) in the sandbox working tree, split task files concatenated in numeric suffix order. Missing → `None`, never an empty string
   - [ ] Compute `replay_set` per D9; choose a run id per config
   - [ ] Sweep orphans, then build the plan (start commit, configs, reviewer, cap, LLM-call bound = configs × 2 × (1 + cap), per design D4); the caller confirms it before any sandbox is created
   - [ ] Per config, in order: `ReplaySandbox`; invoke `sq run P4|P5 <index> -m <alias> -p review-model=<reviewer> -p max-revisions=<n> --run-id <id>` with `cwd` = sandbox via the injected `SqRunInvoker`, using `sys.argv[0]` resolved; time it; `read_outcome`; write the record; then leave the sandbox
