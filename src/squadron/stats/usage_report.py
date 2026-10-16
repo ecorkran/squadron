@@ -26,6 +26,7 @@ from squadron.pipeline.state import (
 )
 from squadron.pipeline.steps import StepTypeName
 from squadron.providers.base import USAGE_KEY
+from squadron.stats.json_support import to_json_dict
 
 _logger = logging.getLogger(__name__)
 
@@ -193,3 +194,75 @@ def action_usage_row(run_id: str, step: str, action: Mapping[str, object]) -> Ac
         _logger.warning("run %s step %s: unreadable usage record: %s", run_id, step, exc)
         return ActionUsageRow(step=step, action_type=action_type, record=None, unreadable=True)
     return ActionUsageRow(step=step, action_type=action_type, record=record)
+
+
+@dataclass(frozen=True)
+class RunTotalsRow:
+    """One run in the cross-run report: its identity and its read-time totals."""
+
+    run_id: str
+    pipeline: str
+    slice: str | None
+    status: str
+    started_at: datetime
+    llm_actions: int  # step actions that run an LLM call, every loop round included
+    recorded: int  # of those, the ones with a usage record
+    totals: UsageTotals
+    partial_loop: bool  # earlier loop rounds are not recorded (D3)
+
+
+@dataclass(frozen=True)
+class RunsUsageReport:
+    """Every readable run matching the filters, newest first, with one total (175 D9)."""
+
+    slice_index: int | None
+    pipeline: str | None
+    rows: tuple[RunTotalsRow, ...]
+    totals: UsageTotals
+    llm_actions: int
+    unreadable_runs: int
+
+    def to_json_dict(self) -> dict[str, object]:
+        return to_json_dict(self)
+
+
+def runs_usage_report(
+    *, slice_index: int | None, pipeline: str | None, state_manager: StateManager
+) -> RunsUsageReport:
+    """Totals across runs, filtered by slice (``params["slice"]``) and pipeline name."""
+    scan = state_manager.scan_runs()
+    matching = [
+        state
+        for state in scan.states
+        if (slice_index is None or str(state.params.get("slice")) == str(slice_index))
+        and (pipeline is None or state.pipeline == pipeline)
+    ]
+    matching.sort(key=lambda state: state.started_at, reverse=True)
+    rows: list[RunTotalsRow] = []
+    records: list[UsageRecord] = []
+    for state in matching:
+        run_rows = report_rows(state)
+        run_records = [row.record for row in run_rows if row.record is not None]
+        records.extend(run_records)
+        slice_param = state.params.get("slice")
+        rows.append(
+            RunTotalsRow(
+                run_id=state.run_id,
+                pipeline=state.pipeline,
+                slice=None if slice_param is None else str(slice_param),
+                status=state.status,
+                started_at=state.started_at,
+                llm_actions=sum(row.action_type in LLM_ACTION_TYPES for row in run_rows),
+                recorded=len(run_records),
+                totals=usage_totals(run_records),
+                partial_loop=is_partial_loop(state),
+            )
+        )
+    return RunsUsageReport(
+        slice_index=slice_index,
+        pipeline=pipeline,
+        rows=tuple(rows),
+        totals=usage_totals(records),
+        llm_actions=sum(row.llm_actions for row in rows),
+        unreadable_runs=len(scan.unreadable),
+    )
