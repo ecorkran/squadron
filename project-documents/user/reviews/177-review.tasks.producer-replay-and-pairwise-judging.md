@@ -6,7 +6,7 @@ slice: producer-replay-and-pairwise-judging
 conventionsSource: AGENTS.md
 projectRules: []
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md
 aiModel: xiaomi/mimo-v2.6-pro
@@ -14,80 +14,81 @@ aiProfile: openrouter
 status: complete
 dateCreated: 20261016
 dateUpdated: 20261016
-reviewedSha: e156acb71031b722116db5b6a89d21605d12c0fb
+reviewedSha: 61cf3a3f7bfc7f4ed34ac7d68d5374e3fa5d7f6a
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
+toolCallsMade: 6
 turns: 4
-promptTokens: 91145
-cachedTokens: 59136
-completionTokens: 10286
-reasoningTokens: 8772
-durationSeconds: 230.2
-costUsd: 0.023109
+promptTokens: 97542
+cachedTokens: 69376
+completionTokens: 13908
+reasoningTokens: 11920
+durationSeconds: 284.5
+costUsd: 0.02463
 costBasis: alias_pricing
 runId: run-20261016-p5-45d152bc
 squadronVersion: 0.22.0
 findings:
   - id: F001
     severity: pass
-    category: coverage
-    summary: "Functional and integration criteria fully traced"
+    category: traceability
+    summary: "All success criteria trace to tasks; no gaps and no scope creep"
     location: "project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md"
   - id: F002
-    severity: concern
+    severity: pass
     category: test-coverage
-    summary: "D10 row \"slice does not resolve at the start point\" has no named test"
-    location: "project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md:221"
+    summary: "Every D10 failure row has a named test"
+    location: "project-documents/user/slices/177-slice.producer-replay-and-pairwise-judging.md:303-323"
   - id: F003
-    severity: concern
-    category: test-coverage
-    summary: "Task 37's real-reply capture is weaker than the design's parser-testing requirement"
-    location: "project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md:336"
+    severity: note
+    category: test-structure
+    summary: "Minor test-with pattern deviations"
+    location: "project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md:94-121"
   - id: F004
     severity: note
-    category: process
-    summary: "Minor test-with pattern deviations"
-    location: "project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md:94"
+    category: commit-hygiene
+    summary: "Task 37 commit subject does not cover walkthrough defect fixes"
+    location: "project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md:334-340"
 ---
 
 # Review: tasks — slice 177
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** xiaomi/mimo-v2.6-pro
 
 ## Findings
 
-### [PASS] Functional and integration criteria fully traced
+### [PASS] All success criteria trace to tasks; no gaps and no scope creep
 
-Cross-reference of the slice design's Success Criteria against the tasks: FR1 (one `producer_replay` record per config with outcome/rounds/cost/wall time/prompt identity/both texts, single-commit sandbox) → Tasks 15–16, 19–24; FR2 (no leftover dirs or `replay-*` cf projects) → Tasks 15–16; FR3 (failed config recorded, set continues) → Tasks 21–22; FR4 (two calls per pair, one record, second invocation makes none) → Tasks 28–29; FR5 (D7 table, `below floor`, `original` row, position consistency, prompt identities, `--json`) → Tasks 34–36; FR6 (dispatch `metadata["prompt"]`, `build_context` versions, stats footer) → Tasks 2–7. Integration requirements are covered by Task 4 ("No run state schema version bump"), Task 8 ("`_SCHEMA_VERSION` stays 1") and Task 11 (old fixture loads unchanged). The D2 spike (Task 1) gates the rest per the design's mitigation, config keys and CLI-only config reads match the design and the Context Summary, and the excluded items are correctly absent (only the design-requested follow-on issues in Task 39). Sequencing is sound — no circular dependencies, and each consumer task (e.g. Task 21 needs Tasks 10/12/15/17/19) comes after its prerequisites.
+Cross-referencing every success criterion in the slice design (177-slice, lines 387–408) against the 39 tasks leaves no unmet requirement and no unmotivated task. The only tasks that do not trace directly to a success criterion — Task 9 (extract `_iter_records`) and Task 14 (extract the process lock) — trace to explicit design content: D3 requires the lock/liveness helpers to be extracted rather than copied, and the D9 list pattern plus the task file's fixed implementation choices cover the store-loop extraction. Both are self-testing refactor tasks with unchanged-behavior success criteria, keeping them lightweight.
 
-### [CONCERN] D10 row "slice does not resolve at the start point" has no named test
+### [PASS] Every D10 failure row has a named test
 
-The slice design's technical requirement (slice design line 402) states "Every D10 row has a named test," and the D10 table includes the row "Slice does not resolve at the start point (D2) → nothing run, error naming slice and start sha, exit 1." Task 21 implements this behavior (task file line 209: fail before any dispatch with the D10 error), but Task 22's explicit named-test enumeration (line 221) lists only four runner rows — no run file, sandbox setup failure, store write failure, cleanup failure — and omits this one. Task 24's CLI tests cover missing options, non-interactive exit, and exit codes for recorded/skipped/stopped sets, not this row either. A junior AI implementing Task 22 as written would never write the test the criterion demands. Add a named test to Task 22 (or Task 24) asserting that when slice resolution fails at the start point, no invoker call occurs and the error names the slice and start sha.
-
-### [CONCERN] Task 37's real-reply capture is weaker than the design's parser-testing requirement
-
-The slice design requires (line 399): "The verdict parser is tested with real judge replies captured during verification: plain, markdown-bold, lowercase, trailing whitespace, and a reply with no verdict." Task 37 requires "at least four real judge replies (including **any** with emphasis, lowercase or no verdict)" — the edge variants are opportunistic ("any"), trailing whitespace is not mentioned at all, and nothing forces a real no-verdict fixture. Task 27 (line 257) deliberately covers these cases only synthetically and defers real fixtures to Task 37. If verification never naturally produces an emphasis-laden, trailing-whitespace, or no-verdict reply — likely, since the judge prompt asks for a strict final line — the real-reply half of the requirement is silently unmet, and per project rules a parser whose production-format fixtures are missing is exactly the false-confidence risk. Tighten Task 37 to require one captured fixture per variant the walkthrough observes and an explicit "not observed" record (with a synthetic or deliberately provoked capture) for any variant it does not.
+The technical requirement "Every D10 row has a named test" is satisfied: no-adding-commit and root-commit (Task 13), slice-not-resolving at the start point (Task 22, asserting no invoker call and the error text), `.gitmodules` (Task 16), non-interactive without `--yes` (Tasks 24 and 31), fetch/`cf init` failure (Tasks 16 and 22), stall failure class (Task 20) with Ctrl-C cleanup (Task 16), no run file (Task 22), store-write failure with kept sandbox (Task 22), cleanup failure (Tasks 16 and 22), judge dispatch raise (Task 29) with exit-1 summary (Task 31), timeout (Task 29), second-call failure with WARNING (Task 29), no-verdict INVALID (Task 29), unreadable record file (Task 11), BT iteration cap (Task 33), and empty report (Tasks 35–36). The BT-cap footer note is only asserted generically via "the footer" in Task 36's inline test, which is acceptable since the D10 row's named test lives in Task 33.
 
 ### [NOTE] Minor test-with pattern deviations
 
-Task 8's tests arrive in Task 11, two tasks later (after the Task 9 refactor and Task 10 store methods) — defensible, since round-trip tests need the store, but it is a deviation from "test task immediately follows its implementation task." Tasks 25 and 36 inline their tests in the implementation task rather than having a paired test task. All are small enough that no restructuring is required; noting for consistency only.
+Three small deviations from "test task immediately follows its implementation task": (1) Task 8's payload models are not exercised until Task 11, with the Task 9 refactor and Task 10 store methods committed in between — acceptable since Task 11's round-trip tests cover both Task 8 and Task 10 as one record-type unit, and Task 9 is proven by existing tests passing unchanged; (2) Task 25 embeds its test as a step with a single `feat:` commit (line 244); (3) Task 36 bundles command, views and tests under one `feat:` commit (lines 328–329). The inline tests in Tasks 25 and 36 are proportionate for effort-1/2 tasks and splitting them would create over-granular task pairs, so no action is required beyond awareness.
+
+### [NOTE] Task 37 commit subject does not cover walkthrough defect fixes
+
+Task 37 runs the seven-step verification walkthrough with real dispatches and includes "Any defect found: fix it, add a test, then continue," but its only named commit is `test: add captured judge replies to verdict parser tests`. If the walkthrough surfaces defects, their fixes would land in a commit whose subject misdescribes the change (and would likely warrant a `fix:` commit of their own). A one-line note that defect fixes get their own semantic commit would keep the log honest.
 
 ### Run Digest
 
-- Response length: 4880 chars
+- Response length: 5698 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 6
 - Tool calls failed: 0
 - Stop reason: stop
 - Output budget: 131072 tokens
 - System prompt: custom
 - Settings sources: n/a (non-SDK)
-- Reasoning characters: 33820
+- Reasoning characters: 45941
 - Effort: backend default
 - Turns: 4
-- Tokens — prompt / cached / cache write / completion / reasoning: 91145 / 59136 / not computed / 10286 / 8772
-- Duration: 230.2 s
+- Tokens — prompt / cached / cache write / completion / reasoning: 97542 / 69376 / not computed / 13908 / 11920
+- Duration: 284.5 s
 - Cost: $0.02 (alias_pricing)
 - `## Summary` located: yes
 - `## Findings` located: yes
