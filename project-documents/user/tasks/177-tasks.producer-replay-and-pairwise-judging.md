@@ -175,18 +175,18 @@ status: not_started
 
 ### Hidden `--run-id` (D4)
 
-- [ ] **Task 17: Fresh run under a chosen id** (effort 2)
-  - [ ] `StateManager.init_run` (`pipeline/state.py:332`) raises `FileExistsError` when a file for the given `run_id` exists
-  - [ ] `_run_pipeline` (`cli/commands/run.py:263`) gains `new_run_id`, passed to `init_run` on the fresh-run path; both `new_run_id` and `run_id` → `ValueError`
-  - [ ] Add hidden `--run-id` to `sq run`; combining it with `--resume` is a usage error
-  - [ ] Commit: `feat: add hidden --run-id to sq run`
+- [x] **Task 17: Fresh run under a chosen id** (effort 2)
+  - [x] `StateManager.init_run` (`pipeline/state.py:332`) raises `FileExistsError` when a file for the given `run_id` exists
+  - [x] `_run_pipeline` (`cli/commands/run.py:263`) gains `new_run_id`, passed to `init_run` on the fresh-run path; both `new_run_id` and `run_id` → `ValueError`
+  - [x] Add hidden `--run-id` to `sq run`; combining it with `--resume` is a usage error (the Typer parameter is named new_run_id and the flag is --run-id; a FileExistsError from a taken id exits 1 with the message)
+  - [x] Commit: `feat: add hidden --run-id to sq run`
   - **Success:** `sq run ... --run-id X` writes run state `X`; a second use of `X` fails
 
-- [ ] **Task 18: Test `--run-id`** (effort 1)
-  - [ ] `init_run` with an existing id → `FileExistsError`; without an id → unchanged
-  - [ ] `_run_pipeline` with `new_run_id` creates that file; with both ids → `ValueError`
-  - [ ] CLI: `--run-id` with `--resume` → non-zero exit; `--run-id` absent from `--help`
-  - [ ] Commit: `test: cover sq run --run-id`
+- [x] **Task 18: Test `--run-id`** (effort 1)
+  - [x] `init_run` with an existing id → `FileExistsError`; without an id → unchanged
+  - [x] `_run_pipeline` with `new_run_id` creates that file; with both ids → `ValueError`
+  - [x] CLI: `--run-id` with `--resume` → non-zero exit; `--run-id` absent from `--help`
+  - [x] Commit: `test: cover sq run --run-id`
   - **Success:** tests pass, zero pyright errors
 
 ### Runner (D4)
