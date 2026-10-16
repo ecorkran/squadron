@@ -267,3 +267,24 @@ def test_the_phase_filter_reaches_the_store(phase: ReplayPhase) -> None:
     )
 
     assert len(report.tables) == (1 if phase is ReplayPhase.DESIGN else 0)
+
+
+def test_a_row_whose_opponents_all_lack_a_strength_says_why() -> None:
+    """Opus beats haiku and loses to the original: haiku never won and the original never lost,
+    so both drop out of the fit and leave opus with nobody to be compared with."""
+    replays = [
+        ("r1", _r(1, "s", 176, {"alias": "opus", "model": _OPUS_MODEL})),
+        ("r2", _r(2, "s", 176, {"alias": "haiku", "model": "claude-haiku-5-5"})),
+    ]
+    judgments = [
+        make_judgment(judge=_JUDGE, replay_set="s", a="r1", b="r2", outcome=PairOutcome.A),
+        make_judgment(judge=_JUDGE, replay_set="s", a="r1", b=_ORIGINAL, outcome=PairOutcome.B),
+    ]
+
+    (table,) = _build(replays=replays, judgments=judgments).tables
+
+    rows = {r.label.split(" ")[0]: r for r in table.rows}
+    assert "no wins" in (rows["haiku"].strength_reason or "")
+    assert "never lost" in (rows["original"].strength_reason or "")
+    assert rows["opus"].strength is None
+    assert "no finite strength" in (rows["opus"].strength_reason or "")

@@ -26,10 +26,14 @@ from squadron.metrology.replay_models import (
     ReplayOutcome,
     ReplayPhase,
 )
-from squadron.replay.bradley_terry import BTFit, Comparison, fit
+from squadron.replay.bradley_terry import BTFit, Comparison, Strength, fit
 from squadron.replay.report_models import ORIGINAL_LABEL, ConfigRow, ReplayReport, ReplayTable
 
 _logger = logging.getLogger(__name__)
+
+NO_FIT_OPPONENTS = (
+    "every opponent it met has no finite strength, so there is nothing to compare it with"
+)
 
 _Replays = Sequence[tuple[str, ProducerReplay]]
 
@@ -269,7 +273,7 @@ def _judged(label: str, tally: _Tally, result: BTFit, min_n: int) -> _Judged:
     strength = result.strengths.get(label)
     return _Judged(
         strength=None if strength is None else strength.value,
-        strength_reason=None if strength is None else strength.reason,
+        strength_reason=_strength_reason(strength, tally),
         wins=tally.wins,
         losses=tally.losses,
         ties=tally.ties,
@@ -278,6 +282,15 @@ def _judged(label: str, tally: _Tally, result: BTFit, min_n: int) -> _Judged:
         inconsistent=tally.inconsistent,
         below_floor=tally.pairs - tally.invalid < min_n,
     )
+
+
+def _strength_reason(strength: Strength | None, tally: _Tally) -> str | None:
+    """Why a row has no strength: the fit's own reason, or that every opponent had none."""
+    if strength is not None:
+        return strength.reason
+    if tally.pairs - tally.invalid > 0:
+        return NO_FIT_OPPONENTS
+    return None
 
 
 def _with_rank(row: ConfigRow, rank: int | None) -> ConfigRow:
