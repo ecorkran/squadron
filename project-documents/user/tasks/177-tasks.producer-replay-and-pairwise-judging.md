@@ -44,7 +44,7 @@ status: not_started
   - [ ] Clean up: `cf project rm replay-spike`, delete the directory (cf project removed; /tmp/replay-spike directory deletion left to PM)
   - [x] If the slice did not resolve: STOP and return the evidence to the Project Manager. Do not start Task 2.
   - [ ] Commit (task file only): `docs: record slice 177 start-point resolution spike`
-  - **Result:** start sha `bca771926e89d9ac7c753d9c88a84aa4b1f83ac7` (first parent of `ef04988`, the commit that first added the 176 design). `sq run P4 176 -m haiku -p review-model=haiku -p max-revisions=1` **resolved the slice and completed** (design-0 PASS, loop-1, summary-2) once two sandbox settings were in place. The 176 plan entry exists at the start point, so cf resolves `176` from the plan and the missing design file does not matter. Two failures on the bare sandbox, each fixed by one setting:
+  - **Result:** start sha `bca771926e89d9ac7c753d9c88a84aa4b1f83ac7` (first parent of `f3d652e0`, the commit that first added the 176 design). `sq run P4 176 -m haiku -p review-model=haiku -p max-revisions=1` **resolved the slice and completed** (design-0 PASS, loop-1, summary-2) once two sandbox settings were in place. The 176 plan entry exists at the start point, so cf resolves `176` from the plan and the missing design file does not matter. Two failures on the bare sandbox, each fixed by one setting:
     1. `cf set slice 176: No file matching index '176' for field 'fileSlice'. No slice plan is set.` — a fresh `cf init --lite` project has no slice plan. Fix: `cf set arch 140` (the initiative index) before the run.
     2. `planning commit for slice 176 on replay/spike; expected main` — the git-environment guard compares the branch to `git.integration_branch`. Fix: `cf config set git.integration_branch replay/<id>` in the sandbox.
   - **Resolving step:** the `set_slice` cf operation (`cf set slice <index>`). Dispatch-free pre-check for Task 21, run in the sandbox after `cf set arch <initiative>`: `cf set slice <index>`; exit 0 and a `Updated slice =` line mean resolved. Neither setting is in the slice design (D3/D4); Task 15 adds both to the sandbox setup. The initiative index comes from the slice plan file name (`<initiative>-slices.*`) at the start point.
@@ -127,21 +127,21 @@ status: not_started
 
 ### Start point (D2)
 
-- [ ] **Task 12: `resolve_start_point`** (effort 2)
-  - [ ] Create `replay/start_point.py` with `StartPoint` and `resolve_start_point(phase, index, history)` per the API contract; the D2 path patterns are defined once, keyed by `ReplayPhase`
-  - [ ] Original first draft from `GitHistory.show` at the adding commit; split task files per the Context Summary rule
-  - [ ] `slice_name` from the original file name
-  - [ ] Errors per D10 rows 1–2 (`StartPointError` subclasses carrying the pattern or sha)
-  - [ ] Commit: `feat: resolve replay start points from git history`
+- [x] **Task 12: `resolve_start_point`** (effort 2)
+  - [x] Create `replay/start_point.py` with `StartPoint` and `resolve_start_point(phase, index, history)` per the API contract; the D2 path patterns are defined once, keyed by `ReplayPhase` (the adding commit is the earliest one adding a matching file directly in the artifact directory, found by scanning commits_touching oldest-first rather than GitHistory.first_added, so an archive/ copy can never be chosen)
+  - [x] Original first draft from `GitHistory.show` at the adding commit; split task files per the Context Summary rule
+  - [x] `slice_name` from the original file name
+  - [x] Errors per D10 rows 1–2 (`StartPointError` subclasses carrying the pattern or sha)
+  - [x] Commit: `feat: resolve replay start points from git history`
   - **Success:** returns the adding commit, its first parent and the first-draft text
 
-- [ ] **Task 13: Test start-point resolution** (effort 2)
-  - [ ] Fixture repo (in `tmp_path`): adding commit found, first parent returned, first draft is the content at the adding commit even after later edits
-  - [ ] A later file under `user/slices/archive/` with the same index is not matched
-  - [ ] Split task files `-1` and `-2` → concatenated draft, suffix-free slice name
-  - [ ] No adding commit → error naming the pattern; root commit → error
-  - [ ] Real history: slice 176 design resolves to the start sha recorded in Task 1
-  - [ ] Commit: `test: cover replay start-point resolution`
+- [x] **Task 13: Test start-point resolution** (effort 2)
+  - [x] Fixture repo (in `tmp_path`): adding commit found, first parent returned, first draft is the content at the adding commit even after later edits
+  - [x] A later file under `user/slices/archive/` with the same index is not matched
+  - [x] Split task files `-1` and `-2` → concatenated draft, suffix-free slice name
+  - [x] No adding commit → error naming the pattern; root commit → error
+  - [x] Real history: slice 176 design resolves to the start sha recorded in Task 1
+  - [x] Commit: `test: cover replay start-point resolution`
   - **Success:** tests pass, zero pyright errors
 
 ### Sandbox (D3)
