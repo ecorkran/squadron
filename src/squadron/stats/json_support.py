@@ -13,11 +13,15 @@ from enum import Enum
 from pathlib import Path
 from typing import cast
 
+from pydantic import BaseModel
+
 
 def to_json_value(value: object) -> object:
     """Dataclasses become dicts of their fields; times, enums and paths become plain values."""
     if is_dataclass(value) and not isinstance(value, type):
         return {f.name: to_json_value(getattr(value, f.name)) for f in fields(value)}
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json")
     if isinstance(value, Enum):
         return value.value
     if isinstance(value, datetime):
