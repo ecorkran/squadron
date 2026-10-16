@@ -191,10 +191,10 @@ status: not_started
 
 ### Runner (D4)
 
-- [ ] **Task 19: Read a replay outcome from run state** (effort 3)
+- [x] **Task 19: Read a replay outcome from run state** (effort 3)
   - [x] In `replay/runner.py`, a pure `read_outcome(state, sandbox_git, artifact_pattern)` maps run state to the D4 table's `outcome`, `rounds`, `failure_class` and `first_verdict`; acceptance uses `LoopCondition.REVIEW_CONCERNS_OR_BETTER`, not a verdict literal (lives in replay/outcome.py as read_outcome(state) -> OutcomeReading, with no sandbox_git or pattern arguments, because it is pure over run state; failure kinds come from a new failure_kind stamp, commit 5ff784c3, since failures had no structured signal; this task also found and fixed a stats defect, commit bf636819)
   - [x] Failure classes (`dispatch_error`, `stall`, `no_artifact`, `other`, `no_run_state`) are an enum or constants defined once
-  - [ ] First draft from the sandbox commit that first added the artifact; final text from the working file. Moved to Task 21: it needs git and the sandbox files, and `read_outcome` is pure over run state
+  - [x] First draft from the sandbox commit that first added the artifact; final text from the working file. Moved to Task 21: it needs git and the sandbox files, and `read_outcome` is pure over run state (done in Task 21 as replay/drafts.py read_drafts, tested in tests/replay/test_drafts.py)
   - [x] Cost, priced k of m and LLM-action counts from `action_usage_row` / `usage_totals` over every round of the phase and loop steps
   - [x] Prompt identity and `task_prompt` (`build_context` stdout) from the run state; effort sent from the producer dispatch's `UsageRecord.effort`
   - [x] Commit: `feat: read replay outcomes from run state`
@@ -207,27 +207,27 @@ status: not_started
   - [x] Commit: `test: cover replay outcome reading`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 21: `run_replay_set`** (effort 3)
-  - [ ] Read the drafts (moved from Task 19): the first draft is the artifact's text at the sandbox commit that first added it, via `resolve_start_point(phase, index, <GitHistory of the sandbox>)`; the final text is the same file(s) in the sandbox working tree, split task files concatenated in numeric suffix order. Missing → `None`, never an empty string
-  - [ ] Compute `replay_set` per D9; choose a run id per config
-  - [ ] Sweep orphans, then build the plan (start commit, configs, reviewer, cap, LLM-call bound = configs × 2 × (1 + cap), per design D4); the caller confirms it before any sandbox is created
-  - [ ] Per config, in order: `ReplaySandbox`; invoke `sq run P4|P5 <index> -m <alias> -p review-model=<reviewer> -p max-revisions=<n> --run-id <id>` with `cwd` = sandbox via the injected `SqRunInvoker`, using `sys.argv[0]` resolved; time it; `read_outcome`; write the record; then leave the sandbox
-  - [ ] Phase-to-pipeline mapping (`DESIGN`→`P4`, `TASKS`→`P5`) defined once
-  - [ ] Before the first config's `sq run`, run the resolution check recorded in Task 1 inside the first sandbox; the slice does not resolve → fail before any dispatch with the D10 error naming slice and start sha (D2); the runner never edits the plan
-  - [ ] No run file → `failed` / `no_run_state` record with exit code and stderr tail, WARNING
-  - [ ] Sandbox setup failure → ERROR with stderr, config skipped, set continues, reported in the summary
-  - [ ] Store write failure → stop the set, `keep()` the sandbox, error naming its path
-  - [ ] Return a summary: records written, configs skipped
-  - [ ] Commit: `feat: run producer replay sets`
+- [x] **Task 21: `run_replay_set`** (effort 3)
+  - [x] Read the drafts (moved from Task 19): the first draft is the artifact's text at the sandbox commit that first added it, via `resolve_start_point(phase, index, <GitHistory of the sandbox>)`; the final text is the same file(s) in the sandbox working tree, split task files concatenated in numeric suffix order. Missing → `None`, never an empty string (run_replay_set takes the request, the StartPoint and ReplayDeps, plus confirm and new_replay_id callables; build_plan is separate)
+  - [x] Compute `replay_set` per D9; choose a run id per config
+  - [x] Sweep orphans, then build the plan (start commit, configs, reviewer, cap, LLM-call bound = configs × 2 × (1 + cap), per design D4); the caller confirms it before any sandbox is created
+  - [x] Per config, in order: `ReplaySandbox`; invoke `sq run P4|P5 <index> -m <alias> -p review-model=<reviewer> -p max-revisions=<n> --run-id <id>` with `cwd` = sandbox via the injected `SqRunInvoker`, using `sys.argv[0]` resolved; time it; `read_outcome`; write the record; then leave the sandbox (the `sq` executable is an injected ReplayDeps.sq_executable; the Task 23 command passes the resolved sys.argv[0])
+  - [x] Phase-to-pipeline mapping (`DESIGN`→`P4`, `TASKS`→`P5`) defined once
+  - [x] Before the first config's `sq run`, run the resolution check recorded in Task 1 inside the first sandbox; the slice does not resolve → fail before any dispatch with the D10 error naming slice and start sha (D2); the runner never edits the plan
+  - [x] No run file → `failed` / `no_run_state` record with exit code and stderr tail, WARNING
+  - [x] Sandbox setup failure → ERROR with stderr, config skipped, set continues, reported in the summary
+  - [x] Store write failure → stop the set, `keep()` the sandbox, error naming its path
+  - [x] Return a summary: records written, configs skipped
+  - [x] Commit: `feat: run producer replay sets`
   - **Success:** one record per config that ran; failures follow D10
 
-- [ ] **Task 22: Test the runner** (effort 3)
-  - [ ] Fakes for sandbox, invoker and store; no git, cf or model
-  - [ ] Two configs → two records in order, argv as specified, `cwd` = each sandbox
-  - [ ] First config fails → `failed` record, second still runs
-  - [ ] Each D10 runner row has a named test: slice does not resolve at the start point (no invoker call, error names slice and start sha), no run file, sandbox setup failure, store write failure (sandbox kept, path in error), cleanup failure (set continues)
-  - [ ] LLM-call bound in the plan equals configs × 2 × (1 + cap)
-  - [ ] Commit: `test: cover replay runner`
+- [x] **Task 22: Test the runner** (effort 3)
+  - [x] Fakes for sandbox, invoker and store; no git, cf or model
+  - [x] Two configs → two records in order, argv as specified, `cwd` = each sandbox
+  - [x] First config fails → `failed` record, second still runs
+  - [x] Each D10 runner row has a named test: slice does not resolve at the start point (no invoker call, error names slice and start sha), no run file, sandbox setup failure, store write failure (sandbox kept, path in error), cleanup failure (set continues)
+  - [x] LLM-call bound in the plan equals configs × 2 × (1 + cap)
+  - [x] Commit: `test: cover replay runner`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 23: `sq replay run` command** (effort 2)
