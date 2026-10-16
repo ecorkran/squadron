@@ -342,3 +342,24 @@ class TestListWorktrees:
         with patch("subprocess.run", return_value=_mock_completed(json.dumps(data))):
             with pytest.raises(ContextForgeError, match="no 'worktreePath'"):
                 ContextForgeClient().list_worktrees()
+
+
+class TestCfVersion:
+    def test_reads_cf_version_once_per_client(self) -> None:
+        client = ContextForgeClient()
+        with patch("subprocess.run", return_value=_mock_completed("0.19.13\n")) as run:
+            assert client.cf_version() == "0.19.13"
+            assert client.cf_version() == "0.19.13"
+        run.assert_called_once()
+        assert run.call_args.args[0] == ["cf", "--version"]
+
+    def test_empty_output_is_an_error(self) -> None:
+        with patch("subprocess.run", return_value=_mock_completed("\n")):
+            with pytest.raises(ContextForgeError, match="empty output"):
+                ContextForgeClient().cf_version()
+
+    def test_failed_read_is_an_error_not_none(self) -> None:
+        err = subprocess.CalledProcessError(1, ["cf"], stderr="boom")
+        with patch("subprocess.run", side_effect=err):
+            with pytest.raises(ContextForgeError, match="boom"):
+                ContextForgeClient().cf_version()

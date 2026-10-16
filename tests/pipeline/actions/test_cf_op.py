@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
-from squadron.integrations.context_forge import ContextForgeError
+from squadron.integrations.context_forge import GUIDE_VERSION_FILE, ContextForgeError
 from squadron.pipeline.actions.cf_op import CfOpAction, CfOperation
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.models import ActionContext, ActionResult
@@ -212,3 +213,47 @@ async def test_execute_set_arch_passes_the_index_to_cf(action: CfOpAction) -> No
 
     assert result.success is True
     cf_client._run.assert_called_once_with(["set", "arch", "200"])
+
+
+def _build_context_ctx(mock_context: ActionContext, cwd: Path) -> ActionContext:
+    mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
+    mock_context.cwd = str(cwd)
+    mock_context.cf_client._run_json = MagicMock(return_value={"context": "ctx"})  # type: ignore[union-attr]
+    mock_context.cf_client.cf_version = MagicMock(return_value="0.19.13")  # type: ignore[union-attr]
+    return mock_context
+
+
+@pytest.mark.asyncio
+async def test_build_context_outputs_versions_with_guide_file(
+    action: CfOpAction, mock_context: ActionContext, tmp_path: Path
+) -> None:
+    version_file = tmp_path / GUIDE_VERSION_FILE
+    version_file.parent.mkdir(parents=True)
+    version_file.write_text("v0.21.1\n", encoding="utf-8")
+
+    result = await action.execute(_build_context_ctx(mock_context, tmp_path))
+
+    assert result.outputs["cf_version"] == "0.19.13"
+    assert result.outputs["guide_version"] == "v0.21.1"
+
+
+@pytest.mark.asyncio
+async def test_build_context_guide_version_none_when_file_absent(
+    action: CfOpAction, mock_context: ActionContext, tmp_path: Path
+) -> None:
+    result = await action.execute(_build_context_ctx(mock_context, tmp_path))
+
+    assert result.outputs["guide_version"] is None
+
+
+@pytest.mark.asyncio
+async def test_other_operations_carry_no_version_keys(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    mock_context.params = {"operation": CfOperation.SUMMARIZE}
+    mock_context.cf_client._run = MagicMock(return_value="s")  # type: ignore[union-attr]
+
+    result = await action.execute(mock_context)
+
+    assert "cf_version" not in result.outputs
+    assert "guide_version" not in result.outputs

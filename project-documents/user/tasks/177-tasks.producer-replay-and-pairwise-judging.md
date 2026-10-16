@@ -52,17 +52,17 @@ status: not_started
 
 ### Prompt identity (D8)
 
-- [ ] **Task 2: `cf_version` and `guide_version` in `build_context` outputs** (effort 2)
-  - [ ] The cf client reads `cf --version` once per client instance and caches it; a failed read is an error, not `None`
-  - [ ] In `pipeline/actions/cf_op.py`, the `build_context` operation adds `cf_version` and `guide_version` to its outputs; `guide_version` is the stripped content of `<cwd>/project-documents/ai-project-guide/.context-forge-guide-version`, or `None` when absent
-  - [ ] Define the guide-version relative path once, as a constant
-  - [ ] Commit: `feat: record cf and guide versions on build_context`
+- [x] **Task 2: `cf_version` and `guide_version` in `build_context` outputs** (effort 2)
+  - [x] The cf client reads `cf --version` once per client instance and caches it; a failed read is an error, not `None`
+  - [x] In `pipeline/actions/cf_op.py`, the `build_context` operation adds `cf_version` and `guide_version` to its outputs; `guide_version` is the stripped content of `<cwd>/project-documents/ai-project-guide/.context-forge-guide-version`, or `None` when absent
+  - [x] Define the guide-version relative path once, as a constant
+  - [x] Commit: `feat: record cf and guide versions on build_context`
   - **Success:** a `build_context` action's outputs carry both keys; other cf operations are unchanged
 
-- [ ] **Task 3: Test `build_context` version keys** (effort 1)
-  - [ ] Version file present → its stripped content; absent → `None`
-  - [ ] `cf --version` runs once across two `build_context` calls on one client
-  - [ ] Commit: `test: cover build_context version keys`
+- [x] **Task 3: Test `build_context` version keys** (effort 1)
+  - [x] Version file present → its stripped content; absent → `None`
+  - [x] `cf --version` runs once across two `build_context` calls on one client
+  - [x] Commit: `test: cover build_context version keys`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 4: `metadata["prompt"]` on every dispatch** (effort 3)
