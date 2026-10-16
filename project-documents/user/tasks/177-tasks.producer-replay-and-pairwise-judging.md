@@ -96,33 +96,33 @@ status: not_started
 
 ### Metrology record types (D9)
 
-- [ ] **Task 8: Replay and judgment payload models** (effort 2)
-  - [ ] Create `metrology/replay_models.py` with the D9 `ProducerReplay` fields and the `PairwiseJudgment` fields listed under D9; `ReplayPhase` (`DESIGN`, `TASKS`), `ReplayOutcome` (`ACCEPTED`, `EXHAUSTED`, `FAILED`) and `PairOutcome` (`A`, `B`, `TIE`, `INCONSISTENT`, `INVALID`) are enums
-  - [ ] `JudgeCall` holds one call's pick (`A`, `B`, `TIE`, `INVALID`) and raw tail; `JudgeRef` holds alias, model, prompt hash
-  - [ ] Contestant references in `PairwiseJudgment.a` / `.b` are a replay record id or `original:<sha>`; define the `original:` prefix once
-  - [ ] Add `RECORD_TYPE_PRODUCER_REPLAY` and `RECORD_TYPE_PAIRWISE_JUDGMENT` and two optional sibling fields to `MetrologyRecord` in `models.py`; `_SCHEMA_VERSION` stays 1
-  - [ ] Commit: `feat: add producer_replay and pairwise_judgment record models`
+- [x] **Task 8: Replay and judgment payload models** (effort 2)
+  - [x] Create `metrology/replay_models.py` with the D9 `ProducerReplay` fields and the `PairwiseJudgment` fields listed under D9; `ReplayPhase` (`DESIGN`, `TASKS`), `ReplayOutcome` (`ACCEPTED`, `EXHAUSTED`, `FAILED`) and `PairOutcome` (`A`, `B`, `TIE`, `INCONSISTENT`, `INVALID`) are enums (ProjectId/ProjectIdSource moved to metrology/project_id.py, re-exported from models.py, to avoid an import cycle; PairwiseJudgment also carries project_id, which list_judgments filters on)
+  - [x] `JudgeCall` holds one call's pick (`A`, `B`, `TIE`, `INVALID`) and raw tail; `JudgeRef` holds alias, model, prompt hash
+  - [x] Contestant references in `PairwiseJudgment.a` / `.b` are a replay record id or `original:<sha>`; define the `original:` prefix once
+  - [x] Add `RECORD_TYPE_PRODUCER_REPLAY` and `RECORD_TYPE_PAIRWISE_JUDGMENT` and two optional sibling fields to `MetrologyRecord` in `models.py`; `_SCHEMA_VERSION` stays 1
+  - [x] Commit: `feat: add producer_replay and pairwise_judgment record models`
   - **Success:** models validate; `models.py` stays near 300 lines
 
-- [ ] **Task 9: Extract the store's list loop** (effort 1)
-  - [ ] Add private `MetrologyStore._iter_records()` yielding `(record_id, MetrologyRecord)` and skipping unreadable files with the existing WARNING
-  - [ ] Move `list_graduations`, `list_audit_runs`, `list_noise_floors` and `list_samples` onto it with unchanged behavior
-  - [ ] Run `pytest tests/metrology -q`
-  - [ ] Commit: `refactor: share the metrology store record scan`
+- [x] **Task 9: Extract the store's list loop** (effort 1)
+  - [x] Add private `MetrologyStore._iter_records()` yielding `(record_id, MetrologyRecord)` and skipping unreadable files with the existing WARNING
+  - [x] Move `list_graduations`, `list_audit_runs`, `list_noise_floors` and `list_samples` onto it with unchanged behavior
+  - [x] Run `pytest tests/metrology -q`
+  - [x] Commit: `refactor: share the metrology store record scan`
   - **Success:** existing metrology tests pass unchanged
 
-- [ ] **Task 10: Replay and judgment store methods** (effort 2)
-  - [ ] Add `generate_replay_id` (`replay-{YYYYMMDD}-{uuid8}`) and `generate_judgment_id` (`pair-{YYYYMMDD}-{uuid8}`) beside the existing id generators
-  - [ ] Add `write_replay`, `list_replays(project_id, phase=None, replay_set=None)`, `write_judgment`, `list_judgments(project_id, phase=None, judge=None)` on `_iter_records`; `judge` matches on the full `JudgeRef` (alias, model, prompt hash)
-  - [ ] Commit: `feat: store producer replays and pairwise judgments`
+- [x] **Task 10: Replay and judgment store methods** (effort 2)
+  - [x] Add `generate_replay_id` (`replay-{YYYYMMDD}-{uuid8}`) and `generate_judgment_id` (`pair-{YYYYMMDD}-{uuid8}`) beside the existing id generators
+  - [x] Add `write_replay`, `list_replays(project_id, phase=None, replay_set=None)`, `write_judgment`, `list_judgments(project_id, phase=None, judge=None)` on `_iter_records`; `judge` matches on the full `JudgeRef` (alias, model, prompt hash) (list_replays returns (record_id, ProducerReplay) pairs because judgments reference replay ids; list_judgments returns PairwiseJudgment values; both take project_id as a required str)
+  - [x] Commit: `feat: store producer replays and pairwise judgments`
   - **Success:** records round-trip through the store
 
-- [ ] **Task 11: Test the new record types** (effort 2)
-  - [ ] Write/list round-trip for both types, including every filter
-  - [ ] A judgment with a different prompt hash is excluded by the `judge` filter
-  - [ ] An unreadable sibling is skipped with a WARNING (`caplog`)
-  - [ ] An existing metrology fixture file (no new fields) loads unchanged
-  - [ ] Commit: `test: cover replay and judgment records`
+- [x] **Task 11: Test the new record types** (effort 2)
+  - [x] Write/list round-trip for both types, including every filter
+  - [x] A judgment with a different prompt hash is excluded by the `judge` filter
+  - [x] An unreadable sibling is skipped with a WARNING (`caplog`)
+  - [x] An existing metrology fixture file (no new fields) loads unchanged
+  - [x] Commit: `test: cover replay and judgment records`
   - **Success:** tests pass, zero pyright errors
 
 ### Start point (D2)
