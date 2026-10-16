@@ -11,7 +11,7 @@ import pytest
 
 from squadron.review.git_utils import run_git
 from squadron.stats.git_history import GitHistory, GitHistoryError
-from tests.stats.repo_support import StatsRepo
+from tests.stats.repo_support import CountingRunner, StatsRepo
 
 _T1 = "2026-10-01T10:00:00+00:00"
 _T2 = "2026-10-02T10:00:00+00:00"
@@ -19,17 +19,6 @@ _T3 = "2026-10-03T10:00:00+00:00"
 _T4 = "2026-10-04T10:00:00+00:00"
 _TASKS = "project-documents/user/tasks/176-tasks.x.md"
 _REVIEW = "project-documents/user/reviews/176-review.code.x.md"
-
-
-class CountingRunner:
-    """The real ``run_git`` with a call log, so a test can assert the call count."""
-
-    def __init__(self) -> None:
-        self.calls: list[list[str]] = []
-
-    def __call__(self, args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
-        self.calls.append(args)
-        return run_git(args, cwd=cwd)
 
 
 @pytest.fixture

@@ -7,6 +7,8 @@ import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
+from squadron.review.git_utils import run_git
+
 
 class StatsRepo:
     """Builds commits with exact paths and author dates; hermetic config comes from conftest."""
@@ -57,3 +59,14 @@ class StatsRepo:
 
     def blob(self, sha: str, path: str) -> str:
         return self.git("rev-parse", f"{sha}:{path}")
+
+
+class CountingRunner:
+    """The real ``run_git`` with a call log, so a test can assert D6's `2 + V` call count."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+        self.calls.append(args)
+        return run_git(args, cwd=cwd)
