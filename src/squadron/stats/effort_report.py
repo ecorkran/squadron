@@ -10,13 +10,13 @@ from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
 
-from squadron.pipeline.state import RunScan, StateManager
+from squadron.pipeline.state import StateManager
 from squadron.review.persistence import REVIEWS_DIR
 from squadron.stats.git_history import GitHistory, WindowSource
 from squadron.stats.json_support import to_json_dict
 from squadron.stats.planning_docs import PlannedSlice, planned_slice, task_file_paths
 from squadron.stats.review_rounds import review_rounds, rounds_to_accept
-from squadron.stats.slice_spend import SliceSpend, slice_spend
+from squadron.stats.slice_spend import SliceSpend, SpendSources, slice_spend
 from squadron.stats.task_attribution import (
     GroupStatus,
     SliceWindow,
@@ -83,15 +83,16 @@ def slice_effort_report(
 ) -> SliceEffortReport:
     """One slice's effort report; ``UnknownSliceError`` when no plan lists ``index``."""
     planned = planned_slice(index, project_root)
-    return build_slice_report(planned, project_root, history, state_manager.scan_runs())
+    sources = SpendSources.load(state_manager, project_root / REVIEWS_DIR)
+    return build_slice_report(planned, project_root, history, sources)
 
 
 def build_slice_report(
-    planned: PlannedSlice, project_root: Path, history: GitHistory, scan: RunScan
+    planned: PlannedSlice, project_root: Path, history: GitHistory, sources: SpendSources
 ) -> SliceEffortReport:
-    """The report for a planned slice from an already-scanned run set.
+    """The report for a planned slice from already-read runs and reviews.
 
-    A rollup reads the plans and scans the runs once, then calls this per slice.
+    A rollup reads the plans, runs and review artifacts once, then calls this per slice.
     """
     index = planned.index
     window = slice_window(history, index, task_file_paths(index, project_root))
@@ -109,13 +110,13 @@ def build_slice_report(
         reviews=tuple(
             ReviewTypeRounds(t, len(r.rounds), rounds_to_accept(r.rounds)) for t, r in read.items()
         ),
-        spend=slice_spend(index, scan, project_root / REVIEWS_DIR),
+        spend=slice_spend(index, sources),
         task_file_missing=planned.tasks is None,
         groups=tuple(_group_row(group) for group in groups),
         markers_not_found=sum(g.status is GroupStatus.MARKER_NOT_FOUND for g in groups),
         rounds_skipped=sum(r.skipped for r in read.values()),
         lower_bound=any(r.lower_bound for r in read.values()),
-        unreadable_runs=len(scan.unreadable),
+        unreadable_runs=len(sources.scan.unreadable),
     )
 
 

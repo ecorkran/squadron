@@ -70,7 +70,7 @@ def reviews_usage_report(reviews_dir: Path, slice_filter: str | None) -> Reviews
             _logger.warning("skipping review artifact with no readable frontmatter: %s", path)
             skipped += 1
             continue
-        if slice_filter is not None and not _matches_slice(path, front, slice_filter):
+        if slice_filter is not None and not _slice_matches(path, _text(front, "slice"), slice_filter):
             continue
         run_id = front.get("runId")
         if run_id is not None:
@@ -86,11 +86,16 @@ def reviews_usage_report(reviews_dir: Path, slice_filter: str | None) -> Reviews
     )
 
 
-def _matches_slice(path: Path, front: Mapping[str, object], slice_filter: str) -> bool:
-    if str(front.get("slice")) == slice_filter:
+def _slice_matches(path: Path, slice_value: str | None, slice_filter: str) -> bool:
+    if slice_value == slice_filter:
         return True
     match = _INDEX_PREFIX.match(path.name)
     return match is not None and match.group(1) == slice_filter
+
+
+def row_matches_slice(row: ReviewUsageRow, slice_filter: str) -> bool:
+    """The ``--slice`` rule applied to an already-read row, so a caller reads the dir once."""
+    return _slice_matches(row.path, row.slice, slice_filter)
 
 
 def _row(path: Path, front: Mapping[str, object]) -> ReviewUsageRow:

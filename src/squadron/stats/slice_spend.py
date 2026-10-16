@@ -11,8 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from squadron.core.usage import UsageRecord
-from squadron.pipeline.state import RunScan
-from squadron.stats.reviews_report import reviews_usage_report
+from squadron.pipeline.state import RunScan, StateManager
+from squadron.stats.reviews_report import (
+    ReviewsUsageReport,
+    reviews_usage_report,
+    row_matches_slice,
+)
 from squadron.stats.usage_report import (
     LLM_ACTION_TYPES,
     UsageTotals,
@@ -30,13 +34,25 @@ class SliceSpend:
     partial_loop_runs: int  # runs whose earlier loop rounds are not recorded
 
 
-def slice_spend(index: int, scan: RunScan, reviews_dir: Path) -> SliceSpend:
+@dataclass(frozen=True)
+class SpendSources:
+    """Every run and standalone review, read once; a rollup filters it per slice."""
+
+    scan: RunScan
+    reviews: ReviewsUsageReport
+
+    @classmethod
+    def load(cls, state_manager: StateManager, reviews_dir: Path) -> SpendSources:
+        return cls(scan=state_manager.scan_runs(), reviews=reviews_usage_report(reviews_dir, None))
+
+
+def slice_spend(index: int, sources: SpendSources) -> SliceSpend:
     """Sum the usage records of slice ``index``'s runs and standalone reviews."""
     records: list[UsageRecord] = []
     llm_actions = 0
     run_count = 0
     partial = 0
-    for state in scan.states:
+    for state in sources.scan.states:
         if str(state.params.get("slice")) != str(index):
             continue
         run_count += 1
@@ -45,11 +61,11 @@ def slice_spend(index: int, scan: RunScan, reviews_dir: Path) -> SliceSpend:
             llm_actions += row.action_type in LLM_ACTION_TYPES
             if row.record is not None:
                 records.append(row.record)
-    reviews = reviews_usage_report(reviews_dir, str(index))
-    records.extend(row.record for row in reviews.rows)
+    reviews = [row for row in sources.reviews.rows if row_matches_slice(row, str(index))]
+    records.extend(row.record for row in reviews)
     return SliceSpend(
         totals=usage_totals(records),
-        llm_actions=llm_actions + len(reviews.rows),
+        llm_actions=llm_actions + len(reviews),
         run_count=run_count,
         partial_loop_runs=partial,
     )

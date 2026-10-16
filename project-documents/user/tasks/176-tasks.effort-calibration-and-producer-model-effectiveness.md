@@ -144,7 +144,7 @@ status: in_progress
   - **Success:** tests pass, zero pyright errors
 
 - [x] **Task 14: Slice window and task attribution**
-  - [x] `slice_window(index, task_paths)` and `attribute(window, tasks)` per D5 rules 1–5, from the in-memory graph only (code is stats/task_attribution.py; also implementation_commits and post_review_fixups for D5 rules 4 and 5; a task with several prescribed subjects ends its group at the latest one found, and is marker not found only when none is found; trailing tasks with no subject form an unmarked group)
+  - [x] `slice_window(index, task_paths)` and `attribute(window, tasks)` per D5 rules 1–5, from the in-memory graph only (code is stats/task_attribution.py; also implementation_commits and post_review_fixups for D5 rules 4 and 5; a task with several prescribed subjects ends its group at the latest one found, and is marker not found only when none is found; trailing tasks with no subject form an unmarked group) (extras count implementation commits only, since doc-only planning commits between the task file and the branch are not rework; design D5 rule 2 updated to match)
   - [x] When no task in the file prescribes a commit subject, there are no markers to anchor groups: groups read `unavailable`, the same as window `NONE` (Success Criterion 3)
   - [x] Commit: `feat: attribute slice commits to task groups`
   - **Success:** attribution needs no git calls beyond `load()`
@@ -159,21 +159,21 @@ status: in_progress
 
 ### Effort reports (D2, D7)
 
-- [ ] **Task 16: `slice_effort_report`**
-  - [ ] New `stats/effort_report.py`: `slice_effort_report(index, *, project_root, history, state_manager)` returns the D7 header and per-group rows, with recorded spend per D7 (all loop rounds, via Task 3)
-  - [ ] No task file, window `NONE`, and no prescribed subjects → the D9 row notes / `unavailable` groups
-  - [ ] Footer counts: markers not found, review rounds skipped, lower-bound flag, unreadable run files
-  - [ ] `to_json_dict()` serializes the dataclass fields
-  - [ ] Commit: `feat: add single-slice effort report core`
+- [x] **Task 16: `slice_effort_report`**
+  - [x] New `stats/effort_report.py`: `slice_effort_report(index, *, project_root, history, state_manager)` returns the D7 header and per-group rows, with recorded spend per D7 (all loop rounds, via Task 3) (also new stats/slice_spend.py for recorded spend, stats/json_support.py for to_json_dict, and a public build_slice_report(planned, project_root, history, scan) that Task 18 reuses; the caller loads history, so one load serves a whole rollup)
+  - [x] No task file, window `NONE`, and no prescribed subjects → the D9 row notes / `unavailable` groups
+  - [x] Footer counts: markers not found, review rounds skipped, lower-bound flag, unreadable run files
+  - [x] `to_json_dict()` serializes the dataclass fields
+  - [x] Commit: `feat: add single-slice effort report core`
   - **Success:** the core imports no Typer and runs no git outside `GitHistory`
 
-- [ ] **Task 17: Test `slice_effort_report`**
-  - [ ] Temp repo with planning docs, a branch, review versions and a run file for the index: header values, groups, and recorded spend match the inputs
-  - [ ] Missing task file → `no task file`; missing branch → `unavailable` groups with planned effort, rounds and spend still present
-  - [ ] Unknown index → the typed error with plan files searched
-  - [ ] Call count `2 + V` for one slice (D6)
-  - [ ] `to_json_dict()` values equal the dataclass values
-  - [ ] Commit: `test: cover single-slice effort report`
+- [x] **Task 17: Test `slice_effort_report`**
+  - [x] Temp repo with planning docs, a branch, review versions and a run file for the index: header values, groups, and recorded spend match the inputs
+  - [x] Missing task file → `no task file`; missing branch → `unavailable` groups with planned effort, rounds and spend still present
+  - [x] Unknown index → the typed error with plan files searched
+  - [x] Call count `2 + V` for one slice (D6)
+  - [x] `to_json_dict()` values equal the dataclass values
+  - [x] Commit: `test: cover single-slice effort report`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 18: `slices_effort_report`**
