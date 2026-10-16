@@ -128,19 +128,19 @@ status: in_progress
   - [x] Commit: `test: cover git history log pass`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 12: Review rounds from committed versions**
-  - [ ] `review_rounds(index, review_type) -> list[ReviewRound]` and `rounds_to_accept(rounds)` per D6, reading each version through `run` and `parse_frontmatter`. Dedupe happens before any `git show`: collect the commits that touched `N-review.T.*.md` (top level and `archive/`), drop versions whose blob id was already seen (keep the earliest commit), then order by commit date
-  - [ ] An unreadable version follows the D9 `git show` / unreadable-frontmatter rows; the result carries a skipped count for the footer
-  - [ ] Lower-bound flag ("Consumes from Other Slices"): set when the earliest round is authored before the cutoff, stored as one module constant with a comment citing 941. Read the cutoff with `git log -1 --format=%aI 941-slice.review-and-revise-loop-from-sq-review-max` (the author date of the 941 branch tip, the same cutoff the design footer text names). If that branch is missing, stop and ask the Project Manager for the date.
-  - [ ] Commit: `feat: read per-round review verdicts from git`
+- [x] **Task 12: Review rounds from committed versions**
+  - [x] `review_rounds(index, review_type) -> list[ReviewRound]` and `rounds_to_accept(rounds)` per D6, reading each version through `run` and `parse_frontmatter`. Dedupe happens before any `git show`: collect the commits that touched `N-review.T.*.md` (top level and `archive/`), drop versions whose blob id was already seen (keep the earliest commit), then order by commit date
+  - [x] An unreadable version follows the D9 `git show` / unreadable-frontmatter rows; the result carries a skipped count for the footer
+  - [x] Lower-bound flag ("Consumes from Other Slices"): set when the earliest round is authored before the cutoff, stored as one module constant with a comment citing 941. Read the cutoff with `git log -1 --format=%aI 941-slice.review-and-revise-loop-from-sq-review-max` (the author date of the 941 branch tip, the same cutoff the design footer text names). If that branch is missing, stop and ask the Project Manager for the date. (cutoff constant COMMIT_EACH_ITERATION_SINCE = 2026-10-13T12:28:49-06:00, read from the 941 branch tip; the code lives in stats/review_rounds.py, and GitHistory.show is the only git call per version)
+  - [x] Commit: `feat: read per-round review verdicts from git`
   - **Success:** the call count for a report is `2 + V` (V = versions read)
 
-- [ ] **Task 13: Test review rounds**
-  - [ ] In the temp repo: three committed versions (FAIL, CONCERNS, PASS) plus an archive copy of round 1 → three rounds after dedupe, rounds-to-accept 2
-  - [ ] Lower-bound flag: earliest round authored before the cutoff → set; after the cutoff → unset (one case each, cutoff constant monkeypatched)
-  - [ ] A version with broken frontmatter, and a `run` stub failing one `git show` → each skipped with WARNING naming sha and path; skipped count 2
-  - [ ] Call count `2 + V` asserted with the counting wrapper
-  - [ ] Commit: `test: cover per-round review verdicts`
+- [x] **Task 13: Test review rounds**
+  - [x] In the temp repo: three committed versions (FAIL, CONCERNS, PASS) plus an archive copy of round 1 → three rounds after dedupe, rounds-to-accept 2
+  - [x] Lower-bound flag: earliest round authored before the cutoff → set; after the cutoff → unset (one case each, cutoff constant monkeypatched)
+  - [x] A version with broken frontmatter, and a `run` stub failing one `git show` → each skipped with WARNING naming sha and path; skipped count 2
+  - [x] Call count `2 + V` asserted with the counting wrapper
+  - [x] Commit: `test: cover per-round review verdicts`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 14: Slice window and task attribution**
