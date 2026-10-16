@@ -80,7 +80,7 @@ $ sq models list
 │ opus            │ sdk          │ claude-opus-5-5                    │
 │ sonnet          │ sdk          │ claude-sonnet-5-5                  │
 │ haiku           │ sdk          │ claude-haiku-4-5-20251001          │
-│ sol             │ openai-oauth │ gpt-6-sol                          │
+│ sol             │ openai-oauth │ gpt-6.1-sol                        │
 │ luna            │ openai-oauth │ gpt-6-luna                         │
 │ gpt54           │ openai       │ gpt-5.4                            │
 │ gemini-flash    │ gemini       │ gemini-3.8-flash                   │

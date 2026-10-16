@@ -100,7 +100,7 @@ cache_write = 25.00
 
 [aliases.sol]
 profile = "openai-oauth"
-model = "gpt-6-sol"
+model = "gpt-6.1-sol"
 cost_tier = "subscription"
 private = true
 

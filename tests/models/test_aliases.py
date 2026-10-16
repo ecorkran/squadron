@@ -60,9 +60,9 @@ def test_resolve_codex() -> None:
 
 
 def test_resolve_sol() -> None:
-    """sol resolves to gpt-6-sol on openai-oauth profile."""
+    """sol resolves to gpt-6.1-sol on openai-oauth profile."""
     model, profile = resolve_model_alias("sol")
-    assert model == "gpt-6-sol"
+    assert model == "gpt-6.1-sol"
     assert profile == "openai-oauth"
 
 
