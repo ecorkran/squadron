@@ -23,6 +23,8 @@ from squadron.metrology.models import (
     RECORD_TYPE_AUDIT_FINDING,
     RECORD_TYPE_AUDIT_NOISE_FLOOR,
     RECORD_TYPE_GRADUATED_CONFIG,
+    RECORD_TYPE_PAIRWISE_JUDGMENT,
+    RECORD_TYPE_PRODUCER_REPLAY,
     RECORD_TYPE_SAMPLE,
     AuditNoiseFloor,
     AuditRun,
@@ -30,6 +32,12 @@ from squadron.metrology.models import (
     JudgeConfigId,
     MetrologyRecord,
     SampleVerdict,
+)
+from squadron.metrology.replay_models import (
+    JudgeRef,
+    PairwiseJudgment,
+    ProducerReplay,
+    ReplayPhase,
 )
 
 _logger = logging.getLogger(__name__)
@@ -86,6 +94,18 @@ def generate_noise_floor_id(now: datetime | None = None) -> str:
     """Return a unique ``floor-{YYYYMMDD}-{uuid8}`` id."""
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
     return f"floor-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def generate_replay_id(now: datetime | None = None) -> str:
+    """Return a unique ``replay-{YYYYMMDD}-{uuid8}`` id."""
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
+    return f"replay-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def generate_judgment_id(now: datetime | None = None) -> str:
+    """Return a unique ``pair-{YYYYMMDD}-{uuid8}`` id."""
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
+    return f"pair-{stamp}-{uuid.uuid4().hex[:8]}"
 
 
 def _judge_config_matches(stored: JudgeConfigId, wanted: JudgeConfigId) -> bool:
@@ -303,6 +323,87 @@ class MetrologyStore:
         # get whichever record id happened to sort last.
         floors.sort(key=lambda pair: pair[1].measured_at, reverse=True)
         return floors
+
+    def write_replay(self, replay: ProducerReplay) -> str:
+        """Envelope and persist one producer replay; return its minted record id."""
+        record_id = generate_replay_id()
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_PRODUCER_REPLAY,
+            producer_replay=replay,
+        )
+        self._write_atomic(
+            self._record_path(record_id),
+            json.dumps(record.model_dump(mode="json"), indent=2),
+        )
+        return record_id
+
+    def list_replays(
+        self,
+        project_id: str,
+        phase: ReplayPhase | None = None,
+        replay_set: str | None = None,
+    ) -> list[tuple[str, ProducerReplay]]:
+        """Return stored ``(record_id, ProducerReplay)`` pairs, newest first.
+
+        The id comes with the payload because a pairwise judgment refers to a
+        contestant by replay record id.
+        """
+        replays: list[tuple[str, ProducerReplay]] = []
+        for record_id, record in self._iter_records():
+            replay = record.producer_replay
+            if replay is None or record.record_type != RECORD_TYPE_PRODUCER_REPLAY:
+                continue
+            if replay.project_id.value != project_id:
+                continue
+            if phase is not None and replay.phase != phase:
+                continue
+            if replay_set is not None and replay.replay_set != replay_set:
+                continue
+            replays.append((record_id, replay))
+        replays.sort(key=lambda pair: pair[1].created_at, reverse=True)
+        return replays
+
+    def write_judgment(self, judgment: PairwiseJudgment) -> str:
+        """Envelope and persist one pairwise judgment; return its minted record id."""
+        record_id = generate_judgment_id()
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_PAIRWISE_JUDGMENT,
+            pairwise_judgment=judgment,
+        )
+        self._write_atomic(
+            self._record_path(record_id),
+            json.dumps(record.model_dump(mode="json"), indent=2),
+        )
+        return record_id
+
+    def list_judgments(
+        self,
+        project_id: str,
+        phase: ReplayPhase | None = None,
+        judge: JudgeRef | None = None,
+    ) -> list[PairwiseJudgment]:
+        """Return stored pairwise judgments, newest first.
+
+        ``judge`` matches the full identity (alias, model, prompt hash): a
+        judgment made under a different judge prompt is a different instrument
+        and is never pooled with this one.
+        """
+        judgments: list[PairwiseJudgment] = []
+        for _, record in self._iter_records():
+            judgment = record.pairwise_judgment
+            if judgment is None or record.record_type != RECORD_TYPE_PAIRWISE_JUDGMENT:
+                continue
+            if judgment.project_id.value != project_id:
+                continue
+            if phase is not None and judgment.phase != phase:
+                continue
+            if judge is not None and judgment.judge != judge:
+                continue
+            judgments.append(judgment)
+        judgments.sort(key=lambda j: j.created_at, reverse=True)
+        return judgments
 
     def load_record(self, sample_id: str) -> MetrologyRecord:
         """Load and validate one record by id.
