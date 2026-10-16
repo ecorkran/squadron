@@ -124,12 +124,12 @@ def core() -> Iterator[_Core]:
     fake = _Core()
     with (
         patch("squadron.cli.commands.replay.run_replay_set", fake),
-        patch("squadron.cli.commands.replay.get_all_aliases", return_value=_ALIASES),
+        patch("squadron.cli.commands.replay_common.get_all_aliases", return_value=_ALIASES),
         patch(
-            "squadron.cli.commands.replay.derive_project_id",
+            "squadron.cli.commands.replay_common.derive_project_id",
             return_value=ProjectId(value="p", source=ProjectIdSource.REMOTE),
         ),
-        patch("squadron.cli.commands.replay._start_point", return_value=_start()),
+        patch("squadron.cli.commands.replay_common.start_point", return_value=_start()),
         patch("squadron.cli.commands.replay._deps", return_value=MagicMock()),
     ):
         yield fake
@@ -171,14 +171,14 @@ def test_a_start_point_error_becomes_a_clean_exit_1() -> None:
 
     import typer
 
-    from squadron.cli.commands import replay
+    from squadron.cli.commands import replay_common as replay
 
     with (
         patch.object(replay, "GitHistory", MagicMock()),
         patch.object(replay, "resolve_start_point", side_effect=StartPointError("no commit added x")),
     ):
         with pytest.raises(typer.Exit) as caught:
-            replay._start_point(ReplayPhase.DESIGN, 176, Path("."))  # pyright: ignore[reportPrivateUsage]
+            replay.start_point(ReplayPhase.DESIGN, 176, Path("."))
 
     assert caught.value.exit_code == 1
 
@@ -227,7 +227,7 @@ def test_a_stopped_set_exits_1_with_the_reason(core: _Core) -> None:
 
 def test_answering_no_at_the_prompt_runs_nothing_and_exits_1(core: _Core) -> None:
     with (
-        patch("squadron.cli.commands.replay._is_interactive", return_value=True),
+        patch("squadron.cli.commands.replay_common.is_interactive", return_value=True),
         patch("squadron.cli.commands.replay.typer.confirm", return_value=False),
     ):
         result = runner.invoke(app, _ARGS)

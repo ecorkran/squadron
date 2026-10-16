@@ -286,16 +286,16 @@ status: not_started
   - [x] Commit: `test: cover pairwise judge`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 30: `sq replay judge` command** (effort 2)
-  - [ ] Options per the API contract; `--judge` has no default; reads `metrology.judge_timeout_s`
-  - [ ] Confirms the number of judge calls like `run` (`--yes`, non-interactive rule); 0 pairs → message, exit 0
-  - [ ] Exit 1 when any pair failed, with the count
-  - [ ] Commit: `feat: add sq replay judge`
+- [x] **Task 30: `sq replay judge` command** (effort 2)
+  - [x] Options per the API contract; `--judge` has no default; reads `metrology.judge_timeout_s` (the command is cli/commands/replay_judge.py, registered on replay_app; shared helpers moved to cli/commands/replay_common.py; replay/judge_jobs.py groups stored replays into one job per replay set; 'Exit 1 when any pair failed' counts pairs that raised or timed out, not INVALID pairs)
+  - [x] Confirms the number of judge calls like `run` (`--yes`, non-interactive rule); 0 pairs → message, exit 0
+  - [x] Exit 1 when any pair failed, with the count
+  - [x] Commit: `feat: add sq replay judge`
   - **Success:** `sq replay judge --help` shows the contract
 
-- [ ] **Task 31: Test `sq replay judge`** (effort 1)
-  - [ ] Missing `--judge` → usage error; 0 pairs → exit 0 with message; a failed pair → exit 1; non-interactive without `--yes` → exit 1
-  - [ ] Commit: `test: cover sq replay judge`
+- [x] **Task 31: Test `sq replay judge`** (effort 1)
+  - [x] Missing `--judge` → usage error; 0 pairs → exit 0 with message; a failed pair → exit 1; non-interactive without `--yes` → exit 1
+  - [x] Commit: `test: cover sq replay judge`
   - **Success:** tests pass, zero pyright errors
 
 ### Report (D6, D7)
