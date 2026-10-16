@@ -22,6 +22,7 @@ from squadron.events.dispatcher import (  # pyright: ignore[reportPrivateUsage]
 )
 from squadron.events.manifest import Binding
 from squadron.integrations.context_forge import ContextForgeError
+from squadron.pipeline.failure_kind import FailureKind
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.steps.phase import ArtifactKind
 
@@ -110,6 +111,7 @@ async def test_cf_error_is_a_failed_outcome_with_the_cf_text_and_no_traceback(
     assert outcome.result.success is False
     assert outcome.result.error is not None
     assert _CF_MESSAGE in outcome.result.error
+    assert outcome.result.metadata["failure_kind"] == FailureKind.ARTIFACT_MISSING.value
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert any(_CF_MESSAGE in r.getMessage() for r in errors)
     assert all(r.exc_info is None for r in errors)

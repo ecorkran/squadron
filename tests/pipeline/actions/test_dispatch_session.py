@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from squadron.pipeline.actions.dispatch import DispatchAction
+from squadron.pipeline.failure_kind import FailureKind
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ResolvedModel
 from squadron.pipeline.sdk_session import DispatchStalledError, SDKExecutionSession
@@ -180,6 +181,7 @@ async def test_session_dispatch_failure_returns_action_result_false(
     result = await action.execute(ctx)
     assert result.success is False
     assert "connection dropped" in (result.error or "")
+    assert result.metadata["failure_kind"] == FailureKind.PROVIDER_ERROR.value
 
 
 @pytest.mark.asyncio
@@ -313,6 +315,7 @@ async def test_stalled_dispatch_fails_step_with_warning_and_no_traceback(
     assert result.success is False
     assert result.error == "dispatch stalled: no output for 1800s; turn interrupted"
     assert result.metadata["stalled"] is True
+    assert result.metadata["failure_kind"] == FailureKind.STALL.value
     assert result.metadata["session_usable"] is usable
     assert "prompt" in result.metadata
     records = [r for r in caplog.records if r.levelno >= logging.WARNING]

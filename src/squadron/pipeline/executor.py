@@ -43,6 +43,7 @@ from squadron.pipeline.classification import (
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
 from squadron.pipeline.control_params import ACCEPT_DECISION, OVERRIDE_INSTRUCTIONS
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -970,6 +971,8 @@ async def _execute_step_once(
             if outcome.result is not None and not outcome.result.success:
                 result.success = False
                 result.error = outcome.result.error
+                if (kind := outcome.result.metadata.get(FAILURE_KIND_KEY)) is not None:
+                    result.metadata[FAILURE_KIND_KEY] = kind
                 break
             if outcome.error_kind is not OutcomeErrorKind.NONE:
                 result.success = False

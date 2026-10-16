@@ -18,6 +18,7 @@ from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
 from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions.dispatch import SKIPPED_KEY
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.pipeline.text_tail import tail_text
@@ -194,7 +195,13 @@ class DispatchArtifactAction:
             # here, once, so every failure branch carries it.
             response = str(context.result.outputs.get("response", ""))
             error = f'{error}; agent\'s final text: "{tail_text(response)}"'
-            return ActionResult(success=False, action_type=self.name, outputs={}, error=error)
+            return ActionResult(
+                success=False,
+                action_type=self.name,
+                outputs={},
+                error=error,
+                metadata={FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value},
+            )
         return ActionResult(success=True, action_type=self.name, outputs={})
 
 
