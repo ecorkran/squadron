@@ -469,6 +469,8 @@ Pipeline execution produces a state file that enables resume after interruption,
 }
 ```
 
+**Loop steps (slice 176).** A step's `action_results` hold its final round only. A loop step also records `prior_round_results` (one list of action results per earlier round, in order), `accepted` (the loop ran out of rounds but met its accept threshold), and `exhausted` (it ran out of rounds). All three default to empty or false, so older state files load unchanged. A run that stops partway through a loop keeps no record of that loop's earlier rounds, because rounds are persisted only when the loop step is written.
+
 ### Storage Location
 
 `~/.config/squadron/runs/` — one JSON file per active/recent run. Old runs can be pruned. Summary steps with `emit: [file]` (no explicit path) write human-readable context snapshots to `~/.config/squadron/runs/summaries/{project}-{pipeline}.md` (latest-only, overwritten each run).

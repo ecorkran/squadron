@@ -15,7 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq stats slice <index>` compares a slice's planned effort with what happened: commits, fix-ups, review rounds, task groups, and recorded spend. `sq stats slices [--since YYYYMMDD]` groups completed slices by planned effort with the median and range of each measure.
+- `sq stats producers [--phase design|tasks]` shows how each producer model config has done on this machine's pipeline runs: verdicts, revise rounds, accepted and failed counts, and cost per accepted artifact.
+- `sq stats runs [--slice INDEX] [--pipeline NAME]` totals usage and cost across runs.
+
 ### Fixed
+- `sq stats run` now counts every round of a review-revise loop. Earlier rounds were left out of the totals, so loop steps looked cheaper than they were.
 - SDK step and review costs no longer include earlier steps in the same session. A summary step showed $5.35 instead of about $0.61.
 
 ## [0.22.0] - 20261015

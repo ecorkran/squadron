@@ -279,10 +279,18 @@ Named templates come from `~/.config/squadron/compaction/`, then the built-ins. 
 sq stats run <run_id>              # one row per step action: model, turns, tokens, cost, time
 sq stats reviews --slice 175       # one row per standalone review artifact
 sq stats run <run_id> --json       # the same rows and totals as JSON
+sq stats runs --slice 175          # one row per run, with a total across them
+sq stats slice 175                 # planned effort against what git and the runs show
+sq stats slices --since 20260901   # completed slices grouped by planned effort
+sq stats producers --phase design  # observed results per producer model config
 /sq:stats reviews --slice 175      # Claude Code; $sq-stats in Codex
 ```
 
 Every pipeline LLM step (dispatch, summary, compact, review) records what it spent in the run's state file, and every review artifact records it in its frontmatter. A value the provider did not report shows as `—`, never as 0. A cost total says how many actions it covers, for example `$1.84 (7 of 9 priced)`. Pipeline reviews appear under `sq stats run`, not `sq stats reviews`, so nothing is counted twice. Runs from before this feature show "no usage recorded".
+
+`sq stats slice` and `sq stats slices` compare the effort a slice was planned at with what happened. Planned effort is a rank from 1 to 5, not a quantity, so `slices` shows the median and range of each measure per level, never a ratio. Everything comes from existing records: the slice plan and task files, git history, review artifacts, and run state. `span` is the wall-clock time between a slice's first and last commit and includes idle time. `recorded spend` is what pipeline runs and standalone reviews recorded; work done interactively in a Claude Code session is recorded nowhere, so it is a floor. A task group needs the task file to prescribe its commit subjects, and one whose subject was reworded shows `marker not found`.
+
+`sq stats producers` reports, per model config and phase, the first-round verdicts, revise rounds, how often the result was accepted or failed, and the cost per accepted artifact, each with its n. It is observational: configs saw different slices, so slice difficulty is a confound, and rows below `metrology.min_evidence_n` show `below floor` instead of a cost ratio. Treat it as a lead, not a verdict.
 
 The cost column says where each figure came from:
 
