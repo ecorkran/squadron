@@ -34,14 +34,14 @@ status: complete
 
 ### Spike: slice resolution at a design start point (D2 risk)
 
-- [ ] **Task 1: Run `sq run P4 176` in a hand-built sandbox** (effort 2)
+- [x] **Task 1: Run `sq run P4 176` in a hand-built sandbox** (effort 2)
   - [x] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `177-slice.producer-replay-and-pairwise-judging` from it
   - [x] Find the commit that first added `project-documents/user/slices/176-slice.*.md` (`git log --diff-filter=A --format=%H -- <path>`) and its first parent
   - [x] Build the sandbox by hand with the four D3 git commands in a scratch directory under `/tmp`; register it with `cf init --lite --no-ide --name replay-spike`
   - [x] In the sandbox, run `sq run P4 176 -m <cheapest alias in models.toml> -p review-model=<same> -p max-revisions=1` (the loop rejects 0: `loop.max must be a positive integer`, `pipeline/loop_config.py:108`)
   - [x] Record in this task, under a `Result:` line: the start sha, whether the slice resolved, and the exact error text if it did not
   - [x] Also record which step resolves the slice (the `set_slice` cf operation or earlier) and the cheapest command that reproduces that resolution without a dispatch. Task 21 runs it as its pre-dispatch check
-  - [ ] Clean up: `cf project rm replay-spike`, delete the directory (cf project removed; /tmp/replay-spike directory deletion left to PM)
+  - [x] Clean up: `cf project rm replay-spike`, delete the directory (cf project removed; /tmp/replay-spike deleted after the first delete was blocked while it was the working directory)
   - [x] If the slice did not resolve: STOP and return the evidence to the Project Manager. Do not start Task 2.
   - [x] Commit (task file only): `docs: record slice 177 start-point resolution spike`
   - **Result:** start sha `bca771926e89d9ac7c753d9c88a84aa4b1f83ac7` (first parent of `f3d652e0`, the commit that first added the 176 design). `sq run P4 176 -m haiku -p review-model=haiku -p max-revisions=1` **resolved the slice and completed** (design-0 PASS, loop-1, summary-2) once two sandbox settings were in place. The 176 plan entry exists at the start point, so cf resolves `176` from the plan and the missing design file does not matter. Two failures on the bare sandbox, each fixed by one setting:

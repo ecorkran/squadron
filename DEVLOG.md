@@ -20,7 +20,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 - Defects found and fixed along the way: `sq stats producers` counted a clean first-draft pass as not accepted whenever P4's loop was skipped (changelog bullet added); failed dispatches had no structured failure kind, so a `failure_kind` is now stamped; the sandbox's `sq` path was relative; the report's group key was an unhashable pydantic model; the stats JSON helper did not serialize pydantic models.
 - Design deviations: an empty tracked `.gitmodules` (squadron has one) must not refuse a replay, so only a file that declares a submodule does; `read_outcome` is pure over run state and the drafts are read by `replay/drafts.py`; `sq stats run --json` does not expose dispatch `metadata`, so the walkthrough reads the run state file.
 - Spend note: step 7 of the walkthrough ran an OpenRouter alias for real ($0.10) because unsetting its key in the environment did not remove its credentials.
-- Open: #227 downstream-outcome scorer, #228 human check of pairwise picks, #229 `sq stats producers` counts replay runs. #224 still blocks `sol` as judge. `/tmp/replay-spike` (the Task 1 scratch directory) is for the PM to delete.
+- Open: #227 downstream-outcome scorer, #228 human check of pairwise picks, #229 `sq stats producers` counts replay runs. #224 still blocks `sol` as judge.
 
 ### Slice 177: Producer Replay and Pairwise Judging — Tasks Complete
 
