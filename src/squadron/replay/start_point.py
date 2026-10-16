@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from squadron.integrations.context_forge import DOCS_ROOT
 from squadron.metrology.replay_models import ReplayPhase
@@ -89,6 +89,13 @@ def resolve_start_point(phase: ReplayPhase, index: int, history: GitHistory) -> 
         start_sha=adding.parents[0],
         original_first_draft=text,
     )
+
+
+def artifact_files(phase: ReplayPhase, index: int, root: Path) -> list[Path]:
+    """The artifact's files in the working tree under ``root``, split files in suffix order."""
+    kind = _KINDS[phase]
+    found = (root / kind.directory).glob(f"{index}-{kind.stem}.*.md")
+    return sorted(found, key=lambda path: _suffix_order(path.as_posix()))
 
 
 def _adding_commit(history: GitHistory, pattern: str, directory: str) -> Commit:
