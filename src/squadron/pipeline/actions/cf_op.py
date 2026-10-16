@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import logging
 from enum import StrEnum
+from pathlib import Path
 from typing import cast
 
-from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
+from squadron.integrations.context_forge import (
+    GUIDE_VERSION_FILE,
+    ContextForgeClient,
+    ContextForgeError,
+)
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -98,6 +103,7 @@ class CfOpAction:
 
         operation = CfOperation(str(operation_raw))
         cf_client: ContextForgeClient = context.cf_client  # type: ignore[assignment]
+        extra_outputs: dict[str, object] = {}
 
         try:
             match operation:
@@ -137,6 +143,10 @@ class CfOpAction:
                     raw = cf_client._run_json(build_args)  # pyright: ignore[reportPrivateUsage]
                     data_dict = cast(dict[str, object], raw) if isinstance(raw, dict) else {}
                     stdout = str(data_dict.get("context", ""))
+                    extra_outputs = {
+                        "cf_version": cf_client.cf_version(),
+                        "guide_version": _read_guide_version(Path(context.cwd)),
+                    }
                 case CfOperation.SUMMARIZE:
                     stdout = cf_client._run(["summarize"])  # pyright: ignore[reportPrivateUsage]
         except ContextForgeError as exc:
@@ -150,8 +160,16 @@ class CfOpAction:
         return ActionResult(
             success=True,
             action_type=self.action_type,
-            outputs={"stdout": stdout, "operation": operation.value},
+            outputs={"stdout": stdout, "operation": operation.value, **extra_outputs},
         )
+
+
+def _read_guide_version(project_dir: Path) -> str | None:
+    """The installed guide's version, or None when the project has no marker file."""
+    version_file = project_dir / GUIDE_VERSION_FILE
+    if not version_file.is_file():
+        return None
+    return version_file.read_text(encoding="utf-8").strip()
 
 
 register_action(ActionType.CF_OP, CfOpAction())

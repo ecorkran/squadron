@@ -20,6 +20,8 @@ from squadron.core.subprocess_text import TEXT_DECODING
 DOCS_ROOT = "project-documents"
 #: Where cf keeps architecture documents and slice plans, relative to the project.
 ARCHITECTURE_DIR = f"{DOCS_ROOT}/user/architecture"
+#: The installed ai-project-guide's version marker, relative to the project.
+GUIDE_VERSION_FILE = f"{DOCS_ROOT}/ai-project-guide/.context-forge-guide-version"
 
 # ---------------------------------------------------------------------------
 # Exceptions
@@ -109,6 +111,9 @@ def cf_project_name() -> str:
 class ContextForgeClient:
     """Typed interface to Context Forge CLI operations."""
 
+    def __init__(self) -> None:
+        self._cf_version: str | None = None
+
     def _run(self, args: list[str]) -> str:
         """Run a ``cf`` CLI command and return stdout.
 
@@ -144,6 +149,20 @@ class ContextForgeClient:
             return json.loads(stdout)
         except json.JSONDecodeError as exc:
             raise ContextForgeError(f"cf {' '.join(args)}: invalid JSON output: {exc}") from exc
+
+    def cf_version(self) -> str:
+        """``cf --version``, read once per client instance and cached.
+
+        Raises:
+            ContextForgeNotAvailable: if ``cf`` is not on PATH.
+            ContextForgeError: if the command fails or prints nothing.
+        """
+        if self._cf_version is None:
+            version = self._run(["--version"]).strip()
+            if not version:
+                raise ContextForgeError("cf --version: empty output")
+            self._cf_version = version
+        return self._cf_version
 
     def is_available(self) -> bool:
         """Return True if ``cf`` is installed and responsive."""
