@@ -314,19 +314,19 @@ status: not_started
   - [x] Commit: `test: cover Bradley-Terry fit`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 34: `replay_report` core** (effort 3)
-  - [ ] `replay/report.py`: `replay_report(phase, judge, store, min_n) -> ReplayReport`, one table per (phase, reviewer, judge) per D7
-  - [ ] Rows keyed per D1 (alias, model, profile, effort sent); every D7 column with its n; `original` row with BT, W-L-T and pairs only; `below floor` when judged pairs < `min_n` (no rank)
-  - [ ] Footer data: slices covered, position consistency (consistent pairs / non-invalid pairs, with counts), prompt identities seen, BT cap note, self-preference flag when the judge's model equals a contestant's model
-  - [ ] No replays → empty report
-  - [ ] Commit: `feat: build replay report`
+- [x] **Task 34: `replay_report` core** (effort 3)
+  - [x] `replay/report.py`: `replay_report(phase, judge, store, min_n) -> ReplayReport`, one table per (phase, reviewer, judge) per D7 (the signature is replay_report(project_id, phase, judge_alias, store, min_n) since the store lists per project; models are in replay/report_models.py; contestants are configs pooled across slices, and a pair between two replays of the same config is left out)
+  - [x] Rows keyed per D1 (alias, model, profile, effort sent); every D7 column with its n; `original` row with BT, W-L-T and pairs only; `below floor` when judged pairs < `min_n` (no rank)
+  - [x] Footer data: slices covered, position consistency (consistent pairs / non-invalid pairs, with counts), prompt identities seen, BT cap note, self-preference flag when the judge's model equals a contestant's model
+  - [x] No replays → empty report
+  - [x] Commit: `feat: build replay report`
   - **Success:** report data covers every D7 column and footer item
 
-- [ ] **Task 35: Test the report core** (effort 2)
-  - [ ] Fixture records across two slices: medians, rates and k of m priced match hand values; `rounds` uses accepted replays only
-  - [ ] Two reviewers → two tables; a judgment from another prompt hash is excluded
-  - [ ] `below floor` marking; self-preference flag on and off; empty store → empty report
-  - [ ] Commit: `test: cover replay report`
+- [x] **Task 35: Test the report core** (effort 2)
+  - [x] Fixture records across two slices: medians, rates and k of m priced match hand values; `rounds` uses accepted replays only (its tests found two defects, fixed in their own commits: ModelRef is unhashable so groups are keyed by reviewer fields, and the stats JSON helper did not serialize pydantic models, which would have broken --json)
+  - [x] Two reviewers → two tables; a judgment from another prompt hash is excluded
+  - [x] `below floor` marking; self-preference flag on and off; empty store → empty report
+  - [x] Commit: `test: cover replay report`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 36: `sq replay report` command and views** (effort 2)
