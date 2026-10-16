@@ -218,7 +218,7 @@ status: not_started
   - [ ] Fakes for sandbox, invoker and store; no git, cf or model
   - [ ] Two configs → two records in order, argv as specified, `cwd` = each sandbox
   - [ ] First config fails → `failed` record, second still runs
-  - [ ] Each D10 runner row has a named test: no run file, sandbox setup failure, store write failure (sandbox kept, path in error), cleanup failure (set continues)
+  - [ ] Each D10 runner row has a named test: slice does not resolve at the start point (no invoker call, error names slice and start sha), no run file, sandbox setup failure, store write failure (sandbox kept, path in error), cleanup failure (set continues)
   - [ ] Dispatch bound in the plan equals configs × (1 + 2 × cap)
   - [ ] Commit: `test: cover replay runner`
   - **Success:** tests pass, zero pyright errors
@@ -333,7 +333,8 @@ status: not_started
 
 - [ ] **Task 37: Verification walkthrough** (effort 3)
   - [ ] Run the design's Verification Walkthrough steps 1–7 with real dispatches; record each step's result under this task
-  - [ ] Save at least four real judge replies (including any with emphasis, lowercase or no verdict) as parser fixtures and add them to the Task 27 test file
+  - [ ] Save one real judge reply per design variant as a parser fixture in the Task 27 test file: plain, markdown-bold, lowercase, trailing whitespace, no verdict
+  - [ ] For a variant the walkthrough does not produce, make a real judge call with an instruction that provokes it, and note under this task which fixtures were provoked
   - [ ] Any defect found: fix it, add a test, then continue
   - [ ] Commit: `test: add captured judge replies to verdict parser tests`
   - **Success:** all seven steps match the walkthrough's expectations
