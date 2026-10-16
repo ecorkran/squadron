@@ -124,9 +124,7 @@ def run_usage_report(run_id: str, state_manager: StateManager) -> RunUsageReport
         # an object, and a failed model validation.
         raise RunUsageLoadError(f"cannot read {path}: {exc}", run_id=run_id, path=path) from exc
 
-    rows: list[ActionUsageRow] = []
-    for step in state.completed_steps:
-        rows.extend(_step_rows(run_id, step))
+    rows = report_rows(state)
     records = [row.record for row in rows if row.record is not None]
     slice_param = state.params.get("slice")
     return RunUsageReport(
@@ -140,6 +138,14 @@ def run_usage_report(run_id: str, state_manager: StateManager) -> RunUsageReport
         totals=usage_totals(records),
         partial_loop=is_partial_loop(state),
     )
+
+
+def report_rows(state: RunState) -> list[ActionUsageRow]:
+    """One row per step action in ``state``, loop rounds included; the single row source."""
+    rows: list[ActionUsageRow] = []
+    for step in state.completed_steps:
+        rows.extend(_step_rows(state.run_id, step))
+    return rows
 
 
 def is_partial_loop(state: RunState) -> bool:

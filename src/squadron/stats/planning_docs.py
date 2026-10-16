@@ -236,18 +236,18 @@ def _parse_plan(path: Path) -> list[_PlanEntry]:
     return entries
 
 
-def _plan_entries(project_root: Path) -> tuple[dict[int, _PlanEntry], list[Path]]:
+def _plan_entries(project_root: Path) -> tuple[dict[int, _PlanEntry], list[Path], set[int]]:
+    """Entries by index (the first wins), the plan files read, and the repeated indexes."""
     files = _plan_files(project_root)
     entries: dict[int, _PlanEntry] = {}
+    repeated: set[int] = set()
     for path in files:
         for entry in _parse_plan(path):
             if entry.index in entries:
-                _logger.warning(
-                    "Slice %d appears in more than one plan entry; using the first", entry.index
-                )
-                continue
-            entries[entry.index] = entry
-    return entries, files
+                repeated.add(entry.index)
+            else:
+                entries[entry.index] = entry
+    return entries, files, repeated
 
 
 def slice_status(index: int, project_root: Path) -> tuple[bool, str | None]:
@@ -280,13 +280,18 @@ def _planned_slice(entry: _PlanEntry, project_root: Path) -> PlannedSlice:
 
 def read_slice_plans(project_root: Path) -> dict[int, PlannedSlice]:
     """Every slice in every ``*-slices.*.md`` plan, with its tasks when a task file exists."""
-    entries, _ = _plan_entries(project_root)
+    entries, _, repeated = _plan_entries(project_root)
+    if repeated:
+        # Old initiatives reuse small indexes; harmless to a report, so not a WARNING.
+        _logger.debug("Slice indexes in more than one plan entry (first wins): %s", sorted(repeated))
     return {index: _planned_slice(entry, project_root) for index, entry in entries.items()}
 
 
 def planned_slice(index: int, project_root: Path) -> PlannedSlice:
     """One slice's plan entry; raises ``UnknownSliceError`` when no plan lists ``index``."""
-    entries, files = _plan_entries(project_root)
+    entries, files, repeated = _plan_entries(project_root)
     if index not in entries:
         raise UnknownSliceError(index, files)
+    if index in repeated:
+        _logger.warning("Slice %d appears in more than one plan entry; using the first", index)
     return _planned_slice(entries[index], project_root)

@@ -143,18 +143,18 @@ status: in_progress
   - [x] Commit: `test: cover per-round review verdicts`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 14: Slice window and task attribution**
-  - [ ] `slice_window(index, task_paths)` and `attribute(window, tasks)` per D5 rules 1–5, from the in-memory graph only
-  - [ ] When no task in the file prescribes a commit subject, there are no markers to anchor groups: groups read `unavailable`, the same as window `NONE` (Success Criterion 3)
-  - [ ] Commit: `feat: attribute slice commits to task groups`
+- [x] **Task 14: Slice window and task attribution**
+  - [x] `slice_window(index, task_paths)` and `attribute(window, tasks)` per D5 rules 1–5, from the in-memory graph only (code is stats/task_attribution.py; also implementation_commits and post_review_fixups for D5 rules 4 and 5; a task with several prescribed subjects ends its group at the latest one found, and is marker not found only when none is found; trailing tasks with no subject form an unmarked group)
+  - [x] When no task in the file prescribes a commit subject, there are no markers to anchor groups: groups read `unavailable`, the same as window `NONE` (Success Criterion 3)
+  - [x] Commit: `feat: attribute slice commits to task groups`
   - **Success:** attribution needs no git calls beyond `load()`
 
-- [ ] **Task 15: Test window and attribution**
-  - [ ] Branch present → `BRANCH`, window excludes the task-file commit and anything before it; branch absent → `NONE`
-  - [ ] Three prescribed subjects, one reworded → two groups with markers and extras, one `marker not found`; duplicate subject → earliest wins
-  - [ ] Branch present but no task prescribes a subject → groups `unavailable`
-  - [ ] Document-only commits are not implementation commits; a code commit after the code review artifact is a fix-up, one before is not
-  - [ ] Commit: `test: cover slice window and task attribution`
+- [x] **Task 15: Test window and attribution**
+  - [x] Branch present → `BRANCH`, window excludes the task-file commit and anything before it; branch absent → `NONE`
+  - [x] Three prescribed subjects, one reworded → two groups with markers and extras, one `marker not found`; duplicate subject → earliest wins
+  - [x] Branch present but no task prescribes a subject → groups `unavailable`
+  - [x] Document-only commits are not implementation commits; a code commit after the code review artifact is a fix-up, one before is not
+  - [x] Commit: `test: cover slice window and task attribution`
   - **Success:** tests pass, zero pyright errors
 
 ### Effort reports (D2, D7)
