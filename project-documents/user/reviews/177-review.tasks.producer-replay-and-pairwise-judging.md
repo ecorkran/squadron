@@ -74,6 +74,16 @@ Three small deviations from "test task immediately follows its implementation ta
 
 Task 37 runs the seven-step verification walkthrough with real dispatches and includes "Any defect found: fix it, add a test, then continue," but its only named commit is `test: add captured judge replies to verdict parser tests`. If the walkthrough surfaces defects, their fixes would land in a commit whose subject misdescribes the change (and would likely warrant a `fix:` commit of their own). A one-line note that defect fixes get their own semantic commit would keep the log honest.
 
+## Response (20261016)
+
+- **F003: no change.** The reviewer marked it proportionate.
+- **F004: accepted.** Task 37 now gives each defect fix its own `fix:` commit, before the fixture commit.
+
+PM-side evaluation found three issues this review missed. All three are fixed in the same commit:
+- **Task 1's spike could not run.** It passed `max-revisions=0`, which `parse_loop_config` rejects (`pipeline/loop_config.py:108`), so the spike would have failed on validation before testing resolution. It now uses 1.
+- **The LLM-call bound was wrong** in design D4, the design's Risk section, and Tasks 21 and 22. P4 makes one dispatch and one review, then one of each per loop round, so the bound is configs × 2 × (1 + cap), not configs × (1 + 2 × cap).
+- **The pre-dispatch resolution check had no mechanism.** Task 1 now records which step resolves the slice and a dispatch-free command that reproduces it. Task 21 runs that command in the first sandbox before any `sq run`.
+
 ### Run Digest
 
 - Response length: 5698 chars

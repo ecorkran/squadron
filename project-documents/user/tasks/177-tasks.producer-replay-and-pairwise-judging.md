@@ -38,8 +38,9 @@ status: not_started
   - [ ] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `177-slice.producer-replay-and-pairwise-judging` from it
   - [ ] Find the commit that first added `project-documents/user/slices/176-slice.*.md` (`git log --diff-filter=A --format=%H -- <path>`) and its first parent
   - [ ] Build the sandbox by hand with the four D3 git commands in a scratch directory under `/tmp`; register it with `cf init --lite --no-ide --name replay-spike`
-  - [ ] In the sandbox, run `sq run P4 176 -m <cheapest alias in models.toml> -p review-model=<same> -p max-revisions=0`
+  - [ ] In the sandbox, run `sq run P4 176 -m <cheapest alias in models.toml> -p review-model=<same> -p max-revisions=1` (the loop rejects 0: `loop.max must be a positive integer`, `pipeline/loop_config.py:108`)
   - [ ] Record in this task, under a `Result:` line: the start sha, whether the slice resolved, and the exact error text if it did not
+  - [ ] Also record which step resolves the slice (the `set_slice` cf operation or earlier) and the cheapest command that reproduces that resolution without a dispatch. Task 21 runs it as its pre-dispatch check
   - [ ] Clean up: `cf project rm replay-spike`, delete the directory
   - [ ] If the slice did not resolve: STOP and return the evidence to the Project Manager. Do not start Task 2.
   - [ ] Commit (task file only): `docs: record slice 177 start-point resolution spike`
@@ -203,10 +204,10 @@ status: not_started
 
 - [ ] **Task 21: `run_replay_set`** (effort 3)
   - [ ] Compute `replay_set` per D9; choose a run id per config
-  - [ ] Sweep orphans, then build the plan (start commit, configs, reviewer, cap, dispatch bound = configs × (1 + 2 × cap)); the caller confirms it before any sandbox is created
+  - [ ] Sweep orphans, then build the plan (start commit, configs, reviewer, cap, LLM-call bound = configs × 2 × (1 + cap), per design D4); the caller confirms it before any sandbox is created
   - [ ] Per config, in order: `ReplaySandbox`; invoke `sq run P4|P5 <index> -m <alias> -p review-model=<reviewer> -p max-revisions=<n> --run-id <id>` with `cwd` = sandbox via the injected `SqRunInvoker`, using `sys.argv[0]` resolved; time it; `read_outcome`; write the record; then leave the sandbox
   - [ ] Phase-to-pipeline mapping (`DESIGN`→`P4`, `TASKS`→`P5`) defined once
-  - [ ] The slice does not resolve at the start point → fail before any dispatch with the D10 error naming slice and start sha (D2); the runner never edits the plan
+  - [ ] Before the first config's `sq run`, run the resolution check recorded in Task 1 inside the first sandbox; the slice does not resolve → fail before any dispatch with the D10 error naming slice and start sha (D2); the runner never edits the plan
   - [ ] No run file → `failed` / `no_run_state` record with exit code and stderr tail, WARNING
   - [ ] Sandbox setup failure → ERROR with stderr, config skipped, set continues, reported in the summary
   - [ ] Store write failure → stop the set, `keep()` the sandbox, error naming its path
@@ -219,7 +220,7 @@ status: not_started
   - [ ] Two configs → two records in order, argv as specified, `cwd` = each sandbox
   - [ ] First config fails → `failed` record, second still runs
   - [ ] Each D10 runner row has a named test: slice does not resolve at the start point (no invoker call, error names slice and start sha), no run file, sandbox setup failure, store write failure (sandbox kept, path in error), cleanup failure (set continues)
-  - [ ] Dispatch bound in the plan equals configs × (1 + 2 × cap)
+  - [ ] LLM-call bound in the plan equals configs × 2 × (1 + cap)
   - [ ] Commit: `test: cover replay runner`
   - **Success:** tests pass, zero pyright errors
 
@@ -336,6 +337,7 @@ status: not_started
   - [ ] Save one real judge reply per design variant as a parser fixture in the Task 27 test file: plain, markdown-bold, lowercase, trailing whitespace, no verdict
   - [ ] For a variant the walkthrough does not produce, make a real judge call with an instruction that provokes it, and note under this task which fixtures were provoked
   - [ ] Any defect found: fix it, add a test, then continue
+  - [ ] Each defect fix found here gets its own `fix:` commit naming the defect, before the fixture commit
   - [ ] Commit: `test: add captured judge replies to verdict parser tests`
   - **Success:** all seven steps match the walkthrough's expectations
 

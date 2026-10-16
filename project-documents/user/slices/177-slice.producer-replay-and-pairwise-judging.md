@@ -174,7 +174,7 @@ It runs with `cwd=<sandbox>`, using the same `sq` executable as the parent (`sys
 
 The hidden `--run-id` option is new, and it is distinct from `--resume`. `_run_pipeline` today treats any `run_id` as a resume. It skips `init_run` and claims an existing file, so passing the id there would create no run state. The change: `_run_pipeline` gains a `new_run_id` parameter, which goes to `init_run(..., run_id=new_run_id)` on the fresh-run path. Passing both `new_run_id` and `run_id` is a `ValueError`. `init_run` gains a check that fails with `FileExistsError` when a file with that id already exists, so a chosen id never overwrites a run. No caller in `src/` passes an id to `init_run` (`run.py:308,727`), and the two tests that do use fresh directories, so the check changes nothing for existing code.
 
-Before any dispatch, the runner prints the plan (start commit, configs, reviewer, revision cap, upper bound on dispatches = configs × (1 + 2 × cap)) and asks for confirmation. `--yes` skips the prompt. A non-interactive session without `--yes` exits 1.
+Before any dispatch, the runner prints the plan (start commit, configs, reviewer, revision cap, upper bound on LLM calls = configs × 2 × (1 + cap): the phase step's dispatch and review, then one dispatch and one review per loop round) and asks for confirmation. `--yes` skips the prompt. A non-interactive session without `--yes` exits 1.
 
 After the subprocess exits, the runner reads run state `<run_id>`:
 
@@ -429,7 +429,7 @@ These commands do not exist yet. Model aliases are examples from this repo's `mo
 ### Technical Risks
 
 - **Slice resolution at a design's start point.** The plan entry gets its index in the same commit as the design (D2). If `sq run P4 <index>` cannot find the slice there, design replays fail for every slice made by the current process.
-- **Cost.** Each config can make up to 1 + 2 × cap dispatches, plus judge calls that grow with k².
+- **Cost.** Each config can make up to 2 × (1 + cap) LLM calls, plus judge calls that grow with k².
 
 ### Mitigation Strategies
 
