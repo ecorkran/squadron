@@ -15,6 +15,7 @@ import pytest
 
 from squadron.config import Settings
 from tests import _hermetic
+from tests.stats.repo_support import StatsRepo
 
 
 @pytest.fixture(scope="session")
@@ -177,3 +178,9 @@ def temp_git_repo(tmp_path: Path) -> Path:
     run_test_git(repo, "add", "README.md")
     run_test_git(repo, "commit", "-q", "-m", "init")
     return repo
+
+
+@pytest.fixture
+def stats_repo(tmp_path: Path) -> StatsRepo:
+    """An empty repo on ``main`` for the effort-report tests; they add commits with chosen dates."""
+    return StatsRepo(tmp_path / "repo")
