@@ -113,6 +113,10 @@ class GitHistory:
             return None
         return result.stdout
 
+    def commit(self, sha: str) -> Commit:
+        """The loaded commit ``sha``; ``KeyError`` when the history has no such commit."""
+        return self._graph()[sha]
+
     def branch_tip(self, index: int) -> Commit | None:
         """The tip of the local branch ``{index}-slice.*``; the first by name when several."""
         prefix = f"{BRANCH_REF_PREFIX}{index}-slice."
