@@ -39,9 +39,10 @@ Replays and judgments are stored in the 320 metrology store as two new record ty
 3. **Replay runner (D4).** For each config, run the phase pipeline (`P4` for design, `P5` for tasks) as an `sq run` subprocess inside the sandbox, with the config's model, the fixed reviewer and a revision cap. Then read the run's outcome, rounds, cost, wall time and the first and final artifact text, and write a `producer_replay` record.
 4. **Pairwise judge (D5).** For every pair of contestants in a replay set, two judge calls (A then B, and B then A), comparing first drafts with frontmatter stripped. One `pairwise_judgment` record per pair.
 5. **Bradley-Terry aggregation and report (D6, D7).** `sq replay report` with `--json`.
-6. **Prompt identity (D8).** Dispatch metadata records the prompt's SHA-256 and source, plus the cf version and guide version reported by `build_context`. `sq stats producers` reports how much of its data carries this.
-7. **Hidden `--run-id` option on `sq run`**, so the runner knows which run state file is its own (D4).
-8. A `/sq:replay` slash command that passes its arguments through, in the same pattern as `/sq:stats`.
+6. **Prompt identity (D8).** Dispatch metadata records the delivered prompt's SHA-256 and source, the squadron version, and the cf and guide versions reported by `build_context`. `sq stats producers` reports how much of its data carries this.
+7. **Hidden `--run-id` option on `sq run`**, which creates a fresh run under a chosen id and refuses an existing one. It is distinct from `--resume`. The runner uses it to know which run state file is its own (D4).
+8. **Config key `metrology.judge_timeout_s`**, a wall-clock bound on each judge call (D5).
+9. A `/sq:replay` slash command that passes its arguments through, in the same pattern as `/sq:stats`.
 
 **Excluded:**
 
@@ -66,7 +67,7 @@ Replays and judgments are stored in the 320 metrology store as two new record ty
 ### Interfaces Required
 
 - `sq run <pipeline> <slice> -m <alias> -p review-model=<alias> -p max-revisions=<n>`, run as a subprocess with `cwd` set to the sandbox. A subprocess is required: the cf client and the SDK session both use the process cwd (`integrations/context_forge.py:112-133`, `pipeline/sdk_session.py:568-578`).
-- `_run_pipeline(..., run_id=...)` (`cli/commands/run.py:263`) already takes a run id. Only the CLI option is new.
+- `StateManager.init_run(..., run_id=...)` (`pipeline/state.py:332`) already creates a run under a caller-chosen id. `_run_pipeline`'s `run_id` parameter is the resume path (`cli/commands/run.py:284-308`: it skips `init_run` and claims an existing file), so it is not used for this (D4).
 - cf: `cf init --lite --no-ide --name <n>` to register the sandbox, and `cf project rm <n>` to remove it.
 - `StateManager.load(run_id)` (`pipeline/state.py:630`).
 - `LoopCondition.REVIEW_CONCERNS_OR_BETTER` (`pipeline/loop_config.py`), the single definition of an accepted verdict.
@@ -153,7 +154,11 @@ It contains exactly one commit and no refs to later history. The directory is `~
 
 The sandbox is registered with cf as `replay-<replay_id>` (`cf init --lite --no-ide --name …`), because cf resolves the project from the cwd and `P4`/`P5` run cf operations. On exit, which includes errors and Ctrl-C, the sandbox runs `cf project rm` and deletes the directory.
 
-Orphans: `sq replay run` first sweeps sandbox directories with no live lock file, and cf projects named `replay-*` whose path no longer exists. Each removal is logged at WARNING.
+**Lock and orphans.** The design borrows the codehost scratch-worktree pattern (`codehost/worktree.py`: `WorktreeLock`, `_is_orphan`, `sweep_orphans`) and does not invent a new one. On creation the sandbox writes `<dir>.lock` beside its directory, holding the owning process's pid and start time, the same fields `WorktreeLock` records. A lock is live while a process with that pid exists and has the same start time, so a recycled pid does not count as the owner. `sq replay run` first sweeps:
+- sandbox directories whose lock is missing or not live;
+- cf projects named `replay-*` whose path no longer exists.
+
+A sandbox with a live lock, such as one belonging to a concurrent `sq replay` process, is left alone. The sweep never raises, and each removal or failed removal is logged at WARNING. If the shared helpers in `codehost/worktree.py` are tied to `PullRequestRecord`, the lock and liveness check are extracted into a shared module rather than copied.
 
 A start point with a `.gitmodules` file fails with an error naming it. Submodule replay is out of scope; squadron has none.
 
@@ -165,7 +170,9 @@ The runner chooses the run id, then runs:
 sq run P4 <index> -m <alias> -p review-model=<reviewer> -p max-revisions=<n> --run-id <run_id>
 ```
 
-It runs with `cwd=<sandbox>`, using the same `sq` executable as the parent (`sys.argv[0]` resolved). A subprocess keeps the executor, the cf client and the SDK session unchanged: all three use the process cwd. The hidden `--run-id` option is new and passes through to `_run_pipeline(run_id=…)`. If a run file with that id already exists, the run fails rather than overwriting it.
+It runs with `cwd=<sandbox>`, using the same `sq` executable as the parent (`sys.argv[0]` resolved). A subprocess keeps the executor, the cf client and the SDK session unchanged: all three use the process cwd.
+
+The hidden `--run-id` option is new, and it is distinct from `--resume`. `_run_pipeline` today treats any `run_id` as a resume. It skips `init_run` and claims an existing file, so passing the id there would create no run state. The change: `_run_pipeline` gains a `new_run_id` parameter, which goes to `init_run(..., run_id=new_run_id)` on the fresh-run path. Passing both `new_run_id` and `run_id` is a `ValueError`. `init_run` gains a check that fails with `FileExistsError` when a file with that id already exists, so a chosen id never overwrites a run. No caller in `src/` passes an id to `init_run` (`run.py:308,727`), and the two tests that do use fresh directories, so the check changes nothing for existing code.
 
 Before any dispatch, the runner prints the plan (start commit, configs, reviewer, revision cap, upper bound on dispatches = configs × (1 + 2 × cap)) and asks for confirmation. `--yes` skips the prompt. A non-interactive session without `--yes` exits 1.
 
@@ -204,6 +211,10 @@ Configs run in the order given. A failed config does not stop the set; the failu
 
 **Contestants.** Every `producer_replay` in the set whose outcome is not `failed` (a failed run has no draft), plus `original`. `sq replay judge` judges only pairs that do not yet have a judgment from that judge, so re-running after adding a config costs only the new pairs. Pairs: k(k−1)/2 for k contestants, two calls each.
 
+**Time bound.** `one_shot_dispatch_with_telemetry` has no wall-clock bound of its own, and 174's stall bounds cover SDK session turns, not this path. Each judge call is therefore wrapped in `asyncio.wait_for`, bounded by a new config key `metrology.judge_timeout_s` (`int`). The key is defined in `config/keys.py` beside `metrology.audit_timeout_s`, whose pattern it copies (`metrology/audit.py:610,682`). Its default is 600 and lives only in that definition. A timeout cancels the call and is treated the same as a call that raises.
+
+**Half-recorded pairs.** A pair is recorded only when both calls return. If the first call returns and the second raises or times out, the first call's usage is logged at WARNING, giving the pair, tokens and cost, so the money spent stays visible. The pair stays unjudged, and the next `sq replay judge` repeats both calls. Recording a half pair would need a second outcome model for one-sided picks, and those are exactly what order swap exists to discard.
+
 **Judge identity.** Alias, resolved model, and the SHA-256 of the packaged judge prompt. Judgments from a different prompt hash are a different judge.
 
 **Self-preference.** When the judge's resolved model equals a contestant's model, the report prints a warning on that table. It does not exclude anything.
@@ -239,9 +250,13 @@ The `original` contestant appears as a row with only BT, W-L-T and pairs. A conf
 
 `build_context` adds two output keys: `cf_version`, from `cf --version` (read once per client), and `guide_version`, from `<cwd>/project-documents/ai-project-guide/.context-forge-guide-version`, or `None` when the file is absent.
 
-Every dispatch adds `metadata["prompt"] = {"sha256": …, "source": "build_context" | "feedback" | "explicit" | "review_findings", "cf_version": …, "guide_version": …}`. The source matches the branch `_resolve_prompt` took. The versions are copied from the latest `build_context` when the source is `build_context`, and are `None` otherwise. This applies to all dispatches, not only replays.
+Every dispatch adds `metadata["prompt"] = {"sha256": …, "source": "build_context" | "feedback" | "explicit" | "review_findings", "squadron_version": …, "cf_version": …, "guide_version": …}`. This applies to all dispatches, not only replays.
+- **`sha256`** is computed over the prompt actually delivered: the text `_resolve_prompt` returns after `_apply_override` and `_apply_pre_emption_fragment` (`pipeline/actions/dispatch.py:671`). Two dispatches that told the model different things never share a hash.
+- **`source`** names the branch `_resolve_prompt` took.
+- **`squadron_version`** is always set, because squadron composes part of every prompt (revise guidance, rules blocks, pre-emption fragments).
+- **`cf_version`** and **`guide_version`** are copied from the latest `build_context` when the source is `build_context`, and are `None` otherwise.
 
-The prompt hash differs across days, because `cf build` embeds the date. So it identifies a prompt, not a template. Template revision is identified by `(cf_version, guide_version)`.
+The prompt hash differs across days, because `cf build` embeds the date. So it identifies a prompt, not a template. Template revision is identified by the tuple `(squadron_version, cf_version, guide_version)`. A release that changes how squadron composes prompts therefore shows up as a different identity instead of being pooled silently.
 
 `sq stats producers` keeps pooling across template revisions. Splitting its key by guide version would push most cells below the floor, since the guide changes weekly. Its footer gains a line: `k of n units carry prompt identity; m guide versions`. The replay report lists the identities each table covers.
 
@@ -300,6 +315,8 @@ Drafts live inside the record. A slice design is tens of kilobytes, and one file
 | Store write fails | set stops; sandbox kept | error naming the sandbox path, exit 1 |
 | Sandbox cleanup fails (cf rm or delete) | set continues | WARNING naming the path or project; next run's sweep retries |
 | Judge dispatch raises | that pair not recorded; other pairs continue | ERROR naming the pair; summary count; exit 1 at the end |
+| Judge call hangs | cancelled after `metrology.judge_timeout_s`; handled as a raise | ERROR naming the pair and the bound |
+| Second call of a pair fails after the first returned | pair not recorded; both calls repeat on the next run | WARNING with the first call's tokens and cost |
 | Judge reply has no verdict line | pair recorded as `INVALID` with the raw tail | counted in the report's `pairs` column |
 | A record file is unreadable | skipped | WARNING (store's existing behavior) |
 | BT fit hits the iteration cap | strengths reported as fitted | WARNING; footer note |
@@ -436,4 +453,4 @@ These commands do not exist yet. Model aliases are examples from this repo's `mo
 
 - The sandbox runs the installed squadron against old inputs. Pipelines and prompts behave as they do today; only the repository content is historical. That is the intended comparison: today's tooling, the same inputs, different models.
 - Judge calls send whole drafts to the judge's provider, as reviews already do. Nothing new leaves the machine.
-- Effort 3/5 from the plan entry is low for this scope. It is closer to 4/5: two new record types, a sandbox with cleanup guarantees, a subprocess runner, a judge and a report.
+- Effort is 4/5, raised from the plan entry's 3/5: two new record types, a sandbox with cleanup guarantees, a subprocess runner, a judge and a report. The plan entry is updated to match.
