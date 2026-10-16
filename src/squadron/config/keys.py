@@ -281,6 +281,15 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "which on a large fanned-out repo are legitimately slow."
         ),
     ),
+    "metrology.judge_timeout_s": ConfigKey(
+        name="metrology.judge_timeout_s",
+        type_=int,
+        default=600,
+        description=(
+            "Wall-clock cap per pairwise judge call in `sq replay judge`, in seconds. "
+            "A call that exceeds it is cancelled and handled as one that raised."
+        ),
+    ),
     "metrology.audit_rate_limit_retries": ConfigKey(
         name="metrology.audit_rate_limit_retries",
         type_=int,

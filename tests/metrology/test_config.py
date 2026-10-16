@@ -141,3 +141,23 @@ class TestKeysAreRead:
     def test_store_dir_unset_falls_back_to_default(self, repo_no_remote: Path) -> None:
         resolved = resolve_store_dir(cwd=str(repo_no_remote))
         assert resolved == Path.home() / ".config" / "squadron" / "metrology"
+
+
+class TestJudgeTimeoutKey:
+    """``metrology.judge_timeout_s`` bounds each pairwise judge call (slice 177 D5)."""
+
+    def test_registered_as_an_int_with_the_documented_default(self) -> None:
+        key = CONFIG_KEYS["metrology.judge_timeout_s"]
+        assert key.type_ is int
+        assert key.default == 600
+
+    def test_resolves_to_its_default(self, repo_no_remote: Path) -> None:
+        assert get_config("metrology.judge_timeout_s", cwd=str(repo_no_remote)) == 600
+
+    def test_project_override_honored(
+        self,
+        repo_no_remote: Path,
+        write_project_config: Callable[[Path, dict[str, object]], Path],
+    ) -> None:
+        write_project_config(repo_no_remote, {"metrology.judge_timeout_s": 90})
+        assert get_config("metrology.judge_timeout_s", cwd=str(repo_no_remote)) == 90
