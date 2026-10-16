@@ -65,20 +65,20 @@ status: not_started
   - [x] Commit: `test: cover build_context version keys`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 4: `metadata["prompt"]` on every dispatch** (effort 3)
-  - [ ] Add a `PromptSource` enum (`build_context`, `feedback`, `explicit`, `review_findings`) in `pipeline/actions/dispatch.py`
-  - [ ] `_resolve_prompt` (`dispatch.py:621`) returns the delivered prompt and its `PromptSource` (a small frozen dataclass); update both callers (`dispatch.py:571`, `dispatch.py:841`)
-  - [ ] Each dispatch writes `metadata["prompt"]` per D8: `sha256` over the text after `_apply_override` and `_apply_pre_emption_fragment`, `source`, `squadron_version` (from `squadron.__version__`), and `cf_version` / `guide_version` copied from the latest `build_context` outputs only when the source is `build_context`, else `None`
-  - [ ] No run state schema version bump
-  - [ ] Commit: `feat: record prompt identity on every dispatch`
+- [x] **Task 4: `metadata["prompt"]` on every dispatch** (effort 3)
+  - [x] Add a `PromptSource` enum (`build_context`, `feedback`, `explicit`, `review_findings`) in `pipeline/actions/dispatch.py` (lives in pipeline/actions/prompt_identity.py)
+  - [x] `_resolve_prompt` (`dispatch.py:621`) returns the delivered prompt and its `PromptSource` (a small frozen dataclass); update both callers (`dispatch.py:571`, `dispatch.py:841`)
+  - [x] Each dispatch writes `metadata["prompt"]` per D8: `sha256` over the text after `_apply_override` and `_apply_pre_emption_fragment`, `source`, `squadron_version` (from `squadron.__version__`), and `cf_version` / `guide_version` copied from the latest `build_context` outputs only when the source is `build_context`, else `None`
+  - [x] No run state schema version bump
+  - [x] Commit: `feat: record prompt identity on every dispatch`
   - **Success:** every dispatch's metadata carries the five D8 fields
 
-- [ ] **Task 5: Test prompt identity** (effort 2)
-  - [ ] One test per `PromptSource` branch asserts `source` and that `sha256` equals the hash of the delivered text
-  - [ ] An override or pre-emption fragment changes `sha256`
-  - [ ] Non-`build_context` sources carry `cf_version` and `guide_version` as `None`
-  - [ ] Existing dispatch tests pass unchanged apart from the added key
-  - [ ] Commit: `test: cover dispatch prompt identity`
+- [x] **Task 5: Test prompt identity** (effort 2)
+  - [x] One test per `PromptSource` branch asserts `source` and that `sha256` equals the hash of the delivered text
+  - [x] An override or pre-emption fragment changes `sha256`
+  - [x] Non-`build_context` sources carry `cf_version` and `guide_version` as `None`
+  - [x] Existing dispatch tests pass unchanged apart from the added key
+  - [x] Commit: `test: cover dispatch prompt identity`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 6: Prompt-identity footer in `sq stats producers`** (effort 2)

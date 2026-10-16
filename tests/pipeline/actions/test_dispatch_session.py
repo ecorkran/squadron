@@ -337,3 +337,21 @@ async def test_provider_error_fails_step_with_one_error_line_and_no_traceback(
     errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(errors) == 1
     assert errors[0].exc_info is None
+
+
+@pytest.mark.asyncio
+async def test_successful_dispatch_records_prompt_identity(action: DispatchAction) -> None:
+    ctx = _make_context(session=_make_session(), params={"prompt": "do the thing"})
+
+    result = await action.execute(ctx)
+
+    prompt = result.metadata["prompt"]
+    assert isinstance(prompt, dict)
+    assert prompt["source"] == "explicit"  # type: ignore[index]
+    assert set(prompt) == {  # type: ignore[arg-type]
+        "sha256",
+        "source",
+        "squadron_version",
+        "cf_version",
+        "guide_version",
+    }
