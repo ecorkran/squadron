@@ -9,14 +9,22 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import cast
 
 from squadron.core.usage import TokenUsage, UsageRecord, add_optional, add_optional_float
 from squadron.pipeline.actions import ActionType
-from squadron.pipeline.state import SchemaVersionError, StateManager, state_file_name
+from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.state import (
+    RunState,
+    SchemaVersionError,
+    StateManager,
+    StepState,
+    state_file_name,
+)
+from squadron.pipeline.steps import StepTypeName
 from squadron.providers.base import USAGE_KEY
 
 _logger = logging.getLogger(__name__)
@@ -26,6 +34,9 @@ _logger = logging.getLogger(__name__)
 LLM_ACTION_TYPES = frozenset(
     {ActionType.DISPATCH, ActionType.SUMMARY, ActionType.COMPACT, ActionType.REVIEW}
 )
+
+#: The row note for a run that stopped or resumed inside a loop step (D9).
+PARTIAL_LOOP_NOTE = "partial loop not recorded"
 
 
 class RunUsageLoadError(Exception):
@@ -53,6 +64,8 @@ class ActionUsageRow:
     action_type: str
     record: UsageRecord | None
     unreadable: bool = False
+    #: 1-based loop round (the final round is the highest); ``None`` outside a loop step.
+    round: int | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +78,8 @@ class RunUsageReport:
     updated_at: datetime
     rows: list[ActionUsageRow] = field(default_factory=list[ActionUsageRow])
     totals: UsageTotals = field(default_factory=lambda: usage_totals([]))
+    #: The run stopped or was resumed inside a loop step, so earlier rounds are not recorded.
+    partial_loop: bool = False
 
     @property
     def llm_actions(self) -> int:
@@ -111,8 +126,7 @@ def run_usage_report(run_id: str, state_manager: StateManager) -> RunUsageReport
 
     rows: list[ActionUsageRow] = []
     for step in state.completed_steps:
-        for action in step.action_results:
-            rows.append(_row(run_id, step.step_name, action))
+        rows.extend(_step_rows(run_id, step))
     records = [row.record for row in rows if row.record is not None]
     slice_param = state.params.get("slice")
     return RunUsageReport(
@@ -124,7 +138,34 @@ def run_usage_report(run_id: str, state_manager: StateManager) -> RunUsageReport
         updated_at=state.updated_at,
         rows=rows,
         totals=usage_totals(records),
+        partial_loop=is_partial_loop(state),
     )
+
+
+def is_partial_loop(state: RunState) -> bool:
+    """True when the run did not complete and its current step is a loop step (D3, D9)."""
+    if state.status == ExecutionStatus.COMPLETED.value:
+        return False
+    return any(
+        step.step_name == state.current_step and step.step_type == StepTypeName.LOOP
+        for step in state.completed_steps
+    )
+
+
+def _step_rows(run_id: str, step: StepState) -> list[ActionUsageRow]:
+    """A step's rows: a loop's earlier rounds first, then the final round (D3)."""
+    if step.step_type != StepTypeName.LOOP:
+        return [_row(run_id, step.step_name, action) for action in step.action_results]
+    earlier = len(step.prior_round_results)
+    final_round = max(step.iteration, earlier + 1)
+    rounds = [*step.prior_round_results, step.action_results]
+    rows: list[ActionUsageRow] = []
+    for offset, actions in enumerate(rounds):
+        round_number = final_round - earlier + offset
+        rows.extend(
+            replace(_row(run_id, step.step_name, action), round=round_number) for action in actions
+        )
+    return rows
 
 
 def _row(run_id: str, step: str, action: Mapping[str, object]) -> ActionUsageRow:

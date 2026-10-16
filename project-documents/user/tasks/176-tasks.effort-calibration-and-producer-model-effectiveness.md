@@ -11,7 +11,7 @@ projectState: >
   Addresses #214 and the observed half of #210; replay and judging moved to slice 177.
 dateCreated: 20261015
 dateUpdated: 20261015
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -34,21 +34,21 @@ status: not_started
 
 ### Loop-round persistence (D3)
 
-- [ ] **Task 1: Persist every loop round in `StepState`**
-  - [ ] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `176-slice.effort-calibration-and-producer-model-effectiveness` from it
-  - [ ] Before any state change, check whether `StepResult.prior_rounds` (`executor.py:226`, built near `executor.py:1089`) keeps round boundaries. It is declared as a flat `list[ActionResult]`.
-  - [ ] If boundaries are lost: change it to `list[list[ActionResult]]`, flatten it where `executor.py:643` builds `prior_outputs`, run `pytest tests/pipeline -q`, and commit `refactor: keep loop prior rounds grouped per round`. If they are recoverable, say so in this task's commit body and make no executor change.
-  - [ ] Add the three D3 fields to `StepState` in `pipeline/state.py`, with defaults so older files load and no schema version bump
-  - [ ] `_append_step` writes them per D3; `action_results`, the hoisted `verdict` and `score`, and `outputs` still come from the final round only
-  - [ ] Commit: `feat: persist every loop round in run state`
+- [x] **Task 1: Persist every loop round in `StepState`**
+  - [x] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `176-slice.effort-calibration-and-producer-model-effectiveness` from it
+  - [x] Before any state change, check whether `StepResult.prior_rounds` (`executor.py:226`, built near `executor.py:1089`) keeps round boundaries. It is declared as a flat `list[ActionResult]`.
+  - [x] If boundaries are lost: change it to `list[list[ActionResult]]`, flatten it where `executor.py:643` builds `prior_outputs`, run `pytest tests/pipeline -q`, and commit `refactor: keep loop prior rounds grouped per round`. If they are recoverable, say so in this task's commit body and make no executor change.
+  - [x] Add the three D3 fields to `StepState` in `pipeline/state.py`, with defaults so older files load and no schema version bump
+  - [x] `_append_step` writes them per D3; `action_results`, the hoisted `verdict` and `score`, and `outputs` still come from the final round only
+  - [x] Commit: `feat: persist every loop round in run state`
   - **Success:** a loop step's state file holds one `prior_round_results` entry per earlier round, plus `accepted` / `exhausted`; non-loop steps write `[]`, `False`, `False`
 
-- [ ] **Task 2: Test loop-round persistence**
-  - [ ] In `tests/pipeline/` (beside the existing state tests): a `StepResult` with two earlier rounds round-trips through `_append_step` / `load` with rounds in order and `accepted` / `exhausted` preserved
-  - [ ] A state file without the three keys loads with `[]`, `False`, `False`
-  - [ ] The final round's `verdict` hoist is unchanged when earlier rounds carry different verdicts
-  - [ ] If Task 1 regrouped `prior_rounds`: an executor test shows `prior_outputs` still sees every round (#170 behavior)
-  - [ ] Commit: `test: cover loop-round persistence`
+- [x] **Task 2: Test loop-round persistence**
+  - [x] In `tests/pipeline/` (beside the existing state tests): a `StepResult` with two earlier rounds round-trips through `_append_step` / `load` with rounds in order and `accepted` / `exhausted` preserved
+  - [x] A state file without the three keys loads with `[]`, `False`, `False`
+  - [x] The final round's `verdict` hoist is unchanged when earlier rounds carry different verdicts
+  - [x] If Task 1 regrouped `prior_rounds`: an executor test shows `prior_outputs` still sees every round (#170 behavior)
+  - [x] Commit: `test: cover loop-round persistence`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 3: Earlier rounds and partial loops in `run_usage_report`**

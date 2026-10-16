@@ -18,7 +18,7 @@ from squadron.core.usage import CostBasis, UsageRecord, format_usd
 from squadron.models.aliases import get_all_aliases
 from squadron.pipeline.run_liveness import format_duration
 from squadron.stats.reviews_report import ReviewsUsageReport
-from squadron.stats.usage_report import RunUsageReport, UsageTotals
+from squadron.stats.usage_report import PARTIAL_LOOP_NOTE, RunUsageReport, UsageTotals
 
 #: The cell for a value nobody reported (D9): never 0.
 UNREPORTED = "—"
@@ -68,6 +68,7 @@ def run_report_json(report: RunUsageReport) -> dict[str, object]:
         "rows": [
             {
                 "step": row.step,
+                "round": row.round,
                 "action": row.action_type,
                 "unreadable": row.unreadable,
                 "usage": None if row.record is None else row.record.to_dict(),
@@ -77,6 +78,7 @@ def run_report_json(report: RunUsageReport) -> dict[str, object]:
         "totals": _totals_json(report.totals),
         "llm_actions": report.llm_actions,
         "unrecorded": report.unrecorded,
+        "partial_loop": report.partial_loop,
     }
 
 
@@ -113,7 +115,9 @@ def render_run_report(report: RunUsageReport, console: Console) -> None:
     rows: list[list[Text]] = []
     for row in report.rows:
         record = row.record
-        step = f"{row.step}{PARTIAL_MARK}" if record is not None and record.partial else row.step
+        step = row.step if row.round is None else f"{row.step} r{row.round}"
+        if record is not None and record.partial:
+            step = f"{step}{PARTIAL_MARK}"
         if record is None:
             blank = UNREADABLE if row.unreadable else UNREPORTED
             cells = [step, row.action_type, blank, *[UNREPORTED] * len(_USAGE_COLUMNS), UNREPORTED]
@@ -126,6 +130,8 @@ def render_run_report(report: RunUsageReport, console: Console) -> None:
         console.print(Text(f"{report.unrecorded} LLM action(s) have no usage recorded."))
     if report.any_partial:
         console.print(Text(PARTIAL_FOOTER))
+    if report.partial_loop:
+        console.print(Text(PARTIAL_LOOP_NOTE))
 
 
 def render_reviews_report(report: ReviewsUsageReport, console: Console) -> None:
