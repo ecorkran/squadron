@@ -63,6 +63,8 @@ class _TaskDraft:
     number: int
     title: str
     end_level: int
+    #: Set for a bullet task: its block holds only lines indented deeper than this.
+    bullet_indent: int | None = None
     effort: int | None = None
     effort_seen: bool = False
     checked: int = 0
@@ -109,12 +111,19 @@ def _draft_for(path: Path, line: str) -> _TaskDraft | None:
         number=int(heading["long"] or heading["short"]),
         title=heading["title"].strip("* "),
         end_level=len(hashes) if hashes else _ANY_HEADING_LEVEL,
+        bullet_indent=None if hashes else len(line) - len(line.lstrip()),
     )
 
 
-def _ends_block(line: str, end_level: int) -> bool:
+def _ends_block(line: str, draft: _TaskDraft) -> bool:
     heading = _MARKDOWN_HEADING.match(line)
-    return heading is not None and len(heading["hashes"]) <= end_level
+    if heading is not None and len(heading["hashes"]) <= draft.end_level:
+        return True
+    if draft.bullet_indent is None or not line.strip():
+        return False
+    # A bullet task's content is indented; a flush paragraph after it (a slice-level
+    # "Effort: 3/5 overall." note, for instance) is not part of the task.
+    return len(line) - len(line.lstrip()) <= draft.bullet_indent
 
 
 def _parse_tasks(path: Path) -> list[PlannedTask]:
@@ -125,7 +134,7 @@ def _parse_tasks(path: Path) -> list[PlannedTask]:
             if current is not None:
                 tasks.append(current.build())
             current = draft
-        elif current is not None and _ends_block(line, current.end_level):
+        elif current is not None and _ends_block(line, current):
             tasks.append(current.build())
             current = None
             continue
