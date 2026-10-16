@@ -60,7 +60,10 @@ def step(
     exhausted: bool = False,
     prior_rounds: Sequence[Sequence[dict[str, object]]] = (),
 ) -> StepState:
+    # The step's verdict is its last action verdict, as StateManager._append_step hoists it.
+    verdict = next((a["verdict"] for a in reversed(actions) if a.get("verdict")), None)
     return StepState(
+        verdict=None if verdict is None else str(verdict),
         step_name=name,
         step_type=step_type,
         status=status,

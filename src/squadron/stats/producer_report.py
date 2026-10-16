@@ -100,7 +100,7 @@ def producer_report(
         excluded=extraction.excluded,
         unreadable_runs=len(scan.unreadable),
         rounds_unrecorded=sum(_rounds_unrecorded(unit) for unit in units),
-        unpriced_runs=sum(not _records(unit)[0] for unit in units),
+        unpriced_runs=sum(_unpriced(unit) for unit in units),
     )
 
 
@@ -158,6 +158,11 @@ def _revise_rounds(unit: ProducerUnit) -> int:
     if loop is None:
         return 0
     return len(loop.prior_round_results) + 1 if loop.prior_round_results else loop.iteration
+
+
+def _unpriced(unit: ProducerUnit) -> bool:
+    """No priced record at all: a run from before 175, or one on an unpriced model."""
+    return all(record.cost_usd is None for record in _records(unit)[0])
 
 
 def _rounds_unrecorded(unit: ProducerUnit) -> bool:
