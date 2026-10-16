@@ -322,3 +322,30 @@ Test file prefixes: `stats/` is `tests/stats/`, `cli/` is `tests/cli/`.
 | Malformed `prior_round_results` entry | `stats/test_usage_report.py::test_malformed_usage_in_earlier_round_is_unreadable_with_warning` (pydantic rejects a non-list round at load, so a malformed entry reaches the report as a malformed usage record inside a round) |
 | No completed slices / no phase runs | `stats/test_effort_rollup.py::test_no_completed_slices_is_an_empty_report_with_its_reason`; `cli/test_stats_effort.py::test_an_empty_rollup_prints_its_reason_and_exits_0`; `cli/test_stats_producers.py::test_no_phase_runs_prints_a_message_and_writes_nothing`; `cli/test_stats_runs.py::test_no_matching_runs_prints_a_message_and_exits_0` |
 
+### Task 33: Verification walkthrough (design steps 2–7, plus 8)
+
+Run with `.venv/bin/sq` in this repo on 20261015. Full results and the corrections to the design's expected output are in the design's Verification Walkthrough.
+
+| Step | Result |
+|---|---|
+| 1. Loop rounds persist (live run in the scratch project) | Not run: needs a live model run. Covered by `tests/pipeline/test_state_loop_rounds.py`, `tests/stats/test_usage_report.py`, `tests/cli/test_stats.py::test_loop_run_shows_rounds_and_partial_loop_note`. |
+| 2. `sq stats slice 175` | `window: branch`, 17 groups (16 with a marker, group 1 `0ac74136`, group 2 `3812c815`, plus a trailing `unmarked` group), `rounds: slice 1 · tasks 1 · code 1` (rounds to acceptance; 4, 4 and 2 versions committed). Matches `git log` for the slice reviews (4 commits). Design text corrected. |
+| 3. `sq stats slice 173` | `planned effort 3/5`, `window: none`, one group `unavailable`, lower-bound footer. |
+| 4. `sq stats slices` / `--json` | Rows for 1/5 (16), 2/5 (54), 3/5 (50), 4/5 (13), unplanned (5) over 138 completed slices; `levels[].measures` present; about 11 s; five WARNINGs for historical versions with unreadable frontmatter. |
+| 5. `sq stats producers --phase design` | Configs with n, `below floor` under 5, observational footer and exclusion counts. |
+| 6. `sq stats runs --slice 176` | `$19.24 (7 of 10 priced)`. 175's own runs predate recording and read `—`. |
+| 7. Failure signals | No git repo: exit 1, names the cwd. Unknown index 9999: exit 1, names the plan files. |
+| 8. Slash parity | `/sq:stats slices --since 20261001` printed the same table as the CLI. |
+
+Observed on this repo: median span by planned effort over the slices created since 20261001 is 1h28m at 2/5, 3h21m at 3/5 and 7h22m at 4/5 (n = 4, 6, 4).
+
+#### Drafted issue comments (not posted; waiting for the Project Manager)
+
+**#214 (effort calibration report):**
+
+> Shipped in slice 176. `sq stats slice <index>` reports planned effort against the commit window, implementation commits, fix-ups, review rounds, task groups and recorded spend. `sq stats slices [--since YYYYMMDD]` groups completed slices by planned effort and shows the median and range of each measure with n. `sq stats runs [--slice] [--pipeline]` totals usage across runs. Planned effort is an ordinal rank, so the rollup compares distributions, not ratios. Task groups are anchored on the commit subjects task files prescribe, so a slice whose task file prescribes none reads `unavailable`. Per-task kind is still untagged (#218). Spend is what runs and standalone reviews recorded; interactive Claude Code work is not.
+
+**#210 (producer model effectiveness):**
+
+> Slice 176 ships the observed half: `sq stats producers [--phase design|tasks]` reports, per producer config (model, profile, effort sent, reviewer), the first-round verdicts, revise rounds, accepted and failed counts and cost per accepted artifact, each with n, from existing run history. It is observational: configs saw different slices and prompt-template revisions are pooled. The controlled half (replaying a phase artifact per config, a blind pairwise judge, and a metrology record type) moves to slice 177, Producer Replay and Pairwise Judging. Keeping this open for 177.
+
