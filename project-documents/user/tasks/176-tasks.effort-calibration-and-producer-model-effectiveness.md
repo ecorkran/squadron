@@ -339,7 +339,7 @@ Run with `.venv/bin/sq` in this repo on 20261015. Full results and the correctio
 
 Observed on this repo: median span by planned effort over the slices created since 20261001 is 1h28m at 2/5, 3h21m at 3/5 and 7h22m at 4/5 (n = 4, 6, 4).
 
-#### Drafted issue comments (not posted; waiting for the Project Manager)
+#### Issue comments (posted 20261015; #214 closed, #210 open for slice 177)
 
 **#214 (effort calibration report):**
 
