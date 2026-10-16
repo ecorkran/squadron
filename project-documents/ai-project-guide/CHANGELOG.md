@@ -1,0 +1,1209 @@
+---
+docType: changelog
+scope: project-wide
+---
+
+# Changelog
+
+All notable changes to the AI Project Guide system will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.21.1] - 2026-10-16
+
+### Fixed
+- `skills/setup-ci`: decides each OPTIONAL ci.yml block by probing the project (tests that use `main` enable the fetch; guide projects enable the frontmatter block), reads the Python and Node test versions from the project instead of guessing, skips the changelog and devlog when finding version files, and defines every slot the release template uses.
+- `skills/setup-ci`: the version search skips `project-documents/`, the devlog row says which DEVLOG.md to use when there are several, and the fetch-main probe ignores temporary test repos.
+- CI baselines: the frontmatter block runs `cf init --lite --no-ide` before `cf validate frontmatter`, and the TypeScript baseline now has the block too. The header comment no longer looks like an unfilled slot.
+
+## [0.21.0] - 2026-10-16
+
+### Added
+- `ci/python/ci.yml` and `ci/typescript/ci.yml`: CI baselines (lint, typecheck, tests, tag-triggered publish) with slots to fill.
+- `skills/setup-ci`: detects the stack, writes the project's `ci.yml` from the baseline and generates its own `release` skill (patch by default, done only when the registry shows the version, integration branch read at release time).
+
+## [0.20.12] - 2026-10-14
+
+### Changed
+- The Phase 6 and Phase 7 prompts state the branch target for the current checkout using the `targetBranch` template variable, so agents in a worktree no longer have to remember to run `cf config get git.integration_branch` (#15, context-forge #70). Older cf leaves the line out, and the `rules/git.md` checklist step remains the fallback. **The variable needs cf 0.19.9 or later.**
+
+## [0.20.11] - 2026-10-13
+
+### Added
+- `lint/typescript/required-rules.mjs`: the required ESLint rules as a block to spread into an existing flat config (e.g. Next.js), so a project with its own config can meet the requirement without replacing it. The TypeScript `required` list accepts the import (context-forge #115)
+
+### Removed
+- `scripts/setup-ide-lint.sh` and `scripts/validate-slice-design`, and the body of `scripts/setup-ide`. context-forge 0.19.6 does this work itself: `cf setup-ide` installs IDE files and lint configs, and `cf validate design` checks slice designs. **Requires cf 0.19.6 or later.** `scripts/setup-ide` is now a stub that tells older cf to run `cf update`; it will be removed in a later release
+- The dev-only setup-ide behavior tests (`tests/`), `ruff.toml` and `.githooks/`. The test suite now lives in context-forge as the spec for its port
+
+### Changed
+- Docs, guides, the system prompt and the npm-scripts snippet use `cf setup-ide` and `cf validate design` instead of the script paths
+
+## [0.20.10] - 2026-10-11
+
+### Added
+- Dev-only behavior test suite for `scripts/setup-ide` (`tests/setup_ide/`, pytest, snapshot-based) plus a ruff config and pre-commit hook; none of it ships in release archives
+
+### Removed
+- Standalone install and migration scripts: `scripts/bootstrap.sh`, `scripts/template-stubs/`, `scripts/migrate-private-to-user.sh` and `scripts/rename-private-to-user-in-repo.sh`. The guide is installed, updated and set up through cf (`cf init`, `cf guides update`, `cf setup-ide`). v0.20.9 is the last version with these scripts
+
+### Changed
+- Language rules (`general`, `python`, `typescript`, `dart`, `csharp`) and lint `required` files name `cf setup-ide` instead of the bare script
+
+### Fixed
+- README no longer says `setup-ide cursor` writes `.cursor/agents/` (#37)
+
+## [0.20.9] - 2026-10-11
+
+### Added
+- `rules/fixes.md` (always-on): a fix is any work committed as `fix:`. A small fix is made and committed straight to the target with `Fixes #n`, with no slice, task file, branch or review. A fix that needs several steps becomes a task group in the project's standing fixes slice. A new option, a changed file or state format, or a new component is a feature and gets its own slice
+- Process guide: a Fixes entry, including how to create the standing fixes slice the first time. That slice is `review: none` by definition, an exception to the review-gate rule
+
+### Changed
+- File naming: 900-999 is one operational range with no sub-ranges. Only slices claim an index. Analysis files use their initiative's base index, or are numbered in order within `user/analysis/` from 900; standalone reviews are numbered in order within `user/reviews/` from 900. Files named under the old 900-939, 940-949 and 950-999 sub-ranges keep their names
+- `git.md`: fixes commit directly to the target, with no branch
+- Phase 7 prompt: issues found during integration are filed as issues and worked as fixes, instead of logged to `950-tasks.maintenance.md`
+
+### Removed
+- Maintenance Task and Maintenance Routine prompts, and their context profiles
+- Process guide reference to a nonexistent Ad-Hoc Tasks prompt
+
+## [0.20.8] - 2026-10-11
+
+### Changed
+- Checklist rules (Phase 6 prompt, maintenance routine, `general.md` rules): check off only items verified as done, and leave unfinished items unchecked, including when work stops to wait for the Project Manager
+
+## [0.20.7] - 2026-10-11
+
+### Fixed
+- `setup-ide`: migrating a `CLAUDE.md` with the legacy marker no longer replaces project content that follows a hand-added `[//]: # (context-forge:managed end)` line; that content is kept (#33)
+- `setup-ide`: without an install manifest, a rule, agent or skill file that differs from the guide's version is left alone with a warning instead of being backed up and replaced, so customized files survive the first manifest run. Installs that predate the manifest keep older stock files until they are removed once (#34)
+
+## [0.20.6] - 2026-10-11
+
+### Added
+- `file-naming-conventions.md`: registered the optional `revision_number` frontmatter field (integer written only by tooling, for `slice-design`, `tasks`, and `review` docs) (#14)
+
+### Changed
+- Images now live in an `images/` folder next to the document that uses them. The two UI mockups moved from `z-attachments/` to `project-guides/images/`, and the Obsidian attachment guidance in `directory-structure.md` and the process guide was replaced
+- Stopped tracking `.obsidian/` (left over from editing the guide in Obsidian)
+- Added `.understand-anything/.understandignore` so the analyzer skips `.obsidian/` and `DEVLOG.md`; untracked the analyzer's `intermediate/` scratch output
+
+### Fixed
+- `rules/general.md`, `CLAUDE.md`: the magic-defaults example is now valid Python, with the two bad lines marked (#27)
+
+## [0.20.5] - 2026-10-10
+
+### Fixed
+
+- Prompts no longer contradict each other on task checkboxes: all places now say
+  delegate to `task-checker`, and check off directly if it is unavailable
+  (squadron#189).
+
+## [0.20.4] - 2026-10-10
+
+### Changed
+
+- Phase 6 prompt names its task files with the `{task-files}` variable (context-forge
+  0.19.4 or later) instead of a hard-coded `{sliceindex}-tasks.{slicename}.md`,
+  so split task files (`-1.md`, `-2.md`, ...) are found (context-forge#114).
+- Process guide, Phase 6: an orchestrating pipeline may run Phases 6 and 7 as
+  one run, provided the pipeline engine (not the implementing agent) starts
+  each review, decides from defined thresholds when review has passed, and
+  merges only after it has passed. Replaces "does not include reviews or a
+  merge" with a rule about who acts.
+
+## [0.20.3] - 2026-10-06
+
+### Fixed
+
+- `setup-ide --dry-run` no longer prints `comm: ... not in sorted order`
+  warnings on Linux when changes are pending; the file lists are now compared
+  in the C locale so the +/~/- report is correct (#36).
+
+## [0.20.2] - 2026-10-05
+
+### Added
+
+- `rules/shell.md`: shell script rules for bash and CI pipeline code
+  (`set -euo pipefail`, quoting, shellcheck, `jq`/`yq` for YAML and JSON,
+  Python past ~50 lines of logic, guarded `cd`, `mktemp` + `trap`, CI `run:`
+  blocks). Applies to `*.sh`, `*.bash`, GitHub Actions and GitLab CI files.
+
+## [0.20.1] - 2026-10-05
+
+### Added
+
+- `setup-ide --root <dir>` installs into another checkout, such as a git
+  worktree, using the script's own guide (#31).
+- `setup-ide --capabilities` prints the supported features as one line, so
+  callers like cf no longer search the script's text for flags (#31).
+
+### Changed
+
+- Git rules now define release versioning: patch is the default, including new
+  flags, options and config keys. Minor is only for a new user-facing feature
+  or significant AI capability, confirmed by the Project Manager. A non-empty
+  CHANGELOG or an `### Added` section never decides the bump on its own.
+- `setup-ide` reads `rules.exclude` with `cf config get --value` when cf
+  supports it, and stops with an error when cf fails instead of silently
+  installing every rule. Older cf versions still work (#31).
+
+### Fixed
+
+- `setup-ide --dry-run` no longer copies `.claude/worktrees/` (whole git
+  checkouts) into its sandbox or lists them as changes.
+
+## [0.20.0] - 2026-10-05
+
+### Added
+
+- `setup-ide --dry-run` lists the files a run would add, change or remove,
+  plus any skip and warning lines, without writing anything.
+- `setup-ide` checks the linter config required by each language it detects
+  (Python, Dart/Flutter, TypeScript, C#) and reports a missing config or
+  missing required rules. `--write-lint` writes the baseline when no config
+  exists; for a `[tool.ruff]` section in `pyproject.toml` it adds a `ruff.toml`
+  that extends it. Baselines live in `project-guides/lint/` (#30).
+- `rules/csharp.md`, with an analyzer baseline that makes catching general
+  exceptions (CA1031) an error.
+
+### Changed
+
+- `setup-ide` no longer overwrites a file it did not install. When an existing
+  file differs and the manifest does not list it, the file is left alone with a
+  warning. With no manifest yet, the existing file is backed up to
+  `<name>.pre-context-forge` before it is replaced.
+- `setup-ide` no longer overwrites a file it installed that has been edited
+  since. It warns and keeps the edit; deleting the file takes the guide's
+  version again.
+- Phase 7 (Slice Integration) is now review, revise, then merge, and runs for
+  every slice. Phase 6 ends at the last commit on the slice branch. The Project
+  Manager or the orchestrating pipeline starts reviews; agents no longer start
+  them on their own when a review gate blocks.
+
+### Removed
+
+- The `tester` agent. Nothing in the guide used it, and `rules/testing.md`
+  covers testing. `setup-ide` removes unedited installed copies on its next run.
+
+### Fixed
+
+- Merging a slice is now tied to Phase 7, after code review passes. The git
+  rules, the task-breakdown guide, and the Phase 6 and Phase 7 prompts no longer
+  lead agents to write merge steps into task files or merge at the end of
+  implementation (#29).
+
+## [0.19.4] - 2026-10-03
+
+### Changed
+
+- Compressed the two `z-attachments/` UI mockup images from 3.5 MB to
+  325 KB total (downscaled to 1200px wide, quantized). Filenames and
+  format unchanged (#28).
+
+## [0.19.3] - 2026-10-02
+
+### Changed
+
+- Release tarballs no longer include `.context-forge/`, which holds this
+  repo's own `setup-ide` install manifest rather than anything consumers use.
+- Removed two unreferenced images from `z-attachments/`.
+
+## [0.19.2] - 2026-09-26
+
+### Fixed
+
+- `guide.ai-project.005-task-breakdown.md` now explicitly forbids a merge
+  step in any task's Success Criteria. The merge belongs to Phase 7 (after
+  the code review), which itself expects all Phase 6 tasks already
+  complete — a merge task in the last task deadlocks completion, since it
+  can never be checked off before the review that depends on it being
+  checked off (#26).
+
+## [0.19.1] - 2026-09-26
+
+### Fixed
+
+- `flutter.md` no longer claims `**/*.dart`, `**/pubspec.yaml` and
+  `**/analysis_options.yaml` — the same paths `dart.md` already owns. Every
+  `.dart` file in a plain Dart project (no Flutter) was attaching Flutter
+  widget/navigation/build guidance that didn't apply. `flutter.md` now
+  attaches only on `android/**` and `ios/**`, the platform folders unique to
+  `flutter create` projects (#13).
+
+## [0.19.0] - 2026-09-25
+
+### Added
+
+- `setup-ide` records the files each target installs in
+  `.context-forge/<target>.manifest` (checksum, size, path). Commit it with the
+  installed files (#25).
+
+### Changed
+
+- `setup-ide` now deletes files it installed earlier but no longer writes: a
+  rule, agent or skill the guide dropped, or a rule newly added to
+  `rules.exclude`. A file edited since it was installed is kept, with a warning.
+  `CLAUDE.md`, `AGENTS.md` and `copilot-instructions.md` are never deleted.
+  Installs from before the manifest existed also lose the `analyze` skill and
+  `code-review-agent.md`, but only when the content matches a version the guide
+  shipped (#25).
+- Valid `status` values are now listed where agents set status: the per-docType
+  schemas, the initiative plan template, and the system prompt (#12).
+
+### Fixed
+
+- `readme.setup-ide.md` described the `cursor` target as installing always-on
+  rules and agents under `.cursor/`. Always-on rules go to `AGENTS.md`, and
+  agents are not installed.
+
+## [0.18.2] - 2026-09-25
+
+### Changed
+
+- PR review files are named `pr-{number}-review.{reviewType}.md`. In a shared
+  reviews directory (`review.external_reviews_dir` or `--reviews-dir`) the name
+  also carries the repository: `pr-{number}-review.{reviewType}.{owner}-{repository}.md`.
+  Reviews written under the old `{host}-{owner}-{repository}-{number}-review.{reviewType}.md`
+  form are not renamed and stay valid.
+
+## [0.18.1] - 2026-09-25
+
+### Changed
+
+- The `copilot` target of `setup-ide` now copies skills to `.agents/skills/` as
+  Agent Skills (`<name>/SKILL.md`) instead of translating them into
+  `.github/prompts/*.prompt.md`. VS Code has deprecated prompt files, and they
+  only worked in the IDE; Copilot reads Agent Skills in the IDE, cloud agent,
+  code review and CLI. `.agents/skills/` is the directory the `agents` target
+  already writes, so one copy serves Copilot, Codex and Cursor (#24).
+
+  Re-running removes `.github/prompts/*.prompt.md` files that an earlier version
+  generated (identified by the `<!-- context-forge:generated -->` stamp), so no
+  skill is listed twice. Hand-written prompt files are left alone, and the
+  directory is removed only if nothing else is in it.
+
+### Removed
+
+- The `analyze` skill (`project-guides/skills/analyze/`), which is obsolete.
+  It was the only shipped skill, so `setup-ide` currently installs no skills on
+  any target. Projects that already installed it keep their copy until they
+  delete it, because `setup-ide` does not remove files the guide has dropped.
+
+### Fixed
+
+- `readme.setup-ide.md` said the `agents` target writes only `AGENTS.md`. It also
+  copies skills to `.agents/skills/`.
+- `file-naming-conventions.md` described the pre-0.18.0 managed-file marker. It
+  now describes the BEGIN/END region and the `context-forge:generated` stamp.
+
+## [0.18.0] - 2026-09-22
+
+Requires context-forge >= 0.17.0. Older versions recognize only the previous
+marker, so they would read every managed file as unmanaged — prompting on each
+run and creating backups for files that already have one.
+
+### Changed
+
+- `setup-ide` now merges its generated content into `CLAUDE.md`, `AGENTS.md`
+  and `.github/copilot-instructions.md` instead of overwriting them. Generated
+  content is wrapped in `<!-- BEGIN:context-forge -->` / `<!-- END:context-forge -->`
+  and only that span is replaced, so hand-written content in those files
+  survives a re-run.
+
+  A file that was never managed is now preserved and the block appended, with a
+  one-time `.pre-context-forge` backup. Previously such a file was destroyed:
+  a project that already had a `CLAUDE.md` before adopting context-forge lost
+  it on first run, with nothing recoverable outside git.
+
+  Files carrying the old `[//]: # (context-forge:managed)` marker migrate
+  automatically — generated content always ran from that marker to end of file,
+  so the span is known without parsing content.
+
+  A file with unbalanced markers is left untouched and the run exits non-zero
+  rather than guessing at the boundary.
+
+- Marker syntax moved from `[//]: # (...)` to HTML comments. The link-reference
+  form depends on renderers discarding unused link reference definitions, which
+  lightweight non-CommonMark parsers get wrong — it leaks as visible text. The
+  generated single-file artifacts under `.github/` carry a standalone
+  `<!-- context-forge:generated -->` tag rather than a pair, since they have no
+  user-authored region to protect.
+
+### Added
+
+- `rules.exclude` — comma-separated basename globs (e.g. `dart.md,swift*.md`)
+  naming scoped rules to leave uninstalled, for rules irrelevant to a project.
+  Read from the `CONTEXT_FORGE_RULES_EXCLUDE` environment variable as a one-off
+  override, otherwise from `cf config`. Unset means every rule is installed, as
+  before.
+
+  Skip-only: a new exclusion stops future copies but never deletes a file an
+  earlier run installed. Always-on rules cannot be excluded, since they compile
+  into the managed block rather than being installed as files.
+
+  A pattern matching nothing warns on stderr without failing the run, naming
+  whether it was a typo or a valid always-on rule that cannot be excluded.
+
+## [0.17.10] - 2026-09-19
+
+### Changed
+
+- Added `.gitattributes` with `export-ignore` for paths used only to develop
+  the guide itself: `user/`, `.claude/`, `.idea/`, `.obsidian/`,
+  `.understand-anything/`, `DEVLOG.md`, `CLAUDE.md`, and `.gitattributes`.
+  They remain tracked here but are left out of `git archive` output, so
+  tarball installs no longer carry them into consumer projects (where the
+  guide's `user/` sat beside the project's own `project-documents/user/` and
+  showed up in PR diffs on every guide update). Submodule and clone installs
+  are unchanged.
+
+## [0.17.9] - 2026-09-19
+
+### Added
+
+- `rules/git.md`: "Worktrees" subsection. The target is a property of the
+  config, never of the checkout; a registered worktree's
+  `git.integration_branch` is its own long-lived branch, giving `main` ←
+  integration branch ← worktree branch ← slice branch. Agents merge exactly
+  one level (slice into target); everything above is PM-only. Unregistered
+  worktrees and a target checked out elsewhere are STOP conditions. Fixes #15.
+- `rules/git.md`: explicit merge steps replace the one-line "merges into the
+  target" sentence — re-read the target, check it out, merge, STOP on failure.
+- `rules/git.md`: "Branch Protection" section. A 404 from the classic
+  protection endpoint does not mean a branch is unprotected; agents must also
+  check `rules/branches/{branch}` (rulesets) before reporting either way.
+
+## [0.17.8] - 2026-09-18
+
+### Fixed
+
+- Removed a self-referential submodule: `project-documents/ai-project-guide`
+  (a gitlink pointing at this repo's own URL) and `.gitmodules`, both
+  introduced by commit `4714fbd` from running `cf guides install` inside a
+  checkout of the guide itself. Every consumer install (tarball, submodule,
+  clone) was carrying both artifacts. Fixes #21.
+
+## [0.17.7] - 2026-09-16
+
+### Added
+
+- `file-naming-conventions.md`: documents the pull-request review filename
+  convention, `{host}-{owner}-{repository}-{number}-review.{reviewType}.md`
+  (e.g. `github.com-ecorkran-squadron-42-review.code.md`), as a third
+  sibling to Slice-Lineage and Operational Reviews under "Review Files".
+  Adds the `targetKind` (`slice`|`arch`|`step`|`pr`, defaults to `slice`)
+  and `rulesSource` (`flag`|`config`|`project`|`user`|`template`|`none`)
+  optional frontmatter keys, and the `pr:` mapping (`host`, `owner`,
+  `repository`, `number`, `url`) that replaces `slice:` for PR reviews.
+  Notes that `reviewedSha` is the PR's head sha, not the reviewing
+  machine's `HEAD`. Ports a convention already shipped in squadron
+  (`383-slice.pr-keyed-review-persistence`).
+
+## [0.17.6] - 2026-09-15
+
+### Added
+
+- `tool-guides/docker/`: a new Docker/container tool guide following the
+  `tool-guides/electron/` numbered-file convention — `00-introduction.md`,
+  `01-image-and-build.md`, `02-entrypoint-and-process-model.md`,
+  `03-compose-and-orchestration.md`, `04-decision-guide.md`. Covers
+  containerization decisions that build and start successfully but fail
+  quietly: multi-mode entrypoint dispatch (reject unknown modes rather than
+  defaulting), PID 1 zombie reaping and signal forwarding, loopback binds
+  not surviving containerization, gitignored env files under `set -e`,
+  build-time vs. runtime work, pinning for reproducibility, `depends_on`
+  vs. real health gating, graceful stop windows, and porting an existing
+  systemd unit's tuning into a container. Closes #20.
+
+## [0.17.5] - 2026-09-14
+
+The Phase 4 slice-design template becomes a file and a schema, and gains a
+validator, so body structure is enforced mechanically rather than by prose.
+
+### Added
+
+- `project-guides/templates/slice-design.md`: the canonical slice-design
+  template as a real file with `{placeholder}` substitution points. Each
+  heading carries a marker: `<!-- required -->` (must appear at the same level
+  with the same text) or `<!-- optional: ... -->` (omit when the stated
+  condition applies). Unmarked level-3 headings are guidance and may be
+  renamed or dropped, so legitimate omission stays legal and "Template
+  Stuffing" remains an anti-pattern.
+- `scripts/validate-slice-design`: checks one or more slice-design documents
+  for every heading the template marks required. Prints `PASS` or `FAIL` with
+  the missing headings; exit 0 pass, 1 fail, 2 usage or template error.
+  Lenient matching (case, whitespace, parenthetical suffixes, fenced blocks
+  skipped); requires `docType: slice-design` in frontmatter. Bash 3.2
+  compatible. The template itself and a real conforming design both pass.
+
+### Changed
+
+- `guide.ai-project.004-slice-design.md`: the inline template blocks are
+  replaced by a pointer to the template file and the required/optional
+  contract; the Design Review Checklist and Phase 4 Success Criteria now
+  require a passing validator run.
+- `prompt.ai-project.system.md` (Phase 4): instructs writing from the
+  template file and running the validator before finishing.
+- `guide.ai-project.process.md` (Phase 4), `file-naming-conventions.md`
+  (slice-design schema), `project-guides/readme.md`, and root `readme.md`
+  point at the template and validator.
+
+Context Forge boundary: `cf validate frontmatter` still checks YAML only and
+`cf check` only that a design exists. Invoking this validator from `cf`, or
+reading the `<!-- required -->` markers natively, is context-forge work.
+
+## [0.17.4] - 2026-09-09
+
+### Added
+
+- Guidance that `review: none` in slice-design frontmatter is a Project
+  Manager decision only. It is Context Forge's review-exempt declaration and
+  clears every slice-scoped review gate (slice, tasks, code) for that slice.
+  Agents must not add it, must not run `cf check --set-review-none`, and must
+  not carry it over when using an earlier slice design as a format template.
+  When `cf next` reports a required review, the correct action is to stop and
+  tell the Project Manager or run the review via the project's review process,
+  never to edit frontmatter. Added to `guide.ai-project.004-slice-design.md`
+  (frontmatter template), `file-naming-conventions.md` (slice-design schema),
+  and `guide.ai-project.process.md` (Phase Approval). Motivated by two
+  real failures in context-forge where an agent set the field to bypass a
+  review gate and a later design inherited it by copying frontmatter.
+
+## [0.17.3] - 2026-09-09
+
+### Added
+
+- Root `readme.md` now carries a callout stating that, once installed into a
+  consuming project, `project-documents/ai-project-guide/` is managed by
+  Context Forge (`cf`) and overwritten on `cf guides update` — customizations
+  belong under `project-documents/user/` instead. Also notes that projects
+  whose CI checks out this repo as a submodule need `submodules: recursive`
+  on their checkout step. Closes #19.
+
+## [0.17.2] - 2026-08-05
+
+Two rule additions, both distilled from real failures where a tool read
+configuration from the wrong universe.
+
+### Added
+
+- `rules/python.md` — "one value, one source" configuration rule: `os.environ`
+  and the pydantic settings object are different sources of truth, and `.env`
+  values loaded by settings are not visible to `os.environ.get()`. Code that
+  reads configuration must go through the settings object, or it silently
+  reads an empty universe and fails without error.
+- `rules/sql.md` — destructive and maintenance tooling (restore, rechunk,
+  repair) must take its DB URL from an explicit caller argument, never from
+  ambient environment inside the tool, and must refuse to run when the target
+  does not match the expected database signature. A restore aimed by an unset
+  variable is the same failure mode the tool exists to repair.
+
+## [0.17.1] - 2026-08-05
+
+Production database protection rules land, and the legacy code-review
+cluster (superseded by squadron) is removed.
+
+### Added
+
+- Production database protection rules, distilled from a real incident (a test
+  fixture handed production credentials truncated prod tables while its suite
+  reported green). Full rule set in `rules/sql.md` ("Production Database
+  Protection"); test-facing subset in `rules/testing.md` ("Database Safety in
+  Tests"); always-on summary line in `rules/general.md` so the protection
+  applies even when no SQL or test file is in scope.
+
+### Removed
+
+- The legacy code-review cluster, superseded by squadron and Claude Code's
+  built-in review commands:
+  - `project-guides/guide.ai-project.090-code-review.md`
+  - `project-guides/prompt.code-review-crawler.md` (dangling since 0.16.0 —
+    its questionnaire source `rules/review.md` was removed then)
+  - `project-guides/agents/code-review-agent.md` and
+    `code-review-config.json` (both pointed at the deleted
+    `.cursor/rules/review.md`, and the config still wrote to the pre-rename
+    `project-documents/our-project/` path)
+  - `.claude/agents/code-review-agent.md` (installed copy)
+  - References cleaned from `project-guides/readme.md`,
+    `guide.ai-project.process.md`, `file-naming-conventions.md`,
+    `readme.setup-ide.md`, `scripts/rename-private-to-user-in-repo.sh`, and
+    `scripts/template-stubs/prompt.legacy-migration.md`. The 090-099
+    specialized-guide range in `file-naming-conventions.md` is unchanged;
+    its example is now `091-legacy-task-migration`.
+
+## [0.17.0] - 2026-08-04
+
+Always-on rules converge on `AGENTS.md` across targets, and the scoped-rule
+index is emitted only where nothing else scopes rules.
+
+### Added
+- `setup-ide agents` now copies skills to `.agents/skills/` when a skills source is present. The source layout (`<name>/SKILL.md`) already matches the destination, so the copy needs no translation
+
+### Changed
+- `setup-ide cursor`: always-on rules are written to `AGENTS.md` instead of `.cursor/rules/`; `.cursor/rules/*.mdc` now carries only the scoped rules. A `.mdc` written by a prior run for a rule that is now always-on is removed, matched by source filename stem so the cleanup can only remove what a previous run wrote from that same source
+- `setup-ide cursor` no longer writes `.cursor/agents/`. An existing directory is left in place with a warning rather than deleted — those files carry no managed marker, so the script cannot tell its own past output from user content
+- The scoped-rule index in `AGENTS.md` is now emitted only by the `agents` target. The index exists because the `AGENTS.md` format has no `applyTo`/`globs` mechanism; `copilot` (`.github/instructions/` with `applyTo`) and `cursor` (`.cursor/rules/` with `globs`) already deliver scoped rules with working scoping, so a third copy pointing at source paths added nothing
+- Copilot setup notes now state that `AGENTS.md` mirrors `copilot-instructions.md`, so enabling VS Code's experimental `chat.useAgentsMdFile` setting loads the same always-on rules twice
+
+### Fixed
+- `copy_skills` reported `.claude/skills/` as the destination regardless of where it actually copied. Harmless while only the `claude` target called it, wrong once the `agents` target did too; it now reports the real target directory. Its "not a skill" warning is likewise no longer worded as Claude-specific
+
+## [0.16.1] - 2026-07-30
+
+### Fixed
+- Rules: `general.md` Project Navigation now points modular rules at `project-documents/ai-project-guide/project-guides/rules/`, the path that resolves in an installed project. The bare `project-guides/rules/` resolved only inside this repository, so every consumer carried a broken cross-reference — while the two neighboring lines in the same section already used the installed path. No functional impact: every target delivers scoped rules through a mechanism that does not consult this line (`.claude/rules/`, `.github/instructions/` with `applyTo:`, the `AGENTS.md` index, or Cursor `globs:`), so the line was a redundant cross-reference rather than a load path
+
+### Added
+- `readme.md`: "Working inside this repository" section for contributors. Guide paths are written for the installed layout, so working in this repo directly requires stripping the `project-documents/ai-project-guide/` prefix; includes a mapping table and a reminder that rules are edited at `project-guides/rules/` while `setup-ide` compiles the generated artifacts
+
+## [0.16.0] - 2026-07-30
+
+Official OpenAI Codex support via a vendor-neutral `AGENTS.md` target, plus a
+round of cleanups to the rules/skills pipeline and the docs describing it.
+
+### Added
+- `setup-ide agents` target: writes `AGENTS.md` and nothing else — no `.github/` tree, no vendor-specific files. Aliases `openai` and `codex` normalize to it, since `AGENTS.md` is a vendor-neutral format and the target is named after the format rather than one vendor (#7)
+- `AGENTS.md` now indexes the scoped (non-`alwaysApply`) rules by path instead of omitting them. The format has no `applyTo`/`paths` scoping mechanism, so inlining them would put Python rules in front of a React project; the index points at the paths they already occupy in the consuming repo, for the agent to read on demand
+- `AGENTS.md` now opens with a `# Project Guidelines` heading, matching `CLAUDE.md`'s structure
+
+### Changed
+- Extracted `compile_copilot_always_on` into a vendor-neutral `compile_always_on_rules`, now shared by the `copilot` and `agents` targets. `.github/copilot-instructions.md` output is byte-identical to before; `AGENTS.md` is no longer a blind `cp` of it
+
+### Removed
+- `project-guides/skills/review.md`: its 12 checklist categories duplicated the Code Review Questionnaire in `guide.ai-project.090-code-review.md` verbatim, and its file-naming section had drifted from the canonical spec — it taught `nnn-review.{name}.md` where `file-naming-conventions.md` defines `nnn-review.{template}.{slice-name}.md`. Had zero inbound references, and was frontmattered `name: review-rules` (a rules file misfiled as a skill). Structured review now lives in squadron and in Claude Code's built-in review commands
+- `project-guides/skills/ui-development.md`: a lossy 29-line restatement of `guide.ui-development.ai.md`, which is the copy actually referenced from the process guide. Zero inbound references, and frontmattered `layer: rules` — also misfiled as a skill. Its accessibility guidance was grafted into the guide first, since the guide lacked it
+
+### Fixed
+- `copy_skills` now warns when it encounters a flat `.md` in `skills/`. Claude Code requires `<name>/SKILL.md`, so the directory-only glob silently dropped flat files from Claude installs — `review.md` and `ui-development.md` reached Copilot as prompts but never reached Claude, with no indication either was skipped
+- `guide.ui-development.ai.md`: replaced Obsidian `![[...]]` embeds with standard markdown image links, so the two mockup figures render on GitHub and in any markdown viewer rather than only in Obsidian. Renamed the images from `Pasted image <timestamp>.png` to descriptive names and added substantive alt text
+- Docs: removed the `windsurf` target from `readme.md`, `project-guides/readme.md`, and `snippets/npm-scripts.ai-support.json.md`. The target was removed from the script some time ago, so all three were documenting a command that exits non-zero
+- Docs: rewrote `readme.setup-ide.md`, which documented only `cursor`/`windsurf`, described the frontmatter contract as `globs:` (sources use `paths:`), and listed a stale rules inventory. Now covers all four targets, what each writes, and the real frontmatter translation per target
+
+## [0.15.14] - 2026-07-29
+
+### Fixed
+- `scripts/setup-ide`: replaced all nine `((var++))` increments with `var=$((var + 1))`. Under `set -e`, `((var++))` exits non-zero when the pre-increment value is `0`, so the script aborted silently on the first counted file — modular rule copying stopped after `dart.md` (the first non-`alwaysApply` rule alphabetically), and agents, skills, and the completion notes were skipped entirely. `cf setup-ide` surfaced this only as a bare non-zero exit with no output. Affected every project running `cf init` (squadron issue #46)
+- `scripts/setup-ide`: `copy_skills` now uses `cp -R` and skips empty skill directories explicitly, instead of a `2>/dev/null`-suppressed `cp` that would abort the script under `set -e` for an empty skill directory or any skill containing a subdirectory
+- `scripts/rename-private-to-user-in-repo.sh`: same `((UPDATED_COUNT++))` / `set -e` abort on the first updated file
+
+## [0.15.13] - 2026-07-22
+
+### Fixed
+- Rules: split the "before starting work" checklist into two clearly labeled paths (planning: commit directly to the target; slice: full branch-management steps) — the merged numbering had led an agent to conclude slice-branch steps might also apply to planning work
+
+### Added
+- Tool guides: TimescaleDB guide set (overview, chunk sizing, restructuring, continuous aggregates, query discipline)
+
+## [0.15.12] - 2026-07-13
+
+### Fixed
+- Rules: `git.integration_branch` no longer prefixes work branch names — branch names stay `{index}-{type}.{name}` regardless of whether the integration branch is set; only the fork point and merge target change
+- Repo: synced root `CLAUDE.md` and the submodule's own `CLAUDE.md`/`git.md` copies with the corrected Branch Naming rules, eliminating drift across the four copies
+
+## [0.15.11] - 2026-07-11
+
+### Changed
+- Rules: replaced `git.branch_root` with `git.integration_branch` in Branch Naming — the new key changes fork/merge topology (work forks from and merges into the integration branch, not `main`), not just the branch name prefix
+- Rules: removed the `{index}-planning.{name}` branch type; planning work (Phases 0–5) now commits directly to the current integration target instead of a dedicated planning branch
+- Repo: synced the root `CLAUDE.md` Branch Naming section with `project-guides/rules/git.md` to eliminate drift
+
+## [0.15.10] - 2026-07-05
+
+### Changed
+- Guides: aligned slice status enum in `prompt.ai-project.system.md` and `guide.ai-project.process.md` with the canonical definition in `file-naming-conventions.md`
+- Repo: added `.understand-anything/` knowledge graph artifacts and `.gitignore` rules to exclude its scratch/trash directories
+
+## [0.15.9] - 2026-06-30
+
+### Changed
+- Rules: Git branch lifecycle now instructs not to delete branches unless specifically instructed to
+
+## [0.15.8] - 2026-06-28
+
+### Added
+- Rules: Optional `git.branch_root` config prefix for work branch names (`cf config get git.branch_root`) — prepends a configured root as `{root}/{branch-name}`; affects the git branch name only, not document layout
+
+## [0.15.7] - 2026-06-28
+
+### Added
+- Rules: Dart language coding standards (`project-guides/rules/dart.md`) and Flutter application standards (`project-guides/rules/flutter.md`)
+- Tool guides: Flutter-on-iOS guide set (`tool-guides/flutter-ios/`) — a path-selecting introduction over a shared `setup/` core (design, build, testing) and a `migration/` path (Android-to-iOS overview, plugin audit), supporting both greenfield iOS apps and Android-to-iOS migrations
+
+## [0.15.6] - 2026-06-28
+
+### Changed
+- Rules: Expanded git branch naming rules to cover planning work (`{index}-planning.{name}`) in addition to slice branches
+
+## [0.15.5] - 2026-06-28
+
+### Changed
+- Docs: Updated `001-concept` references to `000-concept` across prompts, guides, and conventions per phase renumbering
+
+## [0.15.4] - 2026-04-19
+
+### Changed
+- Rules: Added exception handling rule to general.md (Python-specific details in python.md)
+- Rules: Python — require ruff/pyright config blocks in pyproject.toml, tighten exception handling, add load-test tier, async blocking rule, and concurrency/shared-state discipline
+
+## [0.15.3] - 2026-04-13
+
+### Changed
+- Prompts: Hardened task-checker delegation language in Phase 6, Maintenance Routine, and Phase 6 Notes — prescriptive instead of optional
+- Rules: Updated general rules to prescribe task-checker delegation for checklist updates
+
+## [0.15.2] - 2026-04-12
+
+### Added
+- File naming conventions: Added IDE-generated output file exemptions from universal frontmatter requirements
+
+## [0.15.1] - 2026-04-11
+
+### Changed
+- Rules: Add hallucination trap guideline to general rules; fix heading levels in parsing section
+
+## [0.14.7] - 2026-03-30
+
+### Changed
+- Rules: Added evidence-first debugging rule to general rules — require actual error before attempting fixes
+
+## [0.13.20] - 2026-03-20
+
+### Changed
+- Prompts: Phase 6 now specifies `workflow_check`/`cf check` with fix parameter as post-implementation step
+
+## [0.13.19] - 2026-03-18
+
+### Changed
+- Prompts: Phase 2 guard clause strengthened — worktree name no longer implies component, explicit PM confirmation required
+
+## [0.13.18] - 2026-03-18
+
+### Added
+- File naming: Index-matched review artifact conventions (slice-lineage and operational reviews)
+
+### Changed
+- Prompts: Phase 2 now requires agent to confirm architecture goal with PM when not specified
+- File naming: Clarified 900-939 range as ad-hoc reviews; slice-lineage reviews use parent index
+
+## [0.13.17] - 2026-03-18
+
+### Changed
+- Prompts: Phase 2 (Architecture) prompt adds worktree context block with pre-resolved index and naming
+
+## [0.13.16] - 2026-03-17
+
+### Changed
+- Prompts: Phase 2 (Architecture) prompt now includes explicit steps for determining component name and base index
+- Prompts: Clarified index scanning, valid range, and reserved range in Phase 2
+
+## [0.13.15] - 2026-03-13
+
+### Changed
+- Prompts: Removed `status` field from architecture YAML frontmatter template
+- Prompts: Added directive to register architecture document via `cf set arch <nnn>` after creation
+
+## [0.13.14] - 2026-03-13
+
+### Added
+- Guides: Slice plan template now includes `{tsi}` (tentative slice index) in all slice entries with explanation note
+- Prompts: Added "Add Slice Overview" prompt for appending new slices to existing slice plans
+
+### Changed
+- Prompts: Clarified Phase 3 YAML frontmatter — removed per-slice status field note
+- Prompts: Moved "Summarize Context" and "Task Breakdown Supplement" to Deprecated section
+
+## [0.13.13] - 2026-03-13
+
+### Added
+- setup-ide: Add `context-forge:managed` marker comment to generated CLAUDE.md
+
+## [0.13.12] - 2026-03-10
+
+### Changed
+- Relaxed non-architecture file size from "~350 max" to "~350 when possible"
+- Raised task file line limit from ~350 to ~450 in guide and prompt
+- Prompts: Added slice naming guidance (avoid special characters, include tentative slice number)
+
+## [0.13.11] - 2026-03-10
+
+### Changed
+- Guides: Clarified slice planning success criteria format (bullet list, no checkboxes)
+- Prompts: Rearranged YAML frontmatter fields for consistency (dates before status)
+
+## [0.13.10] - 2026-03-09
+
+### Changed
+- Prompts: Phase 4 verification walkthrough noted as draft to be refined during implementation
+- Prompts: Phase 6 now requires running verification walkthrough after task completion and updating it with actual results
+
+## [0.13.9] - 2026-03-09
+
+### Added
+- Prompts: Added YAML frontmatter specification and example to Phase 3 (Slice Planning) prompt
+
+## [0.13.8] - 2026-03-09
+
+### Added
+- Guides: Added Verification Walkthrough section to Phase 4 (Slice Design) with checklist item
+- Prompts: Added verification walkthrough requirement to Slice Design prompt
+
+### Changed
+- Prompts: Phase 5 task breakdown now specifies test-with pattern (tests after each implementation, not batched)
+- Prompts: Phase 6 implementation updated with explicit commit checkpoint guidance and three-attempt retry limit
+
+## [0.13.7] - 2026-03-08
+
+### Added
+- Rules: Added "Parsing & Pattern Matching" section to general rules — prefer lenient parsing, handle format variations, test with real input
+
+## [0.13.6] - 2026-03-08
+
+### Fixed
+- Prompts: Corrected context_profiles input mappings for architecture, slice planning, slice design, task breakdown, implementation, and supplement/expansion variants
+
+## [0.13.5] - 2026-03-08
+
+### Changed
+- Prompts: Expanded context_profiles with kebab-case keys, added default profile and supplemental entries
+- Prompts: Fixed Architecture heading level (h6 → h5)
+- Prompts: Renamed "Perform Routine Maintenance" to "Maintenance Routine"
+- Prompts: Moved Task Breakdown Supplement and Task Expansion to supplemental section
+
+### Removed
+- Prompts: Removed obsolete "Project Phase" and "Ad-Hoc Tasks" prompts
+
+## [0.13.4] - 2026-03-08
+
+### Added
+- Prompts: Added context_profiles table to specify inputs per prompt.
+
+### Changed
+- Prompts: Clarified Phase 7 as not included in standard flow.
+- Prompts: indexing specified for slice plans
+
+## [0.13.3] - 2026-03-06
+
+### Changed
+- Simplified Context Initialization prompt: removed redundant work context bullet list, key documents section, hardcoded HLD path, and legacy path note
+- Replaced static file references with `{{#if fileArch}}` / `{{#if fileSlicePlan}}` template variables
+
+## [0.13.2] - 2026-03-04
+
+### Removed
+- Obsolete `project-artifacts` monorepo pattern references from directory-structure, system prompt, and code review guide
+- Monorepo Context Initialization prompt (superseded by standard context init)
+
+### Changed
+- Renamed `monorepo-scaffolding` examples to `restructure-scaffolding` in file-naming-conventions
+
+## [0.13.0] - 2026-02-28
+
+### Changed
+- Streamlined process: unified architecture → slice plan → slice → task pipeline
+- Consolidated project-level and architecture-level planning into single flow
+- Simplified Phase 1 (Concept) to focus on project vision without separate spec
+- Updated system prompt to reflect simplified process
+
+### Removed
+- Standalone feature concept — everything is a slice
+- Separate spec phase and project-level HLD — absorbed into architecture
+- Task expansion as separate phase (006) — renamed to variant of 005
+- Legacy task migration guide (091)
+- Onboarding notes
+
+## [0.12.1] - 2026-02-28
+
+### Changed
+- Standardized status values to underscore format: `not_started`, `in_progress`, `completed`, `deprecated`
+- Promoted `dateCreated`/`dateUpdated` to required frontmatter fields in file-naming-conventions
+- Removed standalone feature concept (`feature.` prefix, 750+ range) from file-naming-conventions and guides
+
+## [0.12.0] - 2026-02-25
+
+### Added
+- `setup-ide claude`: modular rules support — non-alwaysApply rules copied to `.claude/rules/` (#11)
+
+### Changed
+- `setup-ide claude`: CLAUDE.md now only embeds `alwaysApply: true` rules (general, git)
+- `setup-ide cursor`: converts `paths` frontmatter to Cursor `globs` format, strips `name` field
+- Rules files: standardized on `paths` (Claude-native) frontmatter format
+- `git.md`: marked as `alwaysApply: true`
+
+### Removed
+- Windsurf IDE support dropped from `setup-ide`
+
+## [0.11.8] - 2026-02-24
+
+### Fixed
+- `setup-ide claude`: Fix CLAUDE.md compilation — heading detection, code-fence awareness, heading level promotion (#10)
+
+## [0.11.7] - 2026-02-23
+
+### Changed
+- README: streamlined and reorganized
+- Git rules: minor updates
+- Setup-ide readme: updates
+
+### Removed
+- Removed `user/analysis/940-analysis.initial-codebase.md` (stale analysis file)
+
+## [0.11.6] - 2026-02-20
+
+### Added
+- Git conventions and rules file (`rules/git.md`) with semantic commit specification
+- Future work section in slice planning guide
+
+### Changed
+- Testing rules: specify centralized testing approach
+- Various rules files updated (electron, general, python, react, review, sql, ui-development)
+
+## [0.11.5] - 2026-02-19
+
+### Changed
+- Phase 5 guide: added frequent commit strategy, specify DEVLOG.md location
+- TypeScript rules: full overhaul
+
+### Fixed
+
+
+## [0.11.4] - 2026-02-17
+
+### Added
+- UI development rules file (`rules/ui-development.md`)
+
+### Changed
+- Phase 5 guide: added "test-with" principle for task breakdown
+- Phase 6 guide: streamlined and updated to reflect 2026 practices
+- Session State Summary prompt: updated for clarity
+
+## [0.11.3] - 2026-02-17
+
+### Added
+- **Phase 5: Task Breakdown guide** (`guide.ai-project.005-task-breakdown.md`) — playbook for converting slice designs into granular task lists
+
+### Fixed
+- Minor consistency fixes across rules files and `setup-ide` agent validation
+
+## [0.11.2] - 2026-02-17
+
+### Added
+- Session State Summary prompt in `prompt.ai-project.system.md` for DEVLOG entries at end of work sessions
+
+### Changed
+- Phase 7: Added Session State Summary step at end of each work session
+- Phase 8: Added Session State Summary step for integration results and next planned slice
+
+## [0.11.1] - 2026-02-16
+
+### Fixed
+- Standardize guide frontmatter; ensure `dateUpdated` present on all guide files
+
+## [0.11.0] - 2026-02-15
+
+### Added
+- **Phase 2.5: Project HLD Creation** - Dedicated phase for high-level design before slice planning
+  - New process guide section in `guide.ai-project.000-process.md`
+  - New parameterized prompt in `prompt.ai-project.system.md`
+  - HLD now created separately from slice planning, using next available index in 050-089
+- **Phase 3.5: Architectural Component Design** - Design architectural initiatives spanning multiple slices
+  - New prompt for creating `nnn-arch.{component-name}.md` documents
+  - Architecture documents function as HLD for their scope
+- **Standalone feature index range (750-799)** - Dedicated range for features not tied to a slice
+  - Slice range narrowed from 100-799 to 100-749 (650 slots)
+  - New naming convention: `nnn-feature.{feature-name}.md`
+- **Migration guides directory** (`project-guides/migrations/`)
+  - `20260121-migration-guide.md` - Consistency standards migration
+  - Moved v0.10.0 migration guide here (marked obsolete)
+  - Root `MIGRATION.md` now serves as index
+- **DEVLOG.md** - Internal session log for development continuity
+- **Electron tool guides** - Comprehensive guides (00-05) covering architecture, project structure, electron-vite, testing, and decision guide
+- **MCP tool guide** (`tool-guides/mcp/`) - Overview of Model Context Protocol integration
+
+### Changed
+- **YAML date fields standardized** to `dateCreated`/`dateUpdated` (was `created`/`lastUpdated`)
+  - All dates use YYYYMMDD format (no dashes)
+  - Updated all 78+ markdown files and all YAML specs in prompts/guides
+- **Phase 3 (Slice Planning) updated** for dual-context support
+  - Now accepts either project specification or architecture document as parent
+  - Architecture documents serve as HLD for their scope (no separate HLD needed)
+  - Updated `guide.ai-project.003-slice-planning.md` with dual-context methodology
+- **Phase 4 (Slice Design) updated** to reflect current standards
+- **Index ranges restructured**
+  - 100-749: Slices and slice-linked work
+  - 750-799: Standalone features (new)
+  - 800-899: Reserved
+  - Updated `file-naming-conventions.md`, `directory-structure.md`, and all references
+- **All task files in `user/tasks/` now require index prefix**
+  - `inventory.index-migration.md` → `952-inventory.index-migration.md`
+  - `report.index-migration.20250930.md` → `953-report.index-migration.md`
+- **Project-guides readme** updated with Phase 2.5/3.5, migrations, agents/rules sections, and dateCreated/dateUpdated in author schema
+- **YAML frontmatter** now required on all markdown files (was ~55% coverage, now 100%)
+
+### Fixed
+- Malformed frontmatter in `tool-guides/shadcn/setup.md`
+- Removed empty/orphaned files: `900-slice.maintenance.md`, `guide.object-creation.complex.md`, `api-guides/usgs/`
+- Corrected 800-range misuse (feature file moved to 105-slice/tasks)
+- All date fields across project now use consistent `dateCreated`/`dateUpdated` naming
+
+## [0.10.0] - 2025-10-08
+
+### BREAKING CHANGES
+- **Directory rename**: `project-documents/private/` → `project-documents/user/` for clarity
+  - "private" was confusing (implied secrecy, but directory should be committed)
+  - "user" clearly indicates "your project work"
+  - See [MIGRATION.md](MIGRATION.md) for migration steps
+- **Environment variable rename**: `ORG_PRIVATE_GUIDES_URL` → `EXTERNAL_PROJECT_DOC_URL`
+  - More accurate naming (not just for organizations)
+  - Update your environment variables and CI/CD configs
+
+### Added
+- **Migration script**: `scripts/migrate-private-to-user.sh` - automated migration for user projects
+- **Migration guide**: `MIGRATION.md` - comprehensive migration documentation
+
+### Changed
+- All documentation updated to reference `user/` instead of `private/`
+- Bootstrap script now creates `project-documents/user/` structure
+- All guides and prompts updated for new naming
+
+## [0.9.2] - 2025-10-08
+
+### Added
+- **External guides support**: Import guides from another repository via `EXTERNAL_PROJECT_DOC_URL`
+- **Bootstrap auto-setup**: Automatically creates update scripts for npm/pnpm and Python projects
+
+### Fixed
+- **setup-ide**: CLAUDE.md now created in project root instead of submodule directory
+- **update-guides**: Script always runs from submodule (no manual copying needed)
+
+### Changed
+- **One-time upgrade required**: Existing projects need package.json update (see readme)
+
+## [0.9.0] - 2025-10-06
+
+### Changed
+- **Git submodule architecture**: Migrated from git subtree to git submodule for cleaner separation
+  - Framework guides now in `project-documents/ai-project-guide/` submodule
+  - User work stays in `project-documents/private/` (parent repo)
+  - Simplified updates: `git submodule update --remote`
+  - Works for npm and non-npm projects (Python, Go, Rust, etc.)
+- **Directory structure**: Finalized `user/` subdirectories
+  - Added: `project-guides/` for project-specific customizations
+  - Renamed: `code-reviews/` → `reviews/`
+  - Removed: `maintenance/` directory (use `950-tasks.maintenance.md` instead)
+  - Order: `analysis/, architecture/, features/, project-guides/, reviews/, slices/, tasks/`
+- **Bootstrap scripts**: Universal setup for any project type
+  - `bootstrap.sh` and `bootstrap.py` for one-command setup
+  - Template stub scripts download from GitHub (single source of truth)
+  - Auto-detects git repository root for safety
+
+### Added
+- **Template stub scripts** in `scripts/template-stubs/`
+  - Minimal 3-line stubs for templates
+  - Downloads full bootstrap scripts from ai-project-guide
+  - Preserves `npx degit` simplicity
+
+### Fixed
+- `setup-ide` script now uses correct submodule paths
+- Bootstrap scripts prevent running in wrong directory
+- All path references updated for submodule structure
+
+## [0.8.0] - 2025-01-04
+
+### Added
+- **3-digit index system (nnn)**: Migrated from 2-digit (nn) to 3-digit (nnn) indexing with semantic range allocation
+  - **000-009**: Core process guides
+  - **010-049**: Extended process documentation
+  - **050-089**: Architecture and system design
+  - **090-099**: Specialized guides
+  - **100-799**: Active work (slices, tasks) - 700 slots for massive scalability
+  - **800-899**: Feature documents
+  - **900-939**: Code review tasks (40 slots)
+  - **940-949**: Codebase analysis tasks (10 slots)
+  - **950-999**: Maintenance tasks (50 slots)
+- **File size management**: Documented 350-line limit for non-architecture files with systematic splitting procedure
+- **Monorepo context initialization**: Separate dedicated prompt for monorepo vs standard project contexts
+
+### Changed
+- **HLD standardization**: Moved to `architecture/050-arch.hld-{project}.md` with consistent naming
+- **Directory structure**: Consolidated `maintenance/` into tasks, renamed `code-reviews/` to `reviews/`, ordered by workflow
+- **Simplified naming**: Removed redundant slice names from features - index number creates the link (DRY principle)
+- **Path consistency**: Standardized to `user/{subdir}/...` pattern for all project-specific files
+
+### Fixed
+- Updated analysis, maintenance, and feature prompts for consistency with new structure
+- Corrected path references, YAML fields, and various typos throughout documentation
+
+## [0.7.0] - 2025-08-18
+
+### Added
+- **Slice-based development methodology**: Complete overhaul of project workflow to use vertical slices
+  - **Phase 3: High-Level Design & Slice Planning** - Break projects into manageable vertical slices
+  - **Phase 4: Slice Design (Low-Level Design)** - Create detailed technical designs for individual slices
+  - **Phase 5: Slice Task Breakdown** - Convert slice designs into granular tasks with context headers
+  - **Phase 6: Task Enhancement and Expansion** - Enhance slice tasks for reliable AI execution
+  - **Phase 7: Slice Execution** - Implement individual slices with proper context management
+  - **Phase 8: Slice Integration & Iteration** - Integrate completed slices and plan next iterations
+- **New comprehensive guides**:
+  - `guide.ai-project.03-slice-planning.md` - Complete guide for breaking projects into slices
+  - `guide.ai-project.04-slice-design.md` - Detailed slice design methodology with templates
+  - `guide.ai-project.06-task-expansion.md` - Updated task expansion for slice-based work
+- **Legacy project migration**: 
+  - `guide.ai-project.91-legacy-task-migration.md` - Systematic migration from legacy to slice-based approach
+  - Comprehensive migration prompt for converting existing projects
+- **Enhanced context management**:
+  - YAML front matter for all slice task files with project state, dependencies, and metadata
+  - Context summary sections to enable AI restart capability
+  - Slice-specific file organization with `nn-slice.{slice-name}.md` naming convention
+- **Improved file organization**:
+  - `user/slices/` directory for slice-specific low-level designs
+  - Sequential indexing for all slice and task files (01, 02, 03, etc.)
+  - Clear separation between foundation work, feature slices, and integration work
+
+### Changed
+- **Project workflow**: Shifted from monolithic project approach to slice-based development
+  - Projects now treated as "collections of slices" rather than single large entities
+  - Each slice follows its own design → task → implementation → integration cycle
+  - Better context management and reduced AI hallucination through smaller, focused work units
+- **Guide numbering and organization**:
+  - Moved code review guide to `guide.ai-project.90-code-review.md` (supplemental guides 90+)
+  - Updated task expansion guide to Phase 6: `guide.ai-project.06-task-expansion.md`
+  - Established clear distinction between core workflow phases (1-8) and supplemental guides (90+)
+- **Prompt templates**: Complete overhaul of all prompt templates for slice-based workflow
+  - New slice-specific prompts for planning, design, task breakdown, and implementation
+  - Updated context refresh prompts to work with slice-based projects
+  - Legacy prompts moved to deprecated section with migration guidance
+- **Task file structure**:
+  - Enhanced with YAML front matter including slice metadata and project state
+  - Context summary sections for better AI restart capability
+  - Updated naming convention: `nn-tasks.{slice-name}.md`
+- **Documentation structure**:
+  - Updated README.md with complete phase mapping table (1-8)
+  - Added supplemental guides section and development approach guidance
+  - Clarified when to use slice-based vs traditional approaches
+
+### Fixed
+- **Context management issues**: Slice-based approach significantly reduces "lost in the middle" problems
+- **Guide references**: Updated all cross-references to use correct guide numbering
+- **File naming consistency**: Established clear patterns for slice designs and task files
+
+### Technical Details
+- **Backward compatibility**: Legacy project support maintained with migration path
+- **Agent integration**: Updated for better compatibility with Claude Code, Cline, and other AI agents
+- **Scalability**: Slice-based approach enables future parallelization of development work
+- **Quality assurance**: Enhanced task granularity reduces AI hallucination and improves success rates
+
+### Migration Notes
+- Existing projects can be migrated using the legacy migration guide
+- Traditional approach still available for simple projects and single features
+- All legacy prompts preserved in deprecated sections
+
+## [0.6.0] - 2025-08-15
+
+### Added
+- **Claude Code support**: Added `claude` option to `setup-ide` script to generate `CLAUDE.md` file
+  - Compiles all rules into single Claude-friendly format
+  - Proper heading hierarchy (H1 → H2 → H3 → H4)
+  - General Development Rules listed first, other categories alphabetically
+  - Automatic frontmatter stripping and heading level adjustment
+
+### Changed
+- **Directory structure clarification**: Resolved ambiguity between directory concepts:
+  - `project-documents/user/` for regular development (template instances)
+  - `project-artifacts/` for monorepo template development
+  - Deprecated `{template}/examples/our-project/` with migration path
+- **Feature file naming convention**: Updated from `{feature}-feature.md` to `nn-feature.{feature}.md` format
+- **Task file naming convention**: Updated from `{section}-tasks-phase-4.md` to `nn-tasks-{section}.md` format
+  - Added sequential index prefix (01, 02, 03, etc.) for better organization
+  - Removed confusing '-phase-4' suffix from task file names
+  - Updated all prompt templates and guides to use new naming pattern
+  - Streamlined and updated system prompts.
+- **File naming documentation**: Updated `file-naming-conventions.md` with new task file patterns and documented legacy formats
+- **Documentation updates**: Updated README.md to include Claude setup instructions
+
+## [0.5.2] - 2025-07-26
+
+### Added
+- **Project document phase numbering**: Implemented `XX-name.{project}.md` naming convention for project-specific documents
+- **Consistent ordering**: Project documents now follow the same phase-based ordering as guides
+- **Setup Script**: setup scripts for Windsurf and Cursor rules/ and agents/.
+
+### Changed
+- **Project document names**: Updated project-specific document naming to use phase numbers:
+  - `concept.{project}.md` → `01-concept.{project}.md`
+  - `spec.{project}.md` → `02-spec.{project}.md`
+  - `notes.{project}.md` → `03-notes.{project}.md`
+- **Guide output locations**: Updated all guides to reference new phase-numbered document names
+- **Directory structure**: Updated structure diagrams to reflect new naming convention
+
+## [0.5.1] - 2025-07-24
+
+### Added
+- **Phase numbering system**: Implemented `guide.ai-project.XX-name.md` naming convention for all project guides
+- **Clear phase progression**: Files now alphabetize correctly while showing clear phase order (00-process, 01-concept, 02-spec, 04-task-expansion, 05-code-review)
+
+### Changed
+- **Guide file names**: Renamed all project guides to use phase numbers:
+- **Prompt file names**: Renamed prompt files for better clarity:
+  - `template.ai-project.prompts.md` → `prompt.ai-project.system.md`
+  - `guide.ai-project.05-code-review-crawler.md` → `prompt.code-review-crawler.md`
+  - `guide.ai-project.process.md` → `guide.ai-project.00-process.md`
+  - `guide.ai-project.concept.md` → `guide.ai-project.01-concept.md`
+  - `guide.ai-project.spec.md` → `guide.ai-project.02-spec.md`
+  - `guide.ai-project.task-expansion.md` → `guide.ai-project.04-task-expansion.md`
+  - `guide.code-review.ai.md` → `guide.ai-project.05-code-review.md`
+  - `guide.code-review-2.ai.md` → `guide.ai-project.05-code-review-2.md` (consolidated into main code review guide)
+  - `guide.code-review-crawler.md` → `prompt.code-review-crawler.md`
+- **Internal references**: Updated all cross-references between guides to use new naming convention
+- **Template prompts**: Updated all prompt templates to reference new guide names
+- **Rules consistency**: Updated `rules/general.md` to use `user/` instead of `our-project/`
+
+### Removed
+- **`project-guides/coderules.md`**: Completely removed deprecated file, replaced by `project-guides/rules/general.md`
+- **`project-guides/guide.ai-project.05-code-review-2.md`**: Consolidated duplicate content into main code review guide
+
+### Fixed
+- **File organization**: All guides now follow consistent phase-based naming
+- **Cross-references**: All internal links and dependencies updated to new structure
+
+## [0.5.0] - 2025-07-24
+
+### Added
+- **New modular rules system**: Replaced monolithic `coderules.md` with organized `project-guides/rules/` directory
+- **Agent configurations**: Added `project-guides/agents/` directory for IDE-specific agent configurations
+- **IDE integration guide**: Added instructions for copying rules and agents to `.cursor/` and `.windsurf/` directories
+- **Migration documentation**: Added comprehensive migration guide from `our-project/` to `user/` structure
+
+### Changed
+- **Directory structure**: Migrated from `our-project/` to `user/` throughout all guides
+- **File organization**: Established flat structure under `user/` with dedicated folders for tasks, code-reviews, maintenance, ui
+- **Task file naming**: Updated to consistent hyphen-separated naming (`{section}-tasks.md`)
+- **Code review paths**: Updated all review guides to use `user/code-reviews/`
+- **Template prompts**: Updated all prompt templates to reference new `user/` structure
+
+### Deprecated
+- **`project-guides/coderules.md`**: Marked as deprecated, replaced by modular `rules/` system
+- **`our-project/` directory**: Replaced by `user/` directory (with migration path provided)
+
+### Fixed
+- **Directory structure**: Clarified distinction between `user/` (regular development) and deprecated `our-project/` structure
+- **File naming consistency**: Updated examples in `file-naming-conventions.md` to use `user/`
+- **Link references**: Fixed broken links in `project-guides/readme.md`
+
+### Technical Details
+- Updated 13 files to use new `user/` structure
+- Added migration instructions for existing projects
+- Maintained backward compatibility for legacy `coderules.md`
+- Established clear separation between shared methodology and project-specific work
+
+## [0.4.0] - Previous Release
+
+### Added
+- Initial AI project guide system
+- 6-phase project methodology
+- Tool-specific guides and framework documentation
+- Code review processes and templates
