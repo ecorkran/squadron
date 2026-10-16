@@ -12,7 +12,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from squadron.review.persistence import TASKS_DIR
+from squadron.documents.frontmatter import read_frontmatter
+from squadron.documents.schema import STATUS_ALIASES, DocumentStatus
+from squadron.integrations.context_forge import ARCHITECTURE_DIR
+from squadron.review.persistence import SLICES_DIR, TASKS_DIR
 
 _logger = logging.getLogger(__name__)
 
@@ -32,6 +35,11 @@ _COMMIT_PRESCRIBED = re.compile(r"Commit:\s*`(?P<subject>[^`]+)`")
 _GIT_COMMIT = re.compile(r"git commit -m\s+([\"'])(?P<subject>.+?)\1")
 #: A `-1`, `-2` suffix before `.md` marks one part of a split task file.
 _SPLIT_SUFFIX = re.compile(r"-(?P<part>\d+)$")
+# `1. [x] **(175) Title** ...`: the `(NNN)` index marks a slice entry; backlog items have none.
+_PLAN_ENTRY = re.compile(r"^\s*\d+\.\s+\[[ xX]\]\s+\*\*\((?P<index>\d+)\)\s*(?P<title>.+?)\*\*")
+# A checkbox item or a heading ends an entry; plain numbered lines inside one do not.
+_PLAN_ITEM = re.compile(r"^\s*\d+\.\s+\[[ xX]\]")
+_PLAN_EFFORT = re.compile(r"Effort\**\s*:\s*\**\s*(?P<number>\d+)\s*/\s*\d+")
 #: A block that starts at a bullet (not a markdown heading) ends at any heading.
 _ANY_HEADING_LEVEL = 6
 
@@ -177,3 +185,108 @@ def read_task_files_for(index: int, project_root: Path) -> tuple[PlannedTask, ..
     """Slice ``index``'s tasks, or ``None`` when it has no task file."""
     paths = task_file_paths(index, project_root)
     return read_task_file(paths) if paths else None
+
+
+class UnknownSliceError(Exception):
+    """A slice index is in no slice plan; carries the plan files that were searched."""
+
+    def __init__(self, index: int, searched: Sequence[Path]) -> None:
+        names = ", ".join(str(path) for path in searched) or "no plan files found"
+        super().__init__(f"slice {index} is in no slice plan (searched: {names})")
+        self.index = index
+        self.searched = tuple(searched)
+
+
+@dataclass(frozen=True)
+class _PlanEntry:
+    index: int
+    title: str
+    effort: int | None
+
+
+def _plan_files(project_root: Path) -> list[Path]:
+    return sorted((project_root / ARCHITECTURE_DIR).glob("*-slices.*.md"))
+
+
+def _parse_plan(path: Path) -> list[_PlanEntry]:
+    """Entries of one slice plan; an entry runs to the next numbered item or heading."""
+    entries: list[_PlanEntry] = []
+    head: re.Match[str] | None = None
+    block: list[str] = []
+
+    def close() -> None:
+        if head is None:
+            return
+        effort = _PLAN_EFFORT.search("\n".join(block))
+        entries.append(
+            _PlanEntry(
+                index=int(head["index"]),
+                title=head["title"].strip(),
+                effort=int(effort["number"]) if effort else None,
+            )
+        )
+
+    for line in path.read_text(encoding="utf-8").splitlines():
+        starts_item = _PLAN_ITEM.match(line) is not None
+        if starts_item or _MARKDOWN_HEADING.match(line):
+            close()
+            head, block = (_PLAN_ENTRY.match(line) if starts_item else None), []
+        block.append(line)
+    close()
+    return entries
+
+
+def _plan_entries(project_root: Path) -> tuple[dict[int, _PlanEntry], list[Path]]:
+    files = _plan_files(project_root)
+    entries: dict[int, _PlanEntry] = {}
+    for path in files:
+        for entry in _parse_plan(path):
+            if entry.index in entries:
+                _logger.warning(
+                    "Slice %d appears in more than one plan entry; using the first", entry.index
+                )
+                continue
+            entries[entry.index] = entry
+    return entries, files
+
+
+def slice_status(index: int, project_root: Path) -> tuple[bool, str | None]:
+    """``(complete, dateCreated)`` from slice ``index``'s design frontmatter (D4).
+
+    Complete means the design says ``status: complete``; the plan checkbox is not used
+    because it can lag. A missing design is ``(False, None)``.
+    """
+    designs = sorted((project_root / SLICES_DIR).glob(f"{index}-slice.*.md"))
+    if not designs:
+        return False, None
+    if len(designs) > 1:
+        _logger.warning("Multiple slice designs for index %d, using %s", index, designs[0].name)
+    front = read_frontmatter(designs[0]) or {}
+    status = str(front.get("status", ""))
+    complete = STATUS_ALIASES.get(status, status) == DocumentStatus.COMPLETE
+    created = front.get("dateCreated")
+    return complete, None if created is None else str(created)
+
+
+def _planned_slice(entry: _PlanEntry, project_root: Path) -> PlannedSlice:
+    return PlannedSlice(
+        index=entry.index,
+        title=entry.title,
+        effort=entry.effort,
+        complete=slice_status(entry.index, project_root)[0],
+        tasks=read_task_files_for(entry.index, project_root),
+    )
+
+
+def read_slice_plans(project_root: Path) -> dict[int, PlannedSlice]:
+    """Every slice in every ``*-slices.*.md`` plan, with its tasks when a task file exists."""
+    entries, _ = _plan_entries(project_root)
+    return {index: _planned_slice(entry, project_root) for index, entry in entries.items()}
+
+
+def planned_slice(index: int, project_root: Path) -> PlannedSlice:
+    """One slice's plan entry; raises ``UnknownSliceError`` when no plan lists ``index``."""
+    entries, files = _plan_entries(project_root)
+    if index not in entries:
+        raise UnknownSliceError(index, files)
+    return _planned_slice(entries[index], project_root)

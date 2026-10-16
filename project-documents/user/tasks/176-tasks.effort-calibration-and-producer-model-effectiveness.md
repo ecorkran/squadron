@@ -79,21 +79,21 @@ status: in_progress
   - [x] Commit: `refactor: extract parse_frontmatter and add planning document dirs`
   - **Success:** existing frontmatter tests pass unchanged; the new test passes
 
-- [ ] **Task 6: `read_task_file` in `stats/planning_docs.py`**
-  - [ ] New module with `PlannedTask` and `PlannedSlice` exactly as in the design's API Contracts
-  - [ ] `read_task_file(paths) -> tuple[PlannedTask, ...]` over one task file or an ordered list of split parts, parsing headings, effort, commit subjects and checkboxes per D4
-  - [ ] Open points D4 leaves to the parser: every effort form also accepts a `/5` suffix (`100-tasks.foundation.md` uses `**Effort**: 1/5`), and `git commit -m "…"` may follow other text on the line (`170-tasks.*` uses `git add … && git commit -m`)
-  - [ ] `read_task_files_for(index, project_root)` finds `{index}-tasks.*.md` under `TASKS_DIR` and returns `None` when there is none
-  - [ ] No git, no Typer imports
-  - [ ] Commit: `feat: add task file reader for effort reports`
+- [x] **Task 6: `read_task_file` in `stats/planning_docs.py`**
+  - [x] New module with `PlannedTask` and `PlannedSlice` exactly as in the design's API Contracts
+  - [x] `read_task_file(paths) -> tuple[PlannedTask, ...]` over one task file or an ordered list of split parts, parsing headings, effort, commit subjects and checkboxes per D4
+  - [x] Open points D4 leaves to the parser: every effort form also accepts a `/5` suffix (`100-tasks.foundation.md` uses `**Effort**: 1/5`), and `git commit -m "…"` may follow other text on the line (`170-tasks.*` uses `git add … && git commit -m`) (also: a bullet task's block ends at the first flush, non-indented line, so 173's trailing "Effort: 3/5 overall." is not read as task 24's effort; an Effort line must start the item)
+  - [x] `read_task_files_for(index, project_root)` finds `{index}-tasks.*.md` under `TASKS_DIR` and returns `None` when there is none
+  - [x] No git, no Typer imports
+  - [x] Commit: `feat: add task file reader for effort reports`
   - **Success:** the module imports cleanly and pyright passes
 
-- [ ] **Task 7: Fixtures and tests for the task-file reader**
-  - [ ] Create `tests/stats/fixtures/planning/` with verbatim copies of `100-tasks.foundation.md`, `170-tasks.profile-aware-dispatch-model-routing.md`, `175-tasks.usage-and-cost-tracking.md`, `173-tasks.user-definable-actions-on-supported-events.md`, and `architecture/140-slices.pipeline-foundation.md`. Add a synthetic two-part task file and a synthetic file with `**Effort**: Relative`, marked synthetic in a fixture README line.
-  - [ ] New `tests/stats/test_planning_docs.py`. Per real fixture, assert the task numbers, efforts and commit subjects read from the real file (175: 16 ``Commit:`` subjects; 173: none)
-  - [ ] Split parts read as one ordered list; `**Effort**: Relative` → `effort is None` + WARNING naming file and line; checked/total for one fully and one partly checked task
-  - [ ] A parser that returns no tasks for any real fixture fails the test (D4)
-  - [ ] Commit: `test: cover task file reader with real task files`
+- [x] **Task 7: Fixtures and tests for the task-file reader**
+  - [x] Create `tests/stats/fixtures/planning/` with verbatim copies of `100-tasks.foundation.md`, `170-tasks.profile-aware-dispatch-model-routing.md`, `175-tasks.usage-and-cost-tracking.md`, `173-tasks.user-definable-actions-on-supported-events.md`, and `architecture/140-slices.pipeline-foundation.md`. Add a synthetic two-part task file and a synthetic file with `**Effort**: Relative`, marked synthetic in a fixture README line.
+  - [x] New `tests/stats/test_planning_docs.py`. Per real fixture, assert the task numbers, efforts and commit subjects read from the real file (175: 16 ``Commit:`` subjects; 173: none)
+  - [x] Split parts read as one ordered list; `**Effort**: Relative` → `effort is None` + WARNING naming file and line; checked/total for one fully and one partly checked task
+  - [x] A parser that returns no tasks for any real fixture fails the test (D4)
+  - [x] Commit: `test: cover task file reader with real task files`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 8: Slice plans and slice status**
