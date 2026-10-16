@@ -10,6 +10,7 @@ import yaml
 
 from squadron.documents.frontmatter import (
     FrontmatterError,
+    parse_frontmatter,
     read_frontmatter,
     render_frontmatter_block,
     update_frontmatter,
@@ -264,3 +265,17 @@ def test_update_frontmatter_stamp_preserves_body_byte_for_byte(tmp_path: Path) -
     text = doc.read_text(encoding="utf-8")
     body = text.split("---", 2)[2]
     assert body == "\n\nexact body text\n"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("---\nverdict: PASS\nrounds: 2\n---\nbody\n", {"verdict": "PASS", "rounds": 2}),
+        ("# no fence here\n", None),
+        ("---\nverdict: PASS\nno closing fence\n", None),
+        ("---\n- a\n- b\n---\nbody\n", None),
+    ],
+    ids=["valid", "no-fence", "unclosed-fence", "non-mapping"],
+)
+def test_parse_frontmatter(text: str, expected: dict[str, object] | None) -> None:
+    assert parse_frontmatter(text) == expected

@@ -40,6 +40,9 @@ ARCHIVE_SUBDIR = "archive"
 #: SliceInfo["task_files"] entries are bare filenames — join with this to
 #: get the full relative path (mirrors REVIEWS_DIR's role for reviews).
 TASKS_DIR = Path("project-documents/user/tasks")
+#: Slice design documents, relative to project root (slice 176 D4). Slice plans live in
+#: ``integrations.context_forge.ARCHITECTURE_DIR``.
+SLICES_DIR = Path("project-documents/user/slices")
 
 
 class SliceInfo(TypedDict):

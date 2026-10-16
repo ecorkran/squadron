@@ -51,23 +51,23 @@ status: in_progress
   - [x] Commit: `test: cover loop-round persistence`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 3: Earlier rounds and partial loops in `run_usage_report`**
-  - [ ] `ActionUsageRow` gains `round: int | None = None` (1-based; `None` for non-loop steps). A loop step's earlier-round rows come first, then the final round's rows, per D3
-  - [ ] A malformed `prior_round_results` entry is handled per the D9 row (`unreadable` row and WARNING, as 175's `_row` does)
-  - [ ] `RunUsageReport` gains `partial_loop: bool` for the D9 "run stopped or resumed inside a loop step" row; compare `step_type` through the loop step type constant, not a literal
-  - [ ] `UsageTotals` are built from every round's records
-  - [ ] `render_run_report` shows the round for loop rows and the D9 row note; `run_report_json` adds `round` per row and `partial_loop`
-  - [ ] A run with no loop steps renders exactly as before (Integration Requirements); `stats_views.py` stays under ~300 lines
-  - [ ] Commit: `feat: report every loop round in sq stats run`
+- [x] **Task 3: Earlier rounds and partial loops in `run_usage_report`**
+  - [x] `ActionUsageRow` gains `round: int | None = None` (1-based; `None` for non-loop steps). A loop step's earlier-round rows come first, then the final round's rows, per D3
+  - [x] A malformed `prior_round_results` entry is handled per the D9 row (`unreadable` row and WARNING, as 175's `_row` does)
+  - [x] `RunUsageReport` gains `partial_loop: bool` for the D9 "run stopped or resumed inside a loop step" row; compare `step_type` through the loop step type constant, not a literal
+  - [x] `UsageTotals` are built from every round's records
+  - [x] `render_run_report` shows the round for loop rows and the D9 row note; `run_report_json` adds `round` per row and `partial_loop`
+  - [x] A run with no loop steps renders exactly as before (Integration Requirements); `stats_views.py` stays under ~300 lines
+  - [x] Commit: `feat: report every loop round in sq stats run`
   - **Success:** `sq stats run` lists every round of a loop and its totals include them
 
-- [ ] **Task 4: Test earlier-round usage rows**
-  - [ ] In `tests/stats/test_usage_report.py`: a two-round loop yields rows with rounds 1 and 2, and totals equal the sum of both rounds' records
-  - [ ] A pre-176 run file (no `prior_round_results`) reports the same rows and totals as before this slice
-  - [ ] Malformed `prior_round_results` → `unreadable` row + WARNING (assert with `caplog`)
-  - [ ] A `failed` run whose `current_step` is a loop step → `partial_loop` true and the note in rendered output; a `completed` run → false
-  - [ ] Existing `tests/cli/test_stats.py` output assertions for loop-free runs still pass unchanged
-  - [ ] Commit: `test: cover loop rounds in sq stats run`
+- [x] **Task 4: Test earlier-round usage rows**
+  - [x] In `tests/stats/test_usage_report.py`: a two-round loop yields rows with rounds 1 and 2, and totals equal the sum of both rounds' records
+  - [x] A pre-176 run file (no `prior_round_results`) reports the same rows and totals as before this slice
+  - [x] Malformed `prior_round_results` → `unreadable` row + WARNING (assert with `caplog`)
+  - [x] A `failed` run whose `current_step` is a loop step → `partial_loop` true and the note in rendered output; a `completed` run → false
+  - [x] Existing `tests/cli/test_stats.py` output assertions for loop-free runs still pass unchanged
+  - [x] Commit: `test: cover loop rounds in sq stats run`
   - **Success:** tests pass, zero pyright errors
 
 ### Planning-document readers (D4)

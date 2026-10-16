@@ -63,7 +63,15 @@ def read_frontmatter(path: Path) -> dict[str, object] | None:
     Returns ``None`` when there is no block or it does not parse to a
     mapping — callers decide whether that absence is meaningful.
     """
-    text = path.read_text(encoding="utf-8")
+    return parse_frontmatter(path.read_text(encoding="utf-8"))
+
+
+def parse_frontmatter(text: str) -> dict[str, object] | None:
+    """Parse the YAML frontmatter block of document ``text``.
+
+    The same ``None`` rules as ``read_frontmatter``, for text that is not on disk
+    (for example the output of ``git show``).
+    """
     split = split_document(text)
     if split is None:
         return None
