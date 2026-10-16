@@ -220,10 +220,11 @@ class StepResult:
     exhausted: bool = False
     # Per-item outcomes of an `each` step (slice 195 D9); None for other steps.
     batch_report: BatchReport | None = None
-    # A loop's action results from rounds before the one in ``action_results``, in
-    # order. Read only to build prior_outputs, so a later summary sees every round
-    # (#170); conditions and failure reporting keep reading the final round.
-    prior_rounds: list[ActionResult] = field(default_factory=lambda: [])
+    # A loop's action results from rounds before the one in ``action_results``, one
+    # list per round, in order. Flattened to build prior_outputs, so a later summary
+    # sees every round (#170), and persisted per round (slice 176 D3); conditions and
+    # failure reporting keep reading the final round.
+    prior_rounds: list[list[ActionResult]] = field(default_factory=lambda: [])
 
 
 @dataclass
@@ -640,7 +641,10 @@ async def execute_pipeline(
         # Accumulate prior_outputs from this step's action results, earlier loop
         # rounds first. Keys carry the step name: a bare type-index key let a later
         # step overwrite an earlier one in place, out of execution order (#170).
-        step_actions = [*step_result.prior_rounds, *step_result.action_results]
+        step_actions = [
+            *(ar for round_results in step_result.prior_rounds for ar in round_results),
+            *step_result.action_results,
+        ]
         for idx, action_result in enumerate(step_actions):
             key = prior_output_key(step_result.step_name, action_result.action_type, idx)
             prior_outputs[key] = action_result
@@ -1086,7 +1090,7 @@ def _loop_exhaust_result(
     step: Any,
     loop_config: LoopConfig,
     action_results: list[ActionResult],
-    prior_rounds: list[ActionResult],
+    prior_rounds: list[list[ActionResult]],
 ) -> StepResult:
     """Build the exhaustion StepResult: ACCEPTED when the final round meets
     ``accept_if`` (D6), else the configured ``on_exhaust`` mode.
@@ -1243,11 +1247,11 @@ async def _execute_loop_step(
         return skipped
 
     last_result: StepResult | None = None
-    earlier_rounds: list[ActionResult] = []
+    earlier_rounds: list[list[ActionResult]] = []
 
     for iteration in range(start_iteration, loop_config.max + 1):
         if last_result is not None:
-            earlier_rounds.extend(last_result.action_results)
+            earlier_rounds.append(list(last_result.action_results))
         result = await _execute_step_once(
             step=stripped_step,
             resolved_config=action_config,
@@ -1368,7 +1372,7 @@ async def _execute_loop_body(
     # iteration's results.  Reassigned at the start of each iteration.
     iteration_action_results: list[ActionResult] = []
     # Every finished round before the current one, for StepResult.prior_rounds (#170).
-    earlier_rounds: list[ActionResult] = []
+    earlier_rounds: list[list[ActionResult]] = []
 
     # Accumulates each iteration's results so the next iteration's actions
     # (e.g. DispatchAction's findings-feedback) see what the loop has
@@ -1404,7 +1408,8 @@ async def _execute_loop_body(
         return skipped
 
     for iteration in range(start_iteration, loop_config.max + 1):
-        earlier_rounds.extend(iteration_action_results)
+        if iteration > start_iteration:
+            earlier_rounds.append(iteration_action_results)
         iteration_action_results = []
         iteration_step_outputs: dict[str, ActionResult] = {}
         # What the body's actions resolve step names against this round:

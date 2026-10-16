@@ -2308,7 +2308,10 @@ async def test_every_loop_round_reaches_prior_outputs() -> None:
     loop_result = result.step_results[0]
     # Conditions and failure reporting read the final round only.
     assert [ar.verdict for ar in loop_result.action_results] == ["PASS"]
-    assert [ar.verdict for ar in loop_result.prior_rounds] == ["CONCERNS", "FAIL"]
+    assert [[ar.verdict for ar in round_results] for round_results in loop_result.prior_rounds] == [
+        ["CONCERNS"],
+        ["FAIL"],
+    ]
     prior = captured[0].prior_outputs
     assert [k for k in prior if k.startswith("rounds:")] == [
         "rounds:review-0",
