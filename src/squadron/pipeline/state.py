@@ -126,6 +126,11 @@ class StepState(BaseModel):
     score: float | None = None
     outputs: dict[str, object] = {}
     action_results: list[dict[str, object]] = []
+    # Slice 176 D3: a loop's earlier rounds, one list of action dicts per round, in
+    # order; the final round stays in ``action_results``. Defaults let older files load.
+    prior_round_results: list[list[dict[str, object]]] = []
+    accepted: bool = False
+    exhausted: bool = False
     iteration: int = 0
     completed_at: datetime
 
@@ -508,6 +513,10 @@ class StateManager:
 
         # Serialize action_results as plain dicts
         action_results_dicts = [dataclasses.asdict(ar) for ar in step_result.action_results]
+        prior_round_dicts = [
+            [dataclasses.asdict(ar) for ar in round_results]
+            for round_results in step_result.prior_rounds
+        ]
 
         step_state = StepState(
             step_name=step_result.step_name,
@@ -517,6 +526,9 @@ class StateManager:
             score=score,
             outputs=outputs,
             action_results=action_results_dicts,
+            prior_round_results=prior_round_dicts,
+            accepted=step_result.accepted,
+            exhausted=step_result.exhausted,
             iteration=step_result.iteration,
             completed_at=now,
         )
