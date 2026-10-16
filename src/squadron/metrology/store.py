@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -152,6 +153,21 @@ class MetrologyStore:
             raise SchemaVersionError(version)
         return MetrologyRecord.model_validate(raw)
 
+    def _iter_records(self) -> Iterator[tuple[str, MetrologyRecord]]:
+        """Yield ``(record_id, record)`` for every readable file, in path order.
+
+        An unreadable or unknown-version sibling is skipped with a WARNING: one
+        corrupt record must not sink a whole scan. A targeted read of a single
+        file (``load_record``) surfaces the same problem loudly instead.
+        """
+        for path in sorted(self._store_dir.glob("*.json")):
+            try:
+                record = self._load_raw(path)
+            except (OSError, ValueError, SchemaVersionError):
+                _logger.warning("Skipping unreadable metrology record: %s", path)
+                continue
+            yield path.stem, record
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -195,17 +211,12 @@ class MetrologyStore:
         Tolerantly skips an unreadable sibling with a WARNING (mirrors
         ``list_samples``) — one corrupt record must not sink the whole scan.
         """
-        graduations: list[tuple[str, GraduatedConfig]] = []
-        for path in sorted(self._store_dir.glob("*.json")):
-            try:
-                record = self._load_raw(path)
-            except (OSError, ValueError, SchemaVersionError):
-                _logger.warning("Skipping unreadable metrology record: %s", path)
-                continue
-            if record.record_type != RECORD_TYPE_GRADUATED_CONFIG or record.graduated_config is None:
-                continue
-            graduations.append((path.stem, record.graduated_config))
-        return graduations
+        return [
+            (record_id, record.graduated_config)
+            for record_id, record in self._iter_records()
+            if record.record_type == RECORD_TYPE_GRADUATED_CONFIG
+            and record.graduated_config is not None
+        ]
 
     def write_audit_run(self, run: AuditRun) -> str:
         """Envelope and persist one complete audit run; return its ``run_id``.
@@ -260,12 +271,7 @@ class MetrologyStore:
         record must not sink the whole scan.
         """
         runs: list[AuditRun] = []
-        for path in sorted(self._store_dir.glob("*.json")):
-            try:
-                record = self._load_raw(path)
-            except (OSError, ValueError, SchemaVersionError):
-                _logger.warning("Skipping unreadable metrology record: %s", path)
-                continue
+        for _, record in self._iter_records():
             run = record.audit_run
             if run is None or record.record_type != RECORD_TYPE_AUDIT_FINDING:
                 continue
@@ -285,18 +291,13 @@ class MetrologyStore:
         rather than accumulating duplicates for one series.
         """
         floors: list[tuple[str, AuditNoiseFloor]] = []
-        for path in sorted(self._store_dir.glob("*.json")):
-            try:
-                record = self._load_raw(path)
-            except (OSError, ValueError, SchemaVersionError):
-                _logger.warning("Skipping unreadable metrology record: %s", path)
-                continue
+        for record_id, record in self._iter_records():
             floor = record.audit_noise_floor
             if floor is None or record.record_type != RECORD_TYPE_AUDIT_NOISE_FLOOR:
                 continue
             if project_id is not None and floor.project_id.value != project_id:
                 continue
-            floors.append((path.stem, floor))
+            floors.append((record_id, floor))
         # Newest first, matching ``list_audit_runs``. Glob order sorts by
         # path, so a caller reaching for "the latest floor" would otherwise
         # get whichever record id happened to sort last.
@@ -333,12 +334,7 @@ class MetrologyStore:
         only through the read path that targets one file, not this scan.
         """
         samples: list[SampleVerdict] = []
-        for path in sorted(self._store_dir.glob("*.json")):
-            try:
-                record = self._load_raw(path)
-            except (OSError, ValueError, SchemaVersionError):
-                _logger.warning("Skipping unreadable metrology record: %s", path)
-                continue
+        for _, record in self._iter_records():
             sample = record.sample
             if sample is None or record.record_type != RECORD_TYPE_SAMPLE:
                 continue
