@@ -81,6 +81,10 @@ def _start_point(phase: ReplayPhase, index: int, repo_root: Path) -> StartPoint:
         raise _fail(str(exc)) from exc
 
 
+def _is_interactive() -> bool:
+    return sys.stdin.isatty()
+
+
 def _sq_executable() -> str:
     found = shutil.which(sys.argv[0])
     if found is None:
@@ -124,7 +128,7 @@ def replay_run(
 ) -> None:
     """Regenerate one slice's design or task breakdown under each config, in a sandbox."""
     console = get_console()
-    if not yes and not sys.stdin.isatty():
+    if not yes and not _is_interactive():
         raise _fail("not interactive: pass --yes to confirm the plan")
     config_refs = [_config_ref(alias) for alias in configs]
     reviewer_ref = _model_ref(reviewer)

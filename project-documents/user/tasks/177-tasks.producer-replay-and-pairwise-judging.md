@@ -230,18 +230,18 @@ status: not_started
   - [x] Commit: `test: cover replay runner`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 23: `sq replay run` command** (effort 2)
-  - [ ] Create `cli/commands/replay.py` with a `replay_app` Typer registered in `cli/app.py`; `run` takes the API-contract options, `--reviewer` and `--max-revisions` with no defaults
-  - [ ] Resolve aliases (model, profile) for configs and reviewer; unknown alias → error before any work
-  - [ ] Print the plan and confirm; `--yes` skips; non-interactive without `--yes` → exit 1 (D10)
-  - [ ] Print each config's outcome as it finishes, then the summary; exit 0 when every config produced a record, exit 1 when any was skipped or the set stopped
-  - [ ] Commit: `feat: add sq replay run`
+- [x] **Task 23: `sq replay run` command** (effort 2)
+  - [x] Create `cli/commands/replay.py` with a `replay_app` Typer registered in `cli/app.py`; `run` takes the API-contract options, `--reviewer` and `--max-revisions` with no defaults (rendering is in cli/replay_views.py; the command is a thin shell over run_replay_set; --max-revisions has min 1 because loop.max rejects 0)
+  - [x] Resolve aliases (model, profile) for configs and reviewer; unknown alias → error before any work
+  - [x] Print the plan and confirm; `--yes` skips; non-interactive without `--yes` → exit 1 (D10)
+  - [x] Print each config's outcome as it finishes, then the summary; exit 0 when every config produced a record, exit 1 when any was skipped or the set stopped
+  - [x] Commit: `feat: add sq replay run`
   - **Success:** `sq replay run --help` shows the contract; exits follow D4/D10
 
-- [ ] **Task 24: Test `sq replay run`** (effort 2)
-  - [ ] CliRunner with the runner core faked: missing `--reviewer` / `--max-revisions` → usage error; non-interactive without `--yes` → exit 1, nothing run
-  - [ ] Exit codes for all-recorded (including all `failed`), skipped config, stopped set
-  - [ ] Commit: `test: cover sq replay run`
+- [x] **Task 24: Test `sq replay run`** (effort 2)
+  - [x] CliRunner with the runner core faked: missing `--reviewer` / `--max-revisions` → usage error; non-interactive without `--yes` → exit 1, nothing run
+  - [x] Exit codes for all-recorded (including all `failed`), skipped config, stopped set
+  - [x] Commit: `test: cover sq replay run`
   - **Success:** tests pass, zero pyright errors
 
 ### Judge (D5)
