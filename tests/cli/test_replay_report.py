@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from rich.console import Console
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
@@ -46,6 +47,8 @@ def store(tmp_path: Path) -> Iterator[MetrologyStore]:
         ),
         patch("squadron.cli.commands.replay_report.resolve_store_dir", return_value=tmp_path / "store"),
         patch("squadron.cli.commands.replay_report.get_typed_config", return_value=3),
+        # The global console keeps the width of whichever test created it first.
+        patch("squadron.cli.commands.replay_report.get_console", return_value=Console(width=220)),
     ):
         yield box
 
