@@ -74,14 +74,14 @@ def slice_window(history: GitHistory, index: int, task_paths: Sequence[Path]) ->
     return none
 
 
+def _is_implementation(commit: Commit) -> bool:
+    prefix = f"{DOCS_ROOT}/"
+    return any(not change.path.startswith(prefix) for change in commit.changes)
+
+
 def implementation_commits(window: SliceWindow) -> tuple[Commit, ...]:
     """Window commits touching any path outside ``project-documents/`` (D5 rule 4)."""
-    prefix = f"{DOCS_ROOT}/"
-    return tuple(
-        commit
-        for commit in window.commits
-        if any(not change.path.startswith(prefix) for change in commit.changes)
-    )
+    return tuple(commit for commit in window.commits if _is_implementation(commit))
 
 
 def post_review_fixups(history: GitHistory, index: int, window: SliceWindow) -> tuple[Commit, ...]:
@@ -149,7 +149,11 @@ class _Cursor:
         start = self._commits[self._done] if self._done >= 0 else self._commits[0]
         in_group = self._commits[self._done + 1 : end_place + 1]
         marker_shas = {commit.sha for commit in found}
-        extra = sum(1 for commit in in_group if commit.sha not in marker_shas)
+        # Rework signal: implementation commits only. Planning and review commits between
+        # the task file and the branch are documents, not rework.
+        extra = sum(
+            1 for commit in in_group if commit.sha not in marker_shas and _is_implementation(commit)
+        )
         self._done = end_place
         return TaskGroup(tasks, GroupStatus.ATTRIBUTED, end, extra, end.authored_at - start.authored_at)
 

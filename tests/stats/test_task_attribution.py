@@ -110,6 +110,20 @@ def test_one_reworded_subject_is_marker_not_found_and_the_others_get_groups(
     assert (third.status, third.marker, third.extra) == (GroupStatus.MARKER_NOT_FOUND, None, None)
 
 
+def test_document_only_commits_inside_a_group_are_not_extras(stats_repo: StatsRepo) -> None:
+    stats_repo.commit("init", {"README.md": "x\n"}, _date(1))
+    stats_repo.commit("docs: add tasks", {_TASKS: "# tasks\n"}, _date(2))
+    stats_repo.commit("docs: review", {"project-documents/user/r.md": "r\n"}, _date(3))
+    stats_repo.branch("176-slice.x")
+    stats_repo.commit("feat: a", {"src/a.py": "a\n"}, _date(4))
+    window = slice_window(_loaded(stats_repo), 176, _TASK_PATHS)
+
+    (group,) = attribute(window, [_task(1, "feat: a")])
+
+    assert [c.subject for c in window.commits] == ["docs: review", "feat: a"]
+    assert group.extra == 0
+
+
 def test_a_duplicate_subject_takes_the_earliest_commit(slice_repo: StatsRepo) -> None:
     slice_repo.commit("feat: a", {"src/a.py": "a3\n"}, _date(8))  # same subject again, later
     window = slice_window(_loaded(slice_repo), 176, _TASK_PATHS)
