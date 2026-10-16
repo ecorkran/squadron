@@ -34,16 +34,20 @@ status: not_started
 
 ### Spike: slice resolution at a design start point (D2 risk)
 
-- [ ] **Task 1: Run `sq run P4 176` in a hand-built sandbox** (effort 2)
-  - [ ] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `177-slice.producer-replay-and-pairwise-judging` from it
-  - [ ] Find the commit that first added `project-documents/user/slices/176-slice.*.md` (`git log --diff-filter=A --format=%H -- <path>`) and its first parent
-  - [ ] Build the sandbox by hand with the four D3 git commands in a scratch directory under `/tmp`; register it with `cf init --lite --no-ide --name replay-spike`
-  - [ ] In the sandbox, run `sq run P4 176 -m <cheapest alias in models.toml> -p review-model=<same> -p max-revisions=1` (the loop rejects 0: `loop.max must be a positive integer`, `pipeline/loop_config.py:108`)
-  - [ ] Record in this task, under a `Result:` line: the start sha, whether the slice resolved, and the exact error text if it did not
-  - [ ] Also record which step resolves the slice (the `set_slice` cf operation or earlier) and the cheapest command that reproduces that resolution without a dispatch. Task 21 runs it as its pre-dispatch check
-  - [ ] Clean up: `cf project rm replay-spike`, delete the directory
-  - [ ] If the slice did not resolve: STOP and return the evidence to the Project Manager. Do not start Task 2.
+- [x] **Task 1: Run `sq run P4 176` in a hand-built sandbox** (effort 2)
+  - [x] Read the target (`cf config get git.integration_branch`, empty means `main`) and create `177-slice.producer-replay-and-pairwise-judging` from it
+  - [x] Find the commit that first added `project-documents/user/slices/176-slice.*.md` (`git log --diff-filter=A --format=%H -- <path>`) and its first parent
+  - [x] Build the sandbox by hand with the four D3 git commands in a scratch directory under `/tmp`; register it with `cf init --lite --no-ide --name replay-spike`
+  - [x] In the sandbox, run `sq run P4 176 -m <cheapest alias in models.toml> -p review-model=<same> -p max-revisions=1` (the loop rejects 0: `loop.max must be a positive integer`, `pipeline/loop_config.py:108`)
+  - [x] Record in this task, under a `Result:` line: the start sha, whether the slice resolved, and the exact error text if it did not
+  - [x] Also record which step resolves the slice (the `set_slice` cf operation or earlier) and the cheapest command that reproduces that resolution without a dispatch. Task 21 runs it as its pre-dispatch check
+  - [ ] Clean up: `cf project rm replay-spike`, delete the directory (cf project removed; /tmp/replay-spike directory deletion left to PM)
+  - [x] If the slice did not resolve: STOP and return the evidence to the Project Manager. Do not start Task 2.
   - [ ] Commit (task file only): `docs: record slice 177 start-point resolution spike`
+  - **Result:** start sha `bca771926e89d9ac7c753d9c88a84aa4b1f83ac7` (first parent of `ef04988`, the commit that first added the 176 design). `sq run P4 176 -m haiku -p review-model=haiku -p max-revisions=1` **resolved the slice and completed** (design-0 PASS, loop-1, summary-2) once two sandbox settings were in place. The 176 plan entry exists at the start point, so cf resolves `176` from the plan and the missing design file does not matter. Two failures on the bare sandbox, each fixed by one setting:
+    1. `cf set slice 176: No file matching index '176' for field 'fileSlice'. No slice plan is set.` — a fresh `cf init --lite` project has no slice plan. Fix: `cf set arch 140` (the initiative index) before the run.
+    2. `planning commit for slice 176 on replay/spike; expected main` — the git-environment guard compares the branch to `git.integration_branch`. Fix: `cf config set git.integration_branch replay/<id>` in the sandbox.
+  - **Resolving step:** the `set_slice` cf operation (`cf set slice <index>`). Dispatch-free pre-check for Task 21, run in the sandbox after `cf set arch <initiative>`: `cf set slice <index>`; exit 0 and a `Updated slice =` line mean resolved. Neither setting is in the slice design (D3/D4); Task 15 adds both to the sandbox setup. The initiative index comes from the slice plan file name (`<initiative>-slices.*`) at the start point.
   - **Success:** `Result:` line records a resolved slice at slice 176's real start point
 
 ### Prompt identity (D8)
@@ -151,6 +155,7 @@ status: not_started
 
 - [ ] **Task 15: `ReplaySandbox` and `sweep_orphans`** (effort 3)
   - [ ] Create `replay/sandbox.py`: `ReplaySandbox(start_sha, replay_id, repo_root, runner)` context manager running the D3 git commands, then `cf init --lite --no-ide --name replay-<replay_id>`, with the `<dir>.lock` written first; root `~/.config/squadron/replays/` defined once
+  - [ ] After `cf init`, the sandbox runs `cf config set git.integration_branch replay/<replay_id>` (the planning-commit guard otherwise halts `sq run`) and `cf set arch <initiative>`, the initiative index read from the single `*-slices.*.md` plan at the start point (zero or several raise `SandboxError`); both from the Task 1 spike, defined once as the sandbox's cf setup
   - [ ] A start point containing `.gitmodules` raises an error naming it (D10)
   - [ ] Failed `git fetch` / `cf init` raises `SandboxError` carrying the command's stderr; the partial sandbox is removed
   - [ ] On exit (normal, error, `KeyboardInterrupt`): `cf project rm`, delete the directory and lock; a cleanup failure logs WARNING naming the path or project and does not raise
