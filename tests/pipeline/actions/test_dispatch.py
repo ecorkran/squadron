@@ -650,7 +650,7 @@ class TestFeedbackReview:
             prior_outputs={"0-review-0": _review_result(_DESIGN)},
         )
 
-        prompt = action._resolve_prompt(ctx)
+        prompt = action._resolve_prompt(ctx).text
 
         assert "[concern] Plan argument is ignored (sources.py:12)" in prompt
         assert f"Revise `{_DESIGN}` in place; do not create a new file." in prompt
@@ -661,7 +661,7 @@ class TestFeedbackReview:
             prior_outputs={"0-review-0": _review_result(_DESIGN)},
         )
 
-        prompt = action._resolve_prompt(ctx)
+        prompt = action._resolve_prompt(ctx).text
 
         assert prompt.startswith("Keep the API section.")
         assert "Plan argument is ignored" in prompt
@@ -675,7 +675,7 @@ class TestFeedbackReview:
             },
         )
 
-        prompt = action._resolve_prompt(ctx)
+        prompt = action._resolve_prompt(ctx).text
 
         assert "Create a slice design" not in prompt
         assert "Plan argument is ignored" in prompt
@@ -686,7 +686,7 @@ class TestFeedbackReview:
             prior_outputs={"0-review-0": _review_result(_DESIGN)},
         )
 
-        assert action._resolve_prompt(ctx) == (
+        assert action._resolve_prompt(ctx).text == (
             "Address the following findings from the prior review (verdict: CONCERNS):\n"
             "\n"
             "- [concern] Plan argument is ignored (sources.py:12)\n"
@@ -699,7 +699,7 @@ class TestFeedbackReview:
     def test_fallback_path_appends_revise_guidance(self, action: DispatchAction) -> None:
         ctx = _make_context(params={}, prior_outputs={"0-review-0": _review_result(_DESIGN)})
 
-        prompt = action._resolve_prompt(ctx)
+        prompt = action._resolve_prompt(ctx).text
 
         assert prompt.endswith(
             "- [concern] Plan argument is ignored (sources.py:12)\n\n" + REVISE_GUIDANCE
@@ -711,7 +711,7 @@ class TestFeedbackReview:
         )
         ctx = _make_context(params={}, prior_outputs={"0-review-0": review})
 
-        prompt = action._resolve_prompt(ctx)
+        prompt = action._resolve_prompt(ctx).text
 
         assert "initial improvement pass" in prompt
         assert REVISE_GUIDANCE not in prompt
@@ -729,7 +729,7 @@ class TestFeedbackReview:
         )
         ctx = _make_context(params={"feedback": "review"}, prior_outputs={"0-review-0": review})
 
-        prompt = action._resolve_prompt(ctx)
+        prompt = action._resolve_prompt(ctx).text
 
         assert "- [concern] Missing test — " + _PARTS[0] in prompt
         assert "- [fail] Wrong order — " + _PARTS[1] in prompt

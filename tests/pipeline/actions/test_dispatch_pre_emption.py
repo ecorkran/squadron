@@ -68,7 +68,7 @@ class TestPreEmptionFragmentInjection:
         path = _write_real_fragment(tmp_path)
         ctx = _make_context(params={"prompt": "Original context", "pre_emption_fragment": str(path)})
 
-        result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+        result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result.startswith(_FRAGMENT_OPEN)
         assert _FRAGMENT_CLOSE in result
@@ -86,7 +86,7 @@ class TestPreEmptionFragmentInjection:
             }
         )
 
-        result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+        result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result.startswith(_FRAGMENT_OPEN)
         assert result.index(_FRAGMENT_OPEN) < result.index(_OVERRIDE_OPEN)
@@ -97,7 +97,7 @@ class TestPreEmptionFragmentInjection:
         """Pre-324 behavior for every pipeline that does not opt in."""
         ctx = _make_context(params={"prompt": "Original context"})
 
-        result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+        result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
         assert "Pre-emption" not in result
@@ -105,7 +105,7 @@ class TestPreEmptionFragmentInjection:
     def test_empty_param_leaves_prompt_unchanged(self) -> None:
         ctx = _make_context(params={"prompt": "Original context", "pre_emption_fragment": "   "})
 
-        result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+        result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
 
@@ -117,7 +117,7 @@ class TestPreEmptionFragmentInjection:
             params={"prompt": "Original context", "pre_emption_fragment": f"~/{path.name}"}
         )
 
-        result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+        result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result.startswith(_FRAGMENT_OPEN)
 
@@ -132,7 +132,7 @@ class TestPreEmptionFragmentFailureModes:
         ctx = _make_context(params={"prompt": "Original context", "pre_emption_fragment": str(missing)})
 
         with caplog.at_level(logging.WARNING):
-            result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+            result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
         assert len(caplog.records) == 1
@@ -151,7 +151,7 @@ class TestPreEmptionFragmentFailureModes:
 
         try:
             with caplog.at_level(logging.WARNING):
-                result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+                result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
         finally:
             path.chmod(0o644)
 
@@ -165,7 +165,7 @@ class TestPreEmptionFragmentFailureModes:
         ctx = _make_context(params={"prompt": "Original context", "pre_emption_fragment": str(path)})
 
         with caplog.at_level(logging.WARNING):
-            result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+            result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
         assert len(caplog.records) == 1
@@ -179,7 +179,7 @@ class TestPreEmptionFragmentFailureModes:
         ctx = _make_context(params={"prompt": "Original context", "pre_emption_fragment": str(path)})
 
         with caplog.at_level(logging.WARNING):
-            result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+            result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
         assert len(caplog.records) == 1
@@ -198,7 +198,7 @@ class TestPreEmptionFragmentFailureModes:
         ctx = _make_context(params={"prompt": "Original context", "pre_emption_fragment": str(path)})
 
         with caplog.at_level(logging.WARNING):
-            result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+            result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
         assert len(caplog.records) == 1
@@ -214,7 +214,7 @@ class TestPreEmptionFragmentFailureModes:
         )
 
         with caplog.at_level(logging.WARNING):
-            result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+            result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result == "Original context"
         assert len(caplog.records) == 1
@@ -232,7 +232,7 @@ class TestPreEmptionFragmentFailureModes:
         )
 
         with caplog.at_level(logging.WARNING):
-            result = DispatchAction()._resolve_prompt(ctx)  # pyright: ignore[reportPrivateUsage]
+            result = DispatchAction()._resolve_prompt(ctx).text  # pyright: ignore[reportPrivateUsage]
 
         assert result.startswith(_OVERRIDE_OPEN)
         assert result.endswith("Original context")

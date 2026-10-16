@@ -312,7 +312,9 @@ async def test_stalled_dispatch_fails_step_with_warning_and_no_traceback(
 
     assert result.success is False
     assert result.error == "dispatch stalled: no output for 1800s; turn interrupted"
-    assert result.metadata == {"stalled": True, "session_usable": usable}
+    assert result.metadata["stalled"] is True
+    assert result.metadata["session_usable"] is usable
+    assert "prompt" in result.metadata
     records = [r for r in caplog.records if r.levelno >= logging.WARNING]
     assert len(records) == 1
     assert records[0].levelno == logging.WARNING

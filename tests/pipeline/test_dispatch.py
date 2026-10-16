@@ -48,7 +48,7 @@ class TestDispatchOverrideInstructions:
                 "override_instructions": "do X",
             }
         )
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert result.startswith("--- Instructions from checkpoint resolution ---\n")
         assert "do X\n--- End instructions ---\n\n" in result
         assert result.endswith("Original context")
@@ -58,7 +58,7 @@ class TestDispatchOverrideInstructions:
         action = self._dispatch_action()
 
         ctx = _make_context(params={"prompt": "Original context"})
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert result == "Original context"
         assert "Instructions from checkpoint" not in result
 
@@ -72,7 +72,7 @@ class TestDispatchOverrideInstructions:
                 "override_instructions": "",
             }
         )
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert result == "Original context"
         assert "Instructions from checkpoint" not in result
 
@@ -86,7 +86,7 @@ class TestDispatchOverrideInstructions:
                 "override_instructions": "   ",
             }
         )
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert "Instructions from checkpoint" not in result
 
 
@@ -122,7 +122,7 @@ class TestDispatchPriorReviewFallback:
             ],
         )
         ctx = _make_context(params={}, prior_outputs={"review-0": prior_review})
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert "Missing null check" in result
         assert "src/foo.py:10" in result
         assert "CONCERNS" in result
@@ -137,7 +137,7 @@ class TestDispatchPriorReviewFallback:
             findings=[],
         )
         ctx = _make_context(params={}, prior_outputs={"review-0": prior_review})
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert "initial improvement pass" in result
 
     def test_no_prompt_no_build_context_no_review_raises(self) -> None:
@@ -166,5 +166,5 @@ class TestDispatchPriorReviewFallback:
             params={"prompt": "Explicit prompt"},
             prior_outputs={"review-0": prior_review},
         )
-        result = action._resolve_prompt(ctx)  # type: ignore[union-attr]
+        result = action._resolve_prompt(ctx).text  # type: ignore[union-attr]
         assert result == "Explicit prompt"

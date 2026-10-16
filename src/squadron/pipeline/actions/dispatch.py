@@ -33,6 +33,11 @@ from squadron.pipeline.actions.dispatch_rules import (
     rule_step_from_params,
     sdk_native_record,
 )
+from squadron.pipeline.actions.prompt_identity import (
+    PROMPT_METADATA_KEY,
+    PromptSource,
+    ResolvedPrompt,
+)
 from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
@@ -73,6 +78,11 @@ _logger = logging.getLogger(__name__)
 # The Claude CLI surfaces API-level errors as assistant text with this prefix.
 # e.g. "API Error: 500 {"type":"error","error":{...}}"
 _CLI_ERROR_PREFIX = "API Error:"
+
+
+def _optional_str(value: object) -> str | None:
+    """``None`` stays ``None``; anything else is its string form."""
+    return None if value is None else str(value)
 
 
 def _check_cli_error(response_text: str) -> ActionResult | None:
@@ -402,7 +412,7 @@ class DispatchAction:
             # An unknown git state ends the run; it is never one item's dispatch failure.
             raise
         except ProviderError as exc:
-            return self._provider_failure(context, exc, None)
+            return self._provider_failure(context, exc, None, None)
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
             return ActionResult(
                 success=False,
@@ -440,10 +450,20 @@ class DispatchAction:
             )
 
     def _provider_failure(
-        self, context: ActionContext, exc: ProviderError, usage: UsageRecord | None
+        self,
+        context: ActionContext,
+        exc: ProviderError,
+        usage: UsageRecord | None,
+        prompt: ResolvedPrompt | None,
     ) -> ActionResult:
-        """The failed result for a provider error, carrying what the call spent (D5)."""
+        """The failed result for a provider error, carrying what the call spent (D5).
+
+        ``prompt`` is None when the error came before any prompt was resolved; no
+        prompt was delivered, so no identity is recorded.
+        """
         metadata: dict[str, object] = {}
+        if prompt is not None:
+            metadata[PROMPT_METADATA_KEY] = prompt.identity()
         stamp(metadata, usage)
         if isinstance(exc, DispatchStalledError):
             # An expected, named failure (slice 174 D7): the session already logged
@@ -568,11 +588,11 @@ class DispatchAction:
 
         await session.set_model(model_id)
 
-        prompt = self._resolve_prompt(context)
+        resolved_prompt = self._resolve_prompt(context)
         effort_sent = capture.effort_for_session(resolved)
         started = time.monotonic()
         try:
-            reply = await session.dispatch(prompt)
+            reply = await session.dispatch(resolved_prompt.text)
         except ProviderError as exc:
             stalled_unusable = isinstance(exc, DispatchStalledError) and not exc.session_usable
             record = None
@@ -587,7 +607,7 @@ class DispatchAction:
                     run_id=context.run_id,
                     step_name=context.step_name,
                 )
-            return self._provider_failure(context, exc, record)
+            return self._provider_failure(context, exc, record, resolved_prompt)
         record = capture.record_from_telemetry(
             resolved, reply.telemetry, started=started, model=model_id, effort_sent=effort_sent
         )
@@ -595,9 +615,11 @@ class DispatchAction:
 
         if error_result := _check_cli_error(response_text):
             stamp(error_result.metadata, record)
+            error_result.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
             return error_result
 
         metadata: dict[str, object] = {
+            PROMPT_METADATA_KEY: resolved_prompt.identity(),
             "model": model_id,
             "profile": "sdk-session",
             "background_tasks_waited": session.background_tasks_waited,
@@ -618,8 +640,8 @@ class DispatchAction:
             metadata=metadata,
         )
 
-    def _resolve_prompt(self, context: ActionContext) -> str:
-        """Return the prompt text for this dispatch.
+    def _resolve_prompt(self, context: ActionContext) -> ResolvedPrompt:
+        """Return the delivered prompt for this dispatch, with its source (D8).
 
         Checks ``context.params["prompt"]`` first.  If absent, scans
         ``prior_outputs`` for the most recent ``build_context`` cf-op
@@ -637,8 +659,12 @@ class DispatchAction:
         the resolved prompt so the model treats it as a directive.
         """
         explicit = context.params.get("prompt")
+        source = PromptSource.EXPLICIT
+        cf_version: str | None = None
+        guide_version: str | None = None
         if context.params.get("feedback") is not None:
             prompt = self._resolve_feedback_prompt(context, explicit)
+            source = PromptSource.FEEDBACK
         elif explicit is not None:
             prompt = str(explicit)
         else:
@@ -654,10 +680,14 @@ class DispatchAction:
                 ):
                     _logger.debug("dispatch: using build_context output as prompt")
                     prompt = str(result.outputs["stdout"])
+                    source = PromptSource.BUILD_CONTEXT
+                    cf_version = _optional_str(result.outputs.get("cf_version"))
+                    guide_version = _optional_str(result.outputs.get("guide_version"))
                     break
 
             if prompt is None:
                 prompt = self._resolve_prompt_from_prior_review(context)
+                source = PromptSource.REVIEW_FINDINGS
 
             if prompt is None:
                 msg = (
@@ -668,7 +698,8 @@ class DispatchAction:
                 )
                 raise KeyError(msg)
 
-        return self._apply_pre_emption_fragment(context, self._apply_override(context, prompt))
+        delivered = self._apply_pre_emption_fragment(context, self._apply_override(context, prompt))
+        return ResolvedPrompt(delivered, source, cf_version, guide_version)
 
     @staticmethod
     def _latest_review(context: ActionContext) -> ActionResult | None:
@@ -838,12 +869,18 @@ class DispatchAction:
         requires_writes = dispatch_requires_writes(context.params)
         capture = require_capture(context.usage_capture, self.action_type)
         usage_metadata: dict[str, object] = {}
-        prompt = self._resolve_prompt(context)
+        resolved_prompt = self._resolve_prompt(context)
 
         started = time.monotonic()
         try:
             response_text, tool_telemetry = await self._one_shot(
-                context, resolved, profile_name, prompt, allowed_tools, requires_writes, usage_metadata
+                context,
+                resolved,
+                profile_name,
+                resolved_prompt.text,
+                allowed_tools,
+                requires_writes,
+                usage_metadata,
             )
         except ProviderError as exc:
             record = None
@@ -855,7 +892,7 @@ class DispatchAction:
                     model=model_id,
                     effort_sent=read_effort_sent(usage_metadata),
                 )
-            return self._provider_failure(context, exc, record)
+            return self._provider_failure(context, exc, record, resolved_prompt)
         record = capture.record_from_message(
             resolved,
             usage_metadata,
@@ -866,6 +903,7 @@ class DispatchAction:
 
         if error_result := _check_cli_error(response_text):
             stamp(error_result.metadata, record)
+            error_result.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
             return error_result
 
         outcome = assess_tool_outcome(requires_writes, tool_telemetry)
@@ -874,7 +912,12 @@ class DispatchAction:
 
         # tool_telemetry is empty when the run had no tools, so the keys stay absent rather
         # than reporting a misleading zero (design D5).
-        metadata: dict[str, object] = {"model": model_id, "profile": profile_name, **tool_telemetry}
+        metadata: dict[str, object] = {
+            PROMPT_METADATA_KEY: resolved_prompt.identity(),
+            "model": model_id,
+            "profile": profile_name,
+            **tool_telemetry,
+        }
         stamp(metadata, record)
         if outcome.fail_reason is not None:
             _logger.warning("Dispatch step '%s' failed: %s", context.step_name, outcome.fail_reason)
