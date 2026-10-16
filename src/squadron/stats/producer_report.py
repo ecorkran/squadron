@@ -19,7 +19,6 @@ from squadron.core.usage import UsageRecord
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.prompt_identity import PROMPT_METADATA_KEY
 from squadron.pipeline.executor import ExecutionStatus
-from squadron.pipeline.loop_config import LoopCondition
 from squadron.pipeline.state import StateManager
 from squadron.pipeline.steps import StepTypeName
 from squadron.review.models import Verdict
@@ -30,10 +29,10 @@ from squadron.stats.producer_units import (
     ProducerKey,
     ProducerUnit,
     extract_units,
+    loop_rounds,
+    phase_accepted,
 )
 from squadron.stats.usage_report import LLM_ACTION_TYPES, action_usage_row, usage_totals
-
-_ACCEPTANCE = LoopCondition.REVIEW_CONCERNS_OR_BETTER
 
 
 class FirstRound(StrEnum):
@@ -149,7 +148,7 @@ def _row(key: ProducerKey, usages: list[_UnitUsage], min_n: int) -> ProducerRow:
     records = [record for usage in usages for record in usage.records]
     actions = sum(usage.llm_actions for usage in usages)
     totals = usage_totals(records)
-    accepted = sum(_accepted(unit) for unit in members)
+    accepted = sum(phase_accepted(unit.phase_step, unit.loop_step) for unit in members)
     first = defaultdict(int, {bucket.value: 0 for bucket in FirstRound})
     for unit in members:
         first[_first_round(unit).value] += 1
@@ -163,7 +162,7 @@ def _row(key: ProducerKey, usages: list[_UnitUsage], min_n: int) -> ProducerRow:
         n=len(members),
         below_floor=len(members) < min_n,
         first_round=dict(first),
-        median_revise_rounds=float(statistics.median(_revise_rounds(unit) for unit in members)),
+        median_revise_rounds=float(statistics.median(loop_rounds(unit.loop_step) for unit in members)),
         accepted=accepted,
         failed=sum(unit.phase_step.status == ExecutionStatus.FAILED for unit in members),
         cost_usd=totals.cost_usd,
@@ -184,14 +183,6 @@ def _first_round(unit: ProducerUnit) -> FirstRound:
     return bucket
 
 
-def _revise_rounds(unit: ProducerUnit) -> int:
-    """Loop rounds run: from the persisted rounds (D3), else the loop's own iteration."""
-    loop = unit.loop_step
-    if loop is None:
-        return 0
-    return len(loop.prior_round_results) + 1 if loop.prior_round_results else loop.iteration
-
-
 def _unpriced(usage: _UnitUsage) -> bool:
     """No priced record at all: a run from before 175, or one on an unpriced model."""
     return all(record.cost_usd is None for record in usage.records)
@@ -200,21 +191,6 @@ def _unpriced(usage: _UnitUsage) -> bool:
 def _rounds_unrecorded(unit: ProducerUnit) -> bool:
     loop = unit.loop_step
     return loop is not None and not loop.prior_round_results and loop.iteration > 1
-
-
-def _accepted(unit: ProducerUnit) -> bool:
-    """The loop ended accepted, or with no loop the first-round verdict already passes (D8)."""
-    if unit.phase_step.status != ExecutionStatus.COMPLETED:
-        return False
-    loop = unit.loop_step
-    if loop is None:
-        verdict = unit.phase_step.verdict
-        return verdict is not None and _ACCEPTANCE.met_by_verdict(verdict)
-    if loop.status != ExecutionStatus.COMPLETED:
-        return False
-    # `accepted` is set when a loop exhausted its rounds but met accept_if; a loop whose
-    # `until` was met ends completed on an acceptable verdict, and so does a pre-176 file.
-    return loop.accepted or (loop.verdict is not None and _ACCEPTANCE.met_by_verdict(loop.verdict))
 
 
 @dataclass(frozen=True)

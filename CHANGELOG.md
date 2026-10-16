@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `sq stats run` now counts every round of a review-revise loop. Earlier rounds were left out of the totals, so loop steps looked cheaper than they were.
 - SDK step and review costs no longer include earlier steps in the same session. A summary step showed $5.35 instead of about $0.61.
+- `sq stats producers` now counts a design or tasks run whose first draft passed review as accepted. They were counted as not accepted whenever the revise loop was skipped.
 
 ## [0.22.0] - 20261015
 

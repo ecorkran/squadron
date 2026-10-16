@@ -12,12 +12,16 @@ from typing import cast
 
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.executor import ExecutionStatus
+from squadron.pipeline.loop_config import LoopCondition
 from squadron.pipeline.state import RunState, StepState
 from squadron.pipeline.steps import StepTypeName
 from squadron.stats.usage_report import action_usage_row, is_partial_loop, run_slice
 
 #: The phase step types a producer unit can be, in report order.
 PHASE_TYPES = (StepTypeName.DESIGN, StepTypeName.TASKS)
+
+#: What counts as accepted: the verdict P4/P5's loops accept (their ``accept_if``).
+_ACCEPTANCE = LoopCondition.REVIEW_CONCERNS_OR_BETTER
 
 
 @dataclass(frozen=True)
@@ -145,3 +149,37 @@ def _metadata(action: Mapping[str, object]) -> Mapping[str, object]:
 
 def _text(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def loop_rounds(loop: StepState | None) -> int:
+    """Loop rounds run: from the persisted rounds (176 D3), else the loop's own iteration."""
+    if loop is None:
+        return 0
+    return len(loop.prior_round_results) + 1 if loop.prior_round_results else loop.iteration
+
+
+def phase_accepted(phase_step: StepState, loop_step: StepState | None) -> bool:
+    """The unit ended accepted (176 D8).
+
+    With no loop, or a loop that ran no rounds (``skip_if_met``: the first draft already
+    passed, or a ``--decision accept``), the phase step's first-round verdict decides.
+    Otherwise the loop ended accepted, or completed on an acceptable verdict.
+    """
+    if phase_step.status != ExecutionStatus.COMPLETED:
+        return False
+    if loop_step is None or _ran_no_rounds(loop_step):
+        if loop_step is not None and loop_step.accepted:
+            return True  # accepted by decision, with no rounds run
+        verdict = phase_step.verdict
+        return verdict is not None and _ACCEPTANCE.met_by_verdict(verdict)
+    if loop_step.status != ExecutionStatus.COMPLETED:
+        return False
+    # `accepted` is set when a loop exhausted its rounds but met accept_if; a loop whose
+    # `until` was met ends completed on an acceptable verdict, and so does a pre-176 file.
+    return loop_step.accepted or (
+        loop_step.verdict is not None and _ACCEPTANCE.met_by_verdict(loop_step.verdict)
+    )
+
+
+def _ran_no_rounds(loop: StepState) -> bool:
+    return not loop.action_results and not loop.prior_round_results and loop.iteration == 0

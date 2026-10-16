@@ -265,3 +265,50 @@ def test_pre_177_runs_carry_no_prompt_identity(runs_dir: Path) -> None:
     report = producer_report(phase=None, state_manager=manager, min_n=1)
 
     assert (report.units, report.prompt_identified, report.guide_versions) == (5, 0, 0)
+
+
+def test_a_first_draft_pass_with_a_skipped_loop_is_accepted(runs_dir: Path) -> None:
+    """P4's loop is ``skip_if_met``: a passing first draft leaves a completed, empty loop step."""
+    skipped = run(
+        "s1",
+        [
+            step("design-0", "design", producer_actions(verdict="PASS", cost=1.0)),
+            step("loop-1", "loop"),  # completed, no actions, no verdict, iteration 0
+        ],
+    )
+    manager = _write(runs_dir, skipped)
+
+    report = producer_report(phase=None, state_manager=manager, min_n=1)
+
+    row = _row(report, "claude-opus")
+    assert (row.accepted, row.n, row.median_revise_rounds) == (1, 1, 0.0)
+
+
+def test_a_skipped_loop_after_a_failing_first_draft_is_not_accepted(runs_dir: Path) -> None:
+    skipped = run(
+        "s2",
+        [
+            step("design-0", "design", producer_actions(verdict="FAIL")),
+            step("loop-1", "loop"),
+        ],
+    )
+    manager = _write(runs_dir, skipped)
+
+    report = producer_report(phase=None, state_manager=manager, min_n=1)
+
+    assert _row(report, "claude-opus").accepted == 0
+
+
+def test_a_loop_accepted_by_decision_with_no_rounds_is_accepted(runs_dir: Path) -> None:
+    decided = run(
+        "s3",
+        [
+            step("design-0", "design", producer_actions(verdict="FAIL")),
+            step("loop-1", "loop", accepted=True),
+        ],
+    )
+    manager = _write(runs_dir, decided)
+
+    report = producer_report(phase=None, state_manager=manager, min_n=1)
+
+    assert _row(report, "claude-opus").accepted == 1
