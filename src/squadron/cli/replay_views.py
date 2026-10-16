@@ -62,3 +62,19 @@ def render_summary(summary: ReplaySetSummary, console: Console) -> None:
     console.print(Text(line))
     if summary.stopped is not None:
         console.print(Text(f"Stopped: {summary.stopped}"))
+
+
+def render_judge_plan(
+    pairs: int, calls: int, judge_alias: str, prompt_hash: str, console: Console
+) -> None:
+    judge = f"{judge_alias} (prompt {prompt_hash[:6]})"
+    console.print(Text(f"{pairs} pair(s) to judge: {calls} judge calls with {judge}"))
+
+
+def render_judge_summary(judged: int, failed: int, invalid: int, console: Console) -> None:
+    line = f"{judged} pair(s) judged"
+    if invalid:
+        line += f", {invalid} with no verdict"
+    if failed:
+        line += f", {failed} failed"
+    console.print(Text(line))

@@ -13,8 +13,9 @@ from pathlib import Path
 
 import typer
 from rich import get_console
-from rich.markup import escape
 
+from squadron.cli.commands import replay_common as common
+from squadron.cli.commands.replay_judge import replay_judge
 from squadron.cli.replay_views import (
     DECLINED,
     render_plan,
@@ -23,11 +24,8 @@ from squadron.cli.replay_views import (
     render_summary,
 )
 from squadron.core.process_runner import SubprocessRunner
-from squadron.metrology.errors import MetrologyIdentityError
-from squadron.metrology.identity import derive_project_id
-from squadron.metrology.replay_models import ModelRef, ProducerConfigRef, ReplayPhase
+from squadron.metrology.replay_models import ReplayPhase
 from squadron.metrology.store import MetrologyStore, generate_replay_id, resolve_store_dir
-from squadron.models.aliases import get_all_aliases
 from squadron.pipeline.state import StateManager
 from squadron.replay.drafts import read_drafts
 from squadron.replay.runner import (
@@ -39,9 +37,7 @@ from squadron.replay.runner import (
     run_sq_subprocess,
 )
 from squadron.replay.sandbox import ReplaySandbox
-from squadron.replay.start_point import StartPoint, StartPointError, resolve_start_point
-from squadron.review.git_utils import run_git
-from squadron.stats.git_history import GitHistory, GitHistoryError
+from squadron.replay.start_point import StartPoint
 
 replay_app = typer.Typer(
     name="replay",
@@ -50,45 +46,10 @@ replay_app = typer.Typer(
 )
 
 
-def _fail(message: str) -> typer.Exit:
-    get_console().print(f"[red]Error: {escape(message)}[/red]")
-    return typer.Exit(code=1)
-
-
-def _model_ref(alias: str) -> ModelRef:
-    known = get_all_aliases()
-    if alias not in known:
-        raise _fail(f"unknown model alias '{alias}'")
-    return ModelRef(alias=alias, model=known[alias]["model"])
-
-
-def _config_ref(alias: str) -> ProducerConfigRef:
-    known = get_all_aliases()
-    if alias not in known:
-        raise _fail(f"unknown model alias '{alias}'")
-    entry = known[alias]
-    return ProducerConfigRef(
-        alias=alias, model=entry["model"], profile=entry["profile"], effort_sent=None
-    )
-
-
-def _start_point(phase: ReplayPhase, index: int, repo_root: Path) -> StartPoint:
-    history = GitHistory(repo_root, run=run_git)
-    try:
-        history.load()
-        return resolve_start_point(phase, index, history)
-    except (StartPointError, GitHistoryError) as exc:
-        raise _fail(str(exc)) from exc
-
-
-def _is_interactive() -> bool:
-    return sys.stdin.isatty()
-
-
 def _sq_executable() -> str:
     found = shutil.which(sys.argv[0])
     if found is None:
-        raise _fail(f"cannot locate the sq executable from '{sys.argv[0]}'")
+        raise common.fail(f"cannot locate the sq executable from '{sys.argv[0]}'")
     return found
 
 
@@ -117,6 +78,9 @@ def _exit_code(summary: ReplaySetSummary) -> int:
     return 0 if not summary.skipped and summary.stopped is None and not summary.declined else 1
 
 
+replay_app.command("judge")(replay_judge)
+
+
 @replay_app.command("run")
 def replay_run(
     phase: ReplayPhase = typer.Option(..., "--phase", help="The artifact to regenerate."),
@@ -128,16 +92,13 @@ def replay_run(
 ) -> None:
     """Regenerate one slice's design or task breakdown under each config, in a sandbox."""
     console = get_console()
-    if not yes and not _is_interactive():
-        raise _fail("not interactive: pass --yes to confirm the plan")
-    config_refs = [_config_ref(alias) for alias in configs]
-    reviewer_ref = _model_ref(reviewer)
+    if not yes and not common.is_interactive():
+        raise common.fail("not interactive: pass --yes to confirm the plan")
+    config_refs = [common.config_ref(alias) for alias in configs]
+    reviewer_ref = common.model_ref(reviewer)
     repo_root = Path.cwd()
-    try:
-        project_id = derive_project_id(str(repo_root))
-    except MetrologyIdentityError as exc:
-        raise _fail(str(exc)) from exc
-    start = _start_point(phase, slice_index, repo_root)
+    project_id = common.resolve_project_id(repo_root)
+    start = common.start_point(phase, slice_index, repo_root)
     request = ReplayRequest(
         project_id=project_id,
         phase=phase,
