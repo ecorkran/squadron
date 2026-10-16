@@ -191,19 +191,19 @@ status: in_progress
   - [x] Commit: `test: cover effort rollup`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 20: `sq stats slice` and `sq stats slices` CLI**
-  - [ ] In `cli/commands/stats.py`: `slice <index>` and `slices [--since YYYYMMDD]`, both with `--json`; project root is the cwd; build `GitHistory(Path.cwd(), run=run_git)` and `StateManager()`
-  - [ ] `--since` that is not a valid `YYYYMMDD` date → error naming the value and the expected format, exit 1
-  - [ ] Typed core errors → `Error: …` on stderr, exit 1; empty rollup → message, exit 0
-  - [ ] New `cli/stats_effort_views.py` renders the design's UI layout with widths from `cli/columns.py` `fit_widths`
-  - [ ] Commit: `feat: add sq stats slice and sq stats slices`
+- [x] **Task 20: `sq stats slice` and `sq stats slices` CLI**
+  - [x] In `cli/commands/stats.py`: `slice <index>` and `slices [--since YYYYMMDD]`, both with `--json`; project root is the cwd; build `GitHistory(Path.cwd(), run=run_git)` and `StateManager()`
+  - [x] `--since` that is not a valid `YYYYMMDD` date → error naming the value and the expected format, exit 1
+  - [x] Typed core errors → `Error: …` on stderr, exit 1; empty rollup → message, exit 0
+  - [x] New `cli/stats_effort_views.py` renders the design's UI layout with widths from `cli/columns.py` `fit_widths`
+  - [x] Commit: `feat: add sq stats slice and sq stats slices`
   - **Success:** `sq stats slice 175` and `sq stats slices` render without error in this repo
 
-- [ ] **Task 21: Test the effort CLI**
-  - [ ] In `tests/cli/test_stats.py` (or a new `test_stats_effort.py` if it would exceed ~300 lines), using the temp repo fixture with `chdir`: table and `--json` for both commands; JSON values equal the table's
-  - [ ] No git repo → exit 1 naming the cwd; unknown index → exit 1 naming plan files; malformed `--since` → exit 1; empty rollup → message, exit 0
-  - [ ] No file, ref, or run state is written (compare `git status --porcelain`, `for-each-ref`, and the runs dir before/after)
-  - [ ] Commit: `test: cover sq stats slice and slices`
+- [x] **Task 21: Test the effort CLI**
+  - [x] In `tests/cli/test_stats.py` (or a new `test_stats_effort.py` if it would exceed ~300 lines), using the temp repo fixture with `chdir`: table and `--json` for both commands; JSON values equal the table's (new tests/cli/test_stats_effort.py; the shared project builder is tests/stats/effort_project.py and the stats_repo fixture moved to tests/conftest.py so tests/cli can use it)
+  - [x] No git repo → exit 1 naming the cwd; unknown index → exit 1 naming plan files; malformed `--since` → exit 1; empty rollup → message, exit 0
+  - [x] No file, ref, or run state is written (compare `git status --porcelain`, `for-each-ref`, and the runs dir before/after)
+  - [x] Commit: `test: cover sq stats slice and slices`
   - **Success:** tests pass, zero pyright errors
 
 ### Producer effectiveness (D8)

@@ -174,7 +174,7 @@ Each review artifact is rewritten every round, but every round is committed (941
 
 **Unit.** A top-level `StepState` in `completed_steps` whose `step_type` is `StepTypeName.DESIGN` or `TASKS`. A phase step and its loop are separate `StepState`s (P4, P5 and P456 run files show `design, loop` and `tasks, loop`). The loop belongs to the phase step when it is the next entry in `completed_steps` (index i+1) and its `step_type` is `loop`. Anything else means the unit has no loop. Phase work inside an `each` step is not a top-level phase `StepState`, so it is not counted. A loop with no phase step directly before it (for example, a run adopted with `--from` past the phase step) is not a unit.
 
-**Producer config key.** The phase step's own `action_results` (its final round; a phase step has no `prior_round_results`) give the dispatch action's metadata: model (answering, else requested), profile, and the `usage.effort` that was sent (175 D7). The key adds the reviewer's model from the review action in those same `action_results`, because rounds-to-accept depends on the reviewer (#210, "under a fixed reviewer"). Pipeline name is shown as a column but is not part of the key.
+**Producer config key.** The phase step's own `action_results` (its final round; a phase step has no `prior_round_results`) give the dispatch action's metadata: model (answering, else requested), profile, and the `usage.effort` that was sent (175 D7). The key adds the reviewer's model from the review action in those same `action_results`, because rounds-to-accept depends on the reviewer (#210, "under a fixed reviewer"). The reviewer is the review action's `requested_model` (else `model`): the mechanical task gate reports itself as `model` (`squadron-task-gate`), while `requested_model` is the reviewer the run asked for, which also drives the loop. Pipeline name is shown as a column but is not part of the key.
 
 **Per config, per phase:**
 - n runs
@@ -194,7 +194,9 @@ Each review artifact is rewritten every round, but every round is committed (941
 | `run_git` returns `None` or non-zero for `for-each-ref` or the history pass (hang past the timeout, cannot run) | report not produced | `run_git`'s timeout WARNING, then an error naming the git command, exit 1; never a partial report |
 | `git show <sha>:<path>` returns `None` or non-zero for a review version (timeout, missing object) | that round skipped, same as unreadable frontmatter below | WARNING naming sha, path, and git's stderr; footer count |
 | `metrology.min_evidence_n` is not an integer | `producers` not produced | error naming the key and value, exit 1 |
-| Phase step with no dispatch or no review action in its `action_results` | unit excluded from `producers` | footer `N phase step(s) without a dispatch or review` |
+| Phase step with no dispatch action in its `action_results` | unit excluded from `producers` | footer `N phase step(s) without a dispatch` |
+| Phase step with a dispatch but no review action (a failed dispatch often stops before the review) | unit kept; reviewer shown as `—`, so it is its own config row | none; excluding these would drop 9 of 24 failed phase steps in this machine's run history and bias the failure rate down |
+| Phase step paused at a checkpoint | unit excluded: its outcome is not decided | footer `N phase step(s) paused` |
 | `sq stats slice` with an unknown index | nothing printed | error naming the index and the plan files searched, exit 1 |
 | Task file missing for a slice | slice row has no task groups | row note `no task file`; included in `slices` |
 | Prescribed subject not found | group actuals `unknown` | row `marker not found`; footer count |

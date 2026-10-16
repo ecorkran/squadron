@@ -161,7 +161,7 @@ def is_partial_loop(state: RunState) -> bool:
 def _step_rows(run_id: str, step: StepState) -> list[ActionUsageRow]:
     """A step's rows: a loop's earlier rounds first, then the final round (D3)."""
     if step.step_type != StepTypeName.LOOP:
-        return [_row(run_id, step.step_name, action) for action in step.action_results]
+        return [action_usage_row(run_id, step.step_name, action) for action in step.action_results]
     earlier = len(step.prior_round_results)
     final_round = max(step.iteration, earlier + 1)
     rounds = [*step.prior_round_results, step.action_results]
@@ -169,12 +169,14 @@ def _step_rows(run_id: str, step: StepState) -> list[ActionUsageRow]:
     for offset, actions in enumerate(rounds):
         round_number = final_round - earlier + offset
         rows.extend(
-            replace(_row(run_id, step.step_name, action), round=round_number) for action in actions
+            replace(action_usage_row(run_id, step.step_name, action), round=round_number)
+            for action in actions
         )
     return rows
 
 
-def _row(run_id: str, step: str, action: Mapping[str, object]) -> ActionUsageRow:
+def action_usage_row(run_id: str, step: str, action: Mapping[str, object]) -> ActionUsageRow:
+    """One action's usage row; a malformed record is ``unreadable`` with a WARNING (D9)."""
     action_type = str(action.get("action_type", ""))
     metadata = action.get("metadata")
     raw = (
