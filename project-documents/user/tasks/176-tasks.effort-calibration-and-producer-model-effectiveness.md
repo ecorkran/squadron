@@ -294,3 +294,31 @@ status: in_progress
   - [ ] Commit the task file notes: `docs: record slice 176 verification walkthrough`
   - [ ] Draft the #214 and #210 comments (subcommands, the observed-only scope for #210, slice 177 for replay) under `## Verification Notes`. Post them only after the Project Manager confirms; this task does not post.
   - **Success:** walkthrough results recorded; comments drafted
+
+## Verification Notes
+
+### Task 32: D9 failure table to tests
+
+Full validation on 20261015: `ruff format`, `ruff check`, `pyright` (0 errors), and the full suite (6952 passed, 4 skipped). The structural greps are clean: no `typer` import under `stats/`, no `run_git` outside `stats/git_history.py`, and no bare-string comparison of step types, verdicts, or window sources (step types go through `StepTypeName`, verdicts through `FirstRound`/`LoopCondition`, window sources through `WindowSource`). Each D9 footer and row-note text has one definition in code (`UNREADABLE_RUNS_TEXT` was defined three times and is now one constant).
+
+Test file prefixes: `stats/` is `tests/stats/`, `cli/` is `tests/cli/`.
+
+| D9 row | Test |
+|---|---|
+| Not a git repo, or git missing | `stats/test_git_history.py::test_a_directory_that_is_not_a_repo_names_the_cwd`; `cli/test_stats_effort.py::test_outside_a_git_repo_exits_1_naming_the_cwd` |
+| `run_git` returns `None` or non-zero | `stats/test_git_history.py::test_a_runner_that_cannot_answer_names_the_command_and_leaves_no_graph` (the non-zero case is the not-a-repo test above) |
+| `git show` fails for a review version | `stats/test_review_rounds.py::test_broken_frontmatter_and_a_failing_git_show_are_each_skipped_with_a_warning`; `stats/test_git_history.py::test_show_returns_text_and_warns_when_git_cannot_produce_it`; footer: `cli/test_stats_effort.py::test_footers_count_missing_markers_skipped_rounds_and_unreadable_runs` |
+| `metrology.min_evidence_n` not an integer | `cli/test_stats_producers.py::test_a_non_integer_min_evidence_n_exits_1_naming_key_and_value` |
+| Phase step with no dispatch | `stats/test_producer_units.py::test_a_phase_step_without_a_dispatch_is_excluded_and_counted`; footer: `cli/test_stats_producers.py::test_footers_count_exclusions_and_unreadable_run_files` |
+| Phase step with a dispatch but no review (refined, see D9) | `stats/test_producer_units.py::test_a_dispatch_without_a_review_is_kept_with_no_reviewer`; `stats/test_producer_report.py::test_a_unit_without_a_review_verdict_counts_under_none` |
+| Phase step paused | `stats/test_producer_units.py::test_a_paused_phase_step_is_excluded_and_counted`; footer: `cli/test_stats_producers.py::test_footers_count_exclusions_and_unreadable_run_files` |
+| `sq stats slice` unknown index | `cli/test_stats_effort.py::test_unknown_index_exits_1_naming_the_plan_files`; `stats/test_effort_report.py::test_unknown_index_raises_with_the_plan_files_searched`; `stats/test_planning_docs.py::test_unknown_index_lists_the_plan_files_searched` |
+| Task file missing | `stats/test_effort_report.py::test_missing_task_file_has_no_groups_but_keeps_everything_else`; row note: `cli/test_stats_effort.py::test_a_slice_without_a_task_file_prints_the_row_note`; still in `slices`: `stats/test_effort_rollup.py::test_a_slice_without_a_task_file_is_still_in_the_rollup` |
+| Prescribed subject not found | `stats/test_task_attribution.py::test_one_reworded_subject_is_marker_not_found_and_the_others_get_groups`; footer: `cli/test_stats_effort.py::test_footers_count_missing_markers_skipped_rounds_and_unreadable_runs` |
+| Non-numeric `Effort` | `stats/test_planning_docs.py::test_non_numeric_effort_is_none_with_warning_naming_file_and_line` |
+| Review version with unreadable frontmatter | `stats/test_review_rounds.py::test_broken_frontmatter_and_a_failing_git_show_are_each_skipped_with_a_warning`; footer: `cli/test_stats_effort.py::test_footers_count_missing_markers_skipped_rounds_and_unreadable_runs` |
+| Unreadable or schema-obsolete run file | `stats/test_producer_report.py::test_an_unreadable_run_file_is_counted`; `stats/test_runs_usage_report.py::test_an_unreadable_run_file_is_counted`; footers: `cli/test_stats_runs.py::test_an_unreadable_run_file_is_counted_in_the_footer`, `cli/test_stats_producers.py::test_footers_count_exclusions_and_unreadable_run_files`, `cli/test_stats_effort.py::test_footers_count_missing_markers_skipped_rounds_and_unreadable_runs` |
+| Run stopped inside a loop step | `stats/test_usage_report.py::test_partial_loop_is_a_stopped_run_on_a_loop_step`; `cli/test_stats.py::test_loop_run_shows_rounds_and_partial_loop_note`; `stats/test_runs_usage_report.py::test_a_partial_loop_run_is_flagged`; excluded from `producers`: `stats/test_producer_units.py::test_a_run_stopped_inside_a_loop_is_excluded_and_counted` |
+| Malformed `prior_round_results` entry | `stats/test_usage_report.py::test_malformed_usage_in_earlier_round_is_unreadable_with_warning` (pydantic rejects a non-list round at load, so a malformed entry reaches the report as a malformed usage record inside a round) |
+| No completed slices / no phase runs | `stats/test_effort_rollup.py::test_no_completed_slices_is_an_empty_report_with_its_reason`; `cli/test_stats_effort.py::test_an_empty_rollup_prints_its_reason_and_exits_0`; `cli/test_stats_producers.py::test_no_phase_runs_prints_a_message_and_writes_nothing`; `cli/test_stats_runs.py::test_no_matching_runs_prints_a_message_and_exits_0` |
+
