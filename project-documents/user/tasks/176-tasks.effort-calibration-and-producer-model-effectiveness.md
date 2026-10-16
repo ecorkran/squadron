@@ -11,7 +11,7 @@ projectState: >
   Addresses #214 and the observed half of #210; replay and judging moved to slice 177.
 dateCreated: 20261015
 dateUpdated: 20261015
-status: in_progress
+status: complete
 ---
 
 ## Context Summary
@@ -272,27 +272,27 @@ status: in_progress
 
 ### Documentation and verification
 
-- [ ] **Task 31: Docs and wrappers**
-  - [ ] README `## Usage and cost (sq stats)`: the four subcommands, `span` and `recorded spend` meanings, and the observational caveat for `producers`
-  - [ ] `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md`: extend the subcommand list (pass-through stays unchanged)
-  - [ ] `140-arch.pipeline-foundation.md` run-state section: the three `StepState` fields
-  - [ ] Confirm slice plan entry 177 in `140-slices.pipeline-foundation.md` still matches what this slice provides (D8 config key, D3 rounds); edit only if it does not
-  - [ ] CHANGELOG: short user-facing bullets under Unreleased (new subcommands; `sq stats run` now counts every loop round)
-  - [ ] Commit: `docs: document sq stats slice, slices, producers, and runs`
+- [x] **Task 31: Docs and wrappers**
+  - [x] README `## Usage and cost (sq stats)`: the four subcommands, `span` and `recorded spend` meanings, and the observational caveat for `producers`
+  - [x] `commands/sq/stats.md` and `commands/agents/sq-stats/SKILL.md`: extend the subcommand list (pass-through stays unchanged)
+  - [x] `140-arch.pipeline-foundation.md` run-state section: the three `StepState` fields
+  - [x] Confirm slice plan entry 177 in `140-slices.pipeline-foundation.md` still matches what this slice provides (D8 config key, D3 rounds); edit only if it does not
+  - [x] CHANGELOG: short user-facing bullets under Unreleased (new subcommands; `sq stats run` now counts every loop round)
+  - [x] Commit: `docs: document sq stats slice, slices, producers, and runs`
   - **Success:** the README documents all four subcommands; both wrappers list them
 
-- [ ] **Task 32: Full validation**
-  - [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full `pytest` green
-  - [ ] Map each D9 failure-table row to a passing test; list the test name per row (recorded in the task file notes below)
-  - [ ] `grep` confirms each D9 row note and footer text appears in code exactly once
-  - [ ] `grep` confirms no Typer import under `stats/`, no `run_git` use in `stats/` outside `git_history.py`, and no bare-string comparison of step types, verdicts or window sources
-  - [ ] Record the D9 row-to-test map under a `## Verification Notes` heading at the end of this task file, then commit that file with `docs: map slice 176 failure table to tests`
+- [x] **Task 32: Full validation**
+  - [x] `ruff format`, `ruff check`, `pyright` (zero errors), full `pytest` green
+  - [x] Map each D9 failure-table row to a passing test; list the test name per row (recorded in the task file notes below)
+  - [x] `grep` confirms each D9 row note and footer text appears in code exactly once
+  - [x] `grep` confirms no Typer import under `stats/`, no `run_git` use in `stats/` outside `git_history.py`, and no bare-string comparison of step types, verdicts or window sources
+  - [x] Record the D9 row-to-test map under a `## Verification Notes` heading at the end of this task file, then commit that file with `docs: map slice 176 failure table to tests`
   - **Success:** full suite green; every D9 row has a named test in the task file notes
 
-- [ ] **Task 33: Verification walkthrough and issue comments**
-  - [ ] Run design Verification Walkthrough steps 2–7 with `.venv/bin/sq` in this repo; record each output under `## Verification Notes` in this task file. Step 1 (scratch project live run) and step 8 (slash parity) need a live model run and Claude Code respectively: run them if available, otherwise list them as not run.
-  - [ ] Commit the task file notes: `docs: record slice 176 verification walkthrough`
-  - [ ] Draft the #214 and #210 comments (subcommands, the observed-only scope for #210, slice 177 for replay) under `## Verification Notes`. Post them only after the Project Manager confirms; this task does not post.
+- [x] **Task 33: Verification walkthrough and issue comments**
+  - [x] Run design Verification Walkthrough steps 2–7 with `.venv/bin/sq` in this repo; record each output under `## Verification Notes` in this task file. Step 1 (scratch project live run) and step 8 (slash parity) need a live model run and Claude Code respectively: run them if available, otherwise list them as not run.
+  - [x] Commit the task file notes: `docs: record slice 176 verification walkthrough`
+  - [x] Draft the #214 and #210 comments (subcommands, the observed-only scope for #210, slice 177 for replay) under `## Verification Notes`. Post them only after the Project Manager confirms; this task does not post.
   - **Success:** walkthrough results recorded; comments drafted
 
 ## Verification Notes

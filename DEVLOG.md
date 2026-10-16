@@ -11,6 +11,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261015
 
+### Slice 176: Effort Calibration and Producer Model Effectiveness — implementation (Phase 6 complete)
+
+- Branch `176-slice.effort-calibration-and-producer-model-effectiveness` (from `main`). Tasks 1–33 done; the merge waits for Phase 7. The #214 and #210 comments are drafted in the task file under Verification Notes, not posted.
+- Shipped: `sq stats slice|slices|producers|runs` with `--json`. Every loop round is now persisted in run state (`prior_round_results`, `accepted`, `exhausted`), so `sq stats run` no longer undercounts revised loops. New `stats/` modules: `planning_docs`, `git_history`, `review_rounds`, `task_attribution`, `effort_report`, `effort_rollup`, `slice_spend`, `producer_units`, `producer_report`, `json_support`.
+- Design changes made against real data: (1) task-group `extra` counts implementation commits only (doc commits would have put 6 planning commits into 175's group 1); (2) `producers` excludes only a phase step with no dispatch, because 9 of 24 failed phase steps here have a dispatch and no review, and the reviewer is the review action's `requested_model` (the task gate reports itself as `model`); paused phase steps are excluded and counted. D8 and the D9 table are updated.
+- Fixes found by running on this repo's history: the rollup re-parsed every review per slice (76 s, now 11 s with one read); plan entry 32 held both "Effort: 4/5" and "Effort now 3/5" and is rewritten as one entry.
+- Test changes: `stats_repo` fixture in `tests/conftest.py`, shared builders in `tests/stats/`; fixtures in `tests/stats/fixtures/planning/` are verbatim copies of real planning files. Full suite 6952 passed.
+- Walkthrough: steps 2–8 pass; step 1 (live scratch-project run) not run. Observed median span by planned effort since 20261001: 2/5 1h28m, 3/5 3h21m, 4/5 7h22m.
+- Open: the installed `/sq:stats` wrapper text lists only `run` and `reviews` until `sq install-commands` refreshes it. Five historical review versions with unreadable frontmatter (157, 161, 169, 343, 916) log a WARNING on every rollup.
+
 ### Slice 176: Effort Calibration and Producer Model Effectiveness — Tasks Complete
 
 - Tasks: `project-documents/user/tasks/176-tasks.effort-calibration-and-producer-model-effectiveness.md`, 31 tasks, test-with pairs, commit per checkpoint. Effort 3/5.
