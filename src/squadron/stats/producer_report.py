@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import statistics
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import cast
 
 from squadron.core.usage import UsageRecord
+from squadron.pipeline.actions import ActionType
+from squadron.pipeline.actions.prompt_identity import PROMPT_METADATA_KEY
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.pipeline.state import StateManager
@@ -76,6 +80,9 @@ class ProducerReport:
     unreadable_runs: int
     rounds_unrecorded: int  # loops with several rounds but no per-round data (pre-176 runs)
     unpriced_runs: int  # units with no recorded cost at all (pre-175 runs)
+    units: int  # every unit reported, the denominator of prompt_identified
+    prompt_identified: int  # units whose phase dispatch carries metadata["prompt"] (177 D8)
+    guide_versions: int  # distinct non-None guide versions among those identities
 
     def to_json_dict(self) -> dict[str, object]:
         return to_json_dict(self)
@@ -89,6 +96,7 @@ def producer_report(
     extraction = extract_units(scan.states)
     wanted = PHASE_TYPES if phase is None else (phase,)
     units = [_usage(unit) for unit in extraction.units if unit.phase in wanted]
+    identities = [i for i in (_prompt_identity(u.unit) for u in units) if i is not None]
     sections = tuple(
         _section(p, [u for u in units if u.unit.phase == p], min_n)
         for p in wanted
@@ -101,7 +109,29 @@ def producer_report(
         unreadable_runs=len(scan.unreadable),
         rounds_unrecorded=sum(_rounds_unrecorded(u.unit) for u in units),
         unpriced_runs=sum(_unpriced(u) for u in units),
+        units=len(units),
+        prompt_identified=len(identities),
+        guide_versions=len({guide for guide in (_guide_version(i) for i in identities) if guide}),
     )
+
+
+def _prompt_identity(unit: ProducerUnit) -> Mapping[str, object] | None:
+    """The phase dispatch's ``metadata["prompt"]``, or None for a unit from before 177."""
+    for action in unit.phase_step.action_results:
+        if action.get("action_type") != ActionType.DISPATCH:
+            continue
+        metadata = action.get("metadata")
+        if not isinstance(metadata, Mapping):
+            continue
+        identity = cast("Mapping[str, object]", metadata).get(PROMPT_METADATA_KEY)
+        if isinstance(identity, Mapping):
+            return cast("Mapping[str, object]", identity)
+    return None
+
+
+def _guide_version(identity: Mapping[str, object]) -> str | None:
+    guide = identity.get("guide_version")
+    return None if guide is None else str(guide)
 
 
 def _section(phase: StepTypeName, units: list[_UnitUsage], min_n: int) -> PhaseSection:

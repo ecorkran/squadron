@@ -99,4 +99,9 @@ def _count_footers(report: ProducerReport) -> list[str]:
         (report.rounds_unrecorded, "run(s) with loop rounds that were not recorded"),
         (report.unpriced_runs, "run(s) with no recorded cost"),
     ]
-    return [f"{count} {text}" for count, text in candidates if count]
+    lines = [f"{count} {text}" for count, text in candidates if count]
+    lines.append(
+        f"{report.prompt_identified} of {report.units} units carry prompt identity; "
+        f"{report.guide_versions} guide versions"
+    )
+    return lines
