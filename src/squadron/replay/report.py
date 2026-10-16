@@ -89,16 +89,18 @@ def replay_report(
     judgments = store.list_judgments(project_id, phase)
     if judge_alias is not None:
         judgments = [j for j in judgments if j.judge.alias == judge_alias]
-    by_group: dict[tuple[ReplayPhase, ModelRef], list[tuple[str, ProducerReplay]]] = defaultdict(list)
+    by_group: dict[tuple[ReplayPhase, str, str], list[tuple[str, ProducerReplay]]] = defaultdict(list)
+    reviewers: dict[tuple[ReplayPhase, str, str], ModelRef] = {}
     reviewer_of_set: dict[str, ModelRef] = {}
     for record_id, replay in replays:
-        by_group[(replay.phase, replay.reviewer)].append((record_id, replay))
+        key = (replay.phase, replay.reviewer.alias, replay.reviewer.model)
+        by_group[key].append((record_id, replay))
+        reviewers[key] = replay.reviewer
         reviewer_of_set[replay.replay_set] = replay.reviewer
     labels = {record_id: config_label(replay.config) for record_id, replay in replays}
     tables: list[ReplayTable] = []
-    for (group_phase, reviewer), members in sorted(
-        by_group.items(), key=lambda g: (g[0][0].value, g[0][1].alias)
-    ):
+    for key, members in sorted(by_group.items(), key=lambda group: group[0]):
+        group_phase, reviewer = key[0], reviewers[key]
         mine = [
             j
             for j in judgments
