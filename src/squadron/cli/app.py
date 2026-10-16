@@ -24,6 +24,7 @@ from squadron.cli.commands.models import models_app
 from squadron.cli.commands.pipelines import pipelines_app
 from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.pr import pr_app
+from squadron.cli.commands.replay import replay_app
 from squadron.cli.commands.review import review_app
 
 # Imported for its side effect only: registers "pr" on review_app via
@@ -68,6 +69,7 @@ app.add_typer(skills_app, name="skills")
 app.add_typer(events_app, name="events")
 app.add_typer(pr_app, name="pr")
 app.add_typer(stats_app, name="stats")
+app.add_typer(replay_app, name="replay")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
 app.command("setup")(setup)
