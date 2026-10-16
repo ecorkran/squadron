@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable, Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -235,3 +237,21 @@ def test_answering_no_at_the_prompt_runs_nothing_and_exits_1(core: _Core) -> Non
     assert core.confirmed is False
     assert result.exit_code == 1
     assert "nothing was run" in result.output
+
+
+def test_the_sq_executable_is_an_absolute_path_even_when_invoked_relatively(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The run starts in the sandbox, where a relative `.venv/bin/sq` does not exist."""
+    from squadron.cli.commands import replay
+
+    script = tmp_path / ".venv" / "bin" / "sq"
+    script.parent.mkdir(parents=True)
+    script.write_text("#!/bin/sh\n")
+    script.chmod(0o755)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.argv", [".venv/bin/sq", "replay", "run"])
+
+    resolved = replay._sq_executable()  # pyright: ignore[reportPrivateUsage]
+
+    assert os.path.isabs(resolved) and Path(resolved) == script.resolve()
