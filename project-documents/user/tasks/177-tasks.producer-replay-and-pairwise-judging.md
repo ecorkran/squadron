@@ -267,23 +267,23 @@ status: not_started
   - [x] Commit: `test: cover judge verdict parsing and order swap`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 28: `judge_replay_set`** (effort 3)
-  - [ ] Contestants per D5: non-`failed` replays in the set plus `original:<original_sha>` (draft from the replay record's start point, re-read via `resolve_start_point`)
-  - [ ] Pairs without a judgment from this `JudgeRef`; count calls for the caller's confirmation
-  - [ ] Per pair: two calls through an injected dispatcher (production: `one_shot_dispatch_with_telemetry`, tools off), each wrapped in `asyncio.wait_for(timeout)`; inputs per D5 (judge prompt, `task_prompt`, frontmatter-stripped first drafts as `A` / `B`)
-  - [ ] Both returned → write one `pairwise_judgment` with both `UsageRecord`s
-  - [ ] A call raises or times out → ERROR naming the pair (and the bound for a timeout); pair not recorded; other pairs continue. If the first call had returned, WARNING with its tokens and cost (D5 half-recorded pairs)
-  - [ ] Return a summary: pairs judged, pairs failed
-  - [ ] Commit: `feat: judge replay pairs with order swap`
+- [x] **Task 28: `judge_replay_set`** (effort 3)
+  - [x] Contestants per D5: non-`failed` replays in the set plus `original:<original_sha>` (draft from the replay record's start point, re-read via `resolve_start_point`) (the core is replay/judging.py with an injected JudgeDispatcher; the production dispatcher is replay/judge_dispatch.py, tools off via allowed_tools=[]; the timeout is a float so tests can use a small bound; the plan comes from plan_judging so the caller can confirm the call count first)
+  - [x] Pairs without a judgment from this `JudgeRef`; count calls for the caller's confirmation
+  - [x] Per pair: two calls through an injected dispatcher (production: `one_shot_dispatch_with_telemetry`, tools off), each wrapped in `asyncio.wait_for(timeout)`; inputs per D5 (judge prompt, `task_prompt`, frontmatter-stripped first drafts as `A` / `B`)
+  - [x] Both returned → write one `pairwise_judgment` with both `UsageRecord`s
+  - [x] A call raises or times out → ERROR naming the pair (and the bound for a timeout); pair not recorded; other pairs continue. If the first call had returned, WARNING with its tokens and cost (D5 half-recorded pairs)
+  - [x] Return a summary: pairs judged, pairs failed
+  - [x] Commit: `feat: judge replay pairs with order swap`
   - **Success:** two calls per new pair; a re-run makes none
 
-- [ ] **Task 29: Test the judge** (effort 3)
-  - [ ] Fake dispatcher and store; no model calls
-  - [ ] Two replays + `original` → 3 pairs, 6 calls, second call has drafts swapped; a second invocation → 0 calls
-  - [ ] Adding a third replay → only its new pairs are judged
-  - [ ] `failed` replays are not contestants; frontmatter is stripped from what the dispatcher receives
-  - [ ] D10 judge rows: dispatch raises, timeout (fake that sleeps past a small bound), second-call failure after first returned (WARNING with tokens and cost, no record), no verdict line → `INVALID` record
-  - [ ] Commit: `test: cover pairwise judge`
+- [x] **Task 29: Test the judge** (effort 3)
+  - [x] Fake dispatcher and store; no model calls
+  - [x] Two replays + `original` → 3 pairs, 6 calls, second call has drafts swapped; a second invocation → 0 calls
+  - [x] Adding a third replay → only its new pairs are judged
+  - [x] `failed` replays are not contestants; frontmatter is stripped from what the dispatcher receives
+  - [x] D10 judge rows: dispatch raises, timeout (fake that sleeps past a small bound), second-call failure after first returned (WARNING with tokens and cost, no record), no verdict line → `INVALID` record
+  - [x] Commit: `test: cover pairwise judge`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 30: `sq replay judge` command** (effort 2)

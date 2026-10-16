@@ -31,6 +31,9 @@ def make_replay(
     alias: str = "opus",
     outcome: ReplayOutcome = ReplayOutcome.ACCEPTED,
     created_at: datetime | None = None,
+    first_draft: str | None = "# Draft",
+    task_prompt: str | None = "Create a slice design.",
+    original_sha: str = "a" * 40,
 ) -> ProducerReplay:
     return ProducerReplay(
         replay_set=replay_set,
@@ -38,7 +41,7 @@ def make_replay(
         phase=phase,
         slice_index=176,
         slice_name="effort-calibration",
-        original_sha="a" * 40,
+        original_sha=original_sha,
         start_sha="b" * 40,
         config=ProducerConfigRef(
             alias=alias, model="claude-opus-5-5", profile="sdk", effort_sent="high"
@@ -60,8 +63,8 @@ def make_replay(
             cf_version="0.19.13",
             guide_version=None,
         ),
-        task_prompt="Create a slice design.",
-        first_draft="# Draft",
+        task_prompt=task_prompt,
+        first_draft=first_draft,
         final_text="# Final",
         squadron_version="0.0.0",
         created_at=created_at or datetime(2026, 11, 1, tzinfo=UTC),
