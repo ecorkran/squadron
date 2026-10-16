@@ -143,6 +143,33 @@ def test_pre_slice_run_shows_dashes_and_unrecorded_line(runs_dir: Path) -> None:
     assert "1 LLM action(s) have no usage recorded." in result.output
 
 
+def test_loop_run_shows_rounds_and_partial_loop_note(runs_dir: Path) -> None:
+    state = json.loads((runs_dir / f"{_RUN}.json").read_text())
+    loop_step = {
+        "step_name": "rounds",
+        "step_type": "loop",
+        "status": "failed",
+        "completed_at": "2026-10-14T10:20:00+00:00",
+        "iteration": 2,
+        "prior_round_results": [
+            [_action("review", _record("glm", CostBasis.ALIAS_PRICING, cost=0.03))]
+        ],
+        "action_results": [_action("review", _record("glm", CostBasis.ALIAS_PRICING, cost=0.04))],
+    }
+    state.update(run_id="run-loop", status="failed", current_step="rounds")
+    state["completed_steps"] = [loop_step]
+    (runs_dir / "run-loop.json").write_text(json.dumps(state))
+
+    table = runner.invoke(app, ["stats", "run", "run-loop"])
+    payload = json.loads(runner.invoke(app, ["stats", "run", "run-loop", "--json"]).output)
+
+    assert table.exit_code == 0
+    assert "rounds r1" in table.output and "rounds r2" in table.output
+    assert "partial loop not recorded" in table.output
+    assert [row["round"] for row in payload["rows"]] == [1, 2]
+    assert payload["partial_loop"] is True
+
+
 def test_unknown_run_exits_1_naming_id_and_dir(runs_dir: Path) -> None:
     result = runner.invoke(app, ["stats", "run", "run-nope"])
 

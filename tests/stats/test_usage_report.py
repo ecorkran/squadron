@@ -11,6 +11,7 @@ import pytest
 
 from squadron.core.usage import CostBasis, TokenUsage, UsageRecord
 from squadron.pipeline.state import StateManager
+from squadron.pipeline.steps import StepTypeName
 from squadron.providers.base import USAGE_KEY
 from squadron.stats.usage_report import RunUsageLoadError, run_usage_report, usage_totals
 
@@ -39,7 +40,14 @@ def _action(action_type: str, usage: object = None) -> dict[str, object]:
     return {"success": True, "action_type": action_type, "outputs": {}, "metadata": metadata}
 
 
-def _write_run(runs_dir: Path, steps: list[dict[str, object]], run_id: str = _RUN) -> None:
+def _write_run(
+    runs_dir: Path,
+    steps: list[dict[str, object]],
+    run_id: str = _RUN,
+    *,
+    status: str = "completed",
+    current_step: str | None = None,
+) -> None:
     data = {
         "schema_version": 5,
         "run_id": run_id,
@@ -47,7 +55,8 @@ def _write_run(runs_dir: Path, steps: list[dict[str, object]], run_id: str = _RU
         "params": {"slice": 175},
         "started_at": "2026-10-14T10:00:00+00:00",
         "updated_at": "2026-10-14T10:38:12+00:00",
-        "status": "completed",
+        "status": status,
+        "current_step": current_step,
         "completed_steps": [
             {
                 "completed_at": "2026-10-14T10:10:00+00:00",
@@ -158,3 +167,90 @@ def test_usage_totals_empty_reports_nothing() -> None:
 
     assert totals.cost_usd is None and totals.turns is None and totals.priced == 0
     assert not totals.usage.reported
+
+
+def _loop_step(
+    prior: list[list[dict[str, object]]] | None, final: list[dict[str, object]], iteration: int
+) -> dict[str, object]:
+    step: dict[str, object] = {
+        "step_name": "rounds",
+        "step_type": StepTypeName.LOOP.value,
+        "action_results": final,
+        "iteration": iteration,
+    }
+    if prior is not None:
+        step["prior_round_results"] = prior
+    return step
+
+
+def test_loop_rows_carry_rounds_and_totals_cover_every_round(tmp_path: Path) -> None:
+    round_one = [_action("review", _record(cost=0.1, prompt=100).to_dict())]
+    round_two = [_action("review", _record(cost=0.2, prompt=200).to_dict())]
+    _write_run(tmp_path, [_loop_step([round_one], round_two, iteration=2)])
+
+    report = run_usage_report(_RUN, StateManager(runs_dir=tmp_path))
+
+    assert [row.round for row in report.rows] == [1, 2]
+    assert report.totals.usage.prompt == 300
+    assert (report.totals.cost_usd, report.totals.priced) == (pytest.approx(0.3), 2)  # type: ignore[comparison-overlap]
+    assert not report.partial_loop
+
+
+def test_non_loop_rows_have_no_round(tmp_path: Path) -> None:
+    _write_run(tmp_path, [{"step_name": "design", "action_results": [_action("dispatch")]}])
+
+    report = run_usage_report(_RUN, StateManager(runs_dir=tmp_path))
+
+    assert [row.round for row in report.rows] == [None]
+
+
+def test_pre_176_loop_file_keeps_rows_and_totals(tmp_path: Path) -> None:
+    final = [_action("review", _record(cost=0.2, prompt=200).to_dict())]
+    _write_run(tmp_path, [_loop_step(None, final, iteration=2)])
+
+    report = run_usage_report(_RUN, StateManager(runs_dir=tmp_path))
+
+    assert [row.action_type for row in report.rows] == ["review"]
+    assert report.totals.usage.prompt == 200
+    assert (report.totals.cost_usd, report.totals.priced) == (0.2, 1)
+
+
+def test_malformed_usage_in_earlier_round_is_unreadable_with_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    earlier = [_action("review", {"tokens": [1, 2]})]
+    final = [_action("review", _record(cost=0.2).to_dict())]
+    _write_run(tmp_path, [_loop_step([earlier], final, iteration=2)])
+
+    with caplog.at_level(logging.WARNING, logger="squadron.stats.usage_report"):
+        report = run_usage_report(_RUN, StateManager(runs_dir=tmp_path))
+
+    assert report.rows[0].unreadable and report.rows[0].round == 1
+    assert report.rows[1].record is not None and report.rows[1].round == 2
+    message = next(r.getMessage() for r in caplog.records if r.levelno == logging.WARNING)
+    assert _RUN in message and "rounds" in message
+
+
+@pytest.mark.parametrize(
+    ("status", "partial"), [("failed", True), ("paused", True), ("completed", False)]
+)
+def test_partial_loop_is_a_stopped_run_on_a_loop_step(
+    tmp_path: Path, status: str, partial: bool
+) -> None:
+    final = [_action("review", _record(cost=0.2).to_dict())]
+    _write_run(tmp_path, [_loop_step(None, final, iteration=1)], status=status, current_step="rounds")
+
+    report = run_usage_report(_RUN, StateManager(runs_dir=tmp_path))
+
+    assert report.partial_loop is partial
+
+
+def test_failed_run_on_a_non_loop_step_is_not_partial_loop(tmp_path: Path) -> None:
+    _write_run(
+        tmp_path,
+        [{"step_name": "design", "action_results": [_action("dispatch")]}],
+        status="failed",
+        current_step="design",
+    )
+
+    assert not run_usage_report(_RUN, StateManager(runs_dir=tmp_path)).partial_loop
