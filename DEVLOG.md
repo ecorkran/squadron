@@ -2,12 +2,23 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261015'
+dateUpdated: '20261016'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261016
+
+### Slice 177: Producer Replay and Pairwise Judging — Design Complete
+
+- Design: `project-documents/user/slices/177-slice.producer-replay-and-pairwise-judging.md` (`cf validate design` PASS). Depends on [176, 320]. The plan entry says Effort 3/5; the design judges it closer to 4/5.
+- Shape: `sq replay run|judge|report`. Each config runs as an `sq run P4|P5` subprocess inside a sandbox at the parent of the commit that added the original artifact. The fixed reviewer gives rounds-to-accept; the judge compares first drafts in pairs, in both orders, with the original first draft as a free baseline contestant; results are aggregated with Bradley-Terry (not Elo). Two new metrology record types, `producer_replay` and `pairwise_judgment`, replace 176 D1's single `producer_score`.
+- Deviation from the plan entry: the sandbox is a depth-1 fetch, not a git worktree. A worktree shares refs, so a tool-using producer could read the original artifact from `main` (D3).
+- Prompt identity (D8): every dispatch records the prompt's SHA-256 and source, and `build_context` records the cf and guide versions. `sq stats producers` keeps pooling across template revisions, because the guide changes weekly and splitting would push most cells below the floor.
+- Open risk, settled first: at a design's start point the plan entry may not yet carry the `(index)` prefix (Phase 4 adds it in the same commit). Task 1 tests `sq run P4 176` at slice 176's real start point.
+- Judge and reviewer are required arguments with no defaults. Don't use `sol` until #224 is fixed.
 
 ## 20261015
 
