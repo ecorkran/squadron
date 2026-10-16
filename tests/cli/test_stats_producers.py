@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 from squadron.cli.app import app
 from squadron.core.usage import format_usd
 from squadron.pipeline.state import RunState, StateManager
-from tests.stats.producer_support import action, producer_actions, run, step
+from tests.stats.producer_support import action, producer_actions, prompt_identity, run, step
 
 runner = CliRunner()
 _FLOOR_KEY = "metrology.min_evidence_n"
@@ -142,3 +142,22 @@ def test_footers_count_exclusions_and_unreadable_run_files(project: Path) -> Non
     assert "1 phase step(s) paused" in lines
     assert "1 run(s): partial loop not recorded" in lines
     assert "1 run file(s) unreadable" in lines
+
+
+def test_footer_reports_prompt_identity_coverage_for_pre_177_runs(project: Path) -> None:
+    result = runner.invoke(app, ["stats", "producers"])
+
+    assert result.exit_code == 0, result.output
+    assert "0 of 4 units carry prompt identity; 0 guide versions" in result.output
+    data = _json()
+    assert (data["units"], data["prompt_identified"], data["guide_versions"]) == (4, 0, 0)
+
+
+def test_footer_counts_identified_units_and_guide_versions(project: Path) -> None:
+    identified = producer_actions(verdict="PASS", prompt_identity=prompt_identity("v0.21.1"))
+    state = run("new-1", [step("design-0", "design", identified)])
+    (project / f"{state.run_id}.json").write_text(state.model_dump_json())
+
+    result = runner.invoke(app, ["stats", "producers"])
+
+    assert "1 of 5 units carry prompt identity; 1 guide versions" in result.output

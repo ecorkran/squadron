@@ -36,8 +36,11 @@ def action(
     profile: str | None = None,
     verdict: str | None = None,
     usage_record: dict[str, object] | None = None,
+    prompt_identity: dict[str, object] | None = None,
 ) -> dict[str, object]:
     metadata: dict[str, object] = {}
+    if prompt_identity is not None:
+        metadata["prompt"] = prompt_identity
     if model is not None:
         metadata["model"] = model
     if requested is not None:
@@ -106,6 +109,7 @@ def producer_actions(
     alias: str | None = "opus",
     effort: str | None = None,
     cost: float | None = None,
+    prompt_identity: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
     """A phase step's dispatch and review actions, as a P4/P5 run records them."""
     return [
@@ -114,6 +118,18 @@ def producer_actions(
             model=model,
             profile="sdk",
             usage_record=usage(alias=alias, effort=effort, cost=cost),
+            prompt_identity=prompt_identity,
         ),
         action("review", model="reviewer-runtime", requested=reviewer, verdict=verdict),
     ]
+
+
+def prompt_identity(guide_version: str | None) -> dict[str, object]:
+    """A ``metadata["prompt"]`` value as a build_context dispatch records it (177 D8)."""
+    return {
+        "sha256": "0" * 64,
+        "source": "build_context",
+        "squadron_version": "0.0.0",
+        "cf_version": "0.19.13",
+        "guide_version": guide_version,
+    }

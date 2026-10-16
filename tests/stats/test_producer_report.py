@@ -14,7 +14,14 @@ from squadron.stats.producer_report import (
     ProducerRow,
     producer_report,
 )
-from tests.stats.producer_support import action, producer_actions, run, step, usage
+from tests.stats.producer_support import (
+    action,
+    producer_actions,
+    prompt_identity,
+    run,
+    step,
+    usage,
+)
 
 _MIN_N = 3
 
@@ -228,3 +235,33 @@ def test_json_values_equal_the_report_values(runs_dir: Path) -> None:
     assert phases[0]["phase"] == "design" and phases[0]["rows"][0]["n"] == 3
     assert phases[0]["rows"][0]["cost_per_accepted"] == pytest.approx(4.5 / 3)
     assert data["min_n"] == _MIN_N
+
+
+def _identified_run(run_id: str, guide_version: str | None) -> RunState:
+    actions = producer_actions(verdict="PASS", prompt_identity=prompt_identity(guide_version))
+    return run(run_id, [step("design-0", "design", actions)])
+
+
+def test_prompt_identity_counts_units_and_distinct_guide_versions(runs_dir: Path) -> None:
+    manager = _write(
+        runs_dir,
+        _identified_run("i1", "v0.21.1"),
+        _identified_run("i2", "v0.21.1"),
+        _identified_run("i3", "v0.20.0"),
+        _identified_run("i4", None),  # identified, but the project had no guide marker file
+        *_config_b_runs(),  # two pre-177 units: no metadata["prompt"]
+    )
+
+    report = producer_report(phase=None, state_manager=manager, min_n=1)
+
+    assert (report.units, report.prompt_identified, report.guide_versions) == (6, 4, 2)
+    data = report.to_json_dict()
+    assert (data["units"], data["prompt_identified"], data["guide_versions"]) == (6, 4, 2)
+
+
+def test_pre_177_runs_carry_no_prompt_identity(runs_dir: Path) -> None:
+    manager = _write(runs_dir, *_config_a_runs(), *_config_b_runs())
+
+    report = producer_report(phase=None, state_manager=manager, min_n=1)
+
+    assert (report.units, report.prompt_identified, report.guide_versions) == (5, 0, 0)

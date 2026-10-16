@@ -81,17 +81,17 @@ status: not_started
   - [x] Commit: `test: cover dispatch prompt identity`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 6: Prompt-identity footer in `sq stats producers`** (effort 2)
-  - [ ] `ProducerReport` (`stats/producer_report.py:72`) gains `prompt_identified: int` (units whose dispatch carries `metadata["prompt"]`), `units: int`, and `guide_versions: int` (distinct non-`None` guide versions)
-  - [ ] `cli/stats_producer_views.py` prints the D8 footer line `k of n units carry prompt identity; m guide versions`; `--json` carries the three fields
-  - [ ] The producer key is unchanged (D8: still pooled)
-  - [ ] Commit: `feat: report prompt identity coverage in sq stats producers`
+- [x] **Task 6: Prompt-identity footer in `sq stats producers`** (effort 2)
+  - [x] `ProducerReport` (`stats/producer_report.py:72`) gains `prompt_identified: int` (units whose dispatch carries `metadata["prompt"]`), `units: int`, and `guide_versions: int` (distinct non-`None` guide versions)
+  - [x] `cli/stats_producer_views.py` prints the D8 footer line `k of n units carry prompt identity; m guide versions`; `--json` carries the three fields
+  - [x] The producer key is unchanged (D8: still pooled)
+  - [x] Commit: `feat: report prompt identity coverage in sq stats producers`
   - **Success:** the footer appears; existing rows are unchanged
 
-- [ ] **Task 7: Test the prompt-identity footer** (effort 1)
-  - [ ] Mixed run set (units with and without `metadata["prompt"]`, two guide versions) → correct k, n, m in text and JSON
-  - [ ] Pre-177 runs only → `0 of n`
-  - [ ] Commit: `test: cover sq stats producers prompt identity footer`
+- [x] **Task 7: Test the prompt-identity footer** (effort 1)
+  - [x] Mixed run set (units with and without `metadata["prompt"]`, two guide versions) → correct k, n, m in text and JSON
+  - [x] Pre-177 runs only → `0 of n`
+  - [x] Commit: `test: cover sq stats producers prompt identity footer`
   - **Success:** tests pass, zero pyright errors
 
 ### Metrology record types (D9)
