@@ -112,6 +112,8 @@ class ProducerReplay(BaseModel):
     run_id: str
     outcome: ReplayOutcome
     failure_class: str | None
+    # The error text for ``other``; the exit code and stderr tail for ``no_run_state``.
+    failure_detail: str | None = None
     rounds: int | None
     first_verdict: str | None
     cost_usd: float | None

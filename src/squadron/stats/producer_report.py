@@ -31,8 +31,9 @@ from squadron.stats.producer_units import (
     extract_units,
     loop_rounds,
     phase_accepted,
+    unit_usage,
 )
-from squadron.stats.usage_report import LLM_ACTION_TYPES, action_usage_row, usage_totals
+from squadron.stats.usage_report import usage_totals
 
 
 class FirstRound(StrEnum):
@@ -204,15 +205,5 @@ class _UnitUsage:
 
 def _usage(unit: ProducerUnit) -> _UnitUsage:
     """Usage records and LLM action count over the phase step and every loop round."""
-    steps = [unit.phase_step.action_results]
-    if unit.loop_step is not None:
-        steps += [*unit.loop_step.prior_round_results, unit.loop_step.action_results]
-    records: list[UsageRecord] = []
-    llm_actions = 0
-    for actions in steps:
-        for action in actions:
-            row = action_usage_row(unit.run_id, unit.phase_step.step_name, action)
-            llm_actions += row.action_type in LLM_ACTION_TYPES
-            if row.record is not None:
-                records.append(row.record)
-    return _UnitUsage(unit, records, llm_actions)
+    usage = unit_usage(unit.run_id, unit.phase_step, unit.loop_step)
+    return _UnitUsage(unit, usage.records, usage.llm_actions)

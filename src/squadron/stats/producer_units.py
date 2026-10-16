@@ -10,12 +10,18 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
 
+from squadron.core.usage import UsageRecord
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.pipeline.state import RunState, StepState
 from squadron.pipeline.steps import StepTypeName
-from squadron.stats.usage_report import action_usage_row, is_partial_loop, run_slice
+from squadron.stats.usage_report import (
+    LLM_ACTION_TYPES,
+    action_usage_row,
+    is_partial_loop,
+    run_slice,
+)
 
 #: The phase step types a producer unit can be, in report order.
 PHASE_TYPES = (StepTypeName.DESIGN, StepTypeName.TASKS)
@@ -183,3 +189,27 @@ def phase_accepted(phase_step: StepState, loop_step: StepState | None) -> bool:
 
 def _ran_no_rounds(loop: StepState) -> bool:
     return not loop.action_results and not loop.prior_round_results and loop.iteration == 0
+
+
+@dataclass(frozen=True)
+class StepUsage:
+    """Usage records and LLM action count over a phase step and every loop round."""
+
+    records: list[UsageRecord]
+    llm_actions: int
+
+
+def unit_usage(run_id: str, phase_step: StepState, loop_step: StepState | None) -> StepUsage:
+    """Read each action's usage once, so a malformed record warns once."""
+    steps = [phase_step.action_results]
+    if loop_step is not None:
+        steps += [*loop_step.prior_round_results, loop_step.action_results]
+    records: list[UsageRecord] = []
+    llm_actions = 0
+    for actions in steps:
+        for action in actions:
+            row = action_usage_row(run_id, phase_step.step_name, action)
+            llm_actions += row.action_type in LLM_ACTION_TYPES
+            if row.record is not None:
+                records.append(row.record)
+    return StepUsage(records, llm_actions)
