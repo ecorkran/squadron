@@ -6,6 +6,7 @@ import json
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -60,7 +61,7 @@ def runs_dir(tmp_path: Path) -> Iterator[Path]:
         yield directory
 
 
-def _json(*args: str) -> dict[str, object]:
+def _json(*args: str) -> Any:  # decoded JSON: shape is what the test asserts
     result = runner.invoke(app, ["stats", "runs", *args, "--json"])
     assert result.exit_code == 0, result.output
     return json.loads(result.output)
@@ -75,7 +76,7 @@ def test_table_and_json_show_the_same_rows_and_total(runs_dir: Path) -> None:
     assert isinstance(rows, list) and [row["run_id"] for row in rows] == ["p4-s2", "p5-s1", "p4-s1"]
     for row in rows:
         assert row["run_id"] in table.output
-    total = data["totals"]["cost_usd"]  # type: ignore[index]
+    total = data["totals"]["cost_usd"]
     assert total == 3.0
     assert f"{format_usd(total)} (2 of 6 priced)" in table.output
     assert "1 run(s): partial loop not recorded" in table.output
@@ -83,9 +84,9 @@ def test_table_and_json_show_the_same_rows_and_total(runs_dir: Path) -> None:
 
 
 def test_the_slice_and_pipeline_filters_narrow_the_rows(runs_dir: Path) -> None:
-    by_slice = [row["run_id"] for row in _json("--slice", "1")["rows"]]  # type: ignore[union-attr, index]
-    by_pipeline = [row["run_id"] for row in _json("--pipeline", "p4")["rows"]]  # type: ignore[union-attr, index]
-    both = [row["run_id"] for row in _json("--slice", "1", "--pipeline", "p4")["rows"]]  # type: ignore[union-attr, index]
+    by_slice = [row["run_id"] for row in _json("--slice", "1")["rows"]]
+    by_pipeline = [row["run_id"] for row in _json("--pipeline", "p4")["rows"]]
+    both = [row["run_id"] for row in _json("--slice", "1", "--pipeline", "p4")["rows"]]
 
     assert by_slice == ["p5-s1", "p4-s1"]
     assert by_pipeline == ["p4-s2", "p4-s1"]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -52,7 +53,7 @@ def _set_floor(value: str) -> None:
     (Path.cwd() / ".squadron.toml").write_text(f'"{_FLOOR_KEY}" = {value}\n', encoding="utf-8")
 
 
-def _json(*args: str) -> dict[str, object]:
+def _json(*args: str) -> Any:  # decoded JSON: shape is what the test asserts
     result = runner.invoke(app, ["stats", "producers", *args, "--json"])
     assert result.exit_code == 0, result.output
     return json.loads(result.output)
@@ -64,7 +65,7 @@ def test_table_and_json_agree_on_values(project: Path) -> None:
     data = _json("--phase", "design")
 
     assert table.exit_code == 0, table.output
-    (section,) = data["phases"]  # type: ignore[misc]
+    (section,) = data["phases"]
     row = section["rows"][0]
     # Three design runs of one config: two passed (cost $1.00 each), one failed.
     assert (row["n"], row["accepted"], row["failed"]) == (3, 2, 1)
@@ -76,8 +77,8 @@ def test_table_and_json_agree_on_values(project: Path) -> None:
 
 
 def test_phase_filter_reports_one_phase(project: Path) -> None:
-    both = [section["phase"] for section in _json()["phases"]]  # type: ignore[index, union-attr]
-    only = [section["phase"] for section in _json("--phase", "tasks")["phases"]]  # type: ignore[index, union-attr]
+    both = [section["phase"] for section in _json()["phases"]]
+    only = [section["phase"] for section in _json("--phase", "tasks")["phases"]]
 
     assert both == ["design", "tasks"] and only == ["tasks"]
 

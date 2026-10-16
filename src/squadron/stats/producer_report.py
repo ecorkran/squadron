@@ -88,34 +88,36 @@ def producer_report(
     scan = state_manager.scan_runs()
     extraction = extract_units(scan.states)
     wanted = PHASE_TYPES if phase is None else (phase,)
-    units = [unit for unit in extraction.units if unit.phase in wanted]
+    units = [_usage(unit) for unit in extraction.units if unit.phase in wanted]
     sections = tuple(
-        _section(p, [u for u in units if u.phase == p], min_n)
+        _section(p, [u for u in units if u.unit.phase == p], min_n)
         for p in wanted
-        if any(u.phase == p for u in units)
+        if any(u.unit.phase == p for u in units)
     )
     return ProducerReport(
         min_n=min_n,
         phases=sections,
         excluded=extraction.excluded,
         unreadable_runs=len(scan.unreadable),
-        rounds_unrecorded=sum(_rounds_unrecorded(unit) for unit in units),
-        unpriced_runs=sum(_unpriced(unit) for unit in units),
+        rounds_unrecorded=sum(_rounds_unrecorded(u.unit) for u in units),
+        unpriced_runs=sum(_unpriced(u) for u in units),
     )
 
 
-def _section(phase: StepTypeName, units: list[ProducerUnit], min_n: int) -> PhaseSection:
-    by_key: dict[ProducerKey, list[ProducerUnit]] = defaultdict(list)
-    for unit in units:
-        by_key[unit.key].append(unit)
-    rows = [_row(key, members, min_n) for key, members in by_key.items()]
+def _section(phase: StepTypeName, units: list[_UnitUsage], min_n: int) -> PhaseSection:
+    by_key: dict[ProducerKey, list[_UnitUsage]] = defaultdict(list)
+    for usage in units:
+        by_key[usage.unit.key].append(usage)
+    rows = [_row(key, usages, min_n) for key, usages in by_key.items()]
     rows.sort(key=lambda row: (row.below_floor, -row.n, row.model or ""))
-    return PhaseSection(phase=phase.value, runs=len({u.run_id for u in units}), rows=tuple(rows))
+    runs = len({u.unit.run_id for u in units})
+    return PhaseSection(phase=phase.value, runs=runs, rows=tuple(rows))
 
 
-def _row(key: ProducerKey, members: list[ProducerUnit], min_n: int) -> ProducerRow:
-    records = [record for unit in members for record in _records(unit)[0]]
-    actions = sum(_records(unit)[1] for unit in members)
+def _row(key: ProducerKey, usages: list[_UnitUsage], min_n: int) -> ProducerRow:
+    members = [usage.unit for usage in usages]
+    records = [record for usage in usages for record in usage.records]
+    actions = sum(usage.llm_actions for usage in usages)
     totals = usage_totals(records)
     accepted = sum(_accepted(unit) for unit in members)
     first = defaultdict(int, {bucket.value: 0 for bucket in FirstRound})
@@ -160,9 +162,9 @@ def _revise_rounds(unit: ProducerUnit) -> int:
     return len(loop.prior_round_results) + 1 if loop.prior_round_results else loop.iteration
 
 
-def _unpriced(unit: ProducerUnit) -> bool:
+def _unpriced(usage: _UnitUsage) -> bool:
     """No priced record at all: a run from before 175, or one on an unpriced model."""
-    return all(record.cost_usd is None for record in _records(unit)[0])
+    return all(record.cost_usd is None for record in usage.records)
 
 
 def _rounds_unrecorded(unit: ProducerUnit) -> bool:
@@ -185,7 +187,16 @@ def _accepted(unit: ProducerUnit) -> bool:
     return loop.accepted or (loop.verdict is not None and _ACCEPTANCE.met_by_verdict(loop.verdict))
 
 
-def _records(unit: ProducerUnit) -> tuple[list[UsageRecord], int]:
+@dataclass(frozen=True)
+class _UnitUsage:
+    """A unit with its usage, read once so a malformed record warns once."""
+
+    unit: ProducerUnit
+    records: list[UsageRecord]
+    llm_actions: int
+
+
+def _usage(unit: ProducerUnit) -> _UnitUsage:
     """Usage records and LLM action count over the phase step and every loop round."""
     steps = [unit.phase_step.action_results]
     if unit.loop_step is not None:
@@ -198,4 +209,4 @@ def _records(unit: ProducerUnit) -> tuple[list[UsageRecord], int]:
             llm_actions += row.action_type in LLM_ACTION_TYPES
             if row.record is not None:
                 records.append(row.record)
-    return records, llm_actions
+    return _UnitUsage(unit, records, llm_actions)

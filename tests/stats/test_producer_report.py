@@ -8,7 +8,12 @@ import pytest
 
 from squadron.pipeline.state import RunState, StateManager
 from squadron.pipeline.steps import StepTypeName
-from squadron.stats.producer_report import FirstRound, ProducerReport, producer_report
+from squadron.stats.producer_report import (
+    FirstRound,
+    ProducerReport,
+    ProducerRow,
+    producer_report,
+)
 from tests.stats.producer_support import action, producer_actions, run, step, usage
 
 _MIN_N = 3
@@ -88,7 +93,7 @@ def _config_b_runs() -> list[RunState]:
     return [ok, failed]
 
 
-def _row(report: ProducerReport, model: str):  # noqa: ANN202
+def _row(report: ProducerReport, model: str) -> ProducerRow:
     (section,) = report.phases
     return next(row for row in section.rows if row.model == model)
 

@@ -127,11 +127,10 @@ def run_usage_report(run_id: str, state_manager: StateManager) -> RunUsageReport
 
     rows = report_rows(state)
     records = [row.record for row in rows if row.record is not None]
-    slice_param = state.params.get("slice")
     return RunUsageReport(
         run_id=state.run_id,
         pipeline=state.pipeline,
-        slice=None if slice_param is None else str(slice_param),
+        slice=run_slice(state),
         status=state.status,
         started_at=state.started_at,
         updated_at=state.updated_at,
@@ -147,6 +146,12 @@ def report_rows(state: RunState) -> list[ActionUsageRow]:
     for step in state.completed_steps:
         rows.extend(_step_rows(state.run_id, step))
     return rows
+
+
+def run_slice(state: RunState) -> str | None:
+    """The slice a run was for (``params["slice"]``), as text so ``"176"`` and ``176`` agree."""
+    value = state.params.get("slice")
+    return None if value is None else str(value)
 
 
 def is_partial_loop(state: RunState) -> bool:
@@ -234,7 +239,7 @@ def runs_usage_report(
     matching = [
         state
         for state in scan.states
-        if (slice_index is None or str(state.params.get("slice")) == str(slice_index))
+        if (slice_index is None or run_slice(state) == str(slice_index))
         and (pipeline is None or state.pipeline == pipeline)
     ]
     matching.sort(key=lambda state: state.started_at, reverse=True)
@@ -244,12 +249,11 @@ def runs_usage_report(
         run_rows = report_rows(state)
         run_records = [row.record for row in run_rows if row.record is not None]
         records.extend(run_records)
-        slice_param = state.params.get("slice")
         rows.append(
             RunTotalsRow(
                 run_id=state.run_id,
                 pipeline=state.pipeline,
-                slice=None if slice_param is None else str(slice_param),
+                slice=run_slice(state),
                 status=state.status,
                 started_at=state.started_at,
                 llm_actions=sum(row.action_type in LLM_ACTION_TYPES for row in run_rows),

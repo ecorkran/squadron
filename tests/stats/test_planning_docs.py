@@ -218,6 +218,17 @@ def test_slice_status_complete_other_and_missing(project_root: Path) -> None:
     assert slice_status(999, project_root) == (False, None)
 
 
+def test_design_without_readable_frontmatter_is_not_complete_and_warns(
+    project_root: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    _write_design(project_root, 175, "status: [unclosed")
+
+    with caplog.at_level(logging.WARNING, logger="squadron.stats.planning_docs"):
+        assert slice_status(175, project_root) == (False, None)
+
+    assert any("175-slice.example.md" in r.getMessage() for r in caplog.records)
+
+
 def test_slice_status_accepts_the_completed_alias(project_root: Path) -> None:
     _write_design(project_root, 175, "status: completed\ndateCreated: 20261014")
 

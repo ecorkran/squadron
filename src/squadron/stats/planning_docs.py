@@ -60,6 +60,7 @@ class PlannedSlice:
     title: str
     effort: int | None
     complete: bool
+    date_created: str | None  # the design's dateCreated (YYYYMMDD)
     tasks: tuple[PlannedTask, ...] | None  # None when there is no task file
 
 
@@ -262,7 +263,10 @@ def slice_status(index: int, project_root: Path) -> tuple[bool, str | None]:
         return False, None
     if len(designs) > 1:
         _logger.warning("Multiple slice designs for index %d, using %s", index, designs[0].name)
-    front = read_frontmatter(designs[0]) or {}
+    front = read_frontmatter(designs[0])
+    if front is None:
+        _logger.warning("Slice design %s has no readable frontmatter", designs[0].name)
+        return False, None
     status = str(front.get("status", ""))
     complete = STATUS_ALIASES.get(status, status) == DocumentStatus.COMPLETE
     created = front.get("dateCreated")
@@ -270,11 +274,13 @@ def slice_status(index: int, project_root: Path) -> tuple[bool, str | None]:
 
 
 def _planned_slice(entry: _PlanEntry, project_root: Path) -> PlannedSlice:
+    complete, date_created = slice_status(entry.index, project_root)
     return PlannedSlice(
         index=entry.index,
         title=entry.title,
         effort=entry.effort,
-        complete=slice_status(entry.index, project_root)[0],
+        complete=complete,
+        date_created=date_created,
         tasks=read_task_files_for(entry.index, project_root),
     )
 

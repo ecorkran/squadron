@@ -11,13 +11,13 @@ from dataclasses import dataclass
 from typing import cast
 
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.state import RunState, StepState
 from squadron.pipeline.steps import StepTypeName
-from squadron.stats.usage_report import action_usage_row, is_partial_loop
+from squadron.stats.usage_report import action_usage_row, is_partial_loop, run_slice
 
 #: The phase step types a producer unit can be, in report order.
 PHASE_TYPES = (StepTypeName.DESIGN, StepTypeName.TASKS)
-_PAUSED = "paused"
 
 
 @dataclass(frozen=True)
@@ -42,7 +42,7 @@ class ProducerUnit:
     loop_step: StepState | None
 
 
-@dataclass(frozen=True)
+@dataclass
 class ExcludedCounts:
     """What was left out of the units, each counted for the report footer (D9)."""
 
@@ -62,27 +62,27 @@ class UnitExtraction:
 def extract_units(states: list[RunState]) -> UnitExtraction:
     """Units from every run; ``excluded`` counts what each exclusion rule dropped."""
     units: list[ProducerUnit] = []
-    counts = {name: 0 for name in ExcludedCounts.__dataclass_fields__}
+    excluded = ExcludedCounts()
     for state in states:
         steps = state.completed_steps
         if not any(step.step_type in PHASE_TYPES for step in steps):
             continue  # not a producer run: its loops and each steps are someone else's
-        counts["each_steps"] += sum(step.step_type == StepTypeName.EACH for step in steps)
-        counts["orphan_loops"] += _orphan_loops(steps)
+        excluded.each_steps += sum(step.step_type == StepTypeName.EACH for step in steps)
+        excluded.orphan_loops += _orphan_loops(steps)
         if is_partial_loop(state):
-            counts["partial_loop_runs"] += 1
+            excluded.partial_loop_runs += 1
             continue
         for position, step in enumerate(steps):
             if step.step_type not in PHASE_TYPES:
                 continue
             unit = _unit(state, steps, position)
             if unit is None:
-                counts["without_dispatch"] += 1
-            elif step.status == _PAUSED:
-                counts["paused"] += 1
+                excluded.without_dispatch += 1
+            elif step.status == ExecutionStatus.PAUSED:
+                excluded.paused += 1
             else:
                 units.append(unit)
-    return UnitExtraction(units=tuple(units), excluded=ExcludedCounts(**counts))
+    return UnitExtraction(units=tuple(units), excluded=excluded)
 
 
 def _orphan_loops(steps: list[StepState]) -> int:
@@ -107,11 +107,10 @@ def _unit(state: RunState, steps: list[StepState], position: int) -> ProducerUni
         effort=None if usage is None else usage.effort,
         reviewer=None if review is None else _reviewer(review),
     )
-    slice_param = state.params.get("slice")
     return ProducerUnit(
         run_id=state.run_id,
         pipeline=state.pipeline,
-        slice=None if slice_param is None else str(slice_param),
+        slice=run_slice(state),
         phase=StepTypeName(step.step_type),
         key=key,
         alias=None if usage is None else usage.alias,

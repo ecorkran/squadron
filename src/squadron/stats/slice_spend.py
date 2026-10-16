@@ -22,6 +22,7 @@ from squadron.stats.usage_report import (
     UsageTotals,
     is_partial_loop,
     report_rows,
+    run_slice,
     usage_totals,
 )
 
@@ -53,7 +54,7 @@ def slice_spend(index: int, sources: SpendSources) -> SliceSpend:
     run_count = 0
     partial = 0
     for state in sources.scan.states:
-        if str(state.params.get("slice")) != str(index):
+        if run_slice(state) != str(index):
             continue
         run_count += 1
         partial += is_partial_loop(state)

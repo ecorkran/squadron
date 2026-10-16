@@ -22,7 +22,7 @@ from squadron.stats.effort_report import (
 )
 from squadron.stats.git_history import GitHistory
 from squadron.stats.json_support import to_json_dict
-from squadron.stats.planning_docs import read_slice_plans, slice_status
+from squadron.stats.planning_docs import read_slice_plans
 from squadron.stats.slice_spend import SpendSources
 
 #: The report's reason when nothing matched (D9); `since` is appended when it filtered.
@@ -76,12 +76,21 @@ def slices_effort_report(
     reports = [
         (planned.effort, build_slice_report(planned, project_root, history, sources))
         for planned in read_slice_plans(project_root).values()
-        if planned.complete and _created_since(planned.index, project_root, since)
+        if planned.complete and _created_since(planned.date_created, since)
     ]
     reports.sort(key=lambda pair: pair[1].index)
     if not reports:
         reason = NO_COMPLETED_SLICES if since is None else f"{NO_COMPLETED_SLICES} since {since}"
-        return SlicesEffortReport(since, (), 0, reason, 0, 0, 0, len(sources.scan.unreadable))
+        return SlicesEffortReport(
+            since=since,
+            levels=(),
+            slices=0,
+            empty_reason=reason,
+            markers_not_found=0,
+            rounds_skipped=0,
+            lower_bound_slices=0,
+            unreadable_runs=len(sources.scan.unreadable),
+        )
     return SlicesEffortReport(
         since=since,
         levels=_levels(reports),
@@ -94,10 +103,9 @@ def slices_effort_report(
     )
 
 
-def _created_since(index: int, project_root: Path, since: str | None) -> bool:
+def _created_since(created: str | None, since: str | None) -> bool:
     if since is None:
         return True
-    created = slice_status(index, project_root)[1]
     return created is not None and created >= since
 
 

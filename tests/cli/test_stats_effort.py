@@ -6,6 +6,7 @@ import json
 import subprocess
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -39,7 +40,7 @@ def project(workdir: StatsRepo) -> StatsRepo:
     return workdir
 
 
-def _json(*args: str) -> dict[str, object]:
+def _json(*args: str) -> Any:  # decoded JSON: shape is what the test asserts
     result = runner.invoke(app, ["stats", *args, "--json"])
     assert result.exit_code == 0, result.output
     return json.loads(result.output)
@@ -58,7 +59,7 @@ def test_slice_table_and_json_show_the_same_values(project: StatsRepo) -> None:
     assert str(groups[0]["marker_sha"])[:8] in table.output
     assert "marker not found" in table.output  # the third group, in its marker cell
     assert "$0.75 (2 of 3 priced)" in table.output
-    assert data["spend"]["totals"]["cost_usd"] == 0.75  # type: ignore[index]
+    assert data["spend"]["totals"]["cost_usd"] == 0.75
 
 
 def test_slices_table_and_json_show_the_same_values(project: StatsRepo) -> None:

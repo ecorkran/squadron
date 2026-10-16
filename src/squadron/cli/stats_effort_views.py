@@ -6,6 +6,7 @@ table cannot disagree. No aggregation happens here.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import timedelta
 
 from rich.console import Console
@@ -72,13 +73,23 @@ _LEVEL_COLUMNS = [
         )
     ],
 ]
-_LEVEL_MEASURES = (
-    (Measure.SPAN, "span"),
-    (Measure.IMPLEMENTATION_COMMITS, "count"),
-    (Measure.FIXUPS, "count"),
-    (Measure.DESIGN_ROUNDS, "count"),
-    (Measure.TASKS_ROUNDS, "count"),
-    (Measure.RECORDED_SPEND, "usd"),
+
+
+def _span_value(value: float) -> str:
+    return format_duration(timedelta(seconds=value))
+
+
+def _count_value(value: float) -> str:
+    return f"{value:g}"
+
+
+_LEVEL_MEASURES: tuple[tuple[Measure, Callable[[float], str]], ...] = (
+    (Measure.SPAN, _span_value),
+    (Measure.IMPLEMENTATION_COMMITS, _count_value),
+    (Measure.FIXUPS, _count_value),
+    (Measure.DESIGN_ROUNDS, _count_value),
+    (Measure.TASKS_ROUNDS, _count_value),
+    (Measure.RECORDED_SPEND, format_usd),
 )
 
 
@@ -173,25 +184,15 @@ def _group_cells(number: int, group: GroupRow) -> list[Text]:
 def _level_cells(level: LevelRow) -> list[Text]:
     label = UNPLANNED_LABEL if level.level is None else f"{level.level}/5"
     cells = [label, str(level.n)]
-    cells += [_stat_cell(level.measures[measure.value], kind) for measure, kind in _LEVEL_MEASURES]
+    cells += [_stat_cell(level.measures[measure.value], fmt) for measure, fmt in _LEVEL_MEASURES]
     return [Text(cell) for cell in cells]
 
 
-def _stat_cell(stat: MeasureStat, kind: str) -> str:
+def _stat_cell(stat: MeasureStat, fmt: Callable[[float], str]) -> str:
     if stat.median is None or stat.minimum is None or stat.maximum is None:
         return UNREPORTED
-    median, low, high = (_format_value(v, kind) for v in (stat.median, stat.minimum, stat.maximum))
+    median, low, high = (fmt(v) for v in (stat.median, stat.minimum, stat.maximum))
     return f"{median} ({low}–{high}) n={stat.n}"
-
-
-def _format_value(value: float, kind: str) -> str:
-    match kind:
-        case "span":
-            return format_duration(timedelta(seconds=value))
-        case "usd":
-            return format_usd(value)
-        case _:
-            return f"{value:g}"
 
 
 def _rounds(reviews: tuple[ReviewTypeRounds, ...]) -> str:
