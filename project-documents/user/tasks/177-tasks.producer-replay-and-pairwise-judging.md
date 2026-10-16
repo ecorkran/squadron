@@ -300,18 +300,18 @@ status: not_started
 
 ### Report (D6, D7)
 
-- [ ] **Task 32: Bradley-Terry fit** (effort 2)
-  - [ ] `replay/bradley_terry.py`: `fit(outcomes) -> BTFit` per D6 (Hunter MM, tie = half a win each, tolerance 1e-9, cap 10,000 with WARNING, geometric-mean normalization, per connected component, zero-win contestants get `None` with a reason). Tolerance and cap are module constants
-  - [ ] `INCONSISTENT` counts as a tie; `INVALID` is excluded
-  - [ ] `BTFit` carries strengths, components, iterations, converged
-  - [ ] Commit: `feat: add Bradley-Terry fit`
+- [x] **Task 32: Bradley-Terry fit** (effort 2)
+  - [x] `replay/bradley_terry.py`: `fit(outcomes) -> BTFit` per D6 (Hunter MM, tie = half a win each, tolerance 1e-9, cap 10,000 with WARNING, geometric-mean normalization, per connected component, zero-win contestants get `None` with a reason). Tolerance and cap are module constants (input is a list of Comparison(a, b, outcome) values; besides no-win contestants, a contestant that never lost also has no finite strength and is reported as None with a reason, then removed until none remains; the iteration cap and tolerance are module constants)
+  - [x] `INCONSISTENT` counts as a tie; `INVALID` is excluded
+  - [x] `BTFit` carries strengths, components, iterations, converged
+  - [x] Commit: `feat: add Bradley-Terry fit`
   - **Success:** pure function, no new dependency
 
-- [ ] **Task 33: Test Bradley-Terry** (effort 2)
-  - [ ] Hand-computed three-contestant case (show the expected values in a comment)
-  - [ ] Zero-win contestant → `None` with reason; disconnected graph → two components each normalized
-  - [ ] Iteration cap hit (cap patched low) → WARNING, `converged` false
-  - [ ] Commit: `test: cover Bradley-Terry fit`
+- [x] **Task 33: Test Bradley-Terry** (effort 2)
+  - [x] Hand-computed three-contestant case (show the expected values in a comment)
+  - [x] Zero-win contestant → `None` with reason; disconnected graph → two components each normalized
+  - [x] Iteration cap hit (cap patched low) → WARNING, `converged` false
+  - [x] Commit: `test: cover Bradley-Terry fit`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 34: `replay_report` core** (effort 3)
