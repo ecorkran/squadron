@@ -96,18 +96,18 @@ status: in_progress
   - [x] Commit: `test: cover task file reader with real task files`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 8: Slice plans and slice status**
-  - [ ] `read_slice_plans(project_root) -> dict[int, PlannedSlice]` reads every `*-slices.*.md` under `ARCHITECTURE_DIR` per D4; `tasks` is filled from `read_task_files_for`
-  - [ ] `slice_status(index, project_root) -> tuple[bool, str | None]`: completion per D4 and the design's `dateCreated` for `--since`
-  - [ ] An index in no plan file raises a typed error carrying the plan files searched (D9 "unknown index")
-  - [ ] Commit: `feat: add slice plan and status readers`
+- [x] **Task 8: Slice plans and slice status**
+  - [x] `read_slice_plans(project_root) -> dict[int, PlannedSlice]` reads every `*-slices.*.md` under `ARCHITECTURE_DIR` per D4; `tasks` is filled from `read_task_files_for` (the unknown-index error is raised by planned_slice(index, project_root); a plan entry ends at the next checkbox item or heading, since entries contain plain numbered lines)
+  - [x] `slice_status(index, project_root) -> tuple[bool, str | None]`: completion per D4 and the design's `dateCreated` for `--since`
+  - [x] An index in no plan file raises a typed error carrying the plan files searched (D9 "unknown index")
+  - [x] Commit: `feat: add slice plan and status readers`
   - **Success:** every entry in the 140 fixture is read with its index, title and effort
 
-- [ ] **Task 9: Test slice plans and status**
-  - [ ] Against the 140 fixture: entry count, a checked and an unchecked entry, an entry with `Effort: N/5` and one without
-  - [ ] `slice_status` on a temp design with `status: complete`, one with another status, and a missing design
-  - [ ] Unknown index → the typed error lists the plan files searched
-  - [ ] Commit: `test: cover slice plan and status readers`
+- [x] **Task 9: Test slice plans and status**
+  - [x] Against the 140 fixture: entry count, a checked and an unchecked entry, an entry with `Effort: N/5` and one without
+  - [x] `slice_status` on a temp design with `status: complete`, one with another status, and a missing design
+  - [x] Unknown index → the typed error lists the plan files searched
+  - [x] Commit: `test: cover slice plan and status readers`
   - **Success:** tests pass, zero pyright errors
 
 ### Git history (D5, D6)
