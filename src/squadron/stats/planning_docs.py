@@ -161,8 +161,9 @@ def read_task_file(paths: Sequence[Path]) -> tuple[PlannedTask, ...]:
 def task_file_paths(index: int, project_root: Path) -> tuple[Path, ...]:
     """The task file(s) for slice ``index``, split parts in suffix order; empty when none.
 
-    More than one distinct task file name for an index logs a WARNING and the first (by
-    name) wins, the same rule ``resolve_arch_file`` uses.
+    More than one distinct task file name for an index logs at INFO and the first (by name)
+    wins, the rule ``resolve_arch_file`` uses. INFO, because the repo's own index 100 has two
+    task files for good and a rollup would repeat the line on every run.
     """
     found = sorted((project_root / TASKS_DIR).glob(f"{index}-tasks.*.md"))
     by_base: dict[str, list[Path]] = {}
@@ -172,7 +173,7 @@ def task_file_paths(index: int, project_root: Path) -> tuple[Path, ...]:
         return ()
     base = min(by_base)
     if len(by_base) > 1:
-        _logger.warning("Multiple task files for index %d, using %s", index, base)
+        _logger.info("Multiple task files for index %d, using %s", index, base)
     return tuple(sorted(by_base[base], key=_part_number))
 
 
@@ -191,7 +192,7 @@ class UnknownSliceError(Exception):
     """A slice index is in no slice plan; carries the plan files that were searched."""
 
     def __init__(self, index: int, searched: Sequence[Path]) -> None:
-        names = ", ".join(str(path) for path in searched) or "no plan files found"
+        names = ", ".join(path.name for path in searched) or "no plan files found"
         super().__init__(f"slice {index} is in no slice plan (searched: {names})")
         self.index = index
         self.searched = tuple(searched)

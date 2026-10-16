@@ -176,19 +176,19 @@ status: in_progress
   - [x] Commit: `test: cover single-slice effort report`
   - **Success:** tests pass, zero pyright errors
 
-- [ ] **Task 18: `slices_effort_report`**
-  - [ ] `slices_effort_report(*, since, project_root, history, state_manager)` per D2 and D7, with one `GitHistory.load()` for the whole report
-  - [ ] A measure that is `unknown`/`unavailable` for a slice is left out of that measure's distribution, and the measure's n is reported separately from the level's n
-  - [ ] No completed slices → empty report with that reason (D9)
-  - [ ] Commit: `feat: add effort rollup across completed slices`
+- [x] **Task 18: `slices_effort_report`**
+  - [x] `slices_effort_report(*, since, project_root, history, state_manager)` per D2 and D7, with one `GitHistory.load()` for the whole report (code is stats/effort_rollup.py; runs and standalone reviews are read once via SpendSources so a rollup does not re-parse every review per slice: 76s down to 11s on this repo's 138 completed slices; design and tasks rounds are rounds-to-acceptance, so a review never accepted is unknown, not zero)
+  - [x] A measure that is `unknown`/`unavailable` for a slice is left out of that measure's distribution, and the measure's n is reported separately from the level's n
+  - [x] No completed slices → empty report with that reason (D9)
+  - [x] Commit: `feat: add effort rollup across completed slices`
   - **Success:** `to_json_dict()` has `levels[].measures`
 
-- [ ] **Task 19: Test `slices_effort_report`**
-  - [ ] Three completed slices at two effort levels plus one `unplanned` → correct grouping, n, median and range
-  - [ ] `since` excludes an older slice; a not-complete slice is excluded; a slice with no branch contributes rounds and spend but not commit measures
-  - [ ] No completed slices → empty report with its reason
-  - [ ] Call count `2 + V` for the whole rollup
-  - [ ] Commit: `test: cover effort rollup`
+- [x] **Task 19: Test `slices_effort_report`**
+  - [x] Three completed slices at two effort levels plus one `unplanned` → correct grouping, n, median and range
+  - [x] `since` excludes an older slice; a not-complete slice is excluded; a slice with no branch contributes rounds and spend but not commit measures
+  - [x] No completed slices → empty report with its reason
+  - [x] Call count `2 + V` for the whole rollup
+  - [x] Commit: `test: cover effort rollup`
   - **Success:** tests pass, zero pyright errors
 
 - [ ] **Task 20: `sq stats slice` and `sq stats slices` CLI**

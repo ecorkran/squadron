@@ -140,7 +140,7 @@ def test_read_task_files_for_returns_none_without_a_task_file(tmp_path: Path) ->
     assert read_task_files_for(903, tmp_path) is None
 
 
-def test_multiple_task_file_names_log_a_warning_and_first_wins(
+def test_multiple_task_file_names_are_logged_and_first_wins(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     tasks_dir = tmp_path / TASKS_DIR
@@ -148,7 +148,7 @@ def test_multiple_task_file_names_log_a_warning_and_first_wins(
     for name in ("904-tasks.beta.md", "904-tasks.alpha.md"):
         (tasks_dir / name).write_text("## Tasks\n", encoding="utf-8")
 
-    with caplog.at_level(logging.WARNING, logger="squadron.stats.planning_docs"):
+    with caplog.at_level(logging.INFO, logger="squadron.stats.planning_docs"):
         paths = task_file_paths(904, tmp_path)
 
     assert [path.name for path in paths] == ["904-tasks.alpha.md"]
