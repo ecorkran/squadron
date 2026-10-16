@@ -72,11 +72,11 @@ status: in_progress
 
 ### Planning-document readers (D4)
 
-- [ ] **Task 5: Shared frontmatter and path constants**
-  - [ ] Extract `parse_frontmatter(text)` from `read_frontmatter` in `documents/frontmatter.py` (same `None` rules); `read_frontmatter` reads the file and calls it
-  - [ ] Add `SLICES_DIR` and `ARCHITECTURE_DIR` to `review/persistence.py` beside `TASKS_DIR`
-  - [ ] Test `parse_frontmatter`: valid block, no fence, unclosed fence, non-mapping YAML
-  - [ ] Commit: `refactor: extract parse_frontmatter and add planning document dirs`
+- [x] **Task 5: Shared frontmatter and path constants**
+  - [x] Extract `parse_frontmatter(text)` from `read_frontmatter` in `documents/frontmatter.py` (same `None` rules); `read_frontmatter` reads the file and calls it
+  - [x] Add `SLICES_DIR` and `ARCHITECTURE_DIR` to `review/persistence.py` beside `TASKS_DIR` (SLICES_DIR was added to review/persistence.py; ARCHITECTURE_DIR already existed in integrations/context_forge.py as a str, so it is reused, not duplicated.)
+  - [x] Test `parse_frontmatter`: valid block, no fence, unclosed fence, non-mapping YAML
+  - [x] Commit: `refactor: extract parse_frontmatter and add planning document dirs`
   - **Success:** existing frontmatter tests pass unchanged; the new test passes
 
 - [ ] **Task 6: `read_task_file` in `stats/planning_docs.py`**
