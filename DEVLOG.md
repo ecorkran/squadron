@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261016
 
+### Slice 177: Producer Replay and Pairwise Judging — Tasks Complete
+
+- Tasks: `project-documents/user/tasks/177-tasks.producer-replay-and-pairwise-judging.md`, 39 tasks (353 lines), test-with pairs, commit per task. Effort 4/5.
+- Task 1 is the D2 spike (`sq run P4 176` at slice 176's real start point); if the slice does not resolve, work stops and returns to the PM.
+- Choices fixed in the task file: payloads in new `metrology/replay_models.py` (`models.py` is 294 lines); `MetrologyStore._iter_records()` extracted before adding list methods; worktree lock helpers move to `core/process_lock.py` (not tied to `PullRequestRecord`, but private); split task files are one artifact, concatenated in suffix order; `sq run` child invoked through an injected `SqRunInvoker` with no timeout (ProcessRunner requires one; D10 leaves hangs to 174's stall bounds); `_resolve_prompt` returns prompt + `PromptSource`.
+
 ### Slice 177: Producer Replay and Pairwise Judging — Design Complete
 
 - Design: `project-documents/user/slices/177-slice.producer-replay-and-pairwise-judging.md` (`cf validate design` PASS). Depends on [176, 320]. The plan entry says Effort 3/5; the design judges it closer to 4/5.
