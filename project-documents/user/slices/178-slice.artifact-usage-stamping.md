@@ -277,6 +277,18 @@ These commands come from the design; the `artifact spend` line does not exist ye
 5. Prune the runs (`sq runs prune --pipeline P4 --yes`, and the same for P5), then repeat step 4. The artifact spend line is unchanged; `recorded spend` is gone. `sq stats run <run_id>` now reports the run missing.
 6. Negative check: set `existing: keep` on the design step and rerun P4. The design's `usageRounds` does not change.
 
+#### Results (20261017)
+
+Run on scratch slice 958 on a throwaway branch (`178-walkthrough-scratch`, integration branch pointed at it for the run). All six steps pass after one fix.
+
+- **Fix found by step 3.** The built-in revise steps are plain `dispatch` steps, so they had no expected artifact kind, and `usage-stamp` and `revision-stamp` both skipped every revise round. A dispatch step now takes `artifact: design|tasks`, set on the revise steps of P4, P5, P45, P456 and P56 (41019030). `sq review --revise` strips it because it writes no run state ([#236](https://github.com/ecorkran/squadron/issues/236)).
+1. **Pass.** P4 design: `costUsd: 0.445546`, `usageRounds: 1`, `pricedRounds: 1`.
+2. **Pass.** `sq stats run`: design dispatch row $0.45, 354.5k prompt, 5.4k completion, matching the stamp.
+3. **Pass.** One revise round (scratch P4 copy, `skip_if_met: false`): commits show $0.445546 / 1 round, then $0.688379 / 2 rounds; the difference matches the $0.24 revise row. `revision_number: 1` is now stamped too.
+4. **Pass.** P5: tasks `costUsd: 0.570436` over 2 rounds ($0.44 + $0.13 rows). `sq stats slice 958` prints `artifact spend: design $0.69 (2 of 2 rounds) · tasks $0.57 (2 of 2 rounds) (floor)` under `recorded spend $3.35`.
+5. **Pass.** Pruned the five scratch runs by ID (`--pipeline P4` would have taken every P4 run). `recorded spend —`; the artifact spend line is unchanged; `sq stats run` reports the run missing.
+6. **Pass.** In the step 3 run the design step had `existing: keep`: its dispatch was skipped with no usage row, and `usageRounds` moved only for the revise round.
+
 ## Risk Assessment
 
 ### Technical Risks
