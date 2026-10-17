@@ -7,7 +7,6 @@ an exit code.
 
 from __future__ import annotations
 
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -54,7 +53,7 @@ def _sq_executable() -> str:
         raise common.fail(f"cannot locate the sq executable from '{sys.argv[0]}'")
     # Absolute: `which` returns a relative path as given (`.venv/bin/sq`), and the run
     # starts in the sandbox directory, where that path does not exist.
-    return os.path.abspath(found)
+    return str(Path(found).resolve())
 
 
 def _deps(start: StartPoint, repo_root: Path) -> ReplayDeps:
