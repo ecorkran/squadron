@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.1] - 20261017
+
 ### Added
 
 - Design, task and architecture docs written by a pipeline now record their production cost in frontmatter, and `sq stats slice` shows it as artifact spend.
@@ -22,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Revise rounds in the built-in pipelines now stamp `revision_number` and count toward the artifact's cost; a revise `dispatch` step declares the file it rewrites with `artifact: design|tasks`. Custom pipelines copied from P4/P5 need the same key on their revise step.
+- Codex steps that write no files no longer warn about running in a read-only sandbox.
 
 ## [0.23.0] - 20261016
 

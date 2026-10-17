@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261016'
+dateUpdated: '20261017'
 ---
 
 # Development Log
@@ -10,6 +10,10 @@ dateUpdated: '20261016'
 A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261017
+
+### Release 0.23.1
+
+- **Contents:** slice 178 Artifact Usage Stamping ([#222](https://github.com/ecorkran/squadron/issues/222)); revise-round artifact kind fix (41019030); Codex read-only sandbox warning fix (cb6c082c).
 
 ### Slice 178: Artifact Usage Stamping — Implementation Complete
 
