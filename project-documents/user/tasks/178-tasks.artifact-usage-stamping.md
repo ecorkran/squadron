@@ -189,47 +189,47 @@ status: in_progress
 
 ## Task 14 — `stats/artifacts_report.py`
 
-- [ ] Create `src/squadron/stats/artifacts_report.py` with `ArtifactUsageRow` (API Contracts) and a report type holding the rows; name it `ArtifactsUsageReport`
-- [ ] `artifacts_usage_report(project_root, slice_filter)` per D5
-  - [ ] Reads top-level `*.md` in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only
-  - [ ] Kind from the directory: `TASKS_DIR` → `ArtifactKind.TASKS`; `SLICES_DIR` and `ARCHITECTURE_DIR` → `ArtifactKind.DESIGN`
-  - [ ] Slice from the file name's leading index, reusing the reviews report's rule (import it; do not reimplement; if the helper is underscore-private, make it public in place and update its callers)
-  - [ ] `slice_filter` keeps only rows whose slice matches
-  - [ ] Files without `usageRounds` skipped silently; unreadable file (`FrontmatterError`, `OSError`) skipped with a WARNING naming the path
-- [ ] Provide a per-kind aggregate (cost of priced rounds, `rounds`, `priced_rounds`) for the slice line; keep it in this module so 179 can reuse it
-  - [ ] Success: pyright clean
+- [x] Create `src/squadron/stats/artifacts_report.py` with `ArtifactUsageRow` (API Contracts) and a report type holding the rows; name it `ArtifactsUsageReport`
+- [x] `artifacts_usage_report(project_root, slice_filter)` per D5
+  - [x] Reads top-level `*.md` in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only
+  - [x] Kind from the directory: `TASKS_DIR` → `ArtifactKind.TASKS`; `SLICES_DIR` and `ARCHITECTURE_DIR` → `ArtifactKind.DESIGN`
+  - [x] Slice from the file name's leading index, reusing the reviews report's rule (import it; do not reimplement; if the helper is underscore-private, make it public in place and update its callers)
+  - [x] `slice_filter` keeps only rows whose slice matches
+  - [x] Files without `usageRounds` skipped silently; unreadable file (`FrontmatterError`, `OSError`) skipped with a WARNING naming the path
+- [x] Provide a per-kind aggregate (cost of priced rounds, `rounds`, `priced_rounds`) for the slice line; keep it in this module so 179 can reuse it
+  - [x] Success: pyright clean
 
 ## Task 15 — Tests: artifacts report
 
-- [ ] Add `tests/stats/test_artifacts_report.py`; fixtures copied from real slice, task and arch frontmatter in this repo, with usage keys appended (CLAUDE.md parsing rule)
-  - [ ] One stamped design, one stamped task file, one stamped arch doc → three rows with correct kind and slice
-  - [ ] Unstamped files produce no row and no WARNING
-  - [ ] Unreadable file → skipped with WARNING naming the path
-  - [ ] `slice_filter` excludes other slices' files
-  - [ ] Nested subdirectories under `SLICES_DIR`/`TASKS_DIR` are not read
-  - [ ] Per-kind aggregate sums cost and round counts
-  - [ ] No run state exists in the temp project (179 integration requirement)
-- [ ] Commit: `feat(stats): add artifacts usage report`
+- [x] Add `tests/stats/test_artifacts_report.py`; fixtures copied from real slice, task and arch frontmatter in this repo, with usage keys appended (CLAUDE.md parsing rule)
+  - [x] One stamped design, one stamped task file, one stamped arch doc → three rows with correct kind and slice
+  - [x] Unstamped files produce no row and no WARNING
+  - [x] Unreadable file → skipped with WARNING naming the path
+  - [x] `slice_filter` excludes other slices' files
+  - [x] Nested subdirectories under `SLICES_DIR`/`TASKS_DIR` are not read
+  - [x] Per-kind aggregate sums cost and round counts
+  - [x] No run state exists in the temp project (179 integration requirement)
+- [x] Commit: `feat(stats): add artifacts usage report`
 
 ## Task 16 — `artifact spend` line on `sq stats slice`
 
-- [ ] In `stats/effort_report.py`, attach the slice's `artifacts_usage_report(..., slice_filter=index)` result to the slice report
-- [ ] In `cli/stats_effort_views.py`, print one line directly after `recorded spend`: `artifact spend: design $x (k of m rounds) · tasks $y (k of m rounds) (floor)` (D5, UI Specifications)
-  - [ ] Only kinds with stamped rows appear; no stamped rows → line omitted
-  - [ ] Unpriced rounds show via `k of m`; never rendered as $0 when no round is priced (follow the existing `_spend` rendering for the no-cost case)
-  - [ ] Never added into `recorded spend`
-  - [ ] Success: pyright clean
+- [x] In `stats/effort_report.py`, attach the slice's `artifacts_usage_report(..., slice_filter=index)` result to the slice report
+- [x] In `cli/stats_effort_views.py`, print one line directly after `recorded spend`: `artifact spend: design $x (k of m rounds) · tasks $y (k of m rounds) (floor)` (D5, UI Specifications)
+  - [x] Only kinds with stamped rows appear; no stamped rows → line omitted
+  - [x] Unpriced rounds show via `k of m`; never rendered as $0 when no round is priced (follow the existing `_spend` rendering for the no-cost case)
+  - [x] Never added into `recorded spend`
+  - [x] Success: pyright clean
 
 ## Task 17 — Tests: slice line
 
-- [ ] Extend `tests/cli/test_stats_effort.py` and `tests/stats/test_effort_report.py` (the report now carries the artifact usage attachment from Task 16)
-  - [ ] Stamped design and tasks → line shows both kinds after `recorded spend`, ending in the `(floor)` label
-  - [ ] The attachment on the slice report holds the per-kind aggregate
-  - [ ] Only a design stamped → line shows design only
-  - [ ] No stamps → no `artifact spend` line
-  - [ ] Recorded spend value is the same with and without stamped artifacts
-  - [ ] No run state at all (pruned) → artifact spend line still shown
-- [ ] Commit: `feat(stats): show artifact spend on sq stats slice`
+- [x] Extend `tests/cli/test_stats_effort.py` and `tests/stats/test_effort_report.py` (the report now carries the artifact usage attachment from Task 16)
+  - [x] Stamped design and tasks → line shows both kinds after `recorded spend`, ending in the `(floor)` label
+  - [x] The attachment on the slice report holds the per-kind aggregate
+  - [x] Only a design stamped → line shows design only
+  - [x] No stamps → no `artifact spend` line
+  - [x] Recorded spend value is the same with and without stamped artifacts
+  - [x] No run state at all (pruned) → artifact spend line still shown
+- [x] Commit: `feat(stats): show artifact spend on sq stats slice`
 
 ---
 
@@ -237,18 +237,18 @@ status: in_progress
 
 ## Task 18 — Architecture, slice plan and CHANGELOG
 
-- [ ] `project-documents/user/architecture/140-arch.pipeline-foundation.md`
-  - [ ] Add `usage_stamp.py  # POST_ACTION — 178 usage stamp` to the `events/builtin/` tree, after the `revision_stamp.py` entry
-  - [ ] In the sentence naming "the built-in dispatch-artifact-then-revision-stamp ordering", name the order as dispatch-artifact, then revision-stamp, then usage-stamp
-  - [ ] Amend the sentence ending "reusing only `ActionResult` and `ValidationError`" to say built-ins also import pipeline-layer helpers (`dispatch-artifact` the path helpers; `usage-stamp` `UsageRecord` and `review/artifact_usage`)
-- [ ] Confirm `140-slices.pipeline-foundation.md` entry 34 already states the dispatch-only scope (it does as of 20261016); edit only if not
-- [ ] Add a CHANGELOG `Unreleased` bullet: design, task and architecture docs written by a pipeline now record their production cost in frontmatter, and `sq stats slice` shows it as artifact spend
-- [ ] Commit: `docs: record usage stamp in pipeline architecture and changelog`
+- [x] `project-documents/user/architecture/140-arch.pipeline-foundation.md`
+  - [x] Add `usage_stamp.py  # POST_ACTION — 178 usage stamp` to the `events/builtin/` tree, after the `revision_stamp.py` entry
+  - [x] In the sentence naming "the built-in dispatch-artifact-then-revision-stamp ordering", name the order as dispatch-artifact, then revision-stamp, then usage-stamp
+  - [x] Amend the sentence ending "reusing only `ActionResult` and `ValidationError`" to say built-ins also import pipeline-layer helpers (`dispatch-artifact` the path helpers; `usage-stamp` `UsageRecord` and `review/artifact_usage`)
+- [x] Confirm `140-slices.pipeline-foundation.md` entry 34 already states the dispatch-only scope (it does as of 20261016); edit only if not
+- [x] Add a CHANGELOG `Unreleased` bullet: design, task and architecture docs written by a pipeline now record their production cost in frontmatter, and `sq stats slice` shows it as artifact spend
+- [x] Commit: `docs: record usage stamp in pipeline architecture and changelog`
 
 ## Task 19 — Full validation and walkthrough
 
-- [ ] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full test suite
-  - [ ] Success: all pass; any failure fixed before continuing
+- [x] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full test suite
+  - [x] Success: all pass; any failure fixed before continuing
 - [ ] Before the walkthrough, ask the Project Manager to confirm running live P4 and P5 pipelines (they spend real LLM budget); if not confirmed, mark the walkthrough items not run in the slice design and continue
 - [ ] Run the design's Verification Walkthrough steps 1–6 on a scratch slice, and record results (pass/fail per step, with the observed values) in the slice design's Verification Walkthrough section
   - [ ] Pruning in step 5 targets only the scratch runs created for this walkthrough; if `sq runs prune` cannot select only those runs, stop and ask the Project Manager before pruning
