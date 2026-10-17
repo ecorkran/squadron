@@ -8,8 +8,8 @@ projectState: >
   Slice design complete (20261016) and trimmed after review. No code written. Slices 175 and 176
   are complete; main is the integration target (`git.integration_branch` unset).
 dateCreated: 20261016
-dateUpdated: 20261016
-status: in_progress
+dateUpdated: 20261017
+status: complete
 ---
 
 ## Context Summary
@@ -249,8 +249,8 @@ status: in_progress
 
 - [x] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full test suite
   - [x] Success: all pass; any failure fixed before continuing
-- [ ] Before the walkthrough, ask the Project Manager to confirm running live P4 and P5 pipelines (they spend real LLM budget); if not confirmed, mark the walkthrough items not run in the slice design and continue
-- [ ] Run the design's Verification Walkthrough steps 1–6 on a scratch slice, and record results (pass/fail per step, with the observed values) in the slice design's Verification Walkthrough section
-  - [ ] Pruning in step 5 targets only the scratch runs created for this walkthrough; if `sq runs prune` cannot select only those runs, stop and ask the Project Manager before pruning
-  - [ ] Delete the scratch slice's artifacts afterwards; they are not committed
-- [ ] Commit: `docs: record artifact usage stamping walkthrough results`
+- [x] Before the walkthrough, ask the Project Manager to confirm running live P4 and P5 pipelines (they spend real LLM budget); if not confirmed, mark the walkthrough items not run in the slice design and continue — run on PM instruction 20261017
+- [x] Run the design's Verification Walkthrough steps 1–6 on a scratch slice, and record results (pass/fail per step, with the observed values) in the slice design's Verification Walkthrough section
+  - [x] Pruning in step 5 targets only the scratch runs created for this walkthrough; if `sq runs prune` cannot select only those runs, stop and ask the Project Manager before pruning
+  - [x] Delete the scratch slice's artifacts afterwards; they are not committed
+- [x] Commit: `docs: record artifact usage stamping walkthrough results`

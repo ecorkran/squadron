@@ -9,6 +9,18 @@ dateUpdated: '20261016'
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20261017
+
+### Slice 178: Artifact Usage Stamping — Implementation Complete
+
+- Branch `178-slice.artifact-usage-stamping`, Tasks 1–19 done. Not merged: Phase 7 merges into `main` after the code review passes.
+- Built: `RunCost.frontmatter_fields` key table, `review/frontmatter_usage.py`, `review/artifact_usage.py`, `events/builtin/artifact_paths.py`, `squadron.usage-stamp` (POST_ACTION after `revision-stamp`), `stats/artifacts_report.py`, and the `artifact spend` line on `sq stats slice`.
+- Walkthrough (scratch slice 958, branch `178-walkthrough-scratch`, kept): all six steps pass; results are in the slice design.
+- Fix found by the walkthrough (41019030): built-in revise steps are plain `dispatch` steps with no artifact kind, so `usage-stamp` and `revision-stamp` skipped every revise round (`revision_number` had never fired in a real run). A dispatch step now takes `artifact: design|tasks`; P4/P5/P45/P456/P56 set it. `sq review --revise` strips it because it writes no run state ([#236](https://github.com/ecorkran/squadron/issues/236)). The user's override copies of p5 and p45-user were patched by hand ([#237](https://github.com/ecorkran/squadron/issues/237)).
+- Filed: [#235](https://github.com/ecorkran/squadron/issues/235) (reviewers invent confirmation gates; replace with an enforced cost cap, next up), [#238](https://github.com/ecorkran/squadron/issues/238) (`dateUpdated` written quoted).
+- Code review CONCERNS: F001–F006 fixed (6092476f), F007–F008 kept; disposition in the review file.
+- Validation: ruff clean, pyright 0 errors, full suite 7287 passed, 4 skipped.
+
 ## 20261016
 
 ### Slice 178: Artifact Usage Stamping — Tasks Complete

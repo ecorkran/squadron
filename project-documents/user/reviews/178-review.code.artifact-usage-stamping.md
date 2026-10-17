@@ -158,6 +158,17 @@ The tests also assert that the file is left untouched. The new `usage_stamp_help
 - `RunCost.frontmatter_lines` is derived from `frontmatter_fields`.
 - The `revise` dispatch composition drops `artifact:` explicitly, and a test covers it.
 
+### Disposition (6092476f)
+
+- **F001 fixed.** `UnicodeDecodeError` is caught with the other stamp failures; a non-UTF-8 artifact test asserts the WARNING and an untouched file.
+- **F002 fixed.** The eligible stamp runs in `asyncio.to_thread`; `_stamp_dispatch` documents the no-concurrent-writer assumption.
+- **F003 fixed.** `artifact_paths.dispatch_scope` owns the slice/plan branching and index parse; the post-condition takes its scope label from it. Messages are unchanged.
+- **F004 fixed.** The warning now reads "artifact … frontmatter … is malformed".
+- **F005 fixed.** `ActionType.DISPATCH`, `SLICE_PARAM` and `PLAN_PARAM` replace the literals in both actions.
+- **F006 fixed.** `kind` is passed to `_stamp_target`; the non-mapping record returns early instead of raising.
+- **F007 kept.** Two step types; a protocol method is not worth it yet.
+- **F008 kept.** Drift is at most one rounding unit per round, and the line is a floor.
+
 ### Run Digest
 
 - Response length: 6381 chars
