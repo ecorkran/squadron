@@ -71,6 +71,7 @@ Slice 175 records a `UsageRecord` for every LLM action, but only review artifact
 | Component | Location | Change |
 |---|---|---|
 | Artifact usage model | `pipeline/artifact_usage.py` (new) | `ArtifactUsage`, `fold`, `read_artifact_usage`, `artifact_usage_fields`, key constants |
+| Atomic frontmatter write | `documents/frontmatter.py` | `update_frontmatter` writes through `core/file_write.write_new_file(path, ..., force=True)` (temp sibling, then rename) instead of `path.write_text`. This also covers `revision-stamp` and the devlog action |
 | Stamp action | `events/builtin/usage_stamp.py` (new) | `UsageStampAction` (`squadron.usage-stamp`), POST_ACTION |
 | Binding | `events/manifest.py` | append to `DEFAULT_BINDINGS` after `revision-stamp` |
 | Path resolution | `events/builtin/artifact_paths.py` | add `dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd)`. `dispatch-artifact` calls it, and its error messages and the `dispatch post-condition` log prefix stay unchanged |
@@ -109,7 +110,7 @@ The artifact's frontmatter is the only new persisted state, and it is the source
 
 The stamp does not read `result.outputs`, which keeps it inside the 140-arch event-action rule. It needs no skip check: a kept artifact (`existing: keep`) returns before any model call with empty `metadata` (`pipeline/actions/dispatch.py:_dispatch`), so it has no usage record. Prompt-only mode records no usage either. In both cases no spend was measured, so not stamping is correct by construction, not by coincidence.
 
-**Which file.** The stamp runs only after the post-condition confirmed that a candidate was written this run. It stamps the first candidate from `dispatch_artifact_paths`, in numeric-suffix order, with a file without a suffix first. A design or arch doc has one candidate. A split task breakdown (`nnn-tasks.name-1.md`, `-2.md`; 13 of the repo's task breakdowns) is one artifact, as 177 treats it, and its first part carries the total for every round, whichever part a round rewrote. The record is never split or duplicated, so no task spend goes unattributed.
+**Which file.** The stamp runs only after the post-condition confirmed that a candidate was written this run. It stamps the first candidate from `dispatch_artifact_paths` that exists on disk, in numeric-suffix order, with a file without a suffix first. Existence is checked, not assumed from cf's list. A design or arch doc has one candidate. A split task breakdown (`nnn-tasks.name-1.md`, `-2.md`; 13 of the repo's task breakdowns) is one artifact, as 177 treats it, and its first part carries the total for every round, whichever part a round rewrote. A round that rewrote only `-2` therefore also changes `-1`, and that frontmatter diff goes into the round's commit. The record is never split or duplicated, so no task spend goes unattributed.
 
 **Never fails a run.** This follows 911 D4, the same as `revision-stamp`. Any resolution, parse or write failure (`FrontmatterError`, `OSError`, a cf client error) is logged at WARNING with the path and the reason, and the action returns success. A cost stamp must not fail a converging loop.
 
@@ -133,7 +134,7 @@ A file revised in a loop gets one cumulative total, not one entry per round. Per
 
 The stamp counts dispatches that wrote this file, from any run. The initial draft (iteration 0), each loop revision, and a later run that rewrites the file all add to the same total.
 
-**Agent rewrites.** A revision agent may rewrite the file and drop the keys. The total then restarts at that round, along with `usageRounds`, so the stamp stays internally consistent and is a floor. The committed earlier rounds in git keep the prior totals.
+**Agent rewrites.** A revision agent may rewrite the file and drop the keys. The total then restarts at that round, along with `usageRounds`, so the stamp stays internally consistent and is a floor. The committed earlier rounds in git keep the prior totals. On a revision round (`iteration ≥ 1`) the file should already hold a stamp, so when it has no `usageRounds` a WARNING says `usage stamp: no prior usage keys on revision round {n} of {path}; total restarts and undercounts`. A first-round restart cannot be told apart from a first draft and logs nothing.
 
 **Malformed prior keys.** A non-numeric value is treated like the 175 reviews reader does (D4): that field reads as `None` and a WARNING names the key. When `usageRounds` itself is not a positive int, the total restarts and the WARNING says so.
 
@@ -149,7 +150,7 @@ The stamp counts dispatches that wrote this file, from any run. The initial draf
 
 ### D5 — `sq stats` reads artifacts beside runs, never summed with them
 
-- `sq stats artifacts [--slice INDEX]` reads the top-level `*.md` files in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only. It shows one row per file that has `usageRounds`: kind, file, slice, rounds, tokens, duration, cost (`k of m rounds priced`). It ends with a total. **Kind** is an `ArtifactKind`, taken from the directory the file was found in, not from its name or `docType`: `TASKS_DIR` gives `TASKS`; `SLICES_DIR` and `ARCHITECTURE_DIR` give `DESIGN`, which is the kind the P2 design step already assigns to the arch doc. **Slice** is the file name's leading index, using the reviews report's rule. Files without `usageRounds` are not stamped (most predate this slice) and are skipped silently. Unreadable frontmatter or a malformed `usageRounds` counts toward a `N file(s) unreadable` footer and logs a WARNING.
+- `sq stats artifacts [--slice INDEX]` reads the top-level `*.md` files in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only. It shows one row per file that has `usageRounds`: kind, file, slice, rounds, tokens, duration, cost (`k of m rounds priced`). It ends with a total. **Kind** is an `ArtifactKind`, taken from the directory the file was found in, not from its name or `docType`: `TASKS_DIR` gives `TASKS`; `SLICES_DIR` and `ARCHITECTURE_DIR` give `DESIGN`, which is the kind the P2 design step already assigns to the arch doc. **Slice** is the file name's leading index, using the reviews report's rule. Files without `usageRounds` are not stamped (most predate this slice) and are skipped silently. Unreadable frontmatter or a malformed `usageRounds` counts toward a `N file(s) unreadable` footer and logs a WARNING. A fixed footer line says `artifact totals are floors: a total restarts if the stamp keys are dropped`, and the `artifact spend` line is labelled the same way.
 - `sq stats slice <index>` gains one header line, `artifact spend: design $x (k of m rounds) · tasks $y (…)`, read through `artifacts_usage_report(..., slice_filter=index)`. It sits beside `recorded spend` and is never added to it, because both describe the same dispatches whenever the run still exists.
 
 ### D6 — Failure modes
@@ -159,7 +160,8 @@ The stamp counts dispatches that wrote this file, from any run. The initial draf
 | Path resolution fails (cf error, no arch doc, non-numeric slice/plan) | no stamp; dispatch result unchanged | WARNING naming kind, scope, reason |
 | No path written this run | no stamp | none. The post-condition already failed the step, and later bindings did not run |
 | Artifact has no frontmatter block / invalid YAML | no stamp | WARNING naming path and `FrontmatterError` |
-| Write fails (`OSError`) | no stamp | WARNING naming path |
+| Write fails or the process dies mid-write | no stamp; the existing file is left untouched (atomic replace) | WARNING naming path (`OSError`) |
+| No prior keys on a revision round | total restarts | WARNING (D2) |
 | Malformed prior key | that field restarts | WARNING naming path and key |
 | No usage record on the result | no stamp | DEBUG naming step |
 | `sq stats artifacts`: a stamped file is unreadable | row skipped | WARNING plus footer count |
@@ -240,7 +242,7 @@ Width handling reuses `cli/columns.py` (`fit_widths`).
 
 ### Provides to Other Slices
 
-- **179 (Staged Effort Estimates and Accuracy):** `artifacts_usage_report` and `ArtifactUsage`, giving per-artifact cost and round count by stage for any slice whose artifacts exist, independent of run retention.
+- **179 (Staged Effort Estimates and Accuracy):** `artifacts_usage_report` and `ArtifactUsage`, giving per-artifact cost and round count by stage for any slice whose artifacts exist, independent of run retention. Each total is a floor: it undercounts when an agent dropped the stamp keys (D2).
 - **Any reader of frontmatter cost:** `record_from_frontmatter` and `RunCost.frontmatter_fields` as the single key definition.
 
 ### Consumes from Other Slices
@@ -254,7 +256,7 @@ Width handling reuses `cli/columns.py` (`fit_widths`).
 ### Functional Requirements
 
 - A P4 run that drafts a slice design leaves the review keys, `usageRounds: 1` and `pricedRounds` in the design's frontmatter, and they match that dispatch's `UsageRecord` in run state.
-- A design revised in a loop has a total equal to the sum of its rounds' dispatch records in run state (176 D3 rounds), and `usageRounds` equals the number of dispatch rounds.
+- A design revised in a loop, whose revising agents keep the stamp keys, has a total equal to the sum of its rounds' dispatch records in run state (176 D3 rounds), and `usageRounds` equals the number of dispatch rounds. When a revision drops the keys, the total restarts at that round and the D2 WARNING is logged.
 - A P5 run stamps the task file the same way. A P2 run stamps the architecture document.
 - A step with `existing: keep`, a failed dispatch, an implement dispatch, summary and compact stamp nothing.
 - A split task breakdown is stamped once, on its first part, for every round.
@@ -298,17 +300,17 @@ These commands come from the design; `sq stats artifacts` does not exist yet.
 ### Mitigation Strategies
 
 - A dropped key restarts the total and its round count together, so the stamp stays a consistent floor. Committed rounds in git keep each prior total.
-- All writes go through `update_frontmatter`, the same body-preserving primitive `revision-stamp` already runs on every loop round. Every failure is swallowed with a WARNING (D1), and the binding can be disabled per project.
+- All writes go through `update_frontmatter`, the same body-preserving primitive `revision-stamp` already runs on every loop round, which this slice makes atomic (temp sibling, then rename), so a failed or killed write leaves the document as it was. Every failure is swallowed with a WARNING (D1), and the binding can be disabled per project.
 
 ## Implementation Notes
 
 ### Development Approach
 
-1. Refactor without behavior change: `RunCost.frontmatter_fields` and `from_record`, `review/frontmatter_usage.py`, and `artifact_paths.dispatch_artifact_paths`. Existing review, stats and post-condition tests must pass unchanged.
+1. Make `update_frontmatter` atomic through `write_new_file(..., force=True)`, with a test that a write failing mid-replace leaves the original file byte-identical. Then refactor without behavior change: `RunCost.frontmatter_fields` and `from_record`, `review/frontmatter_usage.py`, and `artifact_paths.dispatch_artifact_paths`. Existing review, stats and post-condition tests must pass unchanged.
 2. `pipeline/artifact_usage.py` (`fold`, read, fields), with unit tests over fold sequences: priced, unpriced, missing and malformed prior.
-3. `events/builtin/usage_stamp.py` and its binding. Event-level tests with a temp project: slice design, task file, arch doc, split task files (`-1`, `-2`), keep, failed dispatch, no frontmatter.
+3. `events/builtin/usage_stamp.py` and its binding. Event-level tests with a temp project: slice design, task file, arch doc, split task files (`-1`, `-2`, including a round that rewrites only `-2`), a revision round with no prior keys, keep, failed dispatch, no frontmatter.
 4. `stats/artifacts_report.py`, the `artifacts` subcommand, and the `slice` header line. Test fixtures copied from real slice and task frontmatter in this repo (CLAUDE.md parsing rule).
-5. Update the wrapper subcommand lists, CHANGELOG bullet, and `140-arch.pipeline-foundation.md`: add `usage_stamp.py` to the `events/builtin/` tree and the stamp to the POST_ACTION ordering note (line 124).
+5. Update the wrapper subcommand lists, CHANGELOG bullet, and `140-arch.pipeline-foundation.md`: add `usage_stamp.py` to the `events/builtin/` tree and the stamp to the POST_ACTION ordering note (line 124). Amend the sentence saying events reuse only `ActionResult` and `ValidationError`: built-ins also import pipeline-layer helpers (`dispatch-artifact` the path helpers, `usage-stamp` `UsageRecord` and `pipeline/artifact_usage`).
 
 ### Special Considerations
 
