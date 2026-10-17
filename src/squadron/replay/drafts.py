@@ -44,4 +44,11 @@ def _final_text(sandbox: Path, phase: ReplayPhase, index: int) -> str | None:
     files = artifact_files(phase, index, sandbox)
     if not files:
         return None
-    return "\n".join(path.read_text(encoding="utf-8") for path in files)
+    try:
+        return "\n".join(path.read_text(encoding="utf-8") for path in files)
+    except (OSError, UnicodeDecodeError) as exc:
+        # A replay whose final text is unreadable is recorded without it; the set goes on.
+        _logger.warning(
+            "final text unreadable for slice %d %s in %s: %s", index, phase.value, sandbox, exc
+        )
+        return None

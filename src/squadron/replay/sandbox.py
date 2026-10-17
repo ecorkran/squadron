@@ -135,7 +135,11 @@ class ReplaySandbox:
             lock = current_process_lock(self._runner)
         except ProcessIdentityUnresolvable as exc:
             raise SandboxError(str(exc)) from exc
-        _lock_path(self._root, self._replay_id).write_text(lock.to_json())
+        lock_path = _lock_path(self._root, self._replay_id)
+        try:
+            lock_path.write_text(lock.to_json())
+        except OSError as exc:
+            raise SandboxError(f"cannot write sandbox lock {lock_path}: {exc}") from exc
 
     def _build_repository(self) -> None:
         sandbox = str(self.path)
@@ -154,7 +158,12 @@ class ReplaySandbox:
     def _declares_submodules(self) -> bool:
         """Whether ``.gitmodules`` has a submodule entry; squadron tracks an empty one."""
         path = self.path / _GITMODULES
-        return path.is_file() and _SUBMODULE_SECTION in path.read_text(encoding="utf-8")
+        if not path.is_file():
+            return False
+        try:
+            return _SUBMODULE_SECTION in path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            raise SandboxError(f"cannot read {_GITMODULES} at {self._start_sha}: {exc}") from exc
 
     def _register_with_cf(self) -> None:
         """Register the sandbox as a cf project and point cf at the slice's initiative.

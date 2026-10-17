@@ -153,6 +153,44 @@ def test_an_empty_gitmodules_file_is_not_a_submodule(repo: StatsRepo, root: Path
         assert (sandbox.path / ".gitmodules").is_file()
 
 
+def test_an_unreadable_gitmodules_is_a_sandbox_error_and_leaves_nothing(
+    repo: StatsRepo, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo.commit("empty gitmodules", {".gitmodules": ""}, _T2)
+    sha = repo.git("rev-parse", "HEAD")
+    real_read_text = Path.read_text
+
+    def read_text(self: Path, *args: object, **kwargs: object) -> str:
+        if self.name == ".gitmodules":
+            raise PermissionError("denied")
+        return real_read_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+
+    with pytest.raises(SandboxError, match=r"cannot read \.gitmodules"):
+        with _sandbox(repo, sha, root, HybridRunner()):
+            pytest.fail("the sandbox should not have opened")
+    assert _gone(root)
+
+
+def test_an_unwritable_lock_is_a_sandbox_error_and_leaves_nothing(
+    repo: StatsRepo, start_sha: str, root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real_write_text = Path.write_text
+
+    def write_text(self: Path, *args: object, **kwargs: object) -> int:
+        if self.suffix == ".lock":
+            raise OSError("disk full")
+        return real_write_text(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "write_text", write_text)
+
+    with pytest.raises(SandboxError, match="cannot write sandbox lock"):
+        with _sandbox(repo, start_sha, root, HybridRunner()):
+            pytest.fail("the sandbox should not have opened")
+    assert _gone(root)
+
+
 def test_a_failed_fetch_carries_stderr_and_leaves_nothing(repo: StatsRepo, root: Path) -> None:
     with pytest.raises(SandboxError, match="fetch") as caught:
         with _sandbox(repo, "0" * 40, root, HybridRunner()):

@@ -45,6 +45,20 @@ def test_an_artifact_that_was_never_committed_has_no_first_draft_but_a_final_tex
     assert "no first draft for slice 176" in caplog.text
 
 
+def test_an_undecodable_final_text_is_none_with_a_warning(
+    stats_repo: StatsRepo, caplog: pytest.LogCaptureFixture
+) -> None:
+    stats_repo.commit("start", {"README.md": "x\n"}, _T1)
+    stats_repo.commit("draft", {_DESIGN: "# draft\n"}, _T2)
+    (stats_repo.root / _DESIGN).write_bytes(b"\xff\xfe\x00bad")
+
+    with caplog.at_level(logging.WARNING):
+        drafts = read_drafts(stats_repo.root, ReplayPhase.DESIGN, 176)
+
+    assert drafts.first == "# draft\n" and drafts.final is None
+    assert "final text unreadable for slice 176" in caplog.text
+
+
 def test_no_artifact_at_all_is_none_for_both(stats_repo: StatsRepo) -> None:
     stats_repo.commit("start", {"README.md": "x\n"}, _T1)
     stats_repo.commit("other", {"b.txt": "b\n"}, _T2)
