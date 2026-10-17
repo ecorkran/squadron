@@ -23,9 +23,6 @@ status: not_started
   design's D-sections, API Contracts, Success Criteria and Verification Walkthrough are the contract.
 - Order follows the design's Development Approach: no-behavior-change refactors (Part A), the
   usage model (Part B), the stamp action (Part C), the report and slice line (Part D), docs (Part E).
-- Design correction: the `slice` header renders in `cli/stats_effort_views.py` (the
-  `recorded spend` line, around line 110), not `cli/stats_views.py` as the design's component
-  table says. Use the real file.
 - Every task that changes code ends with `ruff format`, `ruff check`, `pyright` (zero errors), the
   tests for the touched area, and a commit on the slice branch with a semantic prefix. Locate
   existing tests with `grep` before adding new files. Tests that write artifacts use `tmp_path`,
@@ -52,6 +49,7 @@ status: not_started
 - [ ] In `src/squadron/review/run_cost.py`, add `frontmatter_fields() -> dict[str, object]` returning the 931 D10 key→value mapping that `frontmatter_lines()` renders today
   - [ ] A key is present only when its value is not `None`; `costUsd` rounded to 6 places; `durationSeconds` a float rounded to 1 place (D4)
   - [ ] Key order matches the current `frontmatter_lines()` output order
+  - [ ] Extract the key names (today inline literals in `frontmatter_lines()`) into module-level constants in `run_cost.py`; `frontmatter_fields()` uses them
 - [ ] Rewrite `frontmatter_lines()` to render from `frontmatter_fields()`; no other change to its output
 - [ ] Add classmethod `from_record(record: UsageRecord) -> RunCost` mapping each `UsageRecord` field onto the matching `RunCost` field
   - [ ] Read `UsageRecord` in `pipeline/usage_capture.py` / `core/usage.py` for exact field names; do not guess
@@ -72,7 +70,7 @@ status: not_started
   - [ ] Move `_record` (as public `record_from_frontmatter(path, front)`), `_INT_KEYS`, `_int`, `_float`, `_basis` verbatim from `src/squadron/stats/reviews_report.py`
 - [ ] In `stats/reviews_report.py`, import `record_from_frontmatter` and delete the moved definitions
   - [ ] Success: `grep -n "_INT_KEYS\|def _record" src/squadron/stats/reviews_report.py` returns nothing; pyright clean; `tests/stats/test_reviews_report.py` passes unchanged
-- [ ] As a separate edit after the move passes, replace the key string literals in the moved code with references to the key names `RunCost` defines, so each key is defined once (D4); change no parsing logic
+- [ ] As a separate edit after the move passes, replace the key string literals in the moved code with the `run_cost.py` key constants from Task 2, so each key is defined once (D4); change no parsing logic
   - [ ] Success: `tests/stats/test_reviews_report.py` still passes unchanged
 
 ## Task 5 — Tests: reader move
@@ -147,20 +145,14 @@ status: not_started
 - [ ] File selection (D1): call `dispatch_artifact_paths` with `params` `slice`/`plan`, keep candidates that exist on disk
   - [ ] Exactly one → stamp it; more than one → WARNING naming the files, no stamp; zero → no stamp
 - [ ] Stamp: `read_frontmatter` → `read_artifact_usage` → `fold` → `update_frontmatter` with `artifact_usage_fields`
-  - [ ] Revision round (`iteration ≥ 1`; find where the iteration is available on the context or params — read `revision_stamp.py`, do not guess) with no prior `usageRounds`: WARNING with the D2 text `usage stamp: no prior usage keys on revision round {n} of {path}; total restarts and undercounts`
+  - [ ] Revision round (`context.iteration >= 1`, the field `revision_stamp.py` checks) with no prior `usageRounds`: WARNING with the D2 text `usage stamp: no prior usage keys on revision round {n} of {path}; total restarts and undercounts`
 - [ ] Failure handling (D6): resolution errors (cf client error, missing arch doc, non-numeric slice/plan), `FrontmatterError`, `OSError` → WARNING naming kind/scope or path and the reason; always return success
   - [ ] Catch only those specific exception types, each with a comment (CLAUDE.md exception rule)
   - [ ] Success: the action never alters `result`; pyright clean
 
-## Task 11 — Register the binding
+## Task 11 — Tests: usage stamp, eligibility and happy paths
 
-- [ ] Register `squadron.usage-stamp` with the built-in event actions the same way `revision-stamp` is registered
-- [ ] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
-  - [ ] Success: `sq events` (or its list subcommand) shows `squadron.usage-stamp` after `squadron.revision-stamp`
-
-## Task 12 — Tests: usage stamp, eligibility, happy paths and binding
-
-- [ ] Add `tests/events/builtin/test_usage_stamp.py` using a temp project with real `SLICES_DIR`/`TASKS_DIR`/`ARCHITECTURE_DIR` layout and a fake cf client; frontmatter fixtures copied from real slice, task and arch files in this repo
+- [ ] Add `tests/events/builtin/test_usage_stamp.py`, calling the action directly, using a temp project with real `SLICES_DIR`/`TASKS_DIR`/`ARCHITECTURE_DIR` layout and a fake cf client; frontmatter fixtures copied from real slice, task and arch files in this repo
   - [ ] Slice design dispatch: file gains the review keys, `usageRounds: 1`, `pricedRounds: 1`; values match the record
   - [ ] Task file dispatch stamped the same way
   - [ ] Plan-scoped design dispatch stamps the architecture doc
@@ -169,11 +161,16 @@ status: not_started
   - [ ] Body bytes unchanged after stamping; existing frontmatter keys keep their order
 - [ ] Eligibility (no file change asserted for each): non-dispatch action, failed dispatch, `expected_artifact_kind=None` (implement), empty `metadata` (`existing: keep` / prompt-only)
 - [ ] No `StateManager` writes during a stamp (patch or spy on its save method)
-- [ ] Binding tests for Task 11 (extend `tests/events/test_manifest.py`)
+- [ ] Commit: `feat(events): add usage stamp event action`
+
+## Task 12 — Register the binding, with tests
+
+- [ ] Register `squadron.usage-stamp` with the built-in event actions the same way `revision-stamp` is registered
+- [ ] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
+- [ ] Binding tests (extend `tests/events/test_manifest.py`)
   - [ ] `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS`
   - [ ] An `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
-  - [ ] Dispatcher order: when `dispatch-artifact` fails, `usage-stamp` does not run (one small test of existing `fire` behavior)
-- [ ] Commit: `feat(events): stamp dispatch usage into artifact frontmatter`
+- [ ] Commit: `feat(events): bind usage stamp after revision stamp`
 
 ## Task 13 — Tests: usage stamp failure modes (D6)
 
@@ -243,9 +240,9 @@ status: not_started
 ## Task 18 — Architecture, slice plan and CHANGELOG
 
 - [ ] `project-documents/user/architecture/140-arch.pipeline-foundation.md`
-  - [ ] Add `usage_stamp.py  # POST_ACTION — 178 usage stamp` to the `events/builtin/` tree (near line 597)
-  - [ ] Line 124: name the order as dispatch-artifact, then revision-stamp, then usage-stamp
-  - [ ] Line 122: amend "reusing only `ActionResult` and `ValidationError`" to say built-ins also import pipeline-layer helpers (`dispatch-artifact` the path helpers; `usage-stamp` `UsageRecord` and `review/artifact_usage`)
+  - [ ] Add `usage_stamp.py  # POST_ACTION — 178 usage stamp` to the `events/builtin/` tree, after the `revision_stamp.py` entry
+  - [ ] In the sentence naming "the built-in dispatch-artifact-then-revision-stamp ordering", name the order as dispatch-artifact, then revision-stamp, then usage-stamp
+  - [ ] Amend the sentence ending "reusing only `ActionResult` and `ValidationError`" to say built-ins also import pipeline-layer helpers (`dispatch-artifact` the path helpers; `usage-stamp` `UsageRecord` and `review/artifact_usage`)
 - [ ] Confirm `140-slices.pipeline-foundation.md` entry 34 already states the dispatch-only scope (it does as of 20261016); edit only if not
 - [ ] Add a CHANGELOG `Unreleased` bullet: design, task and architecture docs written by a pipeline now record their production cost in frontmatter, and `sq stats slice` shows it as artifact spend
 - [ ] Commit: `docs: record usage stamp in pipeline architecture and changelog`

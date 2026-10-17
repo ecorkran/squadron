@@ -59,7 +59,7 @@ Slice 175 records a `UsageRecord` for every LLM action, but only review artifact
 
 ### Interfaces Required
 
-- `PostActionContext` (`events/contexts.py:40`): `action_type`, `result` (whose `metadata` carries the usage record), `expected_artifact_kind`, `params` (`slice` or `plan`), `run_started_at`, `cf_client`, `cwd`.
+- `PostActionContext` (`events/contexts.py:40`): `action_type`, `result` (whose `metadata` carries the usage record), `expected_artifact_kind`, `params` (`slice` or `plan`), `run_started_at`, `iteration` (revision round number, as `revision_stamp.py` reads it), `cf_client`, `cwd`.
 - `events/dispatcher.py:fire`: a failed POST_ACTION outcome stops later bindings. Because `usage-stamp` runs after `dispatch-artifact`, it runs only when the post-condition has passed.
 - `documents/frontmatter.py`: `read_frontmatter` and `update_frontmatter`. The latter preserves key order, appends new keys, and keeps the body byte-for-byte.
 - `review/persistence.py`: `SLICES_DIR`, `TASKS_DIR`, `resolve_slice_info`, `resolve_arch_file`. Also `integrations/context_forge.ARCHITECTURE_DIR`.
@@ -78,7 +78,7 @@ Slice 175 records a `UsageRecord` for every LLM action, but only review artifact
 | Key table | `review/run_cost.py` | `RunCost.frontmatter_fields() -> dict[str, object]`, with `frontmatter_lines()` rendered from it; `RunCost.from_record(UsageRecord)` |
 | Frontmatter reader | `review/frontmatter_usage.py` (new) | `record_from_frontmatter(path, front)`, moved from `reviews_report._record` and its field helpers |
 | Artifacts report | `stats/artifacts_report.py` (new) | `artifacts_usage_report(project_root, slice_filter)` |
-| Slice report | `stats/effort_report.py`, `cli/stats_views.py` | artifact spend per kind on the `slice` header |
+| Slice report | `stats/effort_report.py`, `cli/stats_effort_views.py` | artifact spend per kind on the `slice` header |
 
 ### Data Flow
 
