@@ -91,7 +91,7 @@ def test_requested_model_maps_to_alias_only_when_known(tmp_path: Path) -> None:
     _artifact(tmp_path, "1-review.md", requestedModel="opus")
     _artifact(tmp_path, "2-review.md", requestedModel="claude-opus-4-1-20250805")
 
-    with patch("squadron.stats.reviews_report.get_all_aliases", return_value={"opus": {}}):
+    with patch("squadron.review.frontmatter_usage.get_all_aliases", return_value={"opus": {}}):
         report = reviews_usage_report(tmp_path, None)
 
     assert [row.record.alias for row in report.rows] == ["opus", None]

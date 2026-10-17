@@ -13,23 +13,15 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from squadron.core.usage import CostBasis, TokenUsage, UsageRecord
+from squadron.core.usage import UsageRecord
 from squadron.documents.frontmatter import read_frontmatter
-from squadron.models.aliases import get_all_aliases
+from squadron.review.frontmatter_usage import frontmatter_text, record_from_frontmatter
 from squadron.stats.usage_report import UsageTotals, usage_totals
 
 _logger = logging.getLogger(__name__)
 
 #: A review artifact's file name starts with its slice index (``175-review.slice...``).
 _INDEX_PREFIX = re.compile(r"^(\d+)-")
-
-_INT_KEYS = {
-    "prompt": "promptTokens",
-    "cached": "cachedTokens",
-    "cache_write": "cacheWriteTokens",
-    "completion": "completionTokens",
-    "reasoning": "reasoningTokens",
-}
 
 
 @dataclass(frozen=True)
@@ -70,7 +62,9 @@ def reviews_usage_report(reviews_dir: Path, slice_filter: str | None) -> Reviews
             _logger.warning("skipping review artifact with no readable frontmatter: %s", path)
             skipped += 1
             continue
-        if slice_filter is not None and not _slice_matches(path, _text(front, "slice"), slice_filter):
+        if slice_filter is not None and not _slice_matches(
+            path, frontmatter_text(front, "slice"), slice_filter
+        ):
             continue
         run_id = front.get("runId")
         if run_id is not None:
@@ -101,67 +95,10 @@ def row_matches_slice(row: ReviewUsageRow, slice_filter: str) -> bool:
 def _row(path: Path, front: Mapping[str, object]) -> ReviewUsageRow:
     return ReviewUsageRow(
         path=path,
-        date=_text(front, "dateCreated"),
-        slice=_text(front, "slice"),
-        review_type=_text(front, "reviewType"),
-        model=_text(front, "aiModel"),
-        verdict=_text(front, "verdict"),
-        record=_record(path, front),
+        date=frontmatter_text(front, "dateCreated"),
+        slice=frontmatter_text(front, "slice"),
+        review_type=frontmatter_text(front, "reviewType"),
+        model=frontmatter_text(front, "aiModel"),
+        verdict=frontmatter_text(front, "verdict"),
+        record=record_from_frontmatter(path, front),
     )
-
-
-def _record(path: Path, front: Mapping[str, object]) -> UsageRecord:
-    """Map the 931/175 frontmatter cost keys onto a ``UsageRecord``; bad fields become None."""
-    tokens = TokenUsage(**{name: _int(path, front, key) for name, key in _INT_KEYS.items()})
-    requested = _text(front, "requestedModel")
-    effort = _text(front, "effort")
-    return UsageRecord(
-        model=_text(front, "aiModel"),
-        alias=requested if requested in get_all_aliases() else None,
-        profile=_text(front, "aiProfile"),
-        effort=effort,
-        turns=_int(path, front, "turns"),
-        duration_seconds=_float(path, front, "durationSeconds"),
-        usage=tokens,
-        cost_usd=_float(path, front, "costUsd"),
-        cost_basis=_basis(path, front),
-    )
-
-
-def _text(front: Mapping[str, object], key: str) -> str | None:
-    value = front.get(key)
-    return None if value is None else str(value)
-
-
-def _int(path: Path, front: Mapping[str, object], key: str) -> int | None:
-    value = front.get(key)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int):
-        _warn(path, key, value)
-        return None
-    return value
-
-
-def _float(path: Path, front: Mapping[str, object], key: str) -> float | None:
-    value = front.get(key)
-    if value is None:
-        return None
-    if isinstance(value, bool) or not isinstance(value, int | float):
-        _warn(path, key, value)
-        return None
-    return float(value)
-
-
-def _basis(path: Path, front: Mapping[str, object]) -> CostBasis | None:
-    value = front.get("costBasis")
-    if value is None:
-        return None
-    if value in {basis.value for basis in CostBasis}:
-        return CostBasis(str(value))
-    _warn(path, "costBasis", value)
-    return None
-
-
-def _warn(path: Path, key: str, value: object) -> None:
-    _logger.warning("review artifact %s: frontmatter %s is malformed: %.200r", path, key, value)
