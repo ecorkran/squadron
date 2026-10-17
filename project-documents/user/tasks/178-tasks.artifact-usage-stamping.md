@@ -77,9 +77,6 @@ status: not_started
 
 - [ ] Run `tests/stats/test_reviews_report.py` and the `sq stats reviews` CLI tests unchanged
   - [ ] Success: all pass with no test edits
-- [ ] Add `tests/review/test_frontmatter_usage.py` with direct tests of `record_from_frontmatter`
-  - [ ] Integer, float and cost-basis keys parse; a non-numeric value behaves as `reviews_report` behaved before the move (read the moved code for the exact rule)
-  - [ ] One fixture is frontmatter copied from a real review artifact in `project-documents/user/reviews/` that carries usage keys
 - [ ] Commit: `refactor(review): move frontmatter usage reader beside RunCost`
 
 ## Task 6 — `dispatch_artifact_paths` in `artifact_paths.py`
@@ -163,16 +160,7 @@ status: not_started
 - [ ] No `StateManager` writes during a stamp (patch or spy on its save method)
 - [ ] Commit: `feat(events): add usage stamp event action`
 
-## Task 12 — Register the binding, with tests
-
-- [ ] Register `squadron.usage-stamp` with the built-in event actions the same way `revision-stamp` is registered
-- [ ] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
-- [ ] Binding tests (extend `tests/events/test_manifest.py`)
-  - [ ] `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS`
-  - [ ] An `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
-- [ ] Commit: `feat(events): bind usage stamp after revision stamp`
-
-## Task 13 — Tests: usage stamp failure modes (D6)
+## Task 12 — Tests: usage stamp failure modes (D6)
 
 - [ ] One test per D6 row the stamp owns, each asserting the action returns success and the stated log signal (`caplog`)
   - [ ] cf resolution error → WARNING naming kind, scope, reason
@@ -186,6 +174,15 @@ status: not_started
   - [ ] No usage record → DEBUG naming the step
 - [ ] Commit: `test(events): cover usage stamp failure modes`
 
+## Task 13 — Register the binding, with tests
+
+- [ ] Register `squadron.usage-stamp` with the built-in event actions the same way `revision-stamp` is registered
+- [ ] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
+- [ ] Binding tests (extend `tests/events/test_manifest.py`)
+  - [ ] `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS`
+  - [ ] An `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
+- [ ] Commit: `feat(events): bind usage stamp after revision stamp`
+
 ---
 
 ## Part D — Artifacts report and `sq stats slice` line (D5)
@@ -196,7 +193,7 @@ status: not_started
 - [ ] `artifacts_usage_report(project_root, slice_filter)` per D5
   - [ ] Reads top-level `*.md` in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only
   - [ ] Kind from the directory: `TASKS_DIR` → `ArtifactKind.TASKS`; `SLICES_DIR` and `ARCHITECTURE_DIR` → `ArtifactKind.DESIGN`
-  - [ ] Slice from the file name's leading index, reusing the reviews report's rule (import it; do not reimplement)
+  - [ ] Slice from the file name's leading index, reusing the reviews report's rule (import it; do not reimplement; if the helper is underscore-private, make it public in place and update its callers)
   - [ ] `slice_filter` keeps only rows whose slice matches
   - [ ] Files without `usageRounds` skipped silently; unreadable file (`FrontmatterError`, `OSError`) skipped with a WARNING naming the path
 - [ ] Provide a per-kind aggregate (cost of priced rounds, `rounds`, `priced_rounds`) for the slice line; keep it in this module so 179 can reuse it
@@ -225,8 +222,9 @@ status: not_started
 
 ## Task 17 — Tests: slice line
 
-- [ ] Extend `tests/cli/test_stats_effort.py` (and `tests/stats/test_effort_report.py` if the report shape changed)
-  - [ ] Stamped design and tasks → line shows both kinds after `recorded spend`
+- [ ] Extend `tests/cli/test_stats_effort.py` and `tests/stats/test_effort_report.py` (the report now carries the artifact usage attachment from Task 16)
+  - [ ] Stamped design and tasks → line shows both kinds after `recorded spend`, ending in the `(floor)` label
+  - [ ] The attachment on the slice report holds the per-kind aggregate
   - [ ] Only a design stamped → line shows design only
   - [ ] No stamps → no `artifact spend` line
   - [ ] Recorded spend value is the same with and without stamped artifacts
