@@ -16,7 +16,7 @@ status: not_started
 
 Slice 175 records a `UsageRecord` for every LLM action, but only review artifacts carry it in their frontmatter. For the artifacts a pipeline produces (slice designs, task breakdowns, architecture documents) the record lives only in run state, and `sq runs prune` deletes it. This slice stamps the cumulative usage of every dispatch that wrote such an artifact into the artifact's own frontmatter, under the review key names, and adds `sq stats artifacts` plus an artifact-spend line on `sq stats slice` to read it back. Fixes [#222](https://github.com/ecorkran/squadron/issues/222).
 
-**Scope finding.** The plan entry names dispatch, summary and compact. Only dispatch writes an artifact with frontmatter. Compact writes no file (`pipeline/actions/compact.py`). Summary's `file` emit writes the summary text verbatim with no frontmatter block (`pipeline/emit.py:_emit_file`). Summary and compact keep their run-state records and are not stamped (Technical Scope).
+**Scope finding.** The plan entry names dispatch, summary and compact. Only dispatch writes an artifact with frontmatter. Compact writes no file (`pipeline/actions/compact.py`). Summary's `file` emit writes the summary text verbatim with no frontmatter block (`pipeline/emit.py:_emit_file`). Summary and compact keep their run-state records and are not stamped (Technical Scope). The slice plan entry (`140-slices.pipeline-foundation.md`, entry 34) is amended to the same scope.
 
 ## Value
 
@@ -32,9 +32,9 @@ Slice 175 records a `UsageRecord` for every LLM action, but only review artifact
 2. **Initiative-scoped artifacts.** The architecture document written by a plan-scoped design step (P2) is stamped too. Path resolution for slice-scoped and initiative-scoped artifacts moves into `events/builtin/artifact_paths.py`, so the post-condition and the stamp resolve paths the same way (D3).
 3. **Cumulative usage** over every stamped dispatch, with round and priced-round counts (D2).
 4. **One key table.** `RunCost` exposes its frontmatter keys as a field mapping. Review persistence and the stamp both use it (D4).
-5. **One reader.** The mapping from frontmatter keys back to `UsageRecord` moves out of `stats/reviews_report.py` into a shared module that both reports use (D4).
-6. **`sq stats artifacts [--slice INDEX] [--json]`**, and an `artifact spend` line in `sq stats slice` (D5).
-7. Updated subcommand lists in the `/sq:stats` slash command and the `sq-stats` skill.
+5. **One reader.** The mapping from frontmatter keys back to `UsageRecord` moves out of `stats/reviews_report.py` into `review/frontmatter_usage.py`, beside `RunCost`. The stamp and both reports use it (D4).
+6. **`sq stats artifacts [--slice INDEX]`**, and an `artifact spend` line in `sq stats slice` (D5).
+7. Updated subcommand lists in the `/sq:stats` slash command and the `sq-stats` skill, whose "All take `--json`" line now excludes `artifacts`.
 
 **Excluded:**
 
@@ -44,6 +44,8 @@ Slice 175 records a `UsageRecord` for every LLM action, but only review artifact
 - **Model, profile and effort keys.** A cumulative total can span rounds run on different models. Per-round attribution stays in run state, which `sq stats producers` reads (176 D8).
 - **Back-filling existing artifacts** from surviving run state. Artifacts written before this slice show no stamp.
 - **Pipeline review artifacts after pruning.** `sq stats reviews` excludes review artifacts that carry a `runId` because the run counts them, so their spend drops out of every view once the run is pruned. That is a separate gap in the 175 reviews report. It should get its own issue.
+- **Cost basis on stamps** ([#231](https://github.com/ecorkran/squadron/issues/231)). A cumulative total can mix provider-reported and alias-priced rounds. Recording that needs a new `CostBasis` member or key removal, so `costBasis` is not stamped. Per-round basis stays in run state.
+- **`--json` on `sq stats artifacts`.** No consumer: 179 calls `artifacts_usage_report` directly.
 - **Extending `revision_number` to architecture documents.** `squadron.revision-stamp` behaves as before.
 
 ## Dependencies
@@ -71,10 +73,9 @@ Slice 175 records a `UsageRecord` for every LLM action, but only review artifact
 | Artifact usage model | `pipeline/artifact_usage.py` (new) | `ArtifactUsage`, `fold`, `read_artifact_usage`, `artifact_usage_fields`, key constants |
 | Stamp action | `events/builtin/usage_stamp.py` (new) | `UsageStampAction` (`squadron.usage-stamp`), POST_ACTION |
 | Binding | `events/manifest.py` | append to `DEFAULT_BINDINGS` after `revision-stamp` |
-| Path resolution | `events/builtin/artifact_paths.py` | add `dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd)` and `written_since(paths, cwd, since)`. `dispatch-artifact` calls them, and its error messages and the `dispatch post-condition` log prefix stay unchanged |
+| Path resolution | `events/builtin/artifact_paths.py` | add `dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd)`. `dispatch-artifact` calls it, and its error messages and the `dispatch post-condition` log prefix stay unchanged |
 | Key table | `review/run_cost.py` | `RunCost.frontmatter_fields() -> dict[str, object]`, with `frontmatter_lines()` rendered from it; `RunCost.from_record(UsageRecord)` |
-| Cost basis | `core/usage.py` | `CostBasis.MIXED` (D2) |
-| Frontmatter reader | `stats/frontmatter_usage.py` (new) | `record_from_frontmatter(path, front)`, moved from `reviews_report._record` and its field helpers |
+| Frontmatter reader | `review/frontmatter_usage.py` (new) | `record_from_frontmatter(path, front)`, moved from `reviews_report._record` and its field helpers |
 | Artifacts report | `stats/artifacts_report.py` (new) | `artifacts_usage_report(project_root, slice_filter)` |
 | Slice report | `stats/effort_report.py`, `cli/stats_views.py` | artifact spend per kind on the `slice` header |
 | CLI | `cli/commands/stats.py`, `cli/stats_views.py` | `artifacts` subcommand and renderer |
@@ -104,12 +105,11 @@ The artifact's frontmatter is the only new persisted state, and it is the source
 `usage-stamp` acts when all of these hold, and otherwise returns success with no effect:
 
 - `action_type` is dispatch, `result.success` is true, and `expected_artifact_kind` is not `None`.
-- `result.outputs` has no `SKIPPED_KEY`. A kept artifact made no model call.
-- `result.metadata` holds a usage record. When it does not (the provider reported nothing), the stamp is skipped and a DEBUG line names the step. Prompt-only mode records no usage (175), so it never stamps. That is correct: no spend was measured there.
+- `result.metadata` holds a usage record. When it does not, the stamp is skipped and a DEBUG line names the step.
 
-`result.outputs` is read only for `SKIPPED_KEY`, the same as `dispatch-artifact` and `revision-stamp`. A missing key in prompt-only mode cannot cause a wrong stamp, because there is no usage record there either.
+The stamp does not read `result.outputs`, which keeps it inside the 140-arch event-action rule. It needs no skip check: a kept artifact (`existing: keep`) returns before any model call with empty `metadata` (`pipeline/actions/dispatch.py:_dispatch`), so it has no usage record. Prompt-only mode records no usage either. In both cases no spend was measured, so not stamping is correct by construction, not by coincidence.
 
-**Which file.** `dispatch_artifact_paths` resolves the candidate paths, and `written_since(paths, cwd, run_started_at)` keeps the ones modified this run, using the same mtime rule as the post-condition. Exactly one written path is stamped. When more than one was written (a tasks slice with several task files), the record is not split or duplicated. A WARNING says `usage stamp: N {kind} artifacts written for {scope}; spend not attributed (paths)` and nothing is stamped.
+**Which file.** The stamp runs only after the post-condition confirmed that a candidate was written this run. It stamps the first candidate from `dispatch_artifact_paths`, in numeric-suffix order, with a file without a suffix first. A design or arch doc has one candidate. A split task breakdown (`nnn-tasks.name-1.md`, `-2.md`; 13 of the repo's task breakdowns) is one artifact, as 177 treats it, and its first part carries the total for every round, whichever part a round rewrote. The record is never split or duplicated, so no task spend goes unattributed.
 
 **Never fails a run.** This follows 911 D4, the same as `revision-stamp`. Any resolution, parse or write failure (`FrontmatterError`, `OSError`, a cf client error) is logged at WARNING with the path and the reason, and the action returns success. A cost stamp must not fail a converging loop.
 
@@ -121,41 +121,36 @@ A file revised in a loop gets one cumulative total, not one entry per round. Per
 
 | Key | Meaning |
 |---|---|
-| `turns`, `promptTokens`, `cachedTokens`, `cacheWriteTokens`, `completionTokens`, `reasoningTokens`, `durationSeconds`, `costUsd`, `costBasis` | the review keys (931 D10, 175), summed over stamped rounds |
+| `turns`, `promptTokens`, `cachedTokens`, `cacheWriteTokens`, `completionTokens`, `reasoningTokens`, `durationSeconds`, `costUsd` | the review keys (931 D10, 175), summed over stamped rounds. `costBasis` is not stamped (#231) |
 | `usageRounds` | dispatches folded into the total |
 | `pricedRounds` | of those, how many had a cost |
-| `usagePartial` | `true` once any folded record was `partial` (175 D5), and it stays set. Absent otherwise |
 
 `fold(prior, record)` follows 175 D9:
 
 - Tokens and turns use `add_optional`. A field that no round reported is left out.
 - Cost sums priced rounds only, and `pricedRounds` counts them. An unpriced round is never counted as $0, so a reader renders `$x (k of m rounds priced)`.
-- `costBasis` keeps the common basis while every priced round agrees. On the first disagreement it becomes `CostBasis.MIXED` and stays that way. Keys are never removed, because `update_frontmatter` only merges.
 - Duration sums the LLM call times.
 
 The stamp counts dispatches that wrote this file, from any run. The initial draft (iteration 0), each loop revision, and a later run that rewrites the file all add to the same total.
 
-**Agent rewrites.** A revision agent may rewrite the file and drop the keys. The total then restarts at that round, along with `usageRounds`, so the stamp stays internally consistent and is a floor. This case is detectable: `revision_number` is present (≥ 1) but `usageRounds` is absent on a revision round. When it happens, a WARNING says `usage stamp: prior usage keys missing from {path}; total restarts at this round`.
+**Agent rewrites.** A revision agent may rewrite the file and drop the keys. The total then restarts at that round, along with `usageRounds`, so the stamp stays internally consistent and is a floor. The committed earlier rounds in git keep the prior totals.
 
 **Malformed prior keys.** A non-numeric value is treated like the 175 reviews reader does (D4): that field reads as `None` and a WARNING names the key. When `usageRounds` itself is not a positive int, the total restarts and the WARNING says so.
 
 ### D3 — Path resolution in one place
 
-`dispatch_artifact_paths` contains the slice-or-plan branching that is now inline in `dispatch_artifact._dispatch_artifact_post_condition_error`. A slice index goes to `expected_artifact_paths`, and a plan index with no slice goes to `[resolve_arch_file(index, cwd)]`. `written_since` contains the mtime loop from `_check_dispatch_artifact_written`. The post-condition keeps its own error messages and log prefix, which existing tests assert, and calls the shared functions for the facts. The stamp cannot then target a different file from the one the post-condition checked.
+`dispatch_artifact_paths` contains the slice-or-plan branching that is now inline in `dispatch_artifact._dispatch_artifact_post_condition_error`. A slice index goes to `expected_artifact_paths`, and a plan index with no slice goes to `[resolve_arch_file(index, cwd)]`. The post-condition keeps its own error messages, mtime check and log prefix, which existing tests assert. The stamp and the post-condition therefore see the same candidate list.
 
 ### D4 — One key table, one reader
 
 - `RunCost.frontmatter_fields()` returns the D10 key→value mapping (keys present only when they have a value, `costUsd` rounded to 6 places, `durationSeconds` as a float to 1 place). `frontmatter_lines()` renders from it, so review artifacts stay byte-identical. The existing review persistence tests assert that.
 - `RunCost.from_record(UsageRecord)` maps a record onto the same fields.
-- `stats/frontmatter_usage.record_from_frontmatter` moves verbatim from `reviews_report._record` together with `_INT_KEYS` and the `_int`/`_float`/`_basis` helpers. `reviews_report` imports it, and its behavior does not change. `pipeline/artifact_usage.read_artifact_usage` uses it plus the two counts. Each key name is defined once.
-
-`CostBasis.MIXED = "mixed"` is the one enum addition. `sq stats` prints it as `mixed`. The subscription `api-rate equiv.` label applies only to `provider`.
+- `review/frontmatter_usage.record_from_frontmatter` moves verbatim from `reviews_report._record` together with `_INT_KEYS` and the `_int`/`_float`/`_basis` helpers. `reviews_report` imports it, and its behavior does not change. `pipeline/artifact_usage.read_artifact_usage` uses it plus the two counts. Each key name is defined once. `stats` and `pipeline` both import from `review/`, and neither imports the other for this.
 
 ### D5 — `sq stats` reads artifacts beside runs, never summed with them
 
-- `sq stats artifacts [--slice INDEX]` reads the top-level `*.md` files in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only. It shows one row per file that has `usageRounds`: kind, file, slice, rounds, tokens, duration, cost (`k of m rounds priced`). It ends with a total. **Kind** comes from the directory the file was found in, not from its name or `docType`. **Slice** is the file name's leading index, using the reviews report's rule. Files without `usageRounds` are not stamped (most predate this slice) and are skipped silently. Unreadable frontmatter or a malformed `usageRounds` counts toward a `N file(s) unreadable` footer and logs a WARNING.
+- `sq stats artifacts [--slice INDEX]` reads the top-level `*.md` files in `SLICES_DIR` and `TASKS_DIR`, and `*-arch.*.md` in `ARCHITECTURE_DIR`, frontmatter only. It shows one row per file that has `usageRounds`: kind, file, slice, rounds, tokens, duration, cost (`k of m rounds priced`). It ends with a total. **Kind** is an `ArtifactKind`, taken from the directory the file was found in, not from its name or `docType`: `TASKS_DIR` gives `TASKS`; `SLICES_DIR` and `ARCHITECTURE_DIR` give `DESIGN`, which is the kind the P2 design step already assigns to the arch doc. **Slice** is the file name's leading index, using the reviews report's rule. Files without `usageRounds` are not stamped (most predate this slice) and are skipped silently. Unreadable frontmatter or a malformed `usageRounds` counts toward a `N file(s) unreadable` footer and logs a WARNING.
 - `sq stats slice <index>` gains one header line, `artifact spend: design $x (k of m rounds) · tasks $y (…)`, read through `artifacts_usage_report(..., slice_filter=index)`. It sits beside `recorded spend` and is never added to it, because both describe the same dispatches whenever the run still exists.
-- `--json` on `artifacts` mirrors the table through `to_json_dict()`, as 176 does.
 
 ### D6 — Failure modes
 
@@ -163,10 +158,8 @@ The stamp counts dispatches that wrote this file, from any run. The initial draf
 |---|---|---|
 | Path resolution fails (cf error, no arch doc, non-numeric slice/plan) | no stamp; dispatch result unchanged | WARNING naming kind, scope, reason |
 | No path written this run | no stamp | none. The post-condition already failed the step, and later bindings did not run |
-| More than one path written this run | no stamp | WARNING (D1) |
 | Artifact has no frontmatter block / invalid YAML | no stamp | WARNING naming path and `FrontmatterError` |
 | Write fails (`OSError`) | no stamp | WARNING naming path |
-| Prior keys missing on a revision round | total restarts | WARNING (D2) |
 | Malformed prior key | that field restarts | WARNING naming path and key |
 | No usage record on the result | no stamp | DEBUG naming step |
 | `sq stats artifacts`: a stamped file is unreadable | row skipped | WARNING plus footer count |
@@ -180,14 +173,12 @@ The stamp counts dispatches that wrote this file, from any run. The initial draf
 # pipeline/artifact_usage.py
 USAGE_ROUNDS_KEY = "usageRounds"
 PRICED_ROUNDS_KEY = "pricedRounds"
-USAGE_PARTIAL_KEY = "usagePartial"
 
 @dataclass(frozen=True)
 class ArtifactUsage:
     cost: RunCost
     rounds: int
     priced_rounds: int
-    partial: bool = False
 
 def fold(prior: ArtifactUsage | None, record: UsageRecord) -> ArtifactUsage: ...
 def read_artifact_usage(path: Path, front: Mapping[str, object]) -> ArtifactUsage | None: ...
@@ -198,16 +189,12 @@ def dispatch_artifact_paths(
     kind: ArtifactKind, slice_param: object, plan_param: object,
     cf_client: CfClientProtocol, cwd: str,
 ) -> list[str]: ...          # raises as the resolvers do; callers decide how to report
-def written_since(paths: list[str], cwd: str, since: datetime) -> list[str]: ...  # OSError propagates
 
 # stats/artifacts_report.py
-class ArtifactKindDir(StrEnum):   # report-side kind, keyed by directory
-    DESIGN = "design"; TASKS = "tasks"; ARCHITECTURE = "architecture"
-
 @dataclass(frozen=True)
 class ArtifactUsageRow:
     path: Path
-    kind: ArtifactKindDir
+    kind: ArtifactKind          # from the directory (D5)
     slice: str | None
     usage: ArtifactUsage
 
@@ -225,7 +212,6 @@ cacheWriteTokens: 151020
 completionTokens: 30544
 durationSeconds: 512.4
 costUsd: 2.418731
-costBasis: provider
 usageRounds: 2
 pricedRounds: 2
 ```
@@ -271,8 +257,8 @@ Width handling reuses `cli/columns.py` (`fit_widths`).
 - A design revised in a loop has a total equal to the sum of its rounds' dispatch records in run state (176 D3 rounds), and `usageRounds` equals the number of dispatch rounds.
 - A P5 run stamps the task file the same way. A P2 run stamps the architecture document.
 - A step with `existing: keep`, a failed dispatch, an implement dispatch, summary and compact stamp nothing.
-- Two written candidate files produce no stamp and one WARNING.
-- An unpriced round increments `usageRounds` and not `pricedRounds`, and leaves `costUsd` unchanged. Two bases yield `costBasis: mixed`.
+- A split task breakdown is stamped once, on its first part, for every round.
+- An unpriced round increments `usageRounds` and not `pricedRounds`, and leaves `costUsd` unchanged.
 - After `sq runs prune` removes the run, `sq stats artifacts --slice N` still reports the slice's design and task spend.
 - `sq stats slice N` shows the artifact spend line next to recorded spend and does not sum the two.
 
@@ -306,20 +292,21 @@ These commands come from the design; `sq stats artifacts` does not exist yet.
 ### Technical Risks
 
 - **Agent-edited frontmatter.** The producing agent rewrites the file it is revising and can drop or alter the stamped keys between rounds.
+- **Attribution rests on the post-condition's mtime rule.** The stamp trusts that a candidate was written this run (mtime ≥ `run_started_at`). On a resumed run, or when someone edits the file by hand during a run, a dispatch that wrote nothing still passes the post-condition, and its spend is stamped onto the slice's existing artifact. The spend still belongs to producing that artifact, so the slice total stays right; only the attribution to that specific file is unverified. This is the post-condition's existing limit, and this slice does not change it.
 - **Every phase dispatch touches its artifact a second time** (risk Med in the plan). A stamp bug could corrupt a design document.
 
 ### Mitigation Strategies
 
-- A dropped key restarts the total, and the D2 WARNING makes that visible. Committed rounds in git keep each prior total.
+- A dropped key restarts the total and its round count together, so the stamp stays a consistent floor. Committed rounds in git keep each prior total.
 - All writes go through `update_frontmatter`, the same body-preserving primitive `revision-stamp` already runs on every loop round. Every failure is swallowed with a WARNING (D1), and the binding can be disabled per project.
 
 ## Implementation Notes
 
 ### Development Approach
 
-1. Refactor without behavior change: `RunCost.frontmatter_fields` and `from_record`, `stats/frontmatter_usage.py`, and `artifact_paths.dispatch_artifact_paths` and `written_since`. Existing review, stats and post-condition tests must pass unchanged.
-2. `CostBasis.MIXED`, `pipeline/artifact_usage.py` (`fold`, read, fields), with unit tests over fold sequences: priced, unpriced, mixed basis, partial, missing and malformed prior.
-3. `events/builtin/usage_stamp.py` and its binding. Event-level tests with a temp project: slice design, task file, arch doc, keep, failed dispatch, multiple written files, no frontmatter.
+1. Refactor without behavior change: `RunCost.frontmatter_fields` and `from_record`, `review/frontmatter_usage.py`, and `artifact_paths.dispatch_artifact_paths`. Existing review, stats and post-condition tests must pass unchanged.
+2. `pipeline/artifact_usage.py` (`fold`, read, fields), with unit tests over fold sequences: priced, unpriced, missing and malformed prior.
+3. `events/builtin/usage_stamp.py` and its binding. Event-level tests with a temp project: slice design, task file, arch doc, split task files (`-1`, `-2`), keep, failed dispatch, no frontmatter.
 4. `stats/artifacts_report.py`, the `artifacts` subcommand, and the `slice` header line. Test fixtures copied from real slice and task frontmatter in this repo (CLAUDE.md parsing rule).
 5. Update the wrapper subcommand lists, CHANGELOG bullet, and `140-arch.pipeline-foundation.md`: add `usage_stamp.py` to the `events/builtin/` tree and the stamp to the POST_ACTION ordering note (line 124).
 
