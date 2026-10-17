@@ -12,12 +12,12 @@ from pathlib import Path
 
 import yaml
 
-from squadron.core.usage import CostBasis, RunTelemetry, TokenUsage
+from squadron.core.usage import CostBasis, RunTelemetry, TokenUsage, UsageRecord
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.providers.errors import ProviderAPIError, ProviderError
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import format_provider_failure_markdown, format_review_markdown
-from squadron.review.run_cost import COST_NOT_REPORTED, NOT_COMPUTED
+from squadron.review.run_cost import COST_NOT_REPORTED, NOT_COMPUTED, RunCost
 
 _SLICE_INFO = {
     "index": 931,
@@ -223,3 +223,52 @@ def test_failure_artifact_renders_resolved_cost() -> None:
 
     assert _frontmatter(md)["costUsd"] == 0.02
     assert _digest_value(md, "- Cost: ") == "$0.02 (provider)"
+
+
+# --- RunCost.frontmatter_fields / from_record (slice 178 D4) ---
+
+
+def test_frontmatter_fields_omits_none_and_rounds() -> None:
+    cost = RunCost(
+        turns=3,
+        usage=TokenUsage(prompt=10, completion=4),
+        duration_seconds=12.345,
+        cost_usd=0.12345678,
+        cost_basis=CostBasis.PROVIDER,
+    )
+    assert cost.frontmatter_fields() == {
+        "turns": 3,
+        "promptTokens": 10,
+        "completionTokens": 4,
+        "durationSeconds": 12.3,
+        "costUsd": 0.123457,
+        "costBasis": "provider",
+    }
+    assert RunCost().frontmatter_fields() == {}
+
+
+def test_frontmatter_lines_render_from_fields() -> None:
+    cost = RunCost(turns=2, duration_seconds=5.0, cost_usd=0.5)
+    assert cost.frontmatter_lines() == ["turns: 2", "durationSeconds: 5.0", "costUsd: 0.5"]
+
+
+def test_from_record_maps_every_populated_field() -> None:
+    record = UsageRecord(
+        model="m",
+        alias="a",
+        profile=None,
+        effort=None,
+        turns=4,
+        duration_seconds=9.5,
+        usage=TokenUsage(prompt=100, cached=40, cache_write=5, completion=20, reasoning=8),
+        cost_usd=0.25,
+        cost_basis=CostBasis.ALIAS_PRICING,
+    )
+    cost = RunCost.from_record(record)
+    assert cost == RunCost(
+        turns=4,
+        usage=record.usage,
+        duration_seconds=9.5,
+        cost_usd=0.25,
+        cost_basis=CostBasis.ALIAS_PRICING,
+    )

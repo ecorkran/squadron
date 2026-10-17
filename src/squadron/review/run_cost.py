@@ -12,8 +12,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from squadron.core.usage import CostBasis, TokenUsage, format_usd
+from squadron.core.usage import CostBasis, TokenUsage, UsageRecord, format_usd
 from squadron.providers.errors import ProviderError
+
+# Frontmatter keys (931 D10), defined once for the writers and the stats readers.
+KEY_TURNS = "turns"
+KEY_PROMPT_TOKENS = "promptTokens"
+KEY_CACHED_TOKENS = "cachedTokens"
+KEY_CACHE_WRITE_TOKENS = "cacheWriteTokens"
+KEY_COMPLETION_TOKENS = "completionTokens"
+KEY_REASONING_TOKENS = "reasoningTokens"
+KEY_DURATION_SECONDS = "durationSeconds"
+KEY_COST_USD = "costUsd"
+KEY_COST_BASIS = "costBasis"
 
 #: The Run Digest's one sentinel for a fact nobody produced; persistence renders it too.
 NOT_COMPUTED = "not computed"
@@ -47,20 +58,38 @@ class RunCost:
             cost_basis=exc.cost_basis,
         )
 
-    def frontmatter_lines(self) -> list[str]:
-        """Each key only when it has a value (D10 table)."""
+    @classmethod
+    def from_record(cls, record: UsageRecord) -> RunCost:
+        """What one dispatch's ``UsageRecord`` says it cost."""
+        return cls(
+            turns=record.turns,
+            usage=record.usage,
+            duration_seconds=record.duration_seconds,
+            cost_usd=record.cost_usd,
+            cost_basis=record.cost_basis,
+        )
+
+    def frontmatter_fields(self) -> dict[str, object]:
+        """The D10 key table: each key only when it has a value, in render order."""
         keyed: list[tuple[str, object | None]] = [
-            ("turns", self.turns),
-            ("promptTokens", self.usage.prompt),
-            ("cachedTokens", self.usage.cached),
-            ("cacheWriteTokens", self.usage.cache_write),
-            ("completionTokens", self.usage.completion),
-            ("reasoningTokens", self.usage.reasoning),
-            ("durationSeconds", self._duration()),
-            ("costUsd", None if self.cost_usd is None else round(self.cost_usd, 6)),
-            ("costBasis", None if self.cost_basis is None else self.cost_basis.value),
+            (KEY_TURNS, self.turns),
+            (KEY_PROMPT_TOKENS, self.usage.prompt),
+            (KEY_CACHED_TOKENS, self.usage.cached),
+            (KEY_CACHE_WRITE_TOKENS, self.usage.cache_write),
+            (KEY_COMPLETION_TOKENS, self.usage.completion),
+            (KEY_REASONING_TOKENS, self.usage.reasoning),
+            (
+                KEY_DURATION_SECONDS,
+                None if self.duration_seconds is None else round(self.duration_seconds, 1),
+            ),
+            (KEY_COST_USD, None if self.cost_usd is None else round(self.cost_usd, 6)),
+            (KEY_COST_BASIS, None if self.cost_basis is None else self.cost_basis.value),
         ]
-        return [f"{key}: {value}" for key, value in keyed if value is not None]
+        return {key: value for key, value in keyed if value is not None}
+
+    def frontmatter_lines(self) -> list[str]:
+        """``frontmatter_fields`` rendered as ``key: value`` lines."""
+        return [f"{key}: {value}" for key, value in self.frontmatter_fields().items()]
 
     def digest_lines(self) -> list[str]:
         """Always rendered, so every artifact says what it knows and what it does not."""
