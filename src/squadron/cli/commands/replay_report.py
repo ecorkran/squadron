@@ -10,19 +10,11 @@ from rich import get_console
 
 from squadron.cli.commands import replay_common as common
 from squadron.cli.replay_report_views import render_replay_report
-from squadron.config.manager import get_typed_config
 from squadron.metrology.replay_models import ReplayPhase
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.replay.report import replay_report
 
 MIN_EVIDENCE_KEY = "metrology.min_evidence_n"
-
-
-def _min_evidence_n(repo_root: Path) -> int:
-    try:
-        return get_typed_config(MIN_EVIDENCE_KEY, int, cwd=str(repo_root))
-    except ValueError as exc:
-        raise common.fail(f"{exc}. Fix it with 'sq config set {MIN_EVIDENCE_KEY} <n>'.") from exc
 
 
 def replay_report_command(
@@ -39,7 +31,7 @@ def replay_report_command(
         phase=phase,
         judge_alias=judge,
         store=store,
-        min_n=_min_evidence_n(repo_root),
+        min_n=common.int_config(MIN_EVIDENCE_KEY, repo_root),
     )
     if as_json:
         typer.echo(json.dumps(report.to_json_dict(), indent=2))

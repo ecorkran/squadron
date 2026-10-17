@@ -48,7 +48,7 @@ def fakes() -> Iterator[_Fakes]:
         patch(f"{_MODULE}.total_calls", side_effect=lambda jobs: box.pairs_calls),
         patch(f"{_MODULE}.judge_jobs", side_effect=box.judge),
         patch(f"{_MODULE}.one_shot_judge_dispatcher", return_value=MagicMock()),
-        patch(f"{_MODULE}.get_typed_config", return_value=600),
+        patch("squadron.cli.commands.replay_common.get_typed_config", return_value=600),
     ):
         yield box
 
@@ -109,6 +109,18 @@ def test_pairs_with_no_verdict_are_reported(fakes: _Fakes) -> None:
     result = runner.invoke(app, [*_ARGS, "--yes"])
 
     assert result.exit_code == 0 and "1 with no verdict" in result.output
+
+
+def test_a_non_integer_judge_timeout_exits_1_naming_the_key(fakes: _Fakes) -> None:
+    with patch(
+        "squadron.cli.commands.replay_common.get_typed_config", side_effect=ValueError("not an int")
+    ):
+        result = runner.invoke(app, [*_ARGS, "--yes"])
+
+    assert result.exit_code == 1
+    assert "metrology.judge_timeout_s" in result.output
+    assert result.exception is None or isinstance(result.exception, SystemExit)
+    assert fakes.judged_with == []
 
 
 def test_an_input_error_exits_1_with_its_message(fakes: _Fakes) -> None:

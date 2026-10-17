@@ -46,7 +46,7 @@ def store(tmp_path: Path) -> Iterator[MetrologyStore]:
             return_value=ProjectId(value=PROJECT, source=ProjectIdSource.REMOTE),
         ),
         patch("squadron.cli.commands.replay_report.resolve_store_dir", return_value=tmp_path / "store"),
-        patch("squadron.cli.commands.replay_report.get_typed_config", return_value=3),
+        patch("squadron.cli.commands.replay_common.get_typed_config", return_value=3),
         # The global console keeps the width of whichever test created it first.
         patch("squadron.cli.commands.replay_report.get_console", return_value=Console(width=220)),
     ):
@@ -110,7 +110,7 @@ def test_the_table_has_every_column_the_original_row_and_the_footer(store: Metro
 
 def test_a_config_under_the_floor_is_marked(store: MetrologyStore) -> None:
     _fill(store)  # min_n is 3; haiku has 3 valid pairs, opus 3, original 3 -> raise the floor
-    with patch("squadron.cli.commands.replay_report.get_typed_config", return_value=4):
+    with patch("squadron.cli.commands.replay_common.get_typed_config", return_value=4):
         result = runner.invoke(app, ["replay", "report"], env=_WIDE)
 
     assert "below floor" in result.output
@@ -148,7 +148,7 @@ def test_the_judge_filter_and_phase_option_are_accepted(store: MetrologyStore) -
 
 def test_a_non_integer_evidence_floor_exits_1_naming_the_key(store: MetrologyStore) -> None:
     with patch(
-        "squadron.cli.commands.replay_report.get_typed_config", side_effect=ValueError("not an int")
+        "squadron.cli.commands.replay_common.get_typed_config", side_effect=ValueError("not an int")
     ):
         result = runner.invoke(app, ["replay", "report"])
 

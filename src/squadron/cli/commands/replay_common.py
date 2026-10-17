@@ -9,6 +9,7 @@ import typer
 from rich import get_console
 from rich.markup import escape
 
+from squadron.config.manager import get_typed_config
 from squadron.metrology.errors import MetrologyIdentityError
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.project_id import ProjectId
@@ -23,6 +24,14 @@ def fail(message: str) -> typer.Exit:
     """Print an error and return the exit to raise: ``raise fail("...")``."""
     get_console().print(f"[red]Error: {escape(message)}[/red]")
     return typer.Exit(code=1)
+
+
+def int_config(key: str, repo_root: Path) -> int:
+    """An integer config value; a malformed one exits 1 naming the key to fix."""
+    try:
+        return get_typed_config(key, int, cwd=str(repo_root))
+    except ValueError as exc:
+        raise fail(f"{exc}. Fix it with 'sq config set {key} <n>'.") from exc
 
 
 def model_ref(alias: str) -> ModelRef:
