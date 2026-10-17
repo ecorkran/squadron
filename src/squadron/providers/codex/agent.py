@@ -37,10 +37,6 @@ _READ_ONLY_WRITES_REFUSAL = (
     "profile `{profile}` runs Codex with a read-only sandbox; this step must write files. "
     'Set `sandbox = "workspace-write"` in the profile credentials.'
 )
-_READ_ONLY_WARNING = (
-    'Codex profile `%s` runs with a read-only sandbox; set `sandbox = "workspace-write"` '
-    "in the profile credentials if this dispatch should write files"
-)
 _WRITE_STEP_SANDBOX_INFO = (
     "Codex profile `%s` sets no sandbox; this write step runs with workspace-write "
     '(set `sandbox = "read-only"` in the profile to refuse write steps instead)'
@@ -246,19 +242,16 @@ class CodexAgent:
         _log.debug("Codex thread started: model=%s", model)
 
     def _check_sandbox_allows_writes(self, sandbox: Sandbox) -> None:
-        """Refuse a write-required step on a read-only sandbox; warn on a bare dispatch (D2).
+        """Refuse a write-required step on a read-only sandbox (D2).
 
         Runs before the runtime starts, so a refusal costs no model call. The profile name
-        is not on ``AgentConfig``; the provider id stands in for it.
+        is not on ``AgentConfig``; the provider id stands in for it. A step that does not
+        write (review) is correctly read-only, so nothing is logged for it (#224).
         """
         from openai_codex import Sandbox
 
-        if sandbox != Sandbox.read_only:
-            return
-        profile = self._config.provider
-        if self._config.requires_writes:
-            raise ProviderError(_READ_ONLY_WRITES_REFUSAL.format(profile=profile))
-        _log.warning(_READ_ONLY_WARNING, profile)
+        if sandbox == Sandbox.read_only and self._config.requires_writes:
+            raise ProviderError(_READ_ONLY_WRITES_REFUSAL.format(profile=self._config.provider))
 
     def _resolve_sandbox(self) -> Sandbox:
         """Validate ``credentials["sandbox"]`` against the SDK enum.

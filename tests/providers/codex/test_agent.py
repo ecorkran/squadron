@@ -222,15 +222,14 @@ class TestSpawnRefusals:
         _send(CodexAgent(name="test-codex", config=config), "hi")
         fake_sdk.client.thread_start.assert_awaited_once()
 
-    def test_read_only_bare_dispatch_runs_and_warns_once(
+    def test_read_only_bare_dispatch_runs_without_warning(
         self, agent: CodexAgent, fake_sdk: FakeSdk, caplog: pytest.LogCaptureFixture
     ) -> None:
+        """A non-writing step (review) is correctly read-only; no warning (#224)."""
         with caplog.at_level(logging.WARNING, logger="squadron.providers.codex.agent"):
             _send(agent, "hi")
         fake_sdk.client.thread_start.assert_awaited_once()
-        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert len(warnings) == 1
-        assert 'sandbox = "workspace-write"' in warnings[0].getMessage()
+        assert [r for r in caplog.records if r.levelno >= logging.WARNING] == []
 
 
 class TestTurnResultChecks:
