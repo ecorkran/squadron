@@ -12,6 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.21.5] - 2026-10-17
+
+### Changed
+- `skills/setup-ci`: with no `pyproject.toml` or `package.json`, offers a minimal uv Python skeleton (TypeScript not yet covered). Offers a standard `.gitignore` when it is missing or weak.
+- `skills/setup-ci`: always asks for the publish target instead of inferring PyPI or npm from the manifest. When `requires-python` has no upper bound, offers the installed interpreters as choices.
+- `lint/python/ruff.toml`: excludes `*.md`, so ruff no longer formats or lints Python examples in markdown.
+
+## [0.21.4] - 2026-10-17
+
+### Changed
+- `file-naming-conventions.md`: 900-999 splits into 900-989 (sequential, numbered in order, never continuing into 990-999) and 990-999 (standing slices, assigned by hand). 990 is the standing fixes slice.
+- Process guide, Fixes: a new standing fixes slice uses index 990.
+
+## [0.21.3] - 2026-10-17
+
+### Changed
+- Process guide, Phase Approval: front-load decisions. A decision is due at the earliest phase that can make it; no phase completes with a pending decision (#44).
+- `templates/slice-design.md`: each Technical Decision gets a `Status:` line (`decided` or `pending-pm`) under its heading; a design with any `pending-pm` cannot move to Phase 5.
+- Task breakdown guide: no task may wait on a PM decision or PM-supplied artifact; resolve it first or record it as a slice precondition.
+
 ## [0.21.2] - 2026-10-16
 
 ### Changed
