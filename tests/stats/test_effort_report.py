@@ -9,12 +9,13 @@ from pathlib import Path
 import pytest
 
 from squadron.pipeline.state import StateManager
+from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.review.git_utils import run_git
 from squadron.stats.effort_report import SliceEffortReport, slice_effort_report
 from squadron.stats.git_history import GitHistory, WindowSource
 from squadron.stats.planning_docs import UnknownSliceError
 from squadron.stats.task_attribution import GroupStatus
-from tests.stats.effort_project import build_project
+from tests.stats.effort_project import build_project, stamp_artifacts
 from tests.stats.repo_support import CountingRunner, StatsRepo, write_run_file
 
 
@@ -128,3 +129,24 @@ def test_json_values_equal_the_dataclass_values(stats_repo: StatsRepo, runs_dir:
     spend = data["spend"]
     assert isinstance(spend, dict) and spend["totals"]["cost_usd"] == 0.75
     json.dumps(data)  # fully serializable
+
+
+def test_report_carries_per_kind_artifact_usage(stats_repo: StatsRepo, runs_dir: Path) -> None:
+    build_project(stats_repo)
+    stamp_artifacts(stats_repo)
+
+    report = _report(stats_repo, runs_dir)
+
+    assert report.artifact_usage is not None
+    by_kind = {k.kind: k for k in report.artifact_usage.by_kind}
+    assert (by_kind[ArtifactKind.DESIGN].cost_usd, by_kind[ArtifactKind.DESIGN].rounds) == (2.5, 2)
+    assert (by_kind[ArtifactKind.TASKS].cost_usd, by_kind[ArtifactKind.TASKS].priced_rounds) == (1.1, 1)
+    assert report.spend.totals.cost_usd == 0.75  # never summed with recorded spend
+
+
+def test_unstamped_slice_has_empty_artifact_usage(stats_repo: StatsRepo, runs_dir: Path) -> None:
+    build_project(stats_repo)
+
+    report = _report(stats_repo, runs_dir)
+
+    assert report.artifact_usage is not None and report.artifact_usage.by_kind == ()

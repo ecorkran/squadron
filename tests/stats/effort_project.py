@@ -59,3 +59,17 @@ def build_project(repo: StatsRepo, *, branch: bool = True, tasks: bool = True) -
     repo.commit("review: slice 2", {SLICE_REVIEW: review_text("PASS", cost)}, commit_date(6))
     repo.commit("review: code", {CODE_REVIEW: review_text("PASS")}, commit_date(7))
     repo.commit("fix: after review", {"src/two.py": "2b\n"}, commit_date(8))
+
+
+def stamp_artifacts(repo: StatsRepo, *, design: bool = True, tasks: bool = True) -> None:
+    """Add 178 usage stamps to slice 176's design and task file in the working tree."""
+    if design:
+        stamp = "costUsd: 2.5\nusageRounds: 2\npricedRounds: 2\n"
+        (repo.root / DESIGN_FILE).write_text(
+            DESIGN_TEXT.replace("---\n\nBody", f"{stamp}---\n\nBody"), encoding="utf-8"
+        )
+    if tasks:
+        stamp = "costUsd: 1.1\nusageRounds: 2\npricedRounds: 1\n"
+        (repo.root / TASKS_FILE).write_text(
+            f"---\nstatus: not_started\n{stamp}---\n\n{TASK_FILE_TEXT}", encoding="utf-8"
+        )

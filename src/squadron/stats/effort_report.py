@@ -6,12 +6,13 @@ the only git calls made here are one ``show`` per review artifact version.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from pathlib import Path
 
 from squadron.pipeline.state import StateManager
 from squadron.review.persistence import REVIEWS_DIR
+from squadron.stats.artifacts_report import ArtifactsUsageReport, artifacts_usage_report
 from squadron.stats.git_history import GitHistory, WindowSource
 from squadron.stats.json_support import to_json_dict
 from squadron.stats.planning_docs import PlannedSlice, planned_slice, task_file_paths
@@ -73,6 +74,9 @@ class SliceEffortReport:
     rounds_skipped: int
     lower_bound: bool  # a review's earliest round predates commit-per-round (941)
     unreadable_runs: int
+    # Stamped artifact spend (178). Read only for a single slice: a rollup leaves it None
+    # rather than rescanning the planning directories once per slice.
+    artifact_usage: ArtifactsUsageReport | None = None
 
     def to_json_dict(self) -> dict[str, object]:
         return to_json_dict(self)
@@ -84,7 +88,8 @@ def slice_effort_report(
     """One slice's effort report; ``UnknownSliceError`` when no plan lists ``index``."""
     planned = planned_slice(index, project_root)
     sources = SpendSources.load(state_manager, project_root / REVIEWS_DIR)
-    return build_slice_report(planned, project_root, history, sources)
+    report = build_slice_report(planned, project_root, history, sources)
+    return replace(report, artifact_usage=artifacts_usage_report(project_root, str(index)))
 
 
 def build_slice_report(

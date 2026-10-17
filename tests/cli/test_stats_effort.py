@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.pipeline.state import StateManager
-from tests.stats.effort_project import SLICE_REVIEW, build_project, commit_date
+from tests.stats.effort_project import SLICE_REVIEW, build_project, commit_date, stamp_artifacts
 from tests.stats.repo_support import StatsRepo, write_run_file
 
 runner = CliRunner()
@@ -60,6 +60,53 @@ def test_slice_table_and_json_show_the_same_values(project: StatsRepo) -> None:
     assert "marker not found" in table.output  # the third group, in its marker cell
     assert "$0.75 (2 of 3 priced)" in table.output
     assert data["spend"]["totals"]["cost_usd"] == 0.75
+
+
+def test_artifact_spend_line_follows_recorded_spend(project: StatsRepo) -> None:
+    stamp_artifacts(project)
+
+    output = runner.invoke(app, ["stats", "slice", "176"]).output
+
+    # The console wraps at its width, so compare with whitespace collapsed.
+    assert (
+        " ".join(output.split()).count(
+            "recorded spend $0.75 (2 of 3 priced) "
+            "artifact spend: design $2.50 (2 of 2 rounds) · tasks $1.10 (1 of 2 rounds) (floor)"
+        )
+        == 1
+    )
+
+
+def test_artifact_spend_line_shows_only_stamped_kinds(project: StatsRepo) -> None:
+    stamp_artifacts(project, tasks=False)
+
+    output = runner.invoke(app, ["stats", "slice", "176"]).output
+
+    assert "artifact spend: design $2.50 (2 of 2 rounds) (floor)" in output
+    assert "tasks $" not in output
+
+
+def test_no_stamps_means_no_artifact_spend_line(project: StatsRepo) -> None:
+    assert "artifact spend" not in runner.invoke(app, ["stats", "slice", "176"]).output
+
+
+def test_recorded_spend_is_the_same_with_and_without_stamps(project: StatsRepo) -> None:
+    before = _json("slice", "176")["spend"]
+    stamp_artifacts(project)
+    after = _json("slice", "176")["spend"]
+
+    assert before == after
+
+
+def test_artifact_spend_shows_when_run_state_is_pruned(project: StatsRepo, tmp_path: Path) -> None:
+    stamp_artifacts(project)
+    empty_runs = tmp_path / "pruned-runs"
+    empty_runs.mkdir()
+
+    with patch("squadron.cli.commands.stats.StateManager", lambda: StateManager(runs_dir=empty_runs)):
+        output = runner.invoke(app, ["stats", "slice", "176"]).output
+
+    assert "artifact spend: design $2.50" in output
 
 
 def test_slices_table_and_json_show_the_same_values(project: StatsRepo) -> None:

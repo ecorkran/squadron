@@ -17,6 +17,7 @@ from squadron.cli.run_views import print_lines
 from squadron.cli.stats_views import UNREADABLE_RUNS_TEXT, UNREPORTED
 from squadron.core.usage import format_usd
 from squadron.pipeline.run_liveness import format_duration
+from squadron.stats.artifacts_report import ArtifactsUsageReport
 from squadron.stats.effort_report import (
     CODE_REVIEW_TYPE,
     DESIGN_REVIEW_TYPE,
@@ -108,6 +109,8 @@ def render_slice_report(report: SliceEffortReport, console: Console) -> None:
         )
     )
     console.print(Text(f"recorded spend {_spend(report.spend)}"))
+    if report.artifact_usage is not None and report.artifact_usage.by_kind:
+        console.print(Text(_artifact_spend(report.artifact_usage)))
     if report.task_file_missing:
         console.print(Text(NO_TASK_FILE_NOTE))
     else:
@@ -215,6 +218,15 @@ def _spend(spend: SliceSpend) -> str:
     if cost is None:
         return UNREPORTED
     return f"{format_usd(cost)} ({spend.totals.priced} of {spend.llm_actions} priced)"
+
+
+def _artifact_spend(usage: ArtifactsUsageReport) -> str:
+    """Stamped production cost per artifact kind; a floor, and never added to recorded spend."""
+    parts: list[str] = []
+    for item in usage.by_kind:
+        cost = UNREPORTED if item.cost_usd is None else format_usd(item.cost_usd)
+        parts.append(f"{item.kind.value} {cost} ({item.priced_rounds} of {item.rounds} rounds)")
+    return f"artifact spend: {' · '.join(parts)} (floor)"
 
 
 def _duration(value: timedelta | None) -> str:
