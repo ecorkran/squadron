@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Design, task and architecture docs written by a pipeline now record their production cost in frontmatter, and `sq stats slice` shows it as artifact spend.
+
 ## [0.23.0] - 20261016
 
 ### Added

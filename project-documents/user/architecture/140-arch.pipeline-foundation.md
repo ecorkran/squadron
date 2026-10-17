@@ -119,9 +119,9 @@ Users (and future squadron slices) can register custom action types. The action 
 
 A third registry, alongside step types and actions: `squadron/events/` — user-definable callables bound to a **closed** set of events (`commit`, `post-action`) via an `events.yaml` manifest. `post-action` fires at the executor's single action-execution site; `commit` is external, fired by git through `sq events fire commit`. This supersedes 171's deferred post-action-hooks design — the frontmatter gate (172) and the 909/911 post-condition checks are its first three built-in consumers, migrated onto the mechanism rather than left hardcoded.
 
-Event actions are **not** pipeline actions: they take an event-typed context (`CommitContext` / `PostActionContext`), not the pipeline's `ActionContext` — a commit has no `run_id` or `resolver`, so reusing the pipeline shape would mean synthesizing placeholder fields. The pipeline `Action` protocol, `ActionContext`, and action registry are unchanged by this; events registration, namespacing, and dispatch are entirely separate machinery reusing only `ActionResult` and `ValidationError`.
+Event actions are **not** pipeline actions: they take an event-typed context (`CommitContext` / `PostActionContext`), not the pipeline's `ActionContext` — a commit has no `run_id` or `resolver`, so reusing the pipeline shape would mean synthesizing placeholder fields. The pipeline `Action` protocol, `ActionContext`, and action registry are unchanged by this; events registration, namespacing, and dispatch are entirely separate machinery reusing only `ActionResult` and `ValidationError`; built-ins also import pipeline-layer helpers (`dispatch-artifact` the path helpers; `usage-stamp` `UsageRecord` and `review/artifact_usage`).
 
-Authority is one axis, not severity-tiered: an action may **observe** (return success, nothing altered), **fail** (return failure — fails the commit on `commit`, fails the action and stops the chain on `post-action`), or **mutate** (write files, as `squadron.revision-stamp` does) — it may not otherwise touch the `ActionResult` it observes, and may not read `result.outputs` (empty in prompt-only mode, so a dependency would silently no-op there). `commit` runs every binding and reports every failure; `post-action` stops at the first failure, in registration-then-manifest order — the built-in dispatch-artifact-then-revision-stamp ordering expressed directly rather than via a severity clamp.
+Authority is one axis, not severity-tiered: an action may **observe** (return success, nothing altered), **fail** (return failure — fails the commit on `commit`, fails the action and stops the chain on `post-action`), or **mutate** (write files, as `squadron.revision-stamp` does) — it may not otherwise touch the `ActionResult` it observes, and may not read `result.outputs` (empty in prompt-only mode, so a dependency would silently no-op there). `commit` runs every binding and reports every failure; `post-action` stops at the first failure, in registration-then-manifest order — the built-in dispatch-artifact, then revision-stamp, then usage-stamp ordering expressed directly rather than via a severity clamp.
 
 Discovery is declared imports only (`plugins:` in `events.yaml`, one `importlib.import_module` per module at dispatch entry) — no directory scanning, no shell hooks. A plugin that fails to import hard-fails the run with an attributed error; nothing is ever silently skipped. `sq run --step-done` (prompt-only mode) runs the same `post-action` bindings itself, since there is no in-process executor moment to fire from.
 
@@ -594,7 +594,8 @@ src/squadron/events/         # user-definable actions on supported events (173)
     ├── frontmatter_gate.py    # COMMIT — wraps `cf validate frontmatter`
     ├── review_verdict_gate.py # COMMIT — rejects a review whose verdict is not a Verdict member
     ├── dispatch_artifact.py   # POST_ACTION — migrated 909 post-condition
-    └── revision_stamp.py      # POST_ACTION — migrated 911 stamp
+    ├── revision_stamp.py      # POST_ACTION — migrated 911 stamp
+    └── usage_stamp.py         # POST_ACTION — 178 usage stamp
 
 src/squadron/documents/      # document-level primitives shared across subsystems
 ├── frontmatter.py           # read/update/render frontmatter
