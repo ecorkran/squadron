@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261016
 
+### Slice 178: Artifact Usage Stamping — Tasks Complete
+
+- Tasks: `project-documents/user/tasks/178-tasks.artifact-usage-stamping.md` (19 tasks, 258 lines). Parts: A refactors (`RunCost.frontmatter_fields`, `review/frontmatter_usage.py`, `dispatch_artifact_paths`), B `review/artifact_usage.py`, C `squadron.usage-stamp` + binding, D `artifacts_usage_report` + `artifact spend` line, E docs and walkthrough.
+- Design correction carried in tasks: the `slice` header renders in `cli/stats_effort_views.py`, not `cli/stats_views.py`.
+- Next: task review, then Phase 6 on branch `178-slice.artifact-usage-stamping` from `main`.
+
 ### Slice 179: Staged Effort Estimates and Accuracy — Design Complete
 
 - Design: `project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md` (`cf validate design` PASS). Depends on [176, 178]. Effort 3/5.
