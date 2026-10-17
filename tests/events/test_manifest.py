@@ -193,4 +193,21 @@ def test_default_bindings_order_is_909_before_911() -> None:
         "squadron.dispatch-artifact",
         "squadron.dispatch-branch-work",
         "squadron.revision-stamp",
+        "squadron.usage-stamp",
     ]
+
+
+def test_usage_stamp_follows_revision_stamp() -> None:
+    names = [b.action for b in DEFAULT_BINDINGS]
+    assert names.index("squadron.usage-stamp") == names.index("squadron.revision-stamp") + 1
+
+
+def test_disable_removes_usage_stamp(tmp_path: Path) -> None:
+    project_path = tmp_path / "project-events.yaml"
+    project_path.write_text("disable:\n  - squadron.usage-stamp\n")
+
+    manifest = load_manifest(project_path=project_path, user_path=tmp_path / "missing-user.yaml")
+
+    action_names = [b.action for b in manifest.bindings]
+    assert "squadron.usage-stamp" not in action_names
+    assert "squadron.revision-stamp" in action_names

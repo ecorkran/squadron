@@ -75,6 +75,7 @@ DEFAULT_BINDINGS: tuple[Binding, ...] = (
     Binding(
         event=EventType.POST_ACTION, action="squadron.revision-stamp", params={}, source="built-in"
     ),
+    Binding(event=EventType.POST_ACTION, action="squadron.usage-stamp", params={}, source="built-in"),
 )
 
 

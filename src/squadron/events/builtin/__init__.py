@@ -1,1 +1,1 @@
-"""Built-in event actions: frontmatter-gate, dispatch-artifact, revision-stamp."""
+"""Built-in event actions: frontmatter-gate, dispatch-artifact, revision-stamp, usage-stamp."""

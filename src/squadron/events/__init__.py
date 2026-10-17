@@ -100,6 +100,7 @@ def bootstrap_event_actions() -> None:
     import squadron.events.builtin.frontmatter_gate as _b_frontmatter_gate
     import squadron.events.builtin.review_verdict_gate as _b_review_verdict_gate
     import squadron.events.builtin.revision_stamp as _b_revision_stamp
+    import squadron.events.builtin.usage_stamp as _b_usage_stamp
 
     _ = (
         _b_dispatch_artifact,
@@ -107,6 +108,7 @@ def bootstrap_event_actions() -> None:
         _b_frontmatter_gate,
         _b_review_verdict_gate,
         _b_revision_stamp,
+        _b_usage_stamp,
     )
 
     _bootstrapped = True
