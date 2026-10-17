@@ -11,6 +11,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261016
 
+### Slice 179: Staged Effort Estimates and Accuracy — Design Complete
+
+- Design: `project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md` (`cf validate design` PASS). Depends on [176, 178]. Effort 3/5.
+- Estimate store (D1): one `effort` key (1–5) in slice-design frontmatter. Its history is read from git, not from a list in the file. `cf validate frontmatter` accepts the added key (in-root probe).
+- Stages (D2): each committed change takes its stage from the latest review committed strictly before it (`design`, `after-slice-review`, `after-tasks-review`, `after-code-review`); plan is the plan entry value. Git bound becomes 3 + V + E (one `git log -G '^effort:'` call).
+- Re-estimate (D4): `_resolve_feedback_prompt` appends a conditional "update `effort` if scope changed" paragraph naming the design path.
+- Accuracy (D6): Spearman rho per stage × measure via `statistics.correlation(method="ranked")`, with n and the `metrology.min_evidence_n` floor. `sq stats slices --stage plan|design|final`, plus `artifact_spend` measure from 178.
+- Open: the ai-project-guide issue (add `effort` to the slice-design template and guide 004) is implementation step 1 and has not been filed yet. Until it lands, P4 designs carry no design-stage estimate.
+
 ### Slice 178: Artifact Usage Stamping — Design Complete
 
 - Design: `project-documents/user/slices/178-slice.artifact-usage-stamping.md` (`cf validate design` PASS). Depends on [175, 176]; feeds 179. Effort 3/5.
