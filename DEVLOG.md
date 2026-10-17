@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261017
 
+### Release 0.23.2
+
+- **Contents:** fixes for [#219](https://github.com/ecorkran/squadron/issues/219) (resume restores earlier step results), [#233](https://github.com/ecorkran/squadron/issues/233), [#236](https://github.com/ecorkran/squadron/issues/236) and [#238](https://github.com/ecorkran/squadron/issues/238) (`sq review --max` stamping, unquoted `dateUpdated`, atomic frontmatter writes); standing fixes slice renumbered 944 to 990; ai-project-guide v0.21.5; slice 947 added to the plan.
+
 ### Release 0.23.1
 
 - **Contents:** slice 178 Artifact Usage Stamping ([#222](https://github.com/ecorkran/squadron/issues/222)); revise-round artifact kind fix (41019030); Codex read-only sandbox warning fix (cb6c082c).

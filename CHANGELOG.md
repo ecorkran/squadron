@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.2] - 20261017
+
 ### Fixed
 
 - Revise rounds run by `sq review --max` now record `revision_number` and usage in the revised document, as pipeline runs do.
