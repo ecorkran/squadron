@@ -14,65 +14,56 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261016
 dateUpdated: 20261016
-reviewedSha: 0b37bbb061c4c90a20ac8571c80a2a202a1044c6
+reviewedSha: 8d6de0cf06227841582b8fb705522b4eecc922bb
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 103899
-cachedTokens: 11028
-cacheWriteTokens: 92867
-completionTokens: 4375
-durationSeconds: 38.0
-costUsd: 0.416993
+toolCallsMade: 5
+turns: 6
+promptTokens: 365746
+cachedTokens: 271235
+cacheWriteTokens: 94501
+completionTokens: 4411
+durationSeconds: 40.1
+costUsd: 0.449921
 costBasis: provider
 runId: run-20261017-slices-plan-d9bcbe25
 squadronVersion: 0.23.0
 findings:
   - id: F001
-    severity: concern
-    category: proportionality
-    summary: "Overweight: accuracy table, `--stage` grouping and drift line are built before any data exists"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Technical Scope (items 6, D5, D6)"
+    severity: pass
+    category: architecture-alignment
+    summary: "Layering and dependency direction match the architecture"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Architecture"
   - id: F002
     severity: concern
-    category: dependency
-    summary: "`artifact_spend` measure couples this slice to unimplemented slice 178"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Dependencies, #Integration Points"
+    category: under-specification
+    summary: "Version selection and ordering across branches is under-specified"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D3 — Reading the history within 176's git bound"
   - id: F003
     severity: concern
-    category: hidden-dependency
-    summary: "Value depends on an external ai-project-guide change that is not a tracked prerequisite"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Dependencies (companion issue), D4"
+    category: proportionality
+    summary: "Accuracy section is heavier than the evidence it can produce"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D6 — Accuracy is rank correlation, with n"
   - id: F004
-    severity: concern
-    category: correctness
-    summary: "Stage labelling relies on author-date ordering, which is fragile"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D2"
-  - id: F005
-    severity: concern
-    category: architecture-boundary
-    summary: "Re-estimate helper placed under `pipeline/actions/` although it is not an Action"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Component Structure"
-  - id: F006
-    severity: concern
-    category: scope
-    summary: "Behavior change to all `feedback: review` revise prompts, with an unquantified side effect on agent edits"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D4, #Risk Assessment"
-  - id: F007
     severity: note
     category: scope
-    summary: "Reporting is outside the 140 architecture's stated surface"
-    location: "project-documents/user/architecture/140-arch.pipeline-foundation.md"
-  - id: F008
+    summary: "The slice drops 178 as a dependency and defers some scope, and says so"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Dependencies"
+  - id: F005
+    severity: note
+    category: dependency
+    summary: "External prerequisite gates integration, not build"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Prerequisites"
+  - id: F006
     severity: pass
     category: error-handling
-    summary: "Failure modes are enumerated for every new I/O path"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D7"
-  - id: F009
+    summary: "Failure modes are enumerated for each new I/O path"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D7 — Failure modes"
+  - id: F007
     severity: pass
-    category: conventions
-    summary: "Code-structure conventions are honored"
-    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#Technical Requirements"
+    category: integration
+    summary: "Contract with 176 and 941 is stated and consistent"
+    location: "project-documents/user/slices/179-slice.staged-effort-estimates-and-accuracy.md#D3 — Reading the history within 176's git bound"
 ---
 
 # Review: slice — slice 179
@@ -82,59 +73,55 @@ findings:
 
 ## Findings
 
-### [CONCERN] Overweight: accuracy table, `--stage` grouping and drift line are built before any data exists
+### [PASS] Layering and dependency direction match the architecture
 
-Verification step 4 says that after implementation the `plan`, `design` and `final` rows all read `below floor`. No completed design carries `effort`, and 14 of 149 designs mention it in prose, which the slice declines to read. For the foreseeable future the slice therefore ships machinery that renders no result:
-- `--stage plan|design|final` grouping, with its `unestimated` row.
-- A 4-row by 7-measure Spearman table with floor and no-spread handling.
-- A drift line.
-- A new `estimate_accuracy.py` module and a `stage` parameter on the rollup.
+The new `effort` key sits in `documents/schema.py`, which the architecture's package structure lists as the home for document-level primitives. `stats/` cores contain no Typer code. `stats/git_history.py` remains the only module that runs git, and `reestimate_instruction` is a plain helper rather than an Action. The `dispatch` action keeps its listed responsibilities. The slice also states its link to the architecture's cost and usage reporting scope, and plans to amend the Non-goals line.
 
-Only the first of the four accuracy rows, `plan (all)`, has data today. It correlates the plan estimate with outcomes, which 176 already supports.
+### [CONCERN] Version selection and ordering across branches is under-specified
 
-Cut or defer to a follow-up slice that lands once the companion template change has produced real design-stage data:
-- `--stage` and `estimate_accuracy.py`.
-- The `plan`/`design`/`final` accuracy rows and the drift line.
+D3 runs `git log --all -G '^effort:'`, so candidate commits can come from unmerged branches, rebased or cherry-picked duplicates, and other worktrees. D2 then defines an estimate as a version whose `effort` "differs from the previous committed value", and `EstimateHistory.estimates` is in "ancestry order".
 
-The core value is the writing side (`effort` key, re-estimate prompt) plus the per-slice history in `sq stats slice`. That is enough to start collecting data. The accuracy rollup can wait until it has something to measure.
+The document never says three things:
+- Which commit set forms the linear sequence: HEAD's first-parent line only, or every ref.
+- How versions on divergent branches are ordered.
+- How a duplicate of the same change is de-duplicated.
 
-### [CONCERN] `artifact_spend` measure couples this slice to unimplemented slice 178
+Collapsing consecutive equal values only helps once a linear order exists. Without one, `design`, `final` and `drift` can differ from run to run. They are the inputs to every accuracy row, so this is a correctness gap, not only a presentation one.
 
-178 is "designed, not implemented". The slice adds `Measure.ARTIFACT_SPEND` and a new column in the default `sq stats slices` table. That column is not part of the estimate-accuracy goal, and it makes the "default output unchanged" guarantee conditional on 178. Integration Points says the column "waits for it", but the Success Criteria (7) and Verification (4) assume it exists. This is a hidden build ordering. Remove `artifact_spend` from this slice, since it belongs with 178 or a later slice. If it stays, make the 178 dependency an explicit gate on Success Criteria 7 and Verification 4.
+Fix: either restrict candidates to commits reachable from HEAD on the first-parent line, or state the tie-break and de-duplication rule. Add a test for a divergent-branch case.
 
-### [CONCERN] Value depends on an external ai-project-guide change that is not a tracked prerequisite
+### [CONCERN] Accuracy section is heavier than the evidence it can produce
 
-The design says the companion issue "is not a build dependency", yet it is the only mechanism that makes designers write the first `effort`. D4 deliberately stops revise rounds from adding a first estimate. Until the companion issue lands, the design stage is empty for every pipeline-produced design, the history is plan-only, and the whole reader/report stack runs on nothing. Either treat the issue as a delivery gate for this slice (a task with an owner), or let P4's own prompt (squadron-owned) ask the designer for the first `effort`, so the slice is self-sufficient. Filing the issue in "implementation step 1" does not close the dependency.
+The plan entry asks for per-stage estimates, history, and "an accuracy measure". The design delivers a separate `estimate_accuracy.py` core, four `AccuracyRow` values crossed with every `Measure`, two floor reasons (`below floor`, `no spread`), a shared-set rule for three rows, and a footer. By the design's own account, three of the four rows read `below floor` until designs carry `effort` (Consumes from Other Slices; Verification Walkthrough step 4). The remaining row, `plan (all)`, needs no design-stage data at all.
 
-### [CONCERN] Stage labelling relies on author-date ordering, which is fragile
+Cuts to consider:
+- Ship `plan (all)` plus a single shared-set row group for `design` and `final`, and add the others when data exists. #232 already collects deferred work.
+- Drop `final` as a separate row for now, since it equals `design` when there was no revision.
+- Fold the "no spread" and "below floor" distinction into one placeholder, with the reason in JSON only.
 
-A stage comes from "the latest review round committed strictly before it: earlier author date, and not in the same commit". Author dates are not monotonic along history. Rebases, cherry-picks, amends, merges of slice branches and equal-second timestamps all break this. A mislabel would silently move an estimate between `design` and `after-slice-review` and corrupt the accuracy comparison. The design neither states the mitigation nor lists the case in D7. Order by commit topology (position in the `git log` output, which the single whole-history pass already provides) rather than by date. Failing that, state the limitation and add a test with equal or out-of-order dates.
+Related: the five-value `EstimateStage` plus the full review-type to stage mapping serves a per-stage view that this slice itself defers to #232. Only `plan`, `design` and the latest value feed the reports. Keep the stage labels for the `sq stats slice` line, but check the mapping carries no more than that line needs.
 
-### [CONCERN] Re-estimate helper placed under `pipeline/actions/` although it is not an Action
+### [NOTE] The slice drops 178 as a dependency and defers some scope, and says so
 
-140 defines `src/squadron/pipeline/actions/` as the home for implementations of the Action protocol, registered in the action registry. `reestimate.py` is a plain prompt-text helper that calls `resolve_slice_info` from the review package. It sits in that directory only because `dispatch.py` does. It blurs the layer definition, and it adds a `pipeline → review/persistence` dependency that the design does not call out. Put it beside the other prompt-building helpers, or inline it in `dispatch.py`. If it stays in `actions/`, say that it is deliberately a non-action helper.
+The plan entry lists `[176, 178]`. The design moves the `artifact_spend` measure, `--stage` grouping and the rollup drift line to #232, and amends the plan entry's dependencies to `[176]` (Implementation Notes step 6). The plan entry's wording ("per-stage estimates and an accuracy measure") is still met, and the deferral is explicit, so this is acceptable. Make sure the plan amendment and the #232 issue land in the same commit as the design, so the plan and design do not disagree.
 
-### [CONCERN] Behavior change to all `feedback: review` revise prompts, with an unquantified side effect on agent edits
+### [NOTE] External prerequisite gates integration, not build
 
-Appending a paragraph that invites frontmatter edits changes every revise prompt, including `sq review --max` and the judge and findings-addressed cycles. The design says this "does not bias a comparison". But the instruction gives a revising agent a reason to open and rewrite the design, which is exactly the case 178 D2 notes can drop frontmatter keys. The interaction with the 911 revision-stamp (a POST_ACTION that mutates design frontmatter) is not addressed, and neither is the 172/173 commit-time frontmatter gate. The design has no test for the stamp or the gate preserving or rejecting `effort`. Add a success criterion that a revise round followed by the stamp and gate keeps `effort` intact, and add that failure to D7.
+ai-project-guide#43 is open and outside this repo. The design handles it by saying the code builds and tests without it, and that Phase 7 integration waits for it (walkthrough step 3). That is a visible, bounded dependency. The slice's value (design-stage estimates) does not exist without that issue, which is worth tracking on the slice plan.
 
-### [NOTE] Reporting is outside the 140 architecture's stated surface
+### [PASS] Failure modes are enumerated for each new I/O path
 
-The 140 architecture defines no stats or metrology layer. The slice builds on 175/176, and its parent chain is the slice plan, so this is acceptable. The slice correctly excludes routing by effort, which the architecture lists as out of scope ("Automated complexity estimation for model selection"), and it leaves the executor and state model unchanged.
+D7 covers a `git log -G` failure, a `git show` failure, a frontmatter parse failure, an invalid value, a removed key, a missing design, a non-integer `min_evidence_n`, and an unresolvable design at revise time. Each row names a behavior and an observable signal (WARNING, count, or exit 1), and Technical Requirements requires a test per row. No parent-architecture NFR applies to this path.
 
-### [PASS] Failure modes are enumerated for every new I/O path
+### [PASS] Contract with 176 and 941 is stated and consistent
 
-D7 covers the `git log -G` failure (WARNING, then exit 1), `git show` failure, unparseable frontmatter, invalid values, a removed key, and an unresolvable slice in the revise step. Each has an observable signal, and the Technical Requirements demand a test per row. Git calls are bounded as 3 + V + E and stay inside `GitHistory`, consistent with 176's rule that it is the only module that runs git. The design also states the rejection of silent fallbacks by skipping and counting bad values.
-
-### [PASS] Code-structure conventions are honored
-
-The key name is defined once as `EFFORT_ESTIMATE_KEY`. Stages, rows and measures are enums, and the review-type to stage mapping is a single dict. The prompt avoids an example value near the slot, so it does not create a hallucination trap. The parser rules are met by lenient reading plus a test on the real commit shape.
+The git-call budget is restated explicitly (3 + V + E) and the existing call-count test is updated to match. Reports stay read-only, and the only write is the revising agent's own one-line edit, constrained by the prompt and checked by the walkthrough.
 
 ### Run Digest
 
-- Response length: 7933 chars
+- Response length: 6086 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 5
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -142,13 +129,13 @@ The key name is defined once as `EFFORT_ESTIMATE_KEY`. Stages, rows and measures
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 103899 / 11028 / 92867 / 4375 / not computed
-- Duration: 38.0 s
-- Cost: $0.42 (provider)
+- Turns: 6
+- Tokens — prompt / cached / cache write / completion / reasoning: 365746 / 271235 / 94501 / 4411 / not computed
+- Duration: 40.1 s
+- Cost: $0.45 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
