@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Revise rounds run by `sq review --max` now record `revision_number` and usage in the revised document, as pipeline runs do.
+- `sq run --resume` of a paused review-and-revise loop (P4, P5) now works; it failed with "feedback: review but no prior review in scope".
 - Stamping a document no longer quotes `dateUpdated`, and a crash mid-stamp can no longer truncate the document.
 
 ## [0.23.1] - 20261017

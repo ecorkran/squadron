@@ -547,6 +547,16 @@ async def execute_pipeline(
     step_outputs: dict[str, ActionResult] = {}
 
     skipping = start_from is not None
+    if start_from is not None:
+        _seed_resume_outputs(
+            definition=definition,
+            start_from=start_from,
+            start_from_iteration=start_from_iteration,
+            runs_dir=runs_dir,
+            run_id=effective_run_id,
+            prior_outputs=prior_outputs,
+            step_outputs=step_outputs,
+        )
 
     # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
     usage_capture = UsageCapture(set())
@@ -731,6 +741,47 @@ def _load_resume_seed(
         active.key,
     )
     return active.text
+
+
+def _seed_resume_outputs(
+    *,
+    definition: PipelineDefinition,
+    start_from: str,
+    start_from_iteration: int,
+    runs_dir: Path | None,
+    run_id: str,
+    prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult],
+) -> None:
+    """Restore what the steps before *start_from* produced, so a resumed run sees it (#219).
+
+    A step like ``revise`` with ``feedback: review`` reads the latest review in scope;
+    steps skipped by the resume would otherwise leave it empty. A loop resumed above
+    round 1 also restores its own earlier rounds. At round 1 it does not: those results
+    belong to the attempt being redone, and a stale verdict could satisfy ``skip_if_met``.
+    """
+    from squadron.pipeline.state import StateManager, restored_action_results
+
+    names = [step.name for step in definition.steps]
+    start_idx = names.index(start_from)
+    wanted = set(names[:start_idx])
+    if start_from_iteration > 1 and definition.steps[start_idx].step_type == StepTypeName.LOOP:
+        wanted.add(start_from)
+    try:
+        completed = StateManager(runs_dir=runs_dir).load(run_id).completed_steps
+    except FileNotFoundError:
+        _logger.warning("resume: no state file for run %s; earlier results are not restored", run_id)
+        return
+    for step_state in completed:
+        if step_state.step_name not in wanted:
+            continue
+        restored = restored_action_results(step_state)
+        for idx, action_result in restored:
+            key = prior_output_key(step_state.step_name, action_result.action_type, idx)
+            prior_outputs[key] = action_result
+        verdict_result = last_with_verdict([action_result for _, action_result in restored])
+        if verdict_result is not None:
+            step_outputs[step_state.step_name] = verdict_result
 
 
 async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKExecutionSession:

@@ -16,7 +16,7 @@ import os
 import re
 import socket
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
@@ -133,6 +133,33 @@ class StepState(BaseModel):
     exhausted: bool = False
     iteration: int = 0
     completed_at: datetime
+
+
+def restored_action_results(step_state: StepState) -> list[tuple[int, ActionResult]]:
+    """A step's stored action results as ``(index, ActionResult)``, earlier loop rounds first.
+
+    The order and indices match how the executor accumulates ``prior_outputs``, so
+    ``prior_output_key(step, type, index)`` rebuilds the original key. A record that
+    cannot be reconstructed is skipped with a warning and leaves a gap in the indices.
+    """
+    stored = [
+        *(d for round_ in step_state.prior_round_results for d in round_),
+        *step_state.action_results,
+    ]
+    valid_fields = set(ActionResult.__dataclass_fields__)
+    restored: list[tuple[int, ActionResult]] = []
+    for idx, ar_dict in enumerate(stored):
+        filtered = {k: v for k, v in ar_dict.items() if k in valid_fields}
+        try:
+            restored.append((idx, ActionResult(**filtered)))  # type: ignore[arg-type]
+        except TypeError:
+            # ActionResult is a plain dataclass; the only realistic failure from an
+            # arbitrary stored dict is a missing required field (an older or
+            # hand-edited state file). One bad record must not block restoring the rest.
+            _logger.warning(
+                "Could not reconstruct ActionResult from stored dict: %r", ar_dict, exc_info=True
+            )
+    return restored
 
 
 class CheckpointState(BaseModel):
@@ -644,30 +671,21 @@ class StateManager:
             raise FileNotFoundError(f"No state file for run_id={run_id!r}")
         return self._load_raw(path)
 
-    def load_prior_outputs(self, run_id: str) -> dict[str, ActionResult]:
-        """Reconstruct prior_outputs from stored action_results."""
-        state = self.load(run_id)
+    def load_prior_outputs(
+        self, run_id: str, step_names: Collection[str] | None = None
+    ) -> dict[str, ActionResult]:
+        """Reconstruct prior_outputs from stored action_results.
+
+        With *step_names*, only those steps' results are restored (resume scope, #219).
+        """
         prior: dict[str, ActionResult] = {}
-        valid_fields = set(ActionResult.__dataclass_fields__)
-        for step_state in state.completed_steps:
-            for idx, ar_dict in enumerate(step_state.action_results):
-                action_type = ar_dict.get("action_type", "unknown")
-                filtered = {k: v for k, v in ar_dict.items() if k in valid_fields}
-                try:
-                    action_result = ActionResult(**filtered)  # type: ignore[arg-type]
-                except TypeError:
-                    # ActionResult is a plain dataclass; the only realistic
-                    # failure from an arbitrary stored dict is a missing
-                    # required field (e.g. success/action_type/outputs absent
-                    # from an older or hand-edited state file). One bad
-                    # record must not block reconstructing the rest.
-                    _logger.warning(
-                        "Could not reconstruct ActionResult from stored dict: %r",
-                        ar_dict,
-                        exc_info=True,
-                    )
-                    continue
-                prior[prior_output_key(step_state.step_name, str(action_type), idx)] = action_result
+        for step_state in self.load(run_id).completed_steps:
+            if step_names is not None and step_state.step_name not in step_names:
+                continue
+            for idx, action_result in restored_action_results(step_state):
+                prior[prior_output_key(step_state.step_name, action_result.action_type, idx)] = (
+                    action_result
+                )
         return prior
 
     def first_unfinished_step(self, run_id: str, definition: PipelineDefinition) -> str | None:
