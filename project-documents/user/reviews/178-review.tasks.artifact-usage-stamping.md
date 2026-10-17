@@ -14,16 +14,17 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261016
 dateUpdated: 20261016
-reviewedSha: d0e4730825175fdcacd1546a300dbf222d66f315
+reviewedSha: 9057f0adcd78fa804ec9b8acf7b545fc55f49512
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 5
-turns: 6
-promptTokens: 209033
-cachedTokens: 174721
-cacheWriteTokens: 34306
-completionTokens: 4238
-durationSeconds: 33.4
-costUsd: 0.197754
+toolCallsMade: 4
+turns: 5
+promptTokens: 172784
+cachedTokens: 87416
+cacheWriteTokens: 85362
+completionTokens: 3916
+durationSeconds: 31.4
+costUsd: 0.390026
 costBasis: provider
 runId: run-20261017-p5-a1cd3acb
 squadronVersion: 0.23.0
@@ -31,47 +32,42 @@ findings:
   - id: F001
     severity: concern
     category: sequencing
-    summary: "Part C commits are batched at the end of Task 13"
-    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md:141-188"
+    summary: "Task 4 references RunCost key-name definitions that no task creates"
+    location: "src/squadron/review/run_cost.py:54"
   - id: F002
     severity: concern
-    category: test-with-pattern
-    summary: "Manifest and dispatcher tests sit apart from the registration task they test"
-    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md:155-159, 185-187"
+    category: task-scoping
+    summary: "Task 12 is overweight and carries the unpersisted work of Tasks 10 and 11"
+    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md"
   - id: F003
     severity: concern
-    category: scope
-    summary: "Speculative JSON output sub-item in Task 16"
-    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md:224"
+    category: completeness
+    summary: "Task 10 depends on `context.iteration`, which the slice design does not list"
+    location: "src/squadron/events/contexts.py:55"
   - id: F004
-    severity: concern
-    category: clarity
-    summary: "Task 4 contradicts itself on \"verbatim\" versus key-table references"
-    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md:73-74"
+    severity: note
+    category: scope
+    summary: "Dispatcher-order test checks existing behavior no success criterion requires"
+    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md"
   - id: F005
-    severity: concern
-    category: process
-    summary: "Task 19 commit prefix and the walkthrough's dependence on live LLM runs"
-    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md:251-258"
+    severity: note
+    category: documentation
+    summary: "Slice design still names the wrong file for the slice header"
+    location: "project-documents/user/slices/178-slice.artifact-usage-stamping.md:81"
   - id: F006
     severity: note
-    category: testing
-    summary: "Task 3 contains a near-tautological test"
-    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md:66"
+    category: robustness
+    summary: "Task 18 uses line numbers as anchors in the architecture doc"
+    location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md"
   - id: F007
-    severity: note
-    category: accuracy
-    summary: "Design/code discrepancy already handled"
-    location: "src/squadron/cli/stats_effort_views.py:110"
-  - id: F008
     severity: pass
     category: coverage
-    summary: "Success-criteria coverage"
+    summary: "Success criteria are fully covered by tasks"
     location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md"
-  - id: F009
+  - id: F008
     severity: pass
     category: sequencing
-    summary: "Sequencing and sizing"
+    summary: "Sequencing, test placement and merge handling are sound"
     location: "project-documents/user/tasks/178-tasks.artifact-usage-stamping.md"
 ---
 
@@ -82,62 +78,57 @@ findings:
 
 ## Findings
 
-### [CONCERN] Part C commits are batched at the end of Task 13
+### [CONCERN] Task 4 references RunCost key-name definitions that no task creates
 
-Tasks 10, 11, 12 and 13 produce the stamp action, its registration and all of its tests. They have a single commit, at the end of Task 13. The project rule is to commit at least once per task, and the other parts commit after each implement-plus-test pair. Add a commit after Task 12, since Tasks 10–12 produce a working stamp with its happy-path tests. A second commit after Task 13 would then cover the failure-mode and manifest tests. Tasks 2, 4, 6 and 14 also have no commit of their own, but their paired test tasks commit them straight afterward. Task 14's pair, Task 15, has no commit at all, so the report code and its tests ride along with the Task 17 commit.
+Task 4's second step says to replace the key string literals with "the key names `RunCost` defines", so each key is defined once (D4). Task 2 adds `frontmatter_fields()` and `from_record` but never says to extract key-name constants. At `run_cost.py:54`, `"promptTokens"` is an inline literal inside a tuple list. No constants exist today. A junior implementer would find nothing to reference. Fix: add a Task 2 sub-item that extracts the key names into constants (or an enum) that `frontmatter_fields()` uses. Alternatively, reword Task 4 to create them.
 
-### [CONCERN] Manifest and dispatcher tests sit apart from the registration task they test
+### [CONCERN] Task 12 is overweight and carries the unpersisted work of Tasks 10 and 11
 
-Task 11 registers the binding. The tests that check its position in `DEFAULT_BINDINGS`, the `disable:` entry and the dispatcher ordering are in Task 13, two tasks later and mixed in with the failure-mode tests. Move the three manifest and dispatcher tests into a test step directly after Task 11, or into Task 12. The dispatcher-order test is the only test of the design's "No path written this run" row. It exercises existing `fire` behavior, so keep it small.
+Tasks 10 (action) and 11 (registration) have no commit. Task 12 commits both together with about 15 test assertions across five themes: happy paths, eligibility, a StateManager spy, binding order, `disable:`, and dispatcher order. The context summary says every code-changing task ends with a commit. That holds for the whole file only if "task" means each implementation-and-test pair. Split Task 12 into (a) happy-path and eligibility tests with a commit, and (b) binding and `disable:` tests with Task 11's commit. This keeps commits small and matches the stated rule.
 
-### [CONCERN] Speculative JSON output sub-item in Task 16
+### [CONCERN] Task 10 depends on `context.iteration`, which the slice design does not list
 
-Task 16 says to add artifact spend to JSON output "if `sq stats slice` has JSON output". No success criterion or D-section asks for that. The task also leaves the decision to the implementer ("skip if the slice view has no JSON mode"). Either remove the item, or check `stats/json_support.py` now and state in the task whether a JSON mode exists. If the slice view does have one, name the requirement that needs the artifact spend there.
+The slice design's "Interfaces Required" lists the `PostActionContext` fields as `action_type`, `result`, `expected_artifact_kind`, `params`, `run_started_at`, `cf_client` and `cwd`. It does not list `iteration`. The code does have `iteration: int` at `contexts.py:55`, and `revision_stamp.py:104` uses it, so the dependency is satisfiable. Task 10 still says "find where the iteration is available… do not guess". Name `context.iteration` directly, citing `revision_stamp.py:104`. Also fix the design's interface list so the two documents agree.
 
-### [CONCERN] Task 4 contradicts itself on "verbatim" versus key-table references
+### [NOTE] Dispatcher-order test checks existing behavior no success criterion requires
 
-Task 4 says to move the reader code "verbatim". It then says key names must come from the `RunCost` key table "wherever the moved code already names them". The first is a pure move and the second is an edit. The design (D4) only says "verbatim" and "each key name is defined once". Pick one. The simplest option is to move verbatim, then rewire the literals in a separate step, with the unchanged `reviews_report` tests as the guard. As written, a junior implementer could edit parsing behavior while "wiring" the keys.
+The Task 12 sub-item "when `dispatch-artifact` fails, `usage-stamp` does not run" tests `fire`, not new code. The only support is a design rationale in "Interfaces Required", not a success criterion. It is small and cheap, so I'm flagging it only. Drop it if you want a leaner file. The related sub-item about `disable:` does trace to an Integration Requirement, so it should stay.
 
-### [CONCERN] Task 19 commit prefix and the walkthrough's dependence on live LLM runs
+### [NOTE] Slice design still names the wrong file for the slice header
 
-Task 19 commits edits to the slice design document, which are documentation and not tests, under `test:`. Use `docs:` or `review:`. The walkthrough runs P4 and P5 on a scratch slice, so it spends real LLM money and depends on the environment. The task already has a prune safeguard. Add a similar note that the PM should confirm it is acceptable to run the P4 and P5 pipelines. Without that, an automated implementer may skip the step or run it unattended.
+The component table says `cli/stats_views.py`. The task file's context summary corrects this to `cli/stats_effort_views.py`. Fix the design too, so the corrected path doesn't live only in the task file.
 
-### [NOTE] Task 3 contains a near-tautological test
+### [NOTE] Task 18 uses line numbers as anchors in the architecture doc
 
-The test that `frontmatter_lines()` equals lines rendered from `frontmatter_fields()` checks an implementation against itself. The real regression guard is the unchanged existing persistence and rendering tests on the line above, which assert byte-identical review artifacts. The extra test is cheap, but it can be dropped.
+Task 18 locates edits by "near line 597", "Line 124" and "Line 122" in `140-arch.pipeline-foundation.md`. Line numbers drift when the doc is edited. Anchor on the text instead (for example the `events/builtin/` tree entry and the sentence about "reusing only `ActionResult` and `ValidationError`").
 
-### [NOTE] Design/code discrepancy already handled
+### [PASS] Success criteria are fully covered by tasks
 
-The Context Summary correctly redirects the `recorded spend` line from `cli/stats_views.py` (the design's component table) to `cli/stats_effort_views.py`. I confirmed `recorded spend` is printed at line 110 of that file. The test file `tests/cli/test_stats_effort.py` also exists, and `events/builtin/artifact_paths.py` and `revision_stamp.py` exist, as the tasks assume.
+Each criterion maps to at least one task:
+- **Design, task-file and arch-doc stamping:** Tasks 10 and 12.
+- **Loop folding:** Task 12.
+- **Revision-restart WARNING:** Task 13.
+- **Nothing stamped for keep, failed, implement, summary or compact:** Task 12 eligibility.
+- **Split task breakdowns:** Task 13.
+- **Unpriced rounds:** Tasks 9 and 12.
+- **Artifact spend line surviving a prune, and not summed with recorded spend:** Tasks 16 and 17.
+- **Byte-identical review artifacts:** Task 3.
+- **`dispatch-artifact` tests unchanged:** Task 7.
+- **No StateManager writes:** Task 12.
+- **D6 failure rows with log signals:** Task 13.
+- **ruff, pyright and the full suite:** Task 19.
 
-### [PASS] Success-criteria coverage
+Nothing traces to no criterion except the dispatcher-order test noted above. The summary and compact exclusions are handled correctly.
 
-Each design criterion traces to a task:
-- Stamp keys, `usageRounds` and `pricedRounds` on slice, task and architecture docs: Tasks 10 and 12.
-- Cumulative fold across rounds: Tasks 8, 9 and 12.
-- Unpriced rounds: Tasks 9 and 12.
-- Keep, failed dispatch, implement, summary and compact stamp nothing: Task 12 eligibility tests.
-- Split task breakdown gets a WARNING and no stamp: Task 13.
-- No `StateManager` writes: Task 12.
-- Every D6 failure has a log-signal test: Task 13.
-- Artifact spend line next to `recorded spend` and not summed with it: Tasks 16 and 17.
-- Spend survives pruning: Task 17's no-run-state test.
-- 179 needs no run state: Task 15.
-- `disable:` support: Task 13.
-- Byte-identical review artifacts and unchanged `dispatch-artifact` tests: Tasks 3, 5 and 7.
-- Lint, type-check and docs: Tasks 18 and 19.
+### [PASS] Sequencing, test placement and merge handling are sound
 
-I found no tasks outside the design's scope other than the JSON item above.
-
-### [PASS] Sequencing and sizing
-
-The dependencies run in order: refactors (A), then the usage model (B), then the stamp (C), then the report and slice line (D), then docs (E). There are no cycles. Part C uses the `dispatch_artifact_paths` and `record_from_frontmatter` that Part A creates, and Part D uses the model from Part B. The task list is proportionate for a 3/5 slice. Tasks are a single file and each is of reasonable size. Task 10 is the largest, but its sub-items are specific and it points the implementer at `revision_stamp.py` instead of guessing. The merge is correctly left out of the task list, per the Git rules.
+The order is refactors (Part A), then model (B), then action (C), then report and line (D), then docs and validation (E). There are no circular dependencies. Commits occur after Tasks 3, 5, 7, 9, 12, 13, 15, 17, 18 and 19. The branch is created in Task 1 and no merge task is written, as the Git Rules require. The Task 19 live-pipeline walkthrough is gated on Project Manager confirmation and prunes only scratch runs. No NFR is restated in the slice, so no load-test or CI-gate task is needed.
 
 ### Run Digest
 
-- Response length: 6447 chars
+- Response length: 5550 chars
 - Response is newline-free: no
-- Tool calls made: 5
+- Tool calls made: 4
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -145,13 +136,13 @@ The dependencies run in order: refactors (A), then the usage model (B), then the
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 209033 / 174721 / 34306 / 4238 / not computed
-- Duration: 33.4 s
-- Cost: $0.20 (provider)
+- Turns: 5
+- Tokens — prompt / cached / cache write / completion / reasoning: 172784 / 87416 / 85362 / 3916 / not computed
+- Duration: 31.4 s
+- Cost: $0.39 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 8
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 8
+- Finding-shaped matches — surviving validation: 8
