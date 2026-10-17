@@ -66,6 +66,7 @@ The plan entry listed 178 as a dependency for an artifact-spend measure. That me
 
 - `DispatchAction._resolve_feedback_prompt` (`pipeline/actions/dispatch.py:756`) builds every `feedback: review` prompt, and `_latest_review` gives the review being addressed and its template.
 - `BuiltinReviewTemplate` (`review/templates/__init__.py:18`): `SLICE`, `TASKS`, `CODE`.
+- `review/git_utils.resolve_diff_base(cwd)`: the target branch, used as the history tip when no slice branch exists (D3).
 - `review/persistence.py`: `SLICES_DIR`, `REVIEWS_DIR`, `ARCHIVE_SUBDIR`, and `resolve_slice_info(cf_client, index)`, to resolve the design path from the `slice` param.
 - `documents/frontmatter.parse_frontmatter`, used for `git show` text, as `review_rounds` already does.
 - `statistics.correlation(x, y, method="ranked")` (Python 3.12+, and the project requires `>=3.12`). It computes Spearman's rho with tied values averaged. It raises `StatisticsError` when there are fewer than two points or an input is constant.
@@ -126,7 +127,7 @@ The estimate is an integer on the plan's 1–5 scale, stored as `effort` in the 
 
 ### D2 — Stages come from commit ancestry
 
-Each committed version of the design whose `effort` differs from the previous committed value is one estimate. Its stage comes from the nearest review commit on its first-parent ancestry. Walk `first_parent_chain` from the version's commit, starting at its first parent. The first commit that changes this slice's `{index}-review.{slice|tasks|code}.*.md`, at top level or in `archive/`, gives the stage:
+Each version of the design on the slice's chain (D3) whose `effort` differs from the previous version is one estimate. Its stage comes from the nearest review commit on that chain before it. Walk the chain back from the version's commit, starting at its first parent. The first commit that changes this slice's `{index}-review.{slice|tasks|code}.*.md`, at top level or in `archive/`, gives the stage:
 
 | Nearest earlier review type | Stage |
 |---|---|
@@ -162,7 +163,14 @@ The review-type → stage mapping is one `dict[BuiltinReviewTemplate, EstimateSt
 
 The total becomes 3 + V + E, where E is the number of candidate design versions read. 176's call-count test is updated to that figure. A slice with no `effort` history costs no `show` calls.
 
-Consecutive versions with the same value are collapsed, so a commit that only reformatted the line adds nothing. If the latest committed version has no `effort` while an earlier one did, the history keeps the earlier values and sets `key_removed`. The report notes it (D7), so a dropped key is not read as "never estimated".
+**One line of history.** `--all` finds candidates on every branch, but only one first-parent chain counts. It runs from one tip:
+
+- the slice branch tip (`GitHistory.branch_tip(index)`, 176's window rule), when the branch exists. It holds the planning commits made on the target before the fork, and every design, tasks and code round after it.
+- otherwise, the tip of the target branch (`resolve_diff_base`, which reads `git.integration_branch` or falls back to `main`), the branch that planning commits go to before a slice branch exists.
+
+Candidates not on that chain are dropped before any `git show`, so commits on abandoned branches or other worktrees' branches are never read. The kept versions are ordered by their position on the chain, oldest first, and D2 walks the same chain to label them. "Previous" and "latest" below mean previous and latest on that chain. An `effort` change committed on the target after the slice branch's last commit is not on the chain and is not read. The slice is merged by then, so no stage remains to estimate.
+
+Consecutive versions with the same value are collapsed, so a commit that only reformatted the line adds nothing. If the latest version on the chain has no `effort` while an earlier one did, the history keeps the earlier values and sets `key_removed`. The report notes it (D7), so a dropped key is not read as "never estimated".
 
 ### D4 — The re-estimate instruction
 
@@ -198,18 +206,9 @@ Each revision lists its short sha. `drift` is final minus plan. When the design 
 
 Effort is ordinal (176 D2), so accuracy is not a ratio and not an error in units. The question is whether a higher estimate goes with more actual work. For each stage and each existing `Measure`, `sq stats slices` reports Spearman's rho between the estimate and the measure across completed slices, computed with `statistics.correlation(..., method="ranked")`, plus n. A slice missing either value is left out of that cell. The levels table above it is unchanged.
 
-Rows:
+**One set, three rows.** The rows are `plan`, `design` and `final`, all computed over the same slices: completed slices that have both a plan and a design estimate. The stages are therefore compared on the same work. Plan estimates for the larger history are already compared with actuals in 176's levels table, so they get no separate row.
 
-| Row | Slices |
-|---|---|
-| `plan (all)` | every completed slice that has a plan estimate |
-| `plan` | completed slices that have both a plan and a design estimate |
-| `design` | the same set |
-| `final` | the same set |
-
-The last three rows use one shared set, so plan, design and final are compared on the same slices. `plan (all)` shows the larger history that only has plan estimates, and it is the only row with data until designs carry `effort`.
-
-**Floors.** A cell with n below `metrology.min_evidence_n` reads `below floor`. A cell where `correlation` raises `StatisticsError` (an input with no spread, or fewer than two points) reads `—`, and the JSON gives the reason `no spread`. A footer says that later stages see more of the work, so a better `final` correlation is partly hindsight, and that rho measures ordering, not calibration.
+**Floors.** Until that set has `metrology.min_evidence_n` slices, the table is not printed. One line takes its place: `estimate accuracy: below floor (k of n slices have a design estimate; min n m)`. Once the set clears the floor, a cell where `correlation` raises `StatisticsError` (an input with no spread) reads `—`, and the JSON gives the reason `no spread`. A footer says that later stages see more of the work, so a better `final` correlation is partly hindsight, and that rho measures ordering, not calibration.
 
 ### D7 — Failure modes
 
@@ -221,7 +220,9 @@ The last three rows use one shared set, so plan, design and final are compared o
 | `effort` value invalid or outside 1–5 | version skipped | WARNING naming sha, path and value; same count |
 | Latest committed design has no `effort` but an earlier one did | earlier history kept | row note `effort key removed` |
 | Slice has no design in history | plan stage only | `design not estimated` |
-| Accuracy cell below floor, no spread, or n < 2 | cell not ranked | `below floor` or `—`, with the reason in JSON |
+| No slice branch, and the target branch from `resolve_diff_base` is not a local branch | plan stage only | WARNING naming the target; `design not estimated` |
+| Shared set below floor | accuracy table not printed | the `below floor (k of n …)` line |
+| Accuracy cell with no spread | cell not ranked | `—`, with the reason in JSON |
 | `metrology.min_evidence_n` not an integer | `slices` not produced | error naming key and value, exit 1 (176 D9) |
 | Revise step: slice, tasks or code review, `slice` set, design not resolvable | no re-estimate sentence | WARNING naming slice and reason |
 
@@ -266,13 +267,19 @@ def estimate_history(history: GitHistory, index: int, plan_effort: int | None) -
 
 # stats/estimate_accuracy.py
 class AccuracyRow(StrEnum):
-    PLAN_ALL = "plan (all)"; PLAN = "plan"; DESIGN = "design"; FINAL = "final"
+    PLAN = "plan"; DESIGN = "design"; FINAL = "final"
 
 @dataclass(frozen=True)
 class AccuracyCell:
     n: int
     rho: float | None
-    reason: str | None         # "below floor" | "no spread"; None when rho is set
+    reason: str | None         # "no spread"; None when rho is set
+
+@dataclass(frozen=True)
+class EstimateAccuracy:
+    shared_n: int              # completed slices with a plan and a design estimate
+    completed_n: int
+    cells: dict[str, dict[str, AccuracyCell]] | None   # row → measure → cell; None below floor
 
 # pipeline/reestimate_prompt.py
 def reestimate_instruction(
@@ -280,19 +287,24 @@ def reestimate_instruction(
 ) -> str | None: ...
 ```
 
-`slices_effort_report` gains `min_n: int`. `SlicesEffortReport` gains `accuracy: dict[str, dict[str, AccuracyCell]]` (row → measure → cell) and `estimates_skipped`.
+`slices_effort_report` gains `min_n: int`. `SlicesEffortReport` gains `accuracy: EstimateAccuracy` and `estimates_skipped`.
 
 ### UI Specifications
 
-`sq stats slices`, accuracy section (illustrative values):
+`sq stats slices`, accuracy section (illustrative values). Below the floor:
 
 ```
-Estimate accuracy (Spearman rho, n)   min n 5
-Stage        Span        Impl commits  Fix-ups     Design rounds  Tasks rounds  Spend
-plan (all)   0.41 (112)  0.38 (112)    0.12 (97)   0.09 (120)     0.15 (118)    0.33 (40)
-plan         below floor (4) ...
-design       below floor (4) ...
-final        below floor (4) ...
+estimate accuracy: below floor (2 of 138 slices have a design estimate; min n 5)
+```
+
+At or above it:
+
+```
+Estimate accuracy (Spearman rho, n = 7 slices with plan and design estimates)
+Stage   Span   Impl commits  Fix-ups  Design rounds  Tasks rounds  Spend
+plan    0.21   0.30          0.05     0.11           —             0.28
+design  0.48   0.52          0.20     0.35           0.18          0.44
+final   0.61   0.66          0.31     0.40           0.29          0.57
 Later stages see more of the work; rho measures ordering, not calibration.
 ```
 
@@ -309,7 +321,7 @@ Width handling reuses `cli/columns.py` (`fit_widths`).
 
 - **176:** the report cores, the in-memory commit graph, and the evidence floor.
 - **941:** committed rounds. Before 941, revisions may not have been committed, so their estimates are missing. In practice this changes nothing, because no design carried `effort` before this slice.
-- **ai-project-guide#43:** the template key and estimate rules. Until it lands, only hand-added estimates exist, and the `plan`, `design` and `final` accuracy rows read `below floor`.
+- **ai-project-guide#43:** the template key and estimate rules. Until it lands, only hand-added estimates exist, and the accuracy section prints its `below floor` line.
 
 ## Success Criteria
 
@@ -321,9 +333,10 @@ Width handling reuses `cli/columns.py` (`fit_widths`).
 4. A body line `effort: 2` inside a code block is never read as an estimate.
 5. A latest version without `effort` keeps the earlier history and shows `effort key removed`.
 6. The revise prompt for a slice, tasks or code review with a resolvable slice contains the re-estimate paragraph with the design's path. Revise prompts for arch reviews, judge templates and plan-scoped steps do not, and log nothing. An unresolvable slice logs the WARNING.
-7. `sq stats slices` prints the same levels table as before, then the accuracy table.
-8. Accuracy cells show rho with n, `below floor` under `metrology.min_evidence_n`, and `—` with the reason `no spread` for constant inputs.
+7. `sq stats slices` prints the same levels table as before, then the accuracy section.
+8. Below `metrology.min_evidence_n` shared slices, the accuracy section is the single `below floor (k of n …)` line. At or above it, the table shows plan, design and final rho over the shared set with its n, and `—` with the reason `no spread` for constant inputs.
 9. `--json` on `slice` and `slices` carries the same values as the tables.
+10. Design versions on branches other than the slice's chain (D3) are never read, and the kept versions follow chain order.
 
 ### Technical Requirements
 
@@ -346,7 +359,7 @@ These commands come from the design. The estimates line and the accuracy table d
 1. **Hand-added estimate.** In the scratch project, add `effort: 3` to a slice design that has no review yet, and commit it. `sq stats slice <index>` shows `estimates: plan <N> · design 3`.
 2. **Revision after review.** Run `sq review slice <index> --model <alias>` and commit the review. Then change the design to `effort: 4` and commit. `sq stats slice <index>` shows `· after slice review 4 (<sha>)` and `drift` equal to 4 minus the plan value. `sq stats slice <index> --json | python -m json.tool` lists three `estimates` entries.
 3. **Pipeline loops (needs ai-project-guide#43).** Run `sq run P4 <index> -p max-revisions=2` on a new slice whose first review returns CONCERNS. The draft carries `effort`. The revise round's prompt contains the re-estimate paragraph naming the design path (the dispatch prompt test asserts the text). Then run `sq run P5 <index>`. For each round commit, `git show <sha> -- <design>` shows either no change to the design or a one-line `effort` change. `sq stats slice <index>` lists every change with its stage.
-4. **Rollup in this repo.** `sq stats slices` prints today's levels table, then the accuracy table. `plan (all)` has values over the completed slices. `plan`, `design` and `final` read `below floor`, because no completed design carries `effort` yet.
+4. **Rollup in this repo.** `sq stats slices` prints today's levels table, then `estimate accuracy: below floor (0 of <n> slices have a design estimate; min n 5)`, because no completed design carries `effort` yet.
 5. **Bad value.** In the scratch project, set `effort: high` and commit. `sq stats slice <index>` logs a WARNING naming the sha, the path and `high`, and the footer counts one skipped estimate.
 6. **Removed key.** Delete the `effort` line and commit. The history stays, and the row note reads `effort key removed`.
 
