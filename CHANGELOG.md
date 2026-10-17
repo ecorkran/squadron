@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0] - 20261016
+
 ### Added
 - `sq stats slice <index>` compares a slice's planned effort with what happened: commits, fix-ups, review rounds, task groups, and recorded spend. `sq stats slices [--since YYYYMMDD]` groups completed slices by planned effort with the median and range of each measure.
 - `sq stats producers [--phase design|tasks]` shows how each producer model config has done on this machine's pipeline runs: verdicts, revise rounds, accepted and failed counts, and cost per accepted artifact.

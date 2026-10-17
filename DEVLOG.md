@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261016
 
+### Release 0.23.0
+
+- **Contents:** slice 177 (`sq replay run|judge|report`, prompt identity on every dispatch, closes #210); `sq stats` slice, producers and runs reports; review fixes to `build_context` provenance, `metrology.judge_timeout_s` handling and replay sandbox errors.
+
 ### Slice 177: Producer Replay and Pairwise Judging — implementation (Phase 6 complete)
 
 - Branch `177-slice.producer-replay-and-pairwise-judging` (from `main`). All 39 tasks done; the merge waits for Phase 7. Full suite 7198 passed, 4 skipped; ruff and pyright clean.
