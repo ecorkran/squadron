@@ -5,7 +5,12 @@ from __future__ import annotations
 from squadron.pipeline.actions.dispatch import DispatchFeedback
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.phase import ArtifactKind, PhaseStepType
 from squadron.pipeline.steps.utils import validate_allowed_tools
+
+#: Optional dispatch-step key naming the artifact the dispatch rewrites (a loop's
+#: revise step). It gives the step an expected artifact kind, as a phase step has.
+ARTIFACT_KEY = "artifact"
 
 
 class DispatchStepType:
@@ -65,6 +70,17 @@ class DispatchStepType:
                 )
             )
 
+        artifact = cfg.get(ARTIFACT_KEY)
+        if artifact is not None and artifact not in ArtifactKind.__members__.values():
+            valid = [k.value for k in ArtifactKind]
+            errors.append(
+                ValidationError(
+                    field=ARTIFACT_KEY,
+                    message=f"'{ARTIFACT_KEY}' must be one of {valid}, got: {artifact!r}",
+                    action_type=self.step_type,
+                )
+            )
+
         errors.extend(validate_allowed_tools(config, self.step_type))
 
         return errors
@@ -87,6 +103,19 @@ class DispatchStepType:
             action_config["feedback"] = cfg["feedback"]
 
         return [("dispatch", action_config)]
+
+
+def step_artifact_kind(step_type_impl: object, step: StepConfig) -> ArtifactKind | None:
+    """The artifact kind a step's dispatch is expected to write, or None.
+
+    A phase step knows it from its phase; a dispatch step declares it with ``artifact:``.
+    """
+    if isinstance(step_type_impl, PhaseStepType):
+        return step_type_impl.expected_artifact_kind
+    declared = step.config.get(ARTIFACT_KEY)
+    if isinstance(step_type_impl, DispatchStepType) and declared is not None:
+        return ArtifactKind(str(declared))
+    return None
 
 
 register_step_type(StepTypeName.DISPATCH, DispatchStepType())

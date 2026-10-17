@@ -82,7 +82,7 @@ from squadron.pipeline.state import (
     SchemaVersionError,
     StateManager,
 )
-from squadron.pipeline.steps.phase import PhaseStepType
+from squadron.pipeline.steps.dispatch import step_artifact_kind
 
 _logger = logging.getLogger(__name__)
 
@@ -874,9 +874,7 @@ async def _run_post_action_bindings_for_step_done(
     cwd = os.getcwd()
 
     step_type_impl = get_step_type(step.step_type)
-    expected_kind = (
-        step_type_impl.expected_artifact_kind if isinstance(step_type_impl, PhaseStepType) else None
-    )
+    expected_kind = step_artifact_kind(step_type_impl, step)
     actions = step_type_impl.expand(step)
 
     for action_type, action_config in actions:

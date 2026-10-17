@@ -14,6 +14,7 @@ from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.loop_config import ExhaustBehavior
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.steps import StepTypeName, unpack_inner_steps
+from squadron.pipeline.steps.dispatch import ARTIFACT_KEY
 from squadron.review.templates import BuiltinReviewTemplate
 
 # Which shipped pipeline's loop revises which kind of artifact.
@@ -46,6 +47,7 @@ def build_review_revise_definition(kind: BuiltinReviewTemplate) -> PipelineDefin
     review_config = _body_review_config(loop_step, pipeline_name)
     loop_config = copy.deepcopy(loop_step.config)
     loop_config["on_exhaust"] = ExhaustBehavior.FAIL.value
+    _drop_dispatch_artifact(loop_config)
     return PipelineDefinition(
         name=f"review-revise-{kind}",
         description=f"Review, then revise until the {kind} review passes (from {pipeline_name})",
@@ -65,6 +67,19 @@ def build_review_revise_definition(kind: BuiltinReviewTemplate) -> PipelineDefin
         model=base.model,
         auth_policy=base.auth_policy,
     )
+
+
+def _drop_dispatch_artifact(loop_config: dict[str, object]) -> None:
+    """Remove ``artifact:`` from the copied loop's dispatches.
+
+    A declared artifact turns on the dispatch post-condition, which needs the run
+    state this composition does not write (D4), so every revise would fail closed.
+    """
+    for entry in cast(list[object], loop_config.get("steps", [])):
+        if isinstance(entry, dict):
+            dispatch = cast(dict[str, object], entry).get(StepTypeName.DISPATCH)
+            if isinstance(dispatch, dict):
+                cast(dict[str, object], dispatch).pop(ARTIFACT_KEY, None)
 
 
 def _single_loop_step(pipeline: PipelineDefinition, pipeline_name: str) -> StepConfig:

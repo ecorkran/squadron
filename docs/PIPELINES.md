@@ -218,6 +218,7 @@ A step whose only destination is `rotate` is skipped, with no model call, when t
 | `prompt` | string | no | Prompt text. When absent, falls back to the most recent `build_context` output (same behavior as the dispatch action inside phase steps) |
 | `model` | string | no | Model alias for the dispatch |
 | `feedback` | string | no | `review` — revise against the most recent review in scope. The prompt becomes the step's `prompt` (if any), then that review's findings, then `Revise `<file>` in place; do not create a new file.` naming the file the review read. Takes precedence over a prior `build_context` output, which inside a batch item is the original "create a design" prompt. With no review in scope the step fails: `feedback: review but no prior review in scope` |
+| `artifact` | string | no | `design` or `tasks` — the artifact this dispatch rewrites. Gives the step the same post-action handling a design or tasks phase step gets: the dispatch post-condition (the file must be written this run), the `revision_number` stamp and the usage stamp. Set it on every revise step that rewrites a design or task file |
 
 **Example:**
 
@@ -230,7 +231,7 @@ A step whose only destination is `rotate` is skipped, with no model call, when t
 A revise round inside a loop:
 
 ```yaml
-- dispatch: { name: revise, model: "{model}", feedback: review }
+- dispatch: { name: revise, model: "{model}", feedback: review, artifact: design }
 ```
 
 ---

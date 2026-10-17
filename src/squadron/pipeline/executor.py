@@ -68,7 +68,7 @@ from squadron.pipeline.sources import (
 )
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.collection import ItemFailurePolicy
-from squadron.pipeline.steps.phase import PhaseStepType
+from squadron.pipeline.steps.dispatch import step_artifact_kind
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
 from squadron.pipeline.usage_capture import UsageCapture
@@ -880,16 +880,14 @@ async def _execute_step_once(
     )
 
     # Loaded once per step (not per-action) — only needed when this step is a
-    # PhaseStepType with a non-None expected_artifact_kind, checked below.
+    # step with a non-None expected artifact kind (step_artifact_kind), checked below.
     # A missing/corrupt state file is itself a "cannot confirm" condition
     # (fails closed below, at the dispatch post-condition check) rather than
     # an uncaught crash — e.g. execute_pipeline invoked directly without a
     # prior StateManager().init_run() (as some tests and tooling do).
     run_started_at: datetime | None = None
     run_state_error: str | None = None
-    expected_kind = (
-        step_type_impl.expected_artifact_kind if isinstance(step_type_impl, PhaseStepType) else None
-    )
+    expected_kind = step_artifact_kind(step_type_impl, step)
     if expected_kind is not None:
         from squadron.pipeline.state import StateManager
 

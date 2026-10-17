@@ -26,7 +26,7 @@ steps:
       commit_each_iteration: true
       on_exhaust: checkpoint
       steps:
-        - dispatch: { name: revise, model: "{design-model}", feedback: review }
+        - dispatch: { name: revise, model: "{design-model}", feedback: review, artifact: design }
         - review: { template: slice, model: "{review-model}", slice: "{slice}" }
 
   - tasks:
@@ -43,7 +43,7 @@ steps:
       commit_each_iteration: true
       on_exhaust: checkpoint
       steps:
-        - dispatch: { name: revise, model: "{model}", feedback: review }
+        - dispatch: { name: revise, model: "{model}", feedback: review, artifact: tasks }
         - review: { template: tasks, model: "{review-model}", slice: "{slice}" }
 
   - summary:
