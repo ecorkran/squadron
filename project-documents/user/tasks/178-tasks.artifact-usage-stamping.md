@@ -9,7 +9,7 @@ projectState: >
   are complete; main is the integration target (`git.integration_branch` unset).
 dateCreated: 20261016
 dateUpdated: 20261016
-status: not_started
+status: in_progress
 ---
 
 ## Context Summary
@@ -36,9 +36,9 @@ status: not_started
 
 ## Task 1 — Create the slice branch
 
-- [ ] Confirm `cf config get git.integration_branch` is empty (target = `main`) and `git status` is clean
-- [ ] `git checkout -b 178-slice.artifact-usage-stamping main`
-  - [ ] Success: `git branch --show-current` prints `178-slice.artifact-usage-stamping`
+- [x] Confirm `cf config get git.integration_branch` is empty (target = `main`) and `git status` is clean
+- [x] `git checkout -b 178-slice.artifact-usage-stamping main`
+  - [x] Success: `git branch --show-current` prints `178-slice.artifact-usage-stamping`
 
 ---
 
@@ -46,57 +46,57 @@ status: not_started
 
 ## Task 2 — `RunCost.frontmatter_fields` and `RunCost.from_record`
 
-- [ ] In `src/squadron/review/run_cost.py`, add `frontmatter_fields() -> dict[str, object]` returning the 931 D10 key→value mapping that `frontmatter_lines()` renders today
-  - [ ] A key is present only when its value is not `None`; `costUsd` rounded to 6 places; `durationSeconds` a float rounded to 1 place (D4)
-  - [ ] Key order matches the current `frontmatter_lines()` output order
-  - [ ] Extract the key names (today inline literals in `frontmatter_lines()`) into module-level constants in `run_cost.py`; `frontmatter_fields()` uses them
-- [ ] Rewrite `frontmatter_lines()` to render from `frontmatter_fields()`; no other change to its output
-- [ ] Add classmethod `from_record(record: UsageRecord) -> RunCost` mapping each `UsageRecord` field onto the matching `RunCost` field
-  - [ ] Read `UsageRecord` in `pipeline/usage_capture.py` / `core/usage.py` for exact field names; do not guess
-  - [ ] Success: pyright clean; no caller of `frontmatter_lines()` changed
+- [x] In `src/squadron/review/run_cost.py`, add `frontmatter_fields() -> dict[str, object]` returning the 931 D10 key→value mapping that `frontmatter_lines()` renders today
+  - [x] A key is present only when its value is not `None`; `costUsd` rounded to 6 places; `durationSeconds` a float rounded to 1 place (D4)
+  - [x] Key order matches the current `frontmatter_lines()` output order
+  - [x] Extract the key names (today inline literals in `frontmatter_lines()`) into module-level constants in `run_cost.py`; `frontmatter_fields()` uses them
+- [x] Rewrite `frontmatter_lines()` to render from `frontmatter_fields()`; no other change to its output
+- [x] Add classmethod `from_record(record: UsageRecord) -> RunCost` mapping each `UsageRecord` field onto the matching `RunCost` field
+  - [x] Read `UsageRecord` in `pipeline/usage_capture.py` / `core/usage.py` for exact field names; do not guess
+  - [x] Success: pyright clean; no caller of `frontmatter_lines()` changed
 
 ## Task 3 — Tests: `RunCost` key table
 
-- [ ] Run the existing review persistence and rendering tests unchanged (`tests/review/test_run_cost_rendering.py`, `tests/review/test_persistence.py`)
-  - [ ] Success: all pass with no test edits (review artifacts byte-identical)
-- [ ] Add tests beside `test_run_cost_rendering.py`
-  - [ ] `frontmatter_fields()` omits `None` fields and rounds `costUsd` and `durationSeconds` as D4
-  - [ ] `from_record` round-trips every populated `UsageRecord` field
-- [ ] Commit: `refactor(review): expose RunCost frontmatter fields as one key table`
+- [x] Run the existing review persistence and rendering tests unchanged (`tests/review/test_run_cost_rendering.py`, `tests/review/test_persistence.py`)
+  - [x] Success: all pass with no test edits (review artifacts byte-identical)
+- [x] Add tests beside `test_run_cost_rendering.py`
+  - [x] `frontmatter_fields()` omits `None` fields and rounds `costUsd` and `durationSeconds` as D4
+  - [x] `from_record` round-trips every populated `UsageRecord` field
+- [x] Commit: `refactor(review): expose RunCost frontmatter fields as one key table`
 
 ## Task 4 — Move the frontmatter reader to `review/frontmatter_usage.py`
 
-- [ ] Create `src/squadron/review/frontmatter_usage.py`
-  - [ ] Move `_record` (as public `record_from_frontmatter(path, front)`), `_INT_KEYS`, `_int`, `_float`, `_basis` verbatim from `src/squadron/stats/reviews_report.py`
-- [ ] In `stats/reviews_report.py`, import `record_from_frontmatter` and delete the moved definitions
-  - [ ] Success: `grep -n "_INT_KEYS\|def _record" src/squadron/stats/reviews_report.py` returns nothing; pyright clean; `tests/stats/test_reviews_report.py` passes unchanged
-- [ ] As a separate edit after the move passes, replace the key string literals in the moved code with the `run_cost.py` key constants from Task 2, so each key is defined once (D4); change no parsing logic
-  - [ ] Success: `tests/stats/test_reviews_report.py` still passes unchanged
+- [x] Create `src/squadron/review/frontmatter_usage.py`
+  - [x] Move `_record` (as public `record_from_frontmatter(path, front)`), `_INT_KEYS`, `_int`, `_float`, `_basis` verbatim from `src/squadron/stats/reviews_report.py`
+- [x] In `stats/reviews_report.py`, import `record_from_frontmatter` and delete the moved definitions
+  - [x] Success: `grep -n "_INT_KEYS\|def _record" src/squadron/stats/reviews_report.py` returns nothing; pyright clean; `tests/stats/test_reviews_report.py` passes unchanged
+- [x] As a separate edit after the move passes, replace the key string literals in the moved code with the `run_cost.py` key constants from Task 2, so each key is defined once (D4); change no parsing logic
+  - [x] Success: `tests/stats/test_reviews_report.py` still passes unchanged
 
 ## Task 5 — Tests: reader move
 
-- [ ] Run `tests/stats/test_reviews_report.py` and the `sq stats reviews` CLI tests unchanged
-  - [ ] Success: all pass with no test edits
-- [ ] Commit: `refactor(review): move frontmatter usage reader beside RunCost`
+- [x] Run `tests/stats/test_reviews_report.py` and the `sq stats reviews` CLI tests unchanged
+  - [x] Success: all pass with no test edits
+- [x] Commit: `refactor(review): move frontmatter usage reader beside RunCost`
 
 ## Task 6 — `dispatch_artifact_paths` in `artifact_paths.py`
 
-- [ ] In `src/squadron/events/builtin/artifact_paths.py`, add `dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd) -> list[str]` per the design's API Contracts (D3)
-  - [ ] Slice index present → `expected_artifact_paths(...)`; plan index with no slice → `[resolve_arch_file(index, cwd)]`
-  - [ ] Lift the branching from `dispatch_artifact._dispatch_artifact_post_condition_error` as-is; resolver exceptions propagate to the caller
-- [ ] Change `_dispatch_artifact_post_condition_error` to call `dispatch_artifact_paths`
-  - [ ] Its error messages, mtime check and `dispatch post-condition` log prefix stay exactly as they are
-  - [ ] Success: pyright clean
+- [x] In `src/squadron/events/builtin/artifact_paths.py`, add `dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd) -> list[str]` per the design's API Contracts (D3)
+  - [x] Slice index present → `expected_artifact_paths(...)`; plan index with no slice → `[resolve_arch_file(index, cwd)]`
+  - [x] Lift the branching from `dispatch_artifact._dispatch_artifact_post_condition_error` as-is; resolver exceptions propagate to the caller
+- [x] Change `_dispatch_artifact_post_condition_error` to call `dispatch_artifact_paths`
+  - [x] Its error messages, mtime check and `dispatch post-condition` log prefix stay exactly as they are
+  - [x] Success: pyright clean
 
 ## Task 7 — Tests: path resolution move
 
-- [ ] Run `tests/events/builtin/test_dispatch_artifact.py` and `tests/pipeline/test_existing_keep.py` unchanged
-  - [ ] Success: all pass with no test edits
-- [ ] Add tests for `dispatch_artifact_paths` beside the existing `artifact_paths` tests (find with `grep -rn expected_artifact_paths tests`)
-  - [ ] Slice-scoped design and tasks kinds return the `expected_artifact_paths` list
-  - [ ] Plan-scoped design kind with no slice returns the arch file path
-  - [ ] A resolver error propagates (not swallowed)
-- [ ] Commit: `refactor(events): extract dispatch artifact path resolution`
+- [x] Run `tests/events/builtin/test_dispatch_artifact.py` and `tests/pipeline/test_existing_keep.py` unchanged
+  - [x] Success: all pass with no test edits
+- [x] Add tests for `dispatch_artifact_paths` beside the existing `artifact_paths` tests (find with `grep -rn expected_artifact_paths tests`)
+  - [x] Slice-scoped design and tasks kinds return the `expected_artifact_paths` list
+  - [x] Plan-scoped design kind with no slice returns the arch file path
+  - [x] A resolver error propagates (not swallowed)
+- [x] Commit: `refactor(events): extract dispatch artifact path resolution`
 
 ---
 
@@ -104,30 +104,30 @@ status: not_started
 
 ## Task 8 — `review/artifact_usage.py`
 
-- [ ] Create `src/squadron/review/artifact_usage.py` with `USAGE_ROUNDS_KEY`, `PRICED_ROUNDS_KEY`, frozen `ArtifactUsage(cost, rounds, priced_rounds)` (API Contracts)
-- [ ] `fold(prior, record) -> ArtifactUsage` per D2
-  - [ ] Tokens and turns sum with `core/usage.add_optional`; a field no round reported stays `None`
-  - [ ] Cost sums priced rounds only; `priced_rounds` increments only when the record has a cost; an unpriced round never adds $0
-  - [ ] Duration sums with `add_optional_float`; `rounds` increments by one
-  - [ ] `prior=None` starts from an empty total
-- [ ] `artifact_usage_fields(usage) -> dict[str, object]`: `cost.frontmatter_fields()` without `costBasis` (#231), plus `usageRounds` and `pricedRounds`
-- [ ] `read_artifact_usage(path, front) -> ArtifactUsage | None`
-  - [ ] Returns `None` when `usageRounds` is absent
-  - [ ] Uses `record_from_frontmatter` and `RunCost.from_record` for the review keys
-  - [ ] Malformed prior (any usage key non-numeric, or `usageRounds` not a positive int, or `pricedRounds` not a non-negative int): returns `None` and logs one WARNING naming the path and the key (D2)
-  - [ ] Success: module imports nothing from `pipeline` or `events`; pyright clean
+- [x] Create `src/squadron/review/artifact_usage.py` with `USAGE_ROUNDS_KEY`, `PRICED_ROUNDS_KEY`, frozen `ArtifactUsage(cost, rounds, priced_rounds)` (API Contracts)
+- [x] `fold(prior, record) -> ArtifactUsage` per D2
+  - [x] Tokens and turns sum with `core/usage.add_optional`; a field no round reported stays `None`
+  - [x] Cost sums priced rounds only; `priced_rounds` increments only when the record has a cost; an unpriced round never adds $0
+  - [x] Duration sums with `add_optional_float`; `rounds` increments by one
+  - [x] `prior=None` starts from an empty total
+- [x] `artifact_usage_fields(usage) -> dict[str, object]`: `cost.frontmatter_fields()` without `costBasis` (#231), plus `usageRounds` and `pricedRounds`
+- [x] `read_artifact_usage(path, front) -> ArtifactUsage | None`
+  - [x] Returns `None` when `usageRounds` is absent
+  - [x] Uses `record_from_frontmatter` and `RunCost.from_record` for the review keys
+  - [x] Malformed prior (any usage key non-numeric, or `usageRounds` not a positive int, or `pricedRounds` not a non-negative int): returns `None` and logs one WARNING naming the path and the key (D2)
+  - [x] Success: module imports nothing from `pipeline` or `events`; pyright clean
 
 ## Task 9 — Tests: artifact usage model
 
-- [ ] Add `tests/review/test_artifact_usage.py`
-  - [ ] Fold from `None` with a priced record: totals equal the record, `rounds=1`, `priced_rounds=1`
-  - [ ] Fold sequence priced → unpriced → priced: cost is the sum of the two priced rounds, `rounds=3`, `priced_rounds=2`
-  - [ ] A token field reported by no round is absent from `artifact_usage_fields`; reported by one round equals that value
-  - [ ] `artifact_usage_fields` never contains `costBasis`
-  - [ ] `read_artifact_usage` round-trips `artifact_usage_fields` output
-  - [ ] Missing `usageRounds` returns `None` with no WARNING
-  - [ ] Each malformed case returns `None` and asserts the WARNING names path and key (`caplog`)
-- [ ] Commit: `feat(review): add cumulative artifact usage model`
+- [x] Add `tests/review/test_artifact_usage.py`
+  - [x] Fold from `None` with a priced record: totals equal the record, `rounds=1`, `priced_rounds=1`
+  - [x] Fold sequence priced → unpriced → priced: cost is the sum of the two priced rounds, `rounds=3`, `priced_rounds=2`
+  - [x] A token field reported by no round is absent from `artifact_usage_fields`; reported by one round equals that value
+  - [x] `artifact_usage_fields` never contains `costBasis`
+  - [x] `read_artifact_usage` round-trips `artifact_usage_fields` output
+  - [x] Missing `usageRounds` returns `None` with no WARNING
+  - [x] Each malformed case returns `None` and asserts the WARNING names path and key (`caplog`)
+- [x] Commit: `feat(review): add cumulative artifact usage model`
 
 ---
 
