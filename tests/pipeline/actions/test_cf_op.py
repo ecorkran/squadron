@@ -247,6 +247,55 @@ async def test_build_context_guide_version_none_when_file_absent(
 
 
 @pytest.mark.asyncio
+async def test_build_context_survives_unreadable_cf_version(
+    action: CfOpAction,
+    mock_context: ActionContext,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    ctx = _build_context_ctx(mock_context, tmp_path)
+    ctx.cf_client.cf_version = MagicMock(side_effect=ContextForgeError("empty output"))  # type: ignore[union-attr]
+
+    result = await action.execute(ctx)
+
+    assert result.success is True
+    assert result.outputs["stdout"] == "ctx"
+    assert result.outputs["cf_version"] is None
+    assert "cf version unreadable" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_build_context_survives_unreadable_guide_version_file(
+    action: CfOpAction,
+    mock_context: ActionContext,
+    tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    version_file = tmp_path / GUIDE_VERSION_FILE
+    version_file.parent.mkdir(parents=True)
+    version_file.write_bytes(b"\xff\xfe\x00bad")
+
+    result = await action.execute(_build_context_ctx(mock_context, tmp_path))
+
+    assert result.success is True
+    assert result.outputs["guide_version"] is None
+    assert "guide version file unreadable" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_build_context_empty_guide_version_file_is_none(
+    action: CfOpAction, mock_context: ActionContext, tmp_path: Path
+) -> None:
+    version_file = tmp_path / GUIDE_VERSION_FILE
+    version_file.parent.mkdir(parents=True)
+    version_file.write_text("\n", encoding="utf-8")
+
+    result = await action.execute(_build_context_ctx(mock_context, tmp_path))
+
+    assert result.outputs["guide_version"] is None
+
+
+@pytest.mark.asyncio
 async def test_other_operations_carry_no_version_keys(
     action: CfOpAction, mock_context: ActionContext
 ) -> None:

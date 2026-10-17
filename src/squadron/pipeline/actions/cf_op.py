@@ -144,7 +144,7 @@ class CfOpAction:
                     data_dict = cast(dict[str, object], raw) if isinstance(raw, dict) else {}
                     stdout = str(data_dict.get("context", ""))
                     extra_outputs = {
-                        "cf_version": cf_client.cf_version(),
+                        "cf_version": _best_effort_cf_version(cf_client),
                         "guide_version": _read_guide_version(Path(context.cwd)),
                     }
                 case CfOperation.SUMMARIZE:
@@ -164,12 +164,32 @@ class CfOpAction:
         )
 
 
+def _best_effort_cf_version(cf_client: ContextForgeClient) -> str | None:
+    """cf's version for prompt provenance; None (logged) when it cannot be read.
+
+    Provenance only feeds metadata, so a failure here must not block building
+    the production prompt.
+    """
+    try:
+        return cf_client.cf_version()
+    except ContextForgeError:
+        # Swallowed on purpose: metadata-only fact, logged at ERROR with traceback.
+        _logger.exception("cf_op build_context: cf version unreadable; recording none")
+        return None
+
+
 def _read_guide_version(project_dir: Path) -> str | None:
-    """The installed guide's version, or None when the project has no marker file."""
+    """The installed guide's version, or None when absent, empty or unreadable."""
     version_file = project_dir / GUIDE_VERSION_FILE
     if not version_file.is_file():
         return None
-    return version_file.read_text(encoding="utf-8").strip()
+    try:
+        version = version_file.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError):
+        # Swallowed on purpose: metadata-only fact, logged at ERROR with traceback.
+        _logger.exception("cf_op build_context: guide version file unreadable: %s", version_file)
+        return None
+    return version or None
 
 
 register_action(ActionType.CF_OP, CfOpAction())
