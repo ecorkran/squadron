@@ -63,7 +63,6 @@ status: not_started
   - [ ] Success: all pass with no test edits (review artifacts byte-identical)
 - [ ] Add tests beside `test_run_cost_rendering.py`
   - [ ] `frontmatter_fields()` omits `None` fields and rounds `costUsd` and `durationSeconds` as D4
-  - [ ] `frontmatter_lines()` equals the lines rendered from `frontmatter_fields()` for a fully populated and a sparse `RunCost`
   - [ ] `from_record` round-trips every populated `UsageRecord` field
 - [ ] Commit: `refactor(review): expose RunCost frontmatter fields as one key table`
 
@@ -71,9 +70,10 @@ status: not_started
 
 - [ ] Create `src/squadron/review/frontmatter_usage.py`
   - [ ] Move `_record` (as public `record_from_frontmatter(path, front)`), `_INT_KEYS`, `_int`, `_float`, `_basis` verbatim from `src/squadron/stats/reviews_report.py`
-  - [ ] Key names come from the `RunCost` key table, not new string literals, wherever the moved code already names them; do not change parsing behavior
 - [ ] In `stats/reviews_report.py`, import `record_from_frontmatter` and delete the moved definitions
-  - [ ] Success: `grep -n "_INT_KEYS\|def _record" src/squadron/stats/reviews_report.py` returns nothing; pyright clean
+  - [ ] Success: `grep -n "_INT_KEYS\|def _record" src/squadron/stats/reviews_report.py` returns nothing; pyright clean; `tests/stats/test_reviews_report.py` passes unchanged
+- [ ] As a separate edit after the move passes, replace the key string literals in the moved code with references to the key names `RunCost` defines, so each key is defined once (D4); change no parsing logic
+  - [ ] Success: `tests/stats/test_reviews_report.py` still passes unchanged
 
 ## Task 5 — Tests: reader move
 
@@ -158,7 +158,7 @@ status: not_started
 - [ ] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
   - [ ] Success: `sq events` (or its list subcommand) shows `squadron.usage-stamp` after `squadron.revision-stamp`
 
-## Task 12 — Tests: usage stamp, eligibility and happy paths
+## Task 12 — Tests: usage stamp, eligibility, happy paths and binding
 
 - [ ] Add `tests/events/builtin/test_usage_stamp.py` using a temp project with real `SLICES_DIR`/`TASKS_DIR`/`ARCHITECTURE_DIR` layout and a fake cf client; frontmatter fixtures copied from real slice, task and arch files in this repo
   - [ ] Slice design dispatch: file gains the review keys, `usageRounds: 1`, `pricedRounds: 1`; values match the record
@@ -169,6 +169,11 @@ status: not_started
   - [ ] Body bytes unchanged after stamping; existing frontmatter keys keep their order
 - [ ] Eligibility (no file change asserted for each): non-dispatch action, failed dispatch, `expected_artifact_kind=None` (implement), empty `metadata` (`existing: keep` / prompt-only)
 - [ ] No `StateManager` writes during a stamp (patch or spy on its save method)
+- [ ] Binding tests for Task 11 (extend `tests/events/test_manifest.py`)
+  - [ ] `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS`
+  - [ ] An `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
+  - [ ] Dispatcher order: when `dispatch-artifact` fails, `usage-stamp` does not run (one small test of existing `fire` behavior)
+- [ ] Commit: `feat(events): stamp dispatch usage into artifact frontmatter`
 
 ## Task 13 — Tests: usage stamp failure modes (D6)
 
@@ -182,10 +187,7 @@ status: not_started
   - [ ] Revision round with no prior keys → D2 WARNING text, file stamped with `usageRounds: 1`
   - [ ] Malformed prior key → WARNING naming path and key, total restarts
   - [ ] No usage record → DEBUG naming the step
-- [ ] Manifest test: `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS` (extend `tests/events/test_manifest.py`)
-- [ ] Manifest test: an `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
-- [ ] Dispatcher-order test: when `dispatch-artifact` fails, `usage-stamp` does not run
-- [ ] Commit: `feat(events): stamp dispatch usage into artifact frontmatter`
+- [ ] Commit: `test(events): cover usage stamp failure modes`
 
 ---
 
@@ -213,6 +215,7 @@ status: not_started
   - [ ] Nested subdirectories under `SLICES_DIR`/`TASKS_DIR` are not read
   - [ ] Per-kind aggregate sums cost and round counts
   - [ ] No run state exists in the temp project (179 integration requirement)
+- [ ] Commit: `feat(stats): add artifacts usage report`
 
 ## Task 16 — `artifact spend` line on `sq stats slice`
 
@@ -221,7 +224,6 @@ status: not_started
   - [ ] Only kinds with stamped rows appear; no stamped rows → line omitted
   - [ ] Unpriced rounds show via `k of m`; never rendered as $0 when no round is priced (follow the existing `_spend` rendering for the no-cost case)
   - [ ] Never added into `recorded spend`
-- [ ] If `sq stats slice` has JSON output, add the artifact spend to it alongside the recorded spend (check `stats/json_support.py`; skip if the slice view has no JSON mode)
   - [ ] Success: pyright clean
 
 ## Task 17 — Tests: slice line
@@ -252,7 +254,8 @@ status: not_started
 
 - [ ] Run `ruff format`, `ruff check`, `pyright` (zero errors), and the full test suite
   - [ ] Success: all pass; any failure fixed before continuing
+- [ ] Before the walkthrough, ask the Project Manager to confirm running live P4 and P5 pipelines (they spend real LLM budget); if not confirmed, mark the walkthrough items not run in the slice design and continue
 - [ ] Run the design's Verification Walkthrough steps 1–6 on a scratch slice, and record results (pass/fail per step, with the observed values) in the slice design's Verification Walkthrough section
   - [ ] Pruning in step 5 targets only the scratch runs created for this walkthrough; if `sq runs prune` cannot select only those runs, stop and ask the Project Manager before pruning
   - [ ] Delete the scratch slice's artifacts afterwards; they are not committed
-- [ ] Commit: `test: verify artifact usage stamping walkthrough`
+- [ ] Commit: `docs: record artifact usage stamping walkthrough results`
