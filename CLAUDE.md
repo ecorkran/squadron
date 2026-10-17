@@ -177,4 +177,4 @@ chore: update @modelcontextprotocol/server to v2.1
 <!-- END:context-forge -->
 
 ## Bug Fixes
-Fixes never get their own slice: follow `.claude/rules/bug-fixes.md` (small: just fix; bigger: tasks in slice 944).
+Fixes never get their own slice: follow `.claude/rules/bug-fixes.md` (small: just fix; bigger: tasks in slice 990).

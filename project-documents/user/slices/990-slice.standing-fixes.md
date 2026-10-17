@@ -15,11 +15,13 @@ review: none
 
 ## Overview
 
+Renumbered from 944 to 990 on 20261017: 990-999 is reserved for standing slices, so sequential 900-range allocation never collides with them. Older commits, reviews and DEVLOG entries say 944.
+
 A permanent container for fixes. It is never "done": when a fix is too big to just make, add tasks for it to the task file and work them here. Closed or complete items in it are reopened freely. The fixes in it need not be related.
 
 ## Rules
 
 - A small fix that needs no tasks is made directly and committed as `fix:` with `Fixes #n`. It is not recorded here.
-- A fix that needs several steps becomes a task group in [944-tasks.standing-fixes.md](project-documents/user/tasks/944-tasks.standing-fixes.md), titled with its issue number.
+- A fix that needs several steps becomes a task group in [990-tasks.standing-fixes.md](project-documents/user/tasks/990-tasks.standing-fixes.md), titled with its issue number.
 - Work is committed on the target branch. No slice branch, no design, no review (`review: none`).
 - If the fix needs a new user-facing option, a changed file or state format, or a new component, it is a feature and gets its own slice.
