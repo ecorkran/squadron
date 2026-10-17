@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261016
 
+### Slice 178: Artifact Usage Stamping — Design Complete
+
+- Design: `project-documents/user/slices/178-slice.artifact-usage-stamping.md` (`cf validate design` PASS). Depends on [175, 176]; feeds 179. Effort 3/5.
+- Scope finding: only dispatch writes artifacts with frontmatter. Compact writes no file, and summary's file emit has no frontmatter, so neither is stamped. Phase dispatches (design, tasks, and the P2 arch doc) are stamped.
+- Shape: new built-in POST_ACTION `squadron.usage-stamp`, after `revision-stamp`, so it runs only when the dispatch-artifact post-condition passed. It never fails a run (911 D4).
+- Loop decision (D2): one cumulative total per artifact under the review keys, plus `usageRounds`, `pricedRounds` and a sticky `usagePartial`. The prior total is read from the file. Per-round detail stays in run state and git. A mixed basis adds `CostBasis.MIXED`. If an agent drops the keys, the total restarts and a WARNING is logged.
+- When more than one candidate file was written this run, nothing is stamped (WARNING) rather than splitting the cost.
+- Refactors: `RunCost.frontmatter_fields` is the one key table; `stats/frontmatter_usage.py` is the shared reader; `artifact_paths` handles slice and plan resolution and the mtime check.
+- Stats: new `sq stats artifacts [--slice]`, and an `artifact spend` line on `sq stats slice`. It is shown beside recorded spend and never added to it.
+- Not filed: pipeline review artifacts that carry `runId` drop out of every stats view after pruning (175 reviews-report gap). It needs an issue.
+
 ### Release 0.23.0
 
 - **Contents:** slice 177 (`sq replay run|judge|report`, prompt identity on every dispatch, closes #210); `sq stats` slice, producers and runs reports; review fixes to `build_context` provenance, `metrology.judge_timeout_s` handling and replay sandbox errors.
