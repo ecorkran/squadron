@@ -135,53 +135,53 @@ status: in_progress
 
 ## Task 10 — `UsageStampAction`
 
-- [ ] Create `src/squadron/events/builtin/usage_stamp.py` modeled on `revision_stamp.py` (same registration pattern and protocol)
-- [ ] Eligibility (D1): act only when `action_type` is dispatch, `result.success`, and `expected_artifact_kind` is not `None`; otherwise return success with no effect
-  - [ ] No usage record in `result.metadata[USAGE_KEY]` → DEBUG line naming the step, return success
-  - [ ] Never read `result.outputs`
-- [ ] File selection (D1): call `dispatch_artifact_paths` with `params` `slice`/`plan`, keep candidates that exist on disk
-  - [ ] Exactly one → stamp it; more than one → WARNING naming the files, no stamp; zero → no stamp
-- [ ] Stamp: `read_frontmatter` → `read_artifact_usage` → `fold` → `update_frontmatter` with `artifact_usage_fields`
-  - [ ] Revision round (`context.iteration >= 1`, the field `revision_stamp.py` checks) with no prior `usageRounds`: WARNING with the D2 text `usage stamp: no prior usage keys on revision round {n} of {path}; total restarts and undercounts`
-- [ ] Failure handling (D6): resolution errors (cf client error, missing arch doc, non-numeric slice/plan), `FrontmatterError`, `OSError` → WARNING naming kind/scope or path and the reason; always return success
-  - [ ] Catch only those specific exception types, each with a comment (CLAUDE.md exception rule)
-  - [ ] Success: the action never alters `result`; pyright clean
+- [x] Create `src/squadron/events/builtin/usage_stamp.py` modeled on `revision_stamp.py` (same registration pattern and protocol)
+- [x] Eligibility (D1): act only when `action_type` is dispatch, `result.success`, and `expected_artifact_kind` is not `None`; otherwise return success with no effect
+  - [x] No usage record in `result.metadata[USAGE_KEY]` → DEBUG line naming the step, return success
+  - [x] Never read `result.outputs`
+- [x] File selection (D1): call `dispatch_artifact_paths` with `params` `slice`/`plan`, keep candidates that exist on disk
+  - [x] Exactly one → stamp it; more than one → WARNING naming the files, no stamp; zero → no stamp
+- [x] Stamp: `read_frontmatter` → `read_artifact_usage` → `fold` → `update_frontmatter` with `artifact_usage_fields`
+  - [x] Revision round (`context.iteration >= 1`, the field `revision_stamp.py` checks) with no prior `usageRounds`: WARNING with the D2 text `usage stamp: no prior usage keys on revision round {n} of {path}; total restarts and undercounts`
+- [x] Failure handling (D6): resolution errors (cf client error, missing arch doc, non-numeric slice/plan), `FrontmatterError`, `OSError` → WARNING naming kind/scope or path and the reason; always return success
+  - [x] Catch only those specific exception types, each with a comment (CLAUDE.md exception rule)
+  - [x] Success: the action never alters `result`; pyright clean
 
 ## Task 11 — Tests: usage stamp, eligibility and happy paths
 
-- [ ] Add `tests/events/builtin/test_usage_stamp.py`, calling the action directly, using a temp project with real `SLICES_DIR`/`TASKS_DIR`/`ARCHITECTURE_DIR` layout and a fake cf client; frontmatter fixtures copied from real slice, task and arch files in this repo
-  - [ ] Slice design dispatch: file gains the review keys, `usageRounds: 1`, `pricedRounds: 1`; values match the record
-  - [ ] Task file dispatch stamped the same way
-  - [ ] Plan-scoped design dispatch stamps the architecture doc
-  - [ ] Second fold on the same file (revision round with prior keys): totals summed, `usageRounds: 2`, no WARNING
-  - [ ] Unpriced record: `usageRounds` increments, `pricedRounds` and `costUsd` unchanged
-  - [ ] Body bytes unchanged after stamping; existing frontmatter keys keep their order
-- [ ] Eligibility (no file change asserted for each): non-dispatch action, failed dispatch, `expected_artifact_kind=None` (implement), empty `metadata` (`existing: keep` / prompt-only)
-- [ ] No `StateManager` writes during a stamp (patch or spy on its save method)
-- [ ] Commit: `feat(events): add usage stamp event action`
+- [x] Add `tests/events/builtin/test_usage_stamp.py`, calling the action directly, using a temp project with real `SLICES_DIR`/`TASKS_DIR`/`ARCHITECTURE_DIR` layout and a fake cf client; frontmatter fixtures copied from real slice, task and arch files in this repo
+  - [x] Slice design dispatch: file gains the review keys, `usageRounds: 1`, `pricedRounds: 1`; values match the record
+  - [x] Task file dispatch stamped the same way
+  - [x] Plan-scoped design dispatch stamps the architecture doc
+  - [x] Second fold on the same file (revision round with prior keys): totals summed, `usageRounds: 2`, no WARNING
+  - [x] Unpriced record: `usageRounds` increments, `pricedRounds` and `costUsd` unchanged
+  - [x] Body bytes unchanged after stamping; existing frontmatter keys keep their order
+- [x] Eligibility (no file change asserted for each): non-dispatch action, failed dispatch, `expected_artifact_kind=None` (implement), empty `metadata` (`existing: keep` / prompt-only)
+- [x] No `StateManager` writes during a stamp (patch or spy on its save method)
+- [x] Commit: `feat(events): add usage stamp event action`
 
 ## Task 12 — Tests: usage stamp failure modes (D6)
 
-- [ ] One test per D6 row the stamp owns, each asserting the action returns success and the stated log signal (`caplog`)
-  - [ ] cf resolution error → WARNING naming kind, scope, reason
-  - [ ] Plan scope with no arch doc → WARNING
-  - [ ] Non-numeric slice param → WARNING
-  - [ ] Artifact with no frontmatter block, and with invalid YAML → WARNING naming path and `FrontmatterError`
-  - [ ] `OSError` on write → WARNING naming path
-  - [ ] Two candidates on disk (`nnn-tasks.name-1.md`, `-2.md`) → no stamp, WARNING naming both files
-  - [ ] Revision round with no prior keys → D2 WARNING text, file stamped with `usageRounds: 1`
-  - [ ] Malformed prior key → WARNING naming path and key, total restarts
-  - [ ] No usage record → DEBUG naming the step
-- [ ] Commit: `test(events): cover usage stamp failure modes`
+- [x] One test per D6 row the stamp owns, each asserting the action returns success and the stated log signal (`caplog`)
+  - [x] cf resolution error → WARNING naming kind, scope, reason
+  - [x] Plan scope with no arch doc → WARNING
+  - [x] Non-numeric slice param → WARNING
+  - [x] Artifact with no frontmatter block, and with invalid YAML → WARNING naming path and `FrontmatterError`
+  - [x] `OSError` on write → WARNING naming path
+  - [x] Two candidates on disk (`nnn-tasks.name-1.md`, `-2.md`) → no stamp, WARNING naming both files
+  - [x] Revision round with no prior keys → D2 WARNING text, file stamped with `usageRounds: 1`
+  - [x] Malformed prior key → WARNING naming path and key, total restarts
+  - [x] No usage record → DEBUG naming the step
+- [x] Commit: `test(events): cover usage stamp failure modes`
 
 ## Task 13 — Register the binding, with tests
 
-- [ ] Register `squadron.usage-stamp` with the built-in event actions the same way `revision-stamp` is registered
-- [ ] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
-- [ ] Binding tests (extend `tests/events/test_manifest.py`)
-  - [ ] `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS`
-  - [ ] An `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
-- [ ] Commit: `feat(events): bind usage stamp after revision stamp`
+- [x] Register `squadron.usage-stamp` with the built-in event actions the same way `revision-stamp` is registered
+- [x] In `src/squadron/events/manifest.py`, append the POST_ACTION binding to `DEFAULT_BINDINGS` directly after `squadron.revision-stamp`
+- [x] Binding tests (extend `tests/events/test_manifest.py`)
+  - [x] `squadron.usage-stamp` follows `squadron.revision-stamp` in `DEFAULT_BINDINGS`
+  - [x] An `events.yaml` `disable:` entry for `squadron.usage-stamp` removes it, as for other built-ins
+- [x] Commit: `feat(events): bind usage stamp after revision stamp`
 
 ---
 

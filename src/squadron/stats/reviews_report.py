@@ -80,11 +80,14 @@ def reviews_usage_report(reviews_dir: Path, slice_filter: str | None) -> Reviews
     )
 
 
-def _slice_matches(path: Path, slice_value: str | None, slice_filter: str) -> bool:
-    if slice_value == slice_filter:
-        return True
+def leading_slice_index(path: Path) -> str | None:
+    """The slice index a file name starts with (``175-review.slice...`` gives ``"175"``)."""
     match = _INDEX_PREFIX.match(path.name)
-    return match is not None and match.group(1) == slice_filter
+    return None if match is None else match.group(1)
+
+
+def _slice_matches(path: Path, slice_value: str | None, slice_filter: str) -> bool:
+    return slice_value == slice_filter or leading_slice_index(path) == slice_filter
 
 
 def row_matches_slice(row: ReviewUsageRow, slice_filter: str) -> bool:
