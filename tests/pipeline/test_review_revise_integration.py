@@ -16,6 +16,7 @@ from squadron.pipeline.actions.commit import CommitAction
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, execute_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.pipeline.review_revise import build_review_revise_definition
+from squadron.pipeline.state import StateManager
 from squadron.review.persistence import archive_existing_review
 from squadron.review.templates import BuiltinReviewTemplate
 from tests.conftest import run_test_git
@@ -62,12 +63,17 @@ async def _run(repo: Path, verdicts: list[str]) -> tuple[PipelineResult, Recordi
     cf_client = phase_artifact_cf_client(SLICE, DESIGN, "105-tasks.stub.md")
     cf_client.get_config.return_value = ""
     observer = RecordingObserver()
+    # Scratch run state outside the repo, as `sq review --max` writes (#236).
+    runs_dir = repo.parent / "runs"
+    run_id = StateManager(runs_dir=runs_dir).init_run(definition.name, params)
     result = await execute_pipeline(
         definition,
         params,
         resolver=MagicMock(),
         cf_client=cf_client,
         cwd=str(repo),
+        run_id=run_id,
+        runs_dir=runs_dir,
         observer=observer,
         _action_registry={
             "dispatch": _action(revise),

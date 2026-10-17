@@ -16,6 +16,7 @@ from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResu
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult, PipelineDefinition
+from squadron.pipeline.state import StateManager
 from squadron.review.templates import BuiltinReviewTemplate
 
 
@@ -288,6 +289,28 @@ def _run_with(result: PipelineResult, **kwargs: object) -> tuple[int, AsyncMock,
     ):
         code = run_review_revise(**arguments)  # type: ignore[arg-type]
     return code, execute, classify
+
+
+def test_executor_gets_scratch_run_state_that_is_gone_afterwards() -> None:
+    """The artifact post-condition reads the run's start time from run state (#236)."""
+    seen: dict[str, object] = {}
+
+    async def execute(*_args: object, run_id: str, runs_dir: Path, **_kwargs: object) -> PipelineResult:
+        seen["started_at"] = StateManager(runs_dir=runs_dir).load(run_id).started_at
+        seen["runs_dir"] = runs_dir
+        return _result(_leading("PASS"), _step("loop-1", "loop", []))
+
+    with (
+        patch(f"{_MODULE}.execute_pipeline", execute),
+        patch(f"{_MODULE}.classify_for_run", return_value=MagicMock(needs_persistent_session=False)),
+        patch(f"{_MODULE}.ContextForgeClient"),
+        patch(f"{_MODULE}.project_run_lock", return_value=nullcontext()),
+    ):
+        code = run_review_revise(BuiltinReviewTemplate.SLICE, "941", "sol", None, 3, "/repo")
+
+    assert code == 0
+    assert seen["started_at"] is not None
+    assert not Path(str(seen["runs_dir"])).exists()
 
 
 def test_params_carry_slice_reviewer_and_rounds_without_a_reviser() -> None:

@@ -111,3 +111,13 @@ def test_two_writers_racing_exactly_one_wins(tmp_path: Path) -> None:
 
     assert sorted(outcomes) == ["lost", "won"]
     assert target.read_bytes() in (b"a", b"b")
+
+
+def test_force_keeps_the_existing_files_permissions(tmp_path: Path) -> None:
+    target = tmp_path / "x.yaml"
+    target.write_bytes(b"original")
+    target.chmod(0o644)
+
+    write_new_file(target, b"new", force=True)
+
+    assert target.stat().st_mode & 0o777 == 0o644

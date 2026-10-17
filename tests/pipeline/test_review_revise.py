@@ -64,18 +64,18 @@ def test_review_step_copies_the_loop_bodys_review_config() -> None:
 
 
 @pytest.mark.parametrize("kind", [BuiltinReviewTemplate.SLICE, BuiltinReviewTemplate.TASKS])
-def test_revise_dispatch_drops_its_artifact(kind: BuiltinReviewTemplate) -> None:
-    """No run state is written here, so a declared artifact would fail every revise."""
-    shipped_dispatches = [
+def test_revise_dispatch_keeps_its_artifact(kind: BuiltinReviewTemplate) -> None:
+    """The artifact key turns on revision and usage stamping, so the copy keeps it (#236)."""
+    shipped = [
         s["dispatch"]
         for s in _loop(_shipped(REVISE_PIPELINE_BY_KIND[kind])).config["steps"]
         if "dispatch" in s
     ]
-    assert all("artifact" in d for d in shipped_dispatches)
+    assert shipped and all("artifact" in d for d in shipped)
 
     loop = _loop(build_review_revise_definition(kind))
     dispatches = [s["dispatch"] for s in loop.config["steps"] if "dispatch" in s]
-    assert dispatches and all("artifact" not in d for d in dispatches)
+    assert dispatches == shipped
 
 
 def test_code_kind_uses_the_named_loop_of_p6() -> None:

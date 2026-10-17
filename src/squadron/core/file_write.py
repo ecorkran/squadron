@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -44,6 +45,9 @@ def _replace_file(path: Path, content: bytes) -> None:
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(content)
+        if path.exists():
+            # mkstemp creates 0600; the replacement keeps the original's permissions.
+            shutil.copymode(path, tmp_path)
         os.replace(tmp_path, path)
         replaced = True
     finally:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -83,7 +84,7 @@ def test_update_frontmatter_adds_new_key(tmp_path: Path) -> None:
     update_frontmatter(doc, {"revision_number": 1}, today="20260803")
 
     result = read_frontmatter(doc)
-    assert result == {"existing": 1, "revision_number": 1, "dateUpdated": "20260803"}
+    assert result == {"existing": 1, "revision_number": 1, "dateUpdated": 20260803}
 
 
 def test_update_frontmatter_updates_existing_key(tmp_path: Path) -> None:
@@ -93,7 +94,7 @@ def test_update_frontmatter_updates_existing_key(tmp_path: Path) -> None:
     update_frontmatter(doc, {"revision_number": 2}, today="20260803")
 
     result = read_frontmatter(doc)
-    assert result == {"revision_number": 2, "other": "x", "dateUpdated": "20260803"}
+    assert result == {"revision_number": 2, "other": "x", "dateUpdated": 20260803}
 
 
 def test_update_frontmatter_preserves_order_of_untouched_keys(tmp_path: Path) -> None:
@@ -169,7 +170,7 @@ def test_update_frontmatter_output_is_valid_yaml(tmp_path: Path) -> None:
 
     text = doc.read_text(encoding="utf-8")
     fence_block = text.split("---", 2)[1]
-    assert yaml.safe_load(fence_block) == {"a": 1, "b": 2, "dateUpdated": "20260803"}
+    assert yaml.safe_load(fence_block) == {"a": 1, "b": 2, "dateUpdated": 20260803}
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +230,7 @@ def test_update_frontmatter_stamps_dateupdated_and_leaves_datecreated(tmp_path: 
 
     result = read_frontmatter(doc)
     assert result is not None
-    assert result["dateUpdated"] == "20260804"
+    assert result["dateUpdated"] == 20260804
     assert result["dateCreated"] == 20260801
 
 
@@ -241,7 +242,7 @@ def test_update_frontmatter_caller_supplied_dateupdated_wins(tmp_path: Path) -> 
 
     result = read_frontmatter(doc)
     assert result is not None
-    assert result["dateUpdated"] == "20260802"
+    assert result["dateUpdated"] == 20260802
 
 
 def test_update_frontmatter_stamps_dateupdated_even_without_datecreated(tmp_path: Path) -> None:
@@ -252,7 +253,7 @@ def test_update_frontmatter_stamps_dateupdated_even_without_datecreated(tmp_path
 
     result = read_frontmatter(doc)
     assert result is not None
-    assert result["dateUpdated"] == "20260804"
+    assert result["dateUpdated"] == 20260804
     assert "dateCreated" not in result
 
 
@@ -279,3 +280,27 @@ def test_update_frontmatter_stamp_preserves_body_byte_for_byte(tmp_path: Path) -
 )
 def test_parse_frontmatter(text: str, expected: dict[str, object] | None) -> None:
     assert parse_frontmatter(text) == expected
+
+
+def test_update_frontmatter_writes_dateupdated_unquoted(tmp_path: Path) -> None:
+    doc = tmp_path / "doc.md"
+    doc.write_text("---\ndateUpdated: 20260801\n---\nbody\n", encoding="utf-8")
+
+    update_frontmatter(doc, {"revision_number": 1}, today="20260804")
+
+    assert "dateUpdated: 20260804\n" in doc.read_text(encoding="utf-8")
+
+
+def test_update_frontmatter_failed_replace_leaves_document_byte_identical(tmp_path: Path) -> None:
+    doc = tmp_path / "doc.md"
+    doc.write_text("---\ndateUpdated: 20260801\n---\nbody\n", encoding="utf-8")
+    original = doc.read_bytes()
+
+    with (
+        patch("squadron.core.file_write.os.replace", side_effect=OSError("killed mid-replace")),
+        pytest.raises(OSError, match="killed mid-replace"),
+    ):
+        update_frontmatter(doc, {"revision_number": 1}, today="20260804")
+
+    assert doc.read_bytes() == original
+    assert [p.name for p in tmp_path.iterdir()] == ["doc.md"]

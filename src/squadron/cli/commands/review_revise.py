@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import tempfile
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
+from pathlib import Path
 
 import click
 import typer
@@ -34,7 +36,7 @@ from squadron.pipeline.models import ActionResult, PipelineDefinition
 from squadron.pipeline.review_revise import REVIEW_STEP_NAME, build_review_revise_definition
 from squadron.pipeline.run_lock import RunLockError, pipeline_mutates, project_run_lock
 from squadron.pipeline.run_session import classify_for_run, pipeline_session, run_resolver
-from squadron.pipeline.state import ActiveItem
+from squadron.pipeline.state import ActiveItem, StateManager
 from squadron.pipeline.steps import StepTypeName
 from squadron.review.models import Verdict
 from squadron.review.templates import BuiltinReviewTemplate
@@ -242,17 +244,25 @@ async def _run(
         definition, model_override=None, params=params, pool_backend=DefaultPoolBackend()
     )
     try:
-        async with pipeline_session(classification) as session:
-            result = await execute_pipeline(
-                definition,
-                params,
-                resolver=resolver,
-                cf_client=ContextForgeClient(),
-                cwd=cwd,
-                sdk_session=session,
-                pool_policy=classification.policy,
-                observer=printer,
-            )
+        # The revise dispatches' artifact post-condition reads the run's start time from
+        # run state. This run is not resumable (D4), so the state is scratch: it lives in
+        # a temp dir and `sq runs` never lists it.
+        with tempfile.TemporaryDirectory(prefix="sq-review-revise-") as scratch:
+            runs_dir = Path(scratch)
+            run_id = StateManager(runs_dir=runs_dir).init_run(definition.name, params)
+            async with pipeline_session(classification) as session:
+                result = await execute_pipeline(
+                    definition,
+                    params,
+                    resolver=resolver,
+                    cf_client=ContextForgeClient(),
+                    cwd=cwd,
+                    run_id=run_id,
+                    sdk_session=session,
+                    pool_policy=classification.policy,
+                    observer=printer,
+                    runs_dir=runs_dir,
+                )
     except GitEnvironmentError as exc:
         # Process boundary: a git fault (wrong branch, unreadable state) ends the run
         # with its message, as `sq run` does; the operator fixes the checkout.

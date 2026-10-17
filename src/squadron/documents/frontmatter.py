@@ -12,6 +12,7 @@ from typing import cast
 
 import yaml
 
+from squadron.core.file_write import write_new_file
 from squadron.documents.schema import STATUS_ALIASES, DocumentStatus
 
 
@@ -126,6 +127,15 @@ def render_frontmatter_block(data: dict[str, object]) -> str:
     return f"---\n{dumped.rstrip(chr(10))}\n---"
 
 
+def _unquoted_date(value: object) -> object:
+    """An all-digit date string as an int, so ``yaml.safe_dump`` writes it unquoted.
+
+    cf and agents write ``dateUpdated: 20261017``, which YAML reads as an int;
+    dumping the string form would quote it and flip the type on every stamp.
+    """
+    return int(value) if isinstance(value, str) and value.isdigit() else value
+
+
 def update_frontmatter(path: Path, fields: dict[str, object], *, today: str) -> None:
     """Merge ``fields`` into the frontmatter block of ``path``.
 
@@ -165,7 +175,9 @@ def update_frontmatter(path: Path, fields: dict[str, object], *, today: str) -> 
     merged.update(fields)
     if "dateUpdated" not in fields:
         merged["dateUpdated"] = today
+    merged["dateUpdated"] = _unquoted_date(merged["dateUpdated"])
     _validate_status_if_present(merged, context=str(path))
 
     dumped = yaml.safe_dump(merged, sort_keys=False, default_flow_style=False, allow_unicode=True)
-    path.write_text(f"{leading}---\n{dumped}---{body}", encoding="utf-8")
+    # Temp file then rename: a process killed mid-write must not truncate the document.
+    write_new_file(path, f"{leading}---\n{dumped}---{body}".encode(), force=True)
