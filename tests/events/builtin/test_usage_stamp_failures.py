@@ -77,6 +77,18 @@ async def test_unreadable_frontmatter_warns_with_path_and_error_type(
     assert path.read_text(encoding="utf-8") == content
 
 
+async def test_non_utf8_artifact_warns_and_is_untouched(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    path = tmp_path / DESIGN_REL
+    path.parent.mkdir(parents=True)
+    content = b"---\ndocType: slice-design\n---\n\n\xff\xfe body\n"
+    path.write_bytes(content)
+    message = await _run_expecting_one_warning(caplog, tmp_path)
+    assert str(path) in message and "UnicodeDecodeError" in message
+    assert path.read_bytes() == content
+
+
 async def test_write_oserror_warns_with_path(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     path = write_doc(tmp_path, DESIGN_REL, SLICE_FRONT)
     with patch(

@@ -8,6 +8,7 @@ the action returns success. It never alters ``result`` and never reads ``result.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -20,7 +21,10 @@ from squadron.events import EventType, register_event_action
 from squadron.events.builtin.artifact_paths import dispatch_artifact_paths
 from squadron.events.contexts import EventContext, PostActionContext
 from squadron.integrations.context_forge import ContextForgeError
+from squadron.pipeline.actions import ActionType
+from squadron.pipeline.commit_plan import PLAN_PARAM, SLICE_PARAM
 from squadron.pipeline.models import ActionResult, ValidationError
+from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.providers.base import USAGE_KEY
 from squadron.review.artifact_usage import (
     USAGE_ROUNDS_KEY,
@@ -38,9 +42,14 @@ def _usage_record(context: PostActionContext) -> UsageRecord | None:
     if raw is None:
         _logger.debug("usage stamp: step %s recorded no usage; nothing to stamp", context.step_name)
         return None
+    if not isinstance(raw, Mapping):
+        _logger.warning(
+            "usage stamp: step %s has an unreadable usage record: usage is not a mapping: %.200r",
+            context.step_name,
+            raw,
+        )
+        return None
     try:
-        if not isinstance(raw, Mapping):
-            raise ValueError(f"usage is not a mapping: {raw!r:.200}")
         return UsageRecord.from_dict(cast("Mapping[str, object]", raw))
     except ValueError as exc:
         # A malformed record is reported and skipped; a cost stamp never fails the run.
@@ -50,12 +59,10 @@ def _usage_record(context: PostActionContext) -> UsageRecord | None:
         return None
 
 
-def _stamp_target(context: PostActionContext) -> Path | None:
+def _stamp_target(context: PostActionContext, kind: ArtifactKind) -> Path | None:
     """The one existing artifact this dispatch wrote, or None (logged) when not exactly one."""
-    kind = context.expected_artifact_kind
-    assert kind is not None  # eligibility guarantees it
-    slice_param = context.params.get("slice")
-    plan_param = context.params.get("plan")
+    slice_param = context.params.get(SLICE_PARAM)
+    plan_param = context.params.get(PLAN_PARAM)
     try:
         paths = dispatch_artifact_paths(kind, slice_param, plan_param, context.cf_client, context.cwd)
     except (ContextForgeError, ValueError, TypeError, FileNotFoundError) as exc:
@@ -97,6 +104,25 @@ def _stamp(path: Path, record: UsageRecord, iteration: int) -> None:
     update_frontmatter(path, fields, today=datetime.now(UTC).strftime("%Y%m%d"))
 
 
+def _stamp_dispatch(context: PostActionContext, kind: ArtifactKind) -> None:
+    """Stamp an eligible dispatch's usage onto its artifact; every failure is logged.
+
+    Assumes no concurrent writer to the same artifact: stamps run serially, one per
+    dispatch, and parallel collection items write different slices' artifacts.
+    """
+    record = _usage_record(context)
+    if record is None:
+        return
+    path = _stamp_target(context, kind)
+    if path is None:
+        return
+    try:
+        _stamp(path, record, context.iteration)
+    except (FrontmatterError, OSError, UnicodeDecodeError) as exc:
+        # Unparseable or undecodable frontmatter, or a failed write: no stamp, run unaffected.
+        _logger.warning("usage stamp failed for %s: %s: %s", path, type(exc).__name__, exc)
+
+
 class UsageStampAction:
     """POST_ACTION event action: stamp a dispatch's cost onto the artifact it wrote."""
 
@@ -108,25 +134,11 @@ class UsageStampAction:
 
     async def execute(self, context: EventContext) -> ActionResult:
         assert isinstance(context, PostActionContext)
-        done = ActionResult(success=True, action_type=self.name, outputs={})
-        if (
-            context.action_type != "dispatch"
-            or not context.result.success
-            or context.expected_artifact_kind is None
-        ):
-            return done
-        record = _usage_record(context)
-        if record is None:
-            return done
-        path = _stamp_target(context)
-        if path is None:
-            return done
-        try:
-            _stamp(path, record, context.iteration)
-        except (FrontmatterError, OSError) as exc:
-            # Unparseable frontmatter or a failed write: no stamp, run unaffected.
-            _logger.warning("usage stamp failed for %s: %s: %s", path, type(exc).__name__, exc)
-        return done
+        kind = context.expected_artifact_kind
+        if context.action_type == ActionType.DISPATCH and context.result.success and kind is not None:
+            # Context Forge calls and a file read-modify-write: off the event loop.
+            await asyncio.to_thread(_stamp_dispatch, context, kind)
+        return ActionResult(success=True, action_type=self.name, outputs={})
 
 
 register_event_action(UsageStampAction())

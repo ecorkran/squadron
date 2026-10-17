@@ -14,10 +14,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.events import EventType, register_event_action
-from squadron.events.builtin.artifact_paths import dispatch_artifact_paths
+from squadron.events.builtin.artifact_paths import dispatch_artifact_paths, dispatch_scope
 from squadron.events.contexts import EventContext, PostActionContext
 from squadron.integrations.context_forge import ContextForgeError
+from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.dispatch import SKIPPED_KEY
+from squadron.pipeline.commit_plan import PLAN_PARAM, SLICE_PARAM
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
@@ -111,25 +113,12 @@ def _dispatch_artifact_post_condition_error(
         msg = "run start time unavailable"
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
-    if slice_param is None and plan_param is not None:
-        # Initiative-scoped (phase 2): the artifact is the architecture doc.
-        param_name, param, scope_kind = "plan", plan_param, "initiative"
-    elif slice_param is None:
-        msg = f"could not resolve expected {kind.value} artifact path: no 'slice' param in scope"
-        _logger.warning("dispatch post-condition: %s", msg)
-        return msg
-    else:
-        param_name, param, scope_kind = "slice", slice_param, "slice"
     try:
-        index = int(str(param))
-    except ValueError:
-        msg = (
-            f"could not resolve expected {kind.value} artifact path: "
-            f"'{param_name}' param {param!r} is not a numeric index"
-        )
+        scope = dispatch_scope(slice_param, plan_param).label
+    except ValueError as exc:
+        msg = f"could not resolve expected {kind.value} artifact path: {exc}"
         _logger.warning("dispatch post-condition: %s", msg)
         return msg
-    scope = f"{scope_kind} {index}"
     paths = _resolve_paths(
         kind, scope, lambda: dispatch_artifact_paths(kind, slice_param, plan_param, cf_client, cwd)
     )
@@ -153,7 +142,7 @@ class DispatchArtifactAction:
         assert isinstance(context, PostActionContext)
 
         if (
-            context.action_type != "dispatch"
+            context.action_type != ActionType.DISPATCH
             or not context.result.success
             or context.expected_artifact_kind is None
             # A step that kept its existing artifact wrote nothing this run, by design.
@@ -163,8 +152,8 @@ class DispatchArtifactAction:
 
         error = _dispatch_artifact_post_condition_error(
             kind=context.expected_artifact_kind,
-            slice_param=context.params.get("slice"),
-            plan_param=context.params.get("plan"),
+            slice_param=context.params.get(SLICE_PARAM),
+            plan_param=context.params.get(PLAN_PARAM),
             cf_client=context.cf_client,
             cwd=context.cwd,
             run_started_at=context.run_started_at,

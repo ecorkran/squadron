@@ -89,4 +89,4 @@ def _basis(path: Path, front: Mapping[str, object]) -> CostBasis | None:
 
 
 def _warn(path: Path, key: str, value: object) -> None:
-    _logger.warning("review artifact %s: frontmatter %s is malformed: %.200r", path, key, value)
+    _logger.warning("artifact %s: frontmatter %s is malformed: %.200r", path, key, value)
