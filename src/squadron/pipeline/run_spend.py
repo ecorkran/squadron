@@ -42,7 +42,8 @@ def read_cost_cap(cwd: str) -> float | None:
 class RunSpend:
     """Known LLM spend of one ``sq run`` invocation."""
 
-    def __init__(self) -> None:
+    def __init__(self, cap_usd: float | None) -> None:
+        self._cap_usd = cap_usd
         self._known_usd = 0.0
         self._unpriced_aliases_warned: set[str | None] = set()
 
@@ -50,6 +51,15 @@ class RunSpend:
     def known_usd(self) -> float:
         """Total of every action cost seen so far; actions with no cost are not in it."""
         return self._known_usd
+
+    def cap_error(self) -> str | None:
+        """The failure text once known spend exceeds the cap; ``None`` while under it or uncapped."""
+        if self._cap_usd is None or self._known_usd <= self._cap_usd:
+            return None
+        return (
+            f"run spent ${self._known_usd:.2f} this invocation, over {COST_CAP_KEY} "
+            f"${self._cap_usd:.2f}; raise the cap and resume to continue"
+        )
 
     def add(self, raw_usage: object, *, step_name: str) -> None:
         """Fold one action's ``metadata[USAGE_KEY]`` into the total.

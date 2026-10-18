@@ -43,7 +43,7 @@ from squadron.pipeline.classification import (
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
 from squadron.pipeline.control_params import ACCEPT_DECISION, OVERRIDE_INSTRUCTIONS
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -60,6 +60,7 @@ from squadron.pipeline.models import (
     PipelineDefinition,
     prior_output_key,
 )
+from squadron.pipeline.run_spend import RunSpend, read_cost_cap
 from squadron.pipeline.sources import (
     FLAG_KIND_KEY,
     FLAG_REASON_KEY,
@@ -72,7 +73,12 @@ from squadron.pipeline.steps.dispatch import step_artifact_kind
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
 from squadron.pipeline.usage_capture import UsageCapture
-from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+from squadron.providers.base import (
+    FAILED_TOOL_CALLS_KEY,
+    TOOL_CALLS_MADE_KEY,
+    TOOLS_GIVEN_KEY,
+    USAGE_KEY,
+)
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -539,6 +545,9 @@ async def execute_pipeline(
                 f"'{definition.name}'. Steps: {step_names}"
             )
 
+    # A mistyped cap fails the run here, before any step spends (slice 947 D3).
+    cost_cap = read_cost_cap(effective_cwd)
+
     step_results: list[StepResult] = []
     # prior_outputs accumulates across all steps
     prior_outputs: dict[str, ActionResult] = {}
@@ -560,6 +569,8 @@ async def execute_pipeline(
 
     # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
     usage_capture = UsageCapture(set())
+    # One per invocation, shared by every step including fan_out branches (D4, D6).
+    spend = RunSpend(cost_cap)
 
     # Resume: seed the session with the most recent applicable compact summary.
     # A connected session is rotated now; a lazy one gets the seed at connect.
@@ -616,6 +627,7 @@ async def execute_pipeline(
             cf_client=cf_client,
             sdk_session=sdk_session,
             usage_capture=usage_capture,
+            spend=spend,
             get_step_type_fn=get_step_type,
             get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
             runs_dir=runs_dir,
@@ -821,6 +833,7 @@ async def _execute_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None,
@@ -852,6 +865,7 @@ async def _execute_step(
         "cf_client": cf_client,
         "sdk_session": sdk_session,
         "usage_capture": usage_capture,
+        "spend": spend,
         "get_step_type_fn": get_step_type_fn,
         "get_action_fn": get_action_fn,
         "runs_dir": runs_dir,
@@ -913,6 +927,7 @@ async def _execute_step_once(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
@@ -1027,6 +1042,15 @@ async def _execute_step_once(
                 result.success = False
                 result.error = f"{outcome.action_name}: {outcome.error_kind.value}"
                 break
+
+        # Cost cap (slice 947 D4/D5): count this action's spend, then fail the run at the
+        # action that crossed the cap. An action already failing keeps its own error.
+        if spend is not None:
+            spend.add(result.metadata.get(USAGE_KEY), step_name=step.name)
+            if result.success and (cap_error := spend.cap_error()) is not None:
+                result.success = False
+                result.error = cap_error
+                result.metadata[FAILURE_KIND_KEY] = FailureKind.COST_CAP.value
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"
@@ -1261,6 +1285,7 @@ async def _execute_loop_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1318,6 +1343,7 @@ async def _execute_loop_step(
             cf_client=cf_client,
             sdk_session=sdk_session,
             usage_capture=usage_capture,
+            spend=spend,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             iteration=iteration,
@@ -1398,6 +1424,7 @@ async def _execute_loop_body(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1488,6 +1515,7 @@ async def _execute_loop_body(
                 cf_client=cf_client,
                 sdk_session=sdk_session,
                 usage_capture=usage_capture,
+                spend=spend,
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
                 iteration=iteration,
@@ -1760,6 +1788,7 @@ async def _execute_each_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1824,6 +1853,7 @@ async def _execute_each_step(
                     cf_client=cf_client,
                     sdk_session=sdk_session,
                     usage_capture=usage_capture,
+                    spend=spend,
                     get_step_type_fn=get_step_type_fn,
                     get_action_fn=get_action_fn,
                     runs_dir=runs_dir,
@@ -1948,8 +1978,17 @@ def _item_outcome(
         return None, ExecutionStatus.COMPLETED
     if final.status is ExecutionStatus.PAUSED:
         return f"paused at step {final.step_name}", ExecutionStatus.PAUSED
-    stop = policy is ItemFailurePolicy.STOP
+    # A crossed cost cap ends the run under either policy: continuing would keep spending.
+    stop = policy is ItemFailurePolicy.STOP or _crossed_cost_cap(final)
     return _item_failure_reason(final), ExecutionStatus.FAILED if stop else ExecutionStatus.COMPLETED
+
+
+def _crossed_cost_cap(failed: StepResult) -> bool:
+    """Whether any failed action in the step was stopped by the cost cap (slice 947 D5)."""
+    return any(
+        not r.success and r.metadata.get(FAILURE_KIND_KEY) == FailureKind.COST_CAP.value
+        for r in failed.action_results
+    )
 
 
 def _item_failure_reason(failed: StepResult) -> str:
@@ -2026,6 +2065,7 @@ async def _execute_fan_out_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -2101,6 +2141,7 @@ async def _execute_fan_out_step(
             cf_client=cf_client,
             sdk_session=None,  # never propagate session into branches
             usage_capture=usage_capture,
+            spend=spend,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             runs_dir=runs_dir,
@@ -2129,7 +2170,7 @@ async def _execute_fan_out_step(
     # 5. Fail fast if any branch returned FAILED.
     failed = [r for r in branch_results if r.status == ExecutionStatus.FAILED]
     if failed:
-        error_msgs = "; ".join(r.error or "branch failed" for r in failed)
+        error_msgs = "; ".join(_item_failure_reason(r) for r in failed)
         return StepResult(
             step_name=step.name,
             step_type=step.step_type,

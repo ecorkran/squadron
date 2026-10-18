@@ -77,14 +77,14 @@ class TestReadCostCap:
 
 class TestRunSpend:
     def test_sums_known_costs(self) -> None:
-        spend = RunSpend()
+        spend = RunSpend(None)
         spend.add(_usage(0.25), step_name="a")
         spend.add(_usage(1.5), step_name="b")
 
         assert spend.known_usd == pytest.approx(1.75)
 
     def test_none_usage_adds_nothing(self) -> None:
-        spend = RunSpend()
+        spend = RunSpend(None)
         spend.add(None, step_name="a")
 
         assert spend.known_usd == 0.0
@@ -92,7 +92,7 @@ class TestRunSpend:
     def test_unknown_cost_adds_nothing_and_warns_once_per_alias(
         self, caplog: pytest.LogCaptureFixture
     ) -> None:
-        spend = RunSpend()
+        spend = RunSpend(None)
         with caplog.at_level(logging.WARNING, logger=_MOD):
             spend.add(_usage(None, alias="sol"), step_name="one")
             spend.add(_usage(None, alias="sol"), step_name="two")
@@ -108,7 +108,7 @@ class TestRunSpend:
     def test_malformed_record_logs_error_and_leaves_total_unchanged(
         self, caplog: pytest.LogCaptureFixture, raw: object
     ) -> None:
-        spend = RunSpend()
+        spend = RunSpend(None)
         spend.add(_usage(2.0), step_name="good")
 
         with caplog.at_level(logging.ERROR, logger=_MOD):
@@ -117,3 +117,27 @@ class TestRunSpend:
         errors = [r for r in caplog.records if r.levelno == logging.ERROR]
         assert len(errors) == 1 and "bad" in errors[0].getMessage()
         assert spend.known_usd == 2.0
+
+
+class TestCapError:
+    def test_uncapped_never_errors(self) -> None:
+        spend = RunSpend(None)
+        spend.add(_usage(1000.0), step_name="a")
+
+        assert spend.cap_error() is None
+
+    def test_at_the_cap_is_not_over_it(self) -> None:
+        spend = RunSpend(1.0)
+        spend.add(_usage(1.0), step_name="a")
+
+        assert spend.cap_error() is None
+
+    def test_over_the_cap_states_spend_and_cap(self) -> None:
+        spend = RunSpend(1.0)
+        spend.add(_usage(0.6), step_name="a")
+        spend.add(_usage(0.7), step_name="b")
+
+        assert spend.cap_error() == (
+            f"run spent $1.30 this invocation, over {COST_CAP_KEY} $1.00; "
+            "raise the cap and resume to continue"
+        )

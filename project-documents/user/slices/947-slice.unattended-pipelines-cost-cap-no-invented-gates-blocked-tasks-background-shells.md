@@ -170,6 +170,9 @@ Status: decided
   - **Overshoot:** at most the cost of the actions in flight when the cap is crossed. `each` runs items serially, so outside `fan_out` that's one action. A `fan_out` step runs its branches concurrently (`asyncio.gather`), so it adds at most one action per branch, up to the step's branch count. Each branch stops at its own next check. The error's "spent $X" reports the real total.
   - **Per invocation:** a resumed run's count starts at $0, so a run and its resumes can together spend up to the cap once per invocation (D6).
   - **Unknown cost:** actions with no reported cost aren't counted (D4 WARNING).
+- **`each` batches:** a `cost_cap` failure fails the `each` step under either `on_item_failure` policy. Under `continue` the item would otherwise be flagged and the batch would keep spending, so `_item_outcome` treats the cap as fatal.
+- **`fan_out` error text:** a failed branch's step error is its failed action's error (`_item_failure_reason`), not the bare "branch failed", so the cap message (spent, cap, remedy) reaches the step error and the run summary.
+- `RunSpend` takes the cap in its constructor (`RunSpend(cap_usd)`) and owns the check (`cap_error()`), so the executor threads one object, not a spend and a cap.
 
 ### D6 — Spend counts per invocation; not persisted
 Status: decided
