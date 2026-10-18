@@ -50,6 +50,7 @@ from squadron.review.git_utils import (
     DiffSpecError,
     EmptyScopeError,
     assert_reviewable_scope,
+    commit_diff_spec,
     normalize_diff_spec,
     resolve_slice_diff_range,
 )
@@ -1233,6 +1234,9 @@ def review_code(
     cwd: str | None = typer.Option(None, "--cwd", help="Project directory (default: config or .)"),
     files: str | None = typer.Option(None, "--files", help="Glob pattern to scope the review"),
     diff: str | None = typer.Option(None, "--diff", help="Git ref to diff against"),
+    commit: str | None = typer.Option(
+        None, "--commit", help="Review only the changes one commit introduced (short SHA is fine)"
+    ),
     rules: str | None = typer.Option(None, "--rules", help="Path to additional rules file"),
     rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
     no_rules: bool = typer.Option(False, "--no-rules", help="Suppress all rule injection"),
@@ -1300,6 +1304,18 @@ def review_code(
             rprint(f"[red]Error: {escape(str(exc))}[/red]")
             raise typer.Exit(code=1) from exc
 
+    if commit:
+        if diff:
+            rprint("[red]Error: --commit and --diff cannot be combined; pass one.[/red]")
+            raise typer.Exit(code=1)
+        # Already an explicit range — it must not be normalized again.
+        try:
+            diff = commit_diff_spec(commit, review_cwd)
+        except DiffSpecError as exc:
+            _logger.error("review code: %s", exc)
+            rprint(f"[red]Error: {escape(str(exc))}[/red]")
+            raise typer.Exit(code=1) from exc
+
     slice_info: SliceInfo | None = None
     if slice_number is not None and slice_number.isdigit():
         slice_info = _resolve_slice_number(slice_number)
@@ -1319,7 +1335,7 @@ def review_code(
                 "provide a numeric slice, --diff, or --files.[/red]"
             )
         else:
-            rprint("[red]Error: provide a slice number, --diff, or --files.[/red]")
+            rprint("[red]Error: provide a slice number, --diff, --commit, or --files.[/red]")
         raise typer.Exit(code=1)
 
     if use_json:

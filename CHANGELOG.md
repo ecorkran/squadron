@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sq review code --commit SHA` reviews just the changes one commit introduced. A short SHA works.
+
 ## [0.23.2] - 20261017
 
 ### Fixed

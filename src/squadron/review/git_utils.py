@@ -106,6 +106,10 @@ class RefNotFoundError(DiffSpecError):
     """Git ran and could not resolve the ref. The spec itself is the problem."""
 
 
+class RootCommitError(DiffSpecError):
+    """The commit exists but has no parent, so there is nothing to diff it against."""
+
+
 class EmptyScopeCase(StrEnum):
     """Why a diff range yielded nothing to review.
 
@@ -431,6 +435,41 @@ def normalize_diff_spec(spec: str, cwd: str) -> str:
         )
 
     return f"{spec}{THREE_DOT}HEAD"
+
+
+def commit_diff_spec(commit: str, cwd: str) -> str:
+    """Return the range holding exactly the changes *commit* introduced.
+
+    The range is ``<parent>..<sha>`` with the first parent, so a merge commit
+    yields everything the merge brought in. Raises ``NotAGitRepositoryError``,
+    ``RefNotFoundError``, or ``RootCommitError`` before any model call is spent.
+    """
+    result = run_git(["rev-parse", "--verify", f"{commit}^{{commit}}"], cwd=cwd)
+    if result is None:
+        raise NotAGitRepositoryError(
+            f"Cannot resolve --commit {commit!r}: git could not be run in {cwd!r}. "
+            "Check that this is a git repository and that git is installed.",
+            ref=commit,
+        )
+    if result.returncode != 0:
+        raise RefNotFoundError(
+            f"Cannot resolve --commit {commit!r}: no such commit in this repository.",
+            ref=commit,
+        )
+    sha = result.stdout.strip()
+
+    parent = run_git(["rev-parse", "--verify", "--quiet", f"{sha}^1"], cwd=cwd)
+    if parent is None:
+        raise NotAGitRepositoryError(
+            f"Cannot resolve the parent of --commit {commit!r}: git could not answer in {cwd!r}.",
+            ref=commit,
+        )
+    if parent.returncode != 0:
+        raise RootCommitError(
+            f"Cannot review --commit {commit!r}: it has no parent to diff against.",
+            ref=commit,
+        )
+    return f"{parent.stdout.strip()}{TWO_DOT}{sha}"
 
 
 def _changed_paths(diff: str, cwd: str, exclude_patterns: list[str] | None) -> list[str] | None:

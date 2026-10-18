@@ -21,11 +21,13 @@ from squadron.review.git_utils import (
     EmptyScopeError,
     NotAGitRepositoryError,
     RefNotFoundError,
+    RootCommitError,
     _changed_paths,
     _find_merge_commit,
     _find_slice_branch,
     _resolve_fork_point,
     assert_reviewable_scope,
+    commit_diff_spec,
     normalize_diff_spec,
     resolve_diff_base,
     resolve_slice_diff_range,
@@ -591,6 +593,54 @@ class TestNormalizeDiffSpec:
                 normalize_diff_spec("no-such-ref", cwd=".")
         assert exc_info.value.ref == "no-such-ref"
         assert not isinstance(exc_info.value, NotAGitRepositoryError)
+
+
+class TestCommitDiffSpec:
+    """``--commit`` reviews exactly what one commit introduced, from a short SHA."""
+
+    @staticmethod
+    def _git(repo: Path, *args: str) -> str:
+        return subprocess.run(
+            ["git", "-c", "user.email=t@t", "-c", "user.name=t", *args],
+            cwd=repo,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    @pytest.fixture
+    def repo(self, tmp_path: Path) -> Path:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        self._git(repo, "init", "--initial-branch=main")
+        for name in ("first.py", "second.py", "third.py"):
+            (repo / name).write_text("x = 1\n")
+            self._git(repo, "add", "-A")
+            self._git(repo, "commit", "-m", f"add {name}")
+        return repo
+
+    def test_short_sha_scopes_to_that_commit_only(self, repo: Path) -> None:
+        middle = self._git(repo, "rev-parse", "HEAD~1")
+        spec = commit_diff_spec(middle[:7], str(repo))
+        assert spec == f"{self._git(repo, 'rev-parse', 'HEAD~2')}..{middle}"
+        # Neither the earlier nor the later commit leaks into the review.
+        assert assert_reviewable_scope(spec, str(repo), None) == ["second.py"]
+
+    def test_unknown_commit_is_ref_not_found(self, repo: Path) -> None:
+        with pytest.raises(RefNotFoundError) as exc_info:
+            commit_diff_spec("deadbee", str(repo))
+        assert exc_info.value.ref == "deadbee"
+
+    def test_root_commit_is_refused(self, repo: Path) -> None:
+        root = self._git(repo, "rev-list", "--max-parents=0", "HEAD")
+        with pytest.raises(RootCommitError) as exc_info:
+            commit_diff_spec(root[:7], str(repo))
+        assert exc_info.value.ref == root[:7]
+
+    def test_not_a_git_repository(self, tmp_path: Path) -> None:
+        with patch(_GIT_UTILS_SUBPROCESS, side_effect=OSError("no git")):
+            with pytest.raises(NotAGitRepositoryError):
+                commit_diff_spec("1234abc", str(tmp_path))
 
 
 class TestAssertReviewableScope:

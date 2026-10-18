@@ -73,6 +73,7 @@ Optional flags:
 - `--cwd DIR`: project directory to review
 - `--files PATTERN`: glob pattern to scope the review
 - `--diff REF`: git ref to diff against (reviews changed files)
+- `--commit SHA`: review only the changes one commit introduced (short SHA is fine; cannot combine with `--diff`)
 - `--rules PATH`: path to additional rules file
 - `--rules-dir DIR`: rules directory override
 - `--no-rules`: suppress all rule injection
