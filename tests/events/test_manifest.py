@@ -191,10 +191,28 @@ def test_default_bindings_order_is_909_before_911() -> None:
     post_action_names = [b.action for b in DEFAULT_BINDINGS if b.event is EventType.POST_ACTION]
     assert post_action_names == [
         "squadron.dispatch-artifact",
+        "squadron.blocked-tasks",
         "squadron.dispatch-branch-work",
         "squadron.revision-stamp",
         "squadron.usage-stamp",
     ]
+
+
+def test_blocked_tasks_comes_before_branch_work() -> None:
+    """A blocked agent often commits nothing; the PM hand-off must win (slice 947 D7)."""
+    names = [b.action for b in DEFAULT_BINDINGS]
+    assert names.index("squadron.blocked-tasks") < names.index("squadron.dispatch-branch-work")
+
+
+def test_disable_removes_blocked_tasks(tmp_path: Path) -> None:
+    project_path = tmp_path / "project-events.yaml"
+    project_path.write_text("disable:\n  - squadron.blocked-tasks\n")
+
+    manifest = load_manifest(project_path=project_path, user_path=tmp_path / "missing-user.yaml")
+
+    action_names = [b.action for b in manifest.bindings]
+    assert "squadron.blocked-tasks" not in action_names
+    assert "squadron.dispatch-branch-work" in action_names
 
 
 def test_usage_stamp_follows_revision_stamp() -> None:
