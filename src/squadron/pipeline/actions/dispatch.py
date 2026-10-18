@@ -628,6 +628,7 @@ class DispatchAction:
             "profile": "sdk-session",
             "background_tasks_waited": session.background_tasks_waited,
             "background_tasks_stopped": session.background_tasks_stopped,
+            "background_shells_running": session.background_shells_running,
             # The session always runs the preset; a rotation seed rides as its append.
             "system_prompt_mode": (
                 SystemPromptMode.PRESET_APPEND if session.seeded else SystemPromptMode.PRESET

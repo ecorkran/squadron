@@ -973,19 +973,6 @@ class TestDispatchWaitsForBackgroundAgents:
         assert client.receive_calls == 2
 
     @pytest.mark.asyncio
-    async def test_background_shell_does_not_hold_dispatch(self) -> None:
-        client = ScriptedClient(
-            [sdk_task_started("b1", "local_bash"), sdk_text("done"), sdk_result()],
-        )
-        session = scripted_session(client)
-
-        response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
-
-        assert response == "done"
-        assert session.background_tasks_waited == 0  # type: ignore[attr-defined]
-        assert client.receive_calls == 1
-
-    @pytest.mark.asyncio
     async def test_no_tasks_reads_one_turn(self) -> None:
         client = ScriptedClient([sdk_text("hello"), sdk_result()])
         session = scripted_session(client)

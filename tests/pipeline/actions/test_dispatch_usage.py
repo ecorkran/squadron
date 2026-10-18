@@ -122,6 +122,7 @@ def _session(reply: SessionReply | None = None) -> AsyncMock:
     session.current_model = None
     session.background_tasks_waited = 0
     session.background_tasks_stopped = 0
+    session.background_shells_running = 0
     session.seeded = False
     session.setting_sources = None
     session.auto_memory = False

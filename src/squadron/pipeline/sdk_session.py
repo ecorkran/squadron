@@ -170,6 +170,9 @@ class SDKExecutionSession:
     # many it stopped on an idle timeout (zero on every other path).
     background_tasks_waited: int = 0
     background_tasks_stopped: int = 0
+    # Background shells still running when the last dispatch ended (stopped at the
+    # idle bound); agent counts above stay agent-only (slice 947 D11).
+    background_shells_running: int = 0
     # Whether the live client carries a seed in its system prompt.
     seeded: bool = False
     # Per-result cost from the live client's running total; replaced with the client.
@@ -236,6 +239,7 @@ class SDKExecutionSession:
         await self._ensure_usable()
         turns = DispatchTurns(cost_meter=self.cost_meter)
         self.background_tasks_stopped = 0
+        self.background_shells_running = 0
         try:
             text = await self._query_and_collect(prompt, turns)
         except ProviderError as exc:
@@ -288,12 +292,14 @@ class SDKExecutionSession:
                 # The iterator ended without a result. With nothing tracked or
                 # owed, this is today's behavior; otherwise the work the CLI
                 # owes can never arrive.
-                if turns.ledger.active or turns.waiting:
+                if turns.ledger.holding or turns.waiting:
                     raise ProviderError(
                         "stream ended before the dispatch's result; "
                         f"session state {turns.session_state!r}, "
                         f"{len(turns.ledger.active_ids())} background agent(s) still "
-                        f"running: {turns.ledger.descriptions()}"
+                        f"running: {turns.ledger.descriptions()}; "
+                        f"{len(turns.ledger.shell_ids())} background shell(s) still "
+                        f"running: {turns.ledger.shell_descriptions()}"
                     )
                 return turns.text()
             if is_own_result(result):
@@ -312,11 +318,14 @@ class SDKExecutionSession:
             if turns.waiting and not turns.waiting_logged:
                 turns.waiting_logged = True
                 _logger.info(
-                    "dispatch: turn ended with session state %r and %d background agent(s) "
-                    "running; waiting: %s",
+                    "dispatch: turn ended with session state %r, %d background agent(s) and "
+                    "%d background shell(s) running; waiting: %s",
                     turns.session_state,
                     len(turns.ledger.active_ids()),
-                    turns.ledger.descriptions(),
+                    len(turns.ledger.shell_ids()),
+                    ", ".join(
+                        d for d in (turns.ledger.descriptions(), turns.ledger.shell_descriptions()) if d
+                    ),
                 )
 
     async def _read_turn_with_retry(
@@ -444,10 +453,40 @@ class SDKExecutionSession:
                 return None
 
     async def _stop_background(self, turns: DispatchTurns, idle_s: float) -> None:
-        """Stop every tracked agent after an idle timeout, best-effort (D5)."""
-        ids = turns.ledger.active_ids()
-        descriptions = turns.ledger.descriptions()
-        for task_id in ids:
+        """Stop every tracked agent and shell after an idle timeout, best-effort (D5, D11)."""
+        agent_ids = turns.ledger.active_ids()
+        agent_descriptions = turns.ledger.descriptions()
+        shell_ids = turns.ledger.shell_ids()
+        shell_descriptions = turns.ledger.shell_descriptions()
+        await self._stop_tasks(agent_ids + shell_ids)
+        # Clear locally: a lost terminal signal is exactly the case here.
+        turns.ledger.clear()
+        self.background_tasks_stopped = len(agent_ids)
+        self.background_shells_running = len(shell_ids)
+        if not agent_ids and not shell_ids:
+            # The CLI said it was still working (D12) but nothing in the ledger explains it.
+            _logger.warning(
+                "dispatch: no activity for %ds with session state %r and no tracked background "
+                "work; ending the dispatch",
+                idle_s,
+                turns.session_state,
+            )
+        if agent_ids:
+            _logger.warning(
+                "dispatch: no activity for %ds with background agent(s) still running; stopped: %s",
+                idle_s,
+                agent_descriptions,
+            )
+        if shell_ids:
+            _logger.warning(
+                "dispatch ended with %d background shell(s) running: %s (no activity for %ds; stopped)",
+                len(shell_ids),
+                shell_descriptions,
+                idle_s,
+            )
+
+    async def _stop_tasks(self, task_ids: list[str]) -> None:
+        for task_id in task_ids:
             try:
                 await self.client.stop_task(task_id)
             except Exception:  # noqa: BLE001
@@ -456,14 +495,6 @@ class SDKExecutionSession:
                 # so no narrower type exists. Stopping is cleanup: log and go
                 # on to the next id. A late follow-up turn is handled by D6.
                 _logger.exception("dispatch: failed to stop background task %s", task_id)
-        # Clear locally: a lost terminal signal is exactly the case here.
-        turns.ledger.clear()
-        self.background_tasks_stopped = len(ids)
-        _logger.warning(
-            "dispatch: no activity for %ds with background agent(s) still running; stopped: %s",
-            idle_s,
-            descriptions,
-        )
 
     async def capture_summary(
         self,
