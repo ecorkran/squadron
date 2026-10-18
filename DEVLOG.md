@@ -2,19 +2,28 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261017'
+dateUpdated: '20261018'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20261018
+
+### Slice 947: Unattended Pipelines — Task Breakdown Complete
+
+- Tasks: `project-documents/user/tasks/947-tasks.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md` (24 tasks, test-with, a commit per feature).
+- [#239](https://github.com/ecorkran/squadron/issues/239) is folded into 947 as design D12 and Task 1, instead of slice 990. The dispatch ends on the CLI's `idle` session state (`CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1`), with the ledger as the fallback when no state frames arrive. It goes first because the D10 probe and the D11 shell wait both run over `_collect_turns`. The probe gains a fifth question: does the CLI report `running` while a shell is live? If it does, the D11 wait is the D12 wait.
+- Probe script location decided: `scripts/probes/background_shell.py`.
+- Next: Phase 6 on branch `947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells`.
+
 ## 20261017
 
 ### Slice 947: Unattended Pipelines — Design Complete
 
 - Design: `project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md` (D1–D11, all decided; `cf validate design` PASS).
-- #235: shared no-invented-gates criterion appended in `review_client.py` for non-judge templates (judges excluded: calibration); `CLAUDE.md` rule + `BLOCKED:` convention, upstream as [ai-project-guide#45](https://github.com/ecorkran/ai-project-guide/issues/45); task-breakdown guide side already shipped (#44). `max_cost_usd` cap (pipeline YAML + `pipeline.max_cost_usd`, lowest wins), summed from stamped usage in `_execute_step_once`, pre-checked on resume, persisted as `RunState.spent_usd`.
+- #235: shared no-invented-gates criterion appended in `review_client.py` for non-judge templates (judges excluded: calibration); `CLAUDE.md` rule + `BLOCKED:` convention, upstream as [ai-project-guide#45](https://github.com/ecorkran/ai-project-guide/issues/45); task-breakdown guide side already shipped (#44). Cost cap from config `pipeline.max_cost_usd` only, summed from stamped usage in `_execute_step_once`, per invocation and not persisted (revisions 1–2 dropped the YAML field and `RunState.spent_usd`).
 - #223: `squadron.blocked-tasks` POST_ACTION bound before `dispatch-branch-work`, pauses via `awaits_human`; resume re-runs implement. Pending-decision pre-check deferred to [#240](https://github.com/ecorkran/squadron/issues/240) (blocked on context-forge#121).
 - #234: #199's deny hook was already live when #234 was filed, so Task 1 is a real-SDK probe (shell `task_type`, backgrounding path, continuation turn, progress frames). Then shells are waited on (bounded, progress doesn't reset idle) and reported.
 - Next: Phase 5 task breakdown.

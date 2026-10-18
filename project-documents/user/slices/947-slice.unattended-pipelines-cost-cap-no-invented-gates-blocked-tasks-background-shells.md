@@ -47,6 +47,7 @@ This slice adds a review criterion and a CLAUDE.md rule against invented gates, 
 3. A `pipeline.max_cost_usd` config key. The executor sums each invocation's spend and checks it after every action (D3–D6). This is in scope because slice plan entry 41 assigns it to this slice, and #235 replaces the prose cost gates with it. It adds no new commands or files, only one config key over the existing executor.
 4. A built-in POST_ACTION action `squadron.blocked-tasks`. When an implement dispatch leaves a `BLOCKED:` marker in the slice's task files, it pauses the run and prints the marker text. Resuming re-runs the implement step (D7, D8).
 5. Background shells in the SDK dispatch: an evidence probe first, then end-of-turn reporting of running shells, and a wait for shells bounded by the existing background idle timeout. The wait mechanism is written into D11 from the probe's results (D10, D11).
+6. [#239](https://github.com/ecorkran/squadron/issues/239): an SDK session dispatch ends on the CLI's `idle` session state, not on an empty agent ledger, so a background agent's follow-up turn is never cut off (D12). It lands first because D11's wait and the D10 probe both run over `_collect_turns`.
 
 **Excluded**
 
@@ -90,6 +91,7 @@ None. Everything consumed below already exists on `main` (0.23.2).
 | Task-file reading | `pipeline/branch_ops.py` | Extract `slice_task_paths()` shared by merge guard and BLOCKED check |
 | Event outcome copy | `pipeline/executor.py` | Copy `awaits_human` from a failing event outcome |
 | Shell tracking | `pipeline/sdk_turns.py`, `sdk_session.py` | Report running shells; wait per D11 |
+| Dispatch end (#239) | `pipeline/sdk_turns.py`, `sdk_session.py` | Session-state env, `DispatchTurns` state, `_collect_turns` ends on `idle` (D12) |
 
 ### Data Flow
 
@@ -213,6 +215,16 @@ Status: decided
 - Gating: the probe task's last item amends this D11. The wait task's first item checks that D11 records the mechanism and its probe evidence, and the wait task doesn't start without it. If the amendment never happens, the slice isn't complete: the wait criterion below stays unchecked.
 - The #199 deny hook stays. It keeps explicit backgrounding in the foreground, where the foreground stall bound applies.
 
+### D12 — End a session dispatch on the CLI's `idle` state (#239)
+Status: decided
+- Cause (from CLI transcript 8eb3453f, recorded on #239): `BackgroundLedger` clears an agent when its `TaskNotificationMessage` arrives, which is before the turn that consumes it. A notice queued mid-turn leaves the ledger empty at that turn's result, so `_collect_turns` returns while the CLI still owes a follow-up turn. The SDK documents the gap (`_track_task_lifecycle`, SDK #1190): only the CLI's session state closes it.
+- The SDK (0.2.162) already sets `CLAUDE_CODE_SDK_READS_SESSION_STATE`, but it drops those frames from the caller's stream (`sdk_host_only`). `open_pipeline_session` adds `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1` to the session env, so `session_state_changed` reaches us as a `SystemMessage` with `data["state"]` in `idle` / `running` / `requires_action`. The env name and the state values are constants defined once in `sdk_turns.py`.
+- `DispatchTurns` records the latest state, starting at `None` for each dispatch. Once a state frame has been seen, the dispatch ends when our own result is in **and** the state is `idle`. The idle frame may arrive before or after the result, and either order ends the dispatch. While the state is `running` after our result, the dispatch is waiting, bounded by `pipeline.background_idle_timeout_s` (the existing `_stop_background` path).
+- No state frame seen in the dispatch (older CLI): today's ledger rule applies, unchanged.
+- Only the persistent `SDKExecutionSession` path changes. One-shot `query()` dispatches and `--prompt-only` runs already let the CLI decide when the run ends.
+- Failure modes: a stream that closes mid-wait goes through the existing `ProviderError` path. Waiting on `running` past the bound goes through `_stop_background` with its WARNING. An unknown state string logs WARNING once and counts as not idle.
+- D10 runs its probe after D12 lands, and adds a fifth question: does the CLI report `running` while a background shell is live? If it does, D11's wait is the D12 wait and needs no separate mechanism.
+
 ## Implementation Details
 
 ### API Contracts
@@ -257,6 +269,7 @@ sq config get pipeline.max_cost_usd     # None when unset = no cap
 - Marker parsing accepts the real amoeba format (`> BLOCKED: no judge-template review artifact ... PM asked`), list-item, bold, and plain forms, and rejects lowercase prose "blocked".
 - Probe results for D10 (1)–(4) are recorded in this design and on #234, and D11 is amended with the wait mechanism before the wait task starts.
 - A dispatch that returns with a background shell running logs WARNING and sets `background_shells_running`. A dispatch whose turn ends while a shell runs waits for it, bounded by `pipeline.background_idle_timeout_s`, by the mechanism D11 records from the probe (unless the probe records the wait as not needed).
+- An SDK session dispatch whose background agent's notice arrives mid-turn waits for that agent's follow-up turn and returns its text (#239). With no session-state frames, dispatch behavior is unchanged.
 
 ### Technical Requirements
 
@@ -297,7 +310,8 @@ Draft. Refined after Phase 6. Use a scratch slice (as in slice 178's walkthrough
 
 Suggested order (Effort 3/5):
 
-1. D10 probe (evidence only; record results).
+0. D12 dispatch end on `idle` (#239).
+1. D10 probe (evidence only; record results), run over the D12 code.
 2. D1 criterion + D2 `CLAUDE.md` (small, independent).
 3. D3–D6 cost cap: config key → `run_spend.py` → executor threading and check → replay mapping.
 4. D7–D8 BLOCKED: `slice_task_paths` extraction (merge guard unchanged in behavior; existing tests pass) → `parse_blocked_markers` → action + binding → `awaits_human` copy → resume test.
