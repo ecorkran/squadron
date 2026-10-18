@@ -14,61 +14,56 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261017
 dateUpdated: 20261017
-reviewedSha: 97dbd541e58ec5db6733ec9ab8e719d2452dbeb5
-revision_number: 1
+reviewedSha: 7ee3dbe5eb016a1ef7d66ca2280625e756e573b7
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 2
 turns: 3
-promptTokens: 86166
+promptTokens: 86193
 cachedTokens: 47946
-cacheWriteTokens: 38216
-completionTokens: 2812
-durationSeconds: 22.3
-costUsd: 0.195416
+cacheWriteTokens: 38243
+completionTokens: 2682
+durationSeconds: 22.1
+costUsd: 0.194234
 costBasis: provider
 runId: run-20261018-p4-16dfa489
 squadronVersion: 0.23.2
 findings:
   - id: F001
-    severity: pass
-    category: scope
-    summary: "Fits the maintenance initiative's scope"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Overview"
-  - id: F002
     severity: concern
     category: scope-creep
-    summary: "The cost cap is a new feature, which the architecture excludes from this initiative"
+    summary: "Scope exceeds a \"lighter-weight\" maintenance slice; the cost cap is a new feature area"
     location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Technical Scope"
-  - id: F003
-    severity: concern
-    category: proportionality
-    summary: "The design is heavy for a \"lighter-weight\" maintenance slice"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Technical Decisions"
-  - id: F004
+  - id: F002
     severity: concern
     category: under-specification
-    summary: "Unspecified integration points: `BLOCKED_TASK` and the replay reader"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#API Contracts"
-  - id: F005
+    summary: "Item 5 is committed in scope but its core mechanism is deferred to a probe result"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D11"
+  - id: F003
     severity: concern
-    category: boundaries
-    summary: "The executor takes on cross-cutting responsibilities and a hidden event-outcome change"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Component Structure"
-  - id: F006
+    category: boundary-violation
+    summary: "POST_ACTION contract change leaks to all bindings, including user-defined ones"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D7"
+  - id: F004
     severity: concern
     category: error-handling
-    summary: "NFR and failure-mode gaps on the new shell-wait I/O path"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D11 — Report running shells now; write the wait mechanism from the probe"
-  - id: F007
-    severity: note
-    category: documentation
-    summary: "Parent field and NFR handling"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md:5"
-  - id: F008
+    summary: "Cost cap NFR/failure paths: concurrency and unknown-cost gaps weaken the enforcement claim"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D5"
+  - id: F005
+    severity: concern
+    category: error-handling
+    summary: "Parent architecture reference and failure-mode enumeration for the new I/O path are partly implicit"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D11"
+  - id: F006
     severity: pass
-    category: boundaries
-    summary: "Dependency directions and layering"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Dependencies"
+    category: architecture-alignment
+    summary: "Layering and dependency direction"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Component Structure"
+  - id: F007
+    severity: pass
+    category: scope-management
+    summary: "Excluded scope and deferral are explicit"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Excluded"
 ---
 
 # Review: slice — slice 947
@@ -78,66 +73,50 @@ findings:
 
 ## Findings
 
-### [PASS] Fits the maintenance initiative's scope
+### [CONCERN] Scope exceeds a "lighter-weight" maintenance slice; the cost cap is a new feature area
 
-The architecture (900) accepts operational and error-handling improvements that span subsystems, plus non-trivial bug fixes. The slice bundles three issues (#235, #223, #234) with related causes. It also adds one control, the cost cap.
+The architecture (900) says maintenance slices are "lighter-weight". It also allows grouping only when "each item commits separately and can be reverted without touching the others". It excludes "new feature areas", except for small conveniences over existing commands, files and config. This slice bundles five items:
+- a review-prompt criterion;
+- a CLAUDE.md rule;
+- an executor-wide spend ledger with a new `FailureKind` and `FailureClass`;
+- a new POST_ACTION contract (`awaits_human` pause);
+- an SDK shell-wait mechanism that is still undefined.
 
-The architecture says a grouped slice is valid when each item commits separately and can be reverted on its own. The "Development Approach" section says this directly ("Each part is independently committable"). The decision to defer the pre-implement pending-decision check to #240, because it depends on context-forge#121, keeps the slice from absorbing cross-project work.
+The slice defends the cost cap as one config key over the existing executor. In practice it adds a new module (`run_spend.py`), a new parameter threaded through `_execute_step`, `loop`, `each` and `fan_out`, a replay classification, and documented overshoot semantics. That is closer to a feature than to a convenience. The slice does say the plan assigns the cap to this slice (plan entry 41), so this is a proportionality concern rather than a boundary violation. The "independently committable" claim (Implementation Notes) is also uneven. The `awaits_human` copy in the executor and the `slice_task_paths` extraction touch shared paths used by other items.
 
-### [CONCERN] The cost cap is a new feature, which the architecture excludes from this initiative
+Recommendation: confirm that the plan's grouping still holds. If it does, state that the five parts are revertable separately and split the shell work into its own slice if the probe yields a non-trivial mechanism (see the next finding).
 
-Architecture 900 excludes "new feature areas" and allows only "small conveniences over existing commands, files and config." The cost cap adds the following:
-- a new public contract: a pipeline YAML field and a config key
-- a new `FailureKind` member
-- a new persisted `RunState` field
-- a new module, `run_spend.py`
-- a new run-level spend ledger
-- a pre-run gate, a post-action gate, and documented overshoot and crash-loss bounds
+### [CONCERN] Item 5 is committed in scope but its core mechanism is deferred to a probe result
 
-This goes beyond a small convenience over existing config. The slice should either state why it qualifies, for example by pointing to the slice plan entry that assigns it here, or move it to a feature initiative. At minimum it needs a one-line justification under "Technical Scope". Without one, a reader can't tell whether the scope is in bounds.
+D11 is marked "Status: decided". It leaves the wait mechanism unwritten: whether the agent is resumed by an injected turn or by a turn squadron sends, and whether shell progress frames count as activity. Those are the core of #234. The design is still open on how the dispatch behaves when a shell is running.
 
-### [CONCERN] The design is heavy for a "lighter-weight" maintenance slice
+The slice does manage this risk with a gating rule: the wait task cannot start until D11 is amended. It also has a documented fallback to reporting-only. Even so, the design does not specify the integration with `_collect_turns`/`DispatchTurns`, the turn-count and telemetry interaction, or the idle-timeout semantics. The "Provides/Consumes" and Success Criteria sections therefore cannot be checked against a concrete design for this item.
 
-The architecture asks for "lighter-weight" process on maintenance work. This design has 11 decisions, 5 scope items, and about 10 touched components. Several parts can be cut or deferred:
-- **Persisted spend for resume (D6).** This adds the `RunState.spent_usd` field, a pre-1.0 migration WARNING, an observer signature change, and a "crash loss" bound to document. A lighter option meets the requirement. Fail the run on cap crossing, and on resume start the count from zero with one stated limit.
-- **Pre-run cap check on resume (D5).** It exists only because of persisted spend, so it goes if D6 is simplified.
-- **Two cap sources with lowest-wins resolution and a dual-value error message (D3).** One source is enough until something needs the second. Config alone covers "per-project", and the slice already drops the CLI flag.
-- **Shell tracking and wait (D10/D11).** The slice itself says the cause of #234 is unconfirmed and that the wait may turn out "not needed". The shell-ledger and `background_shells_running` metadata work can be deferred until the probe shows a real backgrounding path. The probe alone should be this slice's deliverable.
-- **`FailureKind.BLOCKED_TASK`.** It's added in "API Contracts", but D7 never sets it. The "Failure modes" tests and the design don't mention it.
+Recommendation: either mark D11 "decided" only for the reporting part and "pending" for the wait, or split the wait into a follow-up slice that is designed after the probe. Reporting plus the probe is a cheap, self-contained unit.
 
-Each is a CONCERN under the proportionality criterion. The finding to act on is the cut list above.
+### [CONCERN] POST_ACTION contract change leaks to all bindings, including user-defined ones
 
-### [CONCERN] Unspecified integration points: `BLOCKED_TASK` and the replay reader
+D7 changes the event-outcome loop so that any failing event action with `awaits_human=True` pauses the run instead of failing it. The slice acknowledges this affects user-defined bindings. It argues that built-in behavior is unchanged, but it does not address user actions that already set `awaits_human` on a failure. The contract is also not documented as a versioned or opt-in behavior. A narrower option meets the requirement. The `blocked-tasks` action could be handled as a distinct outcome type, or the pause semantics could apply only to built-in actions. The design should show that this option was weighed, or confirm that no existing user event sets `awaits_human`. `docs/EVENTS.md` is listed for updating, but no compatibility note is called out.
 
-"API Contracts" says both new `FailureKind` members "are read by the replay outcome reader without matching on error text." No component in the table covers the replay reader. D7 builds the BLOCKED `ActionResult` without setting `FAILURE_KIND_KEY`. If the pause is meant to carry `BLOCKED_TASK`, D7 must say where it is set. If it isn't, drop the member. The claim about the replay reader needs a named component and a test, or it should be removed.
+### [CONCERN] Cost cap NFR/failure paths: concurrency and unknown-cost gaps weaken the enforcement claim
 
-### [CONCERN] The executor takes on cross-cutting responsibilities and a hidden event-outcome change
+The cap is best-effort. It is bounded per invocation, `fan_out` can overshoot by one action per branch, and unknown-cost actions are not counted. The slice states these limits clearly, and they are observable (WARNING, error text). However, the overview and Value sections still present it as "a real per-run cap" that "stops at a dollar cap the PM set". The rationale in D1 for pre-authorizing spend in review prompts ("spend is bounded by the run's enforced cost cap") rests on that stronger claim. With no cap configured, which is the default, spend is unbounded, yet the criterion tells reviewers that spend is pre-authorized. Recommendation: align the D1 criterion wording with the best-effort, opt-in nature of the cap. For example, avoid saying spend is "bounded by the run's enforced cost cap" when no cap is set.
 
-Two changes affect behavior beyond this slice.
-1. The executor starts copying `awaits_human` from any failing event outcome. This applies to every POST_ACTION binding, including user-defined ones, not just `squadron.blocked-tasks`. The slice calls it "one line", but it changes the event contract. The "Provides to Other Slices" section should say so, along with whether an existing or user event returning `awaits_human` now pauses a run, and the slice should add a test for that.
-2. `_execute_step_once` now both runs actions and enforces the cap. The slice should say where `RunSpend` is injected and how `fan_out` branches share it. "Share the one event loop" is asserted, but the branch-sharing mechanism isn't described.
+### [CONCERN] Parent architecture reference and failure-mode enumeration for the new I/O path are partly implicit
 
-### [CONCERN] NFR and failure-mode gaps on the new shell-wait I/O path
+D11 enumerates failure modes for the shell wait (non-zero exit, timeout, stream close, extra turn). It does not cover a shell that never emits a terminal frame, or a ledger entry left stale because the terminal frame was dropped. It also does not cover what happens when the idle-timeout stop itself fails (`_stop_background` error). The slice names the existing `ProviderError` path only for the stream-closing case. Recommendation: add these two cases, each with a WARNING signal and a test, to the failure list and to the "failure modes each have an observable signal and a test" criterion.
 
-D11 leaves the wait mechanism undefined ("written after the probe"). It still lists "shell timeout" as a failure mode with a test. The failure modes for this I/O path are only partly enumerated:
-- The shell exits non-zero.
-- The CLI process dies while a shell runs.
-- The SDK stream closes mid-wait.
-- The wait resumes the agent through an extra turn, which also adds cost. That cost must count against the cap, and the design doesn't say how.
+### [PASS] Layering and dependency direction
 
-Deferring the mechanism is acceptable only if the slice design is amended before the wait task starts. The task list and success criteria should make that a gating step, and say what happens if the amendment is skipped.
+Spend tracking sits in the executor and reads usage records already stamped by actions, so the actions do not depend on the ledger. The review criterion is assembled in one place, and `slice_task_paths()` is extracted rather than duplicated. The slice also avoids the alternatives it rejects: a second cap source, persisted spend, and accumulating inside `UsageCapture`. Those choices keep proportionality and respect the DRY and single-definition rules.
 
-### [NOTE] Parent field and NFR handling
+### [PASS] Excluded scope and deferral are explicit
 
-The `parent` field points to `900-slices.maintenance-and-refactoring.md` (the slice plan), which is expected. Architecture 900 states no NFRs, so there is nothing to restate. The design does state its own bounds for the cap (D5 overshoot and crash loss) and for the shell wait (`background_idle_timeout_s`).
-
-### [PASS] Dependency directions and layering
-
-Dependencies run in the right direction. The executor consumes usage records stamped by actions, the BLOCKED check consumes `slice_task_paths()`, and the extraction is shared with the merge guard without changing its behavior. The deferred check stays with context-forge, so squadron doesn't parse decision status itself. The review criterion lives at one assembly point and excludes judge templates, which avoids shifting baselines.
+Excluded items (the pending-decision check in #240, `--max-cost`, YAML cap field, persistence, prompt-only runs) each carry a reason and a tracking issue where one is needed. This keeps the slice within the maintenance-container charter.
 
 ### Run Digest
 
-- Response length: 7409 chars
+- Response length: 7133 chars
 - Response is newline-free: no
 - Tool calls made: 2
 - Tool calls failed: 0
@@ -148,12 +127,12 @@ Dependencies run in the right direction. The executor consumes usage records sta
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 86166 / 47946 / 38216 / 2812 / not computed
-- Duration: 22.3 s
-- Cost: $0.20 (provider)
+- Tokens — prompt / cached / cache write / completion / reasoning: 86193 / 47946 / 38243 / 2682 / not computed
+- Duration: 22.1 s
+- Cost: $0.19 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 8
+- Finding-shaped matches — whole response: 7
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 8
-- Finding-shaped matches — surviving validation: 8
+- Finding-shaped matches — in findings section: 7
+- Finding-shaped matches — surviving validation: 7
