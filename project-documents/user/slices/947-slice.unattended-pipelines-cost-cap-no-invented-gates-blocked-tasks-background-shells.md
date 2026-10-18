@@ -202,11 +202,30 @@ Status: decided
   4. whether a running shell emits `TaskProgressMessage` frames.
 - If (2) finds no path to a background shell, there is no shell to see and no `task_type` string to identify one by. Neither D11 reporting nor the wait ships; both are recorded as not needed, with the probe output as evidence. No shell type is ever written without probe evidence (hallucination-trap rule).
 
+**Probe results** (`scripts/probes/background_shell.py`, run live on claude-haiku-4-5-20251001, CLI 2.1.302, through `open_pipeline_session` so the #199 hook and the D12 state frames were active). Five experiments; frames quoted from the logs.
+1. **`task_type` is `local_bash`** for every backgrounded shell, from both paths in (2): `TaskStartedMessage task_type="local_bash"`.
+2. **A shell can be backgrounded despite the deny hook, by two paths the hook does not see.**
+   - `run_in_background: true` directly: denied by the hook (`PreToolUse:Bash hook error: Background shells are not allowed...`). No task starts.
+   - A Bash command that runs past its own `timeout` parameter: the CLI moves it to the background itself (`Command did not complete within its 5s timeout and was moved to the background (ID: b66lefm88)`), after a `TaskStartedMessage local_bash`. No `run_in_background` input is involved, so the hook never fires. A long `sleep` as the command is refused by the CLI before it runs (`Blocked: sleep 40 followed by...`), which is why the probe uses `python3 -c "import time; time.sleep(40)"` for this path.
+   - The Monitor tool (`ToolSearch select:Monitor`, then `Monitor`): `TaskStartedMessage local_bash` and `background_tasks_changed`. The hook matches only `Bash`, so Monitor is not covered either.
+   - `(cmd) &` inside a foreground command: no task frame at all. It is an untracked OS process, not a tracked shell.
+3. **A shell's end makes the CLI inject a continuation turn**, after the dispatch has already returned. Both paths: `task_updated status=completed`, `task_notification status=completed`, `session_state_changed running`, an assistant turn, then a `ResultMessage` with `origin={"kind": "task-notification"}`, then `idle`. The SDK's `DEFERRING_TASK_TYPES` comment (only agents and workflows run a follow-up turn) does not hold for the CLI 2.1.302 behavior. This is #234's mechanism.
+4. **No progress frames.** Zero `TaskProgressMessage` / `task_progress` frames across all five logs, with shells running 22–30 s. The idle timer sees only silence for a shell's whole run.
+5. **The CLI reports `idle` while a shell is live.** Monitor log: `idle` at t=8.0 s, shell still running, `running` only at t=30.8 s when the shell ended. Same in the timeout path (`idle` t=10.8 s, `running` t=43.2 s). The D12 state does not cover shells; the wait needs its own mechanism (D11).
+
 ### D11 — Report running shells now; write the wait mechanism from the probe
 Status: decided
 - Committed once probe (1) yields the shell `task_type`: `BackgroundLedger` records shell starts and terminal frames (`SHELL_TASK_TYPE` from probe 1). When a dispatch returns with a shell still running, it logs WARNING ("dispatch ended with N background shell(s) running: <descriptions>") and sets `background_shells_running: int` in dispatch metadata, the way `background_tasks_waited` reaches it today.
 - Committed now: the dispatch waits for shells, bounded by `pipeline.background_idle_timeout_s` (the slice plan's requirement). A shell stopped at that bound logs WARNING.
-- Written after the probe: how the wait resumes the agent, depending on probe 3 (injected turn, or squadron sends one), and whether shell progress frames count as activity, depending on probe 4. The probe task amends this D11 with the mechanism and its evidence before the wait task starts. The amendment ends with a numbered implementation step list for the wait (files, functions, the end condition), which the wait task follows. If probe 2 finds no path to a background shell, reporting and the wait are both recorded here as not needed.
+- **Wait mechanism (from the D10 probe).** Shells are reachable (probe 2), `SHELL_TASK_TYPE = "local_bash"` (probe 1). The CLI injects the continuation turn itself when a shell ends (probe 3), so squadron sends nothing: it only has to keep reading. The state is `idle` while a shell lives (probe 5), so the D12 end rule alone returns too early, and there are no progress frames (probe 4), so the idle timer is silence for the shell's whole run.
+  - **End rule.** A dispatch is waiting when our own result is in and either the ledger holds a running agent or shell, or a state frame has been seen and the state isn't `idle`. It settles when neither holds. The ledger term keeps the pre-D12 agent behavior when the CLI says `idle` while an agent lives, and adds shells. The shell's terminal frames clear the ledger, the CLI's `running` that follows keeps the wait open through the continuation turn, and its `idle` ends it (#239's ordering, now for shells).
+  - **Bound.** `pipeline.background_idle_timeout_s` (default 1800 s) of silence. Because shells emit no progress, a shell that runs longer than the bound is stopped. The docs say so.
+  - **Implementation steps** (Tasks 18 and 20 follow these):
+    1. `sdk_turns.py`: add `SHELL_TASK_TYPE = "local_bash"`, citing this probe. `BackgroundLedger` tracks shells in a separate set from agents: `shells_active`, `shell_ids()`, `shell_descriptions()`. `active`, `active_ids()`, `seen_count` and `descriptions()` stay agents-only. Add `holding` (agents or shells running).
+    2. `sdk_turns.py`: `DispatchTurns.waiting` becomes `own_result_seen and (ledger.holding or state_seen_and_not_idle)`. `settled` is unchanged.
+    3. `sdk_session.py` `_collect_turns`: the stream-ended error and the wait log use `ledger.holding`; the message names running shells beside agents.
+    4. `sdk_session.py` `_stop_background`: stop agent ids and shell ids through `client.stop_task`; `background_tasks_stopped` counts agents only; the shell ids stopped set `background_shells_running`, and the WARNING names them. Whether `stop_task` ends a `local_bash` task is verified live in walkthrough step 5, not assumed.
+    5. `DispatchTurns.telemetry` already folds the injected turn's result, so its cost reaches the dispatch's usage record and the cap with no further change.
 - Failure modes on this path, each with an observable signal and a test:
   - **Shell exits non-zero:** a normal terminal frame clears it. The agent reads the result itself; squadron takes no special action.
   - **Shell outlives the bound:** it's stopped and WARNING is logged.
@@ -223,7 +242,7 @@ Status: decided
 - No state frame seen in the dispatch (older CLI): today's ledger rule applies, unchanged.
 - Only the persistent `SDKExecutionSession` path changes. One-shot `query()` dispatches and `--prompt-only` runs already let the CLI decide when the run ends.
 - Failure modes: a stream that closes mid-wait goes through the existing `ProviderError` path. Waiting on `running` past the bound goes through `_stop_background` with its WARNING. An unknown state string logs WARNING once and counts as not idle.
-- D10 runs its probe after D12 lands, and adds a fifth question: does the CLI report `running` while a background shell is live? If it does, D11's wait is the D12 wait and needs no separate mechanism.
+- D10 runs its probe after D12 lands, and adds a fifth question: does the CLI report `running` while a background shell is live? If it does, D11's wait is the D12 wait and needs no separate mechanism. It does not (D10 result 5): D11 adds the ledger term to the end rule.
 
 ## Implementation Details
 
@@ -267,7 +286,7 @@ sq config get pipeline.max_cost_usd     # None when unset = no cap
 - An implement dispatch that leaves a `BLOCKED:` marker in the slice's task files pauses the run at `implement`, prints each marker's text, and runs no later step. This includes when the agent made no commits.
 - Resuming the paused run re-dispatches implement.
 - Marker parsing accepts the real amoeba format (`> BLOCKED: no judge-template review artifact ... PM asked`), list-item, bold, and plain forms, and rejects lowercase prose "blocked".
-- Probe results for D10 (1)–(4) are recorded in this design and on #234, and D11 is amended with the wait mechanism before the wait task starts.
+- Probe results for D10 (1)–(5) are recorded in this design and on #234, and D11 is amended with the wait mechanism before the wait task starts.
 - A dispatch that returns with a background shell running logs WARNING and sets `background_shells_running`. A dispatch whose turn ends while a shell runs waits for it, bounded by `pipeline.background_idle_timeout_s`, by the mechanism D11 records from the probe (unless the probe records shells as unreachable, in which case neither ships).
 - An SDK session dispatch whose background agent's notice arrives mid-turn waits for that agent's follow-up turn and returns its text (#239). With no session-state frames, dispatch behavior is unchanged.
 
@@ -291,8 +310,7 @@ Draft. Refined after Phase 6. Use a scratch slice (as in slice 178's walkthrough
 2. **Cost cap, config.** `sq config set pipeline.max_cost_usd 0.01`, then `sq run P5 <scratch-slice> -v`. The run fails after the first LLM action with `run spent $0.0X this invocation, over pipeline.max_cost_usd $0.01; raise the cap and resume to continue`. `sq run --status latest` shows failed.
 3. **Resume.** `sq config set pipeline.max_cost_usd 20` then `sq run --resume <run-id>`. The run continues, counting from $0.
 4. **BLOCKED pause.** On the scratch slice, add a task "Ask the PM for X; write `BLOCKED:` if you cannot proceed" (a deliberate test of the marker). `sq run P6 <scratch-slice> -v` pauses at `implement`, prints the marker text, and runs no `close-out`, review or devlog. Remove the line, resolve the task, and run `sq run --resume <run-id>`. Implement re-dispatches.
-5. **Background shell.** Run the probe script `scripts/probes/background_shell.py` (Task 3). It reproduces the backgrounding path the probe found. The dispatch waits for the shell and continues as D11 records. A forever shell (`sleep 100000` via the same path) with `pipeline.background_idle_timeout_s` set low is stopped with a WARNING.
-6. If the probe found no backgrounding path (D10), step 5 is replaced by recording the probe output; no shell reporting or wait ships.
+5. **Background shell.** In a scratch slice step, have the agent run `python3 -c "import time; time.sleep(40)"` with the Bash `timeout` parameter at 5000 (the path D10 result 2 found). The dispatch waits through the CLI's continuation turn and returns its text. Repeat with `time.sleep(100000)` and `sq config set pipeline.background_idle_timeout_s 15`: the shell is stopped with a WARNING, and the process is gone afterwards (`ps`), which confirms `stop_task` ends a `local_bash` task.
 
 ## Risk Assessment
 

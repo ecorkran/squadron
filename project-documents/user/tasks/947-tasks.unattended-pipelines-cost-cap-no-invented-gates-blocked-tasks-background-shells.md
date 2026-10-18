@@ -23,37 +23,37 @@ status: not_started
 - Deferred: #240 (pre-implement pending-decision check, blocked on context-forge#121).
 
 ## Task 1: Dispatch ends on the CLI's `idle` state (D12, #239) — Effort 3
-- [ ] Add the session-state constants to `src/squadron/pipeline/sdk_turns.py`, each defined once
-  - [ ] The env var name `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`
-  - [ ] The system-message subtype `session_state_changed`
-  - [ ] The state values `idle`, `running`, `requires_action`
-- [ ] Track state in `DispatchTurns`
-  - [ ] New field for the latest session state, `None` at dispatch start
-  - [ ] Feed it from `SystemMessage` frames whose subtype is the session-state subtype, reading `data["state"]`
-  - [ ] An unknown state string logs WARNING once per dispatch and counts as not idle
-  - [ ] `waiting` is true when our own result is in and either the state has been seen and isn't `idle`, or no state was seen and the ledger is active
-- [ ] Set the env var to `"1"` in the env passed by `open_pipeline_session` (`src/squadron/pipeline/sdk_session.py`), merged with `settings["env"]` without dropping existing keys
-- [ ] Change `_collect_turns` so it ends the dispatch per D12
-  - [ ] State seen: return only when our own result is in and the latest state is `idle`. Either order (idle before or after the result) ends the dispatch.
-  - [ ] An `idle` frame that arrives after our result, with no further result, ends the dispatch. The read loop has to return on that frame, not only on a `ResultMessage`.
-  - [ ] No state seen: today's ledger rule, unchanged
-  - [ ] Waiting on `running` is bounded by `pipeline.background_idle_timeout_s` through the existing `_stop_background` path
-- [ ] Update the `_collect_turns` docstring and the `DispatchTurns` docstring to state the new end condition
-- [ ] Success: one-shot `query()` dispatches (`providers/sdk/agent.py`) are untouched
+- [x] Add the session-state constants to `src/squadron/pipeline/sdk_turns.py`, each defined once
+  - [x] The env var name `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`
+  - [x] The system-message subtype `session_state_changed`
+  - [x] The state values `idle`, `running`, `requires_action`
+- [x] Track state in `DispatchTurns`
+  - [x] New field for the latest session state, `None` at dispatch start
+  - [x] Feed it from `SystemMessage` frames whose subtype is the session-state subtype, reading `data["state"]`
+  - [x] An unknown state string logs WARNING once per dispatch and counts as not idle
+  - [x] `waiting` is true when our own result is in and either the state has been seen and isn't `idle`, or no state was seen and the ledger is active
+- [x] Set the env var to `"1"` in the env passed by `open_pipeline_session` (`src/squadron/pipeline/sdk_session.py`), merged with `settings["env"]` without dropping existing keys
+- [x] Change `_collect_turns` so it ends the dispatch per D12
+  - [x] State seen: return only when our own result is in and the latest state is `idle`. Either order (idle before or after the result) ends the dispatch.
+  - [x] An `idle` frame that arrives after our result, with no further result, ends the dispatch. The read loop has to return on that frame, not only on a `ResultMessage`.
+  - [x] No state seen: today's ledger rule, unchanged
+  - [x] Waiting on `running` is bounded by `pipeline.background_idle_timeout_s` through the existing `_stop_background` path
+- [x] Update the `_collect_turns` docstring and the `DispatchTurns` docstring to state the new end condition
+- [x] Success: one-shot `query()` dispatches (`providers/sdk/agent.py`) are untouched
 
 ## Task 2: Tests for D12 — Effort 2
-- [ ] In `tests/pipeline/test_sdk_session.py`, using the existing fake-client pattern there:
-  - [ ] Replay the #239 order: our result → agent 2's notice → agent 3's notice queued mid-turn → agent 2's follow-up result (ledger empty, state `running`) → agent 3's follow-up turn → `idle`. The dispatch returns agent 3's follow-up text.
-  - [ ] `idle` arriving before our result ends the dispatch at our result
-  - [ ] `idle` arriving after our result, with no further result, ends the dispatch
-  - [ ] No state frames at all: existing ledger tests pass unchanged
-  - [ ] State stuck at `running` past a low `background_idle_timeout_s` goes through `_stop_background` and logs its WARNING
-  - [ ] Stream ends while waiting on `running` raises the existing `ProviderError`
-  - [ ] Unknown state string logs WARNING once and doesn't end the dispatch
-  - [ ] `open_pipeline_session` options carry the env var and keep the existing env keys
-- [ ] Success: all `tests/pipeline/test_sdk_session.py` tests pass; ruff and pyright clean
-- [ ] Commit: `fix: end SDK session dispatches on the CLI idle state (#239)`
-- [ ] Comment on #239 with the commit hash, run as its own `gh` call with `--repo ecorkran/squadron`
+- [x] In `tests/pipeline/test_sdk_session.py`, using the existing fake-client pattern there:
+  - [x] Replay the #239 order: our result → agent 2's notice → agent 3's notice queued mid-turn → agent 2's follow-up result (ledger empty, state `running`) → agent 3's follow-up turn → `idle`. The dispatch returns agent 3's follow-up text.
+  - [x] `idle` arriving before our result ends the dispatch at our result
+  - [x] `idle` arriving after our result, with no further result, ends the dispatch
+  - [x] No state frames at all: existing ledger tests pass unchanged
+  - [x] State stuck at `running` past a low `background_idle_timeout_s` goes through `_stop_background` and logs its WARNING
+  - [x] Stream ends while waiting on `running` raises the existing `ProviderError`
+  - [x] Unknown state string logs WARNING once and doesn't end the dispatch
+  - [x] `open_pipeline_session` options carry the env var and keep the existing env keys
+- [x] Success: all `tests/pipeline/test_sdk_session.py` tests pass; ruff and pyright clean
+- [x] Commit: `fix: end SDK session dispatches on the CLI idle state (#239)`
+- [x] Comment on #239 with the commit hash, run as its own `gh` call with `--repo ecorkran/squadron`
 
 ## Task 3: Background-shell probe (D10) — Effort 3
 - [ ] Write the probe script at `scripts/probes/background_shell.py`. It isn't collected by pytest. It opens a session via `open_pipeline_session` (so the D12 code and the #199 deny hook are active) and logs every SDK message with its type, subtype, `task_type`, status, and timestamp.
