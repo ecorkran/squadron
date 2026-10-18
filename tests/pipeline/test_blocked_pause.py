@@ -9,8 +9,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from squadron.pipeline.control_params import RESUMED_FROM_HANDOFF
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, execute_pipeline
-from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
+from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import StateManager
 from squadron.pipeline.steps import register_step_type
 from tests.pipeline.conftest import phase_artifact_cf_client
@@ -64,13 +65,18 @@ def _pipeline() -> PipelineDefinition:
     return definition
 
 
-def _action(action_type: str) -> MagicMock:
-    impl = MagicMock()
-    impl.execute = AsyncMock(
-        side_effect=lambda ctx: ActionResult(
+def _action(action_type: str, seen: list[object] | None = None) -> MagicMock:
+    """A succeeding action; ``seen`` collects the hand-off resume param each call saw."""
+
+    def execute(ctx: ActionContext) -> ActionResult:
+        if seen is not None:
+            seen.append(ctx.params.get(RESUMED_FROM_HANDOFF))
+        return ActionResult(
             success=True, action_type=action_type, outputs={"response": "stopped, asked the PM"}
         )
-    )
+
+    impl = MagicMock()
+    impl.execute = AsyncMock(side_effect=execute)
     return impl
 
 
@@ -84,6 +90,7 @@ async def _run(
     return await execute_pipeline(
         definition,
         {"_project": "test"},
+        observer=StateManager(runs_dir=tmp_path / "runs").observer(run_id),
         resolver=MagicMock(),
         cf_client=phase_artifact_cf_client(SLICE, f"{SLICE}-slice.stub.md", TASK_FILE),
         cwd=str(tmp_path),
@@ -94,8 +101,10 @@ async def _run(
     )
 
 
-def _actions() -> dict[str, MagicMock]:
-    return {name: _action(name) for name in ("cf-op", "dispatch", "commit", "after")}
+def _actions(seen: list[object] | None = None) -> dict[str, MagicMock]:
+    actions = {name: _action(name) for name in ("cf-op", "commit", "after")}
+    actions["dispatch"] = _action("dispatch", seen)
+    return actions
 
 
 @pytest.mark.asyncio
@@ -137,3 +146,38 @@ async def test_resume_after_a_blocked_pause_redispatches_implement(tmp_path: Pat
     assert resumed.status is ExecutionStatus.COMPLETED
     assert actions["dispatch"].execute.await_count == 2  # implement ran again
     actions["after"].execute.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_only_the_resumed_step_is_told_it_is_resuming_a_hand_off(tmp_path: Path) -> None:
+    """D8: `existing: keep` must not skip implement after a BLOCKED pause (live finding)."""
+    _write_tasks(tmp_path, f"- [ ] 7.2 Capture the artifact\n  {BLOCKED_LINE}\n")
+    run_id = StateManager(runs_dir=tmp_path / "runs").init_run("p6", {})
+    seen: list[object] = []
+    actions = _actions(seen)
+    definition = _pipeline()
+    paused = await _run(tmp_path, definition, actions, run_id)
+    _write_tasks(tmp_path, "- [x] 7.2 Capture the artifact\n")
+    with patch(
+        "squadron.events.builtin.dispatch_branch_work.DispatchBranchWorkAction._count_work",
+        return_value=("107-slice.stub", 2, "main"),
+    ):
+        await _run(tmp_path, definition, actions, run_id, start_from=paused.paused_at)
+
+    assert seen == [None, True]  # first run: not resuming; the resumed implement: told so
+
+
+@pytest.mark.asyncio
+async def test_resuming_a_plain_failure_is_not_a_hand_off(tmp_path: Path) -> None:
+    """A failure that is not a hand-off resumes as before: `keep` may still apply."""
+    _write_tasks(tmp_path, "- [ ] 7.2 Capture the artifact\n")  # no marker: branch-work fails
+    run_id = StateManager(runs_dir=tmp_path / "runs").init_run("p6", {})
+    seen: list[object] = []
+    actions = _actions(seen)
+    definition = _pipeline()
+    failed = await _run(tmp_path, definition, actions, run_id)
+    assert failed.status is ExecutionStatus.FAILED
+
+    await _run(tmp_path, definition, actions, run_id, start_from="implement-0")
+
+    assert seen == [None, None]

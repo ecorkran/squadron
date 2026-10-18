@@ -190,7 +190,8 @@ Status: decided
 
 ### D8 — Resume re-runs the implement step through existing resume logic
 Status: decided
-- A paused run resumes at its paused step (`first_unfinished_step_of`), and the paused step is the phase-6 `implement` step, so the dispatch runs again. No new resume code. A test pins the behavior: pause on BLOCKED, remove the marker, resume, and implement is re-dispatched.
+- A paused run resumes at its paused step (`first_unfinished_step_of`), and the paused step is the phase-6 `implement` step, so the dispatch runs again.
+- **Amended after the live walkthrough.** "No new resume code" was wrong. P6's implement step is `existing: keep`, which skips the dispatch when the slice branch has any commits ahead of the target. A blocked agent often commits its partial work, and a PM who commits the resolution adds a commit too, so the resume found "existing work", skipped implement, and went on to review (the live run failed with `code review resolved diff … to no changed files`, or, with partial commits, would have reviewed unfinished work). Fix: `execute_pipeline` checks the run state when it resumes; if the restarted step's latest record is `PAUSED` and one of its actions has `awaits_human`, it sets the reserved param `resumed_from_handoff` for that step only, and the implement keep check (`_kept_branch_work`) then dispatches. A checkpoint pause is not a hand-off (its step finished), so it keeps skipping. Tests: `tests/pipeline/test_blocked_pause.py` (param set for the resumed step only; a plain failure does not set it) and `tests/pipeline/test_existing_keep.py`.
 
 ### D9 — Pre-implement pending-decision check is deferred
 Status: decided

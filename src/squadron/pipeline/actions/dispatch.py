@@ -40,7 +40,7 @@ from squadron.pipeline.actions.prompt_identity import (
 )
 from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
-from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS
+from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS, RESUMED_FROM_HANDOFF
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -321,6 +321,10 @@ def _kept_branch_work(context: ActionContext) -> dict[str, object] | None:
 
     Work is the branch's own commits ahead of the target, merge commits excluded. A
     failed count raises ``GitStateUnknownError``; it is never read as no work.
+
+    A step resumed from a hand-off pause (a ``BLOCKED`` task, slice 947 D8) did not
+    finish: the commits on the branch are partial work, not a finished step, so it
+    dispatches again.
     """
     from squadron.pipeline.branch_ops import slice_facts
     from squadron.pipeline.commit_plan import SLICE_PARAM
@@ -330,6 +334,11 @@ def _kept_branch_work(context: ActionContext) -> dict[str, object] | None:
         read_integration_target,
     )
 
+    if context.params.get(RESUMED_FROM_HANDOFF) is True:
+        _logger.info(
+            "implement: step %s is resuming a hand-off pause; dispatching again", context.step_name
+        )
+        return None
     target = read_integration_target(context.cf_client)
     branch, _ = slice_facts(parse_slice_index(context.params.get(SLICE_PARAM)), context.cf_client)
     ahead = branch_work_count(branch, target, cwd=context.cwd)

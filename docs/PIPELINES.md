@@ -1093,7 +1093,7 @@ An agent that cannot finish a task without you writes a line starting with `BLOC
 1 blocked task(s) need the Project Manager: no judge-template review artifact ... PM asked. Resolve them, remove the BLOCKED lines, then resume: sq run --resume <run-id>
 ```
 
-Resolve the blocker, delete the `BLOCKED:` line, and `sq run --resume <run-id>`: the `implement` step runs again. The marker is the uppercase word at the start of a line, after any quote marks, list bullet, checkbox or bold: `> BLOCKED: …`, `- [ ] BLOCKED: …`, `**BLOCKED:** …`. Lowercase "blocked by" in prose does not count. Turn the check off with `disable: [squadron.blocked-tasks]` in `events.yaml`.
+Resolve the blocker, delete the `BLOCKED:` line, and `sq run --resume <run-id>`: the `implement` step runs again, even though the agent may already have committed part of the work (a hand-off pause is the one pause `existing: keep` does not skip over). The marker is the uppercase word at the start of a line, after any quote marks, list bullet, checkbox or bold: `> BLOCKED: …`, `- [ ] BLOCKED: …`, `**BLOCKED:** …`. Lowercase "blocked by" in prose does not count. Turn the check off with `disable: [squadron.blocked-tasks]` in `events.yaml`.
 
 ### Background shells
 

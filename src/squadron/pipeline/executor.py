@@ -42,7 +42,11 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
-from squadron.pipeline.control_params import ACCEPT_DECISION, OVERRIDE_INSTRUCTIONS
+from squadron.pipeline.control_params import (
+    ACCEPT_DECISION,
+    OVERRIDE_INSTRUCTIONS,
+    RESUMED_FROM_HANDOFF,
+)
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
@@ -567,6 +571,11 @@ async def execute_pipeline(
             step_outputs=step_outputs,
         )
 
+    # Resuming a step that paused for a person: it must run again, not be kept (D8).
+    resumed_handoff = start_from is not None and _paused_for_a_person(
+        runs_dir, effective_run_id, start_from
+    )
+
     # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
     usage_capture = UsageCapture(set())
     # One per invocation, shared by every step including fan_out branches (D4, D6).
@@ -613,6 +622,9 @@ async def execute_pipeline(
         if observer is not None:
             observer.step_started(step.name)
 
+        if resumed_handoff and step.name == start_from:
+            merged_params[RESUMED_FROM_HANDOFF] = True
+
         step_result = await _execute_step(
             step=step,
             resolved_config=resolved_config,
@@ -642,6 +654,7 @@ async def execute_pipeline(
         )
 
         step_results.append(step_result)
+        merged_params.pop(RESUMED_FROM_HANDOFF, None)  # only the restarted step sees it
 
         if observer is not None:
             observer.step_completed(step_result)
@@ -794,6 +807,29 @@ def _seed_resume_outputs(
         verdict_result = last_with_verdict([action_result for _, action_result in restored])
         if verdict_result is not None:
             step_outputs[step_state.step_name] = verdict_result
+
+
+def _paused_for_a_person(runs_dir: Path | None, run_id: str, step_name: str) -> bool:
+    """Whether the run's latest record of *step_name* is a pause an action raised for a person.
+
+    A checkpoint pause is not one: that step finished its work and waits for a decision.
+    A hand-off (``awaits_human``, e.g. a ``BLOCKED`` task) did not finish (slice 947 D8).
+    """
+    from squadron.pipeline.state import StateManager
+
+    try:
+        completed = StateManager(runs_dir=runs_dir).load(run_id).completed_steps
+    except FileNotFoundError:
+        # `_seed_resume_outputs` has already warned that there is no state file; with
+        # nothing recorded, the step resumes as it always has.
+        return False
+    records = [step_state for step_state in completed if step_state.step_name == step_name]
+    if not records:
+        return False
+    latest = records[-1]
+    return latest.status == ExecutionStatus.PAUSED.value and any(
+        action.get("awaits_human") is True for action in latest.action_results
+    )
 
 
 async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKExecutionSession:
