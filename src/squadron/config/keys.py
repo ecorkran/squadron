@@ -18,6 +18,8 @@ class ConfigKey:
 # Keys read through squadron.config.manager.get_positive_int_config (slice 174 D1).
 FOREGROUND_IDLE_TIMEOUT_KEY = "pipeline.foreground_idle_timeout_s"
 RUN_HEARTBEAT_INTERVAL_KEY = "pipeline.run_heartbeat_interval_s"
+# Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
+COST_CAP_KEY = "pipeline.max_cost_usd"
 
 CONFIG_KEYS: dict[str, ConfigKey] = {
     "cwd": ConfigKey(
@@ -128,6 +130,18 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "background agents it started. After that, the agents are stopped "
             "and the dispatch returns what it has. Foreground turns use "
             "pipeline.foreground_idle_timeout_s."
+        ),
+    ),
+    COST_CAP_KEY: ConfigKey(
+        name=COST_CAP_KEY,
+        type_=float,
+        default=None,
+        description=(
+            "Dollar cap on one `sq run` invocation's known LLM spend. Unset means no cap. "
+            "Best-effort: the run fails at the action that crosses the cap, so it can "
+            "overshoot by the cost of the actions in flight (one action, or one per branch "
+            "of a fan_out step). A resumed run counts from $0. Actions that report no cost "
+            "are not counted. Must be positive."
         ),
     ),
     FOREGROUND_IDLE_TIMEOUT_KEY: ConfigKey(

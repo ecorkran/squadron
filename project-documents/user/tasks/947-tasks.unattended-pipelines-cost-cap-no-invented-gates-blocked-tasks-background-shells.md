@@ -74,18 +74,18 @@ status: not_started
 - [x] Commit: `test: add background-shell probe and record results in slice 947`
 
 ## Task 4: No-invented-gates review criterion (D1) — Effort 1
-- [ ] Add `NO_INVENTED_GATES_CRITERION` to `src/squadron/review/review_client.py` with the D1 text, in substance
-  - [ ] It's a plain prohibition with no example values (project hallucination-trap rule)
-- [ ] Append it to the system prompt after `_STRUCTURED_OUTPUT_INSTRUCTIONS`, only when `not template.is_judge`
-- [ ] Success: no review YAML template is edited
+- [x] Add `NO_INVENTED_GATES_CRITERION` to `src/squadron/review/review_client.py` with the D1 text, in substance
+  - [x] It's a plain prohibition with no example values (project hallucination-trap rule)
+- [x] Append it to the system prompt after `_STRUCTURED_OUTPUT_INSTRUCTIONS`, only when `not template.is_judge`
+- [x] Success: no review YAML template is edited
 
 ## Task 5: Tests for D1 — Effort 1
-- [ ] In the existing review-client tests under `tests/review/`:
-  - [ ] Each built-in non-judge template (`arch`, `slice`, `tasks`, `code`) gets a system prompt containing the criterion
-  - [ ] A user (non-built-in) non-judge template gets it
-  - [ ] A `judge-*` template's system prompt doesn't contain it
-- [ ] Success: review tests pass; ruff and pyright clean
-- [ ] Commit: `feat: add no-invented-gates criterion to non-judge reviews`
+- [x] In the existing review-client tests under `tests/review/`:
+  - [x] Each built-in non-judge template (`arch`, `slice`, `tasks`, `code`) gets a system prompt containing the criterion
+  - [x] A user (non-built-in) non-judge template gets it
+  - [x] A `judge-*` template's system prompt doesn't contain it
+- [x] Success: review tests pass; ruff and pyright clean
+- [x] Commit: `feat: add no-invented-gates criterion to non-judge reviews`
 
 ## Task 6: `CLAUDE.md` gate rule and BLOCKED convention (D2) — Effort 1
 - [ ] Add the D2 rule text to squadron `CLAUDE.md` under Core Principles

@@ -74,6 +74,8 @@ def _coerce_value(key: str, raw_value: str) -> object:
         return _coerce_bool(key, raw_value)
     if key_def.type_ is int:
         return int(raw_value)
+    if key_def.type_ is float:
+        return float(raw_value)
     if key_def.type_ is str:
         return raw_value
     raise ValueError(f"Unsupported config type: {key_def.type_}")
