@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `pipeline.max_cost_usd` caps what one `sq run` may spend: the run stops with an error at the action that crosses the cap. A resumed run counts from $0. See the pipeline guide.
+- A run now pauses when an `implement` step leaves a `BLOCKED:` line in the slice's task files. It prints the blocker and the resume command, and runs no review or close-out until you resume.
+- Architecture, slice, task and code reviews no longer raise approval gates or "ask the PM first" steps as findings.
+
+### Fixed
+
+- An SDK-session dispatch no longer returns early when a background agent's completion notice arrives mid-turn; it waits for that agent's follow-up turn (#239).
+- Dispatches now wait for background shells (a Bash command that outlives its timeout, or Monitor) instead of returning while they run. A shell silent past `pipeline.background_idle_timeout_s` is stopped with a WARNING (#234).
+- A failed `fan_out` branch now reports its own error in the step instead of "branch failed".
+- `sq config set` accepts decimal values for number keys.
+
 ## [0.23.2] - 20261017
 
 ### Fixed

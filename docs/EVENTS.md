@@ -108,6 +108,10 @@ A bound action may do exactly three things:
 - **Fail** — return `success=False` with `error`. On `commit` this fails the
   commit. On `post-action` the dispatcher marks the pipeline action's result
   failed and stops the chain (see Ordering, below).
+  A failing `post-action` result that also sets `awaits_human=True` **pauses**
+  the run instead of failing it: the step ends `PAUSED`, the error text is
+  shown, and no later step runs. `sq run --resume` re-runs the paused step.
+  Use it for a hand-off to a person, not for an error.
 - **Mutate** — an action may write files (squadron's own `revision-stamp`
   built-in does). It may **not** otherwise reach into and change the
   pipeline `ActionResult` it observes, and it may **not** read
@@ -145,9 +149,13 @@ an attributed message rather than skipping past a broken action:
 - **`post-action` stops at the first failure**, in registration-then-manifest
   order. Squadron's own built-ins run first: `squadron.dispatch-artifact`
   (does the phase step's dispatch action actually write the artifact it
-  claimed to?) before `squadron.revision-stamp` (stamp a monotonic
-  `revision_number` onto that artifact) — the stamp only runs once the
-  post-condition has already passed.
+  claimed to?), then `squadron.blocked-tasks` (did an implement dispatch
+  leave a `BLOCKED:` task line for the Project Manager?), then
+  `squadron.dispatch-branch-work`, then `squadron.revision-stamp` (stamp a
+  monotonic `revision_number` onto that artifact) — the stamp only runs once
+  the post-conditions have already passed. `blocked-tasks` comes before
+  `dispatch-branch-work` on purpose: a blocked agent often commits nothing,
+  and the hand-off has to win over the "no commits" failure.
 
 ---
 
@@ -200,7 +208,10 @@ disable:
 | `commit` | `squadron.frontmatter-gate` | Runs `cf validate frontmatter` against staged paths |
 | `commit` | `squadron.review-verdict-gate` | Rejects a staged review whose `verdict:` is missing or not a review verdict |
 | `post-action` | `squadron.dispatch-artifact` | Fails a phase-step dispatch that didn't write its expected artifact |
+| `post-action` | `squadron.blocked-tasks` | Pauses the run when an `implement` dispatch leaves a `BLOCKED:` line in the slice's task files; prints the blocker text and the resume command |
+| `post-action` | `squadron.dispatch-branch-work` | Fails an `implement` dispatch that left no commits on the slice branch |
 | `post-action` | `squadron.revision-stamp` | Stamps a monotonic `revision_number` after a loop-iteration dispatch |
+| `post-action` | `squadron.usage-stamp` | Records a phase dispatch's cost in the artifact's frontmatter |
 
 ---
 

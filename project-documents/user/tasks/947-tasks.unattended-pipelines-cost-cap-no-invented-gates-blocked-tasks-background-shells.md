@@ -142,92 +142,92 @@ status: not_started
 - [x] Commit: `feat: enforce pipeline.max_cost_usd in the executor`
 
 ## Task 12: Extract `slice_task_paths` (D7) — Effort 1
-- [ ] In `src/squadron/pipeline/branch_ops.py`, extract `slice_task_paths(cf_client, slice_index, cwd) -> list[Path]` from `_require_checked_tasks`, using `resolve_slice_info(...)["task_files"]` and `TASKS_DIR`
-- [ ] `_require_checked_tasks` calls it; its behavior and error messages are unchanged
-- [ ] Unit test for `slice_task_paths`: returns the resolved paths; a cf error propagates
-- [ ] Success: existing merge-guard tests pass unchanged; ruff and pyright clean
-- [ ] Commit: `refactor: extract slice_task_paths from the merge guard`
+- [x] In `src/squadron/pipeline/branch_ops.py`, extract `slice_task_paths(cf_client, slice_index, cwd) -> list[Path]` from `_require_checked_tasks`, using `resolve_slice_info(...)["task_files"]` and `TASKS_DIR`
+- [x] `_require_checked_tasks` calls it; its behavior and error messages are unchanged
+- [x] Unit test for `slice_task_paths`: returns the resolved paths; a cf error propagates
+- [x] Success: existing merge-guard tests pass unchanged; ruff and pyright clean
+- [x] Commit: `refactor: extract slice_task_paths from the merge guard`
 
 ## Task 13: `parse_blocked_markers` (D7) — Effort 2
-- [ ] Add `parse_blocked_markers(text) -> tuple[str, ...]` to `src/squadron/pr/tasks.py`, next to `parse_task_items`
-  - [ ] The marker word `BLOCKED` is a module constant, the only literal of it in `src/`
-  - [ ] Lenient per D7: strip leading whitespace, any number of `>` marks, a list bullet (`-*+`) with an optional checkbox, and `*`/`_` emphasis; then match the uppercase word followed by `:`, `—`, `-`, or whitespace
-  - [ ] Case-sensitive, so lowercase prose doesn't match
-  - [ ] Returns the text after the marker for each matching line, in file order
-- [ ] Tests in the existing `pr/tasks` test module:
-  - [ ] Fixture with the real line quoted in #223: `> BLOCKED: no judge-template review artifact ... PM asked`
-  - [ ] List-item form, checkbox form, bold form (`**BLOCKED:**`), plain form, em-dash and hyphen separators, nested `> >`
-  - [ ] Rejects `blocked by`, `Blocked:`, and `UNBLOCKED:`
-  - [ ] No markers → empty tuple
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat: parse BLOCKED markers from task files`
+- [x] Add `parse_blocked_markers(text) -> tuple[str, ...]` to `src/squadron/pr/tasks.py`, next to `parse_task_items`
+  - [x] The marker word `BLOCKED` is a module constant, the only literal of it in `src/`
+  - [x] Lenient per D7: strip leading whitespace, any number of `>` marks, a list bullet (`-*+`) with an optional checkbox, and `*`/`_` emphasis; then match the uppercase word followed by `:`, `—`, `-`, or whitespace
+  - [x] Case-sensitive, so lowercase prose doesn't match
+  - [x] Returns the text after the marker for each matching line, in file order
+- [x] Tests in the existing `pr/tasks` test module:
+  - [x] Fixture with the real line quoted in #223: `> BLOCKED: no judge-template review artifact ... PM asked`
+  - [x] List-item form, checkbox form, bold form (`**BLOCKED:**`), plain form, em-dash and hyphen separators, nested `> >`
+  - [x] Rejects `blocked by`, `Blocked:`, and `UNBLOCKED:`
+  - [x] No markers → empty tuple
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat: parse BLOCKED markers from task files`
 
 ## Task 14: Executor copies `awaits_human` from event outcomes (D7) — Effort 1
-- [ ] In the executor's event-outcome loop, copy `awaits_human` from the failing outcome along with `success`, `error`, and failure kind
-- [ ] Test: a user-style POST_ACTION action that returns `success=False, awaits_human=True` turns the step PAUSED and the run PAUSED, and runs no later step
-- [ ] Test: a failing outcome without `awaits_human` still fails the run (unchanged)
-- [ ] Success: events and pipeline tests pass; ruff and pyright clean
-- [ ] Commit: `feat: let POST_ACTION events pause a run via awaits_human`
+- [x] In the executor's event-outcome loop, copy `awaits_human` from the failing outcome along with `success`, `error`, and failure kind
+- [x] Test: a user-style POST_ACTION action that returns `success=False, awaits_human=True` turns the step PAUSED and the run PAUSED, and runs no later step
+- [x] Test: a failing outcome without `awaits_human` still fails the run (unchanged)
+- [x] Success: events and pipeline tests pass; ruff and pyright clean
+- [x] Commit: `feat: let POST_ACTION events pause a run via awaits_human`
 
 ## Task 15: `squadron.blocked-tasks` action and binding (D7) — Effort 2
-- [ ] Create `src/squadron/events/builtin/blocked_tasks.py`, following `dispatch_branch_work.py` for structure and registration
-  - [ ] Guard: applies only when `action_type == dispatch`, `step_type == StepTypeName.IMPLEMENT`, the result succeeded, a `slice` param is present, and the result isn't `SKIPPED_KEY`. Otherwise it passes.
-  - [ ] Reads the slice's task files through `slice_task_paths` and collects markers through `parse_blocked_markers`
-  - [ ] No markers → pass
-  - [ ] Markers → `success=False`, `awaits_human=True`, with the D7 error text including the run id and the marker texts; logged at WARNING
-  - [ ] Unreadable task file → plain failure naming the path (not paused)
-  - [ ] cf error → plain failure with the cf error text
-- [ ] Register it and add it to `DEFAULT_BINDINGS` in `src/squadron/events/manifest.py`, before `squadron.dispatch-branch-work`
-- [ ] Success: `events.yaml` `disable: [squadron.blocked-tasks]` removes it, like every built-in
+- [x] Create `src/squadron/events/builtin/blocked_tasks.py`, following `dispatch_branch_work.py` for structure and registration
+  - [x] Guard: applies only when `action_type == dispatch`, `step_type == StepTypeName.IMPLEMENT`, the result succeeded, a `slice` param is present, and the result isn't `SKIPPED_KEY`. Otherwise it passes.
+  - [x] Reads the slice's task files through `slice_task_paths` and collects markers through `parse_blocked_markers`
+  - [x] No markers → pass
+  - [x] Markers → `success=False`, `awaits_human=True`, with the D7 error text including the run id and the marker texts; logged at WARNING
+  - [x] Unreadable task file → plain failure naming the path (not paused)
+  - [x] cf error → plain failure with the cf error text
+- [x] Register it and add it to `DEFAULT_BINDINGS` in `src/squadron/events/manifest.py`, before `squadron.dispatch-branch-work`
+- [x] Success: `events.yaml` `disable: [squadron.blocked-tasks]` removes it, like every built-in
 
 ## Task 16: Tests for `squadron.blocked-tasks` — Effort 2
-- [ ] New `tests/events/builtin/test_blocked_tasks.py`
-  - [ ] Each guard condition that doesn't apply → pass, with no task-file read
-  - [ ] Markers present → failing result with `awaits_human=True`, the marker texts, and the resume command; WARNING logged
-  - [ ] No markers → pass
-  - [ ] Unreadable task file → failure naming the path, `awaits_human` false
-  - [ ] cf error → failure with the cf text
-- [ ] In `tests/events/test_manifest.py`: the binding exists and comes before `squadron.dispatch-branch-work`; disabling it removes it
-- [ ] Executor-level test: an implement dispatch that leaves a marker and made no commits pauses at `implement` (the blocked check wins over branch-work's no-commits failure)
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat: pause pipelines on BLOCKED task markers after implement`
+- [x] New `tests/events/builtin/test_blocked_tasks.py`
+  - [x] Each guard condition that doesn't apply → pass, with no task-file read
+  - [x] Markers present → failing result with `awaits_human=True`, the marker texts, and the resume command; WARNING logged
+  - [x] No markers → pass
+  - [x] Unreadable task file → failure naming the path, `awaits_human` false
+  - [x] cf error → failure with the cf text
+- [x] In `tests/events/test_manifest.py`: the binding exists and comes before `squadron.dispatch-branch-work`; disabling it removes it
+- [x] Executor-level test: an implement dispatch that leaves a marker and made no commits pauses at `implement` (the blocked check wins over branch-work's no-commits failure)
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat: pause pipelines on BLOCKED task markers after implement`
 
 ## Task 17: Resume re-runs implement (D8) — Effort 1
-- [ ] Test, using the existing resume test pattern: pause on BLOCKED at `implement`, remove the marker from the task file, resume, and assert implement is dispatched again and later steps run
-- [ ] Success: no resume code changes; test passes
-- [ ] Commit: `test: resume after a BLOCKED pause re-dispatches implement`
+- [x] Test, using the existing resume test pattern: pause on BLOCKED at `implement`, remove the marker from the task file, resume, and assert implement is dispatched again and later steps run
+- [x] Success: no resume code changes; test passes
+- [x] Commit: `test: resume after a BLOCKED pause re-dispatches implement`
 
 ## Task 18: Report running background shells (D11) — Effort 2
-- [ ] Add `SHELL_TASK_TYPE` to `sdk_turns.py` with the value recorded by Task 3 probe answer (1). If the probe recorded shells as not reachable, mark this task's items and Tasks 19–21 [x] with the note "not reachable per D10 probe" and go to Task 22. Never write a shell type string the probe didn't record.
-- [ ] Extend `BackgroundLedger` to track shells separately from waited-for agents: start on `TaskStartedMessage` with the shell type; clear on the same terminal frames agents use
-- [ ] When a dispatch returns with shells still running: WARNING `dispatch ended with N background shell(s) running: <descriptions>`, and `background_shells_running: int` in dispatch metadata, set the same way as `background_tasks_waited`
-- [ ] Extend the `ProviderError` "stream ended before the dispatch's result" message to name running shells
-- [ ] Success: `background_tasks_waited` and `background_tasks_stopped` keep their agent-only meaning
+- [x] Add `SHELL_TASK_TYPE` to `sdk_turns.py` with the value recorded by Task 3 probe answer (1). If the probe recorded shells as not reachable, mark this task's items and Tasks 19–21 [x] with the note "not reachable per D10 probe" and go to Task 22. Never write a shell type string the probe didn't record.
+- [x] Extend `BackgroundLedger` to track shells separately from waited-for agents: start on `TaskStartedMessage` with the shell type; clear on the same terminal frames agents use
+- [x] When a dispatch returns with shells still running: WARNING `dispatch ended with N background shell(s) running: <descriptions>`, and `background_shells_running: int` in dispatch metadata, set the same way as `background_tasks_waited`
+- [x] Extend the `ProviderError` "stream ended before the dispatch's result" message to name running shells
+- [x] Success: `background_tasks_waited` and `background_tasks_stopped` keep their agent-only meaning
 
 ## Task 19: Tests for shell reporting — Effort 1
-- [ ] In `tests/pipeline/test_sdk_session.py`:
-  - [ ] Shell start then terminal frame → not running, no WARNING
-  - [ ] Shell start, dispatch returns → WARNING naming it; `background_shells_running == 1`
-  - [ ] Stream ends with a shell running → `ProviderError` names the shell
-  - [ ] Shell starts don't change `background_tasks_waited`
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat: report background shells left running at dispatch end`
+- [x] In `tests/pipeline/test_sdk_session_shells.py` (new; `test_sdk_session.py` is already past 1300 lines):
+  - [x] Shell start then terminal frame → not running, no WARNING
+  - [x] Shell start, dispatch returns → WARNING naming it; `background_shells_running == 1`
+  - [x] Stream ends with a shell running → `ProviderError` names the shell
+  - [x] Shell starts don't change `background_tasks_waited`
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat: report background shells left running at dispatch end`
 
 ## Task 20: Wait for background shells (D11) — Effort 3
-- [ ] Check that D11 in the slice design records the wait mechanism and its probe evidence (Task 3). If it doesn't, this task doesn't start, and the D11 success criterion stays unchecked.
-- [ ] If D11 records the wait as not needed: mark this task's items [x] with the note "not needed per D11" and go to Task 22
-- [ ] If D11 records that the D12 wait covers shells: add the test in Task 21 only; no new code
-- [ ] Otherwise follow D11's numbered implementation step list, one sub-item per step, bounded by `pipeline.background_idle_timeout_s`. A shell stopped at the bound logs WARNING.
-- [ ] Success: a turn that ends with a shell running doesn't end the dispatch until the shell's terminal frame or the bound, and the D11 failure modes behave as D11 states
+- [x] Check that D11 in the slice design records the wait mechanism and its probe evidence (Task 3). If it doesn't, this task doesn't start, and the D11 success criterion stays unchecked.
+- [x] If D11 records the wait as not needed: mark this task's items [x] with the note "not needed per D11" and go to Task 22
+- [x] If D11 records that the D12 wait covers shells: add the test in Task 21 only; no new code
+- [x] Otherwise follow D11's numbered implementation step list, one sub-item per step, bounded by `pipeline.background_idle_timeout_s`. A shell stopped at the bound logs WARNING.
+- [x] Success: a turn that ends with a shell running doesn't end the dispatch until the shell's terminal frame or the bound, and the D11 failure modes behave as D11 states
 
 ## Task 21: Tests for the shell wait — Effort 2
-- [ ] A turn that ends with a shell running waits, and the dispatch returns the text after the shell completes
-- [ ] Shell exits non-zero → cleared by its terminal frame; no special action
-- [ ] Shell outlives a low `background_idle_timeout_s` → stopped with WARNING
-- [ ] Stream closes mid-wait → `ProviderError` naming the shell
-- [ ] An extra turn's cost lands in the dispatch's usage telemetry
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat: wait for background shells in SDK session dispatches`
+- [x] A turn that ends with a shell running waits, and the dispatch returns the text after the shell completes
+- [x] Shell exits non-zero → cleared by its terminal frame; no special action
+- [x] Shell outlives a low `background_idle_timeout_s` → stopped with WARNING
+- [x] Stream closes mid-wait → `ProviderError` naming the shell
+- [x] An extra turn's cost lands in the dispatch's usage telemetry
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat: wait for background shells in SDK session dispatches`
 
 ## Task 22: Docs and CHANGELOG — Effort 1
 - [ ] `docs/PIPELINES.md`: `pipeline.max_cost_usd`, how to set it, the D5 overshoot bound, the per-invocation count (D6), the unknown-cost WARNING, `--prompt-only` not capped; the BLOCKED pause and how to resume; the shell wait and its bound
