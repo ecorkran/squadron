@@ -230,11 +230,11 @@ status: not_started
 - [x] Commit: `feat: wait for background shells in SDK session dispatches`
 
 ## Task 22: Docs and CHANGELOG — Effort 1
-- [ ] `docs/PIPELINES.md`: `pipeline.max_cost_usd`, how to set it, the D5 overshoot bound, the per-invocation count (D6), the unknown-cost WARNING, `--prompt-only` not capped; the BLOCKED pause and how to resume; the shell wait and its bound
-- [ ] `docs/EVENTS.md`: `squadron.blocked-tasks` in the built-in list with its order; the `awaits_human` pause contract for POST_ACTION actions
-- [ ] CHANGELOG under Unreleased: short user-facing bullets for the cost cap, the BLOCKED pause, the shell wait, and the #239 fix
-- [ ] Success: every doc names the key and action exactly as defined in code
-- [ ] Commit: `docs: document cost cap, BLOCKED pause, and background-shell wait`
+- [x] `docs/PIPELINES.md`: `pipeline.max_cost_usd`, how to set it, the D5 overshoot bound, the per-invocation count (D6), the unknown-cost WARNING, `--prompt-only` not capped; the BLOCKED pause and how to resume; the shell wait and its bound
+- [x] `docs/EVENTS.md`: `squadron.blocked-tasks` in the built-in list with its order; the `awaits_human` pause contract for POST_ACTION actions
+- [x] CHANGELOG under Unreleased: short user-facing bullets for the cost cap, the BLOCKED pause, the shell wait, and the #239 fix
+- [x] Success: every doc names the key and action exactly as defined in code
+- [x] Commit: `docs: document cost cap, BLOCKED pause, and background-shell wait`
 
 ## Task 23: Full validation — Effort 1
 - [x] `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/pyright` with zero errors
