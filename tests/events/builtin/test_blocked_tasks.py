@@ -154,3 +154,13 @@ async def test_non_numeric_slice_param_fails_rather_than_passes() -> None:
     assert not result.success
     assert result.error is not None
     assert "not-an-index" in result.error
+
+
+async def test_a_marker_ending_in_a_period_does_not_double_it(tmp_path: Path) -> None:
+    files = _task_file(tmp_path, "BLOCKED: needs the PM.\n")
+
+    with patch(f"{_MODULE}.slice_task_paths", return_value=files):
+        result = await BlockedTasksAction().execute(_context())
+
+    assert result.error is not None
+    assert result.error.startswith("1 blocked task(s) need the Project Manager: needs the PM. Resolve")

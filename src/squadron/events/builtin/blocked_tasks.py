@@ -71,7 +71,8 @@ class BlockedTasksAction:
         if not markers:
             return ActionResult(success=True, action_type=self.name, outputs={})
 
-        shown = "; ".join(markers[:_MARKERS_NAMED])
+        # A marker that ends in a period would double it before "Resolve them".
+        shown = "; ".join(markers[:_MARKERS_NAMED]).rstrip(".")
         msg = (
             f"{len(markers)} blocked task(s) need the Project Manager: {shown}. "
             f"Resolve them, remove the {BLOCKED_MARKER} lines, then resume: "
