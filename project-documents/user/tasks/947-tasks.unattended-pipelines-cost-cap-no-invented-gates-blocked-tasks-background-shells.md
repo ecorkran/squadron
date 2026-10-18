@@ -116,30 +116,30 @@ status: not_started
 - [x] Commit: `feat: add pipeline.max_cost_usd key and per-run spend ledger`
 
 ## Task 9: `FailureKind.COST_CAP` and replay mapping — Effort 1
-- [ ] Add `COST_CAP = "cost_cap"` to `FailureKind` in `src/squadron/pipeline/failure_kind.py`
-- [ ] Add `FailureClass.COST_CAP` in `src/squadron/replay/outcome.py` and map it in `_CLASS_OF_KIND`
-- [ ] Test in `tests/replay/test_outcome.py`: a run whose failed action carries kind `cost_cap` classifies as `FailureClass.COST_CAP` with the action's error text
-- [ ] Test: every `FailureKind` member has a `_CLASS_OF_KIND` entry, unless such a test already exists
-- [ ] Success: replay tests pass; ruff and pyright clean
-- [ ] Commit: `feat: add cost_cap failure kind and replay class`
+- [x] Add `COST_CAP = "cost_cap"` to `FailureKind` in `src/squadron/pipeline/failure_kind.py`
+- [x] Add `FailureClass.COST_CAP` in `src/squadron/replay/outcome.py` and map it in `_CLASS_OF_KIND`
+- [x] Test in `tests/replay/test_outcome.py`: a run whose failed action carries kind `cost_cap` classifies as `FailureClass.COST_CAP` with the action's error text
+- [x] Test: every `FailureKind` member has a `_CLASS_OF_KIND` entry, unless such a test already exists
+- [x] Success: replay tests pass; ruff and pyright clean
+- [x] Commit: `feat: add cost_cap failure kind and replay class`
 
 ## Task 10: Executor enforces the cap (D4, D5) — Effort 3
-- [ ] In `execute_pipeline` (`src/squadron/pipeline/executor.py`), call `read_cost_cap(cwd)` before the first step. A `ValueError` fails the run at start with that error.
-- [ ] Create one `RunSpend` next to the per-run `UsageCapture`
-- [ ] Thread it as a parameter the same way `usage_capture` is threaded: `_execute_step` → `_execute_step_once`, and through the loop, `each`, and `fan_out` paths. `fan_out`'s `_run_branch` closures receive the same instance.
-- [ ] In `_execute_step_once`, after POST_ACTION events: `spend.add(result.metadata.get(USAGE_KEY))`; then if a cap is set and `known_usd > cap`, the action result becomes `success=False` with `metadata[FAILURE_KIND_KEY] = FailureKind.COST_CAP` and the D5 error text, showing spend and cap with two decimals
-- [ ] Success: no cap configured → no behavior change (existing executor tests pass unchanged)
+- [x] In `execute_pipeline` (`src/squadron/pipeline/executor.py`), call `read_cost_cap(cwd)` before the first step. A `ValueError` fails the run at start with that error.
+- [x] Create one `RunSpend` next to the per-run `UsageCapture`
+- [x] Thread it as a parameter the same way `usage_capture` is threaded: `_execute_step` → `_execute_step_once`, and through the loop, `each`, and `fan_out` paths. `fan_out`'s `_run_branch` closures receive the same instance.
+- [x] In `_execute_step_once`, after POST_ACTION events: `spend.add(result.metadata.get(USAGE_KEY))`; then if a cap is set and `known_usd > cap`, the action result becomes `success=False` with `metadata[FAILURE_KIND_KEY] = FailureKind.COST_CAP` and the D5 error text, showing spend and cap with two decimals
+- [x] Success: no cap configured → no behavior change (existing executor tests pass unchanged)
 
 ## Task 11: Tests for cap enforcement — Effort 2
-- [ ] In the executor tests under `tests/pipeline/`, using fake actions that stamp usage under `USAGE_KEY`:
-  - [ ] Cap unset: a run spending any amount completes
-  - [ ] Cap crossed on the second action: that action fails with kind `cost_cap` and the D5 message; the run is FAILED; no later step runs
-  - [ ] Invalid cap config: the run fails at start with the `ValueError` text and runs no step
-  - [ ] Unknown-cost actions don't count toward the cap and log the WARNING
-  - [ ] `fan_out` step: all branches add to one `RunSpend`; the reported spend is the real total
-  - [ ] `each` step: items add to the same `RunSpend`
-- [ ] Success: pipeline tests pass; ruff and pyright clean
-- [ ] Commit: `feat: enforce pipeline.max_cost_usd in the executor`
+- [x] In the executor tests under `tests/pipeline/`, using fake actions that stamp usage under `USAGE_KEY`:
+  - [x] Cap unset: a run spending any amount completes
+  - [x] Cap crossed on the second action: that action fails with kind `cost_cap` and the D5 message; the run is FAILED; no later step runs
+  - [x] Invalid cap config: the run fails at start with the `ValueError` text and runs no step
+  - [x] Unknown-cost actions don't count toward the cap and log the WARNING
+  - [x] `fan_out` step: all branches add to one `RunSpend`; the reported spend is the real total
+  - [x] `each` step: items add to the same `RunSpend`
+- [x] Success: pipeline tests pass; ruff and pyright clean
+- [x] Commit: `feat: enforce pipeline.max_cost_usd in the executor`
 
 ## Task 12: Extract `slice_task_paths` (D7) — Effort 1
 - [ ] In `src/squadron/pipeline/branch_ops.py`, extract `slice_task_paths(cf_client, slice_index, cwd) -> list[Path]` from `_require_checked_tasks`, using `resolve_slice_info(...)["task_files"]` and `TASKS_DIR`
