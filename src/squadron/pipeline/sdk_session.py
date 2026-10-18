@@ -317,7 +317,10 @@ class SDKExecutionSession:
                 return turns.text()
             if turns.waiting and not turns.waiting_logged:
                 turns.waiting_logged = True
-                _logger.info(
+                # `running` briefly follows every result before `idle`; that is only
+                # worth INFO when an agent or shell is actually being waited for.
+                _logger.log(
+                    logging.INFO if turns.ledger.holding else logging.DEBUG,
                     "dispatch: turn ended with session state %r, %d background agent(s) and "
                     "%d background shell(s) running; waiting: %s",
                     turns.session_state,
