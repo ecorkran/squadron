@@ -127,7 +127,8 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
         default=1800,
         description=(
             "Seconds of silence a pipeline dispatch tolerates while waiting for "
-            "background agents it started. After that, the agents are stopped "
+            "background agents and shells it started. Shells send no progress, so a "
+            "shell that runs longer than this is stopped. After that, they are stopped "
             "and the dispatch returns what it has. Foreground turns use "
             "pipeline.foreground_idle_timeout_s."
         ),
