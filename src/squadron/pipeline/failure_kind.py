@@ -17,3 +17,4 @@ class FailureKind(StrEnum):
     PROVIDER_ERROR = "provider_error"  # a dispatch's provider raised
     STALL = "stall"  # a dispatch produced no output within the stall bound (slice 174)
     ARTIFACT_MISSING = "artifact_missing"  # a phase dispatch wrote no artifact (slice 909/945)
+    COST_CAP = "cost_cap"  # the run's known spend crossed pipeline.max_cost_usd (slice 947)

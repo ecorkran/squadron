@@ -94,26 +94,26 @@ status: not_started
 - [ ] Commit: `docs: add invented-gate rule and BLOCKED convention to CLAUDE.md`
 
 ## Task 7: Cost-cap config key and `run_spend.py` (D3, D4) — Effort 2
-- [ ] Add `pipeline.max_cost_usd` to `src/squadron/config/keys.py`: `type_=float`, `default=None`. The description states that unset means no cap, the cap is best-effort (D5 overshoot bound), and it counts per invocation (D6).
-- [ ] Create `src/squadron/pipeline/run_spend.py`
-  - [ ] Module constant for the key name, the only literal of it in `src/`
-  - [ ] `read_cost_cap(cwd) -> float | None`: `None` when unset; raises `ValueError` naming the key when it's set but isn't a positive number
-  - [ ] `RunSpend` with `add(raw_usage)` and a `known_usd` property
-  - [ ] `add` parses through `UsageRecord.from_dict`. `None` input adds nothing.
-  - [ ] `cost_usd is None` adds nothing and logs WARNING once per alias per run, with the D4 message naming step and alias
-  - [ ] A malformed record (`ValueError` from `from_dict`) logs at ERROR and adds nothing
-  - [ ] `add` contains no `await`
-- [ ] Success: the module imports only from `core`, `config`, and logging, not from the executor
+- [x] Add `pipeline.max_cost_usd` to `src/squadron/config/keys.py`: `type_=float`, `default=None`. The description states that unset means no cap, the cap is best-effort (D5 overshoot bound), and it counts per invocation (D6).
+- [x] Create `src/squadron/pipeline/run_spend.py`
+  - [x] The key name is the constant `COST_CAP_KEY` in `config/keys.py` (the only literal of it in `src/`, beside the other key constants); `run_spend.py` imports it. `_coerce_value` in `config/manager.py` gains float support so `sq config set` accepts the key.
+  - [x] `read_cost_cap(cwd) -> float | None`: `None` when unset; raises `ValueError` naming the key when it's set but isn't a positive number
+  - [x] `RunSpend` with `add(raw_usage, *, step_name)` (the name feeds the D4 WARNING and the ERROR) and a `known_usd` property
+  - [x] `add` parses through `UsageRecord.from_dict`. `None` input adds nothing.
+  - [x] `cost_usd is None` adds nothing and logs WARNING once per alias per run, with the D4 message naming step and alias
+  - [x] A malformed record (`ValueError` from `from_dict`) logs at ERROR and adds nothing
+  - [x] `add` contains no `await`
+- [x] Success: the module imports only from `core`, `config`, and logging, not from the executor
 
 ## Task 8: Tests for `run_spend.py` — Effort 1
-- [ ] New `tests/pipeline/test_run_spend.py`
-  - [ ] `read_cost_cap`: unset → `None`; positive → float; zero, negative, and non-numeric → `ValueError` naming the key
-  - [ ] `RunSpend.add`: sums known costs; `None` input is a no-op
-  - [ ] Unknown cost: adds nothing; one WARNING per alias across repeated adds; a second alias gets its own WARNING
-  - [ ] Malformed record: ERROR logged; total unchanged; no raise
-  - [ ] `read_cost_cap` through the real config layer: a value written to a temp project config with the `sq config set` code path reads back as a float
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat: add pipeline.max_cost_usd key and per-run spend ledger`
+- [x] New `tests/pipeline/test_run_spend.py`
+  - [x] `read_cost_cap`: unset → `None`; positive → float; zero, negative, and non-numeric → `ValueError` naming the key
+  - [x] `RunSpend.add`: sums known costs; `None` input is a no-op
+  - [x] Unknown cost: adds nothing; one WARNING per alias across repeated adds; a second alias gets its own WARNING
+  - [x] Malformed record: ERROR logged; total unchanged; no raise
+  - [x] `read_cost_cap` through the real config layer: a value written to a temp project config with the `sq config set` code path reads back as a float
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat: add pipeline.max_cost_usd key and per-run spend ledger`
 
 ## Task 9: `FailureKind.COST_CAP` and replay mapping — Effort 1
 - [ ] Add `COST_CAP = "cost_cap"` to `FailureKind` in `src/squadron/pipeline/failure_kind.py`
