@@ -8,15 +8,16 @@ interfaces: []
 dateCreated: 20261017
 dateUpdated: 20261018
 status: not_started
-turns: 66
-promptTokens: 4547002
-cachedTokens: 4424830
-cacheWriteTokens: 122060
-completionTokens: 39102
-durationSeconds: 530.9
-costUsd: 2.646523
-usageRounds: 1
-pricedRounds: 1
+turns: 74
+promptTokens: 5716339
+cachedTokens: 5568743
+cacheWriteTokens: 147468
+completionTokens: 49072
+durationSeconds: 634.4
+costUsd: 3.278034
+usageRounds: 2
+pricedRounds: 2
+revision_number: 1
 ---
 
 # Slice Design: Unattended Pipelines — Cost Cap, No Invented Gates, BLOCKED Tasks, Background Shells

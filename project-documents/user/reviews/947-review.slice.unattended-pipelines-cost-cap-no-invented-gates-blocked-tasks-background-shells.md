@@ -14,60 +14,61 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261017
 dateUpdated: 20261017
-reviewedSha: 8d813b4ed64ea16a22f8be36581f08c7e1a52aae
+reviewedSha: 97dbd541e58ec5db6733ec9ab8e719d2452dbeb5
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 8
-turns: 9
-promptTokens: 435659
-cachedTokens: 350148
-cacheWriteTokens: 85497
-completionTokens: 3465
-durationSeconds: 29.1
-costUsd: 0.451541
+toolCallsMade: 2
+turns: 3
+promptTokens: 86166
+cachedTokens: 47946
+cacheWriteTokens: 38216
+completionTokens: 2812
+durationSeconds: 22.3
+costUsd: 0.195416
 costBasis: provider
 runId: run-20261018-p4-16dfa489
 squadronVersion: 0.23.2
 findings:
   - id: F001
     severity: pass
-    category: alignment
-    summary: "Scope fits the maintenance container and the slice plan entry"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Technical Scope"
-  - id: F002
-    severity: pass
     category: scope
-    summary: "Deferrals are explicit, justified and tracked"
+    summary: "Fits the maintenance initiative's scope"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Overview"
+  - id: F002
+    severity: concern
+    category: scope-creep
+    summary: "The cost cap is a new feature, which the architecture excludes from this initiative"
     location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Technical Scope"
   - id: F003
     severity: concern
     category: proportionality
-    summary: "Cost-cap machinery is heavier than the requirement"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D3–D6"
+    summary: "The design is heavy for a \"lighter-weight\" maintenance slice"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Technical Decisions"
   - id: F004
     severity: concern
-    category: proportionality
-    summary: "Shell-wait design is speculative ahead of the probe"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D10–D11"
+    category: under-specification
+    summary: "Unspecified integration points: `BLOCKED_TASK` and the replay reader"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#API Contracts"
   - id: F005
     severity: concern
-    category: failure-modes
-    summary: "Parallel-branch cap overshoot and crash-loss are accepted without bounds"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D5"
+    category: boundaries
+    summary: "The executor takes on cross-cutting responsibilities and a hidden event-outcome change"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Component Structure"
   - id: F006
     severity: concern
     category: error-handling
-    summary: "Unreadable-state and malformed-marker paths lack explicit failure signals for resume with a changed cap source"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Special Considerations"
+    summary: "NFR and failure-mode gaps on the new shell-wait I/O path"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D11 — Report running shells now; write the wait mechanism from the probe"
   - id: F007
     severity: note
-    category: integration
-    summary: "BLOCKED check reads task files, but it is a good reuse of the merge guard"
-    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#D7"
+    category: documentation
+    summary: "Parent field and NFR handling"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md:5"
   - id: F008
-    severity: note
-    category: nfr
-    summary: "No NFR targets in the parent architecture apply"
-    location: "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
+    severity: pass
+    category: boundaries
+    summary: "Dependency directions and layering"
+    location: "project-documents/user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md#Dependencies"
 ---
 
 # Review: slice — slice 947
@@ -77,82 +78,79 @@ findings:
 
 ## Findings
 
-### [PASS] Scope fits the maintenance container and the slice plan entry
+### [PASS] Fits the maintenance initiative's scope
 
-The 900 architecture admits operational, error-handling and configuration work that spans subsystems, and this slice is that. The slice plan entry for 947 asks for five things:
-- the review-template criterion;
-- the CLAUDE.md rule;
-- a `max_cost_usd` cap summed per run and checked in the executor;
-- a BLOCKED pause where resume re-runs implement;
-- a shell wait bounded by the existing idle timeout, plus end-of-turn reporting.
+The architecture (900) accepts operational and error-handling improvements that span subsystems, plus non-trivial bug fixes. The slice bundles three issues (#235, #223, #234) with related causes. It also adds one control, the cost cap.
 
-The design delivers all five. It also checks the #199 deny hook before proceeding, as the plan entry directs (D10, D11).
+The architecture says a grouped slice is valid when each item commits separately and can be reverted on its own. The "Development Approach" section says this directly ("Each part is independently committable"). The decision to defer the pre-implement pending-decision check to #240, because it depends on context-forge#121, keeps the slice from absorbing cross-project work.
 
-### [PASS] Deferrals are explicit, justified and tracked
+### [CONCERN] The cost cap is a new feature, which the architecture excludes from this initiative
 
-The task-breakdown guide change is already shipped upstream (ai-project-guide#44). The upstream `rules/general.md` change is filed as ai-project-guide#45. The pre-implement decision check is blocked on context-forge#121 and tracked as #240. Each of these departs from the plan entry's wording, and the slice records the reason and the tracking issue.
+Architecture 900 excludes "new feature areas" and allows only "small conveniences over existing commands, files and config." The cost cap adds the following:
+- a new public contract: a pipeline YAML field and a config key
+- a new `FailureKind` member
+- a new persisted `RunState` field
+- a new module, `run_spend.py`
+- a new run-level spend ledger
+- a pre-run gate, a post-action gate, and documented overshoot and crash-loss bounds
 
-### [CONCERN] Cost-cap machinery is heavier than the requirement
+This goes beyond a small convenience over existing config. The slice should either state why it qualifies, for example by pointing to the slice plan entry that assigns it here, or move it to a feature initiative. At minimum it needs a one-line justification under "Technical Scope". Without one, a reader can't tell whether the scope is in bounds.
 
-The plan asks for a cap from pipeline YAML or project config, checked against the run's accumulated cost. The design adds several pieces beyond that:
-- a new module with three types (`RunSpend`, `CostCap`, `spend_from_action_dict`);
-- a `CostCap.source` field used only to word the error message;
-- a `get_optional_positive_float_config` helper;
-- a "lowest of two sources wins" rule;
-- a `spent_unknown_actions` counter that persists across resume and is not used for any decision.
+### [CONCERN] The design is heavy for a "lighter-weight" maintenance slice
 
-Cuts to consider:
-- Drop `source` tracking and name both candidate sources in the error.
-- Drop the persisted `spent_unknown_actions`. The per-alias WARNING already makes unknown cost observable.
-- Fold `spend_from_action_dict` into `RunSpend.add`.
-- Use a plain function instead of a separate resolve-and-source type.
+The architecture asks for "lighter-weight" process on maintenance work. This design has 11 decisions, 5 scope items, and about 10 touched components. Several parts can be cut or deferred:
+- **Persisted spend for resume (D6).** This adds the `RunState.spent_usd` field, a pre-1.0 migration WARNING, an observer signature change, and a "crash loss" bound to document. A lighter option meets the requirement. Fail the run on cap crossing, and on resume start the count from zero with one stated limit.
+- **Pre-run cap check on resume (D5).** It exists only because of persisted spend, so it goes if D6 is simplified.
+- **Two cap sources with lowest-wins resolution and a dual-value error message (D3).** One source is enough until something needs the second. Config alone covers "per-project", and the slice already drops the CLI flag.
+- **Shell tracking and wait (D10/D11).** The slice itself says the cause of #234 is unconfirmed and that the wait may turn out "not needed". The shell-ledger and `background_shells_running` metadata work can be deferred until the probe shows a real backgrounding path. The probe alone should be this slice's deliverable.
+- **`FailureKind.BLOCKED_TASK`.** It's added in "API Contracts", but D7 never sets it. The "Failure modes" tests and the design don't mention it.
 
-The persisted `spent_usd` and the pre-run check are justified, so keep them.
+Each is a CONCERN under the proportionality criterion. The finding to act on is the cut list above.
 
-### [CONCERN] Shell-wait design is speculative ahead of the probe
+### [CONCERN] Unspecified integration points: `BLOCKED_TASK` and the replay reader
 
-D11 specifies the full shell mechanism before the D10 probe has run:
-- a second ledger map;
-- `shells_active` and `any_active`;
-- a fixed `SHELL_CONTINUATION_PROMPT`;
-- the send-once rule;
-- timer-reset semantics;
-- two new metadata counters.
+"API Contracts" says both new `FailureKind` members "are read by the replay outcome reader without matching on error text." No component in the table covers the replay reader. D7 builds the BLOCKED `ActionResult` without setting `FAILURE_KIND_KEY`. If the pause is meant to carry `BLOCKED_TASK`, D7 must say where it is set. If it isn't, drop the member. The claim about the replay reader needs a named component and a test, or it should be removed.
 
-D10 admits that a background shell may be unreachable behind the #199 hook, and that the CLI may or may not inject a continuation turn. The design handles this by branching, but the branches are written out in full anyway. It would be lighter to commit only to the probe plus end-of-turn reporting now. The wait and continuation design could then be written once the probe records which path exists. That leaves the design smaller, and it matches the "act only on recorded evidence" intent in the risk section.
+### [CONCERN] The executor takes on cross-cutting responsibilities and a hidden event-outcome change
 
-### [CONCERN] Parallel-branch cap overshoot and crash-loss are accepted without bounds
+Two changes affect behavior beyond this slice.
+1. The executor starts copying `awaits_human` from any failing event outcome. This applies to every POST_ACTION binding, including user-defined ones, not just `squadron.blocked-tasks`. The slice calls it "one line", but it changes the event contract. The "Provides to Other Slices" section should say so, along with whether an existing or user event returning `awaits_human` now pauses a run, and the slice should add a test for that.
+2. `_execute_step_once` now both runs actions and enforces the cap. The slice should say where `RunSpend` is injected and how `fan_out` branches share it. "Share the one event loop" is asserted, but the branch-sharing mechanism isn't described.
 
-The cap is enforced after each action. With parallel `each`/`fan_out` branches, overshoot is "one action per branch", which the doc does not quantify against the branch count or any bound on concurrent dispatches. The State Management section also says a crash mid-step loses that step's spend. A resume then sees an undercounted total, which weakens the guarantee that spend is "bounded mechanically". The doc says both outcomes are acceptable but sets no limit. State the maximum overshoot (branch concurrency × per-action cost) in the success criteria, or document the cap as best-effort. The Value section currently says "bounded mechanically".
+### [CONCERN] NFR and failure-mode gaps on the new shell-wait I/O path
 
-### [CONCERN] Unreadable-state and malformed-marker paths lack explicit failure signals for resume with a changed cap source
+D11 leaves the wait mechanism undefined ("written after the probe"). It still lists "shell timeout" as a failure mode with a test. The failure modes for this I/O path are only partly enumerated:
+- The shell exits non-zero.
+- The CLI process dies while a shell runs.
+- The SDK stream closes mid-wait.
+- The wait resumes the agent through an extra turn, which also adds cost. That cost must count against the cap, and the design doesn't say how.
 
-A run started before this slice loads with `spent_usd = 0.0`. Resuming it under a new cap then silently undercounts. The doc says the pre-check's docstring will state this, so the only signal is in a code comment. The failure-mode list in Technical Requirements does not cover it. At minimum, log a WARNING on resume when the state file lacks `spent_usd` and a cap is active.
+Deferring the mechanism is acceptable only if the slice design is amended before the wait task starts. The task list and success criteria should make that a gating step, and say what happens if the amendment is skipped.
 
-### [NOTE] BLOCKED check reads task files, but it is a good reuse of the merge guard
+### [NOTE] Parent field and NFR handling
 
-Extracting `slice_task_paths()` from `branch_ops.py` removes duplication. Binding `squadron.blocked-tasks` before `dispatch-branch-work` is called out and justified. The `awaits_human` copy in the executor reuses the mapping the merge guard already depends on. No layer boundary is crossed.
+The `parent` field points to `900-slices.maintenance-and-refactoring.md` (the slice plan), which is expected. Architecture 900 states no NFRs, so there is nothing to restate. The design does state its own bounds for the cap (D5 overshoot and crash loss) and for the shell wait (`background_idle_timeout_s`).
 
-### [NOTE] No NFR targets in the parent architecture apply
+### [PASS] Dependency directions and layering
 
-The 900 architecture states no latency or throughput targets, so none need restating. The slice does state its own bounds: the idle timeout for the shell wait, and the cap itself.
+Dependencies run in the right direction. The executor consumes usage records stamped by actions, the BLOCKED check consumes `slice_task_paths()`, and the extraction is shared with the merge guard without changing its behavior. The deferred check stays with context-forge, so squadron doesn't parse decision status itself. The review criterion lives at one assembly point and excludes judge templates, which avoids shifting baselines.
 
 ### Run Digest
 
-- Response length: 6363 chars
+- Response length: 7409 chars
 - Response is newline-free: no
-- Tool calls made: 8
-- Tool calls failed: 1
+- Tool calls made: 2
+- Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 9
-- Tokens — prompt / cached / cache write / completion / reasoning: 435659 / 350148 / 85497 / 3465 / not computed
-- Duration: 29.1 s
-- Cost: $0.45 (provider)
+- Turns: 3
+- Tokens — prompt / cached / cache write / completion / reasoning: 86166 / 47946 / 38216 / 2812 / not computed
+- Duration: 22.3 s
+- Cost: $0.20 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 8
