@@ -15,6 +15,18 @@ from dataclasses import dataclass
 # exact layout, per the project's parsing rules.
 _CHECKBOX_RE = re.compile(r"^\s*[-*+]\s+\[( |x|X)\]\s*(.*?)\s*$")
 
+# The word an agent writes under a task it cannot finish without the Project Manager
+# (slice 947 D2). Uppercase only, so prose like "blocked by" never matches.
+BLOCKED_MARKER = "BLOCKED"
+
+# Lenient prefix (any indent, `>` quote marks, a list bullet with an optional checkbox,
+# `*`/`_` emphasis), the marker word, then any emphasis and separator before the text.
+_BLOCKED_RE = re.compile(
+    r"^\s*(?:>\s*)*(?:[-*+]\s+(?:\[[ xX]\]\s*)?)?[*_]*"
+    + re.escape(BLOCKED_MARKER)
+    + r"(?![A-Za-z0-9])[*_]*\s*[:—–-]*[*_]*\s*(.*?)\s*$"
+)
+
 
 @dataclass(frozen=True)
 class TaskItems:
@@ -42,3 +54,14 @@ def parse_task_items(text: str) -> TaskItems:
         else:
             unchecked.append(item_text)
     return TaskItems(checked=tuple(checked), unchecked=tuple(unchecked))
+
+
+def parse_blocked_markers(text: str) -> tuple[str, ...]:
+    """The text after each ``BLOCKED`` marker line in *text*, in file order.
+
+    Matches the formatting agents actually write: a blockquote
+    (``> BLOCKED: ...``), a list item or checkbox item, bold, or a plain line,
+    with ``:``, a dash, or just a space after the word.
+    """
+    matches = (_BLOCKED_RE.match(line) for line in text.splitlines())
+    return tuple(match.group(1) for match in matches if match is not None)
