@@ -237,14 +237,14 @@ status: not_started
 - [ ] Commit: `docs: document cost cap, BLOCKED pause, and background-shell wait`
 
 ## Task 23: Full validation — Effort 1
-- [ ] `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/pyright` with zero errors
-- [ ] Full test suite, run in the background, all passing. Record any failure with its output and fix it before continuing.
-- [ ] Commit any fixes: `fix: address slice 947 validation failures`
+- [x] `.venv/bin/ruff format --check`, `.venv/bin/ruff check`, `.venv/bin/pyright` with zero errors
+- [x] Full test suite, run in the background, all passing. Record any failure with its output and fix it before continuing.
+- [x] Commit any fixes: `fix: address slice 947 validation failures` — no fixes needed
 
 ## Task 24: Verification walkthrough — Effort 2
-- [ ] Create a scratch slice as slice 178's walkthrough did, so no real slice is touched
-- [ ] Run walkthrough steps 1–4 and the probe-matched step 5 or 6 from the slice design, with `--model` on every `sq review`
-- [ ] Replace the design's "Draft" walkthrough with the commands as run and their observed output lines
-- [ ] Remove the scratch slice and its artifacts; reset `pipeline.max_cost_usd` to unset
-- [ ] Success: each walkthrough step's expected output was observed, or the mismatch was fixed and the step re-run
-- [ ] Commit: `docs: record slice 947 verification walkthrough`
+- [x] Create a scratch slice as slice 178's walkthrough did, so no real slice is touched
+- [x] Run walkthrough steps 1–4 and the probe-matched step 5 or 6 from the slice design, with `--model` on every `sq review`
+- [x] Replace the design's "Draft" walkthrough with the commands as run and their observed output lines
+- [x] Remove the scratch slice and its artifacts; reset `pipeline.max_cost_usd` to unset
+- [x] Success: each walkthrough step's expected output was observed, or the mismatch was fixed and the step re-run
+- [x] Commit: `docs: record slice 947 verification walkthrough`
