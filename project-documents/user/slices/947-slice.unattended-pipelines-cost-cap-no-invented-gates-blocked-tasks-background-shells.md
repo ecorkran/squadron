@@ -6,8 +6,17 @@ parent: project-documents/user/architecture/900-slices.maintenance-and-refactori
 dependencies: []
 interfaces: []
 dateCreated: 20261017
-dateUpdated: 20261017
+dateUpdated: 20261018
 status: not_started
+turns: 66
+promptTokens: 4547002
+cachedTokens: 4424830
+cacheWriteTokens: 122060
+completionTokens: 39102
+durationSeconds: 530.9
+costUsd: 2.646523
+usageRounds: 1
+pricedRounds: 1
 ---
 
 # Slice Design: Unattended Pipelines — Cost Cap, No Invented Gates, BLOCKED Tasks, Background Shells
