@@ -141,7 +141,7 @@ wait for shells (bounded by pipeline.background_idle_timeout_s) → mechanism pe
 Status: decided
 - A constant `NO_INVENTED_GATES_CRITERION` in `review_client.py` is appended to the system prompt after `_STRUCTURED_OUTPUT_INSTRUCTIONS` when `not template.is_judge`. Text, in substance: "Approval steps, confirmation gates, and added caution are never valid findings. LLM spend, pipeline runs, and live tests are pre-authorized; spend is bounded by the run's enforced cost cap. Do not ask for a step that waits on Project Manager confirmation unless a rule you were given names it as required."
 - Every non-judge review (built-in `arch`, `slice`, `tasks`, `code`, plus user templates) goes through this one assembly point, so the rule is stated once and can't drift between YAML files.
-- Judges (`judge-*`) are excluded. Their prompts are calibrated by initiative 320, and a prompt change shifts scores against existing baselines. Judges score fit against criteria and don't propose process steps.
+- Judges are excluded, meaning templates with a `judge:` block (`judge-slice-vs-arch`, `judge-tasks-vs-slice`); the test is `template.is_judge`. `judge-findings-addressed` has no `judge:` block, is not score-calibrated, and so gets the criterion like any non-judge template. Their prompts are calibrated by initiative 320, and a prompt change shifts scores against existing baselines. Judges score fit against criteria and don't propose process steps.
 - Rejected: copying the bullet into the five non-judge YAMLs (duplicates the rule, and user templates miss it).
 
 ### D2 — CLAUDE.md rule and BLOCKED convention; upstream via issue

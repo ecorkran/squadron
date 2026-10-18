@@ -56,22 +56,22 @@ status: not_started
 - [x] Comment on #239 with the commit hash, run as its own `gh` call with `--repo ecorkran/squadron`
 
 ## Task 3: Background-shell probe (D10) — Effort 3
-- [ ] Write the probe script at `scripts/probes/background_shell.py`. It isn't collected by pytest. It opens a session via `open_pipeline_session` (so the D12 code and the #199 deny hook are active) and logs every SDK message with its type, subtype, `task_type`, status, and timestamp.
-- [ ] The probe tries to get a shell into the background inside the pipeline session: a direct `run_in_background` request (expected to be denied by the #199 hook), and a long foreground command the agent moves to the background
-- [ ] Run it live. Record each answer from the logged output, not from reasoning:
-  - [ ] (1) The `task_type` string the CLI emits for a background shell
-  - [ ] (2) Whether a shell can be backgrounded despite the deny hook, and the exact path
-  - [ ] (3) Whether a shell's terminal status makes the CLI inject a continuation turn
-  - [ ] (4) Whether a running shell emits `TaskProgressMessage` frames
-  - [ ] (5) Whether the CLI reports session state `running` while a background shell is live (D12)
-- [ ] If (2) finds no path, record that, and record (1) and (3)–(5) as not reachable with the evidence
-- [ ] Amend the slice design
-  - [ ] D10: add a "Probe results" list with answers (1)–(5) and the log excerpts that show them
-  - [ ] D11: replace "Written after the probe" with the chosen wait mechanism and its evidence. If (5) is yes, the wait is the D12 wait. If (2) found no path, record reporting and the wait as not needed.
-  - [ ] D11: unless the wait is not needed or is the D12 wait, end the amendment with a numbered implementation step list for the wait: files, functions, the end condition, and the bound
-  - [ ] Walkthrough step 5 or 6: keep the one that matches the probe result
-- [ ] Comment on #234 with answers (1)–(5), as its own `gh` call
-- [ ] Commit: `test: add background-shell probe and record results in slice 947`
+- [x] Write the probe script at `scripts/probes/background_shell.py`. It isn't collected by pytest. It opens a session via `open_pipeline_session` (so the D12 code and the #199 deny hook are active) and logs every SDK message with its type, subtype, `task_type`, status, and timestamp.
+- [x] The probe tries to get a shell into the background inside the pipeline session: a direct `run_in_background` request (expected to be denied by the #199 hook), and a long foreground command the agent moves to the background
+- [x] Run it live. Record each answer from the logged output, not from reasoning:
+  - [x] (1) The `task_type` string the CLI emits for a background shell
+  - [x] (2) Whether a shell can be backgrounded despite the deny hook, and the exact path
+  - [x] (3) Whether a shell's terminal status makes the CLI inject a continuation turn
+  - [x] (4) Whether a running shell emits `TaskProgressMessage` frames
+  - [x] (5) Whether the CLI reports session state `running` while a background shell is live (D12)
+- [x] If (2) finds no path, record that, and record (1) and (3)–(5) as not reachable with the evidence
+- [x] Amend the slice design
+  - [x] D10: add a "Probe results" list with answers (1)–(5) and the log excerpts that show them
+  - [x] D11: replace "Written after the probe" with the chosen wait mechanism and its evidence. If (5) is yes, the wait is the D12 wait. If (2) found no path, record reporting and the wait as not needed.
+  - [x] D11: unless the wait is not needed or is the D12 wait, end the amendment with a numbered implementation step list for the wait: files, functions, the end condition, and the bound
+  - [x] Walkthrough step 5 or 6: keep the one that matches the probe result
+- [x] Comment on #234 with answers (1)–(5), as its own `gh` call
+- [x] Commit: `test: add background-shell probe and record results in slice 947`
 
 ## Task 4: No-invented-gates review criterion (D1) — Effort 1
 - [ ] Add `NO_INVENTED_GATES_CRITERION` to `src/squadron/review/review_client.py` with the D1 text, in substance
