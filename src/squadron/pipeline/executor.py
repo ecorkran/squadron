@@ -1035,6 +1035,8 @@ async def _execute_step_once(
             if outcome.result is not None and not outcome.result.success:
                 result.success = False
                 result.error = outcome.result.error
+                # An event can hand the run to a person (slice 947 D7), as an action can.
+                result.awaits_human = outcome.result.awaits_human
                 if (kind := outcome.result.metadata.get(FAILURE_KIND_KEY)) is not None:
                     result.metadata[FAILURE_KIND_KEY] = kind
                 break
