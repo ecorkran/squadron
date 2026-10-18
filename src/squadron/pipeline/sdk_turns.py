@@ -8,12 +8,14 @@ belongs to the response and which background agents are still running.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import StrEnum
 from typing import Final
 
 from claude_agent_sdk import (
     TERMINAL_TASK_STATUSES,
     AssistantMessage,
     ResultMessage,
+    SystemMessage,
     TaskNotificationMessage,
     TaskStartedMessage,
     TaskUpdatedMessage,
@@ -30,7 +32,31 @@ from squadron.logging import get_logger
 from squadron.providers.sdk.translation import translate_sdk_message
 from squadron.providers.sdk.usage import SessionCostMeter, read_result_usage
 
-__all__ = ["WAITED_TASK_TYPES", "BackgroundLedger", "DispatchTurns", "SessionReply", "is_own_result"]
+__all__ = [
+    "SESSION_STATE_ENV",
+    "WAITED_TASK_TYPES",
+    "BackgroundLedger",
+    "DispatchTurns",
+    "SessionReply",
+    "SessionState",
+    "is_own_result",
+    "is_session_state_frame",
+]
+
+# Makes the CLI emit `session_state_changed` frames to the SDK consumer (slice
+# 947 D12). The SDK sets its own SDK_READS_SESSION_STATE but marks those frames
+# host-only and drops them, so the consumer-visible frames need this opt-in.
+SESSION_STATE_ENV: Final = "CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS"
+_SESSION_STATE_SUBTYPE: Final = "session_state_changed"
+
+
+class SessionState(StrEnum):
+    """The CLI's own report of whether it still has work in hand."""
+
+    IDLE = "idle"
+    RUNNING = "running"
+    REQUIRES_ACTION = "requires_action"
+
 
 # Background task types a dispatch waits for. Mirrors the SDK's private
 # DEFERRING_TASK_TYPES (claude_agent_sdk/_internal/query.py), redeclared on
@@ -96,6 +122,11 @@ def is_own_result(msg: ResultMessage) -> bool:
     return msg.origin is None or msg.origin.get("kind") == "human"
 
 
+def is_session_state_frame(msg: object) -> bool:
+    """True for the CLI's ``session_state_changed`` frame."""
+    return isinstance(msg, SystemMessage) and msg.subtype == _SESSION_STATE_SUBTYPE
+
+
 @dataclass(frozen=True)
 class SessionReply:
     """A session call's response text and what it spent (slice 175 D4)."""
@@ -106,7 +137,12 @@ class SessionReply:
 
 @dataclass
 class DispatchTurns:
-    """Response text and task state accumulated across one dispatch's turns."""
+    """Response text and task state accumulated across one dispatch's turns.
+
+    The dispatch ends once our own result is in and the CLI reports ``idle``
+    (D12). A CLI that sends no state frames falls back to the ledger: the
+    dispatch ends once no tracked background agent is running.
+    """
 
     ledger: BackgroundLedger = field(default_factory=BackgroundLedger)
     parts: list[str] = field(default_factory=list[str])
@@ -121,11 +157,17 @@ class DispatchTurns:
     usage_warned: bool = False
     # The connection's meter: results report the session's running cost total.
     cost_meter: SessionCostMeter = field(default_factory=SessionCostMeter)
+    # The CLI's latest reported state, None until a frame arrives (D12). A string
+    # the CLI sent that SessionState doesn't name is kept as-is and never idle.
+    session_state: str | None = None
+    unknown_state_warned: bool = False
 
     def collect(self, msg: object) -> str | None:
         """Record one message; return the session id it carries, if any."""
         self.progressed = True
         self.ledger.observe(msg)
+        if isinstance(msg, SystemMessage) and is_session_state_frame(msg):
+            self.observe_state(msg)
         if isinstance(msg, ResultMessage):
             self.fold_result(msg)
         # A subagent's own messages stream through too (parent_tool_use_id set); its
@@ -148,10 +190,34 @@ class DispatchTurns:
             _logger.warning("SDK session result reported no token usage; usage will not be recorded")
         self.telemetry.fold_result(turns=turns, usage=usage, cost_usd=self.cost_meter.charge(cost))
 
+    def observe_state(self, msg: SystemMessage) -> None:
+        """Record the state a ``session_state_changed`` frame carries."""
+        state = msg.data.get("state")
+        if not isinstance(state, str):
+            state = repr(state)
+        self.session_state = state
+        if state not in SessionState and not self.unknown_state_warned:
+            self.unknown_state_warned = True
+            _logger.warning("SDK session reported unknown state %r; treating it as not idle", state)
+
     @property
     def waiting(self) -> bool:
-        """Our own result is in, but background agents are still running."""
-        return self.own_result_seen and self.ledger.active
+        """Our own result is in, but the CLI still has work in hand.
+
+        With state frames, that is any state but ``idle`` (D12): the CLI knows
+        about every follow-up turn it owes, including ones the ledger never
+        saw. Without them, it is a tracked background agent still running.
+        """
+        if not self.own_result_seen:
+            return False
+        if self.session_state is None:
+            return self.ledger.active
+        return self.session_state != SessionState.IDLE
+
+    @property
+    def settled(self) -> bool:
+        """Our own result is in and nothing is owed: the dispatch is done."""
+        return self.own_result_seen and not self.waiting
 
     def text(self) -> str:
         return "\n".join(self.parts)

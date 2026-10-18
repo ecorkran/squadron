@@ -205,6 +205,13 @@ def sdk_task_updated(task_id: str, status: str) -> object:
     )
 
 
+def sdk_session_state(state: str) -> object:
+    """The CLI's ``session_state_changed`` frame, as the SDK parses it."""
+    from claude_agent_sdk import SystemMessage
+
+    return SystemMessage(subtype="session_state_changed", data={"state": state})
+
+
 class ScriptedClient:
     """Fake ClaudeSDKClient: each receive_response() call plays the next script.
 

@@ -35,7 +35,13 @@ from squadron.config.manager import get_positive_int_config, get_typed_config
 from squadron.core.teardown import close_best_effort
 from squadron.core.usage import RunTelemetry
 from squadron.pipeline.background_shell_guard import pipeline_hooks
-from squadron.pipeline.sdk_turns import DispatchTurns, SessionReply, is_own_result
+from squadron.pipeline.sdk_turns import (
+    SESSION_STATE_ENV,
+    DispatchTurns,
+    SessionReply,
+    is_own_result,
+    is_session_state_frame,
+)
 from squadron.pipeline.text_tail import tail_text
 from squadron.providers.errors import (
     ProviderAPIError,
@@ -253,7 +259,12 @@ class SDKExecutionSession:
             raise ProviderError(str(exc)) from exc
 
     async def _collect_turns(self, turns: DispatchTurns) -> str:
-        """Read turns until our own result arrives with no agent running."""
+        """Read turns until our own result is in and the CLI has nothing more owed (D12).
+
+        With state frames, "nothing owed" is the CLI reporting ``idle``, in either
+        order with our result. Without them, it is no tracked background agent
+        running. A wait on any other state is bounded by the background idle timeout.
+        """
         idle_s: float | None = None
         foreground_idle_s = self._foreground_idle_timeout_s()
         while True:
@@ -270,13 +281,17 @@ class SDKExecutionSession:
                 except _IdleTimeout:
                     await self._stop_background(turns, idle_s)
                     return turns.text()
+            if turns.settled:
+                # An idle frame after our result ended the read with no result (D12).
+                return turns.text()
             if result is None:
-                # The iterator ended without a result. With nothing tracked,
-                # this is today's behavior; with an agent tracked, the work
-                # it owes can never arrive.
-                if turns.ledger.active:
+                # The iterator ended without a result. With nothing tracked or
+                # owed, this is today's behavior; otherwise the work the CLI
+                # owes can never arrive.
+                if turns.ledger.active or turns.waiting:
                     raise ProviderError(
                         "stream ended before the dispatch's result; "
+                        f"session state {turns.session_state!r}, "
                         f"{len(turns.ledger.active_ids())} background agent(s) still "
                         f"running: {turns.ledger.descriptions()}"
                     )
@@ -292,12 +307,14 @@ class SDKExecutionSession:
                     tail_text(turns.discard()),
                 )
                 continue
-            if turns.own_result_seen and not turns.ledger.active:
+            if turns.settled:
                 return turns.text()
             if turns.waiting and not turns.waiting_logged:
                 turns.waiting_logged = True
                 _logger.info(
-                    "dispatch: turn ended with %d background agent(s) running; waiting: %s",
+                    "dispatch: turn ended with session state %r and %d background agent(s) "
+                    "running; waiting: %s",
+                    turns.session_state,
                     len(turns.ledger.active_ids()),
                     turns.ledger.descriptions(),
                 )
@@ -336,6 +353,9 @@ class SDKExecutionSession:
     ) -> ResultMessage | None:
         """Read one turn; return its result, or None if the stream ended first.
 
+        Also returns None when an ``idle`` state frame settles the dispatch
+        after our result (D12); the caller tells the two apart by ``turns.settled``.
+
         With ``idle_s`` set, each wait for the next message is bounded by it
         (the timer resets on every message) and expiry raises ``_IdleTimeout``.
         With ``accept_error``, an ``is_error`` result is returned rather than
@@ -373,6 +393,8 @@ class SDKExecutionSession:
                 _logger.debug("SDKExecutionSession: session_id=%s", sid)
             if isinstance(sdk_msg, ResultMessage):
                 return sdk_msg
+            if is_session_state_frame(sdk_msg) and turns.settled:
+                return None  # the CLI went idle with nothing owed; the caller checks settled
 
     def _background_idle_timeout_s(self) -> float:
         """Read ``pipeline.background_idle_timeout_s`` for this session's cwd."""
@@ -577,7 +599,8 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
         permission_mode="bypassPermissions",
         system_prompt={"type": "preset", "preset": "claude_code"},
         setting_sources=settings["setting_sources"],  # pyright: ignore[reportArgumentType]
-        env=settings["env"],
+        # Dispatch ends on the CLI's own idle report (slice 947 D12).
+        env={**settings["env"], SESSION_STATE_ENV: "1"},
         hooks=pipeline_hooks(),  # pyright: ignore[reportArgumentType]
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))

@@ -11,6 +11,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 from squadron.core.usage import TokenUsage
 from squadron.pipeline.sdk_session import SDKExecutionSession
+from squadron.pipeline.sdk_turns import SESSION_STATE_ENV
 from tests.pipeline.conftest import (
     ScriptedClient,
     scripted_session,
@@ -1134,7 +1135,7 @@ class TestPipelineSessionSettings:
 
         rotated = ctor.call_args.kwargs["options"]
         assert rotated.setting_sources == ["project"]
-        assert rotated.env == {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
+        assert rotated.env == {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", SESSION_STATE_ENV: "1"}
         assert rotated.system_prompt["append"].endswith("S")
 
 
