@@ -195,18 +195,18 @@ Status: decided
 
 ### D10 — Background shells: evidence probe first
 Status: decided
-- The #234 run happened after the #199 deny hook shipped, and the issue notes that backgrounding wasn't confirmed from logs. Following the project's debugging rule, Task 1 is a probe against the real SDK/CLI (live runs are pre-authorized). It records, in the slice design and the issue:
+- The #234 run happened after the #199 deny hook shipped, and the issue notes that backgrounding wasn't confirmed from logs. Following the project's debugging rule, Task 3 (after D12 lands) is a probe against the real SDK/CLI, at `scripts/probes/background_shell.py` (live runs are pre-authorized). It records, in the slice design and the issue:
   1. the `task_type` string the CLI emits for a backgrounded shell. This becomes the constant `SHELL_TASK_TYPE` in `sdk_turns.py`; the SDK doesn't name it.
   2. whether a shell can be backgrounded in a pipeline session despite the deny hook (for example, a long foreground command moved to the background), and how.
   3. whether a shell's terminal status leads the CLI to inject a continuation turn. The SDK's `DEFERRING_TASK_TYPES` comment says only agent/workflow completion runs a follow-up turn.
   4. whether a running shell emits `TaskProgressMessage` frames.
-- If (2) finds no path to a background shell, the slice delivers only the D11 reporting (cheap observability). The waiting and continuation part is then recorded as not needed, with the probe output as evidence.
+- If (2) finds no path to a background shell, there is no shell to see and no `task_type` string to identify one by. Neither D11 reporting nor the wait ships; both are recorded as not needed, with the probe output as evidence. No shell type is ever written without probe evidence (hallucination-trap rule).
 
 ### D11 — Report running shells now; write the wait mechanism from the probe
 Status: decided
-- Committed now: `BackgroundLedger` records shell starts and terminal frames (`SHELL_TASK_TYPE` from probe 1). When a dispatch returns with a shell still running, it logs WARNING ("dispatch ended with N background shell(s) running: <descriptions>") and sets `background_shells_running: int` in dispatch metadata, the way `background_tasks_waited` reaches it today.
+- Committed once probe (1) yields the shell `task_type`: `BackgroundLedger` records shell starts and terminal frames (`SHELL_TASK_TYPE` from probe 1). When a dispatch returns with a shell still running, it logs WARNING ("dispatch ended with N background shell(s) running: <descriptions>") and sets `background_shells_running: int` in dispatch metadata, the way `background_tasks_waited` reaches it today.
 - Committed now: the dispatch waits for shells, bounded by `pipeline.background_idle_timeout_s` (the slice plan's requirement). A shell stopped at that bound logs WARNING.
-- Written after the probe: how the wait resumes the agent, depending on probe 3 (injected turn, or squadron sends one), and whether shell progress frames count as activity, depending on probe 4. The probe task amends this D11 with the mechanism and its evidence before the wait task starts. If probe 2 finds no path to a background shell, the wait is recorded here as not needed, and only the reporting ships.
+- Written after the probe: how the wait resumes the agent, depending on probe 3 (injected turn, or squadron sends one), and whether shell progress frames count as activity, depending on probe 4. The probe task amends this D11 with the mechanism and its evidence before the wait task starts. The amendment ends with a numbered implementation step list for the wait (files, functions, the end condition), which the wait task follows. If probe 2 finds no path to a background shell, reporting and the wait are both recorded here as not needed.
 - Failure modes on this path, each with an observable signal and a test:
   - **Shell exits non-zero:** a normal terminal frame clears it. The agent reads the result itself; squadron takes no special action.
   - **Shell outlives the bound:** it's stopped and WARNING is logged.
@@ -268,7 +268,7 @@ sq config get pipeline.max_cost_usd     # None when unset = no cap
 - Resuming the paused run re-dispatches implement.
 - Marker parsing accepts the real amoeba format (`> BLOCKED: no judge-template review artifact ... PM asked`), list-item, bold, and plain forms, and rejects lowercase prose "blocked".
 - Probe results for D10 (1)–(4) are recorded in this design and on #234, and D11 is amended with the wait mechanism before the wait task starts.
-- A dispatch that returns with a background shell running logs WARNING and sets `background_shells_running`. A dispatch whose turn ends while a shell runs waits for it, bounded by `pipeline.background_idle_timeout_s`, by the mechanism D11 records from the probe (unless the probe records the wait as not needed).
+- A dispatch that returns with a background shell running logs WARNING and sets `background_shells_running`. A dispatch whose turn ends while a shell runs waits for it, bounded by `pipeline.background_idle_timeout_s`, by the mechanism D11 records from the probe (unless the probe records shells as unreachable, in which case neither ships).
 - An SDK session dispatch whose background agent's notice arrives mid-turn waits for that agent's follow-up turn and returns its text (#239). With no session-state frames, dispatch behavior is unchanged.
 
 ### Technical Requirements
@@ -291,8 +291,8 @@ Draft. Refined after Phase 6. Use a scratch slice (as in slice 178's walkthrough
 2. **Cost cap, config.** `sq config set pipeline.max_cost_usd 0.01`, then `sq run P5 <scratch-slice> -v`. The run fails after the first LLM action with `run spent $0.0X this invocation, over pipeline.max_cost_usd $0.01; raise the cap and resume to continue`. `sq run --status latest` shows failed.
 3. **Resume.** `sq config set pipeline.max_cost_usd 20` then `sq run --resume <run-id>`. The run continues, counting from $0.
 4. **BLOCKED pause.** On the scratch slice, add a task "Ask the PM for X; write `BLOCKED:` if you cannot proceed" (a deliberate test of the marker). `sq run P6 <scratch-slice> -v` pauses at `implement`, prints the marker text, and runs no `close-out`, review or devlog. Remove the line, resolve the task, and run `sq run --resume <run-id>`. Implement re-dispatches.
-5. **Background shell.** Run the Task 1 probe script (it lands under `tests/probes/` or the existing live-test location; Task 1 decides). It reproduces the backgrounding path the probe found. The dispatch waits for the shell and continues as D11 records. A forever shell (`sleep 100000` via the same path) with `pipeline.background_idle_timeout_s` set low is stopped with a WARNING.
-6. If the probe found no backgrounding path (D10), step 5 is replaced by a unit-level check of the end-of-turn WARNING and `background_shells_running`, and the walkthrough records the probe output.
+5. **Background shell.** Run the probe script `scripts/probes/background_shell.py` (Task 3). It reproduces the backgrounding path the probe found. The dispatch waits for the shell and continues as D11 records. A forever shell (`sleep 100000` via the same path) with `pipeline.background_idle_timeout_s` set low is stopped with a WARNING.
+6. If the probe found no backgrounding path (D10), step 5 is replaced by recording the probe output; no shell reporting or wait ships.
 
 ## Risk Assessment
 
@@ -302,7 +302,7 @@ Draft. Refined after Phase 6. Use a scratch slice (as in slice 178's walkthrough
 
 ### Mitigation Strategies
 
-- D10 makes the probe the first task, and D11 commits only to reporting and the bounded wait until the probe's results are recorded. Squadron only acts on recorded evidence, and the reporting part is useful whatever the probe finds.
+- D10 makes the probe the first task, and D11 commits only to reporting and the bounded wait until the probe's results are recorded. Squadron only acts on recorded evidence; if no shell can be backgrounded, nothing shell-specific ships.
 
 ## Implementation Notes
 

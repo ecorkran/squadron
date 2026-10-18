@@ -67,7 +67,8 @@ status: not_started
 - [ ] If (2) finds no path, record that, and record (1) and (3)–(5) as not reachable with the evidence
 - [ ] Amend the slice design
   - [ ] D10: add a "Probe results" list with answers (1)–(5) and the log excerpts that show them
-  - [ ] D11: replace "Written after the probe" with the chosen wait mechanism and its evidence. If (5) is yes, the wait is the D12 wait. If (2) found no path, record the wait as not needed.
+  - [ ] D11: replace "Written after the probe" with the chosen wait mechanism and its evidence. If (5) is yes, the wait is the D12 wait. If (2) found no path, record reporting and the wait as not needed.
+  - [ ] D11: unless the wait is not needed or is the D12 wait, end the amendment with a numbered implementation step list for the wait: files, functions, the end condition, and the bound
   - [ ] Walkthrough step 5 or 6: keep the one that matches the probe result
 - [ ] Comment on #234 with answers (1)–(5), as its own `gh` call
 - [ ] Commit: `test: add background-shell probe and record results in slice 947`
@@ -110,6 +111,7 @@ status: not_started
   - [ ] `RunSpend.add`: sums known costs; `None` input is a no-op
   - [ ] Unknown cost: adds nothing; one WARNING per alias across repeated adds; a second alias gets its own WARNING
   - [ ] Malformed record: ERROR logged; total unchanged; no raise
+  - [ ] `read_cost_cap` through the real config layer: a value written to a temp project config with the `sq config set` code path reads back as a float
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat: add pipeline.max_cost_usd key and per-run spend ledger`
 
@@ -196,7 +198,7 @@ status: not_started
 - [ ] Commit: `test: resume after a BLOCKED pause re-dispatches implement`
 
 ## Task 18: Report running background shells (D11) — Effort 2
-- [ ] Add `SHELL_TASK_TYPE` to `sdk_turns.py` with the value recorded by Task 3 probe answer (1). If the probe recorded it as not reachable, mark this task's items [x] with the note "not reachable per D10 probe" and skip to Task 20.
+- [ ] Add `SHELL_TASK_TYPE` to `sdk_turns.py` with the value recorded by Task 3 probe answer (1). If the probe recorded shells as not reachable, mark this task's items and Tasks 19–21 [x] with the note "not reachable per D10 probe" and go to Task 22. Never write a shell type string the probe didn't record.
 - [ ] Extend `BackgroundLedger` to track shells separately from waited-for agents: start on `TaskStartedMessage` with the shell type; clear on the same terminal frames agents use
 - [ ] When a dispatch returns with shells still running: WARNING `dispatch ended with N background shell(s) running: <descriptions>`, and `background_shells_running: int` in dispatch metadata, set the same way as `background_tasks_waited`
 - [ ] Extend the `ProviderError` "stream ended before the dispatch's result" message to name running shells
@@ -211,11 +213,12 @@ status: not_started
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat: report background shells left running at dispatch end`
 
-## Task 20: Wait for background shells (D11) — Effort 2
+## Task 20: Wait for background shells (D11) — Effort 3
 - [ ] Check that D11 in the slice design records the wait mechanism and its probe evidence (Task 3). If it doesn't, this task doesn't start, and the D11 success criterion stays unchecked.
 - [ ] If D11 records the wait as not needed: mark this task's items [x] with the note "not needed per D11" and go to Task 22
 - [ ] If D11 records that the D12 wait covers shells: add the test in Task 21 only; no new code
-- [ ] Otherwise implement the mechanism exactly as D11 records it, bounded by `pipeline.background_idle_timeout_s`. A shell stopped at the bound logs WARNING.
+- [ ] Otherwise follow D11's numbered implementation step list, one sub-item per step, bounded by `pipeline.background_idle_timeout_s`. A shell stopped at the bound logs WARNING.
+- [ ] Success: a turn that ends with a shell running doesn't end the dispatch until the shell's terminal frame or the bound, and the D11 failure modes behave as D11 states
 
 ## Task 21: Tests for the shell wait — Effort 2
 - [ ] A turn that ends with a shell running waits, and the dispatch returns the text after the shell completes
