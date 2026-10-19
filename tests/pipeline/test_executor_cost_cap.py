@@ -213,3 +213,25 @@ async def test_each_items_share_one_tally_and_the_cap_stops_the_batch_under_eith
 
     assert result.status is ExecutionStatus.FAILED
     assert action.execute.await_count == 3  # items 4 and 5 never ran
+
+
+@pytest.mark.parametrize("shape", ["single_step", "body"])
+@pytest.mark.asyncio
+async def test_a_loop_stops_and_fails_at_the_cap_even_with_on_exhaust_skip(
+    patch_config_paths: dict[str, Path], tmp_path: Path, shape: str
+) -> None:
+    _set_cap(tmp_path, "1.0")
+    kind = _step_type(f"_cap_loop_{next(_step_names)}")
+    loop: dict[str, object] = {"max": 5, "until": "review.pass", "on_exhaust": "skip"}
+    if shape == "body":
+        loop["steps"] = [{kind: {}}]
+        step = StepConfig(step_type="loop", name="rounds", config=loop)
+    else:
+        step = StepConfig(step_type=kind, name="rounds", config={"loop": loop})
+    definition = PipelineDefinition(name="cap", description="test", params={}, steps=[step])
+    action = _priced_action(0.6)
+
+    result = await _run(definition, action, tmp_path)
+
+    assert result.status is ExecutionStatus.FAILED
+    assert action.execute.await_count == 2  # rounds 3-5 never ran

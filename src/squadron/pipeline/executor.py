@@ -1389,6 +1389,11 @@ async def _execute_loop_step(
         )
         last_result = result
 
+        # A crossed cost cap ends the loop and the step fails: another round would keep
+        # spending, and `until` / `on_exhaust: skip` must not turn it into a green step.
+        if _crossed_cost_cap(result):
+            return replace(result, status=ExecutionStatus.FAILED, prior_rounds=earlier_rounds)
+
         # Checkpoint pause always stops the loop
         if result.status == ExecutionStatus.PAUSED:
             _warn_loop_abandoned_on_pause(
@@ -1597,6 +1602,17 @@ async def _execute_loop_body(
                     action_results=iteration_action_results,
                     prior_rounds=list(earlier_rounds),
                     iteration=iteration,
+                )
+            # A crossed cost cap ends the loop as FAILED whatever `on_exhaust` says.
+            if _crossed_cost_cap(inner_result):
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=ExecutionStatus.FAILED,
+                    action_results=iteration_action_results,
+                    prior_rounds=list(earlier_rounds),
+                    iteration=iteration,
+                    error=_item_failure_reason(inner_result),
                 )
             # A failed dispatch ends the loop (issue 200): that round changed nothing, so
             # a later review must not be allowed to satisfy `until` or `accept_if`. Any
