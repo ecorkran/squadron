@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261018'
+dateUpdated: '20261019'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261019
+
+### Release 0.23.3
+
+- **Contents:** slice 947 Unattended Pipelines (`pipeline.max_cost_usd` cost cap, BLOCKED-task pause, no invented review gates, background shell wait; #235, #223, #234, #239) and `sq review code --commit SHA`.
 
 ## 20261018
 
