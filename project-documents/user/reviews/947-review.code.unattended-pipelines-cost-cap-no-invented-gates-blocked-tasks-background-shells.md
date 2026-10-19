@@ -106,3 +106,12 @@ The new `squadron.blocked-tasks` action gets this right: unreadable task files, 
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 5
 - Finding-shaped matches — surviving validation: 5
+
+## Response
+
+- **F001** fixed (76066603): both loop shapes stop at the round whose action crosses the cap and fail the step, even when `until` is satisfied or `on_exhaust: skip` is set. `tests/pipeline/test_executor_cost_cap.py` covers the single-step and multi-step body shapes.
+- **F002** fixed (57adde48): the stream-end error says "after the dispatch's result, before the CLI reported idle" when our result was seen, and keeps "before the dispatch's result" when it was not. Both cases have a test.
+- **F003** fixed (57adde48): `parse_blocked_markers` requires a `:` or dash after `BLOCKED`, so a task titled "BLOCKED tasks cleanup" no longer pauses a run. A marker with no text reports "(no reason given)".
+- **F004** fixed (57adde48): `usage_dict` lives once in `tests/pipeline/conftest.py`.
+- **F005** pass, no change.
+- Per-run and rolling-window caps are logged as #241 and #242.
