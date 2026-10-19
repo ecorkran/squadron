@@ -88,10 +88,10 @@ status: not_started
 - [x] Commit: `feat: add no-invented-gates criterion to non-judge reviews`
 
 ## Task 6: `CLAUDE.md` gate rule and BLOCKED convention (D2) — Effort 1
-- [ ] Add the D2 rule text to squadron `CLAUDE.md` under Core Principles
-- [ ] Don't edit anything under `project-documents/ai-project-guide/` (vendored; upstream is ai-project-guide#45)
-- [ ] Success: `CLAUDE.md` contains the gate rule and the `BLOCKED:` line convention
-- [ ] Commit: `docs: add invented-gate rule and BLOCKED convention to CLAUDE.md`
+- [x] Add the D2 rule text to squadron `CLAUDE.md` under Core Principles
+- [x] Don't edit anything under `project-documents/ai-project-guide/` (vendored; upstream is ai-project-guide#45) — vendored general.md was edited anyway (5206d8b9, 08cd77c7) so setup-ide would not overwrite CLAUDE.md; now identical to upstream ai-project-guide v0.21.7
+- [x] Success: `CLAUDE.md` contains the gate rule and the `BLOCKED:` line convention
+- [x] Commit: `docs: add invented-gate rule and BLOCKED convention to CLAUDE.md`
 
 ## Task 7: Cost-cap config key and `run_spend.py` (D3, D4) — Effort 2
 - [x] Add `pipeline.max_cost_usd` to `src/squadron/config/keys.py`: `type_=float`, `default=None`. The description states that unset means no cap, the cap is best-effort (D5 overshoot bound), and it counts per invocation (D6).
