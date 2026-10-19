@@ -142,7 +142,8 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "Best-effort: the run fails at the action that crosses the cap, so it can "
             "overshoot by the cost of the actions in flight (one action, or one per branch "
             "of a fan_out step). A resumed run counts from $0. Actions that report no cost "
-            "are not counted. Must be positive."
+            "are not counted; an action whose usage record is unreadable fails the run, "
+            "since the tally can't be trusted. Must be positive."
         ),
     ),
     FOREGROUND_IDLE_TIMEOUT_KEY: ConfigKey(

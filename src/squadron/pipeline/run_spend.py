@@ -45,6 +45,7 @@ class RunSpend:
     def __init__(self, cap_usd: float | None) -> None:
         self._cap_usd = cap_usd
         self._known_usd = 0.0
+        self._unreadable_steps: list[str] = []
         self._unpriced_aliases_warned: set[str | None] = set()
 
     @property
@@ -54,7 +55,15 @@ class RunSpend:
 
     def cap_error(self) -> str | None:
         """The failure text once known spend exceeds the cap; ``None`` while under it or uncapped."""
-        if self._cap_usd is None or self._known_usd <= self._cap_usd:
+        if self._cap_usd is None:
+            return None
+        if self._unreadable_steps:
+            # A capped run must not run on a tally it cannot trust: fail closed.
+            return (
+                f"cannot enforce {COST_CAP_KEY}: unreadable usage record from step(s) "
+                f"{', '.join(self._unreadable_steps)}"
+            )
+        if self._known_usd <= self._cap_usd:
             return None
         return (
             f"run spent ${self._known_usd:.2f} this invocation, over {COST_CAP_KEY} "
@@ -66,6 +75,8 @@ class RunSpend:
 
         ``None`` means the action spent nothing and adds nothing. An unreadable
         record is logged at ERROR and adds nothing: tallying must not crash the run.
+        With a cap configured it also makes ``cap_error`` fail the run, since the
+        tally can no longer be trusted.
         A record with no cost adds nothing and warns once per alias.
         """
         if raw_usage is None:
@@ -75,9 +86,10 @@ class RunSpend:
                 raise ValueError(f"usage is not a mapping: {raw_usage!r:.200}")
             record = UsageRecord.from_dict(cast("Mapping[str, object]", raw_usage))
         except ValueError:
-            # Reported and skipped, the same posture as usage-stamp; the cap then
-            # undercounts this action, which the ERROR makes visible.
+            # Logged and not counted, the same posture as usage-stamp; a capped run
+            # then fails in cap_error rather than running on an undercount.
             _logger.exception("step %s has an unreadable usage record; not counted in spend", step_name)
+            self._unreadable_steps.append(step_name)
             return
         if record.cost_usd is None:
             self._warn_unpriced(step_name, record.alias)

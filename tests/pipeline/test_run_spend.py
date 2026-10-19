@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 from pathlib import Path
 
@@ -110,6 +111,26 @@ class TestCapError:
         spend.add(usage_dict(1000.0), step_name="a")
 
         assert spend.cap_error() is None
+
+    def test_unreadable_usage_under_a_cap_fails_closed(self) -> None:
+        spend = RunSpend(10.0)
+        spend.add(usage_dict(0.1), step_name="good")
+        spend.add("not a usage record", step_name="bad")
+
+        assert spend.cap_error() == (
+            f"cannot enforce {COST_CAP_KEY}: unreadable usage record from step(s) bad"
+        )
+
+    def test_unreadable_usage_without_a_cap_is_not_an_error(self) -> None:
+        spend = RunSpend(None)
+        spend.add("not a usage record", step_name="bad")
+
+        assert spend.cap_error() is None
+
+    def test_add_stays_synchronous(self) -> None:
+        # Concurrent fan_out branches share one tally; that is race-free only while
+        # add() has no await point, so it must never become a coroutine.
+        assert not inspect.iscoroutinefunction(RunSpend.add)
 
     def test_at_the_cap_is_not_over_it(self) -> None:
         spend = RunSpend(1.0)
