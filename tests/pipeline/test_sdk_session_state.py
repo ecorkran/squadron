@@ -100,7 +100,10 @@ async def test_stream_end_while_running_raises() -> None:
         [],  # stream ends: the CLI never reports idle
     )
 
-    with pytest.raises(ProviderError, match="stream ended before the dispatch's result.*'running'"):
+    with pytest.raises(
+        ProviderError,
+        match="stream ended after the dispatch's result, before the CLI reported idle.*'running'",
+    ):
         await _dispatch(client)
 
 

@@ -9,25 +9,10 @@ import pytest
 
 from squadron.config.keys import COST_CAP_KEY
 from squadron.config.manager import set_config
-from squadron.core.usage import TokenUsage, UsageRecord
 from squadron.pipeline.run_spend import RunSpend, read_cost_cap
+from tests.pipeline.conftest import usage_dict
 
 _MOD = "squadron.pipeline.run_spend"
-
-
-def _usage(cost_usd: float | None, alias: str | None = "opus") -> dict[str, object]:
-    record = UsageRecord(
-        model=None,
-        alias=alias,
-        profile=None,
-        effort=None,
-        turns=1,
-        duration_seconds=1.0,
-        usage=TokenUsage(),
-        cost_usd=cost_usd,
-        cost_basis=None,
-    )
-    return record.to_dict()
 
 
 class TestReadCostCap:
@@ -78,8 +63,8 @@ class TestReadCostCap:
 class TestRunSpend:
     def test_sums_known_costs(self) -> None:
         spend = RunSpend(None)
-        spend.add(_usage(0.25), step_name="a")
-        spend.add(_usage(1.5), step_name="b")
+        spend.add(usage_dict(0.25), step_name="a")
+        spend.add(usage_dict(1.5), step_name="b")
 
         assert spend.known_usd == pytest.approx(1.75)
 
@@ -94,9 +79,9 @@ class TestRunSpend:
     ) -> None:
         spend = RunSpend(None)
         with caplog.at_level(logging.WARNING, logger=_MOD):
-            spend.add(_usage(None, alias="sol"), step_name="one")
-            spend.add(_usage(None, alias="sol"), step_name="two")
-            spend.add(_usage(None, alias="luna"), step_name="three")
+            spend.add(usage_dict(None, alias="sol"), step_name="one")
+            spend.add(usage_dict(None, alias="sol"), step_name="two")
+            spend.add(usage_dict(None, alias="luna"), step_name="three")
 
         warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
         assert spend.known_usd == 0.0
@@ -109,7 +94,7 @@ class TestRunSpend:
         self, caplog: pytest.LogCaptureFixture, raw: object
     ) -> None:
         spend = RunSpend(None)
-        spend.add(_usage(2.0), step_name="good")
+        spend.add(usage_dict(2.0), step_name="good")
 
         with caplog.at_level(logging.ERROR, logger=_MOD):
             spend.add(raw, step_name="bad")
@@ -122,20 +107,20 @@ class TestRunSpend:
 class TestCapError:
     def test_uncapped_never_errors(self) -> None:
         spend = RunSpend(None)
-        spend.add(_usage(1000.0), step_name="a")
+        spend.add(usage_dict(1000.0), step_name="a")
 
         assert spend.cap_error() is None
 
     def test_at_the_cap_is_not_over_it(self) -> None:
         spend = RunSpend(1.0)
-        spend.add(_usage(1.0), step_name="a")
+        spend.add(usage_dict(1.0), step_name="a")
 
         assert spend.cap_error() is None
 
     def test_over_the_cap_states_spend_and_cap(self) -> None:
         spend = RunSpend(1.0)
-        spend.add(_usage(0.6), step_name="a")
-        spend.add(_usage(0.7), step_name="b")
+        spend.add(usage_dict(0.6), step_name="a")
+        spend.add(usage_dict(0.7), step_name="b")
 
         assert spend.cap_error() == (
             f"run spent $1.30 this invocation, over {COST_CAP_KEY} $1.00; "

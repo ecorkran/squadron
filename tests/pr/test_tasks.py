@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from squadron.pr.tasks import parse_blocked_markers, parse_task_items
+from squadron.pr.tasks import NO_REASON_GIVEN, parse_blocked_markers, parse_task_items
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TASKS_DIR = _REPO_ROOT / "project-documents" / "user" / "tasks"
@@ -122,7 +122,6 @@ def test_blocked_marker_in_the_real_amoeba_format() -> None:
         "__BLOCKED:__ needs the PM",
         "BLOCKED — needs the PM",
         "BLOCKED - needs the PM",
-        "BLOCKED needs the PM",
         "BLOCKED:needs the PM",
         "BLOCKED:   needs the PM   ",
     ],
@@ -141,11 +140,18 @@ def test_blocked_marker_forms_yield_the_text_after_the_marker(line: str) -> None
         "BLOCKEDX: needs the PM",
         "see BLOCKED: in the task above",
         "- [ ] 3.1 Resolve BLOCKED: items",
+        "- [ ] BLOCKED tasks list cleanup",
+        "BLOCKED needs the PM",
         "",
     ],
 )
 def test_lines_that_are_not_markers_are_ignored(line: str) -> None:
     assert parse_blocked_markers(line) == ()
+
+
+@pytest.mark.parametrize("line", ["BLOCKED:", "> **BLOCKED:**", "- [ ] BLOCKED -  "])
+def test_a_marker_with_no_reason_gets_a_placeholder(line: str) -> None:
+    assert parse_blocked_markers(line) == (NO_REASON_GIVEN,)
 
 
 def test_markers_come_back_in_file_order() -> None:

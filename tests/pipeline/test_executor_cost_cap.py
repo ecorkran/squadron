@@ -11,29 +11,15 @@ import pytest
 
 from squadron.config.keys import COST_CAP_KEY
 from squadron.config.manager import set_config
-from squadron.core.usage import TokenUsage, UsageRecord
 from squadron.integrations.context_forge import SliceEntry
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, execute_pipeline
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.steps import register_step_type
 from squadron.providers.base import USAGE_KEY
+from tests.pipeline.conftest import usage_dict
 
 _step_names = count()
-
-
-def _usage(cost_usd: float | None) -> dict[str, object]:
-    return UsageRecord(
-        model=None,
-        alias="opus",
-        profile=None,
-        effort=None,
-        turns=1,
-        duration_seconds=1.0,
-        usage=TokenUsage(),
-        cost_usd=cost_usd,
-        cost_basis=None,
-    ).to_dict()
 
 
 def _priced_action(cost_usd: float | None) -> MagicMock:
@@ -41,7 +27,7 @@ def _priced_action(cost_usd: float | None) -> MagicMock:
 
     async def execute(ctx: object) -> ActionResult:
         return ActionResult(
-            success=True, action_type="dispatch", outputs={}, metadata={USAGE_KEY: _usage(cost_usd)}
+            success=True, action_type="dispatch", outputs={}, metadata={USAGE_KEY: usage_dict(cost_usd)}
         )
 
     action = MagicMock()

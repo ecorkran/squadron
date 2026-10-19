@@ -19,12 +19,17 @@ _CHECKBOX_RE = re.compile(r"^\s*[-*+]\s+\[( |x|X)\]\s*(.*?)\s*$")
 # (slice 947 D2). Uppercase only, so prose like "blocked by" never matches.
 BLOCKED_MARKER = "BLOCKED"
 
+# Reported for a marker written with no reason, so the pause message never reads ": .".
+NO_REASON_GIVEN = "(no reason given)"
+
 # Lenient prefix (any indent, `>` quote marks, a list bullet with an optional checkbox,
-# `*`/`_` emphasis), the marker word, then any emphasis and separator before the text.
+# `*`/`_` emphasis), the marker word, then a required `:` or dash (emphasis allowed around
+# it) before the text. A bare space is not enough: a task titled "BLOCKED tasks cleanup"
+# must not stop a run.
 _BLOCKED_RE = re.compile(
     r"^\s*(?:>\s*)*(?:[-*+]\s+(?:\[[ xX]\]\s*)?)?[*_]*"
     + re.escape(BLOCKED_MARKER)
-    + r"(?![A-Za-z0-9])[*_]*\s*[:—–-]*[*_]*\s*(.*?)\s*$"
+    + r"(?![A-Za-z0-9])[*_]*\s*[:—–-]+[*_]*\s*(.*?)\s*$"
 )
 
 
@@ -61,7 +66,8 @@ def parse_blocked_markers(text: str) -> tuple[str, ...]:
 
     Matches the formatting agents actually write: a blockquote
     (``> BLOCKED: ...``), a list item or checkbox item, bold, or a plain line,
-    with ``:``, a dash, or just a space after the word.
+    with ``:`` or a dash after the word. A marker with no text after it yields
+    ``NO_REASON_GIVEN``.
     """
     matches = (_BLOCKED_RE.match(line) for line in text.splitlines())
-    return tuple(match.group(1) for match in matches if match is not None)
+    return tuple(match.group(1) or NO_REASON_GIVEN for match in matches if match is not None)

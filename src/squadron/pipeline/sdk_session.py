@@ -293,8 +293,13 @@ class SDKExecutionSession:
                 # owed, this is today's behavior; otherwise the work the CLI
                 # owes can never arrive.
                 if turns.ledger.holding or turns.waiting:
+                    ended = (
+                        "stream ended after the dispatch's result, before the CLI reported idle"
+                        if turns.own_result_seen
+                        else "stream ended before the dispatch's result"
+                    )
                     raise ProviderError(
-                        "stream ended before the dispatch's result; "
+                        f"{ended}; "
                         f"session state {turns.session_state!r}, "
                         f"{len(turns.ledger.active_ids())} background agent(s) still "
                         f"running: {turns.ledger.descriptions()}; "

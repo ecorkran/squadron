@@ -991,6 +991,18 @@ class TestDispatchWaitsForBackgroundAgents:
         session = scripted_session(client)
 
         with pytest.raises(
+            ProviderError, match="stream ended after the dispatch's result.*Explore src"
+        ):
+            await session.dispatch("p")  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_stream_end_with_no_result_says_so(self) -> None:
+        from squadron.providers.errors import ProviderError
+
+        client = ScriptedClient([sdk_task_started("t1", "local_agent", "Explore src")])
+        session = scripted_session(client)
+
+        with pytest.raises(
             ProviderError, match="stream ended before the dispatch's result.*Explore src"
         ):
             await session.dispatch("p")  # type: ignore[attr-defined]
