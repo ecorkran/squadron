@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from squadron.pr.tasks import parse_task_items
+import pytest
+
+from squadron.pr.tasks import NO_REASON_GIVEN, parse_blocked_markers, parse_task_items
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TASKS_DIR = _REPO_ROOT / "project-documents" / "user" / "tasks"
@@ -88,3 +90,75 @@ def test_real_task_file_fixture() -> None:
     expected_total = len(_CHECKBOX_LINE_RE.findall(text))
     assert expected_total
     assert len(items.checked) + len(items.unchecked) == expected_total
+
+
+# --- parse_blocked_markers (slice 947 D7) -----------------------------------------
+
+# The line the implement agent wrote in amoeba slice 107, quoted in issue #223.
+_REAL_BLOCKED_LINE = "> BLOCKED: no judge-template review artifact ... PM asked"
+
+
+def test_blocked_marker_in_the_real_amoeba_format() -> None:
+    text = f"- [ ] 7.2 Capture the artifact\n  {_REAL_BLOCKED_LINE}\n- [ ] 8.1 Next task\n"
+
+    assert parse_blocked_markers(text) == ("no judge-template review artifact ... PM asked",)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "BLOCKED: needs the PM",
+        "  BLOCKED: needs the PM",
+        "> BLOCKED: needs the PM",
+        "> > BLOCKED: needs the PM",
+        ">BLOCKED: needs the PM",
+        "- BLOCKED: needs the PM",
+        "* BLOCKED: needs the PM",
+        "  - [ ] BLOCKED: needs the PM",
+        "- [x] BLOCKED: needs the PM",
+        "**BLOCKED:** needs the PM",
+        "**BLOCKED**: needs the PM",
+        "> **BLOCKED:** needs the PM",
+        "__BLOCKED:__ needs the PM",
+        "BLOCKED — needs the PM",
+        "BLOCKED - needs the PM",
+        "BLOCKED:needs the PM",
+        "BLOCKED:   needs the PM   ",
+    ],
+)
+def test_blocked_marker_forms_yield_the_text_after_the_marker(line: str) -> None:
+    assert parse_blocked_markers(line) == ("needs the PM",)
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "This task is blocked by the review",
+        "Blocked: needs the PM",
+        "blocked: needs the PM",
+        "UNBLOCKED: needs the PM",
+        "BLOCKEDX: needs the PM",
+        "see BLOCKED: in the task above",
+        "- [ ] 3.1 Resolve BLOCKED: items",
+        "- [ ] BLOCKED tasks list cleanup",
+        "BLOCKED needs the PM",
+        "",
+    ],
+)
+def test_lines_that_are_not_markers_are_ignored(line: str) -> None:
+    assert parse_blocked_markers(line) == ()
+
+
+@pytest.mark.parametrize("line", ["BLOCKED:", "> **BLOCKED:**", "- [ ] BLOCKED -  "])
+def test_a_marker_with_no_reason_gets_a_placeholder(line: str) -> None:
+    assert parse_blocked_markers(line) == (NO_REASON_GIVEN,)
+
+
+def test_markers_come_back_in_file_order() -> None:
+    text = "BLOCKED: first\n- [ ] work\n> BLOCKED: second\n"
+
+    assert parse_blocked_markers(text) == ("first", "second")
+
+
+def test_no_markers_is_an_empty_tuple() -> None:
+    assert parse_blocked_markers("- [ ] a task\n- [x] done\n") == ()

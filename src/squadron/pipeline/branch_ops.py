@@ -308,6 +308,15 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
 _UNCHECKED_PREVIEW = 3  # item texts named in the refusal
 
 
+def slice_task_paths(cf_client: CfClientProtocol, slice_index: int, cwd: str) -> list[Path]:
+    """The slice's task files, as paths under ``cwd``, in the order cf lists them.
+
+    A cf error propagates; an empty list means cf lists no task files for the slice.
+    """
+    info = resolve_slice_info(cf_client, slice_index)
+    return [Path(cwd) / TASKS_DIR / task_file for task_file in info["task_files"]]
+
+
 def _require_checked_tasks(slice_index: int, cwd: str, cf_client: CfClientProtocol) -> None:
     """Refuse the merge while any of the slice's task files has an unchecked box (issue 189).
 
@@ -320,16 +329,15 @@ def _require_checked_tasks(slice_index: int, cwd: str, cf_client: CfClientProtoc
             (``UNFINISHED_TASKS``), or a task file is unreadable (``OTHER``). Nothing
             has changed yet, so this is an item failure.
     """
-    info = resolve_slice_info(cf_client, slice_index)
-    if not info["task_files"]:
+    paths = slice_task_paths(cf_client, slice_index, cwd)
+    if not paths:
         raise MergeFailedError(
             f"slice {slice_index} not merged: cf lists no task files for this slice, "
             "so its work cannot be verified.",
             BranchFailure.UNFINISHED_TASKS,
         )
     unchecked: list[str] = []
-    for task_file in info["task_files"]:
-        path = Path(cwd) / TASKS_DIR / task_file
+    for path in paths:
         try:
             unchecked.extend(parse_task_items(path.read_text(encoding="utf-8")).unchecked)
         except OSError as exc:

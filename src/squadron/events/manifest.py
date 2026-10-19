@@ -66,6 +66,9 @@ DEFAULT_BINDINGS: tuple[Binding, ...] = (
     Binding(
         event=EventType.POST_ACTION, action="squadron.dispatch-artifact", params={}, source="built-in"
     ),
+    # Before branch-work: a blocked agent often commits nothing, and the PM hand-off
+    # has to win over the "no commits" failure (slice 947 D7).
+    Binding(event=EventType.POST_ACTION, action="squadron.blocked-tasks", params={}, source="built-in"),
     Binding(
         event=EventType.POST_ACTION,
         action="squadron.dispatch-branch-work",

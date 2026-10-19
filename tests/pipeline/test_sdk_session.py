@@ -11,6 +11,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 
 from squadron.core.usage import TokenUsage
 from squadron.pipeline.sdk_session import SDKExecutionSession
+from squadron.pipeline.sdk_turns import SESSION_STATE_ENV
 from tests.pipeline.conftest import (
     ScriptedClient,
     scripted_session,
@@ -972,19 +973,6 @@ class TestDispatchWaitsForBackgroundAgents:
         assert client.receive_calls == 2
 
     @pytest.mark.asyncio
-    async def test_background_shell_does_not_hold_dispatch(self) -> None:
-        client = ScriptedClient(
-            [sdk_task_started("b1", "local_bash"), sdk_text("done"), sdk_result()],
-        )
-        session = scripted_session(client)
-
-        response = (await session.dispatch("p")).text  # type: ignore[attr-defined]
-
-        assert response == "done"
-        assert session.background_tasks_waited == 0  # type: ignore[attr-defined]
-        assert client.receive_calls == 1
-
-    @pytest.mark.asyncio
     async def test_no_tasks_reads_one_turn(self) -> None:
         client = ScriptedClient([sdk_text("hello"), sdk_result()])
         session = scripted_session(client)
@@ -1000,6 +988,18 @@ class TestDispatchWaitsForBackgroundAgents:
             [sdk_task_started("t1", "local_agent", "Explore src"), sdk_result()],
             [],  # stream ends: no notification, no result
         )
+        session = scripted_session(client)
+
+        with pytest.raises(
+            ProviderError, match="stream ended after the dispatch's result.*Explore src"
+        ):
+            await session.dispatch("p")  # type: ignore[attr-defined]
+
+    @pytest.mark.asyncio
+    async def test_stream_end_with_no_result_says_so(self) -> None:
+        from squadron.providers.errors import ProviderError
+
+        client = ScriptedClient([sdk_task_started("t1", "local_agent", "Explore src")])
         session = scripted_session(client)
 
         with pytest.raises(
@@ -1134,7 +1134,7 @@ class TestPipelineSessionSettings:
 
         rotated = ctor.call_args.kwargs["options"]
         assert rotated.setting_sources == ["project"]
-        assert rotated.env == {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}
+        assert rotated.env == {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1", SESSION_STATE_ENV: "1"}
         assert rotated.system_prompt["append"].endswith("S")
 
 

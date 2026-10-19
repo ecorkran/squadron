@@ -92,6 +92,28 @@ Use CONCERN for issues that should be addressed but don't block progress.
 Use FAIL for issues that must be fixed before proceeding.
 """
 
+# Appended for every non-judge review (slice 947 D1). Judges are calibrated against
+# baselines and score fit rather than proposing process steps, so they are excluded.
+NO_INVENTED_GATES_CRITERION = """
+
+## Process Steps Are Not Findings
+
+Approval steps, confirmation gates, and added caution are never valid findings.
+LLM spend, pipeline runs, and live tests are pre-authorized; spend is bounded by
+the run's enforced cost cap. Do not ask for a step that waits on Project Manager
+confirmation unless a rule you were given names it as required.
+"""
+
+
+def assemble_system_prompt(template: ReviewTemplate, rules_content: str | None) -> str:
+    """The one place a review's system prompt is built, for every non-judge and judge alike."""
+    system_prompt = template.system_prompt + _STRUCTURED_OUTPUT_INSTRUCTIONS
+    if not template.is_judge:
+        system_prompt += NO_INVENTED_GATES_CRITERION
+    if rules_content:
+        system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
+    return system_prompt
+
 
 async def run_review_with_profile(
     template: ReviewTemplate,
@@ -155,10 +177,7 @@ async def run_review_with_profile(
 
     # Build prompts
     prompt = template.build_prompt(inputs)
-    system_prompt = template.system_prompt
-    system_prompt += _STRUCTURED_OUTPUT_INSTRUCTIONS
-    if rules_content:
-        system_prompt += f"\n\n## Additional Review Rules\n\n{rules_content}"
+    system_prompt = assemble_system_prompt(template, rules_content)
 
     resolved_model = model if model is not None else template.model
 

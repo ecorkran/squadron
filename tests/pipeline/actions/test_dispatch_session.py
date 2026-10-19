@@ -30,6 +30,7 @@ def _make_session(response: str = "session response") -> AsyncMock:
     session.dispatch = AsyncMock(return_value=session_reply(response))
     session.background_tasks_waited = 0
     session.background_tasks_stopped = 0
+    session.background_shells_running = 0
     return session
 
 
@@ -253,12 +254,14 @@ async def test_session_dispatch_records_background_task_counts(action: DispatchA
     session = _make_session()
     session.background_tasks_waited = 2
     session.background_tasks_stopped = 0
+    session.background_shells_running = 1
 
     result = await action.execute(_make_context(session=session))
 
     assert result.success is True
     assert result.metadata["background_tasks_waited"] == 2
     assert result.metadata["background_tasks_stopped"] == 0
+    assert result.metadata["background_shells_running"] == 1
 
 
 @pytest.mark.asyncio

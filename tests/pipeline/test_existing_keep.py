@@ -380,3 +380,30 @@ async def test_implement_keep_count_timeout_raises_and_logs_error(
         r.levelno == logging.ERROR and f"cannot count work on {BRANCH}" in r.getMessage()
         for r in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_implement_dispatches_again_when_resuming_a_hand_off_pause(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Slice 947 D8: a BLOCKED agent's partial commits are not a finished step."""
+    from squadron.pipeline.control_params import RESUMED_FROM_HANDOFF
+
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
+    _commit(temp_git_repo, "partial.py")
+    context = _implement_context(temp_git_repo)
+    context.params[RESUMED_FROM_HANDOFF] = True
+    normal = ActionResult(success=True, action_type="dispatch", outputs={"response": "built"})
+    context.resolver.resolve.return_value = ("m", "openai")  # type: ignore[attr-defined]
+
+    with (
+        patch.object(
+            DispatchAction, "_dispatch_via_agent", new_callable=AsyncMock, return_value=normal
+        ) as agent,
+        caplog.at_level(logging.INFO, logger=_P),
+    ):
+        result = await DispatchAction().execute(context)
+
+    agent.assert_awaited_once()
+    assert result.outputs == {"response": "built"}
+    assert any("resuming a hand-off pause; dispatching again" in r.getMessage() for r in caplog.records)

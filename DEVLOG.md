@@ -11,6 +11,16 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261018
 
+### Slice 947: Unattended Pipelines — Implementation Complete (Phase 6)
+
+- Branch `947-slice.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells` (from `main`), not merged; code review comes before Phase 7. Full suite 7396 passed, 4 skipped before the last two fixes; pyright 0 errors; the touched areas pass after them.
+- Shipped: D12 dispatch end on the CLI's `idle` state (#239); no-invented-gates review criterion for non-judge templates (`assemble_system_prompt`); `pipeline.max_cost_usd` with `RunSpend` and `FailureKind.COST_CAP`; `squadron.blocked-tasks` and the executor's `awaits_human` copy from event outcomes (#223); shell reporting and wait (#234); docs and CHANGELOG.
+- Probe (D10): a Bash command past its `timeout`, and Monitor, start `local_bash` shells the #199 hook never sees; the CLI reports `idle` while one runs and injects a continuation turn when it ends. The wait therefore adds a ledger term to the D12 end rule. Evidence is in the design and on #234.
+- Found and fixed beyond the plan: `sq config set` could not store decimals; a cap failure under `on_item_failure: continue` would only flag the item (now fatal to the batch); a failed `fan_out` branch lost its error text; resume after a BLOCKED pause skipped `implement` under `existing: keep` once the branch had a commit (new reserved param `resumed_from_handoff`).
+- Walkthrough: live in a scratch project (removed after, with its 7 run states); results are in the slice design. `stop_task` verified to end a `local_bash` task.
+- Not done: Task 6, the `CLAUDE.md` gate rule and `BLOCKED:` convention, is edited but not committed (the commit was denied as a change to agent instructions, so the Project Manager commits it). #239 closes at the merge.
+- Next: code review, then Phase 7.
+
 ### Slice 947: Unattended Pipelines — Task Breakdown Complete
 
 - Tasks: `project-documents/user/tasks/947-tasks.unattended-pipelines-cost-cap-no-invented-gates-blocked-tasks-background-shells.md` (24 tasks, test-with, a commit per feature).

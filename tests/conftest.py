@@ -136,6 +136,20 @@ def implement_dispatch_left_commits() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
+def implement_dispatch_left_no_blocked_markers() -> Iterator[None]:
+    """Stand in for the task files: an implement dispatch in a test run left no BLOCKED lines.
+
+    squadron.blocked-tasks reads the slice's task files through cf; pipeline tests with a
+    mocked dispatch have neither. Its own tests override this fixture by name.
+    """
+    with patch(
+        "squadron.events.builtin.blocked_tasks.BlockedTasksAction._read_markers",
+        return_value=(),
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def restore_agent_logger_state() -> Iterator[None]:
     """Undo the global logger mutation ``sq review -v`` performs.
 

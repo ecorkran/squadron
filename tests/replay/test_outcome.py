@@ -138,6 +138,7 @@ def test_a_summary_failure_does_not_undo_an_accepted_artifact() -> None:
         (FailureKind.STALL, FailureClass.STALL),
         (FailureKind.PROVIDER_ERROR, FailureClass.DISPATCH_ERROR),
         (FailureKind.ARTIFACT_MISSING, FailureClass.NO_ARTIFACT),
+        (FailureKind.COST_CAP, FailureClass.COST_CAP),
     ],
 )
 def test_a_failed_phase_step_is_classified_by_its_stamped_kind(
@@ -151,6 +152,15 @@ def test_a_failed_phase_step_is_classified_by_its_stamped_kind(
     assert (reading.outcome, reading.failure_class) == (ReplayOutcome.FAILED, expected)
     assert reading.failure_detail == "why it failed"
     assert reading.rounds is None
+
+
+@pytest.mark.parametrize("kind", list(FailureKind))
+def test_every_failure_kind_has_a_replay_class(kind: FailureKind) -> None:
+    """A new kind with no mapping would crash the reader (a KeyError), not read as `other`."""
+    failed = action("dispatch", success=False, error="e", failure_kind=kind.value)
+    state = run("r6b", [step("design-0", "design", [failed], status="failed")], status="failed")
+
+    assert read_outcome(state).failure_class is not FailureClass.OTHER
 
 
 def test_a_failure_with_no_kind_is_other_with_its_error_text() -> None:

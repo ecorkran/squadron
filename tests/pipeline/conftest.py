@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from squadron.core.usage import RunTelemetry
+from squadron.core.usage import RunTelemetry, TokenUsage, UsageRecord
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import ActionResult, PipelineDefinition
@@ -203,6 +203,28 @@ def sdk_task_updated(task_id: str, status: str) -> object:
         patch={},
         status=status,  # type: ignore[arg-type]
     )
+
+
+def usage_dict(cost_usd: float | None, alias: str | None = "opus") -> dict[str, object]:
+    """A step's stamped usage record (``USAGE_KEY`` metadata) costing ``cost_usd``."""
+    return UsageRecord(
+        model=None,
+        alias=alias,
+        profile=None,
+        effort=None,
+        turns=1,
+        duration_seconds=1.0,
+        usage=TokenUsage(),
+        cost_usd=cost_usd,
+        cost_basis=None,
+    ).to_dict()
+
+
+def sdk_session_state(state: str) -> object:
+    """The CLI's ``session_state_changed`` frame, as the SDK parses it."""
+    from claude_agent_sdk import SystemMessage
+
+    return SystemMessage(subtype="session_state_changed", data={"state": state})
 
 
 class ScriptedClient:

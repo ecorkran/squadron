@@ -42,8 +42,12 @@ from squadron.pipeline.classification import (
     PoolClassificationPolicy,
 )
 from squadron.pipeline.commit_plan import SUBJECT_PARAM, UnmappedTemplateError
-from squadron.pipeline.control_params import ACCEPT_DECISION, OVERRIDE_INSTRUCTIONS
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY
+from squadron.pipeline.control_params import (
+    ACCEPT_DECISION,
+    OVERRIDE_INSTRUCTIONS,
+    RESUMED_FROM_HANDOFF,
+)
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -60,6 +64,7 @@ from squadron.pipeline.models import (
     PipelineDefinition,
     prior_output_key,
 )
+from squadron.pipeline.run_spend import RunSpend, read_cost_cap
 from squadron.pipeline.sources import (
     FLAG_KIND_KEY,
     FLAG_REASON_KEY,
@@ -72,7 +77,12 @@ from squadron.pipeline.steps.dispatch import step_artifact_kind
 from squadron.pipeline.steps.utils import unpack_inner_steps
 from squadron.pipeline.summary_render import gather_cf_params
 from squadron.pipeline.usage_capture import UsageCapture
-from squadron.providers.base import FAILED_TOOL_CALLS_KEY, TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
+from squadron.providers.base import (
+    FAILED_TOOL_CALLS_KEY,
+    TOOL_CALLS_MADE_KEY,
+    TOOLS_GIVEN_KEY,
+    USAGE_KEY,
+)
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import ContextForgeClient
@@ -539,6 +549,9 @@ async def execute_pipeline(
                 f"'{definition.name}'. Steps: {step_names}"
             )
 
+    # A mistyped cap fails the run here, before any step spends (slice 947 D3).
+    cost_cap = read_cost_cap(effective_cwd)
+
     step_results: list[StepResult] = []
     # prior_outputs accumulates across all steps
     prior_outputs: dict[str, ActionResult] = {}
@@ -558,8 +571,15 @@ async def execute_pipeline(
             step_outputs=step_outputs,
         )
 
+    # Resuming a step that paused for a person: it must run again, not be kept (D8).
+    resumed_handoff = start_from is not None and _paused_for_a_person(
+        runs_dir, effective_run_id, start_from
+    )
+
     # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
     usage_capture = UsageCapture(set())
+    # One per invocation, shared by every step including fan_out branches (D4, D6).
+    spend = RunSpend(cost_cap)
 
     # Resume: seed the session with the most recent applicable compact summary.
     # A connected session is rotated now; a lazy one gets the seed at connect.
@@ -602,6 +622,9 @@ async def execute_pipeline(
         if observer is not None:
             observer.step_started(step.name)
 
+        if resumed_handoff and step.name == start_from:
+            merged_params[RESUMED_FROM_HANDOFF] = True
+
         step_result = await _execute_step(
             step=step,
             resolved_config=resolved_config,
@@ -616,6 +639,7 @@ async def execute_pipeline(
             cf_client=cf_client,
             sdk_session=sdk_session,
             usage_capture=usage_capture,
+            spend=spend,
             get_step_type_fn=get_step_type,
             get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
             runs_dir=runs_dir,
@@ -630,6 +654,7 @@ async def execute_pipeline(
         )
 
         step_results.append(step_result)
+        merged_params.pop(RESUMED_FROM_HANDOFF, None)  # only the restarted step sees it
 
         if observer is not None:
             observer.step_completed(step_result)
@@ -784,6 +809,29 @@ def _seed_resume_outputs(
             step_outputs[step_state.step_name] = verdict_result
 
 
+def _paused_for_a_person(runs_dir: Path | None, run_id: str, step_name: str) -> bool:
+    """Whether the run's latest record of *step_name* is a pause an action raised for a person.
+
+    A checkpoint pause is not one: that step finished its work and waits for a decision.
+    A hand-off (``awaits_human``, e.g. a ``BLOCKED`` task) did not finish (slice 947 D8).
+    """
+    from squadron.pipeline.state import StateManager
+
+    try:
+        completed = StateManager(runs_dir=runs_dir).load(run_id).completed_steps
+    except FileNotFoundError:
+        # `_seed_resume_outputs` has already warned that there is no state file; with
+        # nothing recorded, the step resumes as it always has.
+        return False
+    records = [step_state for step_state in completed if step_state.step_name == step_name]
+    if not records:
+        return False
+    latest = records[-1]
+    return latest.status == ExecutionStatus.PAUSED.value and any(
+        action.get("awaits_human") is True for action in latest.action_results
+    )
+
+
 async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKExecutionSession:
     """Construct and connect a new SDKExecutionSession for mid-run lazy auth.
 
@@ -821,6 +869,7 @@ async def _execute_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None,
@@ -852,6 +901,7 @@ async def _execute_step(
         "cf_client": cf_client,
         "sdk_session": sdk_session,
         "usage_capture": usage_capture,
+        "spend": spend,
         "get_step_type_fn": get_step_type_fn,
         "get_action_fn": get_action_fn,
         "runs_dir": runs_dir,
@@ -913,6 +963,7 @@ async def _execute_step_once(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     iteration: int = 0,
@@ -1020,6 +1071,8 @@ async def _execute_step_once(
             if outcome.result is not None and not outcome.result.success:
                 result.success = False
                 result.error = outcome.result.error
+                # An event can hand the run to a person (slice 947 D7), as an action can.
+                result.awaits_human = outcome.result.awaits_human
                 if (kind := outcome.result.metadata.get(FAILURE_KIND_KEY)) is not None:
                     result.metadata[FAILURE_KIND_KEY] = kind
                 break
@@ -1027,6 +1080,15 @@ async def _execute_step_once(
                 result.success = False
                 result.error = f"{outcome.action_name}: {outcome.error_kind.value}"
                 break
+
+        # Cost cap (slice 947 D4/D5): count this action's spend, then fail the run at the
+        # action that crossed the cap. An action already failing keeps its own error.
+        if spend is not None:
+            spend.add(result.metadata.get(USAGE_KEY), step_name=step.name)
+            if result.success and (cap_error := spend.cap_error()) is not None:
+                result.success = False
+                result.error = cap_error
+                result.metadata[FAILURE_KIND_KEY] = FailureKind.COST_CAP.value
 
         # Update step_prior for next action in same step
         key = f"{action_type}-{action_index}"
@@ -1261,6 +1323,7 @@ async def _execute_loop_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1318,12 +1381,18 @@ async def _execute_loop_step(
             cf_client=cf_client,
             sdk_session=sdk_session,
             usage_capture=usage_capture,
+            spend=spend,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             iteration=iteration,
             runs_dir=runs_dir,
         )
         last_result = result
+
+        # A crossed cost cap ends the loop and the step fails: another round would keep
+        # spending, and `until` / `on_exhaust: skip` must not turn it into a green step.
+        if _crossed_cost_cap(result):
+            return replace(result, status=ExecutionStatus.FAILED, prior_rounds=earlier_rounds)
 
         # Checkpoint pause always stops the loop
         if result.status == ExecutionStatus.PAUSED:
@@ -1398,6 +1467,7 @@ async def _execute_loop_body(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1488,6 +1558,7 @@ async def _execute_loop_body(
                 cf_client=cf_client,
                 sdk_session=sdk_session,
                 usage_capture=usage_capture,
+                spend=spend,
                 get_step_type_fn=get_step_type_fn,
                 get_action_fn=get_action_fn,
                 iteration=iteration,
@@ -1531,6 +1602,17 @@ async def _execute_loop_body(
                     action_results=iteration_action_results,
                     prior_rounds=list(earlier_rounds),
                     iteration=iteration,
+                )
+            # A crossed cost cap ends the loop as FAILED whatever `on_exhaust` says.
+            if _crossed_cost_cap(inner_result):
+                return StepResult(
+                    step_name=step.name,
+                    step_type=step.step_type,
+                    status=ExecutionStatus.FAILED,
+                    action_results=iteration_action_results,
+                    prior_rounds=list(earlier_rounds),
+                    iteration=iteration,
+                    error=_item_failure_reason(inner_result),
                 )
             # A failed dispatch ends the loop (issue 200): that round changed nothing, so
             # a later review must not be allowed to satisfy `until` or `accept_if`. Any
@@ -1760,6 +1842,7 @@ async def _execute_each_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -1824,6 +1907,7 @@ async def _execute_each_step(
                     cf_client=cf_client,
                     sdk_session=sdk_session,
                     usage_capture=usage_capture,
+                    spend=spend,
                     get_step_type_fn=get_step_type_fn,
                     get_action_fn=get_action_fn,
                     runs_dir=runs_dir,
@@ -1948,8 +2032,17 @@ def _item_outcome(
         return None, ExecutionStatus.COMPLETED
     if final.status is ExecutionStatus.PAUSED:
         return f"paused at step {final.step_name}", ExecutionStatus.PAUSED
-    stop = policy is ItemFailurePolicy.STOP
+    # A crossed cost cap ends the run under either policy: continuing would keep spending.
+    stop = policy is ItemFailurePolicy.STOP or _crossed_cost_cap(final)
     return _item_failure_reason(final), ExecutionStatus.FAILED if stop else ExecutionStatus.COMPLETED
+
+
+def _crossed_cost_cap(failed: StepResult) -> bool:
+    """Whether any failed action in the step was stopped by the cost cap (slice 947 D5)."""
+    return any(
+        not r.success and r.metadata.get(FAILURE_KIND_KEY) == FailureKind.COST_CAP.value
+        for r in failed.action_results
+    )
 
 
 def _item_failure_reason(failed: StepResult) -> str:
@@ -2026,6 +2119,7 @@ async def _execute_fan_out_step(
     cf_client: Any,
     sdk_session: SDKExecutionSession | None = None,
     usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
     get_step_type_fn: Any,
     get_action_fn: Any,
     runs_dir: Path | None = None,
@@ -2101,6 +2195,7 @@ async def _execute_fan_out_step(
             cf_client=cf_client,
             sdk_session=None,  # never propagate session into branches
             usage_capture=usage_capture,
+            spend=spend,
             get_step_type_fn=get_step_type_fn,
             get_action_fn=get_action_fn,
             runs_dir=runs_dir,
@@ -2129,7 +2224,7 @@ async def _execute_fan_out_step(
     # 5. Fail fast if any branch returned FAILED.
     failed = [r for r in branch_results if r.status == ExecutionStatus.FAILED]
     if failed:
-        error_msgs = "; ".join(r.error or "branch failed" for r in failed)
+        error_msgs = "; ".join(_item_failure_reason(r) for r in failed)
         return StepResult(
             step_name=step.name,
             step_type=step.step_type,

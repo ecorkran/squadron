@@ -36,6 +36,7 @@ class FailureClass(StrEnum):
     DISPATCH_ERROR = "dispatch_error"
     STALL = "stall"
     NO_ARTIFACT = "no_artifact"
+    COST_CAP = "cost_cap"
     OTHER = "other"
     NO_RUN_STATE = "no_run_state"
 
@@ -44,6 +45,7 @@ _CLASS_OF_KIND: dict[FailureKind, FailureClass] = {
     FailureKind.PROVIDER_ERROR: FailureClass.DISPATCH_ERROR,
     FailureKind.STALL: FailureClass.STALL,
     FailureKind.ARTIFACT_MISSING: FailureClass.NO_ARTIFACT,
+    FailureKind.COST_CAP: FailureClass.COST_CAP,
 }
 
 

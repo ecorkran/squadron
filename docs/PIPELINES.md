@@ -1056,6 +1056,51 @@ Two config keys tune this (set with `sq config set`):
 | `pipeline.foreground_idle_timeout_s` | 1800 | Longest silence on a dispatch's foreground turn. After it the turn is interrupted and the step fails with `dispatch stalled: …` |
 | `pipeline.run_heartbeat_interval_s` | 30 | Seconds between heartbeat writes; a run is `stale` after 10 missed intervals |
 
+## Unattended runs: cost cap, BLOCKED tasks, background shells
+
+Three things decide how an unattended `sq run` ends: how much it may spend, whether an agent has handed work back to you, and what a dispatch does about work still running in the background.
+
+### Cost cap
+
+`pipeline.max_cost_usd` stops a run that has spent more than a dollar amount. Unset means no cap.
+
+```bash
+sq config set pipeline.max_cost_usd 20          # user-wide
+sq config set pipeline.max_cost_usd 5 --project # this project only
+```
+
+After every action the run adds up the cost of the LLM calls so far. The action that takes the total over the cap fails with failure kind `cost_cap`, and the run fails:
+
+```
+run spent $20.31 this invocation, over pipeline.max_cost_usd $20.00; raise the cap and resume to continue
+```
+
+Know the limits:
+
+- **Best-effort.** The check runs after an action finishes, so a run can overshoot by the cost of the actions that were in flight: one action, or one per branch of a `fan_out` step (its branches run at the same time). The error reports the real total.
+- **Per invocation.** `sq run` and each `sq run --resume` start counting at $0, so a run and its resumes can together spend up to the cap once per invocation. Raise the cap (or unset it) and resume to continue.
+- **Known costs only.** An action whose provider reports no cost is not counted, and logs one WARNING per model alias per run saying the total is a lower bound.
+- **`each` batches stop too.** A cap failure ends the `each` step even with `on_item_failure: continue`.
+- `--prompt-only` runs are not capped.
+
+A cap that is set but is not a positive number fails the run before any step runs.
+
+### BLOCKED tasks
+
+An agent that cannot finish a task without you writes a line starting with `BLOCKED:` and the reason under the task, leaves the task unchecked, and stops. After an `implement` dispatch, the `squadron.blocked-tasks` event action (see the [Events Guide](EVENTS.md)) reads the slice's task files. If it finds any such line, the run **pauses** at `implement` and prints the blocker text with the command to resume; no review, close-out or later step runs. This holds even when the agent made no commits.
+
+```
+1 blocked task(s) need the Project Manager: no judge-template review artifact ... PM asked. Resolve them, remove the BLOCKED lines, then resume: sq run --resume <run-id>
+```
+
+Resolve the blocker, delete the `BLOCKED:` line, and `sq run --resume <run-id>`: the `implement` step runs again, even though the agent may already have committed part of the work (a hand-off pause is the one pause `existing: keep` does not skip over). The marker is the uppercase word at the start of a line, after any quote marks, list bullet, checkbox or bold: `> BLOCKED: …`, `- [ ] BLOCKED: …`, `**BLOCKED:** …`. Lowercase "blocked by" in prose does not count. Turn the check off with `disable: [squadron.blocked-tasks]` in `events.yaml`.
+
+### Background shells
+
+A shell the agent leaves running past its turn (a Bash command that outlives its `timeout`, or the Monitor tool) ends later in a continuation turn that nothing reads once the dispatch has returned. So an SDK-session dispatch waits for it: it returns after the continuation turn, not when the first turn ends. Agents it started are waited for the same way.
+
+The wait is bounded by `pipeline.background_idle_timeout_s` (default 1800), seconds of **silence**. A running shell sends no progress, so a shell that runs longer than the bound is stopped. When that happens the dispatch logs a WARNING (`dispatch ended with N background shell(s) running: …`) and records the count as `background_shells_running` in the action's metadata. Raise the bound if your commands legitimately run longer.
+
 ## Writing a Custom Pipeline
 
 1. Create `<project-root>/project-documents/user/pipelines/<name>.yaml`

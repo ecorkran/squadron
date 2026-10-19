@@ -11,11 +11,16 @@ from __future__ import annotations
 OVERRIDE_INSTRUCTIONS = "override_instructions"
 # Set by ``--decision accept``: the item's revise loop counts as met with no rounds.
 ACCEPT_DECISION = "accept_decision"
+# Set on the step ``sq run --resume`` restarts when it paused for a person (an action
+# returned ``awaits_human``). That step did not finish, so an ``existing: keep``
+# implement step must dispatch again even though its branch already has commits.
+RESUMED_FROM_HANDOFF = "resumed_from_handoff"
 
 # Each reserved key and the CLI flag that sets it, for the rejection message.
 RESERVED_PARAMS: dict[str, str] = {
     OVERRIDE_INSTRUCTIONS: "--instructions",
     ACCEPT_DECISION: "--decision accept",
+    RESUMED_FROM_HANDOFF: "sq run --resume (it is set automatically for a hand-off pause)",
 }
 
 
