@@ -11,6 +11,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261020
 
+### Slice 366: Dispatcher Routing and Documentation — Implementation Complete (Phase 6)
+
+- Branch `366-slice.dispatcher-routing-and-documentation`, one commit per task; not merged (Phase 7). Full suite: 7523 passed, 4 skipped; ruff and pyright clean.
+- Shipped: `dispatcher_skills()` parser and drift test; `understand` routed through `/sq:analysis` and `$sq-analysis`; install guidance in both skill copies; `sq probe [--json]` (package `squadron.probe`, contract test reads the example in `capability-probe-contract.md`); README, `docs/COMMANDS.md`, CHANGELOG.
+- Walkthrough: steps 1, 7, 8 verified. Steps 2–5 not run: the session's `/sq:analysis` was the pre-366 dispatcher loaded at start; needs a fresh Claude Code session. Step 6 not run: `codex exec` returns 400 for its configured default model. Both are recorded under Task 11 and are still open.
+- Walkthrough gap fixed: the Codex dispatcher stays stale until `sq install-commands --ide codex`; added to step 1. That command also writes `~/.codex/rules/squadron.rules`.
+- Probe fields unchanged from the contract. After merge, tell cf, sq-cf and ai-project-guide-70 that `sq probe` exists, and cf about the contract table typing (see below).
+
 ### Slice 366: Dispatcher Routing and Documentation — Tasks Complete (Phase 5)
 
 - Tasks: `project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md` (13 tasks, 342 lines, one commit per task). Order: parser, drift test, dispatchers, installer pin, skill guidance, probe (types, graph, surfaces, plugin, build, contract, CLI), docs, walkthrough.

@@ -12,7 +12,7 @@ projectState: 361–363 complete, 364 in progress. 366 design committed (4b3afa9
   Integration branch is squadron-brownfield.
 dateCreated: 20261020
 dateUpdated: 20261020
-status: not_started
+status: complete
 turns: 43
 promptTokens: 3005805
 cachedTokens: 2892308
@@ -300,44 +300,44 @@ revision_number: 2
 
 ### Documentation
 
-- [ ] **Task 10: README, COMMANDS, CHANGELOG** (Effort: 2/5)
-  - [ ] README line 375: replace "Squadron ships one, `analysis`." with a sentence saying it ships
+- [x] **Task 10: README, COMMANDS, CHANGELOG** (Effort: 2/5)
+  - [x] README line 375: replace "Squadron ships one, `analysis`." with a sentence saying it ships
     `analysis`, containing `tech-debt-audit` and `understand`.
-  - [ ] Add `### Codebase understanding` under "Skill packs" (D4): reads an existing
+  - [x] Add `### Codebase understanding` under "Skill packs" (D4): reads an existing
     `understand-anything` graph and writes planning documents; run `/sq:analysis understand`
     (Codex: `$sq-analysis understand`); prerequisite plugin with the three install commands from
     Task 4 verbatim; build the graph first with `/understand`; link to
     `commands/analysis/understand.md` for flows and other requirements. Do not list flows. No
     `/sq:overview` text (#247).
-  - [ ] In that subsection, one line: `sq probe --json` reports what is installed and the graph's
+  - [x] In that subsection, one line: `sq probe --json` reports what is installed and the graph's
     state, with a link to `docs/COMMANDS.md#probe`.
-  - [ ] `docs/COMMANDS.md`: add `## probe` matching neighbouring entries' format: the `--json`
+  - [x] `docs/COMMANDS.md`: add `## probe` matching neighbouring entries' format: the `--json`
     flag, exit codes (0 when it can report, 1 when the probe fails), and a link to the contract
     document for fields.
-  - [ ] Extend Task 4's test so `README.md` is a third parametrized file.
-  - [ ] CHANGELOG, under `## [Unreleased]`, `### Added`: one bullet for `/sq:analysis understand`
+  - [x] Extend Task 4's test so `README.md` is a third parametrized file.
+  - [x] CHANGELOG, under `## [Unreleased]`, `### Added`: one bullet for `/sq:analysis understand`
     and `$sq-analysis understand`, plus install guidance when no graph exists; one bullet for
     `sq probe --json`. Short and user-facing.
-  - [ ] **Success:** `pytest tests/skills/test_understand_install_guidance.py` passes with three
+  - [x] **Success:** `pytest tests/skills/test_understand_install_guidance.py` passes with three
     files, and these greps each match: `grep -n "^## probe" docs/COMMANDS.md`;
     `grep -n "COMMANDS.md#probe" README.md`; and the `[Unreleased]` section of `CHANGELOG.md`
     contains both `understand` and `sq probe` (`sed -n '/## \[Unreleased\]/,/^## \[[0-9]/p' CHANGELOG.md | grep -c -e understand -e "sq probe"`
     prints at least 2).
-  - [ ] Commit: `docs: document codebase understanding and sq probe`
+  - [x] Commit: `docs: document codebase understanding and sq probe`
 
 ### Verification
 
-- [ ] **Task 11: Run the verification walkthrough** (Effort: 2/5)
-  - [ ] Follow the slice design's Verification Walkthrough steps 1–8 from the worktree venv.
-  - [ ] Steps 2–5 run in Claude Code. Cancel at the skill's write confirmation in step 3; nothing
+- [x] **Task 11: Run the verification walkthrough** (Effort: 2/5)
+  - [x] Follow the slice design's Verification Walkthrough steps 1–8 from the worktree venv.
+  - [x] Steps 2–5 run in Claude Code. Cancel at the skill's write confirmation in step 3; nothing
     is written. If this session cannot invoke `/sq:analysis`, record "skipped: slash commands not
     invocable from this session" for each of steps 2–5.
-  - [ ] Step 5 uses a scratch git repo under `/tmp`, never this checkout.
-  - [ ] Step 6: if Codex is not available, record "skipped: Codex unavailable" under this task.
-  - [ ] Step 7: if `/plugin` cannot be run from the agent, record that and compare
+  - [x] Step 5 uses a scratch git repo under `/tmp`, never this checkout.
+  - [x] Step 6: if Codex is not available, record "skipped: Codex unavailable" under this task.
+  - [x] Step 7: if `/plugin` cannot be run from the agent, record that and compare
     `understand_plugin_installed` against the `understand-anything` key in
     `~/.claude/plugins/installed_plugins.json` read by hand.
-  - [ ] Record each step's outcome as a one-line sub-bullet under this task.
+  - [x] Record each step's outcome as a one-line sub-bullet under this task.
     - Step 1: passed. Claude and Codex installs wrote the expected files. Gap found: the Codex
       dispatcher stays stale until `sq install-commands --ide codex`; added to the walkthrough.
     - Steps 2–5: skipped: this session's `/sq:analysis` is the pre-366 dispatcher loaded at session
@@ -352,14 +352,14 @@ revision_number: 2
       `/plugin` not run). A fresh `git init` repo and `/tmp` both report `present` false, `path`
       null, `commits_behind` null. Every run exits 0.
     - Step 8: passed. `tests/skills tests/probe tests/cli/test_install_commands.py`: 268 passed.
-  - [ ] **Success:** every non-skipped step matches the design's expected result; every
+  - [x] **Success:** every non-skipped step matches the design's expected result; every
     `sq probe` run exits 0.
-  - [ ] Commit: `docs: record slice 366 walkthrough results`
+  - [x] Commit: `docs: record slice 366 walkthrough results`
 
-- [ ] **Task 12: Final validation** (Effort: 1/5)
-  - [ ] `ruff format`, `ruff check`, `pyright` (zero errors).
-  - [ ] `.venv/bin/pytest tests/skills tests/probe tests/cli/test_install_commands.py tests/cli/test_probe.py -q`
+- [x] **Task 12: Final validation** (Effort: 1/5)
+  - [x] `ruff format`, `ruff check`, `pyright` (zero errors).
+  - [x] `.venv/bin/pytest tests/skills tests/probe tests/cli/test_install_commands.py tests/cli/test_probe.py -q`
     passes, then the full suite.
-  - [ ] Every file in `src/squadron/probe/` is under ~300 lines.
-  - [ ] Commit any formatting changes: `style: format slice 366 changes`. The slice ends at a
+  - [x] Every file in `src/squadron/probe/` is under ~300 lines.
+  - [x] Commit any formatting changes: `style: format slice 366 changes`. The slice ends at a
     commit on the slice branch.
