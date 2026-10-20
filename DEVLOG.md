@@ -2,12 +2,22 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261019'
+dateUpdated: '20261020'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261020
+
+### Initiative 400: Code Quality Measurement — Architecture Complete (Phase 2)
+
+- Architecture: `project-documents/user/architecture/400-arch.code-quality-measurement.md`. Initiatives 400, 420 and 440 were added to the initiative plan on 20261019; context-forge's counterpart to 440 is its initiative 260.
+- Key decisions: snapshots and normalized review findings are new record types in 320's store, keyed on `ProjectId` and commit SHA. Unmeasured metrics are recorded as absent with a reason, never as 0. Length limits come from project config, with no squadron default. Normalization maps review categories onto `AuditCategory` only; the review and audit severity scales stay separate (323's rule). Reports are breakdowns with no composite score, and the data never feeds a gate.
+- Preferred direction: review templates emit the closed vocabulary at write time; historical reviews are mapped afterwards and marked as such.
+- Anticipated slices: snapshot record plus Python adapter (keystone), more language adapters, review normalization and ingest, rollup and trend reports, adoption baseline command.
+- Next: slice plan (Phase 3), `400-slices.code-quality-measurement`.
 
 ## 20261019
 
