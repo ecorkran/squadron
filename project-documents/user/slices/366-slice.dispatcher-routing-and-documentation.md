@@ -3,11 +3,21 @@ docType: slice-design
 slice: dispatcher-routing-and-documentation
 project: squadron
 parent: 360-slices.document-intelligence.md
-dependencies: [361]
+dependencies:
+- 361
 interfaces: []
 dateCreated: 20261020
 dateUpdated: 20261020
 status: not_started
+turns: 20
+promptTokens: 1040941
+cachedTokens: 978753
+cacheWriteTokens: 62150
+completionTokens: 13495
+durationSeconds: 130.4
+costUsd: 0.963351
+usageRounds: 1
+pricedRounds: 1
 ---
 
 # Slice Design: Dispatcher Routing and Documentation
