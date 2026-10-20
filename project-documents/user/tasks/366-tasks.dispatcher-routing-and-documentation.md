@@ -169,39 +169,39 @@ revision_number: 2
 
 ### Probe package
 
-- [ ] **Task 5: Report types and graph detection** (Effort: 2/5)
-  - [ ] Create `src/squadron/probe/report.py` with `TypedDict`s mirroring the contract shape (D10):
+- [x] **Task 5: Report types and graph detection** (Effort: 2/5)
+  - [x] Create `src/squadron/probe/report.py` with `TypedDict`s mirroring the contract shape (D10):
     `SurfaceReport` (`analysis_skill_installed: bool | None`, `entry: str`, `concept: str`,
     `understand_plugin_installed: bool | None`, `graph_build: str`), `GraphReport` (`present: bool`,
     `path: str | None`, `commit: str | None`, `commits_behind: int | None`), `BaselineReport`
     (`available: bool`), `ProbeReport` (`probe_version: int`, `sq_version: str`,
     `surfaces: dict[str, SurfaceReport]`, `graph: GraphReport`, `baseline: BaselineReport`).
     Docstring names the contract document as the source of truth.
-  - [ ] Create `src/squadron/probe/graph.py` (D9) with two functions:
-    - [ ] `project_root(cwd: Path) -> Path`: `run_git(["rev-parse", "--show-toplevel"], cwd=str(cwd))`;
+  - [x] Create `src/squadron/probe/graph.py` (D9) with two functions:
+    - [x] `project_root(cwd: Path) -> Path`: `run_git(["rev-parse", "--show-toplevel"], cwd=str(cwd))`;
       on `None` or non-zero exit, return `cwd`. This is the only place the root rule lives; Task 8
       reuses it.
-    - [ ] `probe_graph(root: Path) -> GraphReport`, given the root from `project_root`.
-  - [ ] `present`: `<root>/.understand-anything/knowledge-graph.json` is a file. `path`: its absolute
+    - [x] `probe_graph(root: Path) -> GraphReport`, given the root from `project_root`.
+  - [x] `present`: `<root>/.understand-anything/knowledge-graph.json` is a file. `path`: its absolute
     path as a string when present, else `None`.
-  - [ ] `commit`: `gitCommitHash` from `meta.json` beside the graph. `None` with its own WARNING log
+  - [x] `commit`: `gitCommitHash` from `meta.json` beside the graph. `None` with its own WARNING log
     line for each of: `meta.json` absent, not valid JSON, no string `gitCommitHash`.
-  - [ ] `commits_behind`: `None` when `commit` is `None`. Else `rev-parse HEAD` equal to `commit` → 0;
+  - [x] `commits_behind`: `None` when `commit` is `None`. Else `rev-parse HEAD` equal to `commit` → 0;
     else `merge-base --is-ancestor <commit> HEAD` exit 0 → `rev-list --count <commit>..HEAD` as int;
     anything else (`None` result, non-zero exit, unparseable count) → `None` with a WARNING naming
     which.
-  - [ ] Module logger (`logging.getLogger(__name__)`). Write nothing; run only these read-only git
+  - [x] Module logger (`logging.getLogger(__name__)`). Write nothing; run only these read-only git
     commands. Do not read the graph's contents.
-  - [ ] Create `tests/probe/__init__.py` and `tests/probe/test_graph.py`. Build temporary git repos
+  - [x] Create `tests/probe/__init__.py` and `tests/probe/test_graph.py`. Build temporary git repos
     with real `git init` and commits (hermetic git config is already applied by `tests/conftest.py`).
     Cases: graph at HEAD → `commits_behind` 0; graph two commits behind → 2; `gitCommitHash` not an
     ancestor (a fabricated 40-hex string) → `None`; non-repository directory with a graph → root is
     `cwd`, `present` true, `commits_behind` `None`; no graph → `present` false, `path` `None`;
     `meta.json` absent, without `gitCommitHash`, and not JSON → `commit` `None` each.
-  - [ ] Each `None` case asserts a WARNING record via `caplog`. One case calls `project_root` from a
+  - [x] Each `None` case asserts a WARNING record via `caplog`. One case calls `project_root` from a
     subdirectory and asserts the repository root.
-  - [ ] **Success:** `pytest tests/probe/test_graph.py` passes; pyright clean.
-  - [ ] Commit: `feat: add probe graph and staleness detection`
+  - [x] **Success:** `pytest tests/probe/test_graph.py` passes; pyright clean.
+  - [x] Commit: `feat: add probe graph and staleness detection`
 
 - [ ] **Task 6: Surface specs and skill detection** (Effort: 3/5)
   - [ ] Create `src/squadron/probe/surfaces.py` (D7). A frozen dataclass `SurfaceSpec` with the
