@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "plugins": {
+    "other-plugin@other-marketplace": [
+      {
+        "scope": "project",
+        "projectPath": "/placeholder/other-project",
+        "installPath": "/placeholder/.claude/plugins/cache/other-marketplace/other-plugin/0000",
+        "version": "0000",
+        "installedAt": "2026-01-01T00:00:00.000Z",
+        "lastUpdated": "2026-01-01T00:00:00.000Z",
+        "gitCommitSha": "0000000000000000000000000000000000000000"
+      }
+    ],
+    "understand-anything@understand-anything": [
+      {
+        "scope": "user",
+        "installPath": "/placeholder/.claude/plugins/cache/understand-anything/understand-anything/0.0.0",
+        "version": "0.0.0",
+        "installedAt": "2026-01-01T00:00:00.000Z",
+        "lastUpdated": "2026-01-01T00:00:00.000Z",
+        "gitCommitSha": "1111111111111111111111111111111111111111"
+      }
+    ]
+  }
+}

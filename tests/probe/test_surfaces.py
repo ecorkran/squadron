@@ -1,3 +1,4 @@
+import json
 import logging
 from pathlib import Path
 
@@ -118,3 +119,77 @@ class TestCodexSkillDetection:
 def test_every_target_has_a_surface_with_contract_keys() -> None:
     assert set(SURFACES) == set(CommandTarget)
     assert {spec.key for spec in SURFACES.values()} == {"claude-code", "codex"}
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+PLUGINS_FILE = Path(".claude/plugins/installed_plugins.json")
+
+
+def _write_plugins(home: Path, content: str) -> None:
+    plugins_file = home / PLUGINS_FILE
+    plugins_file.parent.mkdir(parents=True, exist_ok=True)
+    plugins_file.write_text(content)
+
+
+def _plugin_registry(key: str, scope: str, project_path: Path | None = None) -> str:
+    entry: dict[str, str] = {"scope": scope}
+    if project_path is not None:
+        entry["projectPath"] = str(project_path)
+    return json.dumps({"version": 2, "plugins": {key: [entry]}})
+
+
+class TestClaudePluginDetection:
+    def test_real_format_fixture_is_true(self, home: Path, project: Path) -> None:
+        _write_plugins(home, (FIXTURES / "installed_plugins.json").read_text())
+
+        assert CLAUDE.understand_plugin_installed(project) is True
+
+    def test_file_absent_is_false(self, home: Path, project: Path) -> None:
+        assert CLAUDE.understand_plugin_installed(project) is False
+
+    def test_project_scope_for_this_project_is_true(self, home: Path, project: Path) -> None:
+        _write_plugins(home, _plugin_registry("understand-anything@market", "project", project))
+
+        assert CLAUDE.understand_plugin_installed(project) is True
+
+    def test_project_scope_for_another_path_is_false(
+        self, home: Path, project: Path, tmp_path: Path
+    ) -> None:
+        other = tmp_path / "elsewhere"
+        _write_plugins(home, _plugin_registry("understand-anything@market", "project", other))
+
+        assert CLAUDE.understand_plugin_installed(project) is False
+
+    def test_other_plugins_only_is_false(self, home: Path, project: Path) -> None:
+        _write_plugins(home, _plugin_registry("something-else@market", "user"))
+
+        assert CLAUDE.understand_plugin_installed(project) is False
+
+    @pytest.mark.parametrize(
+        "content",
+        [
+            "not json",
+            json.dumps({"version": 2}),
+            json.dumps({"plugins": {"understand-anything@market": {"scope": "user"}}}),
+        ],
+        ids=["not-json", "plugins-missing", "plugins-value-not-a-list"],
+    )
+    def test_unexpected_shape_is_unknown(
+        self, home: Path, project: Path, content: str, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        _write_plugins(home, content)
+
+        assert CLAUDE.understand_plugin_installed(project) is None
+        assert _warnings(caplog)
+
+
+class TestCodexPluginDetection:
+    def test_skill_present_is_true(self, home: Path, project: Path) -> None:
+        skill_file = _machine_root(CommandTarget.AGENTS, home) / surfaces.CODEX_PLUGIN_SKILL_FILE
+        skill_file.parent.mkdir(parents=True)
+        skill_file.write_text("# understand")
+
+        assert CODEX.understand_plugin_installed(project) is True
+
+    def test_skill_absent_is_false(self, home: Path, project: Path) -> None:
+        assert CODEX.understand_plugin_installed(project) is False
