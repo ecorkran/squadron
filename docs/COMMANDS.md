@@ -575,7 +575,7 @@ sq runs wait <RUN_ID> [--timeout SECONDS]
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `--timeout` | float | no | none (wait forever) | Give up after SECONDS. A `stale` run keeps the wait going, so this is its bound |
+| `--timeout` | float | no | none (wait forever) | Give up after SECONDS. A `stale` run keeps the wait going, so this is its bound. `0` reads the state once and returns: a non-blocking status check, exit 4 while the run is still running |
 
 ## runs prune
 

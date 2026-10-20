@@ -106,6 +106,26 @@ class TestWaitForRun:
         assert fake.now == 5  # the last sleep is cut to the deadline
         assert warned(caplog, _LOGGER, run_id, "timed_out")
 
+    @pytest.mark.parametrize(
+        ("status", "outcome"),
+        [
+            (None, WaitOutcome.TIMED_OUT),
+            (ExecutionStatus.COMPLETED, WaitOutcome.COMPLETED),
+            (ExecutionStatus.PAUSED, WaitOutcome.PAUSED),
+        ],
+    )
+    def test_zero_timeout_polls_once_without_sleeping(
+        self, sm: StateManager, status: ExecutionStatus | None, outcome: WaitOutcome
+    ) -> None:
+        """``--timeout 0`` is a supported non-blocking status check for launchers."""
+        run_id = begin(sm, "steps")
+        if status is not None:
+            end(sm, run_id, status)
+        fake = _FakeTime()
+
+        assert _wait(sm, run_id, fake, timeout=0).outcome is outcome
+        assert fake.sleeps == 0
+
     def test_missing_run(self, sm: StateManager, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger=_LOGGER):
             assert _wait(sm, "no-such-run", _FakeTime(), timeout=None).outcome is WaitOutcome.NOT_FOUND
