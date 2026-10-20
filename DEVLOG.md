@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261020
 
+### Slice 366: Dispatcher Routing and Documentation — Tasks Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md` (25 tasks, 364 lines). Order: parser, drift test, dispatchers, installer pin, skill guidance, probe (types, graph, surfaces, plugin, build, contract, CLI), docs, walkthrough.
+- The design's "CLI reference" is `docs/COMMANDS.md`; README gets a pointer only.
+- Both skill copies carry Claude and Codex install commands, so one constants test covers README and both copies.
+- Contract table types `analysis_skill_installed` and `understand_plugin_installed` as plain `bool`, while D7/D8 can report `null`; this rests on the contract's "Null means unknown" clause. Worth a table note with CF.
+
 ### Slice 366: Dispatcher Routing and Documentation — Design Complete (Phase 4)
 
 - Design: `project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md` (`cf validate design` passes).
