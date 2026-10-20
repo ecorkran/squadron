@@ -39,12 +39,12 @@ def check_item_flags(
     decision: ItemDecision | None,
     instructions: str | None,
 ) -> None:
-    """Refuse a combination of item-resume flags that cannot mean anything."""
+    """Refuse a combination of resume flags that cannot mean anything."""
     problem: str | None = None
-    if item is None and (decision is not None or instructions is not None):
-        problem = "--decision and --instructions require --item"
-    elif item is not None and resume is None:
+    if item is not None and resume is None:
         problem = "--item requires --resume <run_id>"
+    elif resume is None and (decision is not None or instructions is not None):
+        problem = "--decision and --instructions require --resume <run_id>"
     elif item is not None and decision is None:
         problem = "--item requires --decision retry|accept"
     if problem is not None:

@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
 
 from squadron.cli.commands.run_dry_run import render_steps
-from squadron.cli.commands.run_item import check_item_flags, handle_item_resume
+from squadron.cli.commands.run_item import USAGE_EXIT, check_item_flags, handle_item_resume
 from squadron.cli.run_views import render_run_status, status_color
 from squadron.events import EventType, bootstrap_event_actions
 from squadron.events.contexts import PostActionContext
@@ -47,7 +47,11 @@ from squadron.pipeline.classification import (
     StepClass,
     has_profile_param,
 )
-from squadron.pipeline.control_params import reserved_param_error
+from squadron.pipeline.control_params import (
+    ACCEPT_DECISION,
+    OVERRIDE_INSTRUCTIONS,
+    reserved_param_error,
+)
 from squadron.pipeline.executor import (
     ExecutionStatus,
     LazySessionConnectError,
@@ -83,6 +87,7 @@ from squadron.pipeline.state import (
     StateManager,
     check_run_id,
 )
+from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.dispatch import step_artifact_kind
 
 _logger = logging.getLogger(__name__)
@@ -250,6 +255,34 @@ def _refuse_live_run(state: RunState) -> None:
         f"{state.owner.pid} on {escape(state.owner.hostname)}.[/red]"
     )
     raise typer.Exit(1)
+
+
+def _resume_params(
+    state: RunState,
+    definition: PipelineDefinition,
+    resume_from: str,
+    decision: ItemDecision | None,
+    instructions: str | None,
+) -> dict[str, object]:
+    """The run's params plus a plain ``--resume``'s ``--decision`` / ``--instructions`` (#246).
+
+    ``retry`` is the default resume. ``accept`` needs the run paused at a loop step, the
+    only step it can accept; anything else is a usage error rather than a silent rerun.
+    """
+    params = dict(state.params)
+    if instructions is not None:
+        params[OVERRIDE_INSTRUCTIONS] = instructions
+    if decision is ItemDecision.ACCEPT:
+        step = next(s for s in definition.steps if s.name == resume_from)
+        if step.step_type != StepTypeName.LOOP:
+            rprint(
+                f"[red]Error: --decision accept needs a run paused at a loop step; "
+                f"'{escape(resume_from)}' is a {escape(step.step_type)} step.[/red]",
+                file=sys.stderr,
+            )
+            raise typer.Exit(USAGE_EXIT)
+        params[ACCEPT_DECISION] = True
+    return params
 
 
 def _resolve_resume_iteration(state_mgr: StateManager, run_id: str, step_name: str) -> int:
@@ -1056,10 +1089,15 @@ def run(
         None, "--item", help="With --resume: rerun one item of a batch run, by its index."
     ),
     decision: ItemDecision | None = typer.Option(
-        None, "--decision", help="With --item: retry the item, or accept its review."
+        None,
+        "--decision",
+        help="With --resume: retry, or accept the paused loop's review and continue. "
+        "With --item: the same for one batch item.",
     ),
     instructions: str | None = typer.Option(
-        None, "--instructions", help="With --item: instructions prepended to its dispatches."
+        None,
+        "--instructions",
+        help="With --resume: instructions prepended to the dispatches that run.",
     ),
     new_run_id: str | None = typer.Option(
         None,
@@ -1274,6 +1312,7 @@ def run(
             rprint("[yellow]All steps already completed. Nothing to resume.[/yellow]")
             raise typer.Exit(0)
         resume_iteration = _resolve_resume_iteration(state_mgr, resume, resume_from)
+        resume_params = _resume_params(state, definition, resume_from, decision, instructions)
 
         resume_model = model or str(state.params.get("model")) if state.params.get("model") else model
 
@@ -1285,7 +1324,7 @@ def run(
                         definition,
                         _run_pipeline_sdk(
                             state.load_target,
-                            dict(state.params),
+                            resume_params,
                             model_override=resume_model,
                             run_id=run_id,
                             from_step=resume_from,
@@ -1298,7 +1337,7 @@ def run(
                         definition,
                         _run_pipeline(
                             state.load_target,
-                            dict(state.params),
+                            resume_params,
                             model_override=resume_model,
                             run_id=run_id,
                             from_step=resume_from,

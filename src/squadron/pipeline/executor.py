@@ -575,6 +575,9 @@ async def execute_pipeline(
     resumed_handoff = start_from is not None and _paused_for_a_person(
         runs_dir, effective_run_id, start_from
     )
+    # On resume, ``--decision accept`` reaches only the restarted step (#246), so a
+    # later loop in the same run still has to pass on its own.
+    resume_accept = start_from is not None and merged_params.pop(ACCEPT_DECISION, None) is True
 
     # One per run: its pricing-warning set makes each WARNING once per alias (slice 175).
     usage_capture = UsageCapture(set())
@@ -624,6 +627,8 @@ async def execute_pipeline(
 
         if resumed_handoff and step.name == start_from:
             merged_params[RESUMED_FROM_HANDOFF] = True
+        if resume_accept and step.name == start_from:
+            merged_params[ACCEPT_DECISION] = True
 
         step_result = await _execute_step(
             step=step,
@@ -655,6 +660,8 @@ async def execute_pipeline(
 
         step_results.append(step_result)
         merged_params.pop(RESUMED_FROM_HANDOFF, None)  # only the restarted step sees it
+        if resume_accept:
+            merged_params.pop(ACCEPT_DECISION, None)
 
         if observer is not None:
             observer.step_completed(step_result)
@@ -1145,11 +1152,11 @@ async def _execute_step_once(
 def _loop_accept_decision_result(
     *, step: Any, merged_params: dict[str, object], start: int
 ) -> StepResult | None:
-    """``--decision accept`` (slice 197 D9): the loop counts as met and accepted, with no
-    rounds run. Only before round 1."""
-    if merged_params.get(ACCEPT_DECISION) is not True or start != 1:
+    """``--decision accept`` (slice 197 D9, #246): the loop counts as met and accepted,
+    with no rounds run, at whatever round it would have started or resumed."""
+    if merged_params.get(ACCEPT_DECISION) is not True:
         return None
-    _logger.info("loop step %s: accepted by decision; 0 rounds run", step.name)
+    _logger.info("loop step %s: accepted by decision at round %d; 0 rounds run", step.name, start)
     return StepResult(
         step_name=step.name,
         step_type=step.step_type,

@@ -20,8 +20,8 @@ runner = CliRunner()
     [
         (["--resume", "r1", "--item", "401"], "--item requires --decision retry|accept"),
         (["P6", "--item", "401", "--decision", "retry"], "--item requires --resume"),
-        (["--resume", "r1", "--decision", "accept"], "--decision and --instructions require --item"),
-        (["--resume", "r1", "--instructions", "x"], "--decision and --instructions require --item"),
+        (["P6", "--decision", "accept"], "--decision and --instructions require --resume"),
+        (["P6", "--instructions", "x"], "--decision and --instructions require --resume"),
     ],
 )
 def test_a_meaningless_flag_combination_exits_2(args: list[str], message: str) -> None:
