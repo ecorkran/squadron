@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.4] - 20261020
+
 ### Added
 
 - `sq run --run-id <id>` is now a supported option for choosing a run's id, and every fresh run prints `run_id=<id>` to stderr at launch, so launcher programs can track their runs (#243).

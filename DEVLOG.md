@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261020
 
+### Release 0.23.4
+
+- **Contents:** public `sq run --run-id` plus a `run_id=` launch line (#243); `sq runs wait --json` outcome document with checkpoint, failure and reviews detail (#244); branch `when:` and a `merge` param on the code pipelines (#245); `--decision` / `--instructions` on a plain `--resume` (#246); tests pinning `--timeout 0` and non-interactive resume; haiku alias → claude-haiku-5-5; probe contract and 440/cf-260 planning docs. Requested by Amoeba (its S9–S13).
+
 ### Initiative 400: Code Quality Measurement — Architecture Complete (Phase 2)
 
 - Architecture: `project-documents/user/architecture/400-arch.code-quality-measurement.md`. Initiatives 400, 420 and 440 were added to the initiative plan on 20261019; context-forge's counterpart to 440 is its initiative 260.
