@@ -5,6 +5,8 @@ Read-only: runs only ``git rev-parse``, ``merge-base --is-ancestor`` and
 cannot determine is ``None`` with a WARNING naming the cause.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from pathlib import Path

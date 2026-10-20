@@ -5,6 +5,8 @@ One ``SurfaceSpec`` per ``CommandTarget``. The contract strings (``entry``,
 document is their source of truth.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 from collections.abc import Callable
@@ -115,10 +117,13 @@ def _claude_plugin_installed(project_root: Path) -> bool | None:
         return None
     plugins = cast(dict[str, object], data).get("plugins") if isinstance(data, dict) else None
     if not isinstance(plugins, dict) or not all(
-        isinstance(entries, list) for entries in cast(dict[str, object], plugins).values()
+        isinstance(entries, list)
+        and all(isinstance(entry, dict) for entry in cast(list[object], entries))
+        for entries in cast(dict[str, object], plugins).values()
     ):
         logger.warning(
-            "understand_plugin_installed unknown: %s has no 'plugins' object of lists", plugins_file
+            "understand_plugin_installed unknown: %s has no 'plugins' object of entry lists",
+            plugins_file,
         )
         return None
     for key, entries in cast(dict[str, list[dict[str, object]]], plugins).items():

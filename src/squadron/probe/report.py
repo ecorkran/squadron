@@ -5,6 +5,8 @@ The source of truth is ``project-documents/user/reference/capability-probe-contr
 determine the field.
 """
 
+from __future__ import annotations
+
 from typing import TypedDict
 
 

@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -78,16 +79,26 @@ class TestClaudeSkillDetection:
         assert _warnings(caplog)
 
     def test_unreadable_dispatcher_is_unknown(
-        self, home: Path, project: Path, caplog: pytest.LogCaptureFixture
+        self,
+        home: Path,
+        project: Path,
+        caplog: pytest.LogCaptureFixture,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         commands_root = _machine_root(CommandTarget.CLAUDE, home)
         _install_claude_skill(commands_root, POST_366_DISPATCHER)
         dispatcher_file = commands_root / surfaces.CLAUDE_DISPATCHER_FILE
-        dispatcher_file.chmod(0o000)
-        try:
-            assert CLAUDE.analysis_skill_installed(project) is None
-        finally:
-            dispatcher_file.chmod(0o644)
+        read_text = Path.read_text
+
+        def read_text_or_fail(path: Path, *args: Any, **kwargs: Any) -> str:
+            # File permissions are no stand-in: they do nothing as root or on Windows.
+            if path == dispatcher_file:
+                raise PermissionError("simulated unreadable file")
+            return read_text(path, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "read_text", read_text_or_fail)
+
+        assert CLAUDE.analysis_skill_installed(project) is None
         assert _warnings(caplog)
 
     def test_skill_without_dispatcher_is_false(self, home: Path, project: Path) -> None:
@@ -171,8 +182,9 @@ class TestClaudePluginDetection:
             "not json",
             json.dumps({"version": 2}),
             json.dumps({"plugins": {"understand-anything@market": {"scope": "user"}}}),
+            json.dumps({"plugins": {"understand-anything@market": ["not an entry"]}}),
         ],
-        ids=["not-json", "plugins-missing", "plugins-value-not-a-list"],
+        ids=["not-json", "plugins-missing", "plugins-value-not-a-list", "entry-not-an-object"],
     )
     def test_unexpected_shape_is_unknown(
         self, home: Path, project: Path, content: str, caplog: pytest.LogCaptureFixture

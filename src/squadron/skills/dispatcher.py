@@ -5,6 +5,8 @@ to on a ``Valid skills:`` line. The dispatcher drift test and the capability
 probe both read that line through ``dispatcher_skills``.
 """
 
+from __future__ import annotations
+
 import re
 
 _VALID_SKILLS_PREFIX = "valid skills:"

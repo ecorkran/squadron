@@ -3,6 +3,8 @@
 Built to ``project-documents/user/reference/capability-probe-contract.md``.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 from squadron import __version__
