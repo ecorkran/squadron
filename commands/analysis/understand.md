@@ -13,7 +13,7 @@ This skill is a **consumer**. The graph is produced by the upstream `understand-
 plugin's own `/understand` command; this skill never runs, wraps, forks, or installs that plugin. If
 no graph exists, this skill stops and says so rather than analyzing the codebase itself.
 
-When invoked via `/understand`, follow the protocol below. Everything from here through the `---`
+When invoked via `/analysis:understand` or `/sq:analysis understand`, follow the protocol below. Everything from here through the `---`
 divider is the protocol Claude executes. The section after the divider is documentation for humans
 installing or maintaining this skill.
 
@@ -106,9 +106,15 @@ distinct — a reader must be able to tell which failure occurred without inspec
 Stop. Report the path that was checked, and say that this skill consumes a knowledge graph produced
 by the `understand-anything` plugin's own `/understand` command, which must be run first.
 
-State only that the graph is missing. **Do not speculate about whether the plugin is installed**,
-and do not offer to install it — detecting and reporting plugin availability is slice 366's scope,
-and a guess here would be wrong as often as right.
+**Do not guess whether the plugin is installed.** State the build step and the install step as a
+condition, giving the commands for the surface you are running on (this file keeps both):
+
+- Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
+- If the plugin is not installed, on Claude Code run
+  `/plugin marketplace add Egonex-AI/Understand-Anything` then
+  `/plugin install understand-anything`.
+- If the plugin is not installed, on Codex run
+  `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`.
 
 **2. Unparseable** — `jq empty <graph>` exits non-zero.
 

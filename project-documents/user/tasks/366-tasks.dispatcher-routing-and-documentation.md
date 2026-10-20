@@ -100,35 +100,35 @@ revision_number: 2
   - [x] **Success:** `pytest tests/skills/test_dispatcher.py` passes; pyright clean.
   - [x] Commit: `feat: add dispatcher valid-skills parser`
 
-- [ ] **Task 2: Drift test and dispatcher routing** (Effort: 2/5)
-  - [ ] Create `tests/skills/test_dispatcher_drift.py` (D5). Locate files relative to the
+- [x] **Task 2: Drift test and dispatcher routing** (Effort: 2/5)
+  - [x] Create `tests/skills/test_dispatcher_drift.py` (D5). Locate files relative to the
     repository root the same way existing `tests/skills/` tests locate `commands/` (read one first).
-    - [ ] Claude: expected set is the file stems of `commands/analysis/*.md`; actual is
+    - [x] Claude: expected set is the file stems of `commands/analysis/*.md`; actual is
       `dispatcher_skills()` of `commands/sq/analysis.md`. Assert set equality.
-    - [ ] Codex: expected set is the names of `commands/analysis/agents/*/` directories containing a
+    - [x] Codex: expected set is the names of `commands/analysis/agents/*/` directories containing a
       `SKILL.md`, with the `analysis-` prefix stripped; actual is `dispatcher_skills()` of
       `commands/agents/sq-analysis/SKILL.md`. Assert set equality.
-    - [ ] Assert `dispatcher_skills()` did not return `None` before comparing, with a message naming
+    - [x] Assert `dispatcher_skills()` did not return `None` before comparing, with a message naming
       the file.
-  - [ ] Run it: both tests fail, each because `understand` is missing from the dispatcher.
-  - [ ] Edit `commands/sq/analysis.md`:
-    - [ ] Valid skills line: `` `tech-debt-audit`, `understand` ``.
-    - [ ] Usage block: add `/sq:analysis understand [flow]` below the existing line.
-    - [ ] Add `## Skill: understand` after the tech-debt-audit section, separated by `---`, in the
+  - [x] Run it: both tests fail, each because `understand` is missing from the dispatcher.
+  - [x] Edit `commands/sq/analysis.md`:
+    - [x] Valid skills line: `` `tech-debt-audit`, `understand` ``.
+    - [x] Usage block: add `/sq:analysis understand [flow]` below the existing line.
+    - [x] Add `## Skill: understand` after the tech-debt-audit section, separated by `---`, in the
       same shape: invoke `/analysis:understand` passing the remainder of `$ARGUMENTS`; one
       paragraph saying the skill reads an existing `understand-anything` knowledge graph and
       writes squadron planning documents; `[flow]` is optional and the skill's "Flow selection"
       section defines the valid flows and rejects others; the same not-installed message as
       tech-debt-audit.
-    - [ ] Change the Input parsing sentence so the remainder is described as the skill's arguments,
+    - [x] Change the Input parsing sentence so the remainder is described as the skill's arguments,
       not only `[target]`.
-  - [ ] Edit `commands/agents/sq-analysis/SKILL.md` with the same edits in Codex syntax: usage
+  - [x] Edit `commands/agents/sq-analysis/SKILL.md` with the same edits in Codex syntax: usage
     `$sq-analysis understand [flow]`; the section delegates to `$analysis-understand`, passing along
     whatever the user typed after the skill name (D1). Extend the frontmatter `description`, which
     names only the tech debt audit, to cover codebase understanding from a knowledge graph.
-  - [ ] Neither dispatcher names or validates any flow (D2).
-  - [ ] **Success:** `pytest tests/skills/test_dispatcher_drift.py` passes.
-  - [ ] Commit: `feat: route understand through the analysis dispatchers`
+  - [x] Neither dispatcher names or validates any flow (D2).
+  - [x] **Success:** `pytest tests/skills/test_dispatcher_drift.py` passes.
+  - [x] Commit: `feat: route understand through the analysis dispatchers`
 
 - [ ] **Task 3: Pin the installed understand skill** (Effort: 1/5)
   - [ ] In `tests/skills/test_installer.py`, `TestBundledAnalysisPack`, add a test that installing
