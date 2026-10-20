@@ -81,6 +81,7 @@ from squadron.pipeline.state import (
     RunState,
     SchemaVersionError,
     StateManager,
+    check_run_id,
 )
 from squadron.pipeline.steps.dispatch import step_artifact_kind
 
@@ -320,6 +321,7 @@ async def _run_pipeline(
             owner=owner,
             pipeline_path=run_path,
         )
+        _announce_run_id(run_id)
 
     _run_id = run_id  # capture for closure below
     if pool_backend is None:
@@ -606,6 +608,14 @@ def _handle_explain(
 # ---------------------------------------------------------------------------
 
 
+def _announce_run_id(run_id: str) -> None:
+    """Print ``run_id=<id>`` to stderr when a fresh run is created.
+
+    A stable line for external launchers (#243); it appears before any step runs.
+    """
+    print(f"run_id={run_id}", file=sys.stderr, flush=True)
+
+
 def _exit_code(result: PipelineResult) -> int:
     """Process exit code for a finished run: 1 when the pipeline failed.
 
@@ -741,7 +751,7 @@ def _handle_prompt_only_init(
     run_id = state_mgr.init_run(
         run_name, params, execution_mode=ExecutionMode.PROMPT_ONLY, pipeline_path=run_path
     )
-    rprint(f"run_id={escape(str(run_id))}", file=sys.stderr)
+    _announce_run_id(run_id)
 
     pool_backend = DefaultPoolBackend()
     resolver = ModelResolver(
@@ -1054,8 +1064,8 @@ def run(
     new_run_id: str | None = typer.Option(
         None,
         "--run-id",
-        hidden=True,
-        help="Create the run under this id; fails if it exists. For replay runs; not --resume.",
+        help="Create the run under this id (letters, digits, '.', '_', '-'; max 128). "
+        "Fails if it exists. Not with --resume.",
     ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
@@ -1064,6 +1074,12 @@ def run(
     if resume is not None and new_run_id is not None:
         rprint("[red]Error: --resume and --run-id cannot be used together.[/red]")
         raise typer.Exit(1)
+    if new_run_id is not None:
+        try:
+            check_run_id(new_run_id)
+        except ValueError as exc:
+            rprint(f"[red]Error: {escape(str(exc))}[/red]", file=sys.stderr)
+            raise typer.Exit(1) from None
     if resume is not None and from_step is not None:
         rprint("[red]Error: --resume and --from cannot be used together.[/red]")
         raise typer.Exit(1)

@@ -200,6 +200,7 @@ sq run P4 152 -p review-model={model-alias}    # override any pipeline param
 sq run P4 152 --dry-run                        # show the plan without running it
 sq pipelines show P4                           # the YAML a pipeline name runs, and where it lives
 sq runs list                                   # running runs, and paused, failed and batch runs you can resume
+sq run P4 152 --run-id my-run-1                # choose the run id (every run prints run_id=<id> to stderr)
 sq runs wait <run-id> --timeout 3600           # block until a run finishes; exit code says how
 sq runs prune                                  # preview failed, orphaned and broken runs; --yes deletes
 ```

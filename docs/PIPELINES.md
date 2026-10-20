@@ -997,6 +997,8 @@ sq pipelines show P4               # the YAML a pipeline name runs, with its sou
 sq pipelines show P4 --path        # just the path, e.g. for $EDITOR
 ```
 
+**Launching from another program.** Every fresh run prints `run_id=<id>` on its own line to stderr before its first step. To choose the id yourself, pass `sq run P4 152 --run-id <id>`: letters, digits, `.`, `_` and `-`, starting with a letter or digit, at most 128 characters. It fails if a run with that id already exists, and can't be combined with `--resume`. Use `sq runs wait <id>` for the outcome; its exit codes are the stable contract, while the run-state file is internal.
+
 `sq runs list` shows running runs, paused and failed runs with the step `sq run --resume <run-id>` restarts at, and completed batch runs that still have flagged or not-run items, as `N items in <each-step>` (plus `(K accept)` for items `--decision accept` can take). On a terminal the columns fit its width, cutting the widest with `…`; piped output is never cut.
 
 A running run shows where it is (the step, and `[item P/T · index]` inside an `each` step) and its activity: how long it has run and when it last moved. Every SDK run records its process and writes a heartbeat to its state file while it runs, so the listing can tell what happened to it:

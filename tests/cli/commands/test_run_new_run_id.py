@@ -1,4 +1,4 @@
-"""Hidden ``sq run --run-id`` (slice 177 D4): a fresh run under a chosen id."""
+"""``sq run --run-id`` (slice 177 D4, public since #243): a fresh run under a chosen id."""
 
 from __future__ import annotations
 
@@ -50,6 +50,15 @@ def test_init_run_with_an_existing_id_raises_and_keeps_the_file(tmp_path: Path) 
     assert state.params == {"first": True}
 
 
+@pytest.mark.parametrize("bad", ["", "../escape", "a/b", ".hidden", "-x", "a b", "x" * 129])
+def test_init_run_rejects_an_invalid_id(tmp_path: Path, bad: str) -> None:
+    runs_dir = tmp_path / "runs"
+    with pytest.raises(ValueError, match="invalid run id"):
+        StateManager(runs_dir=runs_dir).init_run("p4", {}, run_id=bad)
+
+    assert not runs_dir.exists() or list(runs_dir.iterdir()) == []
+
+
 def test_init_run_without_an_id_mints_distinct_ids(tmp_path: Path) -> None:
     manager = StateManager(runs_dir=tmp_path)
 
@@ -89,6 +98,23 @@ def test_run_pipeline_with_new_run_id_creates_that_run_file(tmp_path: Path) -> N
     assert (tmp_path / "replay-9.json").is_file()
 
 
+def test_a_fresh_run_announces_its_id_on_stderr(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _run(tmp_path, new_run_id="replay-9")
+
+    assert "run_id=replay-9\n" in capsys.readouterr().err
+
+
+def test_a_resumed_run_does_not_announce_its_id(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    StateManager(runs_dir=tmp_path).init_run("test-pipeline", {}, run_id="replay-9")
+    _run(tmp_path, run_id="replay-9")
+
+    assert "run_id=" not in capsys.readouterr().err
+
+
 def test_run_pipeline_with_a_taken_new_run_id_raises(tmp_path: Path) -> None:
     StateManager(runs_dir=tmp_path).init_run("test-pipeline", {}, run_id="replay-9")
 
@@ -113,11 +139,21 @@ def test_run_id_with_resume_is_a_usage_error() -> None:
     assert "--resume and --run-id cannot be used together" in result.output
 
 
-def test_run_id_is_hidden_from_help() -> None:
+def test_run_id_is_listed_in_help() -> None:
     result = runner.invoke(app, ["run", "--help"])
 
     assert result.exit_code == 0
-    assert "--run-id" not in result.output
+    assert "--run-id" in result.output
+
+
+def test_an_invalid_run_id_exits_1_before_running() -> None:
+    sdk = MagicMock()
+    with patch("squadron.cli.commands.run._run_pipeline_sdk", sdk):
+        result = runner.invoke(app, ["run", "test-pipeline", "191", "--run-id", "../x"])
+
+    assert result.exit_code == 1
+    assert "invalid run id" in result.output
+    sdk.assert_not_called()
 
 
 def test_run_id_reaches_the_fresh_run() -> None:

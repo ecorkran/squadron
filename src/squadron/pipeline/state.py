@@ -306,6 +306,17 @@ def _unreadable(path: Path, exc: Exception) -> UnreadableRun:
 # ---------------------------------------------------------------------------
 
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
+# A caller-chosen run id becomes a file name, so it may not contain path separators.
+_RUN_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+
+
+def check_run_id(run_id: str) -> None:
+    """Raise ``ValueError`` unless *run_id* is a valid caller-chosen run id."""
+    if not _RUN_ID_RE.fullmatch(run_id):
+        raise ValueError(
+            f"invalid run id '{run_id}': use letters, digits, '.', '_' or '-', "
+            "starting with a letter or digit, at most 128 characters"
+        )
 
 
 def state_file_name(run_id: str) -> str:
@@ -375,7 +386,8 @@ class StateManager:
 
         A given *run_id* names a new run: an existing file for it raises
         ``FileExistsError`` rather than being overwritten (slice 177 D4). Resuming
-        an existing run is ``claim``, not ``init_run``.
+        an existing run is ``claim``, not ``init_run``. An invalid given id raises
+        ``ValueError`` (``check_run_id``).
         """
         pipeline_name = pipeline_name.lower()
         now = datetime.now(UTC)
@@ -383,8 +395,10 @@ class StateManager:
             date = now.strftime("%Y%m%d")
             slug = _SLUG_RE.sub("-", pipeline_name).strip("-")
             run_id = f"run-{date}-{slug}-{uuid.uuid4().hex[:8]}"
-        elif self._state_path(run_id).exists():
-            raise FileExistsError(f"run state for '{run_id}' already exists")
+        else:
+            check_run_id(run_id)
+            if self._state_path(run_id).exists():
+                raise FileExistsError(f"run state for '{run_id}' already exists")
 
         state = RunState(
             run_id=run_id,
