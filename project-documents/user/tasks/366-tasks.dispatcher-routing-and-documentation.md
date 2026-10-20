@@ -4,11 +4,24 @@ slice: dispatcher-routing-and-documentation
 project: squadron
 lld: project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md
 parent: project-documents/user/architecture/360-slices.document-intelligence.md
-dependencies: [361]
-projectState: 361–363 complete, 364 in progress. 366 design committed (4b3afa91) with the capability probe folded in (PM-approved 20261020). Architecture amendment, contract Shipping Order, slice plan and initiative plan updates already done with the design. Integration branch is squadron-brownfield.
+dependencies:
+- 361
+projectState: 361–363 complete, 364 in progress. 366 design committed (4b3afa91) with
+  the capability probe folded in (PM-approved 20261020). Architecture amendment, contract
+  Shipping Order, slice plan and initiative plan updates already done with the design.
+  Integration branch is squadron-brownfield.
 dateCreated: 20261020
 dateUpdated: 20261020
 status: not_started
+turns: 18
+promptTokens: 1003009
+cachedTokens: 930429
+cacheWriteTokens: 72548
+completionTokens: 18882
+durationSeconds: 170.7
+costUsd: 1.144545
+usageRounds: 1
+pricedRounds: 1
 ---
 
 # Tasks: Dispatcher Routing and Documentation
