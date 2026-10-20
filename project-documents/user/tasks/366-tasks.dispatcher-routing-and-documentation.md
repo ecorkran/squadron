@@ -218,12 +218,15 @@ revision_number: 2
     - [ ] `claude-code`, per scope: `analysis/understand.md` exists and `sq/analysis.md` exists and
       `"understand" in dispatcher_skills(...)`. A dispatcher for which `dispatcher_skills` returns
       `None` → `None` with a WARNING naming the file.
+    - [ ] A read `OSError` on a dispatcher file → `None` with a WARNING naming the file; catch only
+      `OSError`, with a comment saying why it becomes `None`.
     - [ ] `codex`, per scope: `analysis-understand/SKILL.md` exists.
   - [ ] Create `tests/probe/test_surfaces.py`. Populate the temp `HOME` and a temp project root.
     - [ ] Claude: nothing installed → `False`; skill file and post-366 dispatcher at machine scope →
       `True`; same at project scope only → `True`; pre-366 dispatcher (only `tech-debt-audit`)
       plus skill file → `False`; dispatcher with no `Valid skills:` line → `None` with a WARNING;
-      skill file without dispatcher → `False`.
+      dispatcher that exists but is unreadable (`chmod 000`, or patch the read to raise `OSError`)
+      → `None` with a WARNING naming the file; skill file without dispatcher → `False`.
     - [ ] Codex: absent → `False`; machine scope → `True`; project scope → `True`.
     - [ ] Every `CommandTarget` has a `SURFACES` entry; the contract keys are `{"claude-code", "codex"}`.
   - [ ] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
@@ -288,7 +291,8 @@ revision_number: 2
   - [ ] Create `tests/cli/test_probe.py` using `CliRunner` (see `tests/cli/conftest.py`). Cases:
     `--json` stdout is one line that parses as JSON and exits 0; without `--json` output is
     multi-line and parses to the same object; `build_probe` patched to raise → exit 1, stdout empty,
-    error on stderr; a run that logs a WARNING keeps stdout pure JSON; run from a non-repository
+    error on stderr; a run that logs a WARNING keeps stdout pure JSON (assert on `result.stdout`, not
+    `result.output`, which can interleave stderr); run from a non-repository
     temp directory (`monkeypatch.chdir`) → exit 0 and `graph.commits_behind` null.
   - [ ] **Success:** `pytest tests/cli/test_probe.py` passes; `.venv/bin/sq probe --json | jq .`
     parses; `sq --help` lists `probe`.
@@ -315,7 +319,10 @@ revision_number: 2
     and `$sq-analysis understand`, plus install guidance when no graph exists; one bullet for
     `sq probe --json`. Short and user-facing.
   - [ ] **Success:** `pytest tests/skills/test_understand_install_guidance.py` passes with three
-    files.
+    files, and these greps each match: `grep -n "^## probe" docs/COMMANDS.md`;
+    `grep -n "COMMANDS.md#probe" README.md`; and the `[Unreleased]` section of `CHANGELOG.md`
+    contains both `understand` and `sq probe` (`sed -n '/## \[Unreleased\]/,/^## \[[0-9]/p' CHANGELOG.md | grep -c -e understand -e "sq probe"`
+    prints at least 2).
   - [ ] Commit: `docs: document codebase understanding and sq probe`
 
 ### Verification
