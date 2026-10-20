@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261020
 
+### Initiative 400: Code Quality Measurement — Slice Plan Complete (Phase 3)
+
+- Slice plan: `project-documents/user/architecture/400-slices.code-quality-measurement.md`. It has five slices: 400 snapshot record and first adapters (keystone: Python plus one non-Python language; length, lint and type counts; clean HEAD only), 401 complexity, duplication and coverage, 402 code-review normalization and ingest, 403 slice ranges and rollup reports, and 404 adoption baseline command.
+- Commit export moved from the keystone to 403, its first consumer. The architecture's anticipated-slices list was updated to match.
+- The architecture design review came back CONCERNS. All 10 findings were accepted and answered in the review file (2b3bc66f).
+- Next: slice design for 400 (Phase 4).
+
 ### Release 0.23.5
 
 - **Contents:** the 0.23.4 changes. 0.23.4's tag CI failed on one test (`test_run_id_is_listed_in_help`): CI forces colour, so Rich styled `--run-id` across ANSI codes and the substring check missed it. The test now checks the option's `hidden` flag on the command. Nothing was published for 0.23.4.

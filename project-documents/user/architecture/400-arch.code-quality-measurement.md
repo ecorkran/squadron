@@ -103,10 +103,10 @@ Downstream, 420 reads snapshots and normalized review findings to score implemen
 
 Exploratory. The snapshot record and first two adapters are the keystone.
 
-- **Snapshot record, Python adapter and one non-Python adapter (keystone).** The record type, metric enum, adapter contract, tool, rule-set and environment identity, the absent-with-reason rule, exclusions, project-declared limits, and commit export. Metrics are file and function length, lint counts and type counts. A second language with length and lint only proves the contract isn't Python-shaped before it hardens.
+- **Snapshot record, Python adapter and one non-Python adapter (keystone).** The record type, metric enum, adapter contract, tool, rule-set and environment identity, the absent-with-reason rule, exclusions and project-declared limits, on a clean HEAD. Metrics are file and function length, lint counts and type counts. A second language with length and lint only proves the contract isn't Python-shaped before it hardens.
 - **Complexity, duplication and coverage.** The remaining metrics, added to both adapters.
 - **Code-review normalization and ingest.** Closed-vocabulary categories in the `code` review template, the extended sync test, and ingest of review files into the store, including read-side mapping for historical reviews.
-- **Slice ranges, rollup and trend reports.** Durable slice-range records, per-slice, per-project and over-time breakdowns across all three sources, on-demand boundary snapshots, and noise-floor display for LLM sources.
+- **Slice ranges, rollup and trend reports.** Durable slice-range records, commit export for non-HEAD commits, per-slice, per-project and over-time breakdowns across all three sources, on-demand boundary snapshots, and noise-floor display for LLM sources.
 - **Adoption baseline command.** Snapshot plus audit baseline with noise floor in one standalone step.
 
 ## Non-Goals
