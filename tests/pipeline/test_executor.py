@@ -2371,6 +2371,25 @@ class TestPromptCheckpointInteractive:
         assert decision.resolution == CheckpointResolution.EXIT
         assert decision.override_instructions is None
 
+    def test_non_tty_stdin_returns_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Pinned contract: a non-TTY resume (stdin from /dev/null) exits the checkpoint."""
+        import sys
+
+        from squadron.pipeline.executor import (
+            CheckpointResolution,
+            _prompt_checkpoint_interactive,
+        )
+
+        monkeypatch.delenv("SQUADRON_NO_INTERACTIVE", raising=False)
+        monkeypatch.setattr(sys, "stdin", MagicMock(isatty=lambda: False))
+        decision = _prompt_checkpoint_interactive(
+            verdict="CONCERNS",
+            findings=[],
+            run_id="run-abc",
+            step_name="design",
+        )
+        assert decision.resolution == CheckpointResolution.EXIT
+
     def test_accept_returns_formatted_findings(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
