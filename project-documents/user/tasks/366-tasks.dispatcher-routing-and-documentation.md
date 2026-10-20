@@ -338,6 +338,20 @@ revision_number: 2
     `understand_plugin_installed` against the `understand-anything` key in
     `~/.claude/plugins/installed_plugins.json` read by hand.
   - [ ] Record each step's outcome as a one-line sub-bullet under this task.
+    - Step 1: passed. Claude and Codex installs wrote the expected files. Gap found: the Codex
+      dispatcher stays stale until `sq install-commands --ide codex`; added to the walkthrough.
+    - Steps 2–5: skipped: this session's `/sq:analysis` is the pre-366 dispatcher loaded at session
+      start (Valid skills lists only `tech-debt-audit`); the installed file on disk is correct
+      (`Valid skills: tech-debt-audit, understand`) and loads in a fresh session.
+    - Step 6: skipped: Codex 0.146.1 is installed but `codex exec` fails with a 400 (its configured
+      default model is not supported on this ChatGPT account); the installed Codex dispatcher file
+      lists `understand`.
+    - Step 7: passed. In the squadron checkout `graph.commit` equals `meta.json` `gitCommitHash` and
+      `commits_behind` 1736 equals `git rev-list --count`. `understand_plugin_installed` true matches
+      the `understand-anything@understand-anything` key in `installed_plugins.json` (read by hand;
+      `/plugin` not run). A fresh `git init` repo and `/tmp` both report `present` false, `path`
+      null, `commits_behind` null. Every run exits 0.
+    - Step 8: passed. `tests/skills tests/probe tests/cli/test_install_commands.py`: 268 passed.
   - [ ] **Success:** every non-skipped step matches the design's expected result; every
     `sq probe` run exits 0.
   - [ ] Commit: `docs: record slice 366 walkthrough results`

@@ -370,7 +370,12 @@ Run from the worktree with its venv.
    .venv/bin/sq skills install analysis --ide codex
    ls ~/.agents/skills/ | grep analysis   # analysis-tech-debt-audit  analysis-understand
    .venv/bin/sq install-commands          # refreshes /sq:analysis dispatcher
+   .venv/bin/sq install-commands --ide codex  # refreshes the $sq-analysis dispatcher
+   grep "Valid skills" ~/.claude/commands/sq/analysis.md ~/.agents/skills/sq-analysis/SKILL.md
+   # both: Valid skills: `tech-debt-audit`, `understand`
    ```
+   The `ls | grep analysis` above also lists `sq-analysis`, the Codex dispatcher. Start a fresh
+   Claude Code session before steps 2–5: a running session keeps the dispatcher it loaded at start.
 2. Usage path. In Claude Code, run `/sq:analysis`, then `/sq:analysis nope`. Both print usage
    listing `tech-debt-audit` and `understand`.
 3. Routing. In a repo with a graph (squadron has one in `.understand-anything/`), run
