@@ -15,6 +15,7 @@ from enum import StrEnum
 import yaml
 from pydantic import ValidationError
 
+from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.executor import ExecutionStatus, resolve_placeholders
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY
@@ -55,12 +56,52 @@ def run_outcome(
         "updated_at": state.updated_at.isoformat(),
         "checkpoint": None,
         "failure": None,
+        "reviews": _reviews(state),
     }
     if state.status == ExecutionStatus.PAUSED.value:
         doc["checkpoint"] = _checkpoint(state, load_definition)
     elif state.status == ExecutionStatus.FAILED.value:
         doc["failure"] = _failure(state)
     return doc
+
+
+def _reviews(state: RunState) -> list[dict[str, object]]:
+    """Every review the run recorded, in the order written (#244 follow-up, Amoeba S13).
+
+    A loop step's earlier rounds come before its final round; a resumed step
+    contributes again as its own recorded step.
+    """
+    found: list[dict[str, object]] = []
+    for step in state.completed_steps:
+        rounds = [*step.prior_round_results, step.action_results]
+        first_round = step.iteration - len(rounds) + 1
+        for offset, actions in enumerate(rounds):
+            round_number = first_round + offset if step.step_type == StepTypeName.LOOP else None
+            found += [_review_entry(step, a, round_number) for a in actions if _is_review(a)]
+    return found
+
+
+def _is_review(action: dict[str, object]) -> bool:
+    return action.get("action_type") == ActionType.REVIEW
+
+
+def _review_entry(
+    step: StepState, action: dict[str, object], round_number: int | None
+) -> dict[str, object]:
+    outputs = _outputs(action)
+    path = outputs.get(ReviewOutputKey.REVIEW_FILE)
+    parts = outputs.get(ReviewOutputKey.REVIEW_FILES)
+    metadata = action.get("metadata")
+    template = metadata.get("template") if isinstance(metadata, dict) else None  # type: ignore[union-attr]
+    verdict = action.get("verdict")
+    return {
+        "path": path if isinstance(path, str) and path else None,
+        "paths": [p for p in parts if isinstance(p, str)] if isinstance(parts, list) else None,  # type: ignore[union-attr]
+        "template": template if isinstance(template, str) else None,
+        "verdict": verdict if isinstance(verdict, str) else None,
+        "step": step.step_name,
+        "round": round_number,
+    }
 
 
 def _last_step(state: RunState, name: str | None, status: str) -> StepState | None:

@@ -139,11 +139,17 @@ def test_run_id_with_resume_is_a_usage_error() -> None:
     assert "--resume and --run-id cannot be used together" in result.output
 
 
-def test_run_id_is_listed_in_help() -> None:
-    result = runner.invoke(app, ["run", "--help"])
+def test_run_id_is_a_public_option() -> None:
+    """Checked on the command, not the help text: CI's forced colour splits styled flags."""
+    import click
+    import typer.main
 
-    assert result.exit_code == 0
-    assert "--run-id" in result.output
+    group = typer.main.get_command(app)
+    assert isinstance(group, click.Group)
+    run_command = group.get_command(click.Context(group), "run")
+    assert run_command is not None
+    option = next(p for p in run_command.params if "--run-id" in p.opts)
+    assert isinstance(option, click.Option) and not option.hidden
 
 
 def test_an_invalid_run_id_exits_1_before_running() -> None:
