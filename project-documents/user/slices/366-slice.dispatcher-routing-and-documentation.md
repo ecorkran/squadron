@@ -5,7 +5,9 @@ project: squadron
 parent: 360-slices.document-intelligence.md
 dependencies:
 - 361
-interfaces: []
+interfaces:
+- 440
+- context-forge-260
 dateCreated: 20261020
 dateUpdated: 20261020
 status: not_started
@@ -60,11 +62,12 @@ The slice plan's "add the skill file" step is therefore done; this slice adds a 
 6. Tests (D5): installer installs `understand.md`; both dispatchers' valid-skills lines match the
    pack's skill files.
 7. CHANGELOG bullet.
+8. Amend the two `360-arch` sentences named in D3.
 
 **Excluded:**
 
 - Detecting whether the plugin is installed (D3). The capability probe owns detection.
-- README text for `/sq:overview`. That is slice 365's, written when 365 ships (D4).
+- README text for `/sq:overview`, deferred to #247 (D4).
 - Any installer, manifest, or CLI change. None is needed.
 - Changes to flow behavior inside the understand skill.
 
@@ -98,18 +101,7 @@ The slice plan's "add the skill file" step is therefore done; this slice adds a 
    Preflight (graph contract) → Flow selection → Flow
 ```
 
-The direct entries (`/analysis:understand`, `$analysis-understand`) keep working. The dispatcher is
-an extra route, not a replacement.
-
-### Data Flow
-
-Arguments only. The dispatcher strips the skill name and passes the rest, for example
-`concept`, through as the skill's arguments. The dispatcher does not interpret flow names, so a new
-flow needs no dispatcher edit.
-
-### State Management
-
-None. The dispatcher and the docs hold no state.
+The direct entries keep working. Only arguments flow through (D2), and nothing holds state.
 
 ## Technical Decisions
 
@@ -137,8 +129,8 @@ Status: decided
 - When the graph is absent, the skill already stops. The message now also says: build the graph with
   the plugin's `/understand` (Codex: the `understand` skill); if the plugin is not installed, install
   it with `/plugin marketplace add Egonex-AI/Understand-Anything` then
-  `/plugin install understand-anything` (Codex: per the upstream repository's Codex install
-  instructions at `github.com/Egonex-AI/Understand-Anything`).
+  `/plugin install understand-anything`. On Codex, install it with upstream's documented command,
+  `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`.
 - The skill does not try to work out whether the plugin is installed. The only signal on Claude Code
   is `~/.claude/plugins/installed_plugins.json`, an undocumented Claude Code internal file. A skill
   that reads it breaks whenever Claude Code changes that file. Giving both instructions works whether
@@ -147,10 +139,10 @@ Status: decided
   error, so this message is the only place the guidance belongs.
 - The existing "Do not speculate…" sentence is replaced. The wording above states a condition and
   does not guess whether the plugin is installed.
-- **Architecture amendment.** This decision overrides `360-arch.document-intelligence.md` in two
-  places. Flow step 1 says "Verify the plugin is installed". Non-Goals says "The skill detects
-  absence and instructs". For the skill, both now mean that it instructs when the graph is absent.
-  Plugin detection belongs to the capability probe's `understand_plugin_installed` field.
+- **Architecture amendment.** This slice amends `360-arch.document-intelligence.md` (Technical
+  Scope item 8). In Flow step 1, "Verify the plugin is installed and" is removed. In Non-Goals,
+  "The skill detects absence and instructs" becomes "The skill instructs when the graph is absent;
+  plugin detection belongs to the capability probe."
 
 ### D4 — README documents capability (a) only
 Status: decided
@@ -158,8 +150,9 @@ Status: decided
   graph and writes planning documents), the `understand-anything` prerequisite with its install
   commands (D3), and the Codex form. For flows and the skill's other requirements, it links to the
   skill file instead of restating them, so the README cannot drift from the skill.
-- `/sq:overview` is left to 365. The slice plan dropped the 365 dependency so that 366 could ship
-  first, and documenting a command before it exists would advertise something that does not work.
+- `/sq:overview` README text is deferred to #247 because 365 has not shipped. The slice plan
+  requires it only "once 365 exists", and 365's design assigns it to 366, so the issue keeps it
+  owned.
 - Also correct "Squadron ships one, `analysis`" so it says what the pack contains:
   `tech-debt-audit` and `understand`.
 
@@ -169,9 +162,14 @@ Status: decided
   walkthrough covers it by hand.
 - What can break silently is a skill shipped in the pack but missing from a dispatcher. A test in
   `tests/skills/` reads the `Valid skills:` line of each dispatcher and compares it with the pack's
-  skill stems (`commands/analysis/*.md` for Claude, `commands/analysis/agents/analysis-*/` for
-  Codex). Parsing is lenient: take every backtick-quoted token on that line and ignore
-  separators and whitespace.
+  skill names, using set equality so the test fails in both directions. Claude's expected set is
+  the file stems of `commands/analysis/*.md`. Codex's expected set is the names of the
+  `commands/analysis/agents/*/` directories that contain a `SKILL.md`, with the pack prefix
+  `analysis-` stripped. Parsing is lenient: take every backtick-quoted token on that line and
+  ignore separators and whitespace.
+- Sync check for the duplicated text. The same test module defines the two install commands from
+  D3 once, as constants. It asserts that each one appears in both understand skill copies and in
+  the README.
 - `TestBundledAnalysisPack` gains an assertion that `understand.md` is installed and appears in
   `files_written`, which is what the receipt records.
 
@@ -281,6 +279,4 @@ Run from a squadron checkout with the worktree's venv.
 
 ### Special Considerations
 
-- The two understand skill copies have to stay in step by hand, since no sync test covers
-  them. Make the same absent-graph edit in both.
 - Relative Effort: 1/5.
