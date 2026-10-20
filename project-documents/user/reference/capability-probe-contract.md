@@ -31,8 +31,8 @@ rules below breaks Context Forge.
   "probe_version": 1,
   "sq_version": "string",
   "surfaces": {
-    "claude-code": {"analysis_skill_installed": true, "entry": "/sq:analysis understand", "understand_plugin_installed": true},
-    "codex": {"analysis_skill_installed": true, "entry": "analysis-understand", "understand_plugin_installed": false}
+    "claude-code": {"analysis_skill_installed": true, "entry": "/sq:analysis understand", "understand_plugin_installed": true, "graph_build": "/understand"},
+    "codex": {"analysis_skill_installed": true, "entry": "analysis-understand", "understand_plugin_installed": false, "graph_build": "understand"}
   },
   "graph": {"present": true, "path": "string or null", "commit": "string or null", "commits_behind": 0},
   "baseline": {"available": false}
@@ -46,7 +46,8 @@ rules below breaks Context Forge.
 | `surfaces` | object | One entry per agent surface where squadron's brownfield path can run, keyed by the values below. Every supported surface is always present. The agent finds its own surface; on a surface not listed, CF takes its own path. |
 | `surfaces.<s>.analysis_skill_installed` | bool | Squadron's analysis pack, including the understand skill, is installed for that surface. |
 | `surfaces.<s>.entry` | string | How an agent on that surface starts squadron's path: a slash command on `claude-code`, the skill name on `codex`. |
-| `surfaces.<s>.understand_plugin_installed` | bool | The `understand-anything` plugin is installed for that surface. |
+| `surfaces.<s>.understand_plugin_installed` | bool | The `understand-anything` plugin is installed for that surface: its plugin on `claude-code`, its `understand` skill in `~/.agents/skills/` on `codex`. |
+| `surfaces.<s>.graph_build` | string | How an agent on that surface builds or refreshes the graph with `understand-anything`: `/understand` on `claude-code`, the skill name `understand` on `codex`. `entry` never builds the graph; it only reads one, so a missing or stale graph is built with this first. |
 | `graph.present` | bool | `.understand-anything/knowledge-graph.json` exists in the project. |
 | `graph.path` | string or null | Path to the graph file. |
 | `graph.commit` | string or null | The commit the graph was built from. |
@@ -68,6 +69,10 @@ Not supported: Copilot and Cursor, because squadron has no install target for th
 CF tests field names, not surface values. A new surface is additive (see Versioning).
 
 ## Versioning
+
+**Revision note.** v1 was revised twice before any probe existed (998d8944: `surfaces` became an
+object and absorbed `analysis_skill` and `understand_plugin`; then `graph_build` was added). No
+output in the earlier shapes was ever produced, so v1 means the shape in this document.
 
 - Adding a new `surfaces` value or a new optional field is additive. It keeps `probe_version` and is
   recorded in this document before it ships.
