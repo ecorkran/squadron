@@ -9,15 +9,16 @@ interfaces: []
 dateCreated: 20261020
 dateUpdated: 20261020
 status: not_started
-turns: 20
-promptTokens: 1040941
-cachedTokens: 978753
-cacheWriteTokens: 62150
-completionTokens: 13495
-durationSeconds: 130.4
-costUsd: 0.963351
-usageRounds: 1
-pricedRounds: 1
+turns: 31
+promptTokens: 1531878
+cachedTokens: 1456722
+cacheWriteTokens: 75106
+completionTokens: 17803
+durationSeconds: 169.5
+costUsd: 1.248801
+usageRounds: 2
+pricedRounds: 2
+revision_number: 1
 ---
 
 # Slice Design: Dispatcher Routing and Documentation
