@@ -118,14 +118,18 @@ Status: decided
   every surface, and the edit is three lines.
 - The probe contract's `codex.entry` stays `analysis-understand` (direct). Changing it is a contract
   change this slice does not need.
+- This goes beyond the delivery stated in the architecture and slice plan, which name only
+  `/sq:analysis understand`. The Codex dispatcher already exists and routes `tech-debt-audit`, so
+  leaving `understand` out would make Codex the one surface where the dispatcher cannot reach it.
 
 ### D2 — Pass the flow argument through without interpreting it
 Status: decided
-- The dispatcher section says: invoke the skill with the rest of `$ARGUMENTS`. It lists the flows
-  for discoverability, labels the skill as authoritative, and does not validate them. Unrecognized
-  flows are rejected by the skill's own Flow Selection, so nothing is validated twice.
-- Rejected: validating flows in the dispatcher. That would add a second list to keep in sync with
-  the skill.
+- The dispatcher section says: invoke the skill with the rest of `$ARGUMENTS`. It neither names nor
+  validates flows. Usage shows `[flow]` and points to the skill's Flow selection section, the only
+  list of flows. Unrecognized flows are rejected there.
+- Rejected: listing or validating flows in the dispatcher. Either one is a second list to keep in
+  sync with the skill. A list would also advertise flows before their slice lands, as with
+  `candidates` while 364 is in progress.
 
 ### D3 — Missing-graph guidance is conditional wording, not plugin detection
 Status: decided
@@ -142,12 +146,17 @@ Status: decided
   error, so this message is the only place the guidance belongs.
 - The existing "Do not speculate…" sentence is replaced. The wording above states a condition and
   does not guess whether the plugin is installed.
+- **Architecture amendment.** This decision overrides `360-arch.document-intelligence.md` in two
+  places. Flow step 1 says "Verify the plugin is installed". Non-Goals says "The skill detects
+  absence and instructs". For the skill, both now mean that it instructs when the graph is absent.
+  Plugin detection belongs to the capability probe's `understand_plugin_installed` field.
 
 ### D4 — README documents capability (a) only
 Status: decided
-- Under "Skill packs", add a short subsection: what `/sq:analysis understand` does (it reads an
-  existing graph and writes planning documents), its three flows, the `jq` requirement, the
-  `understand-anything` prerequisite and install commands (D3), and the Codex form.
+- Under "Skill packs", add a short subsection covering what the skill does (it reads an existing
+  graph and writes planning documents), the `understand-anything` prerequisite with its install
+  commands (D3), and the Codex form. For flows and the skill's other requirements, it links to the
+  skill file instead of restating them, so the README cannot drift from the skill.
 - `/sq:overview` is left to 365. The slice plan dropped the 365 dependency so that 366 could ship
   first, and documenting a command before it exists would advertise something that does not work.
 - Also correct "Squadron ships one, `analysis`" so it says what the pack contains:
@@ -174,11 +183,11 @@ Dispatcher section to add to `commands/sq/analysis.md`, in the same shape as `te
 ```
 Valid skills: `tech-debt-audit`, `understand`
 
-/sq:analysis understand [comprehension|concept|candidates]
+/sq:analysis understand [flow]
 
 ## Skill: understand
 Invoke `/analysis:understand` passing the remainder of `$ARGUMENTS` …
-(one-paragraph description; flows listed, skill is authoritative; not-installed message)
+(one-paragraph description; flows are defined by the skill's Flow selection; not-installed message)
 ```
 
 The Codex dispatcher mirrors this with `$sq-analysis` / `$analysis-understand`.
@@ -202,8 +211,8 @@ The Codex dispatcher mirrors this with `$sq-analysis` / `$analysis-understand`.
 
 ### Functional Requirements
 
-- `/sq:analysis understand` runs the comprehension flow. `/sq:analysis understand concept` and
-  `/sq:analysis understand candidates` reach those flows with the argument intact.
+- `/sq:analysis understand` runs the comprehension flow, and `/sq:analysis understand concept`
+  reaches the concept flow with the argument intact.
 - `$sq-analysis understand [flow]` behaves the same on Codex.
 - `/sq:analysis bogus` and `/sq:analysis` with no argument still print the usage block, which now
   lists both skills.
