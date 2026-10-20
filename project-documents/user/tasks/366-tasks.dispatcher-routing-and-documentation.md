@@ -93,9 +93,8 @@ revision_number: 1
     Return `None` when no such line exists.
   - [ ] Module docstring says it reads a dispatcher's `Valid skills:` line and that both the drift
     test and the probe use it.
-  - [ ] Create `tests/skills/test_dispatcher.py`. Cases: one skill; two skills comma-separated;
-    leading whitespace; lowercase `valid skills:`; `and` as separator; no line → `None`; line with
-    no backticks → empty set.
+  - [ ] Create `tests/skills/test_dispatcher.py`. Cases: lowercase `valid skills:` with leading
+    whitespace and both `,` and `and` separators; no line → `None`.
   - [ ] One case reads the real `commands/sq/analysis.md` and asserts `tech-debt-audit` is in the
     result (real-world input, per the parsing rules).
   - [ ] **Success:** `pytest tests/skills/test_dispatcher.py` passes; pyright clean.
@@ -104,25 +103,25 @@ revision_number: 1
 - [ ] **Task 2: Drift test and dispatcher routing** (Effort: 2/5)
   - [ ] Create `tests/skills/test_dispatcher_drift.py` (D5). Locate files relative to the
     repository root the same way existing `tests/skills/` tests locate `commands/` (read one first).
-    1. Claude: expected set is the file stems of `commands/analysis/*.md`; actual is
-       `dispatcher_skills()` of `commands/sq/analysis.md`. Assert set equality.
-    2. Codex: expected set is the names of `commands/analysis/agents/*/` directories containing a
-       `SKILL.md`, with the `analysis-` prefix stripped; actual is `dispatcher_skills()` of
-       `commands/agents/sq-analysis/SKILL.md`. Assert set equality.
-    3. Assert `dispatcher_skills()` did not return `None` before comparing, with a message naming
-       the file.
+    - [ ] Claude: expected set is the file stems of `commands/analysis/*.md`; actual is
+      `dispatcher_skills()` of `commands/sq/analysis.md`. Assert set equality.
+    - [ ] Codex: expected set is the names of `commands/analysis/agents/*/` directories containing a
+      `SKILL.md`, with the `analysis-` prefix stripped; actual is `dispatcher_skills()` of
+      `commands/agents/sq-analysis/SKILL.md`. Assert set equality.
+    - [ ] Assert `dispatcher_skills()` did not return `None` before comparing, with a message naming
+      the file.
   - [ ] Run it: both tests fail, each because `understand` is missing from the dispatcher.
   - [ ] Edit `commands/sq/analysis.md`:
-    1. Valid skills line: `` `tech-debt-audit`, `understand` ``.
-    2. Usage block: add `/sq:analysis understand [flow]` below the existing line.
-    3. Add `## Skill: understand` after the tech-debt-audit section, separated by `---`, in the
-       same shape: invoke `/analysis:understand` passing the remainder of `$ARGUMENTS`; one
-       paragraph saying the skill reads an existing `understand-anything` knowledge graph and
-       writes squadron planning documents; `[flow]` is optional and the skill's "Flow selection"
-       section defines the valid flows and rejects others; the same not-installed message as
-       tech-debt-audit.
-    4. Change the Input parsing sentence so the remainder is described as the skill's arguments,
-       not only `[target]`.
+    - [ ] Valid skills line: `` `tech-debt-audit`, `understand` ``.
+    - [ ] Usage block: add `/sq:analysis understand [flow]` below the existing line.
+    - [ ] Add `## Skill: understand` after the tech-debt-audit section, separated by `---`, in the
+      same shape: invoke `/analysis:understand` passing the remainder of `$ARGUMENTS`; one
+      paragraph saying the skill reads an existing `understand-anything` knowledge graph and
+      writes squadron planning documents; `[flow]` is optional and the skill's "Flow selection"
+      section defines the valid flows and rejects others; the same not-installed message as
+      tech-debt-audit.
+    - [ ] Change the Input parsing sentence so the remainder is described as the skill's arguments,
+      not only `[target]`.
   - [ ] Edit `commands/agents/sq-analysis/SKILL.md` with the same edits in Codex syntax: usage
     `$sq-analysis understand [flow]`; the section delegates to `$analysis-understand`, passing along
     whatever the user typed after the skill name (D1). Extend the frontmatter `description`, which
@@ -148,14 +147,14 @@ revision_number: 1
     paragraph (report the checked path, the graph comes from the plugin's `/understand`). The new
     paragraph holds both surfaces' commands, states them as a condition, and does not guess whether
     the plugin is installed:
-    1. Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
-    2. If the plugin is not installed, on Claude Code run
-       `/plugin marketplace add Egonex-AI/Understand-Anything` then
-       `/plugin install understand-anything`.
-    3. If the plugin is not installed, on Codex run
-       `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`.
-    4. The stop message the agent prints includes the build and install commands for the surface it
-       is running on; the file itself always keeps both.
+    - [ ] Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
+    - [ ] If the plugin is not installed, on Claude Code run
+      `/plugin marketplace add Egonex-AI/Understand-Anything` then
+      `/plugin install understand-anything`.
+    - [ ] If the plugin is not installed, on Codex run
+      `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`.
+    - [ ] The stop message the agent prints includes the build and install commands for the surface it
+      is running on; the file itself always keeps both.
   - [ ] Each command appears verbatim, in backticks, on one line. Remove the reference to
     "slice 366's scope"; no slice numbers in the protocol text.
   - [ ] Apply the same replacement to `commands/analysis/agents/analysis-understand/SKILL.md`,
@@ -179,10 +178,10 @@ revision_number: 1
     `surfaces: dict[str, SurfaceReport]`, `graph: GraphReport`, `baseline: BaselineReport`).
     Docstring names the contract document as the source of truth.
   - [ ] Create `src/squadron/probe/graph.py` (D9) with two functions:
-    1. `project_root(cwd: Path) -> Path`: `run_git(["rev-parse", "--show-toplevel"], cwd=str(cwd))`;
-       on `None` or non-zero exit, return `cwd`. This is the only place the root rule lives; Task 8
-       reuses it.
-    2. `probe_graph(root: Path) -> GraphReport`, given the root from `project_root`.
+    - [ ] `project_root(cwd: Path) -> Path`: `run_git(["rev-parse", "--show-toplevel"], cwd=str(cwd))`;
+      on `None` or non-zero exit, return `cwd`. This is the only place the root rule lives; Task 8
+      reuses it.
+    - [ ] `probe_graph(root: Path) -> GraphReport`, given the root from `project_root`.
   - [ ] `present`: `<root>/.understand-anything/knowledge-graph.json` is a file. `path`: its absolute
     path as a string when present, else `None`.
   - [ ] `commit`: `gitCommitHash` from `meta.json` beside the graph. `None` with its own WARNING log
@@ -206,9 +205,8 @@ revision_number: 1
 
 - [ ] **Task 6: Surface specs and skill detection** (Effort: 3/5)
   - [ ] Create `src/squadron/probe/surfaces.py` (D7). A frozen dataclass `SurfaceSpec` with the
-    contract key, `entry`, `concept`, `graph_build`, and two callables:
-    `analysis_skill_installed(project_root: Path) -> bool | None` and
-    `understand_plugin_installed(project_root: Path) -> bool | None` (the latter filled in Task 7).
+    contract key, `entry`, `concept`, `graph_build`, and the callable
+    `analysis_skill_installed(project_root: Path) -> bool | None`. Task 7 adds the plugin field.
   - [ ] `SURFACES: dict[CommandTarget, SurfaceSpec]` with an import-time
     `assert set(SURFACES) == set(CommandTarget)`, matching the `DELIVERIES` pattern. The contract
     strings are copied exactly from the contract's Shape block and defined only here.
@@ -217,31 +215,32 @@ revision_number: 1
     `resolve_root(local=True)` reads `Path.cwd()`, which is wrong when `sq probe` runs from a
     subdirectory; say so in a comment. Combine: any scope `True` → `True`; else any `None` → `None`;
     else `False`.
-    1. `claude-code`, per scope: `analysis/understand.md` exists and `sq/analysis.md` exists and
-       `"understand" in dispatcher_skills(...)`. A dispatcher for which `dispatcher_skills` returns
-       `None` → `None` with a WARNING naming the file.
-    2. `codex`, per scope: `analysis-understand/SKILL.md` exists.
+    - [ ] `claude-code`, per scope: `analysis/understand.md` exists and `sq/analysis.md` exists and
+      `"understand" in dispatcher_skills(...)`. A dispatcher for which `dispatcher_skills` returns
+      `None` → `None` with a WARNING naming the file.
+    - [ ] `codex`, per scope: `analysis-understand/SKILL.md` exists.
   - [ ] Create `tests/probe/test_surfaces.py`. Populate the temp `HOME` and a temp project root.
-    1. Claude: nothing installed → `False`; skill file and post-366 dispatcher at machine scope →
-       `True`; same at project scope only → `True`; pre-366 dispatcher (only `tech-debt-audit`)
-       plus skill file → `False`; dispatcher with no `Valid skills:` line → `None` with a WARNING;
-       skill file without dispatcher → `False`.
-    2. Codex: absent → `False`; machine scope → `True`; project scope → `True`.
-    3. Every `CommandTarget` has a `SURFACES` entry; the contract keys are `{"claude-code", "codex"}`.
+    - [ ] Claude: nothing installed → `False`; skill file and post-366 dispatcher at machine scope →
+      `True`; same at project scope only → `True`; pre-366 dispatcher (only `tech-debt-audit`)
+      plus skill file → `False`; dispatcher with no `Valid skills:` line → `None` with a WARNING;
+      skill file without dispatcher → `False`.
+    - [ ] Codex: absent → `False`; machine scope → `True`; project scope → `True`.
+    - [ ] Every `CommandTarget` has a `SURFACES` entry; the contract keys are `{"claude-code", "codex"}`.
   - [ ] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
   - [ ] Commit: `feat: add probe surface specs and skill detection`
 
 - [ ] **Task 7: Plugin detection** (Effort: 2/5)
-  - [ ] In `surfaces.py`, add the two `understand_plugin_installed` callables (D8), resolving `HOME`
-    at call time.
+  - [ ] In `surfaces.py`, add the field
+    `understand_plugin_installed(project_root: Path) -> bool | None` to `SurfaceSpec` and its two
+    callables (D8), resolving `HOME` at call time.
   - [ ] `codex`: `True` when `~/.agents/skills/understand/SKILL.md` exists, else `False`.
   - [ ] `claude-code`: read `~/.claude/plugins/installed_plugins.json`.
-    1. File absent → `False`.
-    2. Unreadable, not JSON, or no `plugins` object whose values are lists → `None` with a WARNING
-       naming what was unexpected.
-    3. Installed when a key whose part before `@` is `understand-anything` has an entry with
-       `scope` `user`, or any other scope whose `projectPath` resolves to the project root.
-       Otherwise `False`.
+    - [ ] File absent → `False`.
+    - [ ] Unreadable, not JSON, or no `plugins` object whose values are lists → `None` with a WARNING
+      naming what was unexpected.
+    - [ ] Installed when a key whose part before `@` is `understand-anything` has an entry with
+      `scope` `user`, or any other scope whose `projectPath` resolves to the project root.
+      Otherwise `False`.
   - [ ] Catch only `OSError` and `json.JSONDecodeError`, each with a comment saying why it becomes
     `None`.
   - [ ] Add `tests/probe/fixtures/installed_plugins.json` in the real file's format, observed
@@ -252,11 +251,11 @@ revision_number: 1
     Include a user-scope `understand-anything@understand-anything` entry and a project-scope entry
     for another plugin.
   - [ ] Tests in `tests/probe/test_surfaces.py`:
-    1. The fixture copied into the temp `HOME` → `True`.
-    2. Synthetic variants: file absent → `False`; project-scope entry for this project → `True`;
-       project-scope entry for another path → `False`; other plugins only → `False`; not JSON,
-       `plugins` missing, `plugins` value not a list → `None` + WARNING each.
-    3. Codex: `understand/SKILL.md` present → `True`; absent → `False`.
+    - [ ] The fixture copied into the temp `HOME` → `True`.
+    - [ ] Synthetic variants: file absent → `False`; project-scope entry for this project → `True`;
+      project-scope entry for another path → `False`; other plugins only → `False`; not JSON,
+      `plugins` missing, `plugins` value not a list → `None` + WARNING each.
+    - [ ] Codex: `understand/SKILL.md` present → `True`; absent → `False`.
   - [ ] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
   - [ ] Commit: `feat: add probe plugin detection`
 
@@ -289,7 +288,8 @@ revision_number: 1
   - [ ] Create `tests/cli/test_probe.py` using `CliRunner` (see `tests/cli/conftest.py`). Cases:
     `--json` stdout is one line that parses as JSON and exits 0; without `--json` output is
     multi-line and parses to the same object; `build_probe` patched to raise → exit 1, stdout empty,
-    error on stderr; a run that logs a WARNING keeps stdout pure JSON.
+    error on stderr; a run that logs a WARNING keeps stdout pure JSON; run from a non-repository
+    temp directory (`monkeypatch.chdir`) → exit 0 and `graph.commits_behind` null.
   - [ ] **Success:** `pytest tests/cli/test_probe.py` passes; `.venv/bin/sq probe --json | jq .`
     parses; `sq --help` lists `probe`.
   - [ ] Commit: `feat: add sq probe command`
@@ -323,7 +323,8 @@ revision_number: 1
 - [ ] **Task 11: Run the verification walkthrough** (Effort: 2/5)
   - [ ] Follow the slice design's Verification Walkthrough steps 1–8 from the worktree venv.
   - [ ] Steps 2–5 run in Claude Code. Cancel at the skill's write confirmation in step 3; nothing
-    is written.
+    is written. If this session cannot invoke `/sq:analysis`, record "skipped: slash commands not
+    invocable from this session" for each of steps 2–5.
   - [ ] Step 5 uses a scratch git repo under `/tmp`, never this checkout.
   - [ ] Step 6: if Codex is not available, record "skipped: Codex unavailable" under this task.
   - [ ] Step 7: if `/plugin` cannot be run from the agent, record that and compare

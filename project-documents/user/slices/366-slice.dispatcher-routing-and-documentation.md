@@ -184,6 +184,8 @@ Status: decided
   commands (D3), and the Codex form. For flows and the skill's other requirements, it links to the
   skill file instead of restating them.
 - One line in the CLI reference for `sq probe --json`, pointing to the contract document for fields.
+  *Amendment (20261020, task breakdown):* the CLI reference is `docs/COMMANDS.md` (`## probe`);
+  the README has no such section and gets a one-line pointer.
 - `/sq:overview` README text is deferred to #247 because 365 has not shipped. The slice plan
   requires it only "once 365 exists". The 365 design is amended to name #247 as the owner.
 - Also correct "Squadron ships one, `analysis`" so it says what the pack contains:
@@ -234,6 +236,9 @@ Status: decided
     line makes the field `null` with a warning, since its shape is not one squadron wrote.
   - `codex`: `analysis-understand/SKILL.md` exists. The Codex entry is the skill itself, so no
     dispatcher is involved.
+- *Amendment (20261020, task breakdown):* the project-local root is the project root joined with
+  `DELIVERIES[target].local_root`, not `resolve_root(local=True)`, which reads the process cwd and
+  is wrong when `sq probe` runs from a subdirectory.
 
 ### D8 — Plugin detection
 Status: decided
@@ -403,5 +408,5 @@ Run from the worktree with its venv.
 
 ### Special Considerations
 
-- Relative Effort: 2/5.
+- Relative Effort: 3/5 (raised from 2/5 when the probe was folded in).
 - The probe's field names are a cross-repo contract. Any rename goes to CF before code.
