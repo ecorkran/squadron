@@ -14,66 +14,51 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261020
 dateUpdated: 20261020
-reviewedSha: 4b07e4b7f0ad95e17be4f659e83846c56809b092
-revision_number: 1
+reviewedSha: bbd4182dcda0664b794ecee1d8be0cca80f61a77
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 5
 turns: 6
-promptTokens: 190900
-cachedTokens: 92566
-cacheWriteTokens: 98328
-completionTokens: 16933
-durationSeconds: 83.3
-costUsd: 0.029792
+promptTokens: 192288
+cachedTokens: 92864
+cacheWriteTokens: 99418
+completionTokens: 14612
+durationSeconds: 70.9
+costUsd: 0.028851
 costBasis: provider
 runId: run-20261020-p5-9edaa59e
 squadronVersion: 0.23.5
 findings:
   - id: F001
-    severity: pass
-    category: coverage
-    summary: "Success criteria and design decisions are covered by tasks"
-    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:324-355"
+    severity: concern
+    category: error-handling
+    summary: "Unreadable dispatcher file is not handled in surface detection"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:213-221"
   - id: F002
     severity: concern
-    category: sequencing
-    summary: "Task 6 ships an unimplemented callable in its own commit"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:209-211"
+    category: testing
+    summary: "README and CHANGELOG presence has no verification step"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:317-318"
   - id: F003
-    severity: concern
-    category: process
-    summary: "Walkthrough steps 2–5 have no skip rule"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:323-335"
-  - id: F004
-    severity: concern
-    category: coverage
-    summary: "Outside-any-repo exit 0 is only verified by hand"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:289-292"
-  - id: F005
-    severity: concern
-    category: convention
-    summary: "Task-level deviations from the design are not recorded in the design"
-    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:228-229"
-  - id: F006
-    severity: concern
-    category: convention
-    summary: "Numbered sub-steps have no checkboxes"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:107-123"
-  - id: F007
     severity: note
-    category: granularity
-    summary: "Test granularity could be trimmed"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:96-100"
-  - id: F008
+    category: sizing
+    summary: "Task 3 is smaller than a task and could merge into Task 2"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:133-138"
+  - id: F004
     severity: note
     category: proportionality
-    summary: "Effort label is stale after folding in the probe"
-    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:406"
-  - id: F009
+    summary: "Tasks 11 and 12 run overlapping test commands"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:340-341"
+  - id: F005
     severity: note
-    category: security
-    summary: "Unpinned `curl | bash` install is documented in three places"
-    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:156-159"
+    category: testing
+    summary: "Stdout-purity test should assert on `result.stdout`, not `result.output`"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:288-292"
+  - id: F006
+    severity: pass
+    category: sequencing
+    summary: "Sequencing, dependencies, and commit checkpoints"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:86-345"
 ---
 
 # Review: tasks — slice 366
@@ -83,50 +68,33 @@ findings:
 
 ## Findings
 
-### [PASS] Success criteria and design decisions are covered by tasks
+### [CONCERN] Unreadable dispatcher file is not handled in surface detection
 
-Mapping checked: dispatcher routing (Task 2), usage and unrecognized-flow handling (Task 2, walkthrough step 4), missing-graph message (Task 4), installer receipt (Task 3), probe JSON shape and exit codes (Tasks 8–9), pre-366 dispatcher detection (Task 6), contract field names (Task 8), README, CHANGELOG, and COMMANDS (Task 10), and the drift test (Tasks 1–2). Scope items 8 and 10 are correctly excluded as already done. Anchors checked against the code: `local_root` exists at `src/squadron/skills/targets.py:117`, the contract has a `## Shape` block and "or null" rows, and the skill's "unrecognized" stop exists at `commands/analysis/understand.md:399`.
+Task 6 says a dispatcher with no `Valid skills:` line becomes `null` with a WARNING, and Task 7 adds OSError handling only for the plugin file. Nothing says what happens when `sq/analysis.md` or `analysis/understand.md` exists but cannot be read. Under D6 that exception escapes `build_probe`, and the whole probe exits 1. D8 uses `null` for exactly this kind of unknown state, and the review rules require failure modes to be explicit. Add to Task 6: a read `OSError` on a dispatcher or skill file yields `null` with a WARNING naming the file, plus a test case.
 
-### [CONCERN] Task 6 ships an unimplemented callable in its own commit
+### [CONCERN] README and CHANGELOG presence has no verification step
 
-Task 6 declares `understand_plugin_installed` on `SurfaceSpec` and says it is "filled in Task 7". The Task 6 commit therefore contains a placeholder callable whose behavior is unspecified, which conflicts with the no-silent-fallback rule. Merge Tasks 6 and 7 into one task, or have Task 6 add the field only when Task 7 implements it.
+The design's Technical Requirements say the README subsection, the `sq probe` line, and the CHANGELOG bullets "are present." Task 10's success check only runs the install-guidance test, which checks the three install commands and nothing else. The walkthrough (Task 11) also does not cover these. Nothing confirms the requirement is met. Add a grep check to Task 10 or Task 12, for example `docs/COMMANDS.md` containing `## probe`, the README containing `#probe`, and the CHANGELOG `[Unreleased]` section containing both `understand` and `sq probe`.
 
-### [CONCERN] Walkthrough steps 2–5 have no skip rule
+### [NOTE] Task 3 is smaller than a task and could merge into Task 2
 
-Steps 2–5 need an interactive Claude Code session to run slash commands. Only steps 6 (Codex) and 7 (`/plugin`) say what to record when a step cannot run. Add the same rule for steps 2–5, for example "record 'skipped: <reason>' and continue". Otherwise the agent either fabricates results or stalls. Step 1 also writes into the real `~/.claude` and `~/.agents`, which should be called out.
+Task 3 is one assertion in an existing test class, at Effort 1/5, with its own commit. Merging it into Task 2's commit, or keeping it as a sub-item there, would reduce commit granularity without losing any check.
 
-### [CONCERN] Outside-any-repo exit 0 is only verified by hand
+### [NOTE] Tasks 11 and 12 run overlapping test commands
 
-The success criterion "`sq probe --json` ... exits 0 ... outside any repository" has no automated test. Task 5 covers non-repo at the graph-function level only, and Task 9's CLI cases do not include it. Add a `CliRunner` case that runs from a `tmp_path` outside any repo (`monkeypatch.chdir`) and asserts exit 0 with one JSON line on stdout.
+Task 12 runs `tests/skills`, `tests/probe`, and `test_probe.py`, and Task 11 step 8 covers the skills and probe tests as well. Keeping both is acceptable, but Task 12 could say to run only the full suite, since it already includes those paths.
 
-### [CONCERN] Task-level deviations from the design are not recorded in the design
+### [NOTE] Stdout-purity test should assert on `result.stdout`, not `result.output`
 
-Several choices appear only in the task file:
-- Task 6 uses `project root / local_root` instead of `resolve_root(local=True)` (D7). This is the right fix, since `resolve_root(local=True)` reads `Path.cwd()`, but D7 still says the opposite.
-- Task 10 adds `docs/COMMANDS.md` as the "CLI reference" (D4 names the README).
-- Task 2 edits the Codex frontmatter `description` and the Input-parsing sentence, which the dispatcher list in D1–D2 does not name.
+The Task 9 case "a run that logs a WARNING keeps stdout pure JSON" only means something if it reads stdout separately from stderr. Depending on the Click version, `result.output` can combine the two streams. Say in the task to assert on `result.stdout`.
 
-Amend the design to match, so the design remains the source of truth for later reviewers and implementers.
+### [PASS] Sequencing, dependencies, and commit checkpoints
 
-### [CONCERN] Numbered sub-steps have no checkboxes
-
-The project convention requires `[ ]` on every item and subitem. Numbered sub-steps in Tasks 2 (lines 107–111, 115–123), 4 (146–158), 6 (220–223, 225–230), and 7 (239–244) have no checkbox, so task-checker cannot track them. Convert each to `- [ ]`.
-
-### [NOTE] Test granularity could be trimmed
-
-Task 1's seven parser cases go beyond what the criteria need. The drift test's set-equality check exercises the parser end to end, so keeping the whitespace, case-folding, and real-file cases is enough. Task 3 is a single assertion and could be folded into Task 2, which already edits `tests/skills/`. Both are optional.
-
-### [NOTE] Effort label is stale after folding in the probe
-
-The design still reads "Relative Effort: 2/5", but the slice now adds six source modules, seven test files, and a CLI command. Update the label so planning reflects the actual size.
-
-### [NOTE] Unpinned `curl | bash` install is documented in three places
-
-The Codex install runs a script fetched from `main` through `bash`. The design acknowledges this and chose it on purpose, so no change is required. Flag it for the PM, because the remote script can change without review.
+Dependencies run in one direction: parser (1) → dispatchers and drift test (2) → install guidance (4) → report types and graph (5) → surfaces (6) → plugin field (7) → `build_probe` (8) → CLI (9) → docs (10) → walkthrough (11) → final validation (12). Task 6 adds the surface spec without the plugin field, and Task 7 adds it afterward, so there is no circularity. Each implementation task has a test in the same task. Commit checkpoints appear after Tasks 1–12, not batched at the end. The task file correctly contains no merge steps.
 
 ### Run Digest
 
-- Response length: 5569 chars
+- Response length: 4213 chars
 - Response is newline-free: no
 - Tool calls made: 5
 - Tool calls failed: 0
@@ -137,12 +105,12 @@ The Codex install runs a script fetched from `main` through `bash`. The design a
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 190900 / 92566 / 98328 / 16933 / not computed
-- Duration: 83.3 s
+- Tokens — prompt / cached / cache write / completion / reasoning: 192288 / 92864 / 99418 / 14612 / not computed
+- Duration: 70.9 s
 - Cost: $0.03 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
