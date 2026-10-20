@@ -130,42 +130,42 @@ revision_number: 2
   - [x] **Success:** `pytest tests/skills/test_dispatcher_drift.py` passes.
   - [x] Commit: `feat: route understand through the analysis dispatchers`
 
-- [ ] **Task 3: Pin the installed understand skill** (Effort: 1/5)
-  - [ ] In `tests/skills/test_installer.py`, `TestBundledAnalysisPack`, add a test that installing
+- [x] **Task 3: Pin the installed understand skill** (Effort: 1/5)
+  - [x] In `tests/skills/test_installer.py`, `TestBundledAnalysisPack`, add a test that installing
     the bundled `analysis` pack creates `analysis/understand.md` and lists `understand.md` in
     `result.files_written`. Follow the existing tech-debt-audit test's shape.
-  - [ ] **Success:** `pytest tests/skills/test_installer.py` passes.
-  - [ ] Commit: `test: assert analysis pack installs understand`
+  - [x] **Success:** `pytest tests/skills/test_installer.py` passes.
+  - [x] Commit: `test: assert analysis pack installs understand`
 
 ### Missing-graph guidance
 
-- [ ] **Task 4: Install guidance in both skill copies** (Effort: 2/5)
-  - [ ] In `commands/analysis/understand.md`, line 16: change "When invoked via `/understand`" to
+- [x] **Task 4: Install guidance in both skill copies** (Effort: 2/5)
+  - [x] In `commands/analysis/understand.md`, line 16: change "When invoked via `/understand`" to
     "When invoked via `/analysis:understand` or `/sq:analysis understand`".
-  - [ ] In the Claude copy, replace the second paragraph of "**1. Absent**" (from "State only that
+  - [x] In the Claude copy, replace the second paragraph of "**1. Absent**" (from "State only that
     the graph is missing" through "wrong as often as right.") with the D3 guidance. Keep the first
     paragraph (report the checked path, the graph comes from the plugin's `/understand`). The new
     paragraph holds both surfaces' commands, states them as a condition, and does not guess whether
     the plugin is installed:
-    - [ ] Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
-    - [ ] If the plugin is not installed, on Claude Code run
+    - [x] Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
+    - [x] If the plugin is not installed, on Claude Code run
       `/plugin marketplace add Egonex-AI/Understand-Anything` then
       `/plugin install understand-anything`.
-    - [ ] If the plugin is not installed, on Codex run
+    - [x] If the plugin is not installed, on Codex run
       `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`.
-    - [ ] The stop message the agent prints includes the build and install commands for the surface it
+    - [x] The stop message the agent prints includes the build and install commands for the surface it
       is running on; the file itself always keeps both.
-  - [ ] Each command appears verbatim, in backticks, on one line. Remove the reference to
+  - [x] Each command appears verbatim, in backticks, on one line. Remove the reference to
     "slice 366's scope"; no slice numbers in the protocol text.
-  - [ ] Apply the same replacement to `commands/analysis/agents/analysis-understand/SKILL.md`,
+  - [x] Apply the same replacement to `commands/analysis/agents/analysis-understand/SKILL.md`,
     wording identical except where the copy already uses Codex invocation syntax. Its line 15 needs
     no change.
-  - [ ] Create `tests/skills/test_understand_install_guidance.py`. Define the three install commands
+  - [x] Create `tests/skills/test_understand_install_guidance.py`. Define the three install commands
     once as module constants. Parametrize over both skill copies and assert each constant appears in
     each file. Task 10 adds `README.md`.
-  - [ ] **Success:** the test passes; `grep -n "slice 366"` on both copies prints nothing; the
+  - [x] **Success:** the test passes; `grep -n "slice 366"` on both copies prints nothing; the
     absent stop still says to report the checked path.
-  - [ ] Commit: `feat: give understand-anything install guidance when the graph is absent`
+  - [x] Commit: `feat: give understand-anything install guidance when the graph is absent`
 
 ### Probe package
 
