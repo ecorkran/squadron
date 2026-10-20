@@ -56,6 +56,8 @@ no artifact to hand a stakeholder.
 - **Graph is an input, not a dependency.** Squadron reads `.understand-anything/knowledge-graph.json`
   as data. If the plugin is absent or the graph is missing, squadron reports what to run and stops —
   it never shells into the plugin's engine or reimplements a phase of it.
+  *Amendment (20261020, slice 366):* the graph is the input; the plugin is needed only to build it. A missing
+  graph stops the run; a missing plugin with a graph present does not.
 - **Interview fills only what the graph cannot answer.** The skill reads structure first, then asks a
   short focused set of questions scoped to the genuine gaps. Questions the graph already answers are
   never asked.
@@ -124,8 +126,9 @@ Squadron does not replace or wrap either skill.
 
 ### Flow
 
-1. **Preconditions.** Verify the plugin is installed and `knowledge-graph.json` exists. If the graph
-   is missing, report the exact command to run (`/understand`) and stop.
+1. **Preconditions.** Verify `knowledge-graph.json` exists. If the graph is missing, report the
+   exact command to run (`/understand`) and how to install the plugin, and stop. *Amendment (20261020, slice 366):* the
+   plugin-installed check was removed; the skill does not detect the plugin.
 
    **Validate shape, not just presence.** The plugin is upstream-maintained and actively developed,
    so the output contract can change under us. Before reading, confirm the required top-level keys
@@ -397,6 +400,8 @@ comprehension, squadron consumes it. Dispatcher namespacing keeps the names dist
 there is no collision. Adding it requires a new pack file plus three edits to
 `commands/sq/analysis.md` (valid-skills line, usage block, skill section) — the same shape as the
 deprecated slice 344, and no installer, manifest, or CLI change.
+*Amendment (20261020, slice 366):* the Codex dispatcher `commands/agents/sq-analysis/SKILL.md` gets the same three
+edits. Slice 366 also adds `sq probe`, a CLI command for Context Forge (initiative 440).
 
 **Capability (b)** ships as a first-party command in `commands/sq/`, not as a pack skill. It reads
 squadron's own document layout and writes for stakeholders; nothing about it audits a codebase, so
@@ -420,7 +425,8 @@ exists for conversation summaries.
 - **Forking or vendoring understand-anything.** Settled by slice 344's deprecation. Squadron consumes
   the marketplace plugin's output and nothing more.
 - **Squadron installing the marketplace plugin.** Squadron's installer copies markdown; driving
-  Claude Code's plugin system is out of scope. The skill detects absence and instructs.
+  Claude Code's plugin system is out of scope. *Amendment (20261020, slice 366):* the skill instructs when the
+  graph is absent; plugin detection belongs to the capability probe (`sq probe`, slice 366).
 - **Re-implementing graph construction.** Scan, batch, analyze, and assemble belong to the plugin.
 - **A pipeline action for either capability.** These are skills. If pipeline integration is wanted
   later, it is a separate initiative built on the action protocol.

@@ -260,9 +260,11 @@ where its analysis template is the direct comparable.
    `commands/analysis/` so `sq skills install analysis` picks it up via existing copy-all-md
    behavior. Document both capabilities in the README and note the `understand-anything` marketplace
    plugin as a prerequisite for (a), including how to install it, since squadron does not and will
-   not install it.
+   not install it. Also ship `sq probe --json`, the capability probe built to
+   `project-documents/user/reference/capability-probe-contract.md` (folded in 20261020, PM-approved),
+   so the probe and the entry it reports land together.
    - **Value:** User value — the capabilities become discoverable and installable through the paths
-     users already know.
+     users already know. CF 260 reads one JSON document instead of squadron's install paths.
    - **Success Criteria:**
      - `/sq:analysis understand` routes to the skill and passes arguments through intact.
      - `sq skills install analysis` installs both `tech-debt-audit.md` and the new skill; the receipt
@@ -273,12 +275,14 @@ where its analysis template is the direct comparable.
      - README documents `/sq:analysis understand` (and `/sq:overview` once 365 exists), and states
        the plugin prerequisite.
      - Existing skills tests remain green.
+     - `sq probe --json` prints the contract's shape and exits 0 whenever it can report; a test
+       fails if a field name drifts from the contract.
    - **Dependencies:** [361]. Fullest value after [362], [363], [364]. The former dependency on
      [365] was README text only and was dropped 20261020 so 366 can land before CF 260's handoff
      slice, which calls it as its entry point.
    - **Interfaces:** Consumes the 340 dispatcher and installer conventions.
    - **Risk:** Low.
-   - **Relative Effort:** 1/5
+   - **Relative Effort:** 2/5
 
 ---
 

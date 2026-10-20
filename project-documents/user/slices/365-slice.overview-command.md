@@ -360,7 +360,7 @@ so an unwanted run costs one file the PM can delete.
 | `commands/sq/analysis.md` | Unrelated dispatcher; `/sq:overview` is not routed through it | **None** — slice 366 owns dispatcher edits, and only for capability (a) |
 | `commands/analysis/understand.md` | Shares convention *shape*, not a reference (D1) | **None** — not edited by this slice |
 | `cf validate frontmatter` | Validates the generated document's `docType`/`status` | **None** — both are existing enum members |
-| README | Documents `/sq:overview` | **None in this slice** — slice 366 owns the README pass for both capabilities |
+| README | Documents `/sq:overview` | **None in this slice** — added when this slice ships (#247); 366 documents capability (a) only |
 
 ---
 
@@ -369,9 +369,8 @@ so an unwanted run costs one file the PM can delete.
 **Depends on:** nothing in this initiative. [100] for the command surface (`install-commands`
 exists and copies `commands/sq/`).
 
-**Depended on by:** [366], which documents `/sq:overview` in the README alongside
-`/sq:analysis understand`, and whose success criteria require both in one pass. This is the reason
-the slice plan's implementation order runs 365 → 366.
+**Depended on by:** nothing. 366 no longer waits on this slice (dependency dropped 20261020); the
+`/sq:overview` README text lands with this slice, tracked in #247.
 
 **Not depended on by:** 361, 362, 363, 364 — none reads or references this command.
 

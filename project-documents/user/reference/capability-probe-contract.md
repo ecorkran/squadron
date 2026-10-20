@@ -11,7 +11,7 @@ dependsOn: [001-initiative-plan.squadron.md]
 
 A cross-repo contract between squadron initiative 440 and context-forge initiative 260. Context Forge
 runs the probe during brownfield onboarding to decide whether to take squadron's path, and tests these
-field names. Agreed with the CF session on 20261020. The probe itself is not built yet.
+field names. Agreed with the CF session on 20261020. The probe is built in slice 366.
 
 Changing a field name, a field's meaning, or a `surfaces` value without following the versioning
 rules below breaks Context Forge.
@@ -86,8 +86,9 @@ output in the earlier shapes was ever produced, so v1 means the shape in this do
 ## Shipping order
 
 The `claude-code` values route through `/sq:analysis`, which reaches the understand skill only once
-slice 366 lands; today the installed command is `/analysis:understand`. The probe ships after 366,
-so it never reports an entry that does not route.
+slice 366 lands; today the installed command is `/analysis:understand`. The probe ships in slice
+366 together with that routing (folded in 20261020), so it never reports an entry that does not
+route.
 
 ## Not in the probe
 

@@ -16,7 +16,8 @@ A lightweight, append-only record of development activity. Newest entries first.
 - Design: `project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md` (`cf validate design` passes).
 - The understand skill is already in `commands/analysis/` and gets installed. The slice is now routing (`/sq:analysis` and Codex `$sq-analysis`), missing-graph install guidance, README, and a dispatcher/pack drift test.
 - Key decisions: route both surfaces (D1). Pass flow arguments through without validating them (D2). Missing-graph guidance is conditional wording and does not detect the plugin, because `~/.claude/plugins/installed_plugins.json` is an undocumented Claude Code internal file (D3). README covers capability (a) only and `/sq:overview` stays with 365 (D4).
-- Must land before the capability probe and CF 260's handoff slice (probe contract Shipping Order).
+- Must land before CF 260's handoff slice. The capability probe (`sq probe --json`) was folded into 366 afterward (PM-approved 20261020) and added as D6–D11, so routing and the probe ship together per the contract's Shipping Order.
+- Reviewed by claude-haiku-5-5 over three rounds (CONCERNS each; accepted at threshold). Planning docs amended: 360-arch (D3), slice plan item 6, initiative plan item 16, probe contract, 365 README owner (#247).
 - Next: task breakdown (Phase 5).
 
 ### Release 0.23.5
