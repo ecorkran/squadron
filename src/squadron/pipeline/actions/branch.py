@@ -7,12 +7,14 @@ A thin wrapper: the git logic lives in ``pipeline/branch_ops.py``, which the hid
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.branch_ops import (
     BRANCH_OUTPUT,
     FAILURE_OUTPUT,
     MERGED_OUTPUT,
+    SKIPPED_OUTPUT,
     TARGET_OUTPUT,
     BranchFailure,
     MergeFailedError,
@@ -22,7 +24,23 @@ from squadron.pipeline.branch_ops import (
 from squadron.pipeline.commit_plan import SLICE_PARAM
 from squadron.pipeline.git_ops import NoDesignFileError, SliceNotInPlanError, parse_slice_index
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.steps.branch import OP_PARAM, BranchOp
+from squadron.pipeline.steps.branch import OP_PARAM, WHEN_PARAM, BranchOp
+
+_logger = logging.getLogger(__name__)
+_WHEN_VALUES = {"true": True, "false": False}
+
+
+def parse_when(value: object) -> bool:
+    """Whether a branch op runs: absent means yes; otherwise ``true`` or ``false``.
+
+    Raises ValueError for anything else, including an unresolved ``{param}``.
+    """
+    if value is None or isinstance(value, bool):
+        return value is not False
+    enabled = _WHEN_VALUES.get(str(value).strip().lower())
+    if enabled is None:
+        raise ValueError(f"branch '{WHEN_PARAM}' must be true or false, got {value!r}")
+    return enabled
 
 
 class BranchAction:
@@ -40,8 +58,14 @@ class BranchAction:
         try:
             op = BranchOp(str(context.params.get(OP_PARAM)))
             slice_index = parse_slice_index(context.params.get(SLICE_PARAM))
+            enabled = parse_when(context.params.get(WHEN_PARAM))
         except ValueError as exc:
             return self._failure(str(exc))
+        if not enabled:
+            _logger.info("branch %s for slice %d skipped: when is false", op, slice_index)
+            return ActionResult(
+                success=True, action_type=self.action_type, outputs={SKIPPED_OUTPUT: True}
+            )
 
         try:
             # git and cf run as subprocesses; keep them off the event loop.

@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `sq run --run-id <id>` is now a supported option for choosing a run's id, and every fresh run prints `run_id=<id>` to stderr at launch, so launcher programs can track their runs (#243).
+- Code pipelines (`P6`, `implement`, `P56`, `P456`, `implement-plan`) take `-p merge=false` to stop before merging the slice branch, leaving the merge to you (#245).
 
 ## [0.23.3] - 20261019
 

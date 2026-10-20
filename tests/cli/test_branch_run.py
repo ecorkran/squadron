@@ -145,3 +145,13 @@ def test_cli_and_action_end_in_the_same_state(
     assert action_result.outputs == {"branch": BRANCH, "target": "main", "created": True}
     assert _branch(cli_repo) == _branch(action_repo) == BRANCH
     assert cli_result.output.strip() == f"on {BRANCH} (created from main)"
+
+
+def test_merge_with_when_false_skips_and_stays_on_the_slice_branch(in_repo: Path) -> None:
+    runner.invoke(app, ["_branch", "enter", "--slice", "105"])
+
+    result = runner.invoke(app, ["_branch", "merge", "--slice", "105", "--when", "false"])
+
+    assert result.exit_code == 0, result.output
+    assert result.output.strip() == "skipped branch merge (when is false)"
+    assert _branch(in_repo) == BRANCH

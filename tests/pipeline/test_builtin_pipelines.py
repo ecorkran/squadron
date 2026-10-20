@@ -44,6 +44,7 @@ def test_implement_plan_params_and_shape() -> None:
         "max-revisions": "2",
         "pass-threshold": "review.pass",
         "accept-threshold": "review.concerns_or_better",
+        "merge": "true",
     }
     (each,) = definition.steps
     assert (each.step_type, each.name) == ("each", "slices")

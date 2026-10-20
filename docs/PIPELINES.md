@@ -379,12 +379,14 @@ Prefer scalar shorthand:
 - branch: { op: enter }                       # slice defaults to "{slice}"
 - branch: { op: enter, plan: "{plan}", slice: "{slice.index}" }
 - branch: { op: merge, slice: "{slice.index}" }
+- branch: { op: merge, when: "{merge}" }       # skipped when the merge param is false
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
 | `op` | string | yes | `enter` or `merge` |
 | `slice` | string | no | Slice index (default `{slice}`; use `{slice.index}` inside an `each`) |
+| `when` | string | no | `true` or `false`, usually a param (`"{merge}"`). `false` skips the op: the step succeeds without touching git and logs it at INFO. Any other value, including an unset `{param}`, fails the step |
 | `plan` | string | no | `enter` only. Architecture index; cf is switched to it (`set_arch`) before entering, as phase steps do, so the slice resolves even when cf's active plan is another one. A failed `set_arch` fails the item |
 
 Any other key is rejected.
@@ -404,6 +406,8 @@ If an earlier item ended on its own unmerged slice branch, `enter` commits that 
 **Validation:** an `implement` step must come after a `branch: {op: enter}` step — earlier in its own step list, or earlier in an enclosing list than the `loop:` or `each:` that contains it. Otherwise loading fails with `implement step … needs a preceding branch: {op: enter}`. **This is a deliberate break for custom pipelines with an `implement` step:** add the enter before it, and a merge after its review. There is no compatibility flag; without the enter, `implement` would run on whatever is checked out and its commit would refuse to stage.
 
 Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter → implement (existing: keep) → revise-code loop → devlog → branch merge`, the same steps as each item of [`implement-plan`](#implement-plan). The revise loop revises against the code review until `pass-threshold`; if its rounds run out it accepts at `accept-threshold`, and otherwise pauses at a checkpoint before the merge. A test keeps these four in step with `implement-plan`.
+
+**Leaving the merge to a person.** All five take a `merge` param, `true` by default. `sq run P6 152 -p merge=false` runs everything up to the merge and leaves the slice branch unmerged and checked out for you to review and merge. In `implement-plan`, an unmerged slice isn't on the target when a later slice that depends on it starts.
 
 ---
 
@@ -836,13 +840,13 @@ sq pipelines list    # shows all available pipelines with descriptions
 | `P4` | Phase 4 (slice design), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P5` | Phase 5 (tasks), revised until the review passes; checkpoints if it never does | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
 | `P45` | Design and tasks (each revised like `P4`/`P5`) → summary; stops before implementation | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
-| `P6` | Phase 6: `branch enter` → implement with code review → `revise-code` loop → devlog → `branch merge` → summary | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold`, `summary-model` |
-| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model` |
-| `P56` | Tasks (revised like `P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `summary-model` |
+| `P6` | Phase 6: `branch enter` → implement with code review → `revise-code` loop → devlog → `branch merge` → summary | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold`, `summary-model`, `merge` |
+| `P456` | Full slice lifecycle: design and tasks (each revised like `P4`/`P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `design-model`, `model`, `review-model`, `max-revisions`, `summary-model`, `merge` |
+| `P56` | Tasks (revised like `P5`) → compact → `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `summary-model`, `merge` |
 | `slices-plan` | Design and review every undesigned slice in a plan; flags failures and writes a batch report — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
 | `tasks-plan` | Task breakdown for every designed slice in a plan whose design review is acceptable, and a re-review of slices whose tasks review is missing or below the threshold — see [Plan batch pipelines](#plan-batch-pipelines) | `plan`, `model`, `review-model`, `max-revisions` |
-| `implement` | Implementation only (design and tasks already exist): `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold` |
-| `implement-plan` | Implement every ready slice in a plan, in dependency order; flags failures, writes a batch report — see [`implement-plan`](#implement-plan) | `plan`, `model`, `review-model`, `max-revisions` |
+| `implement` | Implementation only (design and tasks already exist): `branch enter` → implement → `revise-code` loop → devlog → `branch merge` | `slice`, `model`, `review-model`, `max-revisions`, `pass-threshold`, `accept-threshold`, `merge` |
+| `implement-plan` | Implement every ready slice in a plan, in dependency order; flags failures, writes a batch report — see [`implement-plan`](#implement-plan) | `plan`, `model`, `review-model`, `max-revisions`, `merge` |
 | `review` | Standalone review against existing artifacts | `slice`, `template`, `model` |
 | `judge-cycle` | Judge-gated review-fix-review cycle — reference implementation of the [judge-gated cycle convention](#judge-gated-cycles) | `slice`, `model`, `review-model`, `max-revisions` |
 | `compose-gate-example` | Reduces a judge result and a review result into one checkpoint gate — reference implementation of [gate composition](#composing-a-judge-and-a-review-at-one-gate) | `slice`, `model`, `review-model` |

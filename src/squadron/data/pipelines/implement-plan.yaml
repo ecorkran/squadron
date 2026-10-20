@@ -8,6 +8,7 @@ params:
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better
+  merge: "true"
 
 steps:
   - each:
@@ -46,4 +47,4 @@ steps:
               - dispatch: { name: revise, model: "{model}", feedback: review }
               - review: { template: code, model: "{review-model}", slice: "{slice.index}" }
         - devlog: { mode: auto, slice: "{slice.index}" }
-        - branch: { op: merge, slice: "{slice.index}" }
+        - branch: { op: merge, slice: "{slice.index}", when: "{merge}" }

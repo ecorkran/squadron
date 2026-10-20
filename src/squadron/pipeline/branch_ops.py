@@ -60,6 +60,7 @@ FAILURE_OUTPUT = "failure"
 BRANCH_OUTPUT = "branch"
 TARGET_OUTPUT = "target"
 MERGED_OUTPUT = "merged"  # present only on a merge; its value is the MergeOutcome
+SKIPPED_OUTPUT = "skipped"  # present only when ``when`` turned the op off
 
 
 class MergeFailedError(ValueError):

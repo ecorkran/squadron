@@ -16,11 +16,12 @@ import typer
 
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.actions.branch import BranchAction
+from squadron.pipeline.branch_ops import SKIPPED_OUTPUT
 from squadron.pipeline.commit_plan import SLICE_PARAM
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolver
-from squadron.pipeline.steps.branch import OP_PARAM, BranchOp
+from squadron.pipeline.steps.branch import OP_PARAM, WHEN_PARAM, BranchOp
 
 _logger = logging.getLogger(__name__)
 
@@ -28,12 +29,17 @@ _logger = logging.getLogger(__name__)
 def branch_run(
     op: BranchOp = typer.Argument(..., help="enter or merge."),
     slice_index: int = typer.Option(..., "--slice", help="Slice index."),
+    when: str | None = typer.Option(None, "--when", help="true or false; false skips the op."),
 ) -> None:
     """[hidden] Enter or merge the slice branch for ``--slice``."""
     context = ActionContext(
         pipeline_name="_branch",
         run_id="",
-        params={OP_PARAM: op.value, SLICE_PARAM: str(slice_index)},
+        params={
+            OP_PARAM: op.value,
+            SLICE_PARAM: str(slice_index),
+            **({WHEN_PARAM: when} if when is not None else {}),
+        },
         step_name="_branch",
         step_index=0,
         prior_outputs={},
@@ -58,6 +64,8 @@ def branch_run(
 
 def _describe(op: BranchOp, outputs: dict[str, object]) -> str:
     """What the action did, for the harness to read."""
+    if outputs.get(SKIPPED_OUTPUT):
+        return f"skipped branch {op} (when is false)"
     match op:
         case BranchOp.ENTER:
             origin = f"created from {outputs['target']}" if outputs["created"] else "existing"

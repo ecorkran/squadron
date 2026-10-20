@@ -25,7 +25,9 @@ class BranchOp(StrEnum):
 OP_PARAM = "op"
 # Optional arch index: cf is aligned to it before the branch action (197 D6).
 PLAN_PARAM = "plan"
-_ALLOWED_KEYS = frozenset({OP_PARAM, SLICE_PARAM, PLAN_PARAM})
+# Optional on/off switch, usually a pipeline param (``when: "{merge}"``): "true" or "false".
+WHEN_PARAM = "when"
+_ALLOWED_KEYS = frozenset({OP_PARAM, SLICE_PARAM, PLAN_PARAM, WHEN_PARAM})
 
 
 class BranchStepType:
@@ -53,6 +55,10 @@ class BranchStepType:
             # The implement step has aligned cf by the time a merge runs.
             errors.append(self._error(PLAN_PARAM, f"'{PLAN_PARAM}' applies to enter only"))
 
+        when = cfg.get(WHEN_PARAM)
+        if when is not None and not isinstance(when, str | bool):
+            errors.append(self._error(WHEN_PARAM, f"'{WHEN_PARAM}' must be true or false"))
+
         for key in sorted(set(cfg) - _ALLOWED_KEYS):
             errors.append(
                 self._error(key, f"unknown key '{key}'; branch accepts {sorted(_ALLOWED_KEYS)}")
@@ -61,15 +67,13 @@ class BranchStepType:
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
-        actions: list[tuple[str, dict[str, object]]] = [
-            (
-                ActionType.BRANCH,
-                {
-                    OP_PARAM: BranchOp(str(cfg[OP_PARAM])),
-                    SLICE_PARAM: cfg.get(SLICE_PARAM, DEFAULT_SLICE_REF),
-                },
-            )
-        ]
+        params: dict[str, object] = {
+            OP_PARAM: BranchOp(str(cfg[OP_PARAM])),
+            SLICE_PARAM: cfg.get(SLICE_PARAM, DEFAULT_SLICE_REF),
+        }
+        if WHEN_PARAM in cfg:
+            params[WHEN_PARAM] = cfg[WHEN_PARAM]
+        actions: list[tuple[str, dict[str, object]]] = [(ActionType.BRANCH, params)]
         # Enter resolves the slice through cf's active plan, so align cf first, in the
         # order phase steps use (195 D2).
         if PLAN_PARAM in cfg:

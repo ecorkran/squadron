@@ -37,6 +37,7 @@ from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loop_commit import round_commit_params
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.steps import StepTypeName, get_step_type
+from squadron.pipeline.steps.branch import WHEN_PARAM
 from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
@@ -361,10 +362,14 @@ def _render_branch(
     slice_ref = config.get(SLICE_PARAM) or params.get(SLICE_PARAM)
     if not isinstance(slice_ref, str | int) or slice_ref == "":
         raise ValueError(f"branch {op} needs a slice index, got {slice_ref!r}")
+    args = ["sq", "_branch", str(op), "--slice", str(slice_ref)]
+    when = config.get(WHEN_PARAM)
+    if when is not None:
+        args += ["--when", str(when).lower()]
     return ActionInstruction(
         action_type=ActionType.BRANCH,
         instruction=f"{str(op).capitalize()} the slice branch",
-        command=shlex.join(["sq", "_branch", str(op), "--slice", str(slice_ref)]),
+        command=shlex.join(args),
     )
 
 
