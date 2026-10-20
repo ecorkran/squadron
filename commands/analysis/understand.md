@@ -1,7 +1,6 @@
 ---
 name: understand
 description: Consumes an existing understand-anything knowledge graph and writes squadron planning documents from it. Reads the graph the plugin already produced — it does not analyze the codebase itself and does not run the plugin. Use when the user asks for a codebase comprehension analysis derived from an existing knowledge graph. Does not auto-invoke.
-disable-model-invocation: true
 ---
 
 # Understand
@@ -109,7 +108,8 @@ by the `understand-anything` plugin's own `/understand` command, which must be r
 **Do not guess whether the plugin is installed.** State the build step and the install step as a
 condition, giving the commands for the surface you are running on (this file keeps both):
 
-- Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
+- Build the graph with the plugin's `/understand` (on Codex, the `understand` skill). Say that this
+  is a paid multi-agent run: on API billing a large repository can cost tens of dollars.
 - If the plugin is not installed, on Claude Code run
   `/plugin marketplace add Egonex-AI/Understand-Anything` then
   `/plugin install understand-anything`.

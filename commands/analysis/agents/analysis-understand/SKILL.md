@@ -112,7 +112,8 @@ by the `understand-anything` plugin's own `/understand` command, which must be r
 **Do not guess whether the plugin is installed.** State the build step and the install step as a
 condition, giving the commands for the surface you are running on (this file keeps both):
 
-- Build the graph with the plugin's `/understand` (on Codex, the `understand` skill).
+- Build the graph with the plugin's `/understand` (on Codex, the `understand` skill). Say that this
+  is a paid multi-agent run: on API billing a large repository can cost tens of dollars.
 - If the plugin is not installed, on Claude Code run
   `/plugin marketplace add Egonex-AI/Understand-Anything` then
   `/plugin install understand-anything`.

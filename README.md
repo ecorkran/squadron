@@ -393,7 +393,7 @@ A pack holds Claude commands at its top level and, optionally, Codex skills unde
 
 The `understand` skill reads an existing [`understand-anything`](https://github.com/Egonex-AI/Understand-Anything) knowledge graph of your codebase and writes planning documents from it. Run `/sq:analysis understand` in Claude Code, or `$sq-analysis understand` in Codex.
 
-It needs the `understand-anything` plugin to build the graph first, with the plugin's `/understand` (on Codex, the `understand` skill). To install the plugin:
+It needs the `understand-anything` plugin to build the graph first, with the plugin's `/understand` (on Codex, the `understand` skill). That build is a paid multi-agent run; on API billing a large repository can cost tens of dollars. To install the plugin:
 
 - Claude Code: `/plugin marketplace add Egonex-AI/Understand-Anything`, then `/plugin install understand-anything`
 - Codex: `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`

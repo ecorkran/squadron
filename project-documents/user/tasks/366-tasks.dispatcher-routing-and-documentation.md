@@ -347,11 +347,13 @@ revision_number: 2
       `/understand` and the two `/plugin` commands; in the squadron checkout both `understand`
       and `understand concept` pass preflight and stop at the staleness decision (1739 commits
       behind, consistent with the probe) before any write.
-    - **Failed: dispatcher delegation on Claude Code.** `/sq:analysis understand nope` ends with
-      the Skill tool error "cannot be used with Skill tool due to disable-model-invocation": the
-      dispatcher cannot invoke `understand.md`, which carries `disable-model-invocation: true`.
-      `tech-debt-audit.md` has the same flag but an HTML comment above its frontmatter, so the flag
-      is not parsed and its delegation works. Needs a PM decision (see DEVLOG).
+    - Found and fixed: dispatcher delegation on Claude Code failed. `/sq:analysis understand nope`
+      ended with the Skill tool error "cannot be used with Skill tool due to
+      disable-model-invocation", because `understand.md` carried `disable-model-invocation: true`
+      (`tech-debt-audit.md` has the flag too, but an HTML comment above its frontmatter keeps it
+      from being parsed). PM chose to drop the flag from `understand.md` and delete the Codex
+      `openai.yaml` twin. Re-run in a fresh session: the dispatcher delegates and the skill
+      rejects `nope`.
     - Step 6 passed: `codex exec -m gpt-6-luna` (Codex's configured default `gpt-6.1-sol` returns a
       400 on this account) delegates `$sq-analysis understand nope` to `analysis-understand`, which
       reports the flow unrecognized.
