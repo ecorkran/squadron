@@ -14,70 +14,66 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261020
 dateUpdated: 20261020
-reviewedSha: bac1b89cf6ea2da1b0f63a0d433d3ea9b66d4dad
+reviewedSha: 4b07e4b7f0ad95e17be4f659e83846c56809b092
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 5
 turns: 6
-promptTokens: 193287
-cachedTokens: 90089
-cacheWriteTokens: 103192
-completionTokens: 17883
-durationSeconds: 87.2
-costUsd: 0.031215
+promptTokens: 190900
+cachedTokens: 92566
+cacheWriteTokens: 98328
+completionTokens: 16933
+durationSeconds: 83.3
+costUsd: 0.029792
 costBasis: provider
 runId: run-20261020-p5-9edaa59e
 squadronVersion: 0.23.5
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Commit checkpoints are batched or missing for most tasks"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:114"
+    severity: pass
+    category: coverage
+    summary: "Success criteria and design decisions are covered by tasks"
+    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:324-355"
   - id: F002
     severity: concern
-    category: consistency
-    summary: "Task 7 step 4 contradicts the \"both copies carry both surfaces\" rule"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:163"
+    category: sequencing
+    summary: "Task 6 ships an unimplemented callable in its own commit"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:209-211"
   - id: F003
     severity: concern
-    category: sequencing
-    summary: "Tasks 11 and 17 depend on a project-root helper that no task defines"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:287"
+    category: process
+    summary: "Walkthrough steps 2–5 have no skip rule"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:323-335"
   - id: F004
     severity: concern
-    category: contract
-    summary: "Contract types `analysis_skill_installed` and `understand_plugin_installed` as `bool`, but the design emits `null`"
-    location: "project-documents/user/reference/capability-probe-contract.md:47"
+    category: coverage
+    summary: "Outside-any-repo exit 0 is only verified by hand"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:289-292"
   - id: F005
     severity: concern
-    category: testing
-    summary: "Plugin-detection tests use only synthetic JSON for an undocumented file"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:274"
+    category: convention
+    summary: "Task-level deviations from the design are not recorded in the design"
+    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:228-229"
   - id: F006
     severity: concern
-    category: process
-    summary: "Task 0 omits the worktree registration check"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:75"
+    category: convention
+    summary: "Numbered sub-steps have no checkboxes"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:107-123"
   - id: F007
-    severity: concern
-    category: proportionality
-    summary: "Task count is high for a 2/5 slice"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md"
+    severity: note
+    category: granularity
+    summary: "Test granularity could be trimmed"
+    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:96-100"
   - id: F008
     severity: note
-    category: design-deviation
-    summary: "Task 13 changes the design's `resolve_root(local=True)` approach"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:242"
+    category: proportionality
+    summary: "Effort label is stale after folding in the probe"
+    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:406"
   - id: F009
     severity: note
-    category: scope
-    summary: "Task 21 puts the `sq probe` CLI reference in `docs/COMMANDS.md`"
-    location: "project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md:340"
-  - id: F010
-    severity: note
-    category: coverage
-    summary: "Coverage checks that passed"
-    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:324"
+    category: security
+    summary: "Unpinned `curl | bash` install is documented in three places"
+    location: "project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md:156-159"
 ---
 
 # Review: tasks — slice 366
@@ -87,62 +83,50 @@ findings:
 
 ## Findings
 
-### [CONCERN] Commit checkpoints are batched or missing for most tasks
+### [PASS] Success criteria and design decisions are covered by tasks
 
-AGENTS.md requires a commit at least once per task. Tasks 0, 1, 3, 4, 7, 8, 10, 11, 13, 15, 17, and 23 have no commit step. Task 3 says "Do not commit yet," so the drift test, dispatcher edits, and `dispatcher_skills` edits all land in Task 5's commit. The same batching happens for Tasks 7–9, 10–12, and 13–16. Give each task its own commit, or name the task-group commit explicitly and justify the deviation.
+Mapping checked: dispatcher routing (Task 2), usage and unrecognized-flow handling (Task 2, walkthrough step 4), missing-graph message (Task 4), installer receipt (Task 3), probe JSON shape and exit codes (Tasks 8–9), pre-366 dispatcher detection (Task 6), contract field names (Task 8), README, CHANGELOG, and COMMANDS (Task 10), and the drift test (Tasks 1–2). Scope items 8 and 10 are correctly excluded as already done. Anchors checked against the code: `local_root` exists at `src/squadron/skills/targets.py:117`, the contract has a `## Shape` block and "or null" rows, and the skill's "unrecognized" stop exists at `commands/analysis/understand.md:399`.
 
-### [CONCERN] Task 7 step 4 contradicts the "both copies carry both surfaces" rule
+### [CONCERN] Task 6 ships an unimplemented callable in its own commit
 
-Step 4 says to "give the user the commands for the surface the skill is running on." The Context Summary (line 48) and Task 9's test assert that all three commands appear in both copies. An agent following step 4 literally would omit the `curl` command from the Claude copy and fail Task 9. Remove step 4 or reword it to "show the commands for both surfaces, marking which applies to the current surface."
+Task 6 declares `understand_plugin_installed` on `SurfaceSpec` and says it is "filled in Task 7". The Task 6 commit therefore contains a placeholder callable whose behavior is unspecified, which conflicts with the no-silent-fallback rule. Merge Tasks 6 and 7 into one task, or have Task 6 add the field only when Task 7 implements it.
 
-### [CONCERN] Tasks 11 and 17 depend on a project-root helper that no task defines
+### [CONCERN] Walkthrough steps 2–5 have no skip rule
 
-Task 17 says `build_probe` should resolve the project root "same rule as graph detection; reuse the function from `graph.py`." Task 11 describes the root rule inline but never names a function. Task 13's skill detection also needs the project root as an input. Task 11 should define `project_root(cwd: Path) -> Path` as a named function, and Tasks 13 and 17 should reference it by that name.
+Steps 2–5 need an interactive Claude Code session to run slash commands. Only steps 6 (Codex) and 7 (`/plugin`) say what to record when a step cannot run. Add the same rule for steps 2–5, for example "record 'skipped: <reason>' and continue". Otherwise the agent either fabricates results or stalls. Step 1 also writes into the real `~/.claude` and `~/.agents`, which should be called out.
 
-### [CONCERN] Contract types `analysis_skill_installed` and `understand_plugin_installed` as `bool`, but the design emits `null`
+### [CONCERN] Outside-any-repo exit 0 is only verified by hand
 
-The contract table types both fields as `bool` (lines 47 and 50). Design D7 and D8 and Task 10 return `null` on unexpected dispatcher or plugin-file shapes, and the contract's "Null means unknown" clause (line 58) supports that. Task 18 follows the table, so its test cannot allow `null` for these two fields. With a temporary HOME both are `false`, so the test passes and the `null` path is never checked against the contract. Resolve the type with CF before code (for example, change the table to `bool or null`), because it changes what CF reads. Task 18 should then assert the nullable form.
+The success criterion "`sq probe --json` ... exits 0 ... outside any repository" has no automated test. Task 5 covers non-repo at the graph-function level only, and Task 9's CLI cases do not include it. Add a `CliRunner` case that runs from a `tmp_path` outside any repo (`monkeypatch.chdir`) and asserts exit 0 with one JSON line on stdout.
 
-### [CONCERN] Plugin-detection tests use only synthetic JSON for an undocumented file
+### [CONCERN] Task-level deviations from the design are not recorded in the design
 
-Task 16's cases all use hand-written JSON. AGENTS.md's parsing rules require the fixture to match the format the parser consumes in production. Design D8 says `~/.claude/plugins/installed_plugins.json` is an undocumented Claude Code internal file. Add a case that uses a real `installed_plugins.json` from this machine (redacted), and make Task 16 record which Claude Code version produced it.
+Several choices appear only in the task file:
+- Task 6 uses `project root / local_root` instead of `resolve_root(local=True)` (D7). This is the right fix, since `resolve_root(local=True)` reads `Path.cwd()`, but D7 still says the opposite.
+- Task 10 adds `docs/COMMANDS.md` as the "CLI reference" (D4 names the README).
+- Task 2 edits the Codex frontmatter `description` and the Input-parsing sentence, which the dispatcher list in D1–D2 does not name.
 
-### [CONCERN] Task 0 omits the worktree registration check
+Amend the design to match, so the design remains the source of truth for later reviewers and implementers.
 
-The session is a git worktree. AGENTS.md requires `cf worktree list --json` to show an entry whose `worktreePath` matches the checkout root. If it does not, the agent must stop and ask the PM before starting. Task 0 should include that check as its first step.
+### [CONCERN] Numbered sub-steps have no checkboxes
 
-### [CONCERN] Task count is high for a 2/5 slice
+The project convention requires `[ ]` on every item and subitem. Numbered sub-steps in Tasks 2 (lines 107–111, 115–123), 4 (146–158), 6 (220–223, 225–230), and 7 (239–244) have no checkbox, so task-checker cannot track them. Convert each to `- [ ]`.
 
-The file has 25 tasks for a slice the design rates 2/5. Several are single-step tasks that can merge without losing a commit checkpoint:
-- Task 0 into Task 1.
-- Tasks 7 and 8 into one task that applies the same paragraph to both copies.
-- Task 10 into Task 11 (report types are needed only by the graph module and the builder).
-- Task 16 into Task 14 (same test file, same fixtures).
-- Task 20 into Task 19 (test with implementation).
-- Task 22 into Task 21.
+### [NOTE] Test granularity could be trimmed
 
-That brings it to about 18 tasks without losing any test-with-implementation pairing.
+Task 1's seven parser cases go beyond what the criteria need. The drift test's set-equality check exercises the parser end to end, so keeping the whitespace, case-folding, and real-file cases is enough. Task 3 is a single assertion and could be folded into Task 2, which already edits `tests/skills/`. Both are optional.
 
-### [NOTE] Task 13 changes the design's `resolve_root(local=True)` approach
+### [NOTE] Effort label is stale after folding in the probe
 
-Design D7 says to use `DELIVERIES[target].resolve_root(local=)`. Task 13 instead joins `project_root` with `local_root`. The reason is sound: `resolve_root(local=True)` uses `Path.cwd()` (`src/squadron/skills/targets.py:132`). The deviation is disclosed in the task, but D7 should be amended to match so the design and tasks do not diverge.
+The design still reads "Relative Effort: 2/5", but the slice now adds six source modules, seven test files, and a CLI command. Update the label so planning reflects the actual size.
 
-### [NOTE] Task 21 puts the `sq probe` CLI reference in `docs/COMMANDS.md`
+### [NOTE] Unpinned `curl | bash` install is documented in three places
 
-Scope item 5 says "one line for `sq probe` in the CLI reference." The task file reinterprets that as a new `## probe` entry in `docs/COMMANDS.md` plus a README pointer. The reinterpretation is disclosed at the top of the task file (lines 45–47), so this is acceptable.
-
-### [NOTE] Coverage checks that passed
-
-- Every functional, technical, and integration criterion maps to a task or to a walkthrough step (Tasks 4–9, 12–14, 18, 20, 23, 24).
-- The architecture amendment exists in `360-arch` (lines 59, 130, 403, 428).
-- The 365 design already names #247 as the `/sq:overview` owner (`365-slice.overview-command.md:373`), so D4's amendment needs no task.
-- `DELIVERIES[...].local_root` exists (`targets.py:117`), so Task 13's reference is accurate.
-- Test-with pairings are in order, and the probe-related tests follow their implementations.
-- No merge appears as a task (Phase 7 rule respected).
+The Codex install runs a script fetched from `main` through `bash`. The design acknowledges this and chose it on purpose, so no change is required. Flag it for the PM, because the remote script can change without review.
 
 ### Run Digest
 
-- Response length: 6483 chars
+- Response length: 5569 chars
 - Response is newline-free: no
 - Tool calls made: 5
 - Tool calls failed: 0
@@ -153,12 +137,12 @@ Scope item 5 says "one line for `sq probe` in the CLI reference." The task file 
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 6
-- Tokens — prompt / cached / cache write / completion / reasoning: 193287 / 90089 / 103192 / 17883 / not computed
-- Duration: 87.2 s
+- Tokens — prompt / cached / cache write / completion / reasoning: 190900 / 92566 / 98328 / 16933 / not computed
+- Duration: 83.3 s
 - Cost: $0.03 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 10
+- Finding-shaped matches — whole response: 9
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 10
-- Finding-shaped matches — surviving validation: 10
+- Finding-shaped matches — in findings section: 9
+- Finding-shaped matches — surviving validation: 9

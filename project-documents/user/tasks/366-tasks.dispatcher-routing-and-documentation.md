@@ -13,15 +13,16 @@ projectState: 361–363 complete, 364 in progress. 366 design committed (4b3afa9
 dateCreated: 20261020
 dateUpdated: 20261020
 status: not_started
-turns: 18
-promptTokens: 1003009
-cachedTokens: 930429
-cacheWriteTokens: 72548
-completionTokens: 18882
-durationSeconds: 170.7
-costUsd: 1.144545
-usageRounds: 1
-pricedRounds: 1
+turns: 28
+promptTokens: 1926039
+cachedTokens: 1824556
+cacheWriteTokens: 101433
+completionTokens: 32118
+durationSeconds: 278.5
+costUsd: 1.819242
+usageRounds: 2
+pricedRounds: 2
+revision_number: 1
 ---
 
 # Tasks: Dispatcher Routing and Documentation
