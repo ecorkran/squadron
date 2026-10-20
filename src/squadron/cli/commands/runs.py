@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import socket
 from datetime import UTC, datetime, timedelta
 
@@ -17,6 +18,7 @@ from squadron.cli.run_views import (
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.run_listing import list_run_summaries
 from squadron.pipeline.run_liveness import LivenessAssessment, assess_liveness
+from squadron.pipeline.run_outcome import run_outcome
 from squadron.pipeline.run_prune import (
     DEFAULT_CATEGORIES,
     DURATION_FORM,
@@ -78,11 +80,19 @@ def wait(
         "An orphaned run ends the wait; a stale one (heartbeat overdue, process "
         "not provably gone) keeps waiting, so this is the bound for that case.",
     ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print the outcome as JSON on stdout (status, checkpoint, failure). "
+        "Exit codes are unchanged.",
+    ),
 ) -> None:
     state_manager = StateManager()
     result = wait_for_run(state_manager, run_id, timeout=timeout)
     outcome = result.outcome
-    if outcome in _STATUS_PANEL_OUTCOMES and result.state is not None:
+    if as_json:
+        typer.echo(json.dumps(run_outcome(run_id, outcome, result.state), indent=2))
+    elif outcome in _STATUS_PANEL_OUTCOMES and result.state is not None:
         render_run_status(result.state)
     code = WAIT_EXIT_CODES[outcome]
     if outcome is WaitOutcome.ORPHANED:

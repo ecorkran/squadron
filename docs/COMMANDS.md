@@ -570,12 +570,27 @@ sq runs list [OPTIONS]
 Block until a run leaves `running`, print its status, and exit with a code per outcome: 0 completed, 1 failed, 3 paused, 4 timed out, 5 run not found, 6 state file unreadable, 7 unknown status, 8 orphaned (the run's process is gone).
 
 ```
-sq runs wait <RUN_ID> [--timeout SECONDS]
+sq runs wait <RUN_ID> [--timeout SECONDS] [--json]
 ```
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--timeout` | float | no | none (wait forever) | Give up after SECONDS. A `stale` run keeps the wait going, so this is its bound. `0` reads the state once and returns: a non-blocking status check, exit 4 while the run is still running |
+| `--json` | flag | no | off | Print the outcome document below on stdout instead of the status panel. Exit codes are unchanged; works with `--timeout 0` |
+
+**`--json` outcome document.** A stable contract for launchers; the run-state file is internal and may change. Keys may be added. A key that does not apply or can't be determined is `null`; never read it as a default.
+
+| Key | Meaning |
+|---|---|
+| `run_id` | The run asked about |
+| `outcome` | The wait outcome, one-to-one with the exit code: `completed`, `failed`, `paused`, `timed_out` (still running), `not_found`, `unreadable`, `unknown_status`, `orphaned`. With `not_found` or `unreadable`, `run_id` and `outcome` are the only keys |
+| `status` | The status the run recorded: `running`, `completed`, `paused`, `failed` |
+| `pipeline` | Pipeline name |
+| `started_at`, `updated_at` | ISO 8601 timestamps; `updated_at` gives a pause's age |
+| `checkpoint` | When paused, else `null`: `kind` (`loop_exhausted`, `interactive_checkpoint`, `awaits_human`, `other`), `step`, `step_type`, `is_loop`, `round` and `max_rounds` (loops only), `verdict` (last review), `review_file` (that review's artifact path), `reason`, `paused_at` |
+| `failure` | When failed, else `null`: `kind` (`provider_error`, `stall`, `artifact_missing`, `cost_cap`, or `null` when untagged), `step`, `message` |
+
+`--decision accept` on resume needs `checkpoint.is_loop` to be true. No prompt text is included.
 
 ## runs prune
 
