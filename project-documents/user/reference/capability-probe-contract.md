@@ -30,9 +30,10 @@ rules below breaks Context Forge.
 {
   "probe_version": 1,
   "sq_version": "string",
-  "surfaces": ["claude-code"],
-  "analysis_skill": {"installed": true, "entry": "/sq:analysis understand"},
-  "understand_plugin": {"installed": true},
+  "surfaces": {
+    "claude-code": {"analysis_skill_installed": true, "entry": "/sq:analysis understand", "understand_plugin_installed": true},
+    "codex": {"analysis_skill_installed": true, "entry": "analysis-understand", "understand_plugin_installed": false}
+  },
   "graph": {"present": true, "path": "string or null", "commit": "string or null", "commits_behind": 0},
   "baseline": {"available": false}
 }
@@ -42,10 +43,10 @@ rules below breaks Context Forge.
 |---|---|---|
 | `probe_version` | int | Version of this contract. |
 | `sq_version` | string | Installed squadron version. |
-| `surfaces` | list of string | Agent surfaces where squadron's brownfield path runs. CF takes its own path on any surface not listed. |
-| `analysis_skill.installed` | bool | The analysis skill pack, including the understand skill, is installed. |
-| `analysis_skill.entry` | string | The command an agent runs to start squadron's path. |
-| `understand_plugin.installed` | bool | The `understand-anything` plugin is installed. |
+| `surfaces` | object | One entry per agent surface where squadron's brownfield path can run, keyed by the values below. Every supported surface is always present. The agent finds its own surface; on a surface not listed, CF takes its own path. |
+| `surfaces.<s>.analysis_skill_installed` | bool | Squadron's analysis pack, including the understand skill, is installed for that surface. |
+| `surfaces.<s>.entry` | string | How an agent on that surface starts squadron's path: a slash command on `claude-code`, the skill name on `codex`. |
+| `surfaces.<s>.understand_plugin_installed` | bool | The `understand-anything` plugin is installed for that surface. |
 | `graph.present` | bool | `.understand-anything/knowledge-graph.json` exists in the project. |
 | `graph.path` | string or null | Path to the graph file. |
 | `graph.commit` | string or null | The commit the graph was built from. |
@@ -59,9 +60,12 @@ rules below breaks Context Forge.
 
 | Value | Meaning |
 |---|---|
-| `claude-code` | Claude Code. The analysis skills install as Claude Code commands, and `understand-anything` is a Claude Code plugin. |
+| `claude-code` | Claude Code. Squadron's analysis pack installs as commands under `~/.claude/commands/` (`--ide claude`); `understand-anything` installs from its Claude Code plugin marketplace. Run end to end on squadron (analyses 943–945). |
+| `codex` | Codex and other runtimes that read `~/.agents/skills/` (`--ide agents`, aliases `codex`, `openai`). Squadron's analysis pack installs there as `analysis-understand`; `understand-anything` documents Codex support (`install.sh codex`, same directory). Not yet run end to end. |
 
-This list is closed. CF compares against it as a constant.
+Not supported: Copilot and Cursor, because squadron has no install target for them (`CommandTarget` omits both), even though `understand-anything` supports them. There is no plain CLI path; the analysis skills run inside an agent.
+
+CF tests field names, not surface values. A new surface is additive (see Versioning).
 
 ## Versioning
 
