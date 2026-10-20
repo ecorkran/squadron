@@ -15,7 +15,7 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 - Branch `366-slice.dispatcher-routing-and-documentation`, one commit per task; not merged (Phase 7). Full suite: 7523 passed, 4 skipped; ruff and pyright clean.
 - Shipped: `dispatcher_skills()` parser and drift test; `understand` routed through `/sq:analysis` and `$sq-analysis`; install guidance in both skill copies; `sq probe [--json]` (package `squadron.probe`, contract test reads the example in `capability-probe-contract.md`); README, `docs/COMMANDS.md`, CHANGELOG.
-- Walkthrough: steps 1, 7, 8 verified. Steps 2–5 not run: the session's `/sq:analysis` was the pre-366 dispatcher loaded at start; needs a fresh Claude Code session. Step 6 not run: `codex exec` returns 400 for its configured default model. Both are recorded under Task 11 and are still open.
+- Walkthrough: steps 1, 2, 6, 7, 8 verified; steps 3–5 verified running the skill directly. Open defect: on Claude Code `/sq:analysis understand` cannot delegate, because `understand.md` has `disable-model-invocation: true` and the Skill tool refuses it (`tech-debt-audit.md` has the same flag but an HTML comment above its frontmatter keeps it from being parsed). Codex delegation works. Options: drop the flag from `understand.md` and its `openai.yaml` twin (parity test in `test_install_commands.py`), or change the routing. PM decision pending.
 - Walkthrough gap fixed: the Codex dispatcher stays stale until `sq install-commands --ide codex`; added to step 1. That command also writes `~/.codex/rules/squadron.rules`.
 - Probe fields unchanged from the contract. After merge, tell cf, sq-cf and ai-project-guide-70 that `sq probe` exists, and cf about the contract table typing (see below).
 

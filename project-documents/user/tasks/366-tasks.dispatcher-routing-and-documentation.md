@@ -340,12 +340,21 @@ revision_number: 2
   - [x] Record each step's outcome as a one-line sub-bullet under this task.
     - Step 1: passed. Claude and Codex installs wrote the expected files. Gap found: the Codex
       dispatcher stays stale until `sq install-commands --ide codex`; added to the walkthrough.
-    - Steps 2–5: skipped: this session's `/sq:analysis` is the pre-366 dispatcher loaded at session
-      start (Valid skills lists only `tech-debt-audit`); the installed file on disk is correct
-      (`Valid skills: tech-debt-audit, understand`) and loads in a fresh session.
-    - Step 6: skipped: Codex 0.146.1 is installed but `codex exec` fails with a 400 (its configured
-      default model is not supported on this ChatGPT account); the installed Codex dispatcher file
-      lists `understand`.
+    - Steps 2–5 ran in fresh headless sessions (`claude -p`, writes denied, stdin closed).
+      Step 2 passed: `/sq:analysis` and `/sq:analysis nope` print usage listing both skills.
+      Steps 3–5 passed when the skill is run directly (`/analysis:understand`): `nope` is rejected
+      with the valid flows; a scratch repo stops at "graph absent" naming the checked path,
+      `/understand` and the two `/plugin` commands; in the squadron checkout both `understand`
+      and `understand concept` pass preflight and stop at the staleness decision (1739 commits
+      behind, consistent with the probe) before any write.
+    - **Failed: dispatcher delegation on Claude Code.** `/sq:analysis understand nope` ends with
+      the Skill tool error "cannot be used with Skill tool due to disable-model-invocation": the
+      dispatcher cannot invoke `understand.md`, which carries `disable-model-invocation: true`.
+      `tech-debt-audit.md` has the same flag but an HTML comment above its frontmatter, so the flag
+      is not parsed and its delegation works. Needs a PM decision (see DEVLOG).
+    - Step 6 passed: `codex exec -m gpt-6-luna` (Codex's configured default `gpt-6.1-sol` returns a
+      400 on this account) delegates `$sq-analysis understand nope` to `analysis-understand`, which
+      reports the flow unrecognized.
     - Step 7: passed. In the squadron checkout `graph.commit` equals `meta.json` `gitCommitHash` and
       `commits_behind` 1736 equals `git rev-list --count`. `understand_plugin_installed` true matches
       the `understand-anything@understand-anything` key in `installed_plugins.json` (read by hand;
