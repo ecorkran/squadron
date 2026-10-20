@@ -262,24 +262,24 @@ revision_number: 2
   - [x] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
   - [x] Commit: `feat: add probe plugin detection`
 
-- [ ] **Task 8: `build_probe` and the contract test** (Effort: 2/5)
-  - [ ] Create `src/squadron/probe/__init__.py` exporting `PROBE_VERSION = 1` and
+- [x] **Task 8: `build_probe` and the contract test** (Effort: 2/5)
+  - [x] Create `src/squadron/probe/__init__.py` exporting `PROBE_VERSION = 1` and
     `build_probe(cwd: Path) -> ProbeReport` (D6, D10). It calls `project_root(cwd)` once, builds
     `surfaces` from `SURFACES` keyed by each spec's contract key, `graph` from `probe_graph(root)`,
     `baseline` as `{"available": False}`, and `sq_version` from `squadron.__version__`.
-  - [ ] Create `tests/probe/test_contract.py` (D11). Read
+  - [x] Create `tests/probe/test_contract.py` (D11). Read
     `project-documents/user/reference/capability-probe-contract.md`, extract the ```` ```json ````
     block under "## Shape", parse it.
-  - [ ] Parse the field table: rows whose Type column contains `or null` name the nullable fields.
+  - [x] Parse the field table: rows whose Type column contains `or null` name the nullable fields.
     Fail the test if no such rows are found (a silent empty set would pass everything).
-  - [ ] Assert `build_probe(tmp_path)` output has exactly the example's keys at every level, and each
+  - [x] Assert `build_probe(tmp_path)` output has exactly the example's keys at every level, and each
     value's JSON type matches the example's, allowing `null` for nullable fields. Treat example
     values of `"string or null"` as type string.
-  - [ ] Assert `probe_version == PROBE_VERSION == 1` and the `entry`, `concept`, `graph_build`
+  - [x] Assert `probe_version == PROBE_VERSION == 1` and the `entry`, `concept`, `graph_build`
     values equal the example's exactly.
-  - [ ] **Success:** passes; renaming a key in the contract's example (try once by hand, then
+  - [x] **Success:** passes; renaming a key in the contract's example (try once by hand, then
     restore) makes it fail.
-  - [ ] Commit: `feat: add build_probe and contract test`
+  - [x] Commit: `feat: add build_probe and contract test`
 
 - [ ] **Task 9: The `sq probe` command** (Effort: 1/5)
   - [ ] Create `src/squadron/cli/commands/probe.py` with a `probe` Typer command and a `--json` flag

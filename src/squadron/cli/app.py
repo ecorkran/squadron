@@ -24,6 +24,7 @@ from squadron.cli.commands.models import models_app
 from squadron.cli.commands.pipelines import pipelines_app
 from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.pr import pr_app
+from squadron.cli.commands.probe import probe
 from squadron.cli.commands.replay import replay_app
 from squadron.cli.commands.review import review_app
 
@@ -71,6 +72,7 @@ app.add_typer(pr_app, name="pr")
 app.add_typer(stats_app, name="stats")
 app.add_typer(replay_app, name="replay")
 app.command("run")(run_command)
+app.command("probe")(probe)
 app.command("doctor")(doctor)
 app.command("setup")(setup)
 app.command("install-commands")(install_commands)
