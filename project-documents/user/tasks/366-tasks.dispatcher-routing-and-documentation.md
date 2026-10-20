@@ -73,32 +73,32 @@ revision_number: 2
 
 ### Setup
 
-- [ ] **Task 0: Create the slice branch** (Effort: 1/5)
-  - [ ] Confirm this worktree is registered: `cf worktree list --json` has an entry whose
+- [x] **Task 0: Create the slice branch** (Effort: 1/5)
+  - [x] Confirm this worktree is registered: `cf worktree list --json` has an entry whose
     `worktreePath` equals `git rev-parse --show-toplevel`. If not, write `BLOCKED:` under this task
     and stop; the target `cf` returns belongs to the primary checkout.
-  - [ ] Read `cf config get git.integration_branch`; its value (or `main` if empty) is the target.
-  - [ ] `git checkout -b 366-slice.dispatcher-routing-and-documentation {target}`, or switch to it
+  - [x] Read `cf config get git.integration_branch`; its value (or `main` if empty) is the target.
+  - [x] `git checkout -b 366-slice.dispatcher-routing-and-documentation {target}`, or switch to it
     if it exists.
-  - [ ] **Success:** `git branch --show-current` prints
+  - [x] **Success:** `git branch --show-current` prints
     `366-slice.dispatcher-routing-and-documentation`.
 
 ### Dispatcher parser and routing
 
-- [ ] **Task 1: Implement and test `dispatcher_skills()`** (Effort: 1/5)
-  - [ ] Create `src/squadron/skills/dispatcher.py` with
+- [x] **Task 1: Implement and test `dispatcher_skills()`** (Effort: 1/5)
+  - [x] Create `src/squadron/skills/dispatcher.py` with
     `dispatcher_skills(text: str) -> set[str] | None` (D5).
-  - [ ] Find the first line whose stripped, case-folded text starts with `valid skills:`. Return every
+  - [x] Find the first line whose stripped, case-folded text starts with `valid skills:`. Return every
     backtick-quoted token on that line as a set; separators (commas, `and`, spaces) are ignored.
     Return `None` when no such line exists.
-  - [ ] Module docstring says it reads a dispatcher's `Valid skills:` line and that both the drift
+  - [x] Module docstring says it reads a dispatcher's `Valid skills:` line and that both the drift
     test and the probe use it.
-  - [ ] Create `tests/skills/test_dispatcher.py`. Cases: lowercase `valid skills:` with leading
+  - [x] Create `tests/skills/test_dispatcher.py`. Cases: lowercase `valid skills:` with leading
     whitespace and both `,` and `and` separators; no line → `None`.
-  - [ ] One case reads the real `commands/sq/analysis.md` and asserts `tech-debt-audit` is in the
+  - [x] One case reads the real `commands/sq/analysis.md` and asserts `tech-debt-audit` is in the
     result (real-world input, per the parsing rules).
-  - [ ] **Success:** `pytest tests/skills/test_dispatcher.py` passes; pyright clean.
-  - [ ] Commit: `feat: add dispatcher valid-skills parser`
+  - [x] **Success:** `pytest tests/skills/test_dispatcher.py` passes; pyright clean.
+  - [x] Commit: `feat: add dispatcher valid-skills parser`
 
 - [ ] **Task 2: Drift test and dispatcher routing** (Effort: 2/5)
   - [ ] Create `tests/skills/test_dispatcher_drift.py` (D5). Locate files relative to the
