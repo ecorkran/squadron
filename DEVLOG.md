@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261020
 
+### Release 0.23.5
+
+- **Contents:** the 0.23.4 changes. 0.23.4's tag CI failed on one test (`test_run_id_is_listed_in_help`): CI forces colour, so Rich styled `--run-id` across ANSI codes and the substring check missed it. The test now checks the option's `hidden` flag on the command. Nothing was published for 0.23.4.
+
 ### Release 0.23.4
 
 - **Contents:** public `sq run --run-id` plus a `run_id=` launch line (#243); `sq runs wait --json` outcome document with checkpoint, failure and reviews detail (#244); branch `when:` and a `merge` param on the code pipelines (#245); `--decision` / `--instructions` on a plain `--resume` (#246); tests pinning `--timeout 0` and non-interactive resume; haiku alias → claude-haiku-5-5; probe contract and 440/cf-260 planning docs. Requested by Amoeba (its S9–S13).

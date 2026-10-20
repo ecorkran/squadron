@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.5] - 20261020
+
+- First published release of the 0.23.4 changes below; 0.23.4 was tagged but never reached PyPI.
+
 ## [0.23.4] - 20261020
 
 ### Added
