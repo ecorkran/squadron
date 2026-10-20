@@ -111,6 +111,15 @@ class TestBundledAnalysisPack:
         assert (commands_dir / "analysis" / "tech-debt-audit.md").exists()
         assert "tech-debt-audit.md" in result.files_written
 
+    def test_install_analysis_pack_creates_understand(self, tmp_path: Path) -> None:
+        commands_dir = tmp_path
+        entry = PackEntry(source="bundled", prefix="analysis")
+
+        result = install_pack("analysis", entry, commands_dir)
+
+        assert (commands_dir / "analysis" / "understand.md").exists()
+        assert "understand.md" in result.files_written
+
     def test_install_analysis_pack_result_fields(self, tmp_path: Path) -> None:
         commands_dir = tmp_path
         entry = PackEntry(source="bundled", prefix="analysis")
