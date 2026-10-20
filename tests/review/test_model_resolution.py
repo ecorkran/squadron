@@ -137,7 +137,7 @@ class TestModelCLIFlag:
             raw_output="## Summary\nPASS\n",
             template_name="code",
             input_files={"cwd": "."},
-            model="claude-haiku-4-5-20251001",
+            model="claude-haiku-5-5",
         )
         result = cli_runner.invoke(
             app,
@@ -146,7 +146,7 @@ class TestModelCLIFlag:
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
         # Alias "haiku" resolves to full model ID
-        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
+        assert call_kwargs["model"] == "claude-haiku-5-5"
 
     def test_config_default_model_resolves_alias(
         self,
