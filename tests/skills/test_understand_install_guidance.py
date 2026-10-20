@@ -21,6 +21,7 @@ INSTALL_COMMANDS = [
 GUIDANCE_FILES = [
     REPO_ROOT / "commands" / "analysis" / "understand.md",
     REPO_ROOT / "commands" / "analysis" / "agents" / "analysis-understand" / "SKILL.md",
+    REPO_ROOT / "README.md",
 ]
 
 

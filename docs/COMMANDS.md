@@ -645,6 +645,20 @@ sq shutdown --all
 | `AGENT_NAME` | string | no | Agent to shut down |
 | `--all` | flag | no | Shutdown all agents |
 
+## probe
+
+Report which brownfield capabilities are available here: whether the analysis skill and the `understand-anything` plugin are installed for Claude Code and Codex, and the state of the project's knowledge graph.
+
+```
+sq probe [--json]
+```
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `--json` | flag | no | Print one compact JSON line instead of indented JSON |
+
+A field the probe cannot determine is `null`, with a warning on stderr. Exit codes: `0` whenever the probe can report, including when everything is absent; `1` only when the probe itself fails. Fields are defined in the [capability probe contract](../project-documents/user/reference/capability-probe-contract.md).
+
 ## events
 
 Run and inspect user-definable actions on supported events (`commit`,

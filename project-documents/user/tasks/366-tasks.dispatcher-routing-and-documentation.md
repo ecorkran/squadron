@@ -281,22 +281,22 @@ revision_number: 2
     restore) makes it fail.
   - [x] Commit: `feat: add build_probe and contract test`
 
-- [ ] **Task 9: The `sq probe` command** (Effort: 1/5)
-  - [ ] Create `src/squadron/cli/commands/probe.py` with a `probe` Typer command and a `--json` flag
+- [x] **Task 9: The `sq probe` command** (Effort: 1/5)
+  - [x] Create `src/squadron/cli/commands/probe.py` with a `probe` Typer command and a `--json` flag
     (D6). Register it in `src/squadron/cli/app.py` as `app.command("probe")(probe)`.
-  - [ ] `--json`: `json.dumps(report, separators=(",", ":"))` on one line. Without: `indent=2`.
-  - [ ] This is a process boundary: wrap `build_probe` so any exception prints the error to stderr
+  - [x] `--json`: `json.dumps(report, separators=(",", ":"))` on one line. Without: `indent=2`.
+  - [x] This is a process boundary: wrap `build_probe` so any exception prints the error to stderr
     and exits 1 with nothing on stdout. Exit 0 otherwise. WARNING log lines go to stderr, never
     stdout.
-  - [ ] Create `tests/cli/test_probe.py` using `CliRunner` (see `tests/cli/conftest.py`). Cases:
+  - [x] Create `tests/cli/test_probe.py` using `CliRunner` (see `tests/cli/conftest.py`). Cases:
     `--json` stdout is one line that parses as JSON and exits 0; without `--json` output is
     multi-line and parses to the same object; `build_probe` patched to raise → exit 1, stdout empty,
     error on stderr; a run that logs a WARNING keeps stdout pure JSON (assert on `result.stdout`, not
     `result.output`, which can interleave stderr); run from a non-repository
     temp directory (`monkeypatch.chdir`) → exit 0 and `graph.commits_behind` null.
-  - [ ] **Success:** `pytest tests/cli/test_probe.py` passes; `.venv/bin/sq probe --json | jq .`
+  - [x] **Success:** `pytest tests/cli/test_probe.py` passes; `.venv/bin/sq probe --json | jq .`
     parses; `sq --help` lists `probe`.
-  - [ ] Commit: `feat: add sq probe command`
+  - [x] Commit: `feat: add sq probe command`
 
 ### Documentation
 
