@@ -31,8 +31,8 @@ rules below breaks Context Forge.
   "probe_version": 1,
   "sq_version": "string",
   "surfaces": {
-    "claude-code": {"analysis_skill_installed": true, "entry": "/sq:analysis understand", "understand_plugin_installed": true, "graph_build": "/understand"},
-    "codex": {"analysis_skill_installed": true, "entry": "analysis-understand", "understand_plugin_installed": false, "graph_build": "understand"}
+    "claude-code": {"analysis_skill_installed": true, "entry": "/sq:analysis understand", "concept": "/sq:analysis understand concept", "understand_plugin_installed": true, "graph_build": "/understand"},
+    "codex": {"analysis_skill_installed": true, "entry": "analysis-understand", "concept": "analysis-understand concept", "understand_plugin_installed": false, "graph_build": "understand"}
   },
   "graph": {"present": true, "path": "string or null", "commit": "string or null", "commits_behind": 0},
   "baseline": {"available": false}
@@ -46,6 +46,7 @@ rules below breaks Context Forge.
 | `surfaces` | object | One entry per agent surface where squadron's brownfield path can run, keyed by the values below. Every supported surface is always present. The agent finds its own surface; on a surface not listed, CF takes its own path. |
 | `surfaces.<s>.analysis_skill_installed` | bool | Squadron's analysis pack, including the understand skill, is installed for that surface. |
 | `surfaces.<s>.entry` | string | How an agent on that surface starts squadron's path: a slash command on `claude-code`, the skill name on `codex`. |
+| `surfaces.<s>.concept` | string | How an agent on that surface runs squadron's concept step (slice 363), which writes `000-concept.{project}.md`. It is the same skill as `entry` with the `concept` flow argument; `entry` alone runs only the comprehension analysis and never writes a concept. |
 | `surfaces.<s>.understand_plugin_installed` | bool | The `understand-anything` plugin is installed for that surface: its plugin on `claude-code`, its `understand` skill in `~/.agents/skills/` on `codex`. |
 | `surfaces.<s>.graph_build` | string | How an agent on that surface builds or refreshes the graph with `understand-anything`: `/understand` on `claude-code`, the skill name `understand` on `codex`. `entry` never builds the graph; it only reads one, so a missing or stale graph is built with this first. |
 | `graph.present` | bool | `.understand-anything/knowledge-graph.json` exists in the project. |
@@ -70,8 +71,9 @@ CF tests field names, not surface values. A new surface is additive (see Version
 
 ## Versioning
 
-**Revision note.** v1 was revised twice before any probe existed (998d8944: `surfaces` became an
-object and absorbed `analysis_skill` and `understand_plugin`; then `graph_build` was added). No
+**Revision note.** v1 was revised before any probe existed (998d8944: `surfaces` became an
+object and absorbed `analysis_skill` and `understand_plugin`; then `graph_build` and `concept`
+were added). No
 output in the earlier shapes was ever produced, so v1 means the shape in this document.
 
 - Adding a new `surfaces` value or a new optional field is additive. It keeps `probe_version` and is
@@ -80,6 +82,12 @@ output in the earlier shapes was ever produced, so v1 means the shape in this do
   bumps `probe_version`.
 - If staleness ever means something other than "behind HEAD", it gets its own field. `commits_behind`
   does not change meaning.
+
+## Shipping order
+
+The `claude-code` values route through `/sq:analysis`, which reaches the understand skill only once
+slice 366 lands; today the installed command is `/analysis:understand`. The probe ships after 366,
+so it never reports an entry that does not route.
 
 ## Not in the probe
 
