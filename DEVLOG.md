@@ -11,6 +11,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261020
 
+### Slice 366: Dispatcher Routing and Documentation — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md` (`cf validate design` passes).
+- The understand skill is already in `commands/analysis/` and gets installed. The slice is now routing (`/sq:analysis` and Codex `$sq-analysis`), missing-graph install guidance, README, and a dispatcher/pack drift test.
+- Key decisions: route both surfaces (D1). Pass flow arguments through without validating them (D2). Missing-graph guidance is conditional wording and does not detect the plugin, because `~/.claude/plugins/installed_plugins.json` is an undocumented Claude Code internal file (D3). README covers capability (a) only and `/sq:overview` stays with 365 (D4).
+- Must land before the capability probe and CF 260's handoff slice (probe contract Shipping Order).
+- Next: task breakdown (Phase 5).
+
 ### Initiative 400: Code Quality Measurement — Architecture Complete (Phase 2)
 
 - Architecture: `project-documents/user/architecture/400-arch.code-quality-measurement.md`. Initiatives 400, 420 and 440 were added to the initiative plan on 20261019; context-forge's counterpart to 440 is its initiative 260.

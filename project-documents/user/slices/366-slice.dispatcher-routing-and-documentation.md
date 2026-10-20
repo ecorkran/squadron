@@ -1,0 +1,266 @@
+---
+docType: slice-design
+slice: dispatcher-routing-and-documentation
+project: squadron
+parent: 360-slices.document-intelligence.md
+dependencies: [361]
+interfaces: []
+dateCreated: 20261020
+dateUpdated: 20261020
+status: not_started
+---
+
+# Slice Design: Dispatcher Routing and Documentation
+
+## Overview
+
+The understand skill (`commands/analysis/understand.md`, built by 361–364) is installed today but
+reachable only as `/analysis:understand` on Claude Code and `$analysis-understand` on Codex. The
+`/sq:analysis` dispatcher, the surface users already know, still lists `tech-debt-audit` as its only
+skill. This slice routes `understand` through both dispatchers, makes the missing-graph stop tell the
+user how to get the `understand-anything` plugin, and documents the capability and its prerequisite
+in the README.
+
+The skill file itself already exists in `commands/analysis/`, and the installer already copies it.
+The slice plan's "add the skill file" step is therefore done; this slice adds a test that pins it.
+
+## Value
+
+- Capability (a) becomes reachable from `/sq:analysis`, where users look for analysis skills.
+- Context Forge 260's handoff slice and the capability probe (`capability-probe-contract.md`)
+  advertise `/sq:analysis understand` as the `claude-code` entry. The contract's Shipping Order
+  requires this slice to land first so the probe never reports an entry that does not route.
+- A user with no graph and no plugin gets install instructions instead of a dead end.
+
+## Technical Scope
+
+**Included:**
+
+1. Claude dispatcher `commands/sq/analysis.md`: add `understand` to the valid-skills line, the usage
+   block, and a new `## Skill: understand` section.
+2. Codex dispatcher `commands/agents/sq-analysis/SKILL.md`: the same three edits, in Codex
+   invocation syntax (`$sq-analysis understand`, delegating to `$analysis-understand`).
+3. Understand skill, both copies (`commands/analysis/understand.md`,
+   `commands/analysis/agents/analysis-understand/SKILL.md`): replace the "Absent" validation
+   paragraph that defers plugin reporting to this slice with the install guidance in D3.
+4. Claude copy line 16: "When invoked via `/understand`" names the upstream plugin's command, not
+   this skill. Change it to `/analysis:understand` (or `/sq:analysis understand`).
+5. README: a "Codebase understanding" subsection under "Skill packs (`sq skills`)" (D4).
+6. Tests (D5): installer installs `understand.md`; both dispatchers' valid-skills lines match the
+   pack's skill files.
+7. CHANGELOG bullet.
+
+**Excluded:**
+
+- Detecting whether the plugin is installed (D3). The capability probe owns detection.
+- README text for `/sq:overview`. That is slice 365's, written when 365 ships (D4).
+- Any installer, manifest, or CLI change. None is needed.
+- Changes to flow behavior inside the understand skill.
+
+## Dependencies
+
+### Prerequisites
+
+- 361 (complete): the understand skill and its graph contract exist.
+- 362, 363 (complete) and 364 (in progress) add flows. The dispatcher passes the flow argument
+  through unchanged, so 366 does not wait on 364.
+
+### Interfaces Required
+
+- 340's dispatcher convention: the first word of `$ARGUMENTS` is the skill name and the rest passes
+  through.
+- 340's installer: `_install_prefix()` copies every `*.md` in `commands/analysis/`, and the Codex
+  target copies every `commands/analysis/agents/*/SKILL.md`.
+- The understand skill's flow selection: no argument or `comprehension`, `concept`, `candidates`.
+
+## Architecture
+
+### Component Structure
+
+```
+/sq:analysis understand [flow]         $sq-analysis understand [flow]
+        │  commands/sq/analysis.md             │  commands/agents/sq-analysis/SKILL.md
+        ▼                                      ▼
+/analysis:understand [flow]            $analysis-understand [flow]
+        │  commands/analysis/understand.md     │  commands/analysis/agents/analysis-understand/SKILL.md
+        ▼                                      ▼
+   Preflight (graph contract) → Flow selection → Flow
+```
+
+The direct entries (`/analysis:understand`, `$analysis-understand`) keep working. The dispatcher is
+an extra route, not a replacement.
+
+### Data Flow
+
+Arguments only. The dispatcher strips the skill name and passes the rest, for example
+`concept`, through as the skill's arguments. The dispatcher does not interpret flow names, so a new
+flow needs no dispatcher edit.
+
+### State Management
+
+None. The dispatcher and the docs hold no state.
+
+## Technical Decisions
+
+### D1 — Route Codex as well as Claude
+Status: decided
+- Add `understand` to `$sq-analysis` along with `/sq:analysis`. Commands should behave the same on
+  every surface, and the edit is three lines.
+- The probe contract's `codex.entry` stays `analysis-understand` (direct). Changing it is a contract
+  change this slice does not need.
+
+### D2 — Pass the flow argument through without interpreting it
+Status: decided
+- The dispatcher section says: invoke the skill with the rest of `$ARGUMENTS`. It lists the flows
+  for discoverability, labels the skill as authoritative, and does not validate them. Unrecognized
+  flows are rejected by the skill's own Flow Selection, so nothing is validated twice.
+- Rejected: validating flows in the dispatcher. That would add a second list to keep in sync with
+  the skill.
+
+### D3 — Missing-graph guidance is conditional wording, not plugin detection
+Status: decided
+- When the graph is absent, the skill already stops. The message now also says: build the graph with
+  the plugin's `/understand` (Codex: the `understand` skill); if the plugin is not installed, install
+  it with `/plugin marketplace add Egonex-AI/Understand-Anything` then
+  `/plugin install understand-anything` (Codex: per the upstream repository's Codex install
+  instructions at `github.com/Egonex-AI/Understand-Anything`).
+- The skill does not try to work out whether the plugin is installed. The only signal on Claude Code
+  is `~/.claude/plugins/installed_plugins.json`, an undocumented Claude Code internal file. A skill
+  that reads it breaks whenever Claude Code changes that file. Giving both instructions works whether
+  or not the plugin is installed.
+- The plugin is only needed when there is no graph. A missing plugin with a graph present is not an
+  error, so this message is the only place the guidance belongs.
+- The existing "Do not speculate…" sentence is replaced. The wording above states a condition and
+  does not guess whether the plugin is installed.
+
+### D4 — README documents capability (a) only
+Status: decided
+- Under "Skill packs", add a short subsection: what `/sq:analysis understand` does (it reads an
+  existing graph and writes planning documents), its three flows, the `jq` requirement, the
+  `understand-anything` prerequisite and install commands (D3), and the Codex form.
+- `/sq:overview` is left to 365. The slice plan dropped the 365 dependency so that 366 could ship
+  first, and documenting a command before it exists would advertise something that does not work.
+- Also correct "Squadron ships one, `analysis`" so it says what the pack contains:
+  `tech-debt-audit` and `understand`.
+
+### D5 — A drift test instead of a routing test
+Status: decided
+- Routing is markdown that an agent interprets, so no unit test can exercise it. The verification
+  walkthrough covers it by hand.
+- What can break silently is a skill shipped in the pack but missing from a dispatcher. A test in
+  `tests/skills/` reads the `Valid skills:` line of each dispatcher and compares it with the pack's
+  skill stems (`commands/analysis/*.md` for Claude, `commands/analysis/agents/analysis-*/` for
+  Codex). Parsing is lenient: take every backtick-quoted token on that line and ignore
+  separators and whitespace.
+- `TestBundledAnalysisPack` gains an assertion that `understand.md` is installed and appears in
+  `files_written`, which is what the receipt records.
+
+## Implementation Details
+
+### API Contracts
+
+Dispatcher section to add to `commands/sq/analysis.md`, in the same shape as `tech-debt-audit`:
+
+```
+Valid skills: `tech-debt-audit`, `understand`
+
+/sq:analysis understand [comprehension|concept|candidates]
+
+## Skill: understand
+Invoke `/analysis:understand` passing the remainder of `$ARGUMENTS` …
+(one-paragraph description; flows listed, skill is authoritative; not-installed message)
+```
+
+The Codex dispatcher mirrors this with `$sq-analysis` / `$analysis-understand`.
+
+## Integration Points
+
+### Provides to Other Slices
+
+- `/sq:analysis understand` and `/sq:analysis understand concept` route. These are the
+  `claude-code.entry` and `claude-code.concept` values in the probe contract, and the entry point
+  that Context Forge 260's handoff slice uses.
+- Unblocks the capability probe (initiative 440), which ships after 366 under the contract's
+  Shipping Order.
+
+### Consumes from Other Slices
+
+- The understand skill's flow-selection contract (361–364). A new flow added by 364 or later needs
+  no dispatcher change (D2).
+
+## Success Criteria
+
+### Functional Requirements
+
+- `/sq:analysis understand` runs the comprehension flow. `/sq:analysis understand concept` and
+  `/sq:analysis understand candidates` reach those flows with the argument intact.
+- `$sq-analysis understand [flow]` behaves the same on Codex.
+- `/sq:analysis bogus` and `/sq:analysis` with no argument still print the usage block, which now
+  lists both skills.
+- `/sq:analysis understand bogus` stops with the skill's own "unrecognized" message.
+- With no graph present, the skill's stop message names the path it checked, the build command, and
+  the plugin install commands for the current surface.
+- `sq skills install analysis` writes `tech-debt-audit.md` and `understand.md`, and the receipt
+  lists both.
+
+### Technical Requirements
+
+- The drift test (D5) passes for both dispatchers and fails if either dispatcher's valid-skills line
+  is missing a pack skill.
+- Existing `tests/skills/` and `tests/cli/test_install_commands.py` stay green.
+- `ruff format`, `ruff check`, and `pyright` report zero errors.
+- README subsection and CHANGELOG bullet are present. The CHANGELOG bullet is user-facing: the
+  skill is now reachable as `/sq:analysis understand`, and the missing-graph message explains how to
+  install the plugin.
+
+### Integration Requirements
+
+- The `claude-code.entry` and `claude-code.concept` strings in `capability-probe-contract.md` both
+  route as written.
+
+### Verification Walkthrough
+
+Run from a squadron checkout with the worktree's venv.
+
+1. Install and confirm the files:
+   ```bash
+   uv run sq skills install analysis
+   ls ~/.claude/commands/analysis/        # tech-debt-audit.md  understand.md
+   uv run sq skills install analysis --ide codex
+   ls ~/.agents/skills/ | grep analysis   # analysis-tech-debt-audit  analysis-understand
+   uv run sq install-commands             # refreshes /sq:analysis dispatcher
+   ```
+2. Usage path. In Claude Code, run `/sq:analysis`, then `/sq:analysis nope`. Both print usage
+   listing `tech-debt-audit` and `understand`.
+3. Routing. In a repo with a graph (squadron has one in `.understand-anything/`), run
+   `/sq:analysis understand`. The skill runs Preflight and starts Flow: Comprehension Analysis.
+   Cancel at the write confirmation. Repeat with `concept` and confirm it reaches Flow: Concept
+   Generation.
+4. Bad flow. Run `/sq:analysis understand nope`. The skill reports the argument is unrecognized.
+5. Missing graph. In a scratch git repo with no `.understand-anything/`, run
+   `/sq:analysis understand`. The stop message names the checked path, says to run `/understand`,
+   and gives the two `/plugin` install commands.
+6. Codex. Run `$sq-analysis understand` in Codex and check that it delegates to
+   `$analysis-understand`. If Codex is unavailable, record that this step was skipped. The probe
+   contract already marks Codex as "not yet run end to end".
+7. Tests:
+   ```bash
+   uv run pytest tests/skills tests/cli/test_install_commands.py -q
+   ```
+
+## Implementation Notes
+
+### Development Approach
+
+1. Drift test first. It fails against the current dispatchers.
+2. Edit the Claude and Codex dispatchers. The test passes.
+3. Installer assertion for `understand.md`.
+4. Update the skill's absent-graph paragraph in both copies, and fix line 16 in the Claude copy.
+5. Add the README subsection and CHANGELOG bullet.
+6. Run the walkthrough.
+
+### Special Considerations
+
+- The two understand skill copies have to stay in step by hand, since no sync test covers
+  them. Make the same absent-graph edit in both.
+- Relative Effort: 1/5.
