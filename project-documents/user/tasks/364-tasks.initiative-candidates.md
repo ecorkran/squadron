@@ -466,6 +466,8 @@ project rules). Re-fork from `main` if it has moved.
 
 ## Task 10: The adoption flow
 
+BLOCKED: Tasks 10–12 frozen 20261020 until the context-forge 260 / squadron 440 handoff contract settles (PM-approved split). When resumed, adoption follows CF's initiative-plan format and never sets the retroactive marker.
+
 - [ ] **10.1 Flow selection** — Effort: 1/5
   - [ ] Add the `candidates adopt` row to the flow-selection table in `commands/analysis/understand.md`.
   - [ ] State that adoption is a separate invocation, never chained onto a derivation run.

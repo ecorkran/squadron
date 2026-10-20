@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 360-arch.document-intelligence.md
 project: squadron
 dateCreated: 20260818
-dateUpdated: 20260823
+dateUpdated: 20261020
 status: not_started
 ---
 
@@ -170,6 +170,15 @@ where its analysis template is the direct comparable.
    The original design deferred candidate *usefulness* knowingly; it did not notice *actionability*
    was a separate question, which is what this correction addresses.
 
+   **Revised 20261020 — brownfield split with context-forge 260 (PM-approved).** CF now owns the
+   existing-state slice plan and the architecture reverse-engineered from code. On a brownfield repo
+   a layer-boundary candidate describes a component that is already built, so it is not proposed as
+   an initiative; `layers[]` boundaries are instead offered to CF as a signal for retroactive slice
+   boundaries. Candidates propose forward work only (complexity clusters and similar) and are indexed
+   after retroactive entries. The `candidates adopt` flow (tasks 10–12) is frozen until the
+   CF/squadron handoff contract settles; when it resumes it follows CF's initiative-plan format and
+   never sets the retroactive marker. See squadron initiative 440.
+
    **Resolved in Phase 4 — candidate usefulness is not a success criterion of this slice.** Mechanical
    correctness (signal named, node IDs resolve, dependencies counted from `edges[]`, nothing written
    without confirmation) is verified against squadron. Usefulness is not verifiable here, because
@@ -261,10 +270,12 @@ where its analysis template is the direct comparable.
      - An unrecognized skill name still produces the dispatcher's usage message.
      - With the marketplace plugin absent, the skill reports how to install it rather than failing
        obscurely.
-     - README documents `/sq:analysis understand` and `/sq:overview`, and states the plugin
-       prerequisite.
+     - README documents `/sq:analysis understand` (and `/sq:overview` once 365 exists), and states
+       the plugin prerequisite.
      - Existing skills tests remain green.
-   - **Dependencies:** [361], [365]. Fullest value after [362], [363], [364].
+   - **Dependencies:** [361]. Fullest value after [362], [363], [364]. The former dependency on
+     [365] was README text only and was dropped 20261020 so 366 can land before CF 260's handoff
+     slice, which calls it as its entry point.
    - **Interfaces:** Consumes the 340 dispatcher and installer conventions.
    - **Risk:** Low.
    - **Relative Effort:** 1/5
@@ -288,7 +299,8 @@ sequence — it can be built first if a client-facing artifact is wanted sooner,
 choice when the marketplace plugin is unavailable.
 
 366 is last because it advertises capabilities that should exist before they are announced, though
-its dispatcher edits could land earlier without harm.
+its dispatcher edits could land earlier without harm. It must land before context-forge 260's
+squadron-handoff slice, which uses `/sq:analysis understand` as its entry point.
 
 ---
 
@@ -307,7 +319,8 @@ Items out of scope for this plan but worth tracking.
 3. [ ] **(3) Graph-Backed Slice Proposals** — Extend candidate generation from initiative-level to
    slice-level for an adopted initiative. Only worth pursuing once candidate quality at the
    initiative level is proven in real use. Dependencies: [364]. Effort: 3/5.
-4. [ ] **(4) Non-Graph Comprehension Path** — Promote `analyze-codebase-prompt.md` from experimental
+4. [x] **(4) Non-Graph Comprehension Path** — *Dropped 20261020: context-forge 260's CF-only
+   brownfield path covers repos without the graph.* Promote `analyze-codebase-prompt.md` from experimental
    reference to a supported lower-token alternative when the marketplace plugin is unavailable or its
    cost is not justified. Dependencies: [362]. Effort: 2/5.
 
