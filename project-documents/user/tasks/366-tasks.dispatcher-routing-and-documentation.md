@@ -203,64 +203,64 @@ revision_number: 2
   - [x] **Success:** `pytest tests/probe/test_graph.py` passes; pyright clean.
   - [x] Commit: `feat: add probe graph and staleness detection`
 
-- [ ] **Task 6: Surface specs and skill detection** (Effort: 3/5)
-  - [ ] Create `src/squadron/probe/surfaces.py` (D7). A frozen dataclass `SurfaceSpec` with the
+- [x] **Task 6: Surface specs and skill detection** (Effort: 3/5)
+  - [x] Create `src/squadron/probe/surfaces.py` (D7). A frozen dataclass `SurfaceSpec` with the
     contract key, `entry`, `concept`, `graph_build`, and the callable
     `analysis_skill_installed(project_root: Path) -> bool | None`. Task 7 adds the plugin field.
-  - [ ] `SURFACES: dict[CommandTarget, SurfaceSpec]` with an import-time
+  - [x] `SURFACES: dict[CommandTarget, SurfaceSpec]` with an import-time
     `assert set(SURFACES) == set(CommandTarget)`, matching the `DELIVERIES` pattern. The contract
     strings are copied exactly from the contract's Shape block and defined only here.
-  - [ ] Skill detection checks the machine root `DELIVERIES[target].resolve_root(local=False)` and
+  - [x] Skill detection checks the machine root `DELIVERIES[target].resolve_root(local=False)` and
     the project root joined with `DELIVERIES[target].local_root`. Deviation from D7's wording:
     `resolve_root(local=True)` reads `Path.cwd()`, which is wrong when `sq probe` runs from a
     subdirectory; say so in a comment. Combine: any scope `True` → `True`; else any `None` → `None`;
     else `False`.
-    - [ ] `claude-code`, per scope: `analysis/understand.md` exists and `sq/analysis.md` exists and
+    - [x] `claude-code`, per scope: `analysis/understand.md` exists and `sq/analysis.md` exists and
       `"understand" in dispatcher_skills(...)`. A dispatcher for which `dispatcher_skills` returns
       `None` → `None` with a WARNING naming the file.
-    - [ ] A read `OSError` on a dispatcher file → `None` with a WARNING naming the file; catch only
+    - [x] A read `OSError` on a dispatcher file → `None` with a WARNING naming the file; catch only
       `OSError`, with a comment saying why it becomes `None`.
-    - [ ] `codex`, per scope: `analysis-understand/SKILL.md` exists.
-  - [ ] Create `tests/probe/test_surfaces.py`. Populate the temp `HOME` and a temp project root.
-    - [ ] Claude: nothing installed → `False`; skill file and post-366 dispatcher at machine scope →
+    - [x] `codex`, per scope: `analysis-understand/SKILL.md` exists.
+  - [x] Create `tests/probe/test_surfaces.py`. Populate the temp `HOME` and a temp project root.
+    - [x] Claude: nothing installed → `False`; skill file and post-366 dispatcher at machine scope →
       `True`; same at project scope only → `True`; pre-366 dispatcher (only `tech-debt-audit`)
       plus skill file → `False`; dispatcher with no `Valid skills:` line → `None` with a WARNING;
       dispatcher that exists but is unreadable (`chmod 000`, or patch the read to raise `OSError`)
       → `None` with a WARNING naming the file; skill file without dispatcher → `False`.
-    - [ ] Codex: absent → `False`; machine scope → `True`; project scope → `True`.
-    - [ ] Every `CommandTarget` has a `SURFACES` entry; the contract keys are `{"claude-code", "codex"}`.
-  - [ ] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
-  - [ ] Commit: `feat: add probe surface specs and skill detection`
+    - [x] Codex: absent → `False`; machine scope → `True`; project scope → `True`.
+    - [x] Every `CommandTarget` has a `SURFACES` entry; the contract keys are `{"claude-code", "codex"}`.
+  - [x] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
+  - [x] Commit: `feat: add probe surface specs and skill detection`
 
-- [ ] **Task 7: Plugin detection** (Effort: 2/5)
-  - [ ] In `surfaces.py`, add the field
+- [x] **Task 7: Plugin detection** (Effort: 2/5)
+  - [x] In `surfaces.py`, add the field
     `understand_plugin_installed(project_root: Path) -> bool | None` to `SurfaceSpec` and its two
     callables (D8), resolving `HOME` at call time.
-  - [ ] `codex`: `True` when `~/.agents/skills/understand/SKILL.md` exists, else `False`.
-  - [ ] `claude-code`: read `~/.claude/plugins/installed_plugins.json`.
-    - [ ] File absent → `False`.
-    - [ ] Unreadable, not JSON, or no `plugins` object whose values are lists → `None` with a WARNING
+  - [x] `codex`: `True` when `~/.agents/skills/understand/SKILL.md` exists, else `False`.
+  - [x] `claude-code`: read `~/.claude/plugins/installed_plugins.json`.
+    - [x] File absent → `False`.
+    - [x] Unreadable, not JSON, or no `plugins` object whose values are lists → `None` with a WARNING
       naming what was unexpected.
-    - [ ] Installed when a key whose part before `@` is `understand-anything` has an entry with
+    - [x] Installed when a key whose part before `@` is `understand-anything` has an entry with
       `scope` `user`, or any other scope whose `projectPath` resolves to the project root.
       Otherwise `False`.
-  - [ ] Catch only `OSError` and `json.JSONDecodeError`, each with a comment saying why it becomes
+  - [x] Catch only `OSError` and `json.JSONDecodeError`, each with a comment saying why it becomes
     `None`.
-  - [ ] Add `tests/probe/fixtures/installed_plugins.json` in the real file's format, observed
+  - [x] Add `tests/probe/fixtures/installed_plugins.json` in the real file's format, observed
     20261020: top-level `version` (int) and `plugins`, an object keyed `name@marketplace` whose
     values are lists of entries with `scope`, `installPath`, `version`, `installedAt`,
     `lastUpdated`, `gitCommitSha`, and `projectPath` on non-user scopes. Copy the structure from
     `~/.claude/plugins/installed_plugins.json`; replace paths and hashes with obvious placeholders.
     Include a user-scope `understand-anything@understand-anything` entry and a project-scope entry
     for another plugin.
-  - [ ] Tests in `tests/probe/test_surfaces.py`:
-    - [ ] The fixture copied into the temp `HOME` → `True`.
-    - [ ] Synthetic variants: file absent → `False`; project-scope entry for this project → `True`;
+  - [x] Tests in `tests/probe/test_surfaces.py`:
+    - [x] The fixture copied into the temp `HOME` → `True`.
+    - [x] Synthetic variants: file absent → `False`; project-scope entry for this project → `True`;
       project-scope entry for another path → `False`; other plugins only → `False`; not JSON,
       `plugins` missing, `plugins` value not a list → `None` + WARNING each.
-    - [ ] Codex: `understand/SKILL.md` present → `True`; absent → `False`.
-  - [ ] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
-  - [ ] Commit: `feat: add probe plugin detection`
+    - [x] Codex: `understand/SKILL.md` present → `True`; absent → `False`.
+  - [x] **Success:** `pytest tests/probe/test_surfaces.py` passes; pyright clean.
+  - [x] Commit: `feat: add probe plugin detection`
 
 - [ ] **Task 8: `build_probe` and the contract test** (Effort: 2/5)
   - [ ] Create `src/squadron/probe/__init__.py` exporting `PROBE_VERSION = 1` and
