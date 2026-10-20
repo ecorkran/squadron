@@ -34,6 +34,7 @@ def _review(verdict: str) -> ActionResult:
         action_type="review",
         outputs={"review_file": "project-documents/user/reviews/105-review.code.stub.md"},
         verdict=verdict,
+        metadata={"template": "code"},
     )
 
 
@@ -186,3 +187,42 @@ async def test_a_checkpoint_prompt_that_exits_is_interactive_checkpoint(
 
     assert isinstance(checkpoint, dict)
     assert (checkpoint["kind"], checkpoint["verdict"]) == ("interactive_checkpoint", "CONCERNS")
+
+
+@pytest.mark.asyncio
+async def test_a_completed_run_lists_every_review_in_order(tmp_path: Path) -> None:
+    definition = _loop_definition()
+    sm, run_id = await _run(
+        tmp_path, definition, {"review": _action([_review("FAIL"), _review("PASS")])}
+    )
+
+    doc = run_outcome(run_id, WaitOutcome.COMPLETED, sm.load(run_id), lambda _: definition)
+
+    assert doc["status"] == "completed"
+    path = "project-documents/user/reviews/105-review.code.stub.md"
+    assert doc["reviews"] == [
+        {
+            "path": path,
+            "paths": None,
+            "template": "code",
+            "verdict": "FAIL",
+            "step": "revise-code",
+            "round": 1,
+        },
+        {
+            "path": path,
+            "paths": None,
+            "template": "code",
+            "verdict": "PASS",
+            "step": "revise-code",
+            "round": 2,
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_a_run_with_no_review_has_an_empty_reviews_list(tmp_path: Path) -> None:
+    done = ActionResult(success=True, action_type="work", outputs={})
+    sm, run_id = await _run(tmp_path, _single("implement", "work"), {"work": _action([done])})
+
+    assert run_outcome(run_id, WaitOutcome.COMPLETED, sm.load(run_id))["reviews"] == []

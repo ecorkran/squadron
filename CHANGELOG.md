@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq run --run-id <id>` is now a supported option for choosing a run's id, and every fresh run prints `run_id=<id>` to stderr at launch, so launcher programs can track their runs (#243).
 - Code pipelines (`P6`, `implement`, `P56`, `P456`, `implement-plan`) take `-p merge=false` to stop before merging the slice branch, leaving the merge to you (#245).
 - `sq run --resume <id>` takes `--decision accept|retry` and `--instructions`, so a run paused at a review loop can be accepted or steered without a terminal (#246).
-- `sq runs wait --json` prints a run's outcome as JSON: why and where it paused (loop out of rounds, checkpoint, blocked task), the round, the last verdict and its review file, or why it failed (#244).
+- `sq runs wait --json` prints a run's outcome as JSON: why and where it paused (loop out of rounds, checkpoint, blocked task), the round, the last verdict and its review file, or why it failed, plus every review file the run wrote (#244).
 
 ## [0.23.3] - 20261019
 

@@ -589,6 +589,7 @@ sq runs wait <RUN_ID> [--timeout SECONDS] [--json]
 | `started_at`, `updated_at` | ISO 8601 timestamps; `updated_at` gives a pause's age |
 | `checkpoint` | When paused, else `null`: `kind` (`loop_exhausted`, `interactive_checkpoint`, `awaits_human`, `other`), `step`, `step_type`, `is_loop`, `round` and `max_rounds` (loops only), `verdict` (last review), `review_file` (that review's artifact path), `reason`, `paused_at` |
 | `failure` | When failed, else `null`: `kind` (`provider_error`, `stall`, `artifact_missing`, `cost_cap`, or `null` when untagged), `step`, `message` |
+| `reviews` | Every review the run recorded, in the order written (an empty list when there were none): `path` (the review artifact), `paths` (every part file of a split review, else `null`), `template`, `verdict`, `step`, and `round` for a loop step (else `null`). A resumed step's reviews follow its earlier ones |
 
 `--decision accept` on resume needs `checkpoint.is_loop` to be true. No prompt text is included.
 
