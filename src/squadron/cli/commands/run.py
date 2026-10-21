@@ -67,6 +67,7 @@ from squadron.pipeline.executor import (
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
+from squadron.pipeline.item_eligibility import item_decisions
 from squadron.pipeline.loader import (
     load_pipeline,
     pipeline_file_path,
@@ -689,6 +690,24 @@ def _display_result(result: PipelineResult) -> None:
     for sr in result.step_results:
         if sr.batch_report is not None:
             _display_batch_report(sr.batch_report)
+    _display_recovery(result)
+
+
+def _display_recovery(result: PipelineResult) -> None:
+    """The command that picks the run up again, when there is one (#248)."""
+    if result.run_id is None:
+        return
+    run_id = escape(result.run_id)
+    if result.status in (ExecutionStatus.PAUSED, ExecutionStatus.FAILED):
+        rprint(f"Resume with: [bold]sq run --resume {run_id}[/bold]")
+        return
+    if any(
+        ItemDecision.RETRY in item_decisions(record)
+        for sr in result.step_results
+        if sr.batch_report is not None
+        for record in sr.batch_report.records
+    ):
+        rprint(f"Retry flagged items: [bold]sq run --resume {run_id} --flagged[/bold]")
 
 
 def _display_failure_context(result: PipelineResult) -> None:

@@ -247,6 +247,7 @@ class PipelineResult:
     step_results: list[StepResult]
     paused_at: str | None = None
     error: str | None = None
+    run_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -671,6 +672,7 @@ async def execute_pipeline(
                 pipeline_name=definition.name,
                 status=ExecutionStatus.PAUSED,
                 step_results=step_results,
+                run_id=effective_run_id,
                 paused_at=step.name,
             )
 
@@ -679,6 +681,7 @@ async def execute_pipeline(
                 pipeline_name=definition.name,
                 status=ExecutionStatus.FAILED,
                 step_results=step_results,
+                run_id=effective_run_id,
             )
 
         # Accumulate prior_outputs from this step's action results, earlier loop
@@ -704,6 +707,7 @@ async def execute_pipeline(
         pipeline_name=definition.name,
         status=ExecutionStatus.COMPLETED,
         step_results=step_results,
+        run_id=effective_run_id,
     )
 
 

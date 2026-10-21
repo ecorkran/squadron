@@ -36,6 +36,6 @@ dateUpdated: 20261021
   - [x] Yes (SDK 0.2.162): `RateLimitEvent.rate_limit_info` carries `status` (`rejected`), `rate_limit_type` (`five_hour`, `seven_day*`, `overage`) and `resets_at`; also `AssistantMessage.error == "rate_limit"` and `ResultMessage.api_error_status`. Today a rejected event is retried with 2–60 s backoff, pointless against a limit that resets in hours
 - [x] #248: A quota or session-limit failure pauses the whole run at the failed step instead of flagging the item and continuing; a plain `sq run --resume <id>` restarts at that step
 - [x] #248: `sq run --resume <id> --flagged` retries every flagged and not_run item in order, stopping on the first rejection
-- [ ] #248: The end-of-run summary prints the exact recovery command(s) for a paused run or flagged items
+- [x] #248: The end-of-run summary prints the exact recovery command(s) for a paused run or flagged items
 - [ ] #248: Item resume commits uncommitted leftovers on the target when every dirty path belongs to the item being retried; any other dirty path still rejects
 - [ ] #248: PIPELINES.md gives one recovery path per failure kind; rerun / resume / item-resume guidance is consistent

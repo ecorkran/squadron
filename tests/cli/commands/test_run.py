@@ -1756,6 +1756,43 @@ def test_failed_run_after_a_merge_says_the_slice_was_merged_and_names_the_failed
     assert "failed: summary-5" in out
 
 
+@pytest.mark.parametrize(
+    ("status", "records", "expected"),
+    [
+        ("paused", [], "Resume with: sq run --resume r1"),
+        ("failed", [], "Resume with: sq run --resume r1"),
+        ("completed", ["flagged"], "Retry flagged items: sq run --resume r1 --flagged"),
+        ("completed", ["not_run"], "Retry flagged items: sq run --resume r1 --flagged"),
+        ("completed", ["passed"], None),
+    ],
+)
+def test_the_run_ends_with_its_recovery_command(
+    status: str, records: list[str], expected: str | None, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue 248: the end of a run prints the command that picks it up again."""
+    from squadron.cli.commands.run import _display_result
+    from squadron.pipeline.batch_report import BatchItemRecord, BatchReport, ItemOutcome
+    from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
+
+    report = BatchReport(
+        pipeline="slices-plan",
+        run_id="r1",
+        step_name="slices",
+        plan="900",
+        records=[BatchItemRecord(str(i), f"S{i}", ItemOutcome(o)) for i, o in enumerate(records)],
+    )
+    step = StepResult("slices", "each", ExecutionStatus.COMPLETED, [], batch_report=report)
+    result = PipelineResult("slices-plan", ExecutionStatus(status), [step], run_id="r1")
+
+    _display_result(result)
+
+    out = " ".join(capsys.readouterr().out.split())
+    if expected is None:
+        assert "sq run --resume" not in out
+    else:
+        assert expected in out
+
+
 class TestUnknownAliasRejectedPreRun:
     """#175 / design criterion 11: a mistyped alias fails before any step writes anything."""
 
