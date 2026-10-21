@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261020'
+dateUpdated: '20261021'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261021
+
+### Release 0.23.6
+
+- **Contents:** slice 366: `/sq:analysis understand` routing on Claude Code and Codex with install guidance, and `sq probe --json` capability probe.
 
 ## 20261020
 

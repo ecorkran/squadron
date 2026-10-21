@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.6] - 20261021
+
 ### Added
 
 - `/sq:analysis understand` and `$sq-analysis understand` run the codebase-understanding skill from either dispatcher, and tell you how to install `understand-anything` and build a graph when none exists.
