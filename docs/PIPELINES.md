@@ -897,7 +897,7 @@ A design step that writes no design, a provider failure, or any other step failu
 
 - **Batches change cf state and don't restore it.** Afterwards cf points at the batch's arch and plan and the batch's phase. A batch that completes sets cf's slice back to the first slice it selected; a paused or failed batch leaves it on the slice it stopped at. Don't run any other cf-consuming command (`sq review slice`, another pipeline, `cf build`) in the project while a batch is running — it would resolve against whichever slice the batch set last.
 - **Commits land on the integration target.** Planning commits (design, tasks, loop rounds, devlog) are refused anywhere else, so start the batch from the target branch (`main`, or `git.integration_branch`). A batch started on another branch stops at its first commit.
-- **Rerun, don't resume.** Selection is by artifact presence, so rerunning a stopped batch picks up only what's left. A slice flagged after its design was written is not re-selected by `slices-plan`; `tasks-plan` then flags it for "design review below threshold", so it keeps appearing in reports until someone deals with it.
+- **Recover with the run id, not a rerun.** See [Recovering a batch](#recovering-a-batch). A fresh rerun selects by artifact presence, so it skips any slice flagged after its design was written: `slices-plan` does not re-select it, and `tasks-plan` then flags it for "design review below threshold".
 - **Cost is unattended.** Every slice can take `max-revisions + 1` design-and-review calls. Keep `max-revisions` small on a large plan.
 - `--prompt-only` doesn't render `each` or `loop:` steps yet (#145).
 - **One mutating run per checkout.** See [Run lock](#run-lock).
@@ -919,6 +919,18 @@ Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: 
 - An implement dispatch that commits nothing fails its code review (no diff to review), so the item is flagged `step_failed`, not merged.
 - Same params as the plan batches above, except `review-model` defaults to `minimax`, matching `P6`.
 - Git, not cf's checkboxes, says a slice is merged. A slice whose branch is merged into the target counts as complete even when cf still reports it open (its tasks were never checked off): it is skipped, its dependents are not flagged, and a WARNING names the slice, branch and target. Fast-forwarded branches and branches with no commits of their own are not treated as merged. If git cannot be read, the batch fails before any item runs.
+
+### Recovering a batch
+
+The end of every run prints the command for its state. By what stopped it:
+
+| What happened | Run status | Command |
+|---|---|---|
+| Usage limit used up | `paused` (`checkpoint.kind: usage_limit`) | after `resets_at`: `sq run --resume <run_id>` |
+| Checkpoint, hand-off or interrupt (Ctrl-C) | `paused` or `failed` | `sq run --resume <run_id>` |
+| Items flagged, run completed | `completed` | `sq run --resume <run_id> --flagged`, or one item with `--item N --decision retry\|accept` |
+
+A plain resume re-enters the batch where it stopped: passed and accepted items keep their records, and flagged, not-run and unreached items run. `--flagged` and `--item` act on a completed run's flagged items. Uncommitted edits an interrupted item left in its own documents on the target are committed before either one starts.
 
 ### Item resume
 

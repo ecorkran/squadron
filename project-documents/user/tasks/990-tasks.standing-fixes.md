@@ -6,7 +6,7 @@ lldReference: project-documents/user/slices/990-slice.standing-fixes.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 projectState: Standing container for multi-step fixes. Add a task group per issue.
-status: in_progress
+status: complete
 dateCreated: 20261011
 dateUpdated: 20261021
 ---
@@ -38,4 +38,4 @@ dateUpdated: 20261021
 - [x] #248: `sq run --resume <id> --flagged` retries every flagged and not_run item in order, stopping on the first rejection
 - [x] #248: The end-of-run summary prints the exact recovery command(s) for a paused run or flagged items
 - [x] #248: Item resume commits uncommitted leftovers on the target when every dirty path belongs to an item of the batch (widened from "the item being retried": the reported case was item 130's file blocking item 128); any other dirty path still rejects
-- [ ] #248: PIPELINES.md gives one recovery path per failure kind; rerun / resume / item-resume guidance is consistent
+- [x] #248: PIPELINES.md gives one recovery path per failure kind; rerun / resume / item-resume guidance is consistent
