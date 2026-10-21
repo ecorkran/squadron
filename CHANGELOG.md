@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/sq:analysis understand` and `$sq-analysis understand` run the codebase-understanding skill from either dispatcher, and tell you how to install `understand-anything` and build a graph when none exists.
+- `sq probe --json` reports which analysis skills and plugins are installed and how current the project's knowledge graph is.
+
 ## [0.23.5] - 20261020
 
 - First published release of the 0.23.4 changes below; 0.23.4 was tagged but never reached PyPI.

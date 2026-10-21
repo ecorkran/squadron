@@ -18,6 +18,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 - The architecture design review came back CONCERNS. All 10 findings were accepted and answered in the review file (2b3bc66f).
 - Next: slice design for 400 (Phase 4).
 
+### Slice 366: Dispatcher Routing and Documentation — Implementation Complete (Phase 6)
+
+- Branch `366-slice.dispatcher-routing-and-documentation`, one commit per task; not merged (Phase 7). Full suite: 7523 passed, 4 skipped; ruff and pyright clean.
+- Shipped: `dispatcher_skills()` parser and drift test; `understand` routed through `/sq:analysis` and `$sq-analysis`; install guidance in both skill copies; `sq probe [--json]` (package `squadron.probe`, contract test reads the example in `capability-probe-contract.md`); README, `docs/COMMANDS.md`, CHANGELOG.
+- Walkthrough: steps 1, 2, 6, 7, 8 verified; steps 3–5 verified running the skill directly. Defect found and fixed: on Claude Code `/sq:analysis understand` could not delegate, because `understand.md` had `disable-model-invocation: true` and the Skill tool refuses it (`tech-debt-audit.md` has the same flag but an HTML comment above its frontmatter keeps it from being parsed). PM decision (20261020): drop the flag from `understand.md` and delete the `openai.yaml` twin; typing `/sq:analysis understand` is the explicit invocation. The absent-graph guidance and README now say that building the graph is a paid multi-agent run (PM's API bill for a 250k LOC repo was about $70).
+- Walkthrough gap fixed: the Codex dispatcher stays stale until `sq install-commands --ide codex`; added to step 1. That command also writes `~/.codex/rules/squadron.rules`.
+- Probe fields unchanged from the contract. After merge, tell cf, sq-cf and ai-project-guide-70 that `sq probe` exists, and cf about the contract table typing (see below).
+
 ### Slice 366: Dispatcher Routing and Documentation — Tasks Complete (Phase 5)
 
 - Tasks: `project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md` (13 tasks, 342 lines, one commit per task). Order: parser, drift test, dispatchers, installer pin, skill guidance, probe (types, graph, surfaces, plugin, build, contract, CLI), docs, walkthrough.

@@ -372,7 +372,7 @@ Precedence, highest first: CLI flag, then project (`.squadron.toml`), then user 
 
 ## Skill packs (`sq skills`)
 
-A skill pack is a set of commands installed from a source named in `skills.toml` (user-level or in a project). Squadron ships one, `analysis`.
+A skill pack is a set of commands installed from a source named in `skills.toml` (user-level or in a project). Squadron ships `analysis`, with the `tech-debt-audit` and `understand` skills.
 
 ```toml
 [packs.mypack]
@@ -388,6 +388,19 @@ sq skills uninstall mypack --ide codex
 ```
 
 A pack holds Claude commands at its top level and, optionally, Codex skills under `agents/<name>/SKILL.md`. Each `SKILL.md` needs frontmatter whose `name` matches its directory, plus a non-empty `description`. A Codex install validates everything first and writes nothing if anything is wrong. A pack with no `agents/` directory installs for Claude only. Uninstall removes exactly the files the install wrote.
+
+### Codebase understanding
+
+The `understand` skill reads an existing [`understand-anything`](https://github.com/Egonex-AI/Understand-Anything) knowledge graph of your codebase and writes planning documents from it. Run `/sq:analysis understand` in Claude Code, or `$sq-analysis understand` in Codex.
+
+It needs the `understand-anything` plugin to build the graph first, with the plugin's `/understand` (on Codex, the `understand` skill). That build is a paid multi-agent run; on API billing a large repository can cost tens of dollars. To install the plugin:
+
+- Claude Code: `/plugin marketplace add Egonex-AI/Understand-Anything`, then `/plugin install understand-anything`
+- Codex: `curl -fsSL https://raw.githubusercontent.com/Egonex-AI/Understand-Anything/main/install.sh | bash -s codex`
+
+The skill's flows and other requirements are in [`commands/analysis/understand.md`](commands/analysis/understand.md).
+
+`sq probe --json` reports what is installed and the graph's state; see [`sq probe`](docs/COMMANDS.md#probe).
 
 ## Exit codes
 

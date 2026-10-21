@@ -689,7 +689,7 @@ def test_agents_install_writes_every_skill_directory(tmp_path: Path) -> None:
         assert (tmp_path / skill_name / "SKILL.md").is_file()
 
     # The nested policy file rides along with its skill directory.
-    assert (tmp_path / "analysis-understand" / "agents" / "openai.yaml").is_file()
+    assert (tmp_path / "analysis-tech-debt-audit" / "agents" / "openai.yaml").is_file()
 
     receipt = _receipts_dir(tmp_path) / "squadron-commands-agents.toml"
     assert receipt.is_file()
@@ -699,7 +699,7 @@ def test_agents_install_lists_what_it_wrote(tmp_path: Path) -> None:
     result = _install_with(runner, tmp_path, "--ide", "codex")
     output = result.output  # type: ignore[attr-defined]
     assert "sq-review/SKILL.md" in output
-    assert "analysis-understand/agents/openai.yaml" in output
+    assert "analysis-tech-debt-audit/agents/openai.yaml" in output
 
 
 @pytest.mark.parametrize("spelling", ["codex", "openai", "agents"])
@@ -878,7 +878,7 @@ def test_target_disagreeing_with_the_receipt_exits_one_and_removes_nothing(
 def test_agents_uninstall_prunes_nested_skill_directories(tmp_path: Path) -> None:
     """A skill's ``agents/`` subdirectory must not be left behind as an empty shell."""
     _install_with(runner, tmp_path, "--ide", "codex")
-    assert (tmp_path / "analysis-understand" / "agents" / "openai.yaml").is_file()
+    assert (tmp_path / "analysis-tech-debt-audit" / "agents" / "openai.yaml").is_file()
 
     result = runner.invoke(
         app,
