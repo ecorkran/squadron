@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Hitting your Claude usage limit mid-run now pauses the run instead of failing every remaining step or batch item; resume it with `sq run --resume <id>` after the reset. `sq runs wait --json` reports it as `usage_limit` with the reset time.
+- Retrying a batch item no longer refuses to start because an interrupted item left its document half-edited on the target; the edit is committed first.
 - A transient "Couldn't confirm model" error when switching models is retried, and fails the step in one line instead of a traceback.
 
 ## [0.23.6] - 20261021

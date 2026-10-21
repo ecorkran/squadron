@@ -37,5 +37,5 @@ dateUpdated: 20261021
 - [x] #248: A quota or session-limit failure pauses the whole run at the failed step instead of flagging the item and continuing; a plain `sq run --resume <id>` restarts at that step
 - [x] #248: `sq run --resume <id> --flagged` retries every flagged and not_run item in order, stopping on the first rejection
 - [x] #248: The end-of-run summary prints the exact recovery command(s) for a paused run or flagged items
-- [ ] #248: Item resume commits uncommitted leftovers on the target when every dirty path belongs to the item being retried; any other dirty path still rejects
+- [x] #248: Item resume commits uncommitted leftovers on the target when every dirty path belongs to an item of the batch (widened from "the item being retried": the reported case was item 130's file blocking item 128); any other dirty path still rejects
 - [ ] #248: PIPELINES.md gives one recovery path per failure kind; rerun / resume / item-resume guidance is consistent

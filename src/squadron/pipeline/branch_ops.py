@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from collections.abc import Collection
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -185,8 +186,36 @@ def restore_target(target: str, cwd: str) -> None:
 
 def dirty_paths(cwd: str) -> str:
     """The changed and untracked paths, comma separated; empty when the tree is clean."""
+    return ", ".join(_dirty_path_list(cwd))
+
+
+def _dirty_path_list(cwd: str) -> list[str]:
     status = _git_stdout(["status", "--porcelain", "-uall"], cwd)
-    return ", ".join(line[3:] for line in status.splitlines() if line.strip())
+    return [line[3:] for line in status.splitlines() if line.strip()]
+
+
+def commit_item_leftovers(indices: Collection[str], target: str, cwd: str) -> bool:
+    """Commit a batch's interrupted item documents left dirty on the target (#248).
+
+    A batch item that commits to the target (a design, its review revisions) and was
+    stopped mid-dispatch leaves its edit uncommitted. Every dirty path must be a
+    document of one of the batch's items, named ``{index}-{type}.{name}.md``;
+    otherwise nothing is touched and the caller still refuses the dirty tree.
+    Returns whether it committed.
+
+    Raises:
+        GitEnvironmentError: the add or commit failed and the target is as it was.
+        GitStateUnknownError: the add or commit failed and the state cannot be verified.
+    """
+    prefixes = tuple(f"{index}-" for index in indices)
+    paths = _dirty_path_list(cwd)
+    if not paths or not prefixes or not all(Path(p).name.startswith(prefixes) for p in paths):
+        return False
+    _write_or_unknown(["add", "--", *paths], cwd, target, "git add")
+    message = "chore: preserve interrupted work on batch items"
+    _write_or_unknown(["commit", "-m", message], cwd, target, "git commit")
+    _logger.warning("committed interrupted batch item work on %s: %s", target, ", ".join(paths))
+    return True
 
 
 def _require_clean_tree(cwd: str, slice_index: int) -> None:

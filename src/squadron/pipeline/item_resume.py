@@ -29,7 +29,7 @@ from squadron.pipeline.batch_report import (
     ItemRerun,
     report_json_path,
 )
-from squadron.pipeline.branch_ops import dirty_paths, restore_target
+from squadron.pipeline.branch_ops import commit_item_leftovers, dirty_paths, restore_target
 from squadron.pipeline.control_params import (
     ACCEPT_DECISION,
     OVERRIDE_INSTRUCTIONS,
@@ -151,7 +151,7 @@ async def _resume_locked(
     run_body: BodyRunner,
 ) -> ResumeOutcome:
     run = _validate(request, state_manager)
-    target = _git_precondition(cwd, cf_client)
+    target = _git_precondition(cwd, cf_client, [r.index for r in run.report.records])
     params = item_params(run.params, request)
     item = await _select_item(request, run, params, cf_client, cwd, target)
     if item is None:  # reconciled
@@ -245,8 +245,12 @@ def _check_record(report: BatchReport, request: ResumeRequest, path: Path) -> No
 # ---------------------------------------------------------------------------
 
 
-def _git_precondition(cwd: str, cf_client: Any) -> str:
-    """Return to the target from a flagged slice branch, then require a clean target."""
+def _git_precondition(cwd: str, cf_client: Any, indices: list[str]) -> str:
+    """Return to the target from a flagged slice branch, then require a clean target.
+
+    Leftover documents of the batch's items (*indices*) on the target itself are
+    committed first (#248).
+    """
     target = read_integration_target(cf_client)
     start = current_branch(cwd)
     if start != target and parse_slice_branch(start) is not None:
@@ -254,6 +258,7 @@ def _git_precondition(cwd: str, cf_client: Any) -> str:
     current = current_branch(cwd)
     if current != target:
         raise _Stop(ResumeExit.REJECTED, f"on {current}, expected {target}; nothing changed")
+    commit_item_leftovers(indices, target, cwd)
     if paths := dirty_paths(cwd):
         raise _Stop(ResumeExit.REJECTED, f"working tree not clean: {paths}; nothing changed")
     verify_git_state(target, cwd=cwd)

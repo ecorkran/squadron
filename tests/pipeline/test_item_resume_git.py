@@ -11,7 +11,7 @@ from squadron.pipeline.batch_report import BatchItemRecord, ItemDecision, ItemOu
 from squadron.pipeline.item_resume import ResumeExit, ResumeOutcome, ResumeRequest, resume_item
 from squadron.pipeline.state import StateManager
 from tests.conftest import run_test_git
-from tests.pipeline.item_resume_support import Project, branch, make_project
+from tests.pipeline.item_resume_support import Project, branch, design, make_project
 
 
 @pytest.fixture
@@ -96,6 +96,38 @@ async def test_a_dirty_target_is_rejected(project: Project) -> None:
 
     assert outcome.exit is ResumeExit.REJECTED
     assert outcome.message.startswith("working tree not clean: stray.txt")
+    body.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_batch_items_interrupted_edit_on_the_target_is_committed(project: Project) -> None:
+    """Issue 248: item 402's half-revised design no longer blocks retrying item 401."""
+    (project.repo / design(402)).write_text("---\ndependencies: [401]\n---\nrevised\n")
+    body = _passing_body()
+
+    outcome = await _resume(project, body)
+
+    assert outcome.exit is ResumeExit.RESOLVED
+    body.assert_awaited_once()
+    subject = run_test_git(project.repo, "log", "-1", "--format=%s", "main").strip()
+    assert subject == "chore: preserve interrupted work on batch items"
+    assert run_test_git(project.repo, "status", "--porcelain").strip() == ""
+
+
+@pytest.mark.asyncio
+async def test_a_stray_path_beside_an_item_edit_still_rejects_with_nothing_committed(
+    project: Project,
+) -> None:
+    (project.repo / design(402)).write_text("revised\n")
+    (project.repo / "stray.txt").write_text("x\n")
+    head = run_test_git(project.repo, "rev-parse", "main").strip()
+    body = _passing_body()
+
+    outcome = await _resume(project, body)
+
+    assert outcome.exit is ResumeExit.REJECTED
+    assert outcome.message.startswith("working tree not clean:")
+    assert run_test_git(project.repo, "rev-parse", "main").strip() == head
     body.assert_not_awaited()
 
 
