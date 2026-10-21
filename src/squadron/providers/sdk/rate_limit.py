@@ -17,8 +17,12 @@ removed — see squadron issue #30.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from claude_agent_sdk import ClaudeSDKError, RateLimitEvent
+from claude_agent_sdk.types import RateLimitInfo
+
+from squadron.providers.errors import ProviderError
 
 #: Default retry budget. Callers that know their workload is heavier (the
 #: metrology audit, whose subagent fan-out multiplies request rate) override
@@ -56,6 +60,42 @@ class RateLimitRejected(ClaudeSDKError):
     ``rejected``, so the existing ``except ClaudeSDKError`` backoff loops
     catch it without restructuring.
     """
+
+
+#: A rejected limit that resets further out than this is a usage limit, not a
+#: throttle: no backoff outlasts it, so the run pauses instead (issue 248).
+USAGE_LIMIT_RESET_HORIZON_S = 300.0
+
+
+class UsageLimitReached(ProviderError):
+    """The account's usage limit (session, weekly or overage) is used up.
+
+    Retrying before ``resets_at`` (Unix seconds, ``None`` when the CLI gave none)
+    cannot succeed, so the run pauses at the failed step (issue 248).
+    """
+
+    def __init__(self, limit_type: str | None, resets_at: int | None) -> None:
+        when = (
+            datetime.fromtimestamp(resets_at, UTC).isoformat(timespec="minutes")
+            if resets_at is not None
+            else "an unreported time"
+        )
+        super().__init__(f"usage limit reached ({limit_type or 'unknown'}); resets at {when}")
+        self.limit_type = limit_type
+        self.resets_at = resets_at
+
+    @classmethod
+    def from_info(cls, info: RateLimitInfo) -> UsageLimitReached:
+        return cls(info.rate_limit_type, info.resets_at)
+
+
+def is_usage_limit(info: RateLimitInfo, now_s: float) -> bool:
+    """True when a rejected limit resets too far out for backoff to outlast it."""
+    return (
+        info.status == _STATUS_REJECTED
+        and info.resets_at is not None
+        and info.resets_at - now_s > USAGE_LIMIT_RESET_HORIZON_S
+    )
 
 
 def is_throttle(exc: Exception) -> bool:

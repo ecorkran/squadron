@@ -47,7 +47,7 @@ from squadron.pipeline.control_params import (
     OVERRIDE_INSTRUCTIONS,
     RESUMED_FROM_HANDOFF,
 )
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind, pauses_run
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -572,7 +572,7 @@ async def execute_pipeline(
         )
 
     # Resuming a step that paused for a person: it must run again, not be kept (D8).
-    resumed_handoff = start_from is not None and _paused_for_a_person(
+    resumed_handoff = start_from is not None and _paused_unfinished(
         runs_dir, effective_run_id, start_from
     )
     # On resume, ``--decision accept`` reaches only the restarted step (#246), so a
@@ -816,11 +816,12 @@ def _seed_resume_outputs(
             step_outputs[step_state.step_name] = verdict_result
 
 
-def _paused_for_a_person(runs_dir: Path | None, run_id: str, step_name: str) -> bool:
-    """Whether the run's latest record of *step_name* is a pause an action raised for a person.
+def _paused_unfinished(runs_dir: Path | None, run_id: str, step_name: str) -> bool:
+    """Whether the run's latest record of *step_name* is a pause raised before the step finished.
 
     A checkpoint pause is not one: that step finished its work and waits for a decision.
-    A hand-off (``awaits_human``, e.g. a ``BLOCKED`` task) did not finish (slice 947 D8).
+    A hand-off (``awaits_human``, e.g. a ``BLOCKED`` task) did not finish (slice 947 D8),
+    and neither did a step stopped by a used-up usage limit (#248).
     """
     from squadron.pipeline.state import StateManager
 
@@ -835,8 +836,14 @@ def _paused_for_a_person(runs_dir: Path | None, run_id: str, step_name: str) -> 
         return False
     latest = records[-1]
     return latest.status == ExecutionStatus.PAUSED.value and any(
-        action.get("awaits_human") is True for action in latest.action_results
+        action.get("awaits_human") is True or pauses_run(_action_metadata(action))
+        for action in latest.action_results
     )
+
+
+def _action_metadata(action: dict[str, object]) -> dict[str, object]:
+    metadata = action.get("metadata")
+    return metadata if isinstance(metadata, dict) else {}  # type: ignore[return-value]
 
 
 async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKExecutionSession:
@@ -1130,14 +1137,19 @@ async def _execute_step_once(
             if decision.override_instructions:
                 merged_params[OVERRIDE_INSTRUCTIONS] = decision.override_instructions
 
-        # Action failure; a failure awaiting a person pauses the run instead of failing it.
+        # Action failure. One awaiting a person, or a used-up usage limit (#248), pauses
+        # the run at this step instead of failing it; the step reruns on resume.
         if not result.success:
+            usage_limited = pauses_run(result.metadata)
             return StepResult(
                 step_name=step.name,
                 step_type=step.step_type,
-                status=ExecutionStatus.PAUSED if result.awaits_human else ExecutionStatus.FAILED,
+                status=ExecutionStatus.PAUSED
+                if result.awaits_human or usage_limited
+                else ExecutionStatus.FAILED,
                 action_results=action_results,
                 iteration=iteration,
+                error=result.error if usage_limited else None,
             )
 
     return StepResult(

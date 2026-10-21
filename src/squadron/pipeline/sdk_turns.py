@@ -20,6 +20,7 @@ from claude_agent_sdk import (
     TaskStartedMessage,
     TaskUpdatedMessage,
 )
+from claude_agent_sdk.types import RateLimitInfo
 
 from squadron.core.models import (
     RATE_LIMIT_EVENT_TYPE,
@@ -192,6 +193,9 @@ class DispatchTurns:
     # the CLI sent that SessionState doesn't name is kept as-is and never idle.
     session_state: str | None = None
     unknown_state_warned: bool = False
+    # The last rejected rate limit this dispatch saw. An error result after one is
+    # the usage limit itself, not a step failure (issue 248).
+    rate_limit_rejection: RateLimitInfo | None = None
 
     def collect(self, msg: object) -> str | None:
         """Record one message; return the session id it carries, if any."""

@@ -9,6 +9,7 @@ from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.tool_support import resolve_allowed_tools
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
+from squadron.pipeline.failure_kind import usage_limit_stamp
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ResolvedModel
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
@@ -320,6 +321,7 @@ async def _execute_summary(
     except ProviderError as exc:
         # A named provider failure (issue 200): one ERROR line, no traceback.
         _logger.error("summary action: failed to capture summary: %s", exc)
+        usage_metadata_out.update(usage_limit_stamp(exc))
         if exc.telemetry is not None:
             stamp(
                 usage_metadata_out,

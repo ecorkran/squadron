@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import logging
+import time
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -51,8 +52,10 @@ from squadron.providers.errors import (
 from squadron.providers.sdk.rate_limit import (
     MAX_RATE_LIMIT_RETRIES,
     RateLimitRejected,
+    UsageLimitReached,
     event_blocks,
     is_throttle,
+    is_usage_limit,
     rate_limit_backoff_s,
 )
 from squadron.providers.sdk.settings import (
@@ -421,12 +424,19 @@ class SDKExecutionSession:
             # before collect() marks progress: a rejected event is not
             # progress and must consume retry budget.
             if isinstance(sdk_msg, RateLimitEvent) and event_blocks(sdk_msg):
-                raise RateLimitRejected(f"rate_limit_event status={sdk_msg.rate_limit_info.status!r}")
+                info = sdk_msg.rate_limit_info
+                # A limit that resets hours out is not worth backing off for (issue 248).
+                if is_usage_limit(info, time.time()):
+                    raise UsageLimitReached.from_info(info)
+                turns.rate_limit_rejection = info
+                raise RateLimitRejected(f"rate_limit_event status={info.status!r}")
             # Raise before collecting any content so no partial error text
             # reaches the caller or _check_cli_error.
             if isinstance(sdk_msg, ResultMessage) and sdk_msg.is_error and not accept_error:
                 turns.progressed = True
                 turns.fold_result(sdk_msg)  # an error result still spent tokens (D5)
+                if turns.rate_limit_rejection is not None:
+                    raise UsageLimitReached.from_info(turns.rate_limit_rejection)
                 raise ProviderAPIError(
                     f"SDK reported is_error=True: {sdk_msg.result or sdk_msg.subtype}"
                 )

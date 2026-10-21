@@ -226,3 +226,30 @@ async def test_a_run_with_no_review_has_an_empty_reviews_list(tmp_path: Path) ->
     sm, run_id = await _run(tmp_path, _single("implement", "work"), {"work": _action([done])})
 
     assert run_outcome(run_id, WaitOutcome.COMPLETED, sm.load(run_id))["reviews"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_usage_limit_pause_reports_kind_and_reset_time(tmp_path: Path) -> None:
+    """Issue 248: the step pauses, and the outcome says when the limit resets."""
+    from squadron.pipeline.failure_kind import USAGE_LIMIT_RESETS_AT_KEY
+
+    limited = ActionResult(
+        success=False,
+        action_type="work",
+        outputs={},
+        error="usage limit reached (five_hour); resets at 2026-10-21T01:50+00:00",
+        metadata={
+            FAILURE_KIND_KEY: FailureKind.USAGE_LIMIT.value,
+            USAGE_LIMIT_RESETS_AT_KEY: 1792547400,
+        },
+    )
+    sm, run_id = await _run(tmp_path, _single("implement", "work"), {"work": _action([limited])})
+
+    state = sm.load(run_id)
+    checkpoint = run_outcome(run_id, WaitOutcome.PAUSED, state)["checkpoint"]
+
+    assert state.status == ExecutionStatus.PAUSED.value
+    assert isinstance(checkpoint, dict)
+    assert checkpoint["kind"] == "usage_limit"
+    assert checkpoint["resets_at"] == "2026-10-21T01:50:00+00:00"
+    assert checkpoint["reason"] == limited.error

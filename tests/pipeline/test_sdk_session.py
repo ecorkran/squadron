@@ -1417,3 +1417,74 @@ class TestSessionTelemetry:
             await session.dispatch("p")  # type: ignore[attr-defined]
 
         assert len([r for r in caplog.records if "no token usage" in r.getMessage()]) == 1
+
+
+def _rejected_stream(client: AsyncMock, *messages_after: object, resets_at: int | None) -> list[int]:
+    """Each read yields one rejected RateLimitEvent, then *messages_after*; returns a call counter."""
+    from claude_agent_sdk import RateLimitEvent, RateLimitInfo
+
+    calls = [0]
+
+    async def _gen():  # type: ignore[return]
+        calls[0] += 1
+        if calls[0] == 1:
+            yield RateLimitEvent(
+                rate_limit_info=RateLimitInfo(
+                    status="rejected", resets_at=resets_at, rate_limit_type="five_hour"
+                ),
+                uuid="evt-1",
+                session_id="sess-1",
+            )
+            return
+        for message in messages_after:
+            yield message
+
+    gen_mock = MagicMock()
+    gen_mock.__aiter__ = lambda self: _gen()
+    client.receive_response.return_value = gen_mock
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_a_far_off_reset_is_a_usage_limit_with_no_retry() -> None:
+    """Issue 248: a limit resetting hours out raises at once; backing off cannot outlast it."""
+    import time
+
+    from squadron.providers.sdk.rate_limit import UsageLimitReached
+
+    client = _make_client()
+    session = _make_session(client)
+    calls = _rejected_stream(client, resets_at=int(time.time()) + 3 * 3600)
+    sleep = AsyncMock()
+
+    with patch(f"{_MOD}.asyncio.sleep", new=sleep), pytest.raises(UsageLimitReached) as info:
+        await session.dispatch("test")
+
+    assert calls[0] == 1
+    sleep.assert_not_awaited()
+    assert info.value.limit_type == "five_hour"
+    assert info.value.telemetry is not None
+
+
+@pytest.mark.asyncio
+async def test_an_error_result_after_a_rejection_is_a_usage_limit() -> None:
+    """Issue 248: the session-limit error result that follows a short rejection is the limit."""
+    from claude_agent_sdk import ResultMessage
+
+    from squadron.providers.sdk.rate_limit import UsageLimitReached
+
+    error_result = ResultMessage(
+        subtype="success",
+        duration_ms=1,
+        duration_api_ms=1,
+        is_error=True,
+        num_turns=1,
+        session_id="sess-1",
+        result="You've hit your session limit · resets 7:50pm",
+    )
+    client = _make_client()
+    session = _make_session(client)
+    _rejected_stream(client, error_result, resets_at=None)
+
+    with patch(f"{_MOD}.asyncio.sleep", new=AsyncMock()), pytest.raises(UsageLimitReached):
+        await session.dispatch("test")

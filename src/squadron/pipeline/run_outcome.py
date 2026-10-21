@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from datetime import UTC, datetime
 from enum import StrEnum
 
 import yaml
@@ -18,7 +19,7 @@ from pydantic import ValidationError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.executor import ExecutionStatus, resolve_placeholders
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, USAGE_LIMIT_RESETS_AT_KEY, pauses_run
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import PipelineDefinition
 from squadron.pipeline.run_wait import WaitOutcome
@@ -36,6 +37,7 @@ class CheckpointKind(StrEnum):
     LOOP_EXHAUSTED = "loop_exhausted"  # a loop ran out of rounds (on_exhaust: checkpoint)
     INTERACTIVE_CHECKPOINT = "interactive_checkpoint"  # a checkpoint: prompt took exit
     AWAITS_HUMAN = "awaits_human"  # an action handed off to a person (e.g. a BLOCKED task)
+    USAGE_LIMIT = "usage_limit"  # the account's usage limit is used up; resume after resets_at
     OTHER = "other"
 
 
@@ -128,11 +130,14 @@ def _checkpoint(state: RunState, load_definition: DefinitionLoader) -> dict[str,
         "review_file": _review_file(step) if step is not None else None,
         "reason": recorded.reason if recorded else None,
         "paused_at": recorded.paused_at.isoformat() if recorded else None,
+        "resets_at": _usage_limit_resets_at(step) if step is not None else None,
     }
 
 
 def _checkpoint_kind(step: StepState) -> CheckpointKind:
     actions = step.action_results
+    if any(pauses_run(_metadata(a)) for a in actions):
+        return CheckpointKind.USAGE_LIMIT
     if any(a.get("awaits_human") is True for a in actions):
         return CheckpointKind.AWAITS_HUMAN
     if any(_outputs(a).get("checkpoint") == "paused" for a in actions):
@@ -140,6 +145,20 @@ def _checkpoint_kind(step: StepState) -> CheckpointKind:
     if step.exhausted:
         return CheckpointKind.LOOP_EXHAUSTED
     return CheckpointKind.OTHER
+
+
+def _usage_limit_resets_at(step: StepState) -> str | None:
+    """When the usage limit that paused *step* resets, as UTC ISO 8601 (#248)."""
+    for action in reversed(step.action_results):
+        resets_at = _metadata(action).get(USAGE_LIMIT_RESETS_AT_KEY)
+        if isinstance(resets_at, int):
+            return datetime.fromtimestamp(resets_at, UTC).isoformat()
+    return None
+
+
+def _metadata(action: dict[str, object]) -> dict[str, object]:
+    metadata = action.get("metadata")
+    return metadata if isinstance(metadata, dict) else {}  # type: ignore[return-value]
 
 
 def _outputs(action: dict[str, object]) -> dict[str, object]:

@@ -791,3 +791,28 @@ class TestSourceReceivesCwd:
             _action_registry={},
         )
         assert seen == [str(tmp_path)]
+
+
+class TestUsageLimitPausesTheBatch:
+    """Issue 248: a used-up usage limit pauses the run; later items are not run."""
+
+    @pytest.mark.asyncio
+    async def test_the_run_pauses_and_later_items_wait(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
+
+        def outcome(index: str) -> ActionResult:
+            if index == "2":
+                return ActionResult(
+                    success=False,
+                    action_type="dispatch",
+                    outputs={},
+                    error="usage limit reached (five_hour); resets at 2026-10-21T01:50+00:00",
+                    metadata={FAILURE_KIND_KEY: FailureKind.USAGE_LIMIT.value},
+                )
+            return ActionResult(success=True, action_type="dispatch", outputs={})
+
+        result, ran = await _run(monkeypatch, _items("1", "2", "3"), outcome, "continue")
+
+        assert result.status == ExecutionStatus.PAUSED
+        assert ran == ["1", "2"]
+        assert _record(result, "2").flag_kind == "paused"

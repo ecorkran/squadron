@@ -383,3 +383,19 @@ async def test_successful_dispatch_records_prompt_identity(action: DispatchActio
         "cf_version",
         "guide_version",
     }
+
+
+@pytest.mark.asyncio
+async def test_a_usage_limit_stamps_its_kind_and_reset_time(action: DispatchAction) -> None:
+    """Issue 248: the executor pauses on this kind; the reset time rides the result."""
+    from squadron.pipeline.failure_kind import USAGE_LIMIT_RESETS_AT_KEY
+    from squadron.providers.sdk.rate_limit import UsageLimitReached
+
+    session = _make_session()
+    session.dispatch.side_effect = UsageLimitReached("five_hour", 1792547400)
+    result = await action.execute(_make_context(session=session))
+
+    assert result.success is False
+    assert result.metadata["failure_kind"] == FailureKind.USAGE_LIMIT.value
+    assert result.metadata[USAGE_LIMIT_RESETS_AT_KEY] == 1792547400
+    assert result.error == "usage limit reached (five_hour); resets at 2026-10-21T01:50+00:00"
