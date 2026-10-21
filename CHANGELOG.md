@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sq run --resume <id> --flagged` retries every flagged and not-run item of a batch run in one command.
+
 ### Fixed
 
 - Hitting your Claude usage limit mid-run now pauses the run instead of failing every remaining step or batch item; resume it with `sq run --resume <id>` after the reset. `sq runs wait --json` reports it as `usage_limit` with the reset time.

@@ -168,3 +168,20 @@ async def test_an_unopenable_lock_file_is_rejected(project: Project) -> None:
     assert outcome.exit is ResumeExit.REJECTED  # type: ignore[attr-defined]
     assert "cannot open" in outcome.message  # type: ignore[attr-defined]
     body.assert_not_awaited()
+
+
+def test_retryable_indices_are_the_flagged_and_not_run_items_in_order(project: Project) -> None:
+    """Issue 248: --flagged retries these; a passed item is left alone."""
+    from squadron.pipeline.item_resume import retryable_indices
+
+    indices = retryable_indices(project.run_id, StateManager(runs_dir=project.runs_dir))
+
+    assert indices == ["401", "402", "404"]
+
+
+def test_retryable_indices_of_an_unknown_run_is_rejected(project: Project) -> None:
+    from squadron.pipeline.item_resume import ResumeOutcome, retryable_indices
+
+    outcome = retryable_indices("no-such-run", StateManager(runs_dir=project.runs_dir))
+
+    assert isinstance(outcome, ResumeOutcome) and outcome.exit is ResumeExit.REJECTED

@@ -927,7 +927,10 @@ A flagged item is fixed by a decision, applied to that item of that run. `sq run
 ```bash
 sq run --resume <run_id> --item 196 --decision retry --instructions "Use the existing CommitPlan."
 sq run --resume <run_id> --item 196 --decision accept
+sq run --resume <run_id> --flagged
 ```
+
+`--flagged` retries every flagged and not-run item in report order, one item resume each. It stops at the first item that is rejected, halts or pauses (a used-up usage limit would pause the rest too) and exits with the worst code it saw. To accept an item, use `--item` with `--decision accept`.
 
 - `retry` reruns the item's body once, from the top, with the run's own pipeline, params and models (`--model` and `-p` apply on top). Work already on the slice branch is kept, so a retry re-reviews it and revises it. `--instructions` is put at the head of every dispatch prompt in the item, in the "Instructions from checkpoint resolution" block.
 - `accept` does the same, except the revise loop counts as met with no rounds: one code review runs (so the report shows what was accepted), then devlog and merge, and the item is recorded **ACCEPTED**. Only items flagged `review_unresolved` can be accepted. A conflict still flags the item; accept overrides the review, not git.

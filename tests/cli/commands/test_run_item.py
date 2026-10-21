@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.pipeline.batch_report import BatchItemRecord, ItemOutcome
+from squadron.pipeline.batch_report import BatchItemRecord, FlagKind, ItemOutcome
 from squadron.pipeline.item_resume import ResumeExit, ResumeOutcome
 
 runner = CliRunner()
@@ -22,6 +22,9 @@ runner = CliRunner()
         (["P6", "--item", "401", "--decision", "retry"], "--item requires --resume"),
         (["P6", "--decision", "accept"], "--decision and --instructions require --resume"),
         (["P6", "--instructions", "x"], "--decision and --instructions require --resume"),
+        (["P6", "--flagged"], "--flagged requires --resume"),
+        (["--resume", "r1", "--flagged", "--item", "401"], "--flagged and --item are exclusive"),
+        (["--resume", "r1", "--flagged", "--decision", "accept"], "--flagged retries"),
     ],
 )
 def test_a_meaningless_flag_combination_exits_2(args: list[str], message: str) -> None:
@@ -105,3 +108,64 @@ def test_a_plain_resume_never_reaches_item_resume() -> None:
     assert result.exit_code == 1
     assert "Run 'no-such-run' not found" in result.output
     resume.assert_not_called()
+
+
+def _outcome(index: str, code: ResumeExit, flag_kind: FlagKind | None = None) -> ResumeOutcome:
+    outcome = ItemOutcome.PASSED if code is ResumeExit.RESOLVED else ItemOutcome.FLAGGED
+    record = BatchItemRecord(index, f"S{index}", outcome, flag_kind=flag_kind)
+    return ResumeOutcome(code, f"{index} S{index}", record, None)
+
+
+def _run_flagged(indices: object, outcomes: list[ResumeOutcome]) -> tuple[object, AsyncMock]:
+    resume = AsyncMock(side_effect=outcomes)
+    with (
+        patch("squadron.cli.commands.run_item.retryable_indices", return_value=indices),
+        patch("squadron.cli.commands.run_item.resume_item", resume),
+    ):
+        result = runner.invoke(app, ["run", "--resume", "r1", "--flagged"])
+    return result, resume
+
+
+def test_flagged_retries_every_open_item_in_order() -> None:
+    """Issue 248: one command retries each flagged and not_run item; worst exit wins."""
+    result, resume = _run_flagged(
+        ["128", "130", "131"],
+        [
+            _outcome("128", ResumeExit.RESOLVED),
+            _outcome("130", ResumeExit.FLAGGED, FlagKind.REVIEW_UNRESOLVED),
+            _outcome("131", ResumeExit.RESOLVED),
+        ],
+    )
+
+    assert result.exit_code == int(ResumeExit.FLAGGED)  # type: ignore[attr-defined]
+    requests = [call.args[0] for call in resume.await_args_list]
+    assert [(r.index, r.decision) for r in requests] == [
+        ("128", "retry"),
+        ("130", "retry"),
+        ("131", "retry"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "stopper",
+    [
+        _outcome("130", ResumeExit.FLAGGED, FlagKind.PAUSED),
+        _outcome("130", ResumeExit.REJECTED),
+        _outcome("130", ResumeExit.HALTED),
+    ],
+)
+def test_flagged_stops_at_a_pause_rejection_or_halt(stopper: ResumeOutcome) -> None:
+    result, resume = _run_flagged(
+        ["128", "130", "131"], [_outcome("128", ResumeExit.RESOLVED), stopper]
+    )
+
+    assert resume.await_count == 2
+    assert result.exit_code == int(stopper.exit)  # type: ignore[attr-defined]
+
+
+def test_flagged_with_nothing_open_exits_0() -> None:
+    result, resume = _run_flagged([], [])
+
+    assert result.exit_code == 0  # type: ignore[attr-defined]
+    assert "No flagged or not_run items in r1" in result.output  # type: ignore[attr-defined]
+    resume.assert_not_awaited()

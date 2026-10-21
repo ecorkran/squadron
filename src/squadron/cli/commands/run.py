@@ -24,7 +24,12 @@ if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
 
 from squadron.cli.commands.run_dry_run import render_steps
-from squadron.cli.commands.run_item import USAGE_EXIT, check_item_flags, handle_item_resume
+from squadron.cli.commands.run_item import (
+    USAGE_EXIT,
+    check_item_flags,
+    handle_flagged_resume,
+    handle_item_resume,
+)
 from squadron.cli.run_views import render_run_status, status_color
 from squadron.events import EventType, bootstrap_event_actions
 from squadron.events.contexts import PostActionContext
@@ -1088,6 +1093,11 @@ def run(
     item: str | None = typer.Option(
         None, "--item", help="With --resume: rerun one item of a batch run, by its index."
     ),
+    flagged: bool = typer.Option(
+        False,
+        "--flagged",
+        help="With --resume: retry every flagged and not-run item of a batch run, in order.",
+    ),
     decision: ItemDecision | None = typer.Option(
         None,
         "--decision",
@@ -1108,7 +1118,7 @@ def run(
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
-    check_item_flags(resume, item, decision, instructions)
+    check_item_flags(resume, item, decision, instructions, flagged)
     if resume is not None and new_run_id is not None:
         rprint("[red]Error: --resume and --run-id cannot be used together.[/red]")
         raise typer.Exit(1)
@@ -1282,6 +1292,12 @@ def run(
         rprint("\n[bold]Steps:[/bold]")
         render_steps(definition.steps, params, ContextForgeClient(), cwd=os.getcwd())
         raise typer.Exit(0)
+
+    # ---- --resume --flagged (#248) ----
+    if resume is not None and flagged:
+        flagged_overrides: dict[str, object] = {}
+        _apply_param_overrides(flagged_overrides, param)  # rejects reserved keys
+        handle_flagged_resume(resume, instructions, model, flagged_overrides, strict, _run_pipeline_sdk)
 
     # ---- --resume --item (slice 197 D8) ----
     if resume is not None and item is not None:

@@ -183,24 +183,42 @@ def _outcome(run: _Run, index: str) -> ResumeOutcome:
 # ---------------------------------------------------------------------------
 
 
-def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
+def retryable_indices(run_id: str, state_manager: StateManager) -> list[str] | ResumeOutcome:
+    """The run's flagged and not_run item indices in report order (#248).
+
+    A run that cannot item-resume returns the REJECTED outcome instead.
+    """
     try:
-        state = state_manager.load(request.run_id)
+        run = _load_run(run_id, state_manager)
+    except _Stop as stop:
+        _logger.warning("item resume %s: %s", run_id, stop)
+        return ResumeOutcome(stop.exit, str(stop))
+    return [r.index for r in run.report.records if ItemDecision.RETRY in item_decisions(r)]
+
+
+def _validate(request: ResumeRequest, state_manager: StateManager) -> _Run:
+    run = _load_run(request.run_id, state_manager)
+    _check_record(run.report, request, run.report_path)
+    return run
+
+
+def _load_run(run_id: str, state_manager: StateManager) -> _Run:
+    try:
+        state = state_manager.load(run_id)
     except FileNotFoundError:
-        raise _Stop(ResumeExit.REJECTED, f"run {request.run_id} not found") from None
+        raise _Stop(ResumeExit.REJECTED, f"run {run_id} not found") from None
     except SchemaVersionError as exc:
         raise _Stop(ResumeExit.REJECTED, str(exc)) from None
     try:
         each = single_each_step(load_pipeline(state.load_target))
     except ItemResumeUnsupportedError as exc:
-        raise _Stop(ResumeExit.REJECTED, f"run {request.run_id}'s {exc}") from None
-    path = report_json_path(state_manager.runs_dir, request.run_id, each.name)
+        raise _Stop(ResumeExit.REJECTED, f"run {run_id}'s {exc}") from None
+    path = report_json_path(state_manager.runs_dir, run_id, each.name)
     try:
         report = BatchReport.load(path)
     except BatchReportLoadError as exc:
         _logger.error("item resume: %s", exc)
         raise _Stop(ResumeExit.REJECTED, str(exc)) from None
-    _check_record(report, request, path)
     return _Run(state.load_target, dict(state.params), each, report, path)
 
 
