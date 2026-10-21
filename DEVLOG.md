@@ -18,6 +18,22 @@ A lightweight, append-only record of development activity. Newest entries first.
 - The architecture design review came back CONCERNS. All 10 findings were accepted and answered in the review file (2b3bc66f).
 - Next: slice design for 400 (Phase 4).
 
+### Slice 366: Dispatcher Routing and Documentation — Tasks Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/366-tasks.dispatcher-routing-and-documentation.md` (13 tasks, 342 lines, one commit per task). Order: parser, drift test, dispatchers, installer pin, skill guidance, probe (types, graph, surfaces, plugin, build, contract, CLI), docs, walkthrough.
+- The design's "CLI reference" is `docs/COMMANDS.md`; README gets a pointer only.
+- Both skill copies carry Claude and Codex install commands, so one constants test covers README and both copies.
+- Contract table now types `analysis_skill_installed` and `understand_plugin_installed` as "bool or null" to match D7/D8; tell CF with the post-merge notice.
+
+### Slice 366: Dispatcher Routing and Documentation — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/366-slice.dispatcher-routing-and-documentation.md` (`cf validate design` passes).
+- The understand skill is already in `commands/analysis/` and gets installed. The slice is now routing (`/sq:analysis` and Codex `$sq-analysis`), missing-graph install guidance, README, and a dispatcher/pack drift test.
+- Key decisions: route both surfaces (D1). Pass flow arguments through without validating them (D2). Missing-graph guidance is conditional wording and does not detect the plugin, because `~/.claude/plugins/installed_plugins.json` is an undocumented Claude Code internal file (D3). README covers capability (a) only and `/sq:overview` stays with 365 (D4).
+- Must land before CF 260's handoff slice. The capability probe (`sq probe --json`) was folded into 366 afterward (PM-approved 20261020) and added as D6–D11, so routing and the probe ship together per the contract's Shipping Order.
+- Reviewed by claude-haiku-5-5 over three rounds (CONCERNS each; accepted at threshold). Planning docs amended: 360-arch (D3), slice plan item 6, initiative plan item 16, probe contract, 365 README owner (#247).
+- Next: task breakdown (Phase 5).
+
 ### Release 0.23.5
 
 - **Contents:** the 0.23.4 changes. 0.23.4's tag CI failed on one test (`test_run_id_is_listed_in_help`): CI forces colour, so Rich styled `--run-id` across ANSI codes and the substring check missed it. The test now checks the option's `hidden` flag on the command. Nothing was published for 0.23.4.
