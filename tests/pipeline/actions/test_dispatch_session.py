@@ -186,6 +186,28 @@ async def test_session_dispatch_failure_returns_action_result_false(
 
 
 @pytest.mark.asyncio
+async def test_set_model_failure_fails_the_step_with_one_line(
+    action: DispatchAction, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Issue 230: a rejected model switch fails the step naming step, alias and model; no traceback."""
+    session = _make_session()
+    session.set_model.side_effect = ProviderError(
+        "could not switch to model claude-opus-5-5: Couldn't confirm model"
+    )
+    ctx = _make_context(session=session, params={"prompt": "go", "model": "opus"})
+    with caplog.at_level(logging.ERROR):
+        result = await action.execute(ctx)
+    assert result.success is False
+    assert result.error == (
+        "model opus: could not switch to model claude-opus-5-5: Couldn't confirm model"
+    )
+    assert result.metadata["failure_kind"] == FailureKind.PROVIDER_ERROR.value
+    session.dispatch.assert_not_called()
+    assert "step design failed" in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+
+
+@pytest.mark.asyncio
 async def test_session_dispatch_cli_error_response_returns_failure(
     action: DispatchAction,
 ) -> None:

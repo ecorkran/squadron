@@ -122,6 +122,11 @@ def _seeded_options(base: ClaudeAgentOptions, seed: str | None) -> ClaudeAgentOp
 # (slice 174 D7). Matches the SDK's own 60 s control-request bound.
 INTERRUPT_DRAIN_TIMEOUT_S = 60
 
+# A rejected model switch is usually transient (the API says "try again"), so it
+# gets a few spaced attempts before the step fails (issue 230).
+SET_MODEL_ATTEMPTS = 3
+SET_MODEL_RETRY_DELAY_S = 2.0
+
 
 class _IdleTimeout(Exception):
     """A read's idle bound expired: a background wait (932 D5) or a foreground turn (174 D7)."""
@@ -210,10 +215,31 @@ class SDKExecutionSession:
         Args:
             model_id: Resolved model ID (e.g. 'claude-haiku-4-5-20251001').
                       Skipped if identical to the currently active model.
+
+        Raises:
+            ProviderError: If the CLI rejects the switch on every attempt (issue 230).
         """
         if model_id == self.current_model:
             return
-        await self.client.set_model(model_id)
+        for attempt in range(1, SET_MODEL_ATTEMPTS + 1):
+            try:
+                await self.client.set_model(model_id)
+                break
+            # The SDK raises bare Exception for a rejected or timed-out control
+            # request ("Couldn't confirm model ..."); there is no narrower type.
+            except Exception as exc:  # noqa: BLE001
+                _logger.debug("set_model %s failed", model_id, exc_info=True)
+                if attempt == SET_MODEL_ATTEMPTS:
+                    raise ProviderError(f"could not switch to model {model_id}: {exc}") from exc
+                _logger.warning(
+                    "set_model %s failed (attempt %d/%d): %s; retrying in %.0fs.",
+                    model_id,
+                    attempt,
+                    SET_MODEL_ATTEMPTS,
+                    exc,
+                    SET_MODEL_RETRY_DELAY_S,
+                )
+                await asyncio.sleep(SET_MODEL_RETRY_DELAY_S)
         self.current_model = model_id
         _logger.debug("SDKExecutionSession: switched model to %s", model_id)
 

@@ -114,6 +114,38 @@ async def test_set_model_updates_current_model() -> None:
     client.set_model.assert_called_once_with("claude-sonnet-4-6")
 
 
+_REJECTED = 'Couldn\'t confirm model "claude-opus-5-5" with the API. Try again.'
+
+
+@pytest.mark.asyncio
+async def test_set_model_retries_a_transient_rejection(caplog: pytest.LogCaptureFixture) -> None:
+    """Issue 230: a rejected switch is retried, each retry logged at WARNING."""
+    client = _make_client()
+    client.set_model = AsyncMock(side_effect=[Exception(_REJECTED), None])
+    session = _make_session(client)
+    with patch(f"{_MOD}.asyncio.sleep", new=AsyncMock()), caplog.at_level(logging.WARNING):
+        await session.set_model("claude-opus-5-5")
+    assert client.set_model.await_count == 2
+    assert session.current_model == "claude-opus-5-5"
+    assert "attempt 1/3" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_set_model_fails_with_one_provider_error_after_every_attempt() -> None:
+    """Issue 230: exhausted attempts raise a ProviderError naming the model and the API message."""
+    from squadron.pipeline.sdk_session import SET_MODEL_ATTEMPTS
+    from squadron.providers.errors import ProviderError
+
+    client = _make_client()
+    client.set_model = AsyncMock(side_effect=Exception(_REJECTED))
+    session = _make_session(client)
+    with patch(f"{_MOD}.asyncio.sleep", new=AsyncMock()), pytest.raises(ProviderError) as info:
+        await session.set_model("claude-opus-5-5")
+    assert client.set_model.await_count == SET_MODEL_ATTEMPTS
+    assert "claude-opus-5-5" in str(info.value) and "Try again" in str(info.value)
+    assert session.current_model is None
+
+
 # ---------------------------------------------------------------------------
 # dispatch
 # ---------------------------------------------------------------------------

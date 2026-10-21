@@ -599,7 +599,12 @@ class DispatchAction:
         resolved = context.resolver.resolve_full(action_model, step_model)
         model_id = resolved.model_id
 
-        await session.set_model(model_id)
+        try:
+            await session.set_model(model_id)
+        except ProviderError as exc:
+            alias = action_model or step_model or model_id
+            named = ProviderError(f"model {alias}: {exc}")
+            return self._provider_failure(context, named, None, None)
 
         resolved_prompt = self._resolve_prompt(context)
         effort_sent = capture.effort_for_session(resolved)
