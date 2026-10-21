@@ -6,9 +6,9 @@ lldReference: project-documents/user/slices/990-slice.standing-fixes.md
 parent: project-documents/user/architecture/900-slices.maintenance-and-refactoring.md
 dependencies: []
 projectState: Standing container for multi-step fixes. Add a task group per issue.
-status: complete
+status: in_progress
 dateCreated: 20261011
-dateUpdated: 20261012
+dateUpdated: 20261021
 ---
 
 # Tasks: Standing Fixes
@@ -28,3 +28,13 @@ dateUpdated: 20261012
 ## #199 Dispatch ends while a background shell runs
 
 - [x] Pipeline SDK sessions deny `run_in_background` Bash calls via a PreToolUse hook; the agent reruns in the foreground (verified against the real SDK)
+
+## #230 + #248 Pipeline failure recovery
+
+- [ ] #230: `set_model` rejection retries a bounded number of times (each retry logged at WARNING), then fails the step with one line naming the step, model alias and ID, and the API message; traceback only at -vv
+- [ ] #248: Check whether the SDK reports session/usage limits as a structured field (not only `is_error` result text); the quota pause below uses it, and does not match error strings unless the SDK offers nothing else
+- [ ] #248: A quota or session-limit failure pauses the whole run at the failed step instead of flagging the item and continuing; a plain `sq run --resume <id>` restarts at that step
+- [ ] #248: `sq run --resume <id> --flagged` retries every flagged and not_run item in order, stopping on the first rejection
+- [ ] #248: The end-of-run summary prints the exact recovery command(s) for a paused run or flagged items
+- [ ] #248: Item resume commits uncommitted leftovers on the target when every dirty path belongs to the item being retried; any other dirty path still rejects
+- [ ] #248: PIPELINES.md gives one recovery path per failure kind; rerun / resume / item-resume guidance is consistent
