@@ -609,6 +609,7 @@ class TestResume:
             mock_result.status.value = "completed"
             mock_result.pipeline_name = "slice"
             mock_result.step_results = []
+            mock_result.run_id = None
             mock_asyncio.run.return_value = mock_result
             result = runner.invoke(app, ["run", "--resume", "run-20260403-test-abc12345"])
         mock_mgr.first_unfinished_step.assert_called_once()
