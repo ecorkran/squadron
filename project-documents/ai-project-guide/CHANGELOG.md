@@ -12,6 +12,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.3] - 2026-10-21
+
+### Added
+- Retroactive-slice marker in `guide.ai-project.brownfield-adoption` (Retroactive Slices): a backticked `retroactive` token after the entry title, with the checked/indexed/no-design-or-tasks rules, index ordering, and `provenance: derived` on the derived architecture. The Brownfield Adoption prompt now points to it and sets `provenance: derived`. Specified by Context Forge slice 263, not yet implemented in cf.
+
+## [0.22.2] - 2026-10-20
+
+### Fixed
+- Brownfield Adoption prompt: the squadron path is now gated only on `analysis_skill_installed` being true. `understand_plugin_installed` is checked only when the graph must be built: true runs `graph_build`; false or null asks the PM to install the plugin or take the CF-only path, saying "unknown" when null. Previously the plugin was required even when the graph was current, and a null value blocked the path.
+- Removed dead references to `guide.ai-project.091-legacy-task-migration` (deleted in v0.13.0) from the process guide and `project-guides/readme.md`.
+
+### Removed
+- `scripts/setup-ide` stub. cf 0.19.6+ does this work itself; cf 0.19.5 and older no longer get the "run `cf update`" message and will fail on the missing script.
+
+## [0.22.1] - 2026-10-20
+
+### Changed
+- Brownfield Adoption prompt: the concept step now invokes the `concept` value from the surface's entry in the Adoption Facts (squadron probe `surfaces.<s>.concept`) instead of an unnamed "concept step". It skips the step when a concept exists unless the PM confirms an overwrite.
+
+## [0.22.0] - 2026-10-20
+
+### Added
+- Brownfield adoption for context-forge initiative 260: `guide.ai-project.brownfield-adoption`, a Brownfield Adoption prompt in `prompt.ai-project.system`, and the `brownfield-adoption` context profile (`fileConcept`, `fileArch`, `fileSlicePlan`, `fileComprehension`). The prompt recovers a baseline concept, a reverse-engineered architecture, and an existing-state slice plan from an existing codebase, never fabricates intent, and reads squadron's capability probe from the "Adoption Facts" section that `cf build` appends. The retroactive-slice marker format is not yet specified.
+
+### Changed
+- The concept prompt now opens by asking the Project Manager what they want to build. `guide.ai-project.000-concept` and the process guide point brownfield projects to the adoption guide.
+
+### Removed
+- Stale `analyze-codebase` entry from `context_profiles`.
+
 ## [0.21.9] - 2026-10-19
 
 ### Added
