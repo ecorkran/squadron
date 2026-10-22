@@ -2,12 +2,27 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261021'
+dateUpdated: '20261022'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261022
+
+### Slice 400: Snapshot Record and First Adapters — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/400-slice.snapshot-record-and-first-adapters-keystone.md`. `cf validate design` passes, and all 10 decisions are `decided`.
+- Key decisions:
+  - One `code_snapshot` record per (project, commit), overwritten in place on a re-snapshot.
+  - Identity rules (rule set, environment, absent-with-detail) are enforced by a model validator.
+  - One exclusion set applied through git pathspecs. Tool-level include/exclude settings are ignored, so pyright counts `tests/` on squadron.
+  - The second language is TypeScript: tree-sitter for length (new dependencies `tree-sitter` and `tree-sitter-typescript`) and the project's own ESLint for lint. Verified against context-forge.
+  - Python type counts only when `uv sync --check --locked --offline` passes.
+  - A before/after `git status --ignored` check enforces read-only.
+- Note: squadron's `.squadron.toml` is gitignored, so its limits (300/50) and exclusions belong to the checkout. The record carries them.
+- Next: task breakdown for 400 (Phase 5).
 
 ## 20261021
 
