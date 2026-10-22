@@ -12,6 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.5] - 2026-10-21
+
+### Changed
+- Phase 6 now forbids pushing as well as merging. The task-breakdown guide's "What to Avoid" lists a push step in a task file, the Phase 6 prompt tells the agent to leave merge and push steps unchecked and tell the Project Manager, and the Git rules (and this repo's CLAUDE.md) say not to merge or push at the end of implementation. Pushing happens only when the Project Manager asks.
+
+## [0.22.4] - 2026-10-21
+
+### Added
+- `skills/setup-ci`: a TypeScript skeleton recipe (ESM, Vitest, the guide's ESLint baseline) for projects with no `package.json`. It was previously "no recipe yet". It asks for npm or pnpm. The skill also detects the package manager from the lockfile or `packageManager` field and, for pnpm, adapts the generated `ci.yml` (`pnpm/action-setup`, `pnpm install --frozen-lockfile`, `pnpm run`).
+
 ## [0.22.3] - 2026-10-21
 
 ### Added
