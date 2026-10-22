@@ -38,6 +38,7 @@ class FailureClass(StrEnum):
     NO_ARTIFACT = "no_artifact"
     COST_CAP = "cost_cap"
     USAGE_LIMIT = "usage_limit"
+    AGENT_QUESTION = "agent_question"
     OTHER = "other"
     NO_RUN_STATE = "no_run_state"
 
@@ -48,6 +49,7 @@ _CLASS_OF_KIND: dict[FailureKind, FailureClass] = {
     FailureKind.ARTIFACT_MISSING: FailureClass.NO_ARTIFACT,
     FailureKind.COST_CAP: FailureClass.COST_CAP,
     FailureKind.USAGE_LIMIT: FailureClass.USAGE_LIMIT,
+    FailureKind.AGENT_QUESTION: FailureClass.AGENT_QUESTION,
 }
 
 

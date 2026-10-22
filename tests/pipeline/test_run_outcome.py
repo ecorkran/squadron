@@ -253,3 +253,30 @@ async def test_a_usage_limit_pause_reports_kind_and_reset_time(tmp_path: Path) -
     assert checkpoint["kind"] == "usage_limit"
     assert checkpoint["resets_at"] == "2026-10-21T01:50:00+00:00"
     assert checkpoint["reason"] == limited.error
+
+
+@pytest.mark.asyncio
+async def test_an_agent_question_pause_reports_kind_and_question(tmp_path: Path) -> None:
+    """Issue 249: an agent that ended on a question pauses the step and surfaces the question."""
+    from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY
+
+    asked = ActionResult(
+        success=False,
+        action_type="work",
+        outputs={},
+        error="agent wrote no design artifact",
+        metadata={
+            FAILURE_KIND_KEY: FailureKind.AGENT_QUESTION.value,
+            AGENT_QUESTION_KEY: "Which option do you want?",
+        },
+    )
+    sm, run_id = await _run(tmp_path, _single("design", "work"), {"work": _action([asked])})
+
+    state = sm.load(run_id)
+    checkpoint = run_outcome(run_id, WaitOutcome.PAUSED, state)["checkpoint"]
+
+    assert state.status == ExecutionStatus.PAUSED.value
+    assert isinstance(checkpoint, dict)
+    assert checkpoint["kind"] == "agent_question"
+    assert checkpoint["question"] == "Which option do you want?"
+    assert checkpoint["resets_at"] is None

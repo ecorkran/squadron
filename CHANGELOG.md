@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- An agent that finishes a phase step by asking you a question, with no artifact written, now pauses the run instead of failing it. The run prints the question and `sq run --resume <id> --instructions "<answer>"`; `sq runs wait --json` reports it as `agent_question` with the question text. (#249)
+
 ## [0.23.7] - 20261021
 
 ### Added

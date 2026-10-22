@@ -1794,6 +1794,35 @@ def test_the_run_ends_with_its_recovery_command(
         assert expected in out
 
 
+def test_a_run_paused_on_an_agent_question_prints_it_and_the_answer_command(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Issue 249: the end of the run shows the question and how to answer it."""
+    from squadron.cli.commands.run import _display_result
+    from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
+    from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY, FAILURE_KIND_KEY, FailureKind
+    from squadron.pipeline.models import ActionResult
+
+    asked = ActionResult(
+        success=False,
+        action_type="dispatch",
+        outputs={},
+        error="agent wrote no design artifact",
+        metadata={
+            FAILURE_KIND_KEY: FailureKind.AGENT_QUESTION.value,
+            AGENT_QUESTION_KEY: "Which option do you want?",
+        },
+    )
+    step = StepResult("design-0", "design", ExecutionStatus.PAUSED, [asked])
+    result = PipelineResult("p4", ExecutionStatus.PAUSED, [step], run_id="r1")
+
+    _display_result(result)
+
+    out = " ".join(capsys.readouterr().out.split())
+    assert "Agent is waiting for an answer: Which option do you want?" in out
+    assert 'Answer with: sq run --resume r1 --instructions "<answer>"' in out
+
+
 class TestUnknownAliasRejectedPreRun:
     """#175 / design criterion 11: a mistyped alias fails before any step writes anything."""
 

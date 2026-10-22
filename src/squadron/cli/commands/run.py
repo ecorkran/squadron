@@ -64,6 +64,7 @@ from squadron.pipeline.executor import (
     execute_pipeline,
     resolve_placeholders,
 )
+from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
@@ -699,6 +700,10 @@ def _display_recovery(result: PipelineResult) -> None:
         return
     run_id = escape(result.run_id)
     if result.status in (ExecutionStatus.PAUSED, ExecutionStatus.FAILED):
+        if (question := _agent_question(result)) is not None:
+            rprint(f"Agent is waiting for an answer: {escape(question)}")
+            rprint(f'Answer with: [bold]sq run --resume {run_id} --instructions "<answer>"[/bold]')
+            return
         rprint(f"Resume with: [bold]sq run --resume {run_id}[/bold]")
         return
     if any(
@@ -708,6 +713,16 @@ def _display_recovery(result: PipelineResult) -> None:
         for record in sr.batch_report.records
     ):
         rprint(f"Retry flagged items: [bold]sq run --resume {run_id} --flagged[/bold]")
+
+
+def _agent_question(result: PipelineResult) -> str | None:
+    """What a paused agent asked when it ended on a question with no artifact (#249)."""
+    for sr in result.step_results:
+        for ar in sr.action_results:
+            question = ar.metadata.get(AGENT_QUESTION_KEY)
+            if isinstance(question, str):
+                return question
+    return None
 
 
 def _display_failure_context(result: PipelineResult) -> None:

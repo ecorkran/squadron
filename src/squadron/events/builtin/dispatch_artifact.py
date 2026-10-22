@@ -20,7 +20,7 @@ from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.dispatch import SKIPPED_KEY
 from squadron.pipeline.commit_plan import PLAN_PARAM, SLICE_PARAM
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
+from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY, FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.pipeline.text_tail import tail_text
@@ -129,6 +129,22 @@ def _dispatch_artifact_post_condition_error(
     )
 
 
+_QUESTION_CLOSERS = "*_`\"')]"
+
+
+def _failure_metadata(response: str, final_text: str) -> dict[str, object]:
+    """An agent whose last words are a question is waiting for an answer, not broken (#249).
+
+    Heuristic: markdown emphasis and closing quotes after the question mark don't count.
+    """
+    if response.rstrip().rstrip(_QUESTION_CLOSERS).endswith("?"):
+        return {
+            FAILURE_KIND_KEY: FailureKind.AGENT_QUESTION.value,
+            AGENT_QUESTION_KEY: final_text,
+        }
+    return {FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value}
+
+
 class DispatchArtifactAction:
     """POST_ACTION event action: fail a dispatch that wrote no artifact."""
 
@@ -163,13 +179,14 @@ class DispatchArtifactAction:
             # The agent's last words say why no artifact exists (D7). Appended
             # here, once, so every failure branch carries it.
             response = str(context.result.outputs.get("response", ""))
-            error = f'{error}; agent\'s final text: "{tail_text(response)}"'
+            final_text = tail_text(response)
+            error = f'{error}; agent\'s final text: "{final_text}"'
             return ActionResult(
                 success=False,
                 action_type=self.name,
                 outputs={},
                 error=error,
-                metadata={FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value},
+                metadata=_failure_metadata(response, final_text),
             )
         return ActionResult(success=True, action_type=self.name, outputs={})
 

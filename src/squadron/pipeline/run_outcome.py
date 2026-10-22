@@ -19,7 +19,12 @@ from pydantic import ValidationError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.executor import ExecutionStatus, resolve_placeholders
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, USAGE_LIMIT_RESETS_AT_KEY, pauses_run
+from squadron.pipeline.failure_kind import (
+    AGENT_QUESTION_KEY,
+    FAILURE_KIND_KEY,
+    USAGE_LIMIT_RESETS_AT_KEY,
+    FailureKind,
+)
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import PipelineDefinition
 from squadron.pipeline.run_wait import WaitOutcome
@@ -38,6 +43,7 @@ class CheckpointKind(StrEnum):
     INTERACTIVE_CHECKPOINT = "interactive_checkpoint"  # a checkpoint: prompt took exit
     AWAITS_HUMAN = "awaits_human"  # an action handed off to a person (e.g. a BLOCKED task)
     USAGE_LIMIT = "usage_limit"  # the account's usage limit is used up; resume after resets_at
+    AGENT_QUESTION = "agent_question"  # the agent ended on a question; resume with --instructions
     OTHER = "other"
 
 
@@ -131,13 +137,17 @@ def _checkpoint(state: RunState, load_definition: DefinitionLoader) -> dict[str,
         "reason": recorded.reason if recorded else None,
         "paused_at": recorded.paused_at.isoformat() if recorded else None,
         "resets_at": _usage_limit_resets_at(step) if step is not None else None,
+        "question": _agent_question(step) if step is not None else None,
     }
 
 
 def _checkpoint_kind(step: StepState) -> CheckpointKind:
     actions = step.action_results
-    if any(pauses_run(_metadata(a)) for a in actions):
+    kinds = {_metadata(a).get(FAILURE_KIND_KEY) for a in actions}
+    if FailureKind.USAGE_LIMIT.value in kinds:
         return CheckpointKind.USAGE_LIMIT
+    if FailureKind.AGENT_QUESTION.value in kinds:
+        return CheckpointKind.AGENT_QUESTION
     if any(a.get("awaits_human") is True for a in actions):
         return CheckpointKind.AWAITS_HUMAN
     if any(_outputs(a).get("checkpoint") == "paused" for a in actions):
@@ -153,6 +163,15 @@ def _usage_limit_resets_at(step: StepState) -> str | None:
         resets_at = _metadata(action).get(USAGE_LIMIT_RESETS_AT_KEY)
         if isinstance(resets_at, int):
             return datetime.fromtimestamp(resets_at, UTC).isoformat()
+    return None
+
+
+def _agent_question(step: StepState) -> str | None:
+    """What the agent asked when it paused *step* by ending on a question (#249)."""
+    for action in reversed(step.action_results):
+        question = _metadata(action).get(AGENT_QUESTION_KEY)
+        if isinstance(question, str):
+            return question
     return None
 
 

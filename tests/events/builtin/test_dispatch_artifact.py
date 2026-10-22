@@ -22,7 +22,7 @@ from squadron.events.dispatcher import (  # pyright: ignore[reportPrivateUsage]
 )
 from squadron.events.manifest import Binding
 from squadron.integrations.context_forge import ContextForgeError
-from squadron.pipeline.failure_kind import FailureKind
+from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY, FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.steps.phase import ArtifactKind
 
@@ -73,7 +73,7 @@ def test_missing_arch_doc_fails(tmp_path: Path) -> None:
 _CF_MESSAGE = "No slice plan configured. Set one with: cf set slicePlan <path>"
 
 
-def _cf_failing_context() -> PostActionContext:
+def _cf_failing_context(response: str = "done") -> PostActionContext:
     cf_client = MagicMock()
     cf_client.list_slices.side_effect = ContextForgeError(_CF_MESSAGE)
     return PostActionContext(
@@ -81,7 +81,7 @@ def _cf_failing_context() -> PostActionContext:
         cwd=".",
         params={"slice": "127"},
         action_type="dispatch",
-        result=ActionResult(success=True, action_type="dispatch", outputs={"response": "done"}),
+        result=ActionResult(success=True, action_type="dispatch", outputs={"response": response}),
         run_id="run-1",
         run_started_at=datetime.now(tz=UTC),
         run_state_error=None,
@@ -115,3 +115,42 @@ async def test_cf_error_is_a_failed_outcome_with_the_cf_text_and_no_traceback(
     errors = [r for r in caplog.records if r.levelno == logging.ERROR]
     assert any(_CF_MESSAGE in r.getMessage() for r in errors)
     assert all(r.exc_info is None for r in errors)
+
+
+# --- an agent that ends on a question has not failed; it is waiting (#249) ---
+
+_QUESTION_BINDING = Binding(
+    event=EventType.POST_ACTION,
+    action="squadron.dispatch-artifact",
+    params={},
+    source="built-in",
+)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "Two options.\n\nWhich option do you want?",
+        "Which option do you want?  \n",
+        "Should I proceed with **the assumed schema?**",
+    ],
+)
+async def test_no_artifact_and_a_final_question_is_an_agent_question(response: str) -> None:
+    outcome = await _run_binding(_QUESTION_BINDING, _cf_failing_context(response), 5)
+
+    assert outcome.result is not None
+    assert outcome.result.success is False
+    assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.AGENT_QUESTION.value
+    assert outcome.result.metadata[AGENT_QUESTION_KEY] == " ".join(response.split())
+
+
+@pytest.mark.parametrize(
+    "response",
+    ["I wrote nothing. Why? Unknown.", "done", ""],
+)
+async def test_no_artifact_without_a_final_question_stays_artifact_missing(response: str) -> None:
+    outcome = await _run_binding(_QUESTION_BINDING, _cf_failing_context(response), 5)
+
+    assert outcome.result is not None
+    assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.ARTIFACT_MISSING.value
+    assert AGENT_QUESTION_KEY not in outcome.result.metadata

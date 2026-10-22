@@ -47,7 +47,12 @@ from squadron.pipeline.control_params import (
     OVERRIDE_INSTRUCTIONS,
     RESUMED_FROM_HANDOFF,
 )
-from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind, pauses_run
+from squadron.pipeline.failure_kind import (
+    AGENT_QUESTION_KEY,
+    FAILURE_KIND_KEY,
+    FailureKind,
+    pauses_run,
+)
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -1091,8 +1096,9 @@ async def _execute_step_once(
                 result.error = outcome.result.error
                 # An event can hand the run to a person (slice 947 D7), as an action can.
                 result.awaits_human = outcome.result.awaits_human
-                if (kind := outcome.result.metadata.get(FAILURE_KIND_KEY)) is not None:
-                    result.metadata[FAILURE_KIND_KEY] = kind
+                for key in (FAILURE_KIND_KEY, AGENT_QUESTION_KEY):
+                    if (value := outcome.result.metadata.get(key)) is not None:
+                        result.metadata[key] = value
                 break
             if outcome.error_kind is not OutcomeErrorKind.NONE:
                 result.success = False
@@ -1141,19 +1147,20 @@ async def _execute_step_once(
             if decision.override_instructions:
                 merged_params[OVERRIDE_INSTRUCTIONS] = decision.override_instructions
 
-        # Action failure. One awaiting a person, or a used-up usage limit (#248), pauses
-        # the run at this step instead of failing it; the step reruns on resume.
+        # Action failure. One awaiting a person, a used-up usage limit (#248) or an agent's
+        # question (#249) pauses the run at this step instead of failing it; the step reruns
+        # on resume.
         if not result.success:
-            usage_limited = pauses_run(result.metadata)
+            waiting = pauses_run(result.metadata)
             return StepResult(
                 step_name=step.name,
                 step_type=step.step_type,
                 status=ExecutionStatus.PAUSED
-                if result.awaits_human or usage_limited
+                if result.awaits_human or waiting
                 else ExecutionStatus.FAILED,
                 action_results=action_results,
                 iteration=iteration,
-                error=result.error if usage_limited else None,
+                error=result.error if waiting else None,
             )
 
     return StepResult(
