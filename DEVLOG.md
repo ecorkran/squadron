@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261021
 
+### Release 0.23.8
+
+- **Contents:** a phase step whose agent ends on a question with no artifact now pauses the run with the question and resume command (#249).
+
 ### Release 0.23.7
 
 - **Contents:** pipeline failure recovery (#230, #248): usage-limit pause and resume, `--flagged` batch retry, recovery command at run end, `set_model` retry, interrupted batch-item edit committed on resume.
