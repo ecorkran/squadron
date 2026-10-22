@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.7] - 20261021
+
 ### Added
 
 - `sq run --resume <id> --flagged` retries every flagged and not-run item of a batch run in one command.

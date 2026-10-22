@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261021
 
+### Release 0.23.7
+
+- **Contents:** pipeline failure recovery (#230, #248): usage-limit pause and resume, `--flagged` batch retry, recovery command at run end, `set_model` retry, interrupted batch-item edit committed on resume.
+
 ### Release 0.23.6
 
 - **Contents:** slice 366: `/sq:analysis understand` routing on Claude Code and Codex with install guidance, and `sq probe --json` capability probe.
