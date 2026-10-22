@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261022
 
+### Slice 400: Snapshot Record and First Adapters — Task Breakdown Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/400-tasks.snapshot-record-and-first-adapters-keystone.md`, 35 tasks, 300 lines, test-with ordering and a commit per milestone.
+- Order: dependencies → models/store → config/preflight → contract, files, lengths, runner, orchestrator → real tool-output fixtures → Python adapter (ast, ruff, uv+pyright) → TypeScript adapter (tree-sitter, ESLint) → registry/CLI → docs → walkthrough.
+- Fixture source for ESLint's skipped-file case: context-forge's `ignores` covers tracked `**/vitest.config.ts` and `**/tests/**`. ESLint there is 10.12.0.
+
 ### Slice 400: Snapshot Record and First Adapters — Design Complete (Phase 4)
 
 - Design: `project-documents/user/slices/400-slice.snapshot-record-and-first-adapters-keystone.md`. `cf validate design` passes, and all 10 decisions are `decided`.

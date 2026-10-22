@@ -92,8 +92,13 @@ New code lives in `src/squadron/metrology/`. The record models sit in a sibling 
 | `snapshot/preflight.py` | Repo, HEAD, clean tree, config validation, and the post-measurement integrity check |
 | `snapshot/runner.py` | Default subprocess `ToolRunner` (timeout, no shell), tool resolution and version probe |
 | `snapshot/lengths.py` | Shared non-blank line counting and the distribution reduction |
-| `snapshot/python_adapter.py` | Python adapter: ast, ruff, pyright, uv environment |
-| `snapshot/typescript_adapter.py` | TypeScript adapter: tree-sitter, ESLint |
+| `snapshot/config_hash.py` | Canonical-JSON hash of a pyproject table and content hash of a config file, shared by the ruff, pyright and ESLint rule sets |
+| `snapshot/python_adapter.py` | Python adapter class and ast length. Delegates lint and types to the two modules below |
+| `snapshot/python_lint.py` | ruff runner and rule-set resolution |
+| `snapshot/python_types.py` | uv environment check and pyright runner |
+| `snapshot/typescript_adapter.py` | TypeScript adapter class. Delegates to the two modules below |
+| `snapshot/typescript_length.py` | tree-sitter parsing and function walk |
+| `snapshot/typescript_lint.py` | ESLint runner and rule-set resolution |
 | `snapshot/take.py` | Orchestrator `take_snapshot(repo_root, registry, runner, store) -> CodeSnapshot`. Fills absent measurements and writes the record |
 | `cli/commands/metrology_snapshot.py` | `snapshot` command, registered onto `metrology_app` |
 
