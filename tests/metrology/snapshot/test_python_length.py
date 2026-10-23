@@ -9,7 +9,7 @@ from textwrap import dedent
 import pytest
 
 from squadron.metrology.snapshot.contract import AdapterContext
-from squadron.metrology.snapshot.python_adapter import PythonAdapter
+from squadron.metrology.snapshot.python_adapter import PythonAdapter, measure_lengths
 from squadron.metrology.snapshot_models import (
     LengthLimits,
     Measurement,
@@ -44,7 +44,7 @@ def measure(
             target.write_bytes(content)
         else:
             target.write_text(dedent(content), encoding="utf-8")
-    result = PythonAdapter().measure(context(repo, **limits), list(files))
+    result = measure_lengths(context(repo, **limits), list(files))
     return {m.metric: m for m in result}
 
 
@@ -53,11 +53,15 @@ def function_lengths(measurement: Measurement, path: str) -> dict[str, int]:
     return {row.qualified_name: row.length for row in measurement.over_limit if row.path == path}
 
 
-def test_adapter_declares_length_metrics_only_and_pb2_conventions() -> None:
+def test_adapter_declares_its_metrics_and_pb2_conventions() -> None:
     adapter = PythonAdapter()
 
     assert adapter.language is SourceLanguage.PYTHON
-    assert adapter.metrics == {SnapshotMetric.FILE_LENGTH, SnapshotMetric.FUNCTION_LENGTH}
+    assert adapter.metrics == {
+        SnapshotMetric.FILE_LENGTH,
+        SnapshotMetric.FUNCTION_LENGTH,
+        SnapshotMetric.LINT_COUNT,
+    }
     assert adapter.convention_exclusions == ("**/*_pb2.py", "**/*_pb2_grpc.py")
 
 
@@ -205,7 +209,7 @@ def test_unreadable_tracked_file_is_listed_and_not_measured(
     (tmp_path / "dangling.py").symlink_to(tmp_path / "missing-target.py")
 
     with caplog.at_level(logging.WARNING):
-        result = PythonAdapter().measure(context(tmp_path), ["dangling.py"])
+        result = measure_lengths(context(tmp_path), ["dangling.py"])
 
     by_metric = {m.metric: m for m in result}
     assert by_metric[SnapshotMetric.FILE_LENGTH].per_file == {}
