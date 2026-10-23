@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261022'
+dateUpdated: '20261023'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261023
+
+### Release 0.24.0
+
+- **Contents:** Slice 400 keystone: `sq metrology snapshot` measures a clean commit's file length, function length, lint and type errors per language, with absent metrics recorded as absent, never zero. #259: `sq review` prints a `Usage:` line (tokens and cost). Designs for slices 401–404 (docs only).
 
 ## 20261022
 

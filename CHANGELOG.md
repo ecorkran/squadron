@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0] - 20261023
+
 ### Added
 
 - `sq review` prints a `Usage:` line (tokens and cost) after every review, including with `--no-save` and when the provider fails. (#259)

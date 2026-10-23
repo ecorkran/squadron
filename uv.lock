@@ -1059,7 +1059,7 @@ wheels = [
 
 [[package]]
 name = "squadron-ai"
-version = "0.23.8"
+version = "0.24.0"
 source = { editable = "." }
 dependencies = [
     { name = "claude-agent-sdk" },
