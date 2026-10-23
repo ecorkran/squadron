@@ -9,6 +9,7 @@ aggregation this slice needs are satisfied by per-record JSON.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import uuid
@@ -22,6 +23,7 @@ from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
     RECORD_TYPE_AUDIT_FINDING,
     RECORD_TYPE_AUDIT_NOISE_FLOOR,
+    RECORD_TYPE_CODE_SNAPSHOT,
     RECORD_TYPE_GRADUATED_CONFIG,
     RECORD_TYPE_PAIRWISE_JUDGMENT,
     RECORD_TYPE_PRODUCER_REPLAY,
@@ -31,6 +33,7 @@ from squadron.metrology.models import (
     GraduatedConfig,
     JudgeConfigId,
     MetrologyRecord,
+    ProjectId,
     SampleVerdict,
 )
 from squadron.metrology.replay_models import (
@@ -39,6 +42,7 @@ from squadron.metrology.replay_models import (
     ProducerReplay,
     ReplayPhase,
 )
+from squadron.metrology.snapshot_models import CodeSnapshot
 
 _logger = logging.getLogger(__name__)
 
@@ -106,6 +110,12 @@ def generate_judgment_id(now: datetime | None = None) -> str:
     """Return a unique ``pair-{YYYYMMDD}-{uuid8}`` id."""
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
     return f"pair-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def snapshot_record_id(project_id: ProjectId, commit_sha: str) -> str:
+    """The deterministic record id of a code snapshot: one per (project, commit)."""
+    project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
+    return f"snapshot-{project_digest}-{commit_sha[:12]}"
 
 
 def _judge_config_matches(stored: JudgeConfigId, wanted: JudgeConfigId) -> bool:
@@ -404,6 +414,51 @@ class MetrologyStore:
             judgments.append(judgment)
         judgments.sort(key=lambda j: j.created_at, reverse=True)
         return judgments
+
+    def write_snapshot(self, snapshot: CodeSnapshot) -> str:
+        """Envelope and persist a code snapshot; return its record id.
+
+        The id is deterministic per (project, commit), so re-measuring a commit
+        replaces the earlier record in place (D3) and leaves one consistent
+        record. The replaced record isn't kept and no diff is computed.
+        """
+        record_id = snapshot_record_id(snapshot.project_id, snapshot.commit_sha)
+        if snapshot.snapshot_id != record_id:
+            raise MetrologyStoreError(
+                f"Snapshot id {snapshot.snapshot_id!r} does not match the record id "
+                f"{record_id!r} for this project and commit"
+            )
+        path = self._record_path(record_id)
+        if path.exists():
+            _logger.info("Replaced the earlier code snapshot of commit %s", snapshot.commit_sha)
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_CODE_SNAPSHOT,
+            code_snapshot=snapshot,
+        )
+        self._write_atomic(path, json.dumps(record.model_dump(mode="json"), indent=2))
+        return record_id
+
+    def list_snapshots(
+        self, project_id: ProjectId, commit_sha: str | None = None
+    ) -> list[CodeSnapshot]:
+        """Return a project's stored code snapshots, newest first.
+
+        ``commit_sha`` narrows to one commit. Tolerantly skips an unreadable
+        sibling with a WARNING, like the other list methods.
+        """
+        snapshots: list[CodeSnapshot] = []
+        for _, record in self._iter_records():
+            snapshot = record.code_snapshot
+            if snapshot is None or record.record_type != RECORD_TYPE_CODE_SNAPSHOT:
+                continue
+            if snapshot.project_id.value != project_id.value:
+                continue
+            if commit_sha is not None and snapshot.commit_sha != commit_sha:
+                continue
+            snapshots.append(snapshot)
+        snapshots.sort(key=lambda snap: snap.measured_at, reverse=True)
+        return snapshots
 
     def load_record(self, sample_id: str) -> MetrologyRecord:
         """Load and validate one record by id.
