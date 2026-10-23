@@ -35,7 +35,9 @@ dependencies = [
     "pyperclip>=1.8.2",
     "regex>=2024.0.0",
     # Code snapshot (slice 400): in-process TypeScript parsing for function length.
-    "tree-sitter>=0.26.0",
+    # tree-sitter 0.26.0 corrupts the heap while parsing real TypeScript with the 0.23.2
+    # grammar (segfault in pymalloc); 0.24.0 and 0.25.2 parse the same files cleanly.
+    "tree-sitter>=0.25.2,<0.26",
     "tree-sitter-typescript>=0.23.2",
     # Codex provider (openai-oauth): official SDK with a bundled runtime binary.
     "openai-codex>=0.159.3,<1",

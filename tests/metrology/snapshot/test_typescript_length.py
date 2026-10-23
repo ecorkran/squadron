@@ -248,5 +248,16 @@ def test_tool_identity_names_the_parser_and_grammar_versions(tmp_path: Path) -> 
     tool = measured[SnapshotMetric.FILE_LENGTH].tool
     assert tool is not None
     assert tool.name == "squadron-tree-sitter-ts"
-    assert "tree-sitter0.26" in tool.version
+    assert "tree-sitter0.25" in tool.version
     assert "tree-sitter-typescript0.23" in tool.version
+
+
+def test_tree_sitter_stays_below_the_release_that_corrupts_the_heap() -> None:
+    """tree-sitter 0.26.0 segfaulted (pymalloc corruption) while parsing real TypeScript
+    with the 0.23.2 grammar; 0.24.0 and 0.25.2 parse the same files cleanly. The pin in
+    pyproject.toml is the fix, and this guards it against a casual relaxation."""
+    from importlib.metadata import version
+
+    major, minor, *_ = (int(part) for part in version("tree-sitter").split("."))
+
+    assert (major, minor) < (0, 26)

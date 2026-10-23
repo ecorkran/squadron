@@ -78,11 +78,15 @@ def tree_sitter_tool_identity() -> ToolIdentity:
 
 
 @functools.cache
-def _parser(tsx: bool) -> tree_sitter.Parser:
+def _language(tsx: bool) -> tree_sitter.Language:
     grammar = (
         tree_sitter_typescript.language_tsx() if tsx else tree_sitter_typescript.language_typescript()
     )
-    return tree_sitter.Parser(tree_sitter.Language(grammar))
+    return tree_sitter.Language(grammar)
+
+
+def _parser(tsx: bool) -> tree_sitter.Parser:
+    return tree_sitter.Parser(_language(tsx))
 
 
 def _name(node: tree_sitter.Node) -> str:

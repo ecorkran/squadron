@@ -69,7 +69,7 @@ There are two adapters. Python measures all four metrics. TypeScript measures le
 ### Prerequisites
 - **320 (complete):** `MetrologyStore`, the `MetrologyRecord` envelope, `ProjectId` and `derive_project_id`, and the `MetrologyError` hierarchy.
 - **100 (complete):** Typer CLI registration under `metrology_app`.
-- **New runtime dependencies:** `tree-sitter` and `tree-sitter-typescript`, which ship prebuilt wheels. Checked on 20261022: tree-sitter 0.26.0 with tree-sitter-typescript 0.23.2 parses TypeScript in-process with no Node.
+- **New runtime dependencies:** `tree-sitter` and `tree-sitter-typescript`, which ship prebuilt wheels. Checked on 20261022: tree-sitter 0.25.2 with tree-sitter-typescript 0.23.2 parses TypeScript in-process with no Node. tree-sitter 0.26.0 is excluded: it corrupted the heap (segfault in pymalloc) parsing real context-forge files, which 0.24.0 and 0.25.2 parse cleanly.
 - **Tools at measurement time, resolved from the measured project and never installed:** `ruff`, `pyright`, `uv` for Python; `node_modules/.bin/eslint` for TypeScript. A missing tool means that metric is absent with `tool_missing`. It doesn't fail the snapshot.
 
 ### Interfaces Required
