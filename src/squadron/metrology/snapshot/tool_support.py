@@ -29,10 +29,10 @@ def absent(
 
 
 def tool_missing(
-    language: SourceLanguage, metric: SnapshotMetric, tool: str, looked_in: str
+    language: SourceLanguage, metric: SnapshotMetric, tool: str, looked_in: str | None = None
 ) -> Measurement:
     """The tool isn't installed where it's allowed to come from."""
-    detail = f"{tool} not found in {looked_in}"
+    detail = f"{tool} not found" if looked_in is None else f"{tool} not found in {looked_in}"
     _logger.warning("%s: %s", metric.value, detail)
     return absent(language, metric, AbsenceReason.TOOL_MISSING, detail)
 

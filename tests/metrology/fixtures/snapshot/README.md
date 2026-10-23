@@ -45,9 +45,11 @@ In `eslint_context_forge.stdout`, `packages/core/vitest.config.ts` (tracked, mat
   disable file ignore settings or use "--no-warn-ignored" to suppress this warning.`
 - `warningCount: 1`, `errorCount: 0`
 
-A skipped file is therefore a result entry whose only message has a null `ruleId` and
-`severity` 1, not a missing entry. Task 28 identifies skipped files by that shape (a
-null `ruleId` on a non-fatal warning), and never counts them as lint findings.
+A skipped file is therefore a result entry, not a missing one. Its only message has a null
+`ruleId`, `severity` 1, `fatal: false` and no `line`/`column`. The adapter identifies
+skipped files by exactly that shape and never counts them as lint findings. The missing
+position matters: a real null-`ruleId` warning (for example an unused disable directive)
+always carries a line and column.
 
 ## Exit-code table
 
