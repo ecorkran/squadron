@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261022
 
+### Slice 401: Complexity, Duplication and Coverage — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md`. `cf validate design` passes, and all 7 decisions are `decided`.
+- Key decisions:
+  - Complexity (McCabe) and duplication (exact 100-token windows) are counted in-process on 400's parse, so they share function length's function set. No new dependency.
+  - Coverage comes from Cobertura XML (coverage.py and Istanbul) as two metrics: `covered_lines` and `coverable_lines`.
+  - A report matches the commit when no tracked file is newer than it. It's configured with `metrology.coverage_reports`.
+  - Contract unchanged: only enum members are added. The store back-fills missing metrics on read, so 400 records aren't silently skipped.
+- Note: Istanbul's Cobertura always writes `version="0.1"`, so a change of coverage provider isn't visible in the identity. The counting text states it.
+- Next: task breakdown for 401 (Phase 5).
+
 ### Slice 400: Snapshot Record and First Adapters — Implementation Complete (Phase 6)
 
 - Branch `400-slice.snapshot-record-and-first-adapters-keystone`, 34 tasks, not merged (Phase 7 after review). `sq metrology snapshot [--cwd] [--json]` writes one `code_snapshot` record per (project, commit) with file length, function length, lint count and type errors; Python measures all four, TypeScript length and lint.
