@@ -61,3 +61,19 @@ class AuditBlockMalformedError(MetrologyError):
     half-parsing — a partially-read block would under-count findings and
     silently bias the measurement.
     """
+
+
+class SnapshotPreflightError(MetrologyError):
+    """A code snapshot can't start: not a git repo, no HEAD, a dirty tree, or bad config.
+
+    Every message names the fix. Nothing is written when this is raised.
+    """
+
+
+class SnapshotIntegrityError(MetrologyError):
+    """A snapshot can't be trusted: the repo changed during measurement, or git couldn't answer.
+
+    Raised after measuring (the tree is no longer clean) or when a git call returns
+    nothing or fails, which is never treated as an empty file set or a clean tree.
+    Nothing is written when this is raised.
+    """

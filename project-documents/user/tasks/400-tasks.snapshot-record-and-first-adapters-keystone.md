@@ -10,7 +10,7 @@ projectState: 0.23.8 released; slice 400 design complete (revision 2, review con
   resolved)
 dateCreated: 20261022
 dateUpdated: 20261022
-status: not_started
+status: in_progress
 turns: 30
 promptTokens: 2121124
 cachedTokens: 2020672
@@ -37,65 +37,65 @@ revision_number: 2
 - Next slices: 401 (more metrics), 403 (diffs), 404 (adoption baseline). All consume the record shape and adapter contract fixed here.
 
 ## Task 1: Branch and parser dependencies — Effort 1
-- [ ] Create the slice branch from the target
-- [ ] Add `tree-sitter` and `tree-sitter-typescript` to `[project] dependencies` in `pyproject.toml` with lower bounds at the checked versions (0.26.0 and 0.23.2), then `uv sync`
-- [ ] Success: `.venv/bin/python -c` parsing a one-line TypeScript function with the `typescript` and `tsx` languages succeeds; `uv.lock` updated
-- [ ] Commit: `chore: add tree-sitter and tree-sitter-typescript dependencies`
+- [x] Create the slice branch from the target
+- [x] Add `tree-sitter` and `tree-sitter-typescript` to `[project] dependencies` in `pyproject.toml` with lower bounds at the checked versions (0.26.0 and 0.23.2), then `uv sync`
+- [x] Success: `.venv/bin/python -c` parsing a one-line TypeScript function with the `typescript` and `tsx` languages succeeds; `uv.lock` updated
+- [x] Commit: `chore: add tree-sitter and tree-sitter-typescript dependencies`
 
 ## Task 2: Snapshot test scaffolding — Effort 2
-- [ ] Create `tests/metrology/snapshot/` (with `__init__.py` and `conftest.py`)
-- [ ] Fixture `snapshot_git_repo`: a factory that builds a git repo under `tmp_path` from a `{relative_path: content}` mapping, commits it, and returns the path. Model it on `_init_repo` in `tests/metrology/conftest.py` and `temp_git_repo` in `tests/conftest.py` (local user name/email, no reliance on the developer's git config or default branch)
-- [ ] Fixture `snapshot_store`: a `MetrologyStore` rooted under `tmp_path`
-- [ ] Success: a smoke test uses both fixtures and passes
+- [x] Create `tests/metrology/snapshot/` (with `__init__.py` and `conftest.py`)
+- [x] Fixture `snapshot_git_repo`: a factory that builds a git repo under `tmp_path` from a `{relative_path: content}` mapping, commits it, and returns the path. Model it on `_init_repo` in `tests/metrology/conftest.py` and `temp_git_repo` in `tests/conftest.py` (local user name/email, no reliance on the developer's git config or default branch)
+- [x] Fixture `snapshot_store`: a `MetrologyStore` rooted under `tmp_path`
+- [x] Success: a smoke test uses both fixtures and passes
 
 ## Task 3: Snapshot enums and identity models (D2) — Effort 2
-- [ ] Create `src/squadron/metrology/snapshot_models.py`
-- [ ] Enums (`StrEnum`), each the only definition of its values:
-  - [ ] `SnapshotMetric`: file length, function length, lint count, type errors
-  - [ ] `SourceLanguage`: `python`, `typescript`, `javascript`, `shell` (javascript and shell are the `no_adapter` languages in walkthrough steps 2 and 8)
-  - [ ] `AbsenceReason`: `no_adapter`, `metric_unsupported`, `tool_missing`, `tool_failed`, `environment_unresolved`
-- [ ] Pydantic models: `ToolIdentity` (name, version, counting), `RuleSetIdentity` (source, content_hash: `str | None`), `EnvironmentIdentity` (lockfile path, lockfile SHA-256, interpreter version), `LengthLimits` (max_file_lines, max_function_lines, limits_declared), `Distribution` (count, total, min, p50, p90, max), `FunctionOverLimit` (path, qualified name, start line, length)
-- [ ] Define the `tool-defaults` rule-set source as a module constant (D2 last bullet)
-- [ ] Success: module imports cleanly; pyright clean
+- [x] Create `src/squadron/metrology/snapshot_models.py`
+- [x] Enums (`StrEnum`), each the only definition of its values:
+  - [x] `SnapshotMetric`: file length, function length, lint count, type errors
+  - [x] `SourceLanguage`: `python`, `typescript`, `javascript`, `shell` (javascript and shell are the `no_adapter` languages in walkthrough steps 2 and 8)
+  - [x] `AbsenceReason`: `no_adapter`, `metric_unsupported`, `tool_missing`, `tool_failed`, `environment_unresolved`
+- [x] Pydantic models: `ToolIdentity` (name, version, counting), `RuleSetIdentity` (source, content_hash: `str | None`), `EnvironmentIdentity` (lockfile path, lockfile SHA-256, interpreter version), `LengthLimits` (max_file_lines, max_function_lines, limits_declared), `Distribution` (count, total, min, p50, p90, max), `FunctionOverLimit` (path, qualified name, start line, length)
+- [x] Define the `tool-defaults` rule-set source as a module constant (D2 last bullet)
+- [x] Success: module imports cleanly; pyright clean
 
 ## Task 4: Measurement, LanguageSnapshot, CodeSnapshot and validators (D1, D2) — Effort 3
-- [ ] In `snapshot_models.py`, add `Measurement` with the fields listed under Database / Storage Schema
-- [ ] Model validator on `Measurement` enforcing D2:
-  - [ ] present lint or type measurement requires `rule_set`
-  - [ ] present type measurement requires `environment`
-  - [ ] absent measurement requires `absent_detail` and carries no values (empty `per_file`, `over_limit`, `unparsed_files`, `tool_ignored_files`; no `distribution`, `limit`)
-  - [ ] present measurement requires `tool`
-- [ ] Add `LanguageSnapshot` (language, file_count, adapter: `str | None`, measurements) and `CodeSnapshot` (fields per Database / Storage Schema)
-- [ ] `LanguageSnapshot` validator: exactly one `Measurement` per `SnapshotMetric` member, each with matching `language`
-- [ ] Deterministic serialization: `per_file` keys, `over_limit`, `unparsed_files`, `tool_ignored_files`, `exclusions`, `languages` and `measurements` are sorted before serialization (D1, Database / Storage Schema)
-- [ ] Success: file stays under ~300 lines; if it would exceed, move the identity models into a second sibling module and note it in the module table of the slice design
+- [x] In `snapshot_models.py`, add `Measurement` with the fields listed under Database / Storage Schema
+- [x] Model validator on `Measurement` enforcing D2:
+  - [x] present lint or type measurement requires `rule_set`
+  - [x] present type measurement requires `environment`
+  - [x] absent measurement requires `absent_detail` and carries no values (empty `per_file`, `over_limit`, `unparsed_files`, `tool_ignored_files`; no `distribution`, `limit`)
+  - [x] present measurement requires `tool`
+- [x] Add `LanguageSnapshot` (language, file_count, adapter: `str | None`, measurements) and `CodeSnapshot` (fields per Database / Storage Schema)
+- [x] `LanguageSnapshot` validator: exactly one `Measurement` per `SnapshotMetric` member, each with matching `language`
+- [x] Deterministic serialization: `per_file` keys, `over_limit`, `unparsed_files`, `tool_ignored_files`, `exclusions`, `languages` and `measurements` are sorted before serialization (D1, Database / Storage Schema)
+- [x] Success: file stays under ~300 lines; if it would exceed, move the identity models into a second sibling module and note it in the module table of the slice design
 
 ## Task 5: Model tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_snapshot_models.py`:
-  - [ ] each D2 validator rule rejects a violating `Measurement` and accepts a valid one
-  - [ ] `tool-defaults` rule set with `content_hash=None` is accepted
-  - [ ] `LanguageSnapshot` rejects a missing metric, a duplicate metric, and a measurement whose language doesn't match
-  - [ ] two `CodeSnapshot`s built from the same data in different insertion orders serialize to identical JSON
-  - [ ] round trip `model_dump_json` → `model_validate_json` is lossless
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add code snapshot models and validators`
+- [x] `tests/metrology/snapshot/test_snapshot_models.py`:
+  - [x] each D2 validator rule rejects a violating `Measurement` and accepts a valid one
+  - [x] `tool-defaults` rule set with `content_hash=None` is accepted
+  - [x] `LanguageSnapshot` rejects a missing metric, a duplicate metric, and a measurement whose language doesn't match
+  - [x] two `CodeSnapshot`s built from the same data in different insertion orders serialize to identical JSON
+  - [x] round trip `model_dump_json` → `model_validate_json` is lossless
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add code snapshot models and validators`
 
 ## Task 6: Envelope field and store methods (Database / Storage Schema, D3) — Effort 2
-- [ ] In `src/squadron/metrology/models.py`: add `RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"` beside the other record-type constants and `code_snapshot: CodeSnapshot | None = None` on `MetrologyRecord`. `schema_version` stays 1
-- [ ] In `src/squadron/metrology/store.py`:
-  - [ ] `write_snapshot(snapshot) -> record_id`. Id is `snapshot-{sha256(project_id.value)[:12]}-{commit_sha[:12]}` (State Management), built in one helper. Uses `_write_atomic`
-  - [ ] When a record with that id already exists, log INFO naming the commit and that the earlier record was replaced (D3)
-  - [ ] `list_snapshots(project_id, commit_sha=None)`, newest first, via `_iter_records`
-- [ ] Success: existing store tests still pass
+- [x] In `src/squadron/metrology/models.py`: add `RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"` beside the other record-type constants and `code_snapshot: CodeSnapshot | None = None` on `MetrologyRecord`. `schema_version` stays 1
+- [x] In `src/squadron/metrology/store.py`:
+  - [x] `write_snapshot(snapshot) -> record_id`. Id is `snapshot-{sha256(project_id.value)[:12]}-{commit_sha[:12]}` (State Management), built in one helper. Uses `_write_atomic`
+  - [x] When a record with that id already exists, log INFO naming the commit and that the earlier record was replaced (D3)
+  - [x] `list_snapshots(project_id, commit_sha=None)`, newest first, via `_iter_records`
+- [x] Success: existing store tests still pass
 
 ## Task 7: Store and back-compat tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_snapshot_store.py`, using `snapshot_store`:
-  - [ ] write then list returns the snapshot; filter by `commit_sha` works; order is newest first
-  - [ ] a second write for the same (project, commit) leaves one record and logs the INFO line (`caplog`)
-  - [ ] different commits produce different ids
-  - [ ] a store holding one record of every existing record type plus a snapshot loads all of them unchanged (Success Criterion 10)
-- [ ] Success: these tests and all of `tests/metrology/` pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add code_snapshot envelope field and store methods`
+- [x] `tests/metrology/snapshot/test_snapshot_store.py`, using `snapshot_store`:
+  - [x] write then list returns the snapshot; filter by `commit_sha` works; order is newest first
+  - [x] a second write for the same (project, commit) leaves one record and logs the INFO line (`caplog`)
+  - [x] different commits produce different ids
+  - [x] a store holding one record of every existing record type plus a snapshot loads all of them unchanged (Success Criterion 10)
+- [x] Success: these tests and all of `tests/metrology/` pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add code_snapshot envelope field and store methods`
 
 ## Task 8: Config keys (D10) — Effort 1
 - [ ] Add to `CONFIG_KEYS` in `src/squadron/config/keys.py`, following the existing `metrology.*` entries: `metrology.max_file_lines` (int, None), `metrology.max_function_lines` (int, None), `metrology.snapshot_exclude` (str, None), `metrology.snapshot_tool_timeout_s` (int, 600)
