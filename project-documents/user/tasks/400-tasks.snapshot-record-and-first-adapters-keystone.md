@@ -10,7 +10,7 @@ projectState: 0.23.8 released; slice 400 design complete (revision 2, review con
   resolved)
 dateCreated: 20261022
 dateUpdated: 20261022
-status: in_progress
+status: complete
 turns: 30
 promptTokens: 2121124
 cachedTokens: 2020672
@@ -320,7 +320,7 @@ revision_number: 2
 - [x] Commit: `docs: record slice 400 walkthrough results`
 
 ## Task 34: Final validation — Effort 1
-- [ ] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
-- [ ] Every new module is at ~300 lines or less (`wc -l src/squadron/metrology/snapshot*.py src/squadron/metrology/snapshot/*.py`)
-- [ ] Every Success Criterion (Functional 1–10, Technical, Integration) in the slice design maps to a passing test or a recorded walkthrough step
-- [ ] Commit any remaining changes on the slice branch
+- [x] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
+- [x] Every new module is at ~300 lines or less (`wc -l src/squadron/metrology/snapshot*.py src/squadron/metrology/snapshot/*.py`)
+- [x] Every Success Criterion (Functional 1–10, Technical, Integration) in the slice design maps to a passing test or a recorded walkthrough step
+- [x] Commit any remaining changes on the slice branch
