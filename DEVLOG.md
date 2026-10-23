@@ -11,6 +11,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261022
 
+### Slice 400: Snapshot Record and First Adapters — Implementation Complete (Phase 6)
+
+- Branch `400-slice.snapshot-record-and-first-adapters-keystone`, 34 tasks, not merged (Phase 7 after review). `sq metrology snapshot [--cwd] [--json]` writes one `code_snapshot` record per (project, commit) with file length, function length, lint count and type errors; Python measures all four, TypeScript length and lint.
+- Modules under `src/squadron/metrology/snapshot/`: contract, registry, preflight, files, lengths, runner, tool_support, config_hash, take, render, python_{adapter,lint,types}, typescript_{adapter,length,lint}. Models in `snapshot_models.py`; envelope field and store methods in `models.py`/`store.py`.
+- **tree-sitter 0.26.0 segfaults** (pymalloc corruption) parsing real context-forge files with the 0.23.2 grammar; 0.24.0 and 0.25.2 are clean. Pinned `tree-sitter>=0.25.2,<0.26` with a test. Found only by the walkthrough, not by unit tests.
+- Walkthrough (all ten steps) is recorded in the slice design. Findings: squadron's pyright count includes `tests/` (1,769 errors in 201 files) because the snapshot ignores pyright's `include`; 15 of context-forge's 396 TypeScript files hit grammar error nodes and are listed as `unparsed_files`.
+- Real tool output is stored as fixtures in `tests/metrology/fixtures/snapshot/` with an exit-code table. pyright exit 3 (bad config) still prints a valid zero-error JSON report, so the exit code decides, not the JSON.
+- Next: code review of the slice, then 401.
+
 ### Slice 400: Snapshot Record and First Adapters — Task Breakdown Complete (Phase 5)
 
 - Tasks: `project-documents/user/tasks/400-tasks.snapshot-record-and-first-adapters-keystone.md`, 35 tasks, 300 lines, test-with ordering and a commit per milestone.

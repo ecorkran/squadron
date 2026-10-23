@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sq metrology snapshot` measures a clean commit and records file length, function length, lint count and type-error count per language (Python and TypeScript), each with the tool, version and rule set that produced it. A metric that can't be measured is recorded as absent with a reason, never as zero.
+
 ## [0.23.8] - 20261021
 
 ### Fixed

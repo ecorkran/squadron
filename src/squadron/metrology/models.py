@@ -21,6 +21,7 @@ from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
+from squadron.metrology.snapshot_models import CodeSnapshot
 from squadron.review.models import Verdict
 
 #: Record types the store envelope may carry. ``sample`` is written by 320;
@@ -35,6 +36,8 @@ RECORD_TYPE_AUDIT_NOISE_FLOOR = "audit_noise_floor"
 #: Written by 177's producer replay and pairwise judge, behind the same discriminator.
 RECORD_TYPE_PRODUCER_REPLAY = "producer_replay"
 RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
+#: Written by 400's code snapshot: one record per (project, commit).
+RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
 
 
 class JudgeResultRef(BaseModel):
@@ -277,3 +280,4 @@ class MetrologyRecord(BaseModel):
     audit_noise_floor: AuditNoiseFloor | None = None
     producer_replay: ProducerReplay | None = None
     pairwise_judgment: PairwiseJudgment | None = None
+    code_snapshot: CodeSnapshot | None = None

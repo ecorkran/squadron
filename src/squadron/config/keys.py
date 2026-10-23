@@ -234,6 +234,44 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "(project-level, via .squadron.toml). Never a filesystem path."
         ),
     ),
+    "metrology.max_file_lines": ConfigKey(
+        name="metrology.max_file_lines",
+        type_=int,
+        default=None,
+        description=(
+            "Project-declared maximum non-blank lines per file, checked by "
+            "'sq metrology snapshot'. Unset means no limit is declared; squadron "
+            "applies no default."
+        ),
+    ),
+    "metrology.max_function_lines": ConfigKey(
+        name="metrology.max_function_lines",
+        type_=int,
+        default=None,
+        description=(
+            "Project-declared maximum non-blank lines per function, checked by "
+            "'sq metrology snapshot'. Unset means no limit is declared."
+        ),
+    ),
+    "metrology.snapshot_exclude": ConfigKey(
+        name="metrology.snapshot_exclude",
+        type_=str,
+        default=None,
+        description=(
+            "Comma-separated glob patterns excluded from 'sq metrology snapshot' "
+            "(for example vendored or generated code). Applied through git "
+            "pathspecs to every metric alike."
+        ),
+    ),
+    "metrology.snapshot_tool_timeout_s": ConfigKey(
+        name="metrology.snapshot_tool_timeout_s",
+        type_=int,
+        default=600,
+        description=(
+            "Timeout in seconds for each tool subprocess call made by "
+            "'sq metrology snapshot' (version probes, uv check, each file chunk)."
+        ),
+    ),
     "metrology.min_evidence_n": ConfigKey(
         name="metrology.min_evidence_n",
         type_=int,
