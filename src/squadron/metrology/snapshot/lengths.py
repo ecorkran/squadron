@@ -7,19 +7,24 @@ their length measurements here, so the definitions can't drift apart.
 
 from __future__ import annotations
 
+import logging
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from squadron.metrology.snapshot_models import (
     Distribution,
     FunctionOverLimit,
+    LengthLimits,
     Measurement,
     SnapshotMetric,
     SourceLanguage,
     ToolIdentity,
 )
+
+_logger = logging.getLogger(__name__)
 
 #: Physical line breaks as Python's tokenizer and tree-sitter count them. Not
 #: ``str.splitlines``, which also splits on form feeds and Unicode separators.
@@ -141,3 +146,68 @@ def function_length_measurement(
         over_limit=over_limit,
         unparsed_files=list(unparsed_files),
     )
+
+
+#: Parses one file's text into its functions. May raise any of the adapter's
+#: declared parse errors, which mark the file unparsed instead of failing the snapshot.
+FunctionExtractor = Callable[[str, str], list[FunctionLength]]
+
+
+def _measure_source(
+    repo_root: Path,
+    path: str,
+    extract: FunctionExtractor,
+    parse_errors: tuple[type[Exception], ...],
+    per_file: dict[str, int],
+    functions: list[FunctionLength],
+    unparsed: list[str],
+) -> None:
+    try:
+        raw = (repo_root / path).read_bytes()
+    except OSError as exc:
+        _logger.warning("Can't read %s for length (%s); not measured", path, exc)
+        unparsed.append(path)
+        return
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        # Still counts for file length (with replacement characters); it just
+        # contributes no functions.
+        _logger.warning("%s isn't valid UTF-8 (%s); no functions measured", path, exc)
+        per_file[path] = count_non_blank(raw.decode("utf-8", errors="replace"))
+        unparsed.append(path)
+        return
+    per_file[path] = count_non_blank(text)
+    try:
+        functions.extend(extract(path, text))
+    except parse_errors as exc:
+        # A file the parser can't handle keeps its file length and contributes no
+        # functions; it's listed so the gap is visible.
+        _logger.warning("Can't parse %s (%s: %s); no functions measured", path, type(exc).__name__, exc)
+        unparsed.append(path)
+
+
+def measure_length_metrics(
+    repo_root: Path,
+    files: Sequence[str],
+    language: SourceLanguage,
+    tool: ToolIdentity,
+    limits: LengthLimits,
+    extract: FunctionExtractor,
+    parse_errors: tuple[type[Exception], ...],
+) -> list[Measurement]:
+    """File length and function length for *files*, shared by every adapter.
+
+    The adapter supplies only ``extract`` (text to functions) and the parse errors it
+    can raise. Reading, decoding, counting, warnings and the measurement shape are
+    defined once here, so the two languages can't drift apart.
+    """
+    per_file: dict[str, int] = {}
+    functions: list[FunctionLength] = []
+    unparsed: list[str] = []
+    for path in files:
+        _measure_source(repo_root, path, extract, parse_errors, per_file, functions, unparsed)
+    return [
+        file_length_measurement(language, tool, per_file, limits.max_file_lines),
+        function_length_measurement(language, tool, functions, limits.max_function_lines, unparsed),
+    ]

@@ -9,7 +9,6 @@ imported or executed. Lint and type errors are added by the sibling modules
 from __future__ import annotations
 
 import ast
-import logging
 import platform
 from collections.abc import Sequence
 
@@ -17,10 +16,8 @@ from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.lengths import (
     FunctionLength,
-    count_non_blank,
     count_non_blank_span,
-    file_length_measurement,
-    function_length_measurement,
+    measure_length_metrics,
     physical_lines,
 )
 from squadron.metrology.snapshot.python_lint import measure_ruff_lint
@@ -31,8 +28,6 @@ from squadron.metrology.snapshot_models import (
     SourceLanguage,
     ToolIdentity,
 )
-
-_logger = logging.getLogger(__name__)
 
 AST_TOOL_NAME = "squadron-python-ast"
 
@@ -83,54 +78,24 @@ def _collect_functions(
     return found
 
 
-def _measure_file(
-    ctx: AdapterContext,
-    path: str,
-    per_file: dict[str, int],
-    functions: list[FunctionLength],
-    unparsed: list[str],
-) -> None:
-    try:
-        raw = (ctx.repo_root / path).read_bytes()
-    except OSError as exc:
-        _logger.warning("Can't read %s for length (%s); not measured", path, exc)
-        unparsed.append(path)
-        return
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
-        # Still counts for file length (with replacement characters); it just
-        # contributes no functions.
-        _logger.warning("%s isn't valid UTF-8 (%s); no functions measured", path, exc)
-        per_file[path] = count_non_blank(raw.decode("utf-8", errors="replace"))
-        unparsed.append(path)
-        return
-    per_file[path] = count_non_blank(text)
-    try:
-        tree = ast.parse(text, filename=path)
-        functions.extend(_collect_functions(tree, path, physical_lines(text)))
-    except (SyntaxError, RecursionError, MemoryError, ValueError) as exc:
-        # A file this interpreter can't parse (newer syntax, pathological nesting,
-        # NUL bytes) keeps its file length and contributes no functions; it's
-        # listed so the gap is visible.
-        _logger.warning("Can't parse %s (%s: %s); no functions measured", path, type(exc).__name__, exc)
-        unparsed.append(path)
+_PARSE_ERRORS: tuple[type[Exception], ...] = (SyntaxError, RecursionError, MemoryError, ValueError)
+
+
+def _extract_functions(path: str, text: str) -> list[FunctionLength]:
+    return _collect_functions(ast.parse(text, filename=path), path, physical_lines(text))
 
 
 def measure_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
     """File length and function length for *files* (no external tool)."""
-    tool = ast_tool_identity()
-    per_file: dict[str, int] = {}
-    functions: list[FunctionLength] = []
-    unparsed: list[str] = []
-    for path in files:
-        _measure_file(ctx, path, per_file, functions, unparsed)
-    return [
-        file_length_measurement(SourceLanguage.PYTHON, tool, per_file, ctx.limits.max_file_lines),
-        function_length_measurement(
-            SourceLanguage.PYTHON, tool, functions, ctx.limits.max_function_lines, unparsed
-        ),
-    ]
+    return measure_length_metrics(
+        ctx.repo_root,
+        files,
+        SourceLanguage.PYTHON,
+        ast_tool_identity(),
+        ctx.limits,
+        _extract_functions,
+        _PARSE_ERRORS,
+    )
 
 
 class PythonAdapter:
