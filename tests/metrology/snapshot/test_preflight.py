@@ -36,6 +36,10 @@ class TestPreflight:
         with pytest.raises(SnapshotPreflightError, match="not a git repository"):
             preflight(tmp_path)
 
+    def test_a_subdirectory_of_a_repo_is_refused(self, repo: Path) -> None:
+        with pytest.raises(SnapshotPreflightError, match="not its root"):
+            preflight(repo / "src")
+
     def test_repo_without_commits_raises(self, tmp_path: Path) -> None:
         run_test_git(tmp_path, "init", "-q", "-b", "main")
 

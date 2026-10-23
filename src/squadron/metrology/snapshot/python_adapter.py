@@ -103,7 +103,7 @@ class PythonAdapter:
 
     language = SourceLanguage.PYTHON
     metrics = frozenset(SnapshotMetric)
-    convention_exclusions = ("**/*_pb2.py", "**/*_pb2_grpc.py")
+    convention_exclusions: tuple[str, ...] = ("**/*_pb2.py", "**/*_pb2_grpc.py")
 
     def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
         listed = list(files)

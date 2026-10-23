@@ -22,7 +22,7 @@ class TypeScriptAdapter:
     metrics = frozenset(
         {SnapshotMetric.FILE_LENGTH, SnapshotMetric.FUNCTION_LENGTH, SnapshotMetric.LINT_COUNT}
     )
-    convention_exclusions = ("**/*.d.ts", "**/node_modules/**", "**/dist/**")
+    convention_exclusions: tuple[str, ...] = ("**/*.d.ts", "**/node_modules/**", "**/dist/**")
 
     def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
         return [*measure_typescript_lengths(ctx, files), measure_eslint_lint(ctx, list(files))]

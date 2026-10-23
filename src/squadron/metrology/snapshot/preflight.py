@@ -125,11 +125,16 @@ def _read_timeout(repo_root: Path) -> int:
 
 
 def _head_sha(repo_root: Path) -> str:
-    inside = _git_stdout(repo_root, ["rev-parse", "--is-inside-work-tree"], SnapshotPreflightError)
-    if inside is None:
+    toplevel = _git_stdout(repo_root, ["rev-parse", "--show-toplevel"], SnapshotPreflightError)
+    if toplevel is None:
         raise SnapshotPreflightError(
             f"{repo_root} is not a git repository. Run `sq metrology snapshot --cwd` "
             "on a repository root."
+        )
+    if Path(toplevel.strip()).resolve() != repo_root.resolve():
+        raise SnapshotPreflightError(
+            f"{repo_root} is inside a repository but is not its root ({toplevel.strip()}). "
+            "Run `sq metrology snapshot --cwd` on the repository root."
         )
     head = _git_stdout(repo_root, ["rev-parse", "HEAD"], SnapshotPreflightError)
     if head is None or not head.strip():

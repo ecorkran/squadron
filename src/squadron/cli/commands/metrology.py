@@ -20,6 +20,7 @@ from rich import print as rprint
 from rich.markup import escape
 
 from squadron.cli.commands.metrology_preemption import preempt_app, register_delta_command
+from squadron.cli.commands.metrology_snapshot import register_snapshot_command
 from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.audit import (
     AuditPreflightError,
@@ -92,6 +93,7 @@ metrology_app.add_typer(audit_app)
 # ~1000 lines) and are mounted here, so the command surface is unchanged.
 metrology_app.add_typer(preempt_app)
 register_delta_command(audit_app)
+register_snapshot_command(metrology_app)
 
 _VERDICT_CHOICES = "/".join(v.value for v in (Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL))
 

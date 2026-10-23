@@ -415,6 +415,10 @@ class MetrologyStore:
         judgments.sort(key=lambda j: j.created_at, reverse=True)
         return judgments
 
+    def record_location(self, record_id: str) -> Path:
+        """Where the record with *record_id* is (or would be) stored."""
+        return self._record_path(record_id)
+
     def write_snapshot(self, snapshot: CodeSnapshot) -> str:
         """Envelope and persist a code snapshot; return its record id.
 
