@@ -8,9 +8,11 @@ so every absence is observable.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from squadron.metrology.snapshot.runner import stderr_head
+from squadron.metrology.snapshot.contract import AdapterContext
+from squadron.metrology.snapshot.runner import chunk_files, probe_version, stderr_head
 from squadron.metrology.snapshot_models import (
     AbsenceReason,
     Measurement,
@@ -60,4 +62,54 @@ def repo_relative(filename: str, repo_root: Path) -> str | None:
             return path.relative_to(root).as_posix()
         except ValueError:
             continue
+    return None
+
+
+def probe_or_failure(
+    ctx: AdapterContext, language: SourceLanguage, metric: SnapshotMetric, tool_path: Path
+) -> str | Measurement:
+    """The tool's version, or the ``tool_failed`` measurement to return when it can't be read."""
+    probe = probe_version(ctx.runner, tool_path, ctx.repo_root, ctx.tool_timeout_s)
+    if probe.version is not None:
+        return probe.version
+    return tool_failed(
+        language,
+        metric,
+        probe.failure or "version probe failed",
+        command=f"{tool_path} --version",
+    )
+
+
+def run_chunked(
+    ctx: AdapterContext,
+    *,
+    language: SourceLanguage,
+    metric: SnapshotMetric,
+    tool_name: str,
+    tool_path: Path,
+    files: Sequence[str],
+    build_argv: Callable[[list[str]], list[str]],
+    ok_exits: frozenset[int],
+    fold: Callable[[str], str | None],
+) -> Measurement | None:
+    """Run a tool over *files* in argv-sized chunks, folding each chunk's stdout.
+
+    Returns None when every chunk ran, exited with a code in *ok_exits* and *fold*
+    accepted its output. Otherwise returns the ``tool_failed`` measurement for the first
+    failure (timeout, abnormal exit, or the detail *fold* returned), so a count is never
+    partial. *fold* adds one chunk's output to the caller's accumulators.
+    """
+    for chunk in chunk_files(files):
+        result = ctx.runner.run(build_argv(chunk), cwd=ctx.repo_root, timeout_s=ctx.tool_timeout_s)
+        command = f"{tool_path} ({len(chunk)} files)"
+        if result.timed_out:
+            detail = f"{tool_name} timed out after {ctx.tool_timeout_s}s"
+        elif result.exit_code not in ok_exits:
+            detail = f"{tool_name} exited {result.exit_code}: {stderr_head(result.stderr)}"
+        else:
+            failure = fold(result.stdout)
+            if failure is None:
+                continue
+            detail = failure
+        return tool_failed(language, metric, detail, command=command, stderr=result.stderr)
     return None

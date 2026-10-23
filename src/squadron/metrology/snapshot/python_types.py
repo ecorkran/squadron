@@ -14,15 +14,12 @@ from pathlib import Path
 from squadron.metrology.snapshot.config_hash import file_content_hash, pyproject_table_hash
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.python_lint import PROJECT_TOOL_DIRS
-from squadron.metrology.snapshot.runner import (
-    chunk_files,
-    probe_version,
-    resolve_tool,
-    stderr_head,
-)
+from squadron.metrology.snapshot.runner import probe_version, resolve_tool, stderr_head
 from squadron.metrology.snapshot.tool_support import (
     absent,
+    probe_or_failure,
     repo_relative,
+    run_chunked,
     tool_failed,
     tool_missing,
 )
@@ -170,48 +167,46 @@ def measure_pyright_types(ctx: AdapterContext, files: list[str]) -> Measurement:
     tool_path = resolve_tool(ctx.repo_root, PYRIGHT_TOOL_NAME, PROJECT_TOOL_DIRS, use_path=True)
     if tool_path is None:
         return tool_missing(_LANGUAGE, _METRIC, PYRIGHT_TOOL_NAME, f"{PROJECT_TOOL_DIRS[0]} or on PATH")
-    probe = probe_version(ctx.runner, tool_path, ctx.repo_root, ctx.tool_timeout_s)
-    if probe.version is None:
-        return tool_failed(
-            _LANGUAGE,
-            _METRIC,
-            probe.failure or "version probe failed",
-            command=f"{tool_path} --version",
-        )
+    version = probe_or_failure(ctx, _LANGUAGE, _METRIC, tool_path)
+    if isinstance(version, Measurement):
+        return version
     try:
         rule_set = resolve_pyright_rule_set(ctx.repo_root)
     except ValueError as exc:
         return tool_failed(_LANGUAGE, _METRIC, str(exc), command="resolve pyright rule set")
     counts: dict[str, int] = {}
-    for chunk in chunk_files(files):
-        argv = [str(tool_path), "--outputjson", "--pythonpath", VENV_PYTHON, *chunk]
-        result = ctx.runner.run(argv, cwd=ctx.repo_root, timeout_s=ctx.tool_timeout_s)
-        command = f"{tool_path} --outputjson ({len(chunk)} files)"
-        if result.timed_out:
-            return tool_failed(
-                _LANGUAGE,
-                _METRIC,
-                f"pyright timed out after {ctx.tool_timeout_s}s",
-                command=command,
-                stderr=result.stderr,
-            )
-        if result.exit_code not in _PYRIGHT_REPORT_EXITS:
-            return tool_failed(
-                _LANGUAGE,
-                _METRIC,
-                f"pyright exited {result.exit_code}: {stderr_head(result.stderr)}",
-                command=command,
-                stderr=result.stderr,
-            )
-        parsed = _count_errors(result.stdout, ctx.repo_root)
+
+    def fold(stdout: str) -> str | None:
+        parsed = _count_errors(stdout, ctx.repo_root)
         if isinstance(parsed, str):
-            return tool_failed(_LANGUAGE, _METRIC, parsed, command=command, stderr=result.stderr)
+            return parsed
         for path, count in parsed.items():
             counts[path] = counts.get(path, 0) + count
+        return None
+
+    failure = run_chunked(
+        ctx,
+        language=_LANGUAGE,
+        metric=_METRIC,
+        tool_name=PYRIGHT_TOOL_NAME,
+        tool_path=tool_path,
+        files=files,
+        build_argv=lambda chunk: [
+            str(tool_path),
+            "--outputjson",
+            "--pythonpath",
+            VENV_PYTHON,
+            *chunk,
+        ],
+        ok_exits=_PYRIGHT_REPORT_EXITS,
+        fold=fold,
+    )
+    if failure is not None:
+        return failure
     return Measurement(
         metric=_METRIC,
         language=_LANGUAGE,
-        tool=ToolIdentity(name=PYRIGHT_TOOL_NAME, version=probe.version, counting=_COUNTING),
+        tool=ToolIdentity(name=PYRIGHT_TOOL_NAME, version=version, counting=_COUNTING),
         rule_set=rule_set,
         environment=environment,
         per_file=counts,

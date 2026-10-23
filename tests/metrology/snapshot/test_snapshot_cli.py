@@ -14,9 +14,8 @@ from squadron.cli.app import app
 from squadron.metrology.snapshot.contract import AdapterRegistry
 from squadron.metrology.snapshot_models import CodeSnapshot, SnapshotMetric, SourceLanguage
 from squadron.metrology.store import MetrologyStore
-from tests.metrology.snapshot.builders import make_code_snapshot, make_project_id
+from tests.metrology.snapshot.builders import FakeAdapter, make_code_snapshot, make_project_id
 from tests.metrology.snapshot.conftest import SnapshotRepoFactory
-from tests.metrology.snapshot.test_take import FakeAdapter
 
 runner = CliRunner()
 

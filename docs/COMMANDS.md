@@ -525,7 +525,7 @@ Lengths count non-blank lines. The limits (`metrology.max_file_lines`, `metrolog
 | `tool_failed` | The tool timed out, exited abnormally or produced unusable output |
 | `environment_unresolved` | Type errors need a `uv.lock` and a `.venv` in sync with it |
 
-Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`), never installed. **Snapshotting a repository runs its own `node_modules/.bin/eslint` and its JavaScript config, which executes the repository's code.** Only snapshot repositories you trust. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
+Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`) before `PATH`, and never installed. **Snapshotting a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only snapshot repositories you trust. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
 
 ## spawn
 

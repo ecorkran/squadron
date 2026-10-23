@@ -415,5 +415,5 @@ Caveats found while running it:
 
 ### Special Considerations
 - **Squadron's limits live in a gitignored file.** `.squadron.toml` is gitignored in squadron, so limits and exclusions belong to the checkout. Because the record carries both, a snapshot taken under different settings is identifiable rather than silently comparable. Overwriting one is logged (D3).
-- **Security.** Tools run with argv lists, never a shell. Only binaries inside the measured project or on `PATH` run: no `npx`, no install, no network (`uv --offline`). Snapshotting an untrusted repo still runs that repo's `node_modules/.bin/eslint` and its JavaScript config, which executes the repo's code. The command's help text states this.
+- **Security.** Tools run with argv lists, never a shell. Only binaries inside the measured project or on `PATH` run: no `npx`, no install, no network (`uv --offline`). Snapshotting an untrusted repo still runs that repo's own `.venv/bin/ruff`, `.venv/bin/pyright`, `.venv/bin/python`, `node_modules/.bin/eslint` and its JavaScript config, which executes the repo's code with the caller's full environment inherited. The command's help text and `docs/COMMANDS.md` state this.
 - **Performance.** Pyright on a large repo is the slowest step, and it's bounded by `metrology.snapshot_tool_timeout_s`. A timeout gives `tool_failed`, never a partial count.

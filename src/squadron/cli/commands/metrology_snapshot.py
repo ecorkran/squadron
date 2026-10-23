@@ -54,9 +54,11 @@ def register_snapshot_command(metrology_app: typer.Typer) -> None:
         The tree must be clean (an untracked .squadron.toml is allowed). Nothing is
         written into the repository.
 
-        Security: snapshotting a repository runs that repository's own
-        node_modules/.bin/eslint and its JavaScript config, which executes the
-        repository's code. Only snapshot repositories you trust.
+        Security: snapshotting a repository runs executables and config taken from
+        that repository: its .venv/bin/ruff, .venv/bin/pyright and .venv/bin/python,
+        node_modules/.bin/eslint and its JavaScript config. That executes the
+        repository's code, with your full environment (including any secrets in it)
+        inherited. Only snapshot repositories you trust.
         """
         repo_root = Path(cwd).expanduser().resolve() if cwd else Path.cwd().resolve()
         store_dir = resolve_store_dir(cwd=str(repo_root))

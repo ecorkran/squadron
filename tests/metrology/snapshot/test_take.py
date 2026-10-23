@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
 
 import pytest
 
@@ -13,61 +12,15 @@ from squadron.metrology.errors import (
     SnapshotIntegrityError,
     SnapshotPreflightError,
 )
-from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.take import take_snapshot
 from squadron.metrology.snapshot_models import (
     AbsenceReason,
-    EnvironmentIdentity,
-    Measurement,
-    RuleSetIdentity,
     SnapshotMetric,
     SourceLanguage,
-    ToolIdentity,
 )
 from squadron.metrology.store import MetrologyStore
-from tests.metrology.snapshot.builders import make_project_id
+from tests.metrology.snapshot.builders import FakeAdapter, make_project_id
 from tests.metrology.snapshot.conftest import FakeToolRunner, SnapshotRepoFactory
-
-TOOL = ToolIdentity(name="fake", version="1.0", counting="fake counting")
-
-
-def present(metric: SnapshotMetric, language: SourceLanguage) -> Measurement:
-    return Measurement(
-        metric=metric,
-        language=language,
-        tool=TOOL,
-        rule_set=RuleSetIdentity(source="fake.toml", content_hash="a" * 64),
-        environment=EnvironmentIdentity(
-            lockfile_path="uv.lock", lockfile_sha256="b" * 64, interpreter_version="3.12"
-        ),
-    )
-
-
-class FakeAdapter:
-    """Declares ``metrics``; returns ``reports`` (default: one present measurement each)."""
-
-    def __init__(
-        self,
-        language: SourceLanguage,
-        metrics: frozenset[SnapshotMetric],
-        *,
-        reports: list[SnapshotMetric] | None = None,
-        convention_exclusions: tuple[str, ...] = (),
-        write_into_repo: str | None = None,
-    ) -> None:
-        self.language = language
-        self.metrics = metrics
-        self.convention_exclusions = convention_exclusions
-        self._reports = reports if reports is not None else sorted(metrics, key=lambda m: m.value)
-        self._write_into_repo = write_into_repo
-        self.calls: list[tuple[AdapterContext, list[str]]] = []
-
-    def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-        self.calls.append((ctx, list(files)))
-        if self._write_into_repo is not None:
-            (ctx.repo_root / self._write_into_repo).write_text("written\n", encoding="utf-8")
-        return [present(metric, self.language) for metric in self._reports]
-
 
 ALL_METRICS = frozenset(SnapshotMetric)
 FILES = {"a.py": "x = 1\n", "b.ts": "const y = 1;\n", "run.sh": "echo hi\n"}

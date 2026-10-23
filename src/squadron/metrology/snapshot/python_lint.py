@@ -8,18 +8,18 @@ Ruff runs read-only (``--no-cache``) over the explicit snapshot file list with
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 
 from squadron.metrology.snapshot.config_hash import file_content_hash, pyproject_table_hash
 from squadron.metrology.snapshot.contract import AdapterContext
-from squadron.metrology.snapshot.runner import (
-    chunk_files,
-    probe_version,
-    resolve_tool,
-    stderr_head,
+from squadron.metrology.snapshot.runner import resolve_tool
+from squadron.metrology.snapshot.tool_support import (
+    probe_or_failure,
+    repo_relative,
+    run_chunked,
+    tool_failed,
+    tool_missing,
 )
-from squadron.metrology.snapshot.tool_support import repo_relative, tool_failed, tool_missing
 from squadron.metrology.snapshot_models import (
     RULE_SET_SOURCE_TOOL_DEFAULTS,
     Measurement,
@@ -29,10 +29,12 @@ from squadron.metrology.snapshot_models import (
     ToolIdentity,
 )
 
-_logger = logging.getLogger(__name__)
-
 RUFF_TOOL_NAME = "ruff"
 PROJECT_TOOL_DIRS = (".venv/bin",)
+
+#: ``--exit-zero`` makes findings exit 0, so any other exit code is a failure.
+_REPORT_EXITS = frozenset({0})
+_RUFF_ARGS = ("check", "--no-cache", "--exit-zero", "--output-format", "json")
 
 _COUNTING = (
     "ruff findings per file under the project's own rule selection; syntax errors count as findings"
@@ -83,56 +85,40 @@ def measure_ruff_lint(ctx: AdapterContext, files: list[str]) -> Measurement:
     tool_path = resolve_tool(ctx.repo_root, RUFF_TOOL_NAME, PROJECT_TOOL_DIRS, use_path=True)
     if tool_path is None:
         return tool_missing(language, metric, RUFF_TOOL_NAME, f"{PROJECT_TOOL_DIRS[0]} or on PATH")
-    probe = probe_version(ctx.runner, tool_path, ctx.repo_root, ctx.tool_timeout_s)
-    if probe.version is None or probe.failure is not None:
-        return tool_failed(
-            language,
-            metric,
-            probe.failure or "version probe failed",
-            command=f"{tool_path} --version",
-        )
+    version = probe_or_failure(ctx, language, metric, tool_path)
+    if isinstance(version, Measurement):
+        return version
     try:
         rule_set = resolve_ruff_rule_set(ctx.repo_root)
     except ValueError as exc:
         return tool_failed(language, metric, str(exc), command="resolve ruff rule set")
     counts: dict[str, int] = {}
-    for chunk in chunk_files(files):
-        argv = [
-            str(tool_path),
-            "check",
-            "--no-cache",
-            "--exit-zero",
-            "--output-format",
-            "json",
-            *chunk,
-        ]
-        result = ctx.runner.run(argv, cwd=ctx.repo_root, timeout_s=ctx.tool_timeout_s)
-        command = f"{tool_path} check ({len(chunk)} files)"
-        if result.timed_out:
-            return tool_failed(
-                language,
-                metric,
-                f"ruff timed out after {ctx.tool_timeout_s}s",
-                command=command,
-                stderr=result.stderr,
-            )
-        if result.exit_code != 0:
-            return tool_failed(
-                language,
-                metric,
-                f"ruff exited {result.exit_code}: {stderr_head(result.stderr)}",
-                command=command,
-                stderr=result.stderr,
-            )
-        parsed = _count_findings(result.stdout, ctx.repo_root)
+
+    def fold(stdout: str) -> str | None:
+        parsed = _count_findings(stdout, ctx.repo_root)
         if isinstance(parsed, str):
-            return tool_failed(language, metric, parsed, command=command, stderr=result.stderr)
+            return parsed
         for path, count in parsed.items():
             counts[path] = counts.get(path, 0) + count
+        return None
+
+    failure = run_chunked(
+        ctx,
+        language=language,
+        metric=metric,
+        tool_name=RUFF_TOOL_NAME,
+        tool_path=tool_path,
+        files=files,
+        build_argv=lambda chunk: [str(tool_path), *_RUFF_ARGS, *chunk],
+        ok_exits=_REPORT_EXITS,
+        fold=fold,
+    )
+    if failure is not None:
+        return failure
     return Measurement(
         metric=metric,
         language=language,
-        tool=ToolIdentity(name=RUFF_TOOL_NAME, version=probe.version, counting=_COUNTING),
+        tool=ToolIdentity(name=RUFF_TOOL_NAME, version=version, counting=_COUNTING),
         rule_set=rule_set,
         per_file=counts,
     )

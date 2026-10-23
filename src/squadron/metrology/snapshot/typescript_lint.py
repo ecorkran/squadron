@@ -15,13 +15,14 @@ from typing import cast
 
 from squadron.metrology.snapshot.config_hash import file_content_hash
 from squadron.metrology.snapshot.contract import AdapterContext
-from squadron.metrology.snapshot.runner import (
-    chunk_files,
-    probe_version,
-    resolve_tool,
-    stderr_head,
+from squadron.metrology.snapshot.runner import resolve_tool
+from squadron.metrology.snapshot.tool_support import (
+    probe_or_failure,
+    repo_relative,
+    run_chunked,
+    tool_failed,
+    tool_missing,
 )
-from squadron.metrology.snapshot.tool_support import repo_relative, tool_failed, tool_missing
 from squadron.metrology.snapshot_models import (
     Measurement,
     RuleSetIdentity,
@@ -118,43 +119,28 @@ def measure_eslint_lint(ctx: AdapterContext, files: list[str]) -> Measurement:
     rule_set = resolve_eslint_rule_set(ctx.repo_root)
     if rule_set is None:
         return tool_failed(_LANGUAGE, _METRIC, _NO_CONFIG_DETAIL, command="resolve eslint config")
-    probe = probe_version(ctx.runner, tool_path, ctx.repo_root, ctx.tool_timeout_s)
-    if probe.version is None:
-        return tool_failed(
-            _LANGUAGE,
-            _METRIC,
-            probe.failure or "version probe failed",
-            command=f"{tool_path} --version",
-        )
+    version = probe_or_failure(ctx, _LANGUAGE, _METRIC, tool_path)
+    if isinstance(version, Measurement):
+        return version
     counts: dict[str, int] = {}
     ignored: list[str] = []
-    for chunk in chunk_files(files):
-        argv = [str(tool_path), "--format", "json", *chunk]
-        result = ctx.runner.run(argv, cwd=ctx.repo_root, timeout_s=ctx.tool_timeout_s)
-        command = f"{tool_path} --format json ({len(chunk)} files)"
-        if result.timed_out:
-            return tool_failed(
-                _LANGUAGE,
-                _METRIC,
-                f"eslint timed out after {ctx.tool_timeout_s}s",
-                command=command,
-                stderr=result.stderr,
-            )
-        if result.exit_code not in _REPORT_EXITS:
-            return tool_failed(
-                _LANGUAGE,
-                _METRIC,
-                f"eslint exited {result.exit_code}: {stderr_head(result.stderr)}",
-                command=command,
-                stderr=result.stderr,
-            )
-        failure = _read_report(result.stdout, ctx.repo_root, counts, ignored)
-        if failure is not None:
-            return tool_failed(_LANGUAGE, _METRIC, failure, command=command, stderr=result.stderr)
+    failure = run_chunked(
+        ctx,
+        language=_LANGUAGE,
+        metric=_METRIC,
+        tool_name=ESLINT_TOOL_NAME,
+        tool_path=tool_path,
+        files=files,
+        build_argv=lambda chunk: [str(tool_path), "--format", "json", *chunk],
+        ok_exits=_REPORT_EXITS,
+        fold=lambda stdout: _read_report(stdout, ctx.repo_root, counts, ignored),
+    )
+    if failure is not None:
+        return failure
     return Measurement(
         metric=_METRIC,
         language=_LANGUAGE,
-        tool=ToolIdentity(name=ESLINT_TOOL_NAME, version=probe.version, counting=_COUNTING),
+        tool=ToolIdentity(name=ESLINT_TOOL_NAME, version=version, counting=_COUNTING),
         rule_set=rule_set,
         per_file=counts,
         tool_ignored_files=ignored,
