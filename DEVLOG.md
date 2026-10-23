@@ -11,6 +11,19 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261022
 
+### Slice 404: Adoption Baseline Command — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/404-slice.adoption-baseline-command.md`. `cf validate design` passes, and all 7 decisions are `decided`.
+- Key decisions:
+  - `sq metrology baseline [PATH]`: all config is read from PATH. Every preflight (snapshot, identity, audit, skill, profile, model, run count) runs before the snapshot, so nothing is written or spent on a config failure.
+  - The model must be pinned (`--model` or `metrology.audit_model`). An unpinned model fails, unlike `audit run`.
+  - The variance series is the audit run. There's no separate fourth run, because `baseline_report` already reports the newest run in the group, with the floor beside it. Runs are pinned to the snapshot's SHA.
+  - The series loop moves out of `audit variance` into `metrology/audit_series.py`, shared by both commands. `audit variance` behavior is unchanged.
+  - The scope report uses the snapshot's own file set and says plainly that the audit agent isn't limited by exclusions. No prompt.
+  - A partial failure keeps the snapshot and runs, and points to `audit variance` to finish. Re-running the baseline is refused by 400's clean-tree check because of the audit's untracked analysis file.
+  - The probe's `baseline.available` becomes constant `true`. Field and `probe_version` are unchanged.
+- Next: task breakdown for 404 (Phase 5).
+
 ### Slice 403: Slice Ranges and Rollup Reports — Design Complete (Phase 4)
 
 - Design: `project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md`. `cf validate design` passes, and all 10 decisions are `decided`.
