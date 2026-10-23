@@ -472,6 +472,10 @@ Settings for judge calibration and the tech-debt audit harness. Run
 | `metrology.audit_rate_limit_retries` | int | 10 | Retries before a rate-limited run gives up |
 | `metrology.audit_rate_limit_cap_s` | int | 60 | Ceiling on exponential rate-limit backoff |
 | `metrology.preemption_fragment_dir` | string | `~/.config/squadron/metrology/preemption` | Where `preempt generate` writes fragment files |
+| `metrology.max_file_lines` | int | *(unset)* | Maximum non-blank lines per file, checked by `sq metrology snapshot`. Unset means no limit is declared; squadron applies none |
+| `metrology.max_function_lines` | int | *(unset)* | Maximum non-blank lines per function, checked by `sq metrology snapshot` |
+| `metrology.snapshot_exclude` | string | *(unset)* | Comma-separated glob patterns excluded from every snapshot metric (vendored or generated code) |
+| `metrology.snapshot_tool_timeout_s` | int | 600 | Timeout for each tool call a snapshot makes (version probes, the uv check, each file chunk) |
 
 #### Pinning the audit model
 
@@ -495,6 +499,33 @@ sq config set metrology.audit_model claude-sonnet-5 --project
 
 An explicit `--model` on the command still overrides the pin. The resolved
 model is stored on each record, so an audit can say what produced it.
+
+## metrology snapshot
+
+Measure the clean HEAD of a repository and record one `code_snapshot` per commit in the metrology store. Each language with an adapter gets four metrics: file length, function length, lint count and type-error count. Python measures all four; TypeScript measures length and lint, and records type errors as absent (`metric_unsupported`). A metric that can't be measured is absent with a reason and detail, never zero.
+
+```
+sq metrology snapshot [--cwd PATH] [--json]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `--cwd` | path | no | current directory | Repository root to measure. A subdirectory of a repository is refused |
+| `--json` | flag | no | off | Print the `CodeSnapshot` record as JSON instead of the summary |
+
+The working tree must be clean; an untracked `.squadron.toml` is the one exception. Snapshotting writes nothing into the repository and exits 1, recording nothing, if it finds the repository changed afterwards. Re-snapshotting a commit replaces its record.
+
+Lengths count non-blank lines. The limits (`metrology.max_file_lines`, `metrology.max_function_lines`) and exclusions (`metrology.snapshot_exclude`) come from the measured repository's own `.squadron.toml`; see [Metrology keys](#metrology-keys). Without limits the record says none were declared and reports the distributions only.
+
+| Absence reason | Meaning |
+|---|---|
+| `no_adapter` | The language is detected but has no adapter (shell, JavaScript) |
+| `metric_unsupported` | The adapter doesn't measure that metric (TypeScript type errors) |
+| `tool_missing` | The tool isn't installed where it may come from |
+| `tool_failed` | The tool timed out, exited abnormally or produced unusable output |
+| `environment_unresolved` | Type errors need a `uv.lock` and a `.venv` in sync with it |
+
+Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`), never installed. **Snapshotting a repository runs its own `node_modules/.bin/eslint` and its JavaScript config, which executes the repository's code.** Only snapshot repositories you trust. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
 
 ## spawn
 
