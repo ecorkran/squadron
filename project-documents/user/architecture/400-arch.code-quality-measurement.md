@@ -77,7 +77,7 @@ Code-review output arrives already categorized. The `code` review template emits
 
 Slice attribution is durable. The first time a slice's range resolves (from git topology, or from the existing `git_utils` resolver while its reflog entry still exists), the range is written to the store as a slice-range record. After that the reflog no longer matters. Slices whose range never resolved roll up at project level only.
 
-Reports read snapshots, audit runs and review records and present them as a breakdown per slice, per project and over time. A slice's before and after is the snapshot at its fork commit against the snapshot at its merge commit. Because any commit can be measured after the fact, a report takes missing boundary snapshots on demand; nothing has to run at fork time. LLM-sourced numbers are shown against their noise floor. Deterministic numbers need none.
+Reports read snapshots, audit runs and review records and present them as a breakdown per slice, per project and over time. A slice's before and after is the snapshot of the target just before it landed against the snapshot just after: the merge commit's first parent against the merge commit, or the fork against the tip for a fast-forward (refined in slice 403, D3, so other work merged after the fork isn't counted). Because any commit can be measured after the fact, a report takes missing boundary snapshots on demand; nothing has to run at fork time. LLM-sourced numbers are shown against their noise floor. Deterministic numbers need none.
 
 For an existing project, one standalone baseline command takes the first snapshot and runs the audit baseline with its noise floor. Every later slice is measured against it.
 

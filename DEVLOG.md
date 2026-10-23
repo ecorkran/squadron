@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261022
 
+### Slice 403: Slice Ranges and Rollup Reports — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md`. `cf validate design` passes, and all 10 decisions are `decided`.
+- Key decisions:
+  - A slice range is an append-only list of landings. On `main`, slices 172, 305 and 940 each landed twice. Merge landings are searched on the target's first-parent line only, which excludes sync merges into slice branches, and there's no fallback to `main`. A fast-forward is resolved from the reflog only when the tip is on the target's first-parent line.
+  - Before/after = the target just before and just after the landing (`M^1`→`M`, or fork→tip for a fast-forward). This refines the architecture's fork→merge: fork→merge would include other work merged in between.
+  - Commit export: `git archive` with exclude pathspecs (git 2.50.1 accepts them; `ls-tree` doesn't). `AdapterContext.environment_root` is the one contract change: tools and the venv come from the live checkout, and sources and configs from the export. An export of a clean HEAD must equal the in-place snapshot. Type counts at an export need an identical `uv.lock` hash.
+  - Comparability is decided per measurement, and breaks are named. An exclusions change marks every row, and a limits change marks only the over-limit figures. Audit figures reuse `compute_delta`. Review figures say `no floor measured`. No `score` key anywhere.
+  - Commands: `slice-ranges`, `snapshot --commit`, and `report slice|project|history` (`trend` is taken).
+- Next: task breakdown for 403 (Phase 5). 403 can't be implemented before 402.
+
 ### Slice 402: Code-Review Normalization and Ingest — Design Complete (Phase 4)
 
 - Design: `project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md`. `cf validate design` passes, and all 9 decisions are `decided`.
