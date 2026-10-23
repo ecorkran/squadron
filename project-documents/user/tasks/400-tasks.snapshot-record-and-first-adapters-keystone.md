@@ -98,226 +98,226 @@ revision_number: 2
 - [x] Commit: `feat(metrology): add code_snapshot envelope field and store methods`
 
 ## Task 8: Config keys (D10) — Effort 1
-- [ ] Add to `CONFIG_KEYS` in `src/squadron/config/keys.py`, following the existing `metrology.*` entries: `metrology.max_file_lines` (int, None), `metrology.max_function_lines` (int, None), `metrology.snapshot_exclude` (str, None), `metrology.snapshot_tool_timeout_s` (int, 600)
-- [ ] The 600 default appears only in `CONFIG_KEYS`
-- [ ] Success: `sq config set metrology.max_file_lines 300` in a scratch repo writes `.squadron.toml`; existing config tests pass
+- [x] Add to `CONFIG_KEYS` in `src/squadron/config/keys.py`, following the existing `metrology.*` entries: `metrology.max_file_lines` (int, None), `metrology.max_function_lines` (int, None), `metrology.snapshot_exclude` (str, None), `metrology.snapshot_tool_timeout_s` (int, 600)
+- [x] The 600 default appears only in `CONFIG_KEYS`
+- [x] Success: `sq config set metrology.max_file_lines 300` in a scratch repo writes `.squadron.toml`; existing config tests pass
 
 ## Task 9: Snapshot errors and preflight (D9, D10) — Effort 3
-- [ ] In `src/squadron/metrology/errors.py`: `SnapshotPreflightError` and `SnapshotIntegrityError`, subclassing `MetrologyError`. Every raise site's message names the fix
-- [ ] Create `src/squadron/metrology/snapshot/__init__.py` and `snapshot/preflight.py`. All git calls go through `run_git`
-- [ ] `preflight(repo_root)` returns the HEAD SHA, `LengthLimits`, project exclusion patterns and tool timeout:
-  - [ ] not a git repo, or no HEAD → `SnapshotPreflightError`
-  - [ ] `git status --porcelain` output non-empty → `SnapshotPreflightError` naming the paths. The one exemption is an untracked `.squadron.toml` at the repo root (D9)
-  - [ ] `run_git` returning `None` or non-zero → log ERROR naming the call, then raise; never a clean tree (Consumes from Other Slices)
-  - [ ] limits read with `get_config(key, cwd=str(repo_root))`; a non-integer or ≤0 limit → `SnapshotPreflightError`; unset limits recorded as `None`; `limits_declared` false when both unset
-  - [ ] `snapshot_exclude` split on commas, whitespace stripped, empty entries skipped
-  - [ ] timeout read with `get_positive_int_config`
-- [ ] `check_integrity(repo_root)`: reruns the same porcelain check (shared helper, not a copy) and raises `SnapshotIntegrityError` naming the paths, or, after logging ERROR, naming the git call when it returns `None` / non-zero
-- [ ] Success: `derive_project_id` is not wrapped; its `MetrologyIdentityError` propagates unchanged
+- [x] In `src/squadron/metrology/errors.py`: `SnapshotPreflightError` and `SnapshotIntegrityError`, subclassing `MetrologyError`. Every raise site's message names the fix
+- [x] Create `src/squadron/metrology/snapshot/__init__.py` and `snapshot/preflight.py`. All git calls go through `run_git`
+- [x] `preflight(repo_root)` returns the HEAD SHA, `LengthLimits`, project exclusion patterns and tool timeout:
+  - [x] not a git repo, or no HEAD → `SnapshotPreflightError`
+  - [x] `git status --porcelain` output non-empty → `SnapshotPreflightError` naming the paths. The one exemption is an untracked `.squadron.toml` at the repo root (D9)
+  - [x] `run_git` returning `None` or non-zero → log ERROR naming the call, then raise; never a clean tree (Consumes from Other Slices)
+  - [x] limits read with `get_config(key, cwd=str(repo_root))`; a non-integer or ≤0 limit → `SnapshotPreflightError`; unset limits recorded as `None`; `limits_declared` false when both unset
+  - [x] `snapshot_exclude` split on commas, whitespace stripped, empty entries skipped
+  - [x] timeout read with `get_positive_int_config`
+- [x] `check_integrity(repo_root)`: reruns the same porcelain check (shared helper, not a copy) and raises `SnapshotIntegrityError` naming the paths, or, after logging ERROR, naming the git call when it returns `None` / non-zero
+- [x] Success: `derive_project_id` is not wrapped; its `MetrologyIdentityError` propagates unchanged
 
 ## Task 10: Config and preflight tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_preflight.py`, using `snapshot_git_repo`:
-  - [ ] clean repo passes and returns the HEAD SHA
-  - [ ] non-repo dir, and a repo with no commits, each raise `SnapshotPreflightError`
-  - [ ] modified tracked file and untracked file each raise, naming the path
-  - [ ] untracked `.squadron.toml` passes; an untracked `ruff.toml` fails
-  - [ ] limits: valid values recorded; `0`, `-1` and a non-number raise; none set gives `limits_declared=False`
-  - [ ] `snapshot_exclude` with spaces and an empty entry (`"a/**, ,b/**"`) parses to two patterns
-  - [ ] config is read from the measured repo's `.squadron.toml`, not the process cwd (run with `monkeypatch.chdir` elsewhere)
-  - [ ] `check_integrity` raises after a tracked file is modified and after a new untracked file appears; passes on an ignored path
-  - [ ] `run_git` patched to return `None` raises in both preflight and integrity, and logs ERROR
-  - [ ] the four new `CONFIG_KEYS` entries have the Task 8 types and defaults
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add snapshot config keys, preflight and integrity check`
+- [x] `tests/metrology/snapshot/test_preflight.py`, using `snapshot_git_repo`:
+  - [x] clean repo passes and returns the HEAD SHA
+  - [x] non-repo dir, and a repo with no commits, each raise `SnapshotPreflightError`
+  - [x] modified tracked file and untracked file each raise, naming the path
+  - [x] untracked `.squadron.toml` passes; an untracked `ruff.toml` fails
+  - [x] limits: valid values recorded; `0`, `-1` and a non-number raise; none set gives `limits_declared=False`
+  - [x] `snapshot_exclude` with spaces and an empty entry (`"a/**, ,b/**"`) parses to two patterns
+  - [x] config is read from the measured repo's `.squadron.toml`, not the process cwd (run with `monkeypatch.chdir` elsewhere)
+  - [x] `check_integrity` raises after a tracked file is modified and after a new untracked file appears; passes on an ignored path
+  - [x] `run_git` patched to return `None` raises in both preflight and integrity, and logs ERROR
+  - [x] the four new `CONFIG_KEYS` entries have the Task 8 types and defaults
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add snapshot config keys, preflight and integrity check`
 
 ## Task 11: Adapter contract (Implementation Details → Adapter contract) — Effort 2
-- [ ] Create `snapshot/contract.py` with:
-  - [ ] `ToolResult` (exit code, stdout, stderr, timed_out) and `ToolRunner` protocol: `run(argv, *, cwd, timeout_s)`, `timeout_s` required with no default (D10)
-  - [ ] `LanguageAdapter` protocol and frozen `AdapterContext`, as in the design
-  - [ ] the `SourceLanguage` → file-extension map (TypeScript: `.ts`, `.tsx`, `.mts`, `.cts`; JavaScript includes `.js`, `.mjs`, `.cjs`; shell `.sh`)
-  - [ ] `AdapterRegistry` type: a mapping from `SourceLanguage` to adapter, holding no adapters
-- [ ] Add a `FakeToolRunner` to `tests/metrology/snapshot/conftest.py`: returns scripted `ToolResult`s keyed by argv prefix and records the calls
-- [ ] Success: `contract.py` imports nothing from any adapter module; pyright clean
+- [x] Create `snapshot/contract.py` with:
+  - [x] `ToolResult` (exit code, stdout, stderr, timed_out) and `ToolRunner` protocol: `run(argv, *, cwd, timeout_s)`, `timeout_s` required with no default (D10)
+  - [x] `LanguageAdapter` protocol and frozen `AdapterContext`, as in the design
+  - [x] the `SourceLanguage` → file-extension map (TypeScript: `.ts`, `.tsx`, `.mts`, `.cts`; JavaScript includes `.js`, `.mjs`, `.cjs`; shell `.sh`)
+  - [x] `AdapterRegistry` type: a mapping from `SourceLanguage` to adapter, holding no adapters
+- [x] Add a `FakeToolRunner` to `tests/metrology/snapshot/conftest.py`: returns scripted `ToolResult`s keyed by argv prefix and records the calls
+- [x] Success: `contract.py` imports nothing from any adapter module; pyright clean
 
 ## Task 12: File-set resolution (D4) — Effort 2
-- [ ] Create `snapshot/files.py`
-- [ ] `effective_exclusions(project_patterns, adapters)`: sorted union of project patterns and each adapter's `convention_exclusions`
-- [ ] `resolve_files(repo_root, exclusions)` (public, for 404): `git ls-files -z -- . ':(exclude,glob)<p>'…` via `run_git`; `None` or non-zero logs ERROR and raises `SnapshotIntegrityError` naming the call
-- [ ] `group_by_language(files)`: uses the contract's extension map; files with no mapped extension are not grouped
-- [ ] Success: no glob library imported; git does all matching
+- [x] Create `snapshot/files.py`
+- [x] `effective_exclusions(project_patterns, adapters)`: sorted union of project patterns and each adapter's `convention_exclusions`
+- [x] `resolve_files(repo_root, exclusions)` (public, for 404): `git ls-files -z -- . ':(exclude,glob)<p>'…` via `run_git`; `None` or non-zero logs ERROR and raises `SnapshotIntegrityError` naming the call
+- [x] `group_by_language(files)`: uses the contract's extension map; files with no mapped extension are not grouped
+- [x] Success: no glob library imported; git does all matching
 
 ## Task 13: File-set tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_files.py`:
-  - [ ] untracked files never appear
-  - [ ] `commands/analysis/**` exclusion removes every file under it, at any depth
-  - [ ] `**/*.d.ts` and `**/node_modules/**` conventions remove tracked matches
-  - [ ] effective set is sorted and de-duplicated
-  - [ ] grouping maps `.ts`/`.tsx`/`.mts`/`.cts` to TypeScript, `.mjs` to JavaScript, `.sh` to shell
-  - [ ] a path with a space and a non-ASCII name survive the `-z` split
-  - [ ] `run_git` returning `None` raises `SnapshotIntegrityError` and logs ERROR (`caplog`)
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add adapter contract and file-set resolution`
+- [x] `tests/metrology/snapshot/test_files.py`:
+  - [x] untracked files never appear
+  - [x] `commands/analysis/**` exclusion removes every file under it, at any depth
+  - [x] `**/*.d.ts` and `**/node_modules/**` conventions remove tracked matches
+  - [x] effective set is sorted and de-duplicated
+  - [x] grouping maps `.ts`/`.tsx`/`.mts`/`.cts` to TypeScript, `.mjs` to JavaScript, `.sh` to shell
+  - [x] a path with a space and a non-ASCII name survive the `-z` split
+  - [x] `run_git` returning `None` raises `SnapshotIntegrityError` and logs ERROR (`caplog`)
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add adapter contract and file-set resolution`
 
 ## Task 14: Shared length counting (D1, D6) — Effort 2
-- [ ] Create `snapshot/lengths.py`:
-  - [ ] non-blank physical line count for a text, and for a line span (start, end inclusive)
-  - [ ] `distribution(values)` → `Distribution` (count, total, min, p50, p90, max); define the percentile method once and state it in the docstring
-  - [ ] file-length measurement builder: `per_file` for every file, distribution, and `limit`. Files over the limit are not a stored field: they are the `per_file` entries above `limit` (Success Criterion 5). Add a `files_over_limit()` helper here that derives them, for the CLI summary
-  - [ ] function-length measurement builder: distribution over functions, `over_limit` rows only for functions above a declared limit; empty when no limit
-- [ ] Tests in `tests/metrology/snapshot/test_lengths.py`: blank and whitespace-only lines excluded; distribution on 1, 2 and 10 values; `files_over_limit()` returns exactly the files above the limit and nothing with no limit; function `over_limit` rows appear only above the limit; no limit gives empty `over_limit` with distribution present
-- [ ] Success: both adapters can build length measurements from this module alone (no duplication); tests pass
-- [ ] Commit: `feat(metrology): add shared length counting`
+- [x] Create `snapshot/lengths.py`:
+  - [x] non-blank physical line count for a text, and for a line span (start, end inclusive)
+  - [x] `distribution(values)` → `Distribution` (count, total, min, p50, p90, max); define the percentile method once and state it in the docstring
+  - [x] file-length measurement builder: `per_file` for every file, distribution, and `limit`. Files over the limit are not a stored field: they are the `per_file` entries above `limit` (Success Criterion 5). Add a `files_over_limit()` helper here that derives them, for the CLI summary
+  - [x] function-length measurement builder: distribution over functions, `over_limit` rows only for functions above a declared limit; empty when no limit
+- [x] Tests in `tests/metrology/snapshot/test_lengths.py`: blank and whitespace-only lines excluded; distribution on 1, 2 and 10 values; `files_over_limit()` returns exactly the files above the limit and nothing with no limit; function `over_limit` rows appear only above the limit; no limit gives empty `over_limit` with distribution present
+- [x] Success: both adapters can build length measurements from this module alone (no duplication); tests pass
+- [x] Commit: `feat(metrology): add shared length counting`
 
 ## Task 15: Capture real tool output fixtures (Technical Requirements) — Effort 2
-- [ ] Pre-check: `../context-forge/node_modules/.bin/eslint` exists and `git -C ../context-forge ls-files` lists a file matched by its `eslint.config.mjs` `ignores`. If either fails, write a `BLOCKED:` line under this task and stop; never install into `../context-forge`. Tasks 26 and 27 need none of these fixtures and may proceed first
-- [ ] Store under `tests/metrology/fixtures/snapshot/`, with a `README.md` recording, per file, the exact command, exit code, tool version and source repo
-- [ ] ruff: `ruff check --no-cache --exit-zero --output-format json` on squadron, plus a run on a scratch file with known violations so the fixture holds non-empty findings. Trim large output only by dropping list entries, never by editing their fields
-- [ ] pyright: `--outputjson` on squadron, plus a scratch file with one error and one warning, so both severities appear (exit code recorded), plus a scratch project with an invalid `pyrightconfig.json` for the fatal-exit case
-- [ ] uv: stdout/stderr and exit code of `uv sync --check --locked --offline` for in-sync (squadron) and out-of-sync (scratch project) cases
-- [ ] ESLint: `node_modules/.bin/eslint --format json` in `../context-forge` on a few `src` files plus one file matched by its `ignores` (for example a tracked `vitest.config.ts`). Record in the README exactly how ESLint 10 reports the skipped file; Task 28 parses that, not an assumed shape. Also capture a fatal exit by running the same binary with `--config` pointing at a scratch config that fails to load (a file outside `../context-forge`)
-- [ ] Exit-code table in the README, taken from the captures: for pyright and ESLint, which exit codes accompany a parseable JSON findings report (a normal result) and which mean the tool failed. Tasks 24 and 28 implement exactly this table
-- [ ] Version outputs: `--version` text for ruff, pyright, uv, ESLint
-- [ ] Success: `git -C ../context-forge status --porcelain` empty after capture; squadron tree clean apart from the new fixtures
-- [ ] Commit: `test(metrology): add real tool-output fixtures for snapshot adapters`
+- [x] Pre-check: `../context-forge/node_modules/.bin/eslint` exists and `git -C ../context-forge ls-files` lists a file matched by its `eslint.config.mjs` `ignores`. If either fails, write a `BLOCKED:` line under this task and stop; never install into `../context-forge`. Tasks 26 and 27 need none of these fixtures and may proceed first
+- [x] Store under `tests/metrology/fixtures/snapshot/`, with a `README.md` recording, per file, the exact command, exit code, tool version and source repo
+- [x] ruff: `ruff check --no-cache --exit-zero --output-format json` on squadron, plus a run on a scratch file with known violations so the fixture holds non-empty findings. Trim large output only by dropping list entries, never by editing their fields
+- [x] pyright: `--outputjson` on squadron, plus a scratch file with one error and one warning, so both severities appear (exit code recorded), plus a scratch project with an invalid `pyrightconfig.json` for the fatal-exit case
+- [x] uv: stdout/stderr and exit code of `uv sync --check --locked --offline` for in-sync (squadron) and out-of-sync (scratch project) cases
+- [x] ESLint: `node_modules/.bin/eslint --format json` in `../context-forge` on a few `src` files plus one file matched by its `ignores` (for example a tracked `vitest.config.ts`). Record in the README exactly how ESLint 10 reports the skipped file; Task 28 parses that, not an assumed shape. Also capture a fatal exit by running the same binary with `--config` pointing at a scratch config that fails to load (a file outside `../context-forge`)
+- [x] Exit-code table in the README, taken from the captures: for pyright and ESLint, which exit codes accompany a parseable JSON findings report (a normal result) and which mean the tool failed. Tasks 24 and 28 implement exactly this table
+- [x] Version outputs: `--version` text for ruff, pyright, uv, ESLint
+- [x] Success: `git -C ../context-forge status --porcelain` empty after capture; squadron tree clean apart from the new fixtures
+- [x] Commit: `test(metrology): add real tool-output fixtures for snapshot adapters`
 
 ## Task 16: Default subprocess ToolRunner and tool resolution (D8) — Effort 3
-- [ ] Create `snapshot/runner.py`:
-  - [ ] `SubprocessToolRunner`: argv list, never a shell; enforces `timeout_s`; returns `timed_out=True` on timeout rather than raising; UTF-8 decoding with replacement
-  - [ ] `resolve_tool(repo_root, name, project_dirs, use_path)`: project location first (`.venv/bin/…`, `node_modules/.bin/…`), then `PATH` only where D8 allows (ruff, pyright)
-  - [ ] `probe_version(runner, tool_path, timeout_s)`: runs `--version`, parses a version; a hang, non-zero exit or unparseable output returns a failure with detail ("version probe failed: …") and logs WARNING with the tool, command and stderr head
-  - [ ] argv chunking helper that splits a file list to stay under argv limits
-- [ ] Success: module has no adapter-specific logic
+- [x] Create `snapshot/runner.py`:
+  - [x] `SubprocessToolRunner`: argv list, never a shell; enforces `timeout_s`; returns `timed_out=True` on timeout rather than raising; UTF-8 decoding with replacement
+  - [x] `resolve_tool(repo_root, name, project_dirs, use_path)`: project location first (`.venv/bin/…`, `node_modules/.bin/…`), then `PATH` only where D8 allows (ruff, pyright)
+  - [x] `probe_version(runner, tool_path, timeout_s)`: runs `--version`, parses a version; a hang, non-zero exit or unparseable output returns a failure with detail ("version probe failed: …") and logs WARNING with the tool, command and stderr head
+  - [x] argv chunking helper that splits a file list to stay under argv limits
+- [x] Success: module has no adapter-specific logic
 
 ## Task 17: Runner tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_runner.py`:
-  - [ ] real subprocess: a command that exceeds a 1 s timeout returns `timed_out=True`
-  - [ ] resolution prefers the project binary over `PATH`; ESLint is never resolved from `PATH`; missing tool returns not-found
-  - [ ] version probe parses each Task 15 `--version` capture (ruff, pyright, uv, ESLint)
-  - [ ] version probe: timeout, non-zero exit and unparseable output each return a failure and log WARNING (`caplog`)
-  - [ ] chunking covers every file exactly once
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add subprocess tool runner and version probe`
+- [x] `tests/metrology/snapshot/test_runner.py`:
+  - [x] real subprocess: a command that exceeds a 1 s timeout returns `timed_out=True`
+  - [x] resolution prefers the project binary over `PATH`; ESLint is never resolved from `PATH`; missing tool returns not-found
+  - [x] version probe parses each Task 15 `--version` capture (ruff, pyright, uv, ESLint)
+  - [x] version probe: timeout, non-zero exit and unparseable output each return a failure and log WARNING (`caplog`)
+  - [x] chunking covers every file exactly once
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add subprocess tool runner and version probe`
 
 ## Task 18: Orchestrator `take_snapshot` (Data Flow, D3) — Effort 3
-- [ ] Create `snapshot/take.py` with `take_snapshot(repo_root, registry, runner, store) -> CodeSnapshot`, importing only the contract, never an adapter
-- [ ] Flow per Data Flow: preflight → `derive_project_id` → effective exclusions → `resolve_files` → group → per language:
-  - [ ] log one INFO line per language before measuring
-  - [ ] no adapter → every `SnapshotMetric` absent `no_adapter`
-  - [ ] adapter → `measure`; raise if it returns an undeclared metric or omits a declared one
-  - [ ] fill `metric_unsupported` for metrics the adapter doesn't declare
-- [ ] After measuring, `check_integrity`; on failure nothing is written
-- [ ] Build `CodeSnapshot` (squadron version, `measured_at`, limits, exclusions), then `store.write_snapshot`
-- [ ] Success: under ~300 lines; no adapter import
+- [x] Create `snapshot/take.py` with `take_snapshot(repo_root, registry, runner, store) -> CodeSnapshot`, importing only the contract, never an adapter
+- [x] Flow per Data Flow: preflight → `derive_project_id` → effective exclusions → `resolve_files` → group → per language:
+  - [x] log one INFO line per language before measuring
+  - [x] no adapter → every `SnapshotMetric` absent `no_adapter`
+  - [x] adapter → `measure`; raise if it returns an undeclared metric or omits a declared one
+  - [x] fill `metric_unsupported` for metrics the adapter doesn't declare
+- [x] After measuring, `check_integrity`; on failure nothing is written
+- [x] Build `CodeSnapshot` (squadron version, `measured_at`, limits, exclusions), then `store.write_snapshot`
+- [x] Success: under ~300 lines; no adapter import
 
 ## Task 19: Orchestrator tests — Effort 3
-- [ ] `tests/metrology/snapshot/test_take.py` with fake adapters and `FakeToolRunner`:
-  - [ ] a language with no adapter gets every metric absent `no_adapter`
-  - [ ] an adapter declaring a subset gets `metric_unsupported` for the rest
-  - [ ] every `SnapshotMetric` member appears for every language present (Integration Requirements, guards 401)
-  - [ ] adapter returning an undeclared metric, or omitting a declared one, raises
-  - [ ] a fake adapter that writes a file into the repo causes `SnapshotIntegrityError` and no record is written
-  - [ ] a dirty tree is refused before any adapter runs and nothing is written
-  - [ ] two runs on one commit leave one record and identical JSON apart from `measured_at`
-  - [ ] the per-language INFO lines are logged
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add snapshot orchestrator`
+- [x] `tests/metrology/snapshot/test_take.py` with fake adapters and `FakeToolRunner`:
+  - [x] a language with no adapter gets every metric absent `no_adapter`
+  - [x] an adapter declaring a subset gets `metric_unsupported` for the rest
+  - [x] every `SnapshotMetric` member appears for every language present (Integration Requirements, guards 401)
+  - [x] adapter returning an undeclared metric, or omitting a declared one, raises
+  - [x] a fake adapter that writes a file into the repo causes `SnapshotIntegrityError` and no record is written
+  - [x] a dirty tree is refused before any adapter runs and nothing is written
+  - [x] two runs on one commit leave one record and identical JSON apart from `measured_at`
+  - [x] the per-language INFO lines are logged
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add snapshot orchestrator`
 
 ## Task 20: Python adapter — ast length (D6) — Effort 3
-- [ ] Create `snapshot/python_adapter.py` with the adapter class: `language` Python, `metrics` file length and function length only (Task 22 adds lint, Task 24 adds type errors; never stub placeholder measurements), `convention_exclusions` `**/*_pb2.py`, `**/*_pb2_grpc.py`. The `squadron-python-ast` tool name constant lives here; the `ruff` and `pyright` names live in the modules that run them (Tasks 22 and 24)
-- [ ] File length via `lengths.py` for every file
-- [ ] Function length: walk `ast` for `def`/`async def` at any depth, qualified like `__qualname__` (`Cls.method`, `outer.<locals>.inner`); span from first decorator (or def line) to `end_lineno`; lambdas excluded
-- [ ] `SyntaxError`, `RecursionError`, `MemoryError`, `UnicodeDecodeError` → file in `unparsed_files`, WARNING per file, still counted for file length
-- [ ] Tool identity: version is squadron version plus Python version; `counting` states the D6 definition
-- [ ] Success: the measured project's code is never imported or executed
+- [x] Create `snapshot/python_adapter.py` with the adapter class: `language` Python, `metrics` file length and function length only (Task 22 adds lint, Task 24 adds type errors; never stub placeholder measurements), `convention_exclusions` `**/*_pb2.py`, `**/*_pb2_grpc.py`. The `squadron-python-ast` tool name constant lives here; the `ruff` and `pyright` names live in the modules that run them (Tasks 22 and 24)
+- [x] File length via `lengths.py` for every file
+- [x] Function length: walk `ast` for `def`/`async def` at any depth, qualified like `__qualname__` (`Cls.method`, `outer.<locals>.inner`); span from first decorator (or def line) to `end_lineno`; lambdas excluded
+- [x] `SyntaxError`, `RecursionError`, `MemoryError`, `UnicodeDecodeError` → file in `unparsed_files`, WARNING per file, still counted for file length
+- [x] Tool identity: version is squadron version plus Python version; `counting` states the D6 definition
+- [x] Success: the measured project's code is never imported or executed
 
 ## Task 21: Python length tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_python_length.py`: decorated function span; nested and method qualnames; lambda excluded; nested function counted on its own and inside its parent; over-limit rows; each of the four parse failures lands in `unparsed_files` with a WARNING (`RecursionError` from deeply nested source, undecodable bytes)
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add Python adapter with ast length`
+- [x] `tests/metrology/snapshot/test_python_length.py`: decorated function span; nested and method qualnames; lambda excluded; nested function counted on its own and inside its parent; over-limit rows; each of the four parse failures lands in `unparsed_files` with a WARNING (`RecursionError` from deeply nested source, undecodable bytes)
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add Python adapter with ast length`
 
 ## Task 22: Python adapter — ruff lint (D4, D8) — Effort 2
-- [ ] Create `snapshot/config_hash.py` (canonical-JSON hash of a pyproject table, content hash of a config file; shared by ruff, pyright and ESLint) and `snapshot/python_lint.py` (ruff runner and rule-set resolution). `python_adapter.py` only delegates. The slice design's module table already lists them
-- [ ] Add lint count to the adapter's `metrics`
-- [ ] Resolve ruff, probe version; missing → `tool_missing`; probe failure → `tool_failed` without running ruff
-- [ ] Rule set: `ruff.toml`, then `.ruff.toml`, then pyproject `[tool.ruff]` hashed as canonical JSON (sorted keys); none → `tool-defaults`. Use the `config_hash.py` helper for the pyproject table
-- [ ] Run `ruff check --no-cache --exit-zero --output-format json` over chunked file lists; count findings per file into `per_file` (non-zero only)
-- [ ] Non-zero exit, timeout or unparseable JSON → `tool_failed` with WARNING (tool, command, stderr head); never a partial count
-- [ ] Success: parser reads the Task 15 ruff fixture shape
+- [x] Create `snapshot/config_hash.py` (canonical-JSON hash of a pyproject table, content hash of a config file; shared by ruff, pyright and ESLint) and `snapshot/python_lint.py` (ruff runner and rule-set resolution). `python_adapter.py` only delegates. The slice design's module table already lists them
+- [x] Add lint count to the adapter's `metrics`
+- [x] Resolve ruff, probe version; missing → `tool_missing`; probe failure → `tool_failed` without running ruff
+- [x] Rule set: `ruff.toml`, then `.ruff.toml`, then pyproject `[tool.ruff]` hashed as canonical JSON (sorted keys); none → `tool-defaults`. Use the `config_hash.py` helper for the pyproject table
+- [x] Run `ruff check --no-cache --exit-zero --output-format json` over chunked file lists; count findings per file into `per_file` (non-zero only)
+- [x] Non-zero exit, timeout or unparseable JSON → `tool_failed` with WARNING (tool, command, stderr head); never a partial count
+- [x] Success: parser reads the Task 15 ruff fixture shape
 
 ## Task 23: Ruff lint tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_python_lint.py` with `FakeToolRunner` returning the Task 15 fixtures: counts match the fixture; each rule-set source is chosen in order; editing `[project] version` in pyproject doesn't change the hash, editing `[tool.ruff]` does; missing tool, version-probe failure, timeout, bad JSON and non-zero exit each give the right absence and a WARNING
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add ruff lint to the Python adapter`
+- [x] `tests/metrology/snapshot/test_python_lint.py` with `FakeToolRunner` returning the Task 15 fixtures: counts match the fixture; each rule-set source is chosen in order; editing `[project] version` in pyproject doesn't change the hash, editing `[tool.ruff]` does; missing tool, version-probe failure, timeout, bad JSON and non-zero exit each give the right absence and a WARNING
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add ruff lint to the Python adapter`
 
 ## Task 24: Python adapter — uv environment and pyright (D7, D8) — Effort 3
-- [ ] Create `snapshot/python_types.py` holding the uv environment check and the pyright runner. `python_adapter.py` only delegates
-- [ ] Add type errors to the adapter's `metrics`
-- [ ] Environment check in order: `uv.lock` exists; `.venv/` exists; `uv sync --check --locked --offline` exits 0. Each failure → type errors absent `environment_unresolved` with detail naming the condition (`.venv not found`, `lockfile type not supported: poetry.lock` when another lockfile is present)
-- [ ] uv outcomes per D7: exit 1 → `environment_unresolved`; uv not found → `tool_missing`; timeout, other exit or unparseable output → `tool_failed`; each non-success at WARNING
-- [ ] `EnvironmentIdentity`: `uv.lock` path, its SHA-256, interpreter version of `.venv/bin/python`
-- [ ] Pyright rule set: `pyrightconfig.json`, then pyproject `[tool.pyright]`, else `tool-defaults`
-- [ ] Run pyright `--outputjson --pythonpath .venv/bin/python` on chunked files; count only `severity == "error"`. Exit codes follow the Task 15 table: exit 1 with parseable JSON is a normal result (errors were found), never `tool_failed`. Any other exit code, a timeout or unparseable JSON → `tool_failed` with WARNING (tool, command, stderr head), never a partial count. Missing → `tool_missing`; version-probe failure → `tool_failed` without running pyright
-- [ ] `counting` states that every snapshot file is analyzed regardless of pyright `include` (D4)
-- [ ] Success: `python_adapter.py`, `python_lint.py` and `python_types.py` each stay under ~300 lines
+- [x] Create `snapshot/python_types.py` holding the uv environment check and the pyright runner. `python_adapter.py` only delegates
+- [x] Add type errors to the adapter's `metrics`
+- [x] Environment check in order: `uv.lock` exists; `.venv/` exists; `uv sync --check --locked --offline` exits 0. Each failure → type errors absent `environment_unresolved` with detail naming the condition (`.venv not found`, `lockfile type not supported: poetry.lock` when another lockfile is present)
+- [x] uv outcomes per D7: exit 1 → `environment_unresolved`; uv not found → `tool_missing`; timeout, other exit or unparseable output → `tool_failed`; each non-success at WARNING
+- [x] `EnvironmentIdentity`: `uv.lock` path, its SHA-256, interpreter version of `.venv/bin/python`
+- [x] Pyright rule set: `pyrightconfig.json`, then pyproject `[tool.pyright]`, else `tool-defaults`
+- [x] Run pyright `--outputjson --pythonpath .venv/bin/python` on chunked files; count only `severity == "error"`. Exit codes follow the Task 15 table: exit 1 with parseable JSON is a normal result (errors were found), never `tool_failed`. Any other exit code, a timeout or unparseable JSON → `tool_failed` with WARNING (tool, command, stderr head), never a partial count. Missing → `tool_missing`; version-probe failure → `tool_failed` without running pyright
+- [x] `counting` states that every snapshot file is analyzed regardless of pyright `include` (D4)
+- [x] Success: `python_adapter.py`, `python_lint.py` and `python_types.py` each stay under ~300 lines
 
 ## Task 25: Environment and pyright tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_python_types.py`, using Task 15 fixtures: no `uv.lock`; `poetry.lock` only; no `.venv`; uv exit 1; uv missing; uv timeout; uv unexpected exit — each gives the specified absence, detail and WARNING. In-sync case counts only errors from the pyright fixture and carries the environment identity. Pyright failure modes: exit 1 with errors is counted, not failed; missing tool, version-probe failure, timeout, bad JSON and a fatal exit (the Task 15 invalid-config capture) each give the specified absence and a WARNING
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add Python type-error measurement with uv environment check`
+- [x] `tests/metrology/snapshot/test_python_types.py`, using Task 15 fixtures: no `uv.lock`; `poetry.lock` only; no `.venv`; uv exit 1; uv missing; uv timeout; uv unexpected exit — each gives the specified absence, detail and WARNING. In-sync case counts only errors from the pyright fixture and carries the environment identity. Pyright failure modes: exit 1 with errors is counted, not failed; missing tool, version-probe failure, timeout, bad JSON and a fatal exit (the Task 15 invalid-config capture) each give the specified absence and a WARNING
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add Python type-error measurement with uv environment check`
 
 ## Task 26: TypeScript adapter — tree-sitter length (D5, D6) — Effort 3
-- [ ] Create `snapshot/typescript_length.py` (tree-sitter parsing and function walk) and `snapshot/typescript_adapter.py` (the adapter class, delegating): `language` TypeScript, `metrics` file length and function length (Task 28 adds lint); `convention_exclusions` `**/*.d.ts`, `**/node_modules/**`, `**/dist/**`. The `squadron-tree-sitter-ts` tool name constant lives in `typescript_length.py`; the `eslint` name lives in `typescript_lint.py` (Task 28)
-- [ ] Parse `.tsx` with the TSX grammar and the rest with the TypeScript grammar
-- [ ] Count function declarations (generators included), methods (constructors, accessors), function expressions, block-bodied arrows; skip expression-bodied arrows. Name from the node, else the enclosing variable declarator or property, else `<anonymous>`
-- [ ] Tree with an error root, or undecodable file → `unparsed_files` with WARNING; still counted for file length
-- [ ] Tool version: squadron version plus tree-sitter and grammar versions
-- [ ] Success: no Node process runs for length
+- [x] Create `snapshot/typescript_length.py` (tree-sitter parsing and function walk) and `snapshot/typescript_adapter.py` (the adapter class, delegating): `language` TypeScript, `metrics` file length and function length (Task 28 adds lint); `convention_exclusions` `**/*.d.ts`, `**/node_modules/**`, `**/dist/**`. The `squadron-tree-sitter-ts` tool name constant lives in `typescript_length.py`; the `eslint` name lives in `typescript_lint.py` (Task 28)
+- [x] Parse `.tsx` with the TSX grammar and the rest with the TypeScript grammar
+- [x] Count function declarations (generators included), methods (constructors, accessors), function expressions, block-bodied arrows; skip expression-bodied arrows. Name from the node, else the enclosing variable declarator or property, else `<anonymous>`
+- [x] Tree with an error root, or undecodable file → `unparsed_files` with WARNING; still counted for file length
+- [x] Tool version: squadron version plus tree-sitter and grammar versions
+- [x] Success: no Node process runs for length
 
 ## Task 27: TypeScript length tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_typescript_length.py`: each counted node kind; expression-bodied arrow skipped; naming from declarator and property; `<anonymous>`; `.tsx` with JSX parses; a syntax-error file and an undecodable-bytes file each land in `unparsed_files` with WARNING
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add TypeScript adapter with tree-sitter length`
+- [x] `tests/metrology/snapshot/test_typescript_length.py`: each counted node kind; expression-bodied arrow skipped; naming from declarator and property; `<anonymous>`; `.tsx` with JSX parses; a syntax-error file and an undecodable-bytes file each land in `unparsed_files` with WARNING
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add TypeScript adapter with tree-sitter length`
 
 ## Task 28: TypeScript adapter — ESLint lint (D4, D5, D8) — Effort 3
-- [ ] Create `snapshot/typescript_lint.py` (ESLint runner and rule-set resolution, using `config_hash.py`); `typescript_adapter.py` only delegates. Add lint count to the adapter's `metrics`
-- [ ] Resolve only `node_modules/.bin/eslint`; missing → `tool_missing` (detail `node_modules/.bin/eslint not found`); never `npx`
-- [ ] Rule set: `eslint.config.{js,mjs,cjs}` hashed by content; none → lint absent `tool_failed` ("no eslint.config.{js,mjs,cjs} found") without running ESLint
-- [ ] Run `--format json` without `--cache` on chunked files; count messages per file
-- [ ] Files ESLint skipped (identified as recorded in the Task 15 README) go to `tool_ignored_files` and add nothing to the count
-- [ ] Exit codes follow the Task 15 table: exit 1 with parseable JSON is a normal result (errors were found), never `tool_failed`. Any other exit code (for example a config load error), a timeout or unparseable JSON → `tool_failed` with WARNING (tool, command, stderr head), never a partial count. Version-probe failure → `tool_failed` without running ESLint. No `environment` on ESLint lint (D2)
-- [ ] Success: TypeScript type errors come out `metric_unsupported` from the orchestrator, not from the adapter; every TypeScript module stays under ~300 lines
+- [x] Create `snapshot/typescript_lint.py` (ESLint runner and rule-set resolution, using `config_hash.py`); `typescript_adapter.py` only delegates. Add lint count to the adapter's `metrics`
+- [x] Resolve only `node_modules/.bin/eslint`; missing → `tool_missing` (detail `node_modules/.bin/eslint not found`); never `npx`
+- [x] Rule set: `eslint.config.{js,mjs,cjs}` hashed by content; none → lint absent `tool_failed` ("no eslint.config.{js,mjs,cjs} found") without running ESLint
+- [x] Run `--format json` without `--cache` on chunked files; count messages per file
+- [x] Files ESLint skipped (identified as recorded in the Task 15 README) go to `tool_ignored_files` and add nothing to the count
+- [x] Exit codes follow the Task 15 table: exit 1 with parseable JSON is a normal result (errors were found), never `tool_failed`. Any other exit code (for example a config load error), a timeout or unparseable JSON → `tool_failed` with WARNING (tool, command, stderr head), never a partial count. Version-probe failure → `tool_failed` without running ESLint. No `environment` on ESLint lint (D2)
+- [x] Success: TypeScript type errors come out `metric_unsupported` from the orchestrator, not from the adapter; every TypeScript module stays under ~300 lines
 
 ## Task 29: ESLint tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_typescript_lint.py` with the Task 15 ESLint fixtures: counts match; the ignored file is in `tool_ignored_files` and not counted; no config gives `tool_failed`; missing binary gives `tool_missing`; exit 1 with findings is counted, not failed; version-probe failure, timeout, bad JSON and a fatal exit (the Task 15 config-load capture) give `tool_failed` with WARNING
-- [ ] Success: tests pass; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add ESLint lint to the TypeScript adapter`
+- [x] `tests/metrology/snapshot/test_typescript_lint.py` with the Task 15 ESLint fixtures: counts match; the ignored file is in `tool_ignored_files` and not counted; no config gives `tool_failed`; missing binary gives `tool_missing`; exit 1 with findings is counted, not failed; version-probe failure, timeout, bad JSON and a fatal exit (the Task 15 config-load capture) give `tool_failed` with WARNING
+- [x] Success: tests pass; ruff and pyright clean
+- [x] Commit: `feat(metrology): add ESLint lint to the TypeScript adapter`
 
 ## Task 30: Default registry and CLI command (API Contracts) — Effort 2
-- [ ] `snapshot/registry.py`: `default_registry()` returning the Python and TypeScript adapters; the only non-test module importing concrete adapters
-- [ ] `src/squadron/cli/commands/metrology_snapshot.py`: `snapshot [--cwd PATH] [--json]`, registered on `metrology_app`
-  - [ ] passes `default_registry()` and `SubprocessToolRunner` to `take_snapshot`
-  - [ ] human output: one line per language with each metric summary or `absent: <reason> (<detail>)`, then the limits line (`none declared` when unset), exclusion count and record path
-  - [ ] `--json` prints the `CodeSnapshot` JSON
-  - [ ] `SnapshotPreflightError`, `SnapshotIntegrityError`, `MetrologyIdentityError`, `MetrologyStoreError` → message on stderr, exit 1. The command logs `MetrologyStoreError` at ERROR with the store path before exiting (failure-mode table)
-  - [ ] help text states that snapshotting a repo runs its `node_modules/.bin/eslint` and its JavaScript config (Special Considerations → Security)
-- [ ] Success: `sq metrology snapshot --help` shows both options
+- [x] `snapshot/registry.py`: `default_registry()` returning the Python and TypeScript adapters; the only non-test module importing concrete adapters
+- [x] `src/squadron/cli/commands/metrology_snapshot.py`: `snapshot [--cwd PATH] [--json]`, registered on `metrology_app`
+  - [x] passes `default_registry()` and `SubprocessToolRunner` to `take_snapshot`
+  - [x] human output: one line per language with each metric summary or `absent: <reason> (<detail>)`, then the limits line (`none declared` when unset), exclusion count and record path
+  - [x] `--json` prints the `CodeSnapshot` JSON
+  - [x] `SnapshotPreflightError`, `SnapshotIntegrityError`, `MetrologyIdentityError`, `MetrologyStoreError` → message on stderr, exit 1. The command logs `MetrologyStoreError` at ERROR with the store path before exiting (failure-mode table)
+  - [x] help text states that snapshotting a repo runs its `node_modules/.bin/eslint` and its JavaScript config (Special Considerations → Security)
+- [x] Success: `sq metrology snapshot --help` shows both options
 
 ## Task 31: CLI tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_snapshot_cli.py` with `CliRunner`, a `snapshot_git_repo` repo and an isolated store: clean run exits 0 and writes one record; `--json` parses as `CodeSnapshot`; dirty tree exits 1 with the path on stderr and no record; `--cwd` measures the given repo, not the process cwd; `sq metrology list`, `report baseline` and `audit delta` give the same output with and without a snapshot record in the store (Success Criterion 10); a store dir that can't be written (a regular file in its place) exits 1 with the path on stderr, logs ERROR, and leaves no record
-- [ ] Success: tests pass; full `tests/metrology/` passes; ruff and pyright clean
-- [ ] Commit: `feat(metrology): add sq metrology snapshot command`
+- [x] `tests/metrology/snapshot/test_snapshot_cli.py` with `CliRunner`, a `snapshot_git_repo` repo and an isolated store: clean run exits 0 and writes one record; `--json` parses as `CodeSnapshot`; dirty tree exits 1 with the path on stderr and no record; `--cwd` measures the given repo, not the process cwd; `sq metrology list`, `report baseline` and `audit delta` give the same output with and without a snapshot record in the store (Success Criterion 10); a store dir that can't be written (a regular file in its place) exits 1 with the path on stderr, logs ERROR, and leaves no record
+- [x] Success: tests pass; full `tests/metrology/` passes; ruff and pyright clean
+- [x] Commit: `feat(metrology): add sq metrology snapshot command`
 
 ## Task 32: Docs, CHANGELOG and squadron config — Effort 1
-- [ ] `docs/COMMANDS.md`: document `sq metrology snapshot`, and add the four new keys to the metrology config table
-- [ ] CHANGELOG: one user-facing bullet under Unreleased
-- [ ] Add the walkthrough step 1 values to squadron's local `.squadron.toml` (gitignored; not committed)
-- [ ] Commit: `docs: document sq metrology snapshot`
+- [x] `docs/COMMANDS.md`: document `sq metrology snapshot`, and add the four new keys to the metrology config table
+- [x] CHANGELOG: one user-facing bullet under Unreleased
+- [x] Add the walkthrough step 1 values to squadron's local `.squadron.toml` (gitignored; not committed)
+- [x] Commit: `docs: document sq metrology snapshot`
 
 ## Task 33: Verification walkthrough — Effort 3
-- [ ] Run walkthrough steps 2–10 from the slice design against squadron and `../context-forge`. Record each step's actual output summary in the slice design under a "Walkthrough Results" heading
-- [ ] Any step that fails is a bug in this slice: fix it, add a regression test, rerun the step
-- [ ] Success: all ten steps match their expected structure; `git -C ../context-forge status --porcelain` empty afterwards; scratch clones removed
-- [ ] Commit: `docs: record slice 400 walkthrough results`
+- [x] Run walkthrough steps 2–10 from the slice design against squadron and `../context-forge`. Record each step's actual output summary in the slice design under a "Walkthrough Results" heading
+- [x] Any step that fails is a bug in this slice: fix it, add a regression test, rerun the step
+- [x] Success: all ten steps match their expected structure; `git -C ../context-forge status --porcelain` empty afterwards; scratch clones removed
+- [x] Commit: `docs: record slice 400 walkthrough results`
 
 ## Task 34: Final validation — Effort 1
 - [ ] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass

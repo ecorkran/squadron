@@ -12,7 +12,7 @@ interfaces:
 - 404
 dateCreated: 20261022
 dateUpdated: 20261022
-status: not_started
+status: complete
 turns: 85
 promptTokens: 5690269
 cachedTokens: 5541026
@@ -370,6 +370,28 @@ None of these commands exist yet. Expected outputs describe structure, not exact
    - `git -C ../context-forge status --porcelain` still empty
 9. **Tool missing.** On a scratch TypeScript repo with no `node_modules`, lint shows `absent: tool_missing (node_modules/.bin/eslint not found)` and length is still measured.
 10. **Old records load.** `sq metrology list` and `sq metrology report baseline` print as before the slice.
+
+### Walkthrough Results
+
+Run 20261022 on commit 71674382, tools ruff 0.15.1, pyright 1.1.408, uv 0.11.2, ESLint 10.12.0, Python 3.13.7. Steps 3 and 4 used `jq`/Python on `--json`; step 1 used squadron's local `.squadron.toml` (limits 300/50 and the two exclusions).
+
+| Step | Result |
+|---|---|
+| 2 | Python: 931 files, 106 over 300 lines; 11,057 functions, 189 over 50; ruff 0.15.1 with `pyproject.toml[tool.ruff]`, 0 findings; pyright 1.1.408 with `pyproject.toml[tool.pyright]` and `uv.lock` hash, 1,769 errors in 201 files. Shell: all four metrics `absent: no_adapter`. `limits: file 300, function 50`, `exclusions: 7`, record under `~/.config/squadron/metrology/` |
+| 3 | `[]`: nothing under `commands/analysis/` in any `per_file` |
+| 4 | Two runs identical apart from `measured_at`; one `snapshot-*` file for the commit |
+| 5 | `touch scratch.txt` gives `Error: The working tree is not clean: scratch.txt.` and exit 1; nothing written |
+| 6 | `limits: none declared`, `limits_declared: false`, `over_limit` empty, distributions present |
+| 7 | A clone with no `.venv`: `type_errors: absent: environment_unresolved (.venv not found)`; length and ruff lint present |
+| 8 | context-forge: `typescript` section (396 files; length from `squadron-tree-sitter-ts`; ESLint 10.12.0 with `eslint.config.mjs` and its hash, 0 findings, 206 files skipped by the config's `ignores`; type errors `metric_unsupported`), a `javascript` section (8 files, all `no_adapter`), `limits: none declared`; `git -C ../context-forge status --porcelain` empty |
+| 9 | A TypeScript repo with no `node_modules`: `lint_count: absent: tool_missing (node_modules/.bin/eslint not found)`; length still measured |
+| 10 | `sq metrology list` and `sq metrology report baseline` print as before |
+
+Caveats found while running it:
+- **Pyright counts `tests/` and non-`src` files on squadron.** Squadron's own pyright gate is `include = ["src"]`; the snapshot analyzes every snapshot file (D4), so 1,567 of the 1,769 errors are under `tests/` and 201 are in `project-documents/user/reference/codebase-probe.py`. This is the design's stated consequence, not a regression, but it means the number is not what `pyright` reports in CI.
+- **15 of context-forge's 396 TypeScript files are listed as `unparsed_files`.** The tree-sitter-typescript 0.23.2 grammar produces an error node for `vi.importActual<typeof import('fs')>()` and for a destructuring-with-`await` statement in `ProjectModelBuilder.ts`. They keep their file length and contribute no functions; each logs a WARNING.
+- **tree-sitter 0.26.0 segfaults.** The first step 8 run crashed the process (exit 139, pymalloc corruption) while parsing real context-forge files; 0.24.0 and 0.25.2 parse them cleanly. `pyproject.toml` pins `tree-sitter>=0.25.2,<0.26`, and a test guards the pin.
+- **WARNING lines print to the terminal.** An absent metric's WARNING (for example `lint_count: node_modules/.bin/eslint not found`) appears on stderr before the summary, in addition to the `absent:` line in it.
 
 ## Risk Assessment
 

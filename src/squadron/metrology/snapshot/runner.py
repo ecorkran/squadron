@@ -15,6 +15,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.metrology.snapshot.contract import ToolResult, ToolRunner
 
 _logger = logging.getLogger(__name__)
@@ -42,8 +43,7 @@ class SubprocessToolRunner:
                 cwd=cwd,
                 capture_output=True,
                 text=True,
-                encoding="utf-8",
-                errors="replace",
+                **TEXT_DECODING,
                 timeout=timeout_s,
                 check=False,
             )

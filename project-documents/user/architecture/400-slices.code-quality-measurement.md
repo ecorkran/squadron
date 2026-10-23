@@ -27,7 +27,7 @@ Ordering:
 
 ## Foundation Work
 
-1. [ ] **(400) Snapshot Record and First Adapters (keystone)**: The snapshot record type in 320's store, the closed metric enum, the adapter contract, and two adapters: Python, plus one non-Python language. Metrics are file and function length, lint counts and type counts. The second language covers length and lint only, which is enough to prove the contract isn't Python-shaped before it hardens. A snapshot is taken of a clean HEAD, read-only; a dirty tree is refused.
+1. [x] **(400) Snapshot Record and First Adapters (keystone)**: The snapshot record type in 320's store, the closed metric enum, the adapter contract, and two adapters: Python, plus one non-Python language. Metrics are file and function length, lint counts and type counts. The second language covers length and lint only, which is enough to prove the contract isn't Python-shaped before it hardens. A snapshot is taken of a clean HEAD, read-only; a dirty tree is refused.
    - **Value:** Architectural enablement. Every later slice reads this record, and squadron's own size limits get checked for the first time.
    - **Success Criteria:**
      - `sq` takes a snapshot of a clean HEAD and writes one record per commit to the metrology store, keyed on `ProjectId` and commit SHA. A dirty tree is refused with an explicit error.
