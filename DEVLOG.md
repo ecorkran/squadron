@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261022
 
+### Slice 402: Code-Review Normalization and Ingest — Design Complete (Phase 4)
+
+- Design: `project-documents/user/slices/402-slice.code-review-normalization-and-ingest.md`. `cf validate design` passes, and all 9 decisions are `decided`.
+- Key decisions:
+  - `ReviewCategory` = `AuditCategory` + `correctness`. Both live in a new leaf module, `core/finding_categories.py` (`AuditCategory` moved, with re-exports), so the review client doesn't import the metrology package.
+  - Normalization is opt-in through a `normalize_categories` template flag (only `code.yaml` sets it) and runs in the review client's parse closure. The shared parser is unchanged, so arch, slice and tasks output can't move.
+  - Write time matches strictly: anything out of vocabulary becomes `other` with `rawCategory` kept. The historical alias table is read-side only, and records built through it are marked `read_side_mapped`.
+  - `sq metrology ingest-reviews`: one `code_review` record per file, keyed on project + content hash, so it's idempotent and a re-reviewed file adds a round. Skips non-code and `UNKNOWN`-verdict reviews. A missing `reviewedSha` is recorded with a reason. The slice comes only from `sourceDocument`.
+- Corpus: 116 code reviews, 70 distinct category strings, 113 `uncategorized`, 37 without `reviewedSha`.
+- Next: task breakdown for 402 (Phase 5).
+
 ### Slice 401: Complexity, Duplication and Coverage — Design Complete (Phase 4)
 
 - Design: `project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md`. `cf validate design` passes, and all 7 decisions are `decided`.
