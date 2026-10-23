@@ -24,6 +24,7 @@ from squadron.metrology.snapshot.lengths import (
     physical_lines,
 )
 from squadron.metrology.snapshot.python_lint import measure_ruff_lint
+from squadron.metrology.snapshot.python_types import measure_pyright_types
 from squadron.metrology.snapshot_models import (
     Measurement,
     SnapshotMetric,
@@ -133,13 +134,16 @@ def measure_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measureme
 
 
 class PythonAdapter:
-    """Measures Python: file length, function length and ruff lint count."""
+    """Measures Python: all four metrics."""
 
     language = SourceLanguage.PYTHON
-    metrics = frozenset(
-        {SnapshotMetric.FILE_LENGTH, SnapshotMetric.FUNCTION_LENGTH, SnapshotMetric.LINT_COUNT}
-    )
+    metrics = frozenset(SnapshotMetric)
     convention_exclusions = ("**/*_pb2.py", "**/*_pb2_grpc.py")
 
     def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-        return [*measure_lengths(ctx, files), measure_ruff_lint(ctx, list(files))]
+        listed = list(files)
+        return [
+            *measure_lengths(ctx, listed),
+            measure_ruff_lint(ctx, listed),
+            measure_pyright_types(ctx, listed),
+        ]
