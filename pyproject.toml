@@ -34,6 +34,9 @@ dependencies = [
     "tomli-w>=1.0",
     "pyperclip>=1.8.2",
     "regex>=2024.0.0",
+    # Code snapshot (slice 400): in-process TypeScript parsing for function length.
+    "tree-sitter>=0.26.0",
+    "tree-sitter-typescript>=0.23.2",
     # Codex provider (openai-oauth): official SDK with a bundled runtime binary.
     "openai-codex>=0.159.3,<1",
 ]
