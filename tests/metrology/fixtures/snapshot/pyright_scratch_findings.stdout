@@ -1,0 +1,46 @@
+{
+    "version": "1.1.408",
+    "time": "1792715274388",
+    "generalDiagnostics": [
+        {
+            "file": "__REPO_ROOT__/mod.py",
+            "severity": "warning",
+            "message": "Import \"os\" is not accessed",
+            "range": {
+                "start": {
+                    "line": 0,
+                    "character": 7
+                },
+                "end": {
+                    "line": 0,
+                    "character": 9
+                }
+            },
+            "rule": "reportUnusedImport"
+        },
+        {
+            "file": "__REPO_ROOT__/mod.py",
+            "severity": "error",
+            "message": "Type \"Literal['text']\" is not assignable to declared type \"int\"\n  \"Literal['text']\" is not assignable to \"int\"",
+            "range": {
+                "start": {
+                    "line": 2,
+                    "character": 13
+                },
+                "end": {
+                    "line": 2,
+                    "character": 19
+                }
+            },
+            "rule": "reportAssignmentType"
+        }
+    ],
+    "summary": {
+        "filesAnalyzed": 1,
+        "errorCount": 1,
+        "warningCount": 1,
+        "informationCount": 0,
+        "timeInSec": 0.137
+    }
+}
+

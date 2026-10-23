@@ -1,0 +1,5 @@
+Would use project environment at: .venv
+Resolved 2 packages in 3ms
+Would install 1 package
+ + six==1.17.0
+The environment is outdated; run `uv sync` to update the environment
