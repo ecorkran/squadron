@@ -104,6 +104,14 @@ class RunCost:
             f"- Cost: {self._cost()}",
         ]
 
+    def summary_line(self) -> str:
+        """One terminal line: the facts the digest carries, with the same "not reported" wording."""
+        usage = self.usage
+        return (
+            f"Usage: prompt {_optional(usage.prompt)}, cached {_optional(usage.cached)}, "
+            f"completion {_optional(usage.completion)} — cost {self._cost()}"
+        )
+
     def json_fields(self) -> dict[str, object]:
         """Always present, null when not reported (stop_reason's convention)."""
         return {

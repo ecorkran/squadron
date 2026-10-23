@@ -77,6 +77,7 @@ from squadron.review.rules import (
     load_review_rules,
     resolve_rules_dir,
 )
+from squadron.review.run_cost import RunCost
 from squadron.review.save_target import ArchTarget, SliceTarget
 from squadron.review.task_gate_files import TaskFileReadError, gate_task_files
 from squadron.review.template_inputs import missing_input_files
@@ -209,6 +210,9 @@ def _display_terminal(result: ReviewResult, verbosity: int = 0) -> None:
     # this they collapse on the terminal, where most reviews are actually read.
     if verbosity >= 1:
         _display_tool_telemetry(console, result)
+
+    # Always printed, saved or not: with --no-save this is the only place the spend shows.
+    console.print(f"  {result.run_cost.summary_line()}", style="dim", markup=False)
 
     if not result.findings:
         # Two distinct degraded parses, both of which used to print as clean. A verdict
@@ -798,6 +802,7 @@ def _run_review_command(
         # stopped. Printing and exiting discards it; the artifact keeps it.
         # Escaped: provider messages can carry brackets that are not Rich tags.
         rprint(f"[red]Error: Review failed — {escape(str(exc))}[/red]")
+        rprint(f"[dim]  {escape(RunCost.from_error(exc).summary_line())}[/dim]")
         if failure_target is not None and not no_save:
             saved = save_provider_failure(
                 exc,
