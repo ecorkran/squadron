@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import pytest
 
+from squadron.metrology.snapshot.contract import ToolResult
 from squadron.metrology.store import MetrologyStore
 from tests.conftest import run_test_git
 
@@ -40,3 +41,27 @@ def snapshot_git_repo(tmp_path: Path) -> SnapshotRepoFactory:
 def snapshot_store(tmp_path: Path) -> MetrologyStore:
     """An isolated MetrologyStore rooted under ``tmp_path``."""
     return MetrologyStore(store_dir=tmp_path / "snapshot-store")
+
+
+class FakeToolRunner:
+    """A ``ToolRunner`` returning scripted results, keyed by argv prefix.
+
+    The first script whose prefix matches the start of ``argv`` answers. A call
+    with no matching script fails the test loudly rather than inventing a result.
+    Every call is recorded in ``calls``.
+    """
+
+    def __init__(self, scripts: Mapping[tuple[str, ...], ToolResult] | None = None) -> None:
+        self._scripts = dict(scripts or {})
+        self.calls: list[tuple[str, ...]] = []
+
+    def script(self, prefix: tuple[str, ...], result: ToolResult) -> None:
+        self._scripts[prefix] = result
+
+    def run(self, argv: Sequence[str], *, cwd: Path, timeout_s: int) -> ToolResult:
+        call = tuple(argv)
+        self.calls.append(call)
+        for prefix, result in self._scripts.items():
+            if call[: len(prefix)] == prefix:
+                return result
+        raise AssertionError(f"FakeToolRunner has no script for {call!r}")
