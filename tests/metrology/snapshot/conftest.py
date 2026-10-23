@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import Protocol
 
 import pytest
 
@@ -11,7 +12,13 @@ from squadron.metrology.snapshot.contract import ToolResult
 from squadron.metrology.store import MetrologyStore
 from tests.conftest import run_test_git
 
-SnapshotRepoFactory = Callable[[Mapping[str, str]], Path]
+DEFAULT_REMOTE = "https://github.com/manta/example-repo.git"
+
+
+class SnapshotRepoFactory(Protocol):
+    """Builds a committed repo; ``remote=None`` leaves it with no origin (no identity)."""
+
+    def __call__(self, files: Mapping[str, str], *, remote: str | None = DEFAULT_REMOTE) -> Path: ...
 
 
 @pytest.fixture
@@ -22,10 +29,12 @@ def snapshot_git_repo(tmp_path: Path) -> SnapshotRepoFactory:
     developer's own git settings never reach a test.
     """
 
-    def build(files: Mapping[str, str]) -> Path:
+    def build(files: Mapping[str, str], *, remote: str | None = DEFAULT_REMOTE) -> Path:
         repo = tmp_path / "snapshot-repo"
         repo.mkdir()
         run_test_git(repo, "init", "-q", "-b", "main")
+        if remote is not None:
+            run_test_git(repo, "remote", "add", "origin", remote)
         for relative, content in files.items():
             target = repo / relative
             target.parent.mkdir(parents=True, exist_ok=True)

@@ -77,3 +77,11 @@ class SnapshotIntegrityError(MetrologyError):
     nothing or fails, which is never treated as an empty file set or a clean tree.
     Nothing is written when this is raised.
     """
+
+
+class SnapshotAdapterContractError(MetrologyError):
+    """A language adapter broke the contract: it returned an undeclared metric, or omitted one.
+
+    This is a bug in the adapter, not in the measured project, so it fails the whole
+    snapshot rather than being recorded as an absent metric.
+    """
