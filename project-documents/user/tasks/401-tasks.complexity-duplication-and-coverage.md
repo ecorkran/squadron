@@ -152,6 +152,7 @@ revision_number: 2
 - [ ] Add to `test_duplication.py` (or `test_python_duplication.py`), through `PythonAdapter` on a `snapshot_git_repo` repo:
   - [ ] two files with an identical function of over 100 tokens but different comments and blank lines report the function's lines in both
   - [ ] a file with an unterminated triple-quoted string and one with bad indentation are each in duplication's `unparsed_files` with a WARNING, while their function length is unaffected
+  - [ ] with `DUPLICATION_MAX_TOKENS` lowered by `monkeypatch`, a `PythonAdapter` run gives `tool_failed` for `duplicated_lines` while file length, function length and cyclomatic complexity are still present (Success Criterion 10, "other metrics unaffected")
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): measure duplicated lines for Python`
 
@@ -273,16 +274,16 @@ revision_number: 2
 ## Task 28: Docs and CHANGELOG — Effort 1
 - [ ] `docs/COMMANDS.md`: under `sq metrology snapshot`, the four new metrics with their definitions (one line each, pointing at `counting`), and `metrology.coverage_report` in the metrology config table, including that the report must be gitignored and fresh
 - [ ] `docs/COMMANDS.md` and the CHANGELOG bullet under Unreleased both state that snapshots from earlier versions are skipped and must be retaken
+- [ ] Success: `docs/COMMANDS.md` names all four metrics and `metrology.coverage_report`; the CHANGELOG bullet exists under Unreleased (`grep` both)
 - [ ] Commit: `docs: document snapshot complexity, duplication and coverage`
 
-## Task 29: Verification walkthrough — Effort 3
+## Task 29: Verification walkthrough and final validation — Effort 3
 - [ ] Run walkthrough steps 1–10 from the slice design against squadron, `../context-forge` and a scratch vitest project. Record each step's actual output summary in the slice design under a "Walkthrough Results" heading
 - [ ] Step 10 needs a 400-written snapshot in the store; if none exists, record that in the results and run the rest of the step
 - [ ] Any step that fails is a bug in this slice: fix it, add a regression test, rerun the step
 - [ ] Success: all steps match their expected structure; `git -C ../context-forge status --porcelain` empty afterwards; squadron's `.squadron.toml` key restored after steps 6 and 7; scratch project removed
 - [ ] Commit: `docs: record slice 401 walkthrough results`
-
-## Task 30: Final validation — Effort 1
+- [ ] Final validation:
 - [ ] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
 - [ ] Every new module is at ~300 lines or less (`wc -l src/squadron/metrology/snapshot/*.py`)
 - [ ] `git diff <target> -- src/squadron/metrology/snapshot_models.py` shows enum members only, where `<target>` is `cf config get git.integration_branch`, or `main` if empty; `take.py`, `contract.py`, `files.py` and `store.py` show no diff
