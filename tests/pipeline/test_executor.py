@@ -5,6 +5,7 @@ evaluate_condition, retry loops, and core executor logic.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -2370,6 +2371,19 @@ class TestPromptCheckpointInteractive:
         )
         assert decision.resolution == CheckpointResolution.EXIT
         assert decision.override_instructions is None
+
+    def test_non_interactive_warning_names_the_cause_not_a_bogus_switch(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        from squadron.pipeline.executor import _prompt_checkpoint_interactive
+
+        monkeypatch.setenv("SQUADRON_NO_INTERACTIVE", "0")
+        with caplog.at_level(logging.WARNING):
+            _prompt_checkpoint_interactive(
+                verdict=None, findings=[], run_id="run-abc", step_name="design"
+            )
+        assert "SQUADRON_NO_INTERACTIVE is set" in caplog.text
+        assert "=0" not in caplog.text
 
     def test_non_tty_stdin_returns_exit(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Pinned contract: a non-TTY resume (stdin from /dev/null) exits the checkpoint."""

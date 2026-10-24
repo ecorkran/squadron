@@ -387,9 +387,12 @@ def _prompt_checkpoint_interactive(
     Falls back to EXIT silently in non-interactive environments.
     """
     if not _is_interactive():
+        # Any non-empty SQUADRON_NO_INTERACTIVE disables the menu, "0" included, so the
+        # message names the cause rather than a value that would turn it off.
         _logger.warning(
-            "checkpoint: non-interactive environment; defaulting to exit"
-            " (set SQUADRON_NO_INTERACTIVE=0 to suppress)"
+            "checkpoint at step '%s': no interactive terminal (stdin is not a TTY or "
+            "SQUADRON_NO_INTERACTIVE is set); exiting at the checkpoint",
+            step_name,
         )
         return CheckpointDecision(CheckpointResolution.EXIT, None)
 
