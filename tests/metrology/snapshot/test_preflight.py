@@ -144,12 +144,33 @@ class TestLimitsAndConfig:
 
         assert preflight(repo).limits.max_file_lines == 123
 
+    def test_coverage_report_unset_passes(self, repo: Path) -> None:
+        preflight(repo)
+
+    @pytest.mark.parametrize("value", ["coverage.xml", "build/cov.xml", "does/not/exist.xml"])
+    def test_relative_coverage_report_path_passes_even_when_the_file_is_missing(
+        self, repo: Path, write_project_config: ConfigWriter, value: str
+    ) -> None:
+        write_project_config(repo, {"metrology.coverage_report": value})
+
+        preflight(repo)
+
+    @pytest.mark.parametrize("value", ["/tmp/coverage.xml", "../coverage.xml", "a/../../x.xml", ""])
+    def test_bad_coverage_report_path_raises_in_preflight(
+        self, repo: Path, write_project_config: ConfigWriter, value: str
+    ) -> None:
+        write_project_config(repo, {"metrology.coverage_report": value})
+
+        with pytest.raises(SnapshotPreflightError, match="metrology.coverage_report"):
+            preflight(repo)
+
     def test_new_config_keys_have_declared_types_and_defaults(self) -> None:
         expected = {
             "metrology.max_file_lines": (int, None),
             "metrology.max_function_lines": (int, None),
             "metrology.snapshot_exclude": (str, None),
             "metrology.snapshot_tool_timeout_s": (int, 600),
+            "metrology.coverage_report": (str, None),
         }
         for name, (type_, default) in expected.items():
             assert CONFIG_KEYS[name].type_ is type_

@@ -17,6 +17,7 @@ from squadron.metrology.errors import (
     SnapshotIntegrityError,
     SnapshotPreflightError,
 )
+from squadron.metrology.snapshot.coverage import KEY_COVERAGE_REPORT, parse_report_path
 from squadron.metrology.snapshot_models import LengthLimits
 from squadron.review.git_utils import run_git
 
@@ -155,6 +156,9 @@ def preflight(repo_root: Path) -> PreflightResult:
         )
     max_file = _read_limit(KEY_MAX_FILE_LINES, repo_root)
     max_function = _read_limit(KEY_MAX_FUNCTION_LINES, repo_root)
+    # Validated here so a bad value fails before any tool runs; the reader resolves the
+    # key again at measurement time (401 D6).
+    parse_report_path(get_config(KEY_COVERAGE_REPORT, cwd=str(repo_root)))
     limits = LengthLimits(
         max_file_lines=max_file,
         max_function_lines=max_function,

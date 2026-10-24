@@ -263,6 +263,17 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "pathspecs to every metric alike."
         ),
     ),
+    "metrology.coverage_report": ConfigKey(
+        name="metrology.coverage_report",
+        type_=str,
+        default=None,
+        description=(
+            "Repo-relative path to a Cobertura XML coverage report that "
+            "'sq metrology snapshot' reads for covered and coverable lines. The report "
+            "must be gitignored and newer than every tracked file. Unset means "
+            "coverage is not configured."
+        ),
+    ),
     "metrology.snapshot_tool_timeout_s": ConfigKey(
         name="metrology.snapshot_tool_timeout_s",
         type_=int,
