@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261023
 
+### Slice 401: Complexity, Duplication and Coverage — Task Breakdown Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md`, 29 tasks, test-with ordering, one commit per implementation and test pair.
+- Order: enums → Python and TypeScript complexity counters → `MeasuredFunction` / `measure_parse_metrics` rename that wires complexity into both walks → duplication pass, then each language's tokenizer → coverage key and preflight → real Cobertura fixtures (coverage.py, Istanbul via scratch vitest) → reader → freshness → per-language measurements → adapter wiring → render, docs, walkthrough.
+- Surprise: `PythonAdapter.metrics` is `frozenset(SnapshotMetric)`, so adding the enum members would make it claim unmeasured metrics and `take_snapshot` would raise. Task 2 makes it an explicit set, and each later task adds a metric when that metric is measured.
+- `typescript_complexity` takes the counted-function predicate as a parameter, so it doesn't import `typescript_length`, which itself imports it.
+
 ### Release 0.24.0
 
 - **Contents:** Slice 400 keystone: `sq metrology snapshot` measures a clean commit's file length, function length, lint and type errors per language, with absent metrics recorded as absent, never zero. #259: `sq review` prints a `Usage:` line (tokens and cost). Designs for slices 401–404 (docs only).
