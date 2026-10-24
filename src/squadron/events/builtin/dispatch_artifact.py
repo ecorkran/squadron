@@ -132,12 +132,18 @@ def _dispatch_artifact_post_condition_error(
 _QUESTION_CLOSERS = "*_`\"')]"
 
 
-def _failure_metadata(response: str, final_text: str) -> dict[str, object]:
-    """An agent whose last words are a question is waiting for an answer, not broken (#249).
+def _asks_question(response: str) -> bool:
+    """Whether any line of *response* ends on a question mark.
 
-    Heuristic: markdown emphasis and closing quotes after the question mark don't count.
+    A line, not the whole text: an agent often asks, lists options, then recommends one
+    (#266). Markdown emphasis and closing quotes after the question mark don't count.
     """
-    if response.rstrip().rstrip(_QUESTION_CLOSERS).endswith("?"):
+    return any(line.rstrip().rstrip(_QUESTION_CLOSERS).endswith("?") for line in response.splitlines())
+
+
+def _failure_metadata(response: str, final_text: str) -> dict[str, object]:
+    """An agent that asked a question is waiting for an answer, not broken (#249)."""
+    if _asks_question(response):
         return {
             FAILURE_KIND_KEY: FailureKind.AGENT_QUESTION.value,
             AGENT_QUESTION_KEY: final_text,

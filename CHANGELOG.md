@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A pipeline run now pauses for an answer when the agent asks a question and then recommends an option, instead of failing the step. (#266)
+
 ## [0.24.0] - 20261023
 
 ### Added

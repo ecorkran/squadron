@@ -133,6 +133,8 @@ _QUESTION_BINDING = Binding(
         "Two options.\n\nWhich option do you want?",
         "Which option do you want?  \n",
         "Should I proceed with **the assumed schema?**",
+        # Asks, lists options, then recommends one (#266).
+        "Which of these do you want?\n1. **Revise.**\n2. **Regenerate.**\n\nI'd go with option 1.",
     ],
 )
 async def test_no_artifact_and_a_final_question_is_an_agent_question(response: str) -> None:
