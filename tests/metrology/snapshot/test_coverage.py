@@ -2,16 +2,28 @@
 
 from __future__ import annotations
 
+import logging
+import os
+import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
+from squadron.metrology.errors import SnapshotIntegrityError
+from squadron.metrology.snapshot import coverage as coverage_module
 from squadron.metrology.snapshot.coverage import (
+    CoverageAbsence,
     CoverageFailure,
     CoverageReading,
     read_cobertura,
+    read_coverage,
 )
+from squadron.metrology.snapshot_models import AbsenceReason
 from tests.metrology.snapshot.builders import read_fixture
+from tests.metrology.snapshot.conftest import SnapshotRepoFactory
+
+ConfigWriter = Callable[[Path, dict[str, object]], Path]
 
 REPORT = "cov.xml"
 COVERAGEPY_FIXTURE = "cobertura_coveragepy.xml"
@@ -116,3 +128,135 @@ class TestReadCobertura:
 
         assert isinstance(result, CoverageFailure)
         assert "can't be read" in result.detail
+
+
+@pytest.fixture
+def repo(snapshot_git_repo: SnapshotRepoFactory) -> Path:
+    return snapshot_git_repo({"src/a.py": "x = 1\n", ".gitignore": f"{REPORT}\n"})
+
+
+def configure(repo: Path, write_project_config: ConfigWriter, value: str = REPORT) -> None:
+    write_project_config(repo, {"metrology.coverage_report": value})
+
+
+def fresh_report(repo: Path) -> Path:
+    """A report written after the commit, so no tracked file is newer than it."""
+    report = write_report(repo, read_fixture(ISTANBUL_FIXTURE, repo))
+    now = report.stat().st_mtime_ns
+    os.utime(report, ns=(now + 10_000_000_000, now + 10_000_000_000))
+    return report
+
+
+class TestReadCoverage:
+    def test_unset_key_is_coverage_not_configured(
+        self, repo: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING):
+            result = read_coverage(repo)
+
+        assert isinstance(result, CoverageAbsence)
+        assert result.reason is AbsenceReason.COVERAGE_NOT_CONFIGURED
+        assert "metrology.coverage_report" in caplog.text
+
+    def test_missing_report_is_report_missing_naming_the_path(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        configure(repo, write_project_config, "nope.xml")
+
+        result = read_coverage(repo)
+
+        assert isinstance(result, CoverageAbsence)
+        assert result.reason is AbsenceReason.REPORT_MISSING
+        assert "nope.xml" in result.detail
+
+    def test_report_written_after_the_commit_is_fresh_and_parsed(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        configure(repo, write_project_config)
+        fresh_report(repo)
+
+        result = read_coverage(repo)
+
+        assert isinstance(result, CoverageReading)
+        assert result.producer_version == "0.1"
+
+    def test_a_newer_tracked_file_makes_the_report_stale_naming_it(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        configure(repo, write_project_config)
+        report = fresh_report(repo)
+        newer = report.stat().st_mtime_ns + 5_000_000_000
+        os.utime(repo / "src" / "a.py", ns=(newer, newer))
+
+        result = read_coverage(repo)
+
+        assert isinstance(result, CoverageAbsence)
+        assert result.reason is AbsenceReason.REPORT_STALE
+        assert "src/a.py" in result.detail
+
+    def test_report_with_the_same_mtime_as_the_newest_tracked_file_is_fresh(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        configure(repo, write_project_config)
+        report = fresh_report(repo)
+        same = report.stat().st_mtime_ns
+        os.utime(repo / "src" / "a.py", ns=(same, same))
+
+        assert isinstance(read_coverage(repo), CoverageReading)
+
+    @pytest.mark.parametrize("returncode", [None, 128])
+    def test_git_ls_files_failure_raises_and_logs_error(
+        self,
+        repo: Path,
+        write_project_config: ConfigWriter,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        returncode: int | None,
+    ) -> None:
+        configure(repo, write_project_config)
+        fresh_report(repo)
+        failed = (
+            None
+            if returncode is None
+            else subprocess.CompletedProcess(["git"], returncode, stdout="", stderr="boom")
+        )
+        monkeypatch.setattr(coverage_module, "run_git", lambda *args, **kwargs: failed)
+
+        with caplog.at_level(logging.ERROR), pytest.raises(SnapshotIntegrityError, match="ls-files"):
+            read_coverage(repo)
+
+        assert "git ls-files -z failed" in caplog.text
+
+    def test_a_stat_error_on_a_tracked_file_is_a_failure_naming_the_path(
+        self,
+        repo: Path,
+        write_project_config: ConfigWriter,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        configure(repo, write_project_config)
+        fresh_report(repo)
+        (repo / "src" / "a.py").unlink()
+
+        with caplog.at_level(logging.WARNING):
+            result = read_coverage(repo)
+
+        assert isinstance(result, CoverageFailure)
+        assert "a.py" in result.detail
+        assert "a.py" in caplog.text
+
+    def test_a_malformed_report_is_a_failure_logged_at_warning(
+        self,
+        repo: Path,
+        write_project_config: ConfigWriter,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        configure(repo, write_project_config)
+        report = write_report(repo, "<coverage")
+        now = report.stat().st_mtime_ns + 10_000_000_000
+        os.utime(report, ns=(now, now))
+
+        with caplog.at_level(logging.WARNING):
+            result = read_coverage(repo)
+
+        assert isinstance(result, CoverageFailure)
+        assert "not well-formed XML" in caplog.text

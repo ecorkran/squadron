@@ -7,12 +7,18 @@ and the Cobertura reader; each adapter builds its own measurements from one read
 
 from __future__ import annotations
 
+import logging
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from squadron.metrology.errors import SnapshotPreflightError
+from squadron.config.manager import get_config
+from squadron.metrology.errors import SnapshotIntegrityError, SnapshotPreflightError
 from squadron.metrology.snapshot.tool_support import repo_relative
+from squadron.metrology.snapshot_models import AbsenceReason
+from squadron.review.git_utils import run_git
+
+_logger = logging.getLogger(__name__)
 
 KEY_COVERAGE_REPORT = "metrology.coverage_report"
 
@@ -155,3 +161,80 @@ def read_cobertura(report: Path, repo_path: str, repo_root: Path) -> CoverageRea
         for path, lines in collected.items()
     }
     return CoverageReading(repo_path, version, files)
+
+
+@dataclass(frozen=True)
+class CoverageAbsence:
+    """Coverage can't be reported for this commit, with the reason the record keeps."""
+
+    reason: AbsenceReason
+    detail: str
+
+
+def _absence(reason: AbsenceReason, detail: str) -> CoverageAbsence:
+    _logger.warning("coverage: %s (%s)", detail, reason.value)
+    return CoverageAbsence(reason, detail)
+
+
+def _failure(report_path: str, detail: str) -> CoverageFailure:
+    _logger.warning("coverage: %s", detail)
+    return CoverageFailure(report_path, detail)
+
+
+def _tracked_files(repo_root: Path) -> list[str]:
+    """Every tracked path, from ``git ls-files -z``; git failing is never an empty list."""
+    call = "git ls-files -z"
+    completed = run_git(["ls-files", "-z"], cwd=str(repo_root))
+    if completed is None or completed.returncode != 0:
+        _logger.error("%s failed in %s", call, repo_root)
+        raise SnapshotIntegrityError(
+            f"`{call}` failed in {repo_root}, so the coverage report's freshness can't be checked. "
+            "Run it by hand to see why, then re-run `sq metrology snapshot`."
+        )
+    return [path for path in completed.stdout.split("\0") if path]
+
+
+def _newest_tracked(repo_root: Path, tracked: list[str]) -> tuple[int, str] | None:
+    """The newest mtime (ns) among *tracked* and its path; None for no tracked files.
+
+    Raises ``OSError`` for a file that can't be stat'ed: it is never skipped.
+    """
+    newest: tuple[int, str] | None = None
+    for path in tracked:
+        mtime = (repo_root / path).lstat().st_mtime_ns
+        if newest is None or mtime > newest[0]:
+            newest = (mtime, path)
+    return newest
+
+
+def read_coverage(repo_root: Path) -> CoverageReading | CoverageAbsence | CoverageFailure:
+    """The coverage report for the measured repo, if it is configured, present and fresh.
+
+    A report is fresh when its mtime is at or after the newest tracked file's (D5).
+    Absences and failures are data and log at WARNING; only a failing ``git ls-files``
+    raises (``SnapshotIntegrityError``).
+    """
+    try:
+        configured = parse_report_path(get_config(KEY_COVERAGE_REPORT, cwd=str(repo_root)))
+    except SnapshotPreflightError as exc:
+        return _failure(KEY_COVERAGE_REPORT, str(exc))
+    if configured is None:
+        return _absence(AbsenceReason.COVERAGE_NOT_CONFIGURED, f"{KEY_COVERAGE_REPORT} is not set")
+    report = repo_root / configured
+    if not report.exists():
+        return _absence(AbsenceReason.REPORT_MISSING, f"{configured} does not exist")
+    tracked = _tracked_files(repo_root)
+    try:
+        report_mtime = report.stat().st_mtime_ns
+        newest = _newest_tracked(repo_root, tracked)
+    except OSError as exc:
+        return _failure(configured, f"can't stat {exc.filename} to check {configured} is fresh: {exc}")
+    if newest is not None and report_mtime < newest[0]:
+        return _absence(
+            AbsenceReason.REPORT_STALE,
+            f"{configured} is older than tracked file {newest[1]}; re-run the tests to refresh it",
+        )
+    result = read_cobertura(report, configured, repo_root)
+    if isinstance(result, CoverageFailure):
+        return _failure(result.report_path, result.detail)
+    return result
