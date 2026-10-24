@@ -9,11 +9,14 @@ imported or executed. Lint and type errors are added by the sibling modules
 from __future__ import annotations
 
 import ast
+import io
 import platform
+import tokenize
 from collections.abc import Sequence
 
 from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
+from squadron.metrology.snapshot.duplication import duplication_tool_identity, measure_duplication
 from squadron.metrology.snapshot.lengths import (
     MeasuredFunction,
     count_non_blank_span,
@@ -106,6 +109,44 @@ def measure_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measureme
     )
 
 
+#: Token types that carry no code: comments and layout (D3).
+_DROPPED_TOKEN_TYPES = frozenset(
+    {
+        tokenize.COMMENT,
+        tokenize.NL,
+        tokenize.NEWLINE,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+        tokenize.ENCODING,
+        tokenize.ENDMARKER,
+    }
+)
+
+#: ``SyntaxError`` covers ``IndentationError``.
+_TOKEN_ERRORS: tuple[type[Exception], ...] = (tokenize.TokenError, SyntaxError)
+
+
+def _tokenize(text: str) -> list[tuple[str, int]]:
+    """Code tokens with their start line; comments and layout dropped."""
+    return [
+        (token.string, token.start[0])
+        for token in tokenize.generate_tokens(io.StringIO(text).readline)
+        if token.type not in _DROPPED_TOKEN_TYPES
+    ]
+
+
+def measure_python_duplication(ctx: AdapterContext, files: Sequence[str]) -> Measurement:
+    """Duplicated lines across *files* (the stdlib tokenizer, no external tool)."""
+    return measure_duplication(
+        ctx.repo_root,
+        files,
+        SourceLanguage.PYTHON,
+        duplication_tool_identity(ast_tool_identity()),
+        _tokenize,
+        _TOKEN_ERRORS,
+    )
+
+
 class PythonAdapter:
     """Measures Python: all four metrics."""
 
@@ -115,6 +156,7 @@ class PythonAdapter:
             SnapshotMetric.FILE_LENGTH,
             SnapshotMetric.FUNCTION_LENGTH,
             SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+            SnapshotMetric.DUPLICATED_LINES,
             SnapshotMetric.LINT_COUNT,
             SnapshotMetric.TYPE_ERRORS,
         }
@@ -125,6 +167,7 @@ class PythonAdapter:
         listed = list(files)
         return [
             *measure_lengths(ctx, listed),
+            measure_python_duplication(ctx, listed),
             measure_ruff_lint(ctx, listed),
             measure_pyright_types(ctx, listed),
         ]
