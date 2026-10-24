@@ -18,6 +18,13 @@ from squadron.metrology.snapshot_models import (
 
 _HASH_PREVIEW_CHARS = 8
 
+#: Coverage metrics list files the report doesn't mention, not files a tool's ignores skipped.
+_REPORT_METRICS = frozenset({SnapshotMetric.COVERABLE_LINES, SnapshotMetric.COVERED_LINES})
+#: Metrics shown as a spread over functions rather than a per-file total.
+_FUNCTION_SPREAD_METRICS = frozenset(
+    {SnapshotMetric.FUNCTION_LENGTH, SnapshotMetric.CYCLOMATIC_COMPLEXITY}
+)
+
 
 def _spread(distribution: Distribution | None, unit: str) -> str:
     if distribution is None:
@@ -46,7 +53,7 @@ def _summarize(measurement: Measurement) -> str:
             else ""
         )
         return f"{_spread(measurement.distribution, 'file')}{over}{tool_text}"
-    if measurement.metric is SnapshotMetric.FUNCTION_LENGTH:
+    if measurement.metric in _FUNCTION_SPREAD_METRICS:
         over = f"; {len(measurement.over_limit)} over {measurement.limit}" if measurement.limit else ""
         return (
             f"{_spread(measurement.distribution, 'function')}{over}{_unparsed(measurement)}{tool_text}"
@@ -59,8 +66,13 @@ def _summarize(measurement: Measurement) -> str:
         digest = measurement.environment.lockfile_sha256[:_HASH_PREVIEW_CHARS]
         detail += f", {measurement.environment.lockfile_path} {digest}"
     if measurement.tool_ignored_files:
-        detail += f"; {len(measurement.tool_ignored_files)} skipped by the tool's ignores"
-    return f"{detail}{tool_text}"
+        reason = (
+            "not in report"
+            if measurement.metric in _REPORT_METRICS
+            else "skipped by the tool's ignores"
+        )
+        detail += f"; {len(measurement.tool_ignored_files)} {reason}"
+    return f"{detail}{_unparsed(measurement)}{tool_text}"
 
 
 def _language_lines(entry: LanguageSnapshot) -> list[str]:
