@@ -19,7 +19,13 @@ from squadron.metrology.snapshot.coverage import (
     read_cobertura,
     read_coverage,
 )
-from squadron.metrology.snapshot_models import AbsenceReason
+from squadron.metrology.snapshot.coverage_measurements import coverage_measurements
+from squadron.metrology.snapshot_models import (
+    AbsenceReason,
+    Measurement,
+    SnapshotMetric,
+    SourceLanguage,
+)
 from tests.metrology.snapshot.builders import read_fixture
 from tests.metrology.snapshot.conftest import SnapshotRepoFactory
 
@@ -260,3 +266,81 @@ class TestReadCoverage:
 
         assert isinstance(result, CoverageFailure)
         assert "not well-formed XML" in caplog.text
+
+
+class TestCoverageMeasurements:
+    def reading(self, tmp_path: Path, fixture: str = ISTANBUL_FIXTURE) -> CoverageReading:
+        return read_ok(tmp_path, read_fixture(fixture, tmp_path))
+
+    def by_metric(self, measurements: list[Measurement]) -> dict[SnapshotMetric, Measurement]:
+        return {m.metric: m for m in measurements}
+
+    def test_unreported_files_are_tool_ignored_and_untested_reported_files_are_zero(
+        self, tmp_path: Path
+    ) -> None:
+        reading = self.reading(tmp_path)
+        files = ["src/math.ts", "src/pure.ts", "src/other.ts"]
+
+        measured = self.by_metric(coverage_measurements(reading, SourceLanguage.TYPESCRIPT, files))
+
+        coverable = measured[SnapshotMetric.COVERABLE_LINES]
+        covered = measured[SnapshotMetric.COVERED_LINES]
+        assert coverable.per_file == {"src/math.ts": 4, "src/pure.ts": 1}
+        assert covered.per_file == {"src/math.ts": 1, "src/pure.ts": 0}
+        for measurement in (coverable, covered):
+            assert measurement.tool_ignored_files == ["src/other.ts"]
+            assert measurement.distribution is None
+        assert coverable.tool is not None
+        assert (coverable.tool.name, coverable.tool.version) == ("cobertura", "0.1")
+
+    def test_a_reading_with_none_of_the_languages_files_has_empty_per_file(
+        self, tmp_path: Path
+    ) -> None:
+        reading = self.reading(tmp_path)
+
+        measured = self.by_metric(coverage_measurements(reading, SourceLanguage.PYTHON, ["a.py"]))
+
+        for measurement in measured.values():
+            assert measurement.per_file == {}
+            assert measurement.tool_ignored_files == ["a.py"]
+
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            AbsenceReason.COVERAGE_NOT_CONFIGURED,
+            AbsenceReason.REPORT_MISSING,
+            AbsenceReason.REPORT_STALE,
+        ],
+    )
+    def test_each_absence_reason_reaches_both_metrics(self, reason: AbsenceReason) -> None:
+        measured = coverage_measurements(
+            CoverageAbsence(reason, "why"), SourceLanguage.PYTHON, ["a.py"]
+        )
+
+        assert {m.metric for m in measured} == {
+            SnapshotMetric.COVERABLE_LINES,
+            SnapshotMetric.COVERED_LINES,
+        }
+        assert all(m.absent is reason and m.absent_detail == "why" for m in measured)
+
+    def test_a_failure_gives_tool_failed_on_both_metrics(self) -> None:
+        measured = coverage_measurements(
+            CoverageFailure(REPORT, "cov.xml is not well-formed XML"),
+            SourceLanguage.PYTHON,
+            ["a.py"],
+        )
+
+        assert all(m.absent is AbsenceReason.TOOL_FAILED for m in measured)
+        assert all(m.absent_detail == "cov.xml is not well-formed XML" for m in measured)
+
+    def test_the_counting_text_states_the_provider_limit_and_the_freshness_rule(
+        self, tmp_path: Path
+    ) -> None:
+        reading = self.reading(tmp_path)
+
+        tool = coverage_measurements(reading, SourceLanguage.TYPESCRIPT, [])[0].tool
+
+        assert tool is not None
+        assert "Istanbul always writes version 0.1" in tool.counting
+        assert "newer mtime" in tool.counting
+        assert REPORT in tool.counting
