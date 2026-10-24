@@ -476,6 +476,7 @@ Settings for judge calibration and the tech-debt audit harness. Run
 | `metrology.max_function_lines` | int | *(unset)* | Maximum non-blank lines per function, checked by `sq metrology snapshot` |
 | `metrology.snapshot_exclude` | string | *(unset)* | Comma-separated glob patterns excluded from every snapshot metric (vendored or generated code) |
 | `metrology.snapshot_tool_timeout_s` | int | 600 | Timeout for each tool call a snapshot makes (version probes, the uv check, each file chunk) |
+| `metrology.coverage_report` | string | *(unset)* | Repo-relative path to a Cobertura XML coverage report that `sq metrology snapshot` reads. The report must be gitignored and newer than every tracked file; absolute paths and `..` are refused. Unset means coverage is `coverage_not_configured` |
 
 #### Pinning the audit model
 
@@ -502,7 +503,7 @@ model is stored on each record, so an audit can say what produced it.
 
 ## metrology snapshot
 
-Measure the clean HEAD of a repository and record one `code_snapshot` per commit in the metrology store. Each language with an adapter gets four metrics: file length, function length, lint count and type-error count. Python measures all four; TypeScript measures length and lint, and records type errors as absent (`metric_unsupported`). A metric that can't be measured is absent with a reason and detail, never zero.
+Measure the clean HEAD of a repository and record one `code_snapshot` per commit in the metrology store. Each language with an adapter gets eight metrics: file length, function length, cyclomatic complexity, duplicated lines, lint count, type-error count, covered lines and coverable lines. Python measures all eight; TypeScript measures every metric but type errors, which it records as absent (`metric_unsupported`). A metric that can't be measured is absent with a reason and detail, never zero.
 
 ```
 sq metrology snapshot [--cwd PATH] [--json]
@@ -517,6 +518,18 @@ The working tree must be clean; an untracked `.squadron.toml` is the one excepti
 
 Lengths count non-blank lines. The limits (`metrology.max_file_lines`, `metrology.max_function_lines`) and exclusions (`metrology.snapshot_exclude`) come from the measured repository's own `.squadron.toml`; see [Metrology keys](#metrology-keys). Without limits the record says none were declared and reports the distributions only.
 
+Four of these metrics were added after the first snapshot release (each states its exact counting rule in the record's tool `counting` text):
+
+| Metric | What it counts |
+|---|---|
+| `cyclomatic_complexity` | McCabe complexity per function (1 plus its decision points), as a distribution over the same functions function length covers. No limit |
+| `duplicated_lines` | Non-blank lines under any run of 100 consecutive tokens that occurs twice in the language's files (exact match, comments and layout ignored). Absent (`tool_failed`) past 4,000,000 tokens per language |
+| `covered_lines`, `coverable_lines` | Per file, the lines a Cobertura report records with hits and the lines it lists, read from `metrology.coverage_report`. Files the report doesn't mention are listed as not in the report |
+
+Coverage comes from a report your project already produces (for example `pytest --cov-report=xml`, or vitest/jest with the `cobertura` reporter); the snapshot runs no tests. The report counts only if no tracked file has a newer modification time, so re-run your tests after any change. Add the report to `.gitignore`, or the snapshot refuses the dirty tree.
+
+**Snapshots written before these metrics existed lack them. They are skipped when records are listed, with a warning, and must be retaken** by running `sq metrology snapshot` again on the commit.
+
 | Absence reason | Meaning |
 |---|---|
 | `no_adapter` | The language is detected but has no adapter (shell, JavaScript) |
@@ -524,6 +537,9 @@ Lengths count non-blank lines. The limits (`metrology.max_file_lines`, `metrolog
 | `tool_missing` | The tool isn't installed where it may come from |
 | `tool_failed` | The tool timed out, exited abnormally or produced unusable output |
 | `environment_unresolved` | Type errors need a `uv.lock` and a `.venv` in sync with it |
+| `coverage_not_configured` | `metrology.coverage_report` isn't set |
+| `report_missing` | The configured coverage report file doesn't exist |
+| `report_stale` | A tracked file is newer than the coverage report; the detail names it |
 
 Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`) before `PATH`, and never installed. **Snapshotting a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only snapshot repositories you trust. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
 
