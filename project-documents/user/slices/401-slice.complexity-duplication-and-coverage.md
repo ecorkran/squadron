@@ -300,14 +300,36 @@ The command exists. The metrics and the config key don't yet. Outputs describe s
 
 1. **New metrics on squadron.** On a clean tree, run `sq metrology snapshot`. The `python` section shows `cyclomatic_complexity` (a function count equal to `function_length`'s) and `duplicated_lines`. `covered_lines` and `coverable_lines` show `absent: coverage_not_configured`. `shell` shows all eight metrics as `no_adapter`.
 2. **Function sets match.** Run `sq metrology snapshot --json | jq '.languages[] | select(.language=="python") | .measurements[] | select(.metric=="function_length" or .metric=="cyclomatic_complexity") | .distribution.count'`. Both numbers are equal.
-3. **Produce a coverage report.** Run `uv run --with pytest-cov pytest --cov=src/squadron --cov-report=xml -q`. This writes `coverage.xml` at the root, which is gitignored, and `git status --porcelain` stays empty. Add `"metrology.coverage_report" = "coverage.xml"` to `.squadron.toml`.
+3. **Produce a coverage report.** Run `uv run --with pytest-cov pytest --cov=src/squadron --cov-report=xml -q` (a subset such as `tests/metrology` is enough; the report must be written after the last change to any tracked file). This writes `coverage.xml` at the root, which is gitignored, and `git status --porcelain` stays empty. Add `"metrology.coverage_report" = "coverage.xml"` to `.squadron.toml`.
 4. **Coverage present.** Run `sq metrology snapshot`. Python `coverable_lines` and `covered_lines` are present with `[cobertura 7.x]`. Files outside `src/squadron`, such as `tests/`, are counted as not in the report. Check the totals against `coverage.xml`: `xmllint --xpath 'string(/coverage/@lines-valid)' coverage.xml` equals the `coverable_lines` total.
 5. **Stale report.** Run `touch src/squadron/__init__.py && sq metrology snapshot`. Coverage shows `absent: report_stale`, naming that file, and `git status --porcelain` is still empty because the content didn't change. Re-run step 3 to restore.
 6. **Missing report.** Set the key to `nope.xml`. Coverage shows `absent: report_missing`. Restore the key.
 7. **Bad key.** Set the key to `/tmp/coverage.xml`. The snapshot exits 1 with a preflight error before any tool runs. Restore the key.
 8. **TypeScript.** Run `sq metrology snapshot --cwd ../context-forge`. The `typescript` section shows complexity and duplication from `squadron-tree-sitter-ts`, and coverage shows `absent: coverage_not_configured`, since context-forge has no coverage provider installed. File length and function length match 400's walkthrough on the same commit.
 9. **TypeScript coverage.** In a scratch vitest project with `@vitest/coverage-v8`, a committed `.gitignore` for `coverage/`, and `coverage.reporter: ['cobertura']`, run `npx vitest run --coverage` and set `metrology.coverage_report = "coverage/cobertura-coverage.xml"`. Then `sq metrology snapshot --cwd <scratch>` shows TypeScript coverage present with `[cobertura 0.1]`.
-10. **Determinism and old records.** Two `--json` runs are identical apart from `measured_at`. `sq metrology list` logs a WARNING for each snapshot record 400 wrote. Re-snapshot those commits and the warnings stop.
+10. **Determinism and old records.** Two `--json` runs are identical apart from `measured_at` (compare with `jq -S 'del(.measured_at)'`). `sq metrology list` prints `Skipping unreadable metrology record: <path>` for each snapshot record 400 wrote. Snapshots only measure HEAD, so a 400 record of an older commit can't be re-snapshotted; the warning stops when the stale record file is deleted or when HEAD is the commit it covers.
+
+### Walkthrough Results
+
+Run 20261024 on the slice branch at 06eba343 (all code committed). Tools: ruff 0.15.1, pyright 1.1.408, pytest-cov 7.1.0 with coverage.py 7.17.0, vitest 5.0.5 with `@vitest/coverage-v8` 5.0.5, Python 3.13.7. Squadron's `.squadron.toml` carries limits 300/50 and two exclusions.
+
+| Step | Result |
+|---|---|
+| 1 | `python` section: `cyclomatic_complexity: 11204 functions, p50 1, p90 4, max 82`, `duplicated_lines: 1693 in 38 file(s)`, both from `squadron-python-ast 0.24.0+python3.13.7`; coverage `absent: coverage_not_configured`; `shell` all eight metrics `no_adapter` |
+| 2 | `function_length` and `cyclomatic_complexity` distribution counts: 11204 and 11204 |
+| 3 | `pytest --cov=src/squadron --cov-report=xml tests/metrology`: 6 minutes, all pass; `coverage.xml` written, `git status --porcelain` empty |
+| 4 | `coverable_lines: 27902 in 393 file(s); 552 not in report [cobertura 7.17.0]`, `covered_lines: 11529 ...`. `xmllint` gives `lines-valid` 27902 and `lines-covered` 11529: equal to the snapshot totals |
+| 5 | After `touch src/squadron/__init__.py`: `absent: report_stale (coverage.xml is older than tracked file src/squadron/__init__.py; ...)`; `git status --porcelain` empty |
+| 6 | Key `nope.xml`: `absent: report_missing (nope.xml does not exist)` |
+| 7 | Key `/tmp/coverage.xml`: `Error: metrology.coverage_report must be relative to the repository root, got '/tmp/coverage.xml'. Fix it with ...`, exit 1 |
+| 8 | A clean clone of context-forge (its working tree held another session's uncommitted edits, so the snapshot refused it with the dirty-tree error and nothing was written there): `typescript` with complexity (5417 functions, 17 unparsed) and duplication from `squadron-tree-sitter-ts`; coverage `coverage_not_configured`. The same commit measured by the pre-401 code (`main`) and by this branch gives identical `file_length` and `function_length` measurements (Success Criterion 12) |
+| 9 | Scratch vitest project, `coverage/` gitignored, `reporter: ['cobertura']`: `coverable_lines: 4 in 1 file(s); 2 not in report [cobertura 0.1]`, `covered_lines: 1 in 1 file(s)` |
+| 10 | Two `--json` runs identical apart from `measured_at`. `sq metrology list` skipped the three 400-written records with `Skipping unreadable metrology record`. The old-commit records can't be re-snapshotted (corrected above) and were left in the store |
+
+Caveats found while running it:
+- **Success Criterion 3's Python fixture was 6 but D2 gives 7.** A comprehension always has a `for`, and D2 counts each comprehension `for` and `if`. The criterion text now says so.
+- **Istanbul repeats a function's first line inside `<method>`.** Counting every `<line>` would not match the root `lines-valid`; the reader counts only `<class><lines>` entries (D4).
+- **The task's "function length unaffected" for an untokenizable Python file can't hold:** `tokenize` and `ast.parse` fail on the same files, so such a file is unparsed for function length too. The tests assert that its file length is still counted.
 
 ## Implementation Notes
 
