@@ -45,7 +45,7 @@ Ordering:
 
 ## Feature Slices (in implementation order)
 
-2. [ ] **(401) Complexity, Duplication and Coverage**: The remaining static metrics, added to both 400 adapters through the existing contract. Coverage is read from a report the project already produces. The snapshot doesn't install dependencies or run tests itself.
+2. [x] **(401) Complexity, Duplication and Coverage**: The remaining static metrics, added to both 400 adapters through the existing contract. Coverage is read from a report the project already produces. The snapshot doesn't install dependencies or run tests itself.
    - **Value:** Developer value. Complete static snapshots, which 420 needs for scoring.
    - **Success Criteria:**
      - Complexity and duplication are measured for both languages, and each adapter states how it counts.

@@ -2,12 +2,26 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261023'
+dateUpdated: '20261024'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261024
+
+### Slice 401: Complexity, Duplication and Coverage — Implementation Complete (Phase 6)
+
+- Branch `401-slice.complexity-duplication-and-coverage`, one commit per task pair. Four metrics added to both adapters through the unchanged 400 contract: `cyclomatic_complexity`, `duplicated_lines`, `covered_lines`, `coverable_lines`. The only diff to `snapshot_models.py` is enum members; `take.py`, `contract.py`, `files.py`, `store.py` and `registry.py` are untouched.
+- Walkthrough passed on squadron, a clean clone of context-forge and a scratch vitest project. 400's `file_length` and `function_length` are identical on the same commit before and after (checked with a worktree of `main`).
+- Surprises:
+  - Istanbul writes a function's first line twice: once under `<method>`, once under the class. Only class-level `<line>` entries sum to the root `lines-valid`, so the reader counts those. Found by capturing a real report, not from the spec.
+  - Success Criterion 3's Python fixture said 6; D2 (a comprehension's `for` and its `if` both count) gives 7. The criterion now says 7.
+  - `tokenize` and `ast.parse` fail on the same files, so "function length unaffected" cannot hold for an untokenizable Python file. The test asserts file length is still counted.
+  - The duplication tokenizer takes `(path, text)`, not `text`: `.tsx` needs the TSX grammar.
+  - `coverage.py` would have passed 300 lines with the measurements, so `coverage_measurements.py` is separate.
+- Not done: the old-commit 400 snapshot records in the dev store are still skipped with a warning; snapshots only measure HEAD, so they can't be re-taken. Delete them by hand if the warning bothers you.
 
 ## 20261023
 
