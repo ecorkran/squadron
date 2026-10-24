@@ -8,8 +8,17 @@ dependencies:
 projectState: 0.24.0 released with slice 400 (sq metrology snapshot); slice 401 design
   complete, all decisions decided
 dateCreated: 20261023
-dateUpdated: 20261023
+dateUpdated: 20261024
 status: not_started
+turns: 13
+promptTokens: 877165
+cachedTokens: 789673
+cacheWriteTokens: 87466
+completionTokens: 18241
+durationSeconds: 191.4
+costUsd: 1.222891
+usageRounds: 1
+pricedRounds: 1
 ---
 
 # Tasks: Complexity, Duplication and Coverage
