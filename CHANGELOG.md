@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - A pipeline run now pauses for an answer when the agent asks a question and then recommends an option, instead of failing the step. (#266)
+- A pipeline that enters a slice branch now refuses a dirty working tree at the start of the run, before it spends anything on dispatches and reviews. The verbose `compact` line shows its model instead of `template=?`. (#256)
 
 ## [0.24.0] - 20261023
 

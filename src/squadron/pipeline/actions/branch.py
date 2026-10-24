@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.branch_ops import (
@@ -18,6 +19,7 @@ from squadron.pipeline.branch_ops import (
     TARGET_OUTPUT,
     BranchFailure,
     MergeFailedError,
+    dirty_paths,
     enter_slice_branch,
     merge_slice_branch,
 )
@@ -53,6 +55,20 @@ class BranchAction:
     def validate(self, config: dict[str, object]) -> list[ValidationError]:
         """The step type validates ``op``; nothing more is checkable before run time."""
         return []
+
+    def preflight(self, params: Mapping[str, object], cwd: str) -> None:
+        """Refuse a fresh run whose enter would meet a dirty tree, before any step spends (#256).
+
+        Raises:
+            ValueError: this is an enabled enter and the working tree is not clean.
+        """
+        if params.get(OP_PARAM) != BranchOp.ENTER or not parse_when(params.get(WHEN_PARAM)):
+            return
+        if paths := dirty_paths(cwd):
+            raise ValueError(
+                f"working tree not clean: {paths}. This pipeline enters a slice branch; "
+                "commit or remove them, then rerun."
+            )
 
     async def execute(self, context: ActionContext) -> ActionResult:
         try:

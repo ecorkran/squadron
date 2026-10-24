@@ -905,6 +905,15 @@ def test_label_shows_pool_reference() -> None:
     assert _summarize_action_config("dispatch", {}, resolver, None) == "model=pool:review"
 
 
+def test_compact_label_shows_its_model_not_a_template() -> None:
+    """#256: compact has no template param; its label printed ``template=?``."""
+    from squadron.pipeline.executor import (
+        _summarize_action_config,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    assert _summarize_action_config("compact", {}, make_resolver(), None) == "model=session"
+
+
 def test_review_label_keeps_template_and_shows_model() -> None:
     from squadron.pipeline.executor import (
         _summarize_action_config,  # pyright: ignore[reportPrivateUsage]

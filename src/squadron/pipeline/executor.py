@@ -27,6 +27,7 @@ from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.actions.protocol import RunPreflight
 from squadron.pipeline.batch_report import (
     BatchItemRecord,
     BatchReport,
@@ -67,6 +68,7 @@ from squadron.pipeline.models import (
     ActionContext,
     ActionResult,
     PipelineDefinition,
+    StepConfig,
     prior_output_key,
 )
 from squadron.pipeline.run_spend import RunSpend, read_cost_cap
@@ -143,15 +145,13 @@ def _summarize_action_config(
             if op == "set_arch":
                 return f"set_arch({config.get('plan', '?')})"
             return str(op)
-        case "dispatch":
+        case "dispatch" | "compact":
             return action_model_label(resolver, action_type, config, step_model)
         case "review":
             tmpl = config.get("template", "?")
             return f"template={tmpl}, {action_model_label(resolver, action_type, config, step_model)}"
         case "checkpoint":
             return f"trigger={config.get('trigger', '?')}"
-        case "compact":
-            return f"template={config.get('template', '?')}"
         case "commit":
             return f"subject={config.get(SUBJECT_PARAM, '?')}"
         case _:
@@ -260,6 +260,26 @@ class PipelineResult:
 # ---------------------------------------------------------------------------
 
 _PLACEHOLDER_RE = re.compile(r"\{([\w.\-]+)\}")
+
+
+def _preflight(
+    definition: PipelineDefinition,
+    params: dict[str, object],
+    cwd: str,
+    get_step_type_fn: Any,
+    get_action_fn: Any,
+) -> None:
+    """Let each top-level action that can refuse a fresh run do so before any step spends.
+
+    Raises:
+        ValueError: an action's preflight refused the run's starting state.
+    """
+    for step in definition.steps:
+        resolved = StepConfig(step.step_type, step.name, resolve_placeholders(step.config, params))
+        for action_type, action_params in get_step_type_fn(step.step_type).expand(resolved):
+            action = get_action_fn(action_type)
+            if isinstance(action, RunPreflight):
+                action.preflight(action_params, cwd)
 
 
 def resolve_placeholders(
@@ -557,6 +577,14 @@ async def execute_pipeline(
 
     # A mistyped cap fails the run here, before any step spends (slice 947 D3).
     cost_cap = read_cost_cap(effective_cwd)
+    get_action_fn = _action_registry.__getitem__ if _action_registry else get_action
+    # Actions refuse a fresh run here, not mid-run (#256). A resume skips this: the
+    # run's own uncommitted work may be what a check would refuse.
+    if start_from is None and item_rerun is None:
+        # A test registry may hold only the actions its run reaches; an action it
+        # lacks has no preflight to run.
+        find_action = _action_registry.get if _action_registry else get_action
+        _preflight(definition, merged_params, effective_cwd, get_step_type, find_action)
 
     step_results: list[StepResult] = []
     # prior_outputs accumulates across all steps
@@ -652,7 +680,7 @@ async def execute_pipeline(
             usage_capture=usage_capture,
             spend=spend,
             get_step_type_fn=get_step_type,
-            get_action_fn=_action_registry.__getitem__ if _action_registry else get_action,
+            get_action_fn=get_action_fn,
             runs_dir=runs_dir,
             start_iteration=_resume_start_iteration(
                 step=step, start_from=start_from, start_from_iteration=start_from_iteration

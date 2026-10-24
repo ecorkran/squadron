@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -29,4 +30,13 @@ class Action(Protocol):
 
         Returns an empty list if the configuration is valid.
         """
+        ...
+
+
+@runtime_checkable
+class RunPreflight(Protocol):
+    """An action that can refuse a fresh run at its start, before any step spends (#256)."""
+
+    def preflight(self, params: Mapping[str, object], cwd: str) -> None:
+        """Raise ValueError when this action would fail on the run's starting state."""
         ...
