@@ -16,6 +16,8 @@ from collections.abc import Sequence
 
 from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
+from squadron.metrology.snapshot.coverage import read_coverage
+from squadron.metrology.snapshot.coverage_measurements import coverage_measurements
 from squadron.metrology.snapshot.duplication import duplication_tool_identity, measure_duplication
 from squadron.metrology.snapshot.lengths import (
     MeasuredFunction,
@@ -148,7 +150,7 @@ def measure_python_duplication(ctx: AdapterContext, files: Sequence[str]) -> Mea
 
 
 class PythonAdapter:
-    """Measures Python: all four metrics."""
+    """Measures Python: every snapshot metric."""
 
     language = SourceLanguage.PYTHON
     metrics = frozenset(
@@ -159,6 +161,8 @@ class PythonAdapter:
             SnapshotMetric.DUPLICATED_LINES,
             SnapshotMetric.LINT_COUNT,
             SnapshotMetric.TYPE_ERRORS,
+            SnapshotMetric.COVERED_LINES,
+            SnapshotMetric.COVERABLE_LINES,
         }
     )
     convention_exclusions: tuple[str, ...] = ("**/*_pb2.py", "**/*_pb2_grpc.py")
@@ -170,4 +174,5 @@ class PythonAdapter:
             measure_python_duplication(ctx, listed),
             measure_ruff_lint(ctx, listed),
             measure_pyright_types(ctx, listed),
+            *coverage_measurements(read_coverage(ctx.repo_root), self.language, listed),
         ]
