@@ -20,7 +20,12 @@ class TypeScriptAdapter:
 
     language = SourceLanguage.TYPESCRIPT
     metrics = frozenset(
-        {SnapshotMetric.FILE_LENGTH, SnapshotMetric.FUNCTION_LENGTH, SnapshotMetric.LINT_COUNT}
+        {
+            SnapshotMetric.FILE_LENGTH,
+            SnapshotMetric.FUNCTION_LENGTH,
+            SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+            SnapshotMetric.LINT_COUNT,
+        }
     )
     convention_exclusions: tuple[str, ...] = ("**/*.d.ts", "**/node_modules/**", "**/dist/**")
 

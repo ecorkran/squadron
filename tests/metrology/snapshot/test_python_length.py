@@ -61,6 +61,7 @@ def test_adapter_declares_its_metrics_and_pb2_conventions() -> None:
     assert adapter.metrics == {
         SnapshotMetric.FILE_LENGTH,
         SnapshotMetric.FUNCTION_LENGTH,
+        SnapshotMetric.CYCLOMATIC_COMPLEXITY,
         SnapshotMetric.LINT_COUNT,
         SnapshotMetric.TYPE_ERRORS,
     }

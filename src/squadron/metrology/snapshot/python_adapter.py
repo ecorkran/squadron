@@ -17,10 +17,10 @@ from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.lengths import (
     MeasuredFunction,
     count_non_blank_span,
-    measure_length_metrics,
+    measure_parse_metrics,
     physical_lines,
 )
-from squadron.metrology.snapshot.python_complexity import python_complexity
+from squadron.metrology.snapshot.python_complexity import COMPLEXITY_COUNTING, python_complexity
 from squadron.metrology.snapshot.python_lint import measure_ruff_lint
 from squadron.metrology.snapshot.python_types import measure_pyright_types
 from squadron.metrology.snapshot_models import (
@@ -47,6 +47,11 @@ def ast_tool_identity() -> ToolIdentity:
         version=f"{__version__}+python{platform.python_version()}",
         counting=_AST_COUNTING,
     )
+
+
+def ast_complexity_tool_identity() -> ToolIdentity:
+    """The same in-process parser, with the complexity metric's own counting text."""
+    return ast_tool_identity().model_copy(update={"counting": COMPLEXITY_COUNTING})
 
 
 def _span_start(node: _FunctionNode) -> int:
@@ -88,12 +93,13 @@ def _extract_functions(path: str, text: str) -> list[MeasuredFunction]:
 
 
 def measure_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-    """File length and function length for *files* (no external tool)."""
-    return measure_length_metrics(
+    """File length, function length and complexity for *files* (no external tool)."""
+    return measure_parse_metrics(
         ctx.repo_root,
         files,
         SourceLanguage.PYTHON,
         ast_tool_identity(),
+        ast_complexity_tool_identity(),
         ctx.limits,
         _extract_functions,
         _PARSE_ERRORS,
@@ -108,6 +114,7 @@ class PythonAdapter:
         {
             SnapshotMetric.FILE_LENGTH,
             SnapshotMetric.FUNCTION_LENGTH,
+            SnapshotMetric.CYCLOMATIC_COMPLEXITY,
             SnapshotMetric.LINT_COUNT,
             SnapshotMetric.TYPE_ERRORS,
         }

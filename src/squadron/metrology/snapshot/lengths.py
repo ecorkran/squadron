@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from squadron.metrology.snapshot.complexity import complexity_measurement
 from squadron.metrology.snapshot_models import (
     Distribution,
     FunctionOverLimit,
@@ -202,16 +203,17 @@ def _measure_source(
         unparsed.append(path)
 
 
-def measure_length_metrics(
+def measure_parse_metrics(
     repo_root: Path,
     files: Sequence[str],
     language: SourceLanguage,
     tool: ToolIdentity,
+    complexity_tool: ToolIdentity,
     limits: LengthLimits,
     extract: FunctionExtractor,
     parse_errors: tuple[type[Exception], ...],
 ) -> list[Measurement]:
-    """File length and function length for *files*, shared by every adapter.
+    """File length, function length and complexity for *files*, shared by every adapter.
 
     The adapter supplies only ``extract`` (text to functions) and the parse errors it
     can raise. Reading, decoding, counting, warnings and the measurement shape are
@@ -225,4 +227,10 @@ def measure_length_metrics(
     return [
         file_length_measurement(language, tool, per_file, limits.max_file_lines),
         function_length_measurement(language, tool, functions, limits.max_function_lines, unparsed),
+        complexity_measurement(
+            language,
+            complexity_tool,
+            distribution([fn.complexity for fn in functions]),
+            unparsed,
+        ),
     ]

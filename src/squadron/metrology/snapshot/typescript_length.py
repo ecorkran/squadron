@@ -20,10 +20,10 @@ from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.lengths import (
     MeasuredFunction,
     count_non_blank_span,
-    measure_length_metrics,
+    measure_parse_metrics,
     physical_lines,
 )
-from squadron.metrology.snapshot.typescript_complexity import typescript_complexity
+from squadron.metrology.snapshot.typescript_complexity import COMPLEXITY_COUNTING, typescript_complexity
 from squadron.metrology.snapshot_models import Measurement, SourceLanguage, ToolIdentity
 
 TREE_SITTER_TOOL_NAME = "squadron-tree-sitter-ts"
@@ -76,6 +76,11 @@ def tree_sitter_tool_identity() -> ToolIdentity:
         ),
         counting=_COUNTING,
     )
+
+
+def tree_sitter_complexity_tool_identity() -> ToolIdentity:
+    """The same in-process parser, with the complexity metric's own counting text."""
+    return tree_sitter_tool_identity().model_copy(update={"counting": COMPLEXITY_COUNTING})
 
 
 @functools.cache
@@ -142,12 +147,13 @@ def _extract_functions(path: str, text: str) -> list[MeasuredFunction]:
 
 
 def measure_typescript_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-    """File length and function length for *files* (no external tool, no Node)."""
-    return measure_length_metrics(
+    """File length, function length and complexity for *files* (no external tool, no Node)."""
+    return measure_parse_metrics(
         ctx.repo_root,
         files,
         SourceLanguage.TYPESCRIPT,
         tree_sitter_tool_identity(),
+        tree_sitter_complexity_tool_identity(),
         ctx.limits,
         _extract_functions,
         (TypeScriptParseError, MemoryError),
