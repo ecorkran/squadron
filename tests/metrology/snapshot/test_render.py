@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     file_length_measurement,
     function_length_measurement,
 )
@@ -33,7 +33,7 @@ def python_snapshot() -> CodeSnapshot:
     measurements = [
         file_length_measurement(language, TOOL, {"a.py": 400, "b.py": 10}, limit=300),
         function_length_measurement(
-            language, TOOL, [FunctionLength("a.py", "f", 1, 70)], limit=50, unparsed_files=["c.py"]
+            language, TOOL, [MeasuredFunction("a.py", "f", 1, 70, 1)], limit=50, unparsed_files=["c.py"]
         ),
         Measurement(
             metric=SnapshotMetric.LINT_COUNT,

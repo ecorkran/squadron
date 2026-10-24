@@ -15,11 +15,12 @@ from collections.abc import Sequence
 from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     count_non_blank_span,
     measure_length_metrics,
     physical_lines,
 )
+from squadron.metrology.snapshot.python_complexity import python_complexity
 from squadron.metrology.snapshot.python_lint import measure_ruff_lint
 from squadron.metrology.snapshot.python_types import measure_pyright_types
 from squadron.metrology.snapshot_models import (
@@ -55,9 +56,9 @@ def _span_start(node: _FunctionNode) -> int:
 
 def _collect_functions(
     tree: ast.AST, path: str, lines: Sequence[str], prefix: str = ""
-) -> list[FunctionLength]:
+) -> list[MeasuredFunction]:
     """Every def and async def at any depth, named like ``__qualname__``."""
-    found: list[FunctionLength] = []
+    found: list[MeasuredFunction] = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             found.extend(_collect_functions(node, path, lines, f"{prefix}{node.name}."))
@@ -65,11 +66,12 @@ def _collect_functions(
             start = _span_start(node)
             end = node.end_lineno if node.end_lineno is not None else node.lineno
             found.append(
-                FunctionLength(
+                MeasuredFunction(
                     path=path,
                     qualified_name=f"{prefix}{node.name}",
                     start_line=start,
                     length=count_non_blank_span(lines, start, end),
+                    complexity=python_complexity(node),
                 )
             )
             found.extend(_collect_functions(node, path, lines, f"{prefix}{node.name}.<locals>."))
@@ -81,7 +83,7 @@ def _collect_functions(
 _PARSE_ERRORS: tuple[type[Exception], ...] = (SyntaxError, RecursionError, MemoryError, ValueError)
 
 
-def _extract_functions(path: str, text: str) -> list[FunctionLength]:
+def _extract_functions(path: str, text: str) -> list[MeasuredFunction]:
     return _collect_functions(ast.parse(text, filename=path), path, physical_lines(text))
 
 

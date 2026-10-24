@@ -18,11 +18,12 @@ import tree_sitter_typescript
 from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     count_non_blank_span,
     measure_length_metrics,
     physical_lines,
 )
+from squadron.metrology.snapshot.typescript_complexity import typescript_complexity
 from squadron.metrology.snapshot_models import Measurement, SourceLanguage, ToolIdentity
 
 TREE_SITTER_TOOL_NAME = "squadron-tree-sitter-ts"
@@ -116,23 +117,24 @@ def _is_counted(node: tree_sitter.Node) -> bool:
     return node.type != "arrow_function" or body.type == _BODY_BLOCK
 
 
-def _extract_functions(path: str, text: str) -> list[FunctionLength]:
+def _extract_functions(path: str, text: str) -> list[MeasuredFunction]:
     tree = _parser(Path(path).suffix.lower() == _TSX_SUFFIX).parse(text.encode("utf-8"))
     if tree.root_node.has_error:
         raise TypeScriptParseError("the syntax tree contains an error node")
     lines = physical_lines(text)
-    found: list[FunctionLength] = []
+    found: list[MeasuredFunction] = []
     pending = [tree.root_node]
     while pending:
         node = pending.pop()
         if _is_counted(node):
             start = _start_row(node) + 1
             found.append(
-                FunctionLength(
+                MeasuredFunction(
                     path=path,
                     qualified_name=_name(node),
                     start_line=start,
                     length=count_non_blank_span(lines, start, node.end_point.row + 1),
+                    complexity=typescript_complexity(node, _is_counted),
                 )
             )
         pending.extend(reversed(node.children))

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     count_non_blank,
     count_non_blank_span,
     distribution,
@@ -101,9 +101,9 @@ class TestFileLength:
 
 class TestFunctionLength:
     FUNCTIONS = (
-        FunctionLength("b.py", "g", 9, 70),
-        FunctionLength("a.py", "f", 3, 50),
-        FunctionLength("a.py", "Cls.m", 20, 51),
+        MeasuredFunction("b.py", "g", 9, 70, 1),
+        MeasuredFunction("a.py", "f", 3, 50, 1),
+        MeasuredFunction("a.py", "Cls.m", 20, 51, 1),
     )
 
     def test_over_limit_rows_only_above_the_limit(self) -> None:
