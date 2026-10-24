@@ -164,11 +164,25 @@ async def run_review_with_profile(
     # letting a non-review reach persistence.
     # Kept for the parser's diff-membership location check (slice 904) further down.
     diff_files: set[str] | None = None
+    exclude_patterns = template.diff_exclude_patterns
     diff_ref = inputs.get("diff")
     if diff_ref is not None:
-        diff_files = _run_git_diff_filenames(
-            diff_ref, inputs.get("cwd", "."), template.diff_exclude_patterns
-        )
+        cwd_for_diff = inputs.get("cwd", ".")
+        diff_files = _run_git_diff_filenames(diff_ref, cwd_for_diff, exclude_patterns)
+        if not diff_files and exclude_patterns:
+            # Every changed file matched the exclusions (a docs-only slice, #265). The
+            # diff is not empty, so review all of it rather than fail the run.
+            diff_files = _run_git_diff_filenames(diff_ref, cwd_for_diff)
+            if diff_files:
+                _logger.warning(
+                    "%s review: all %d changed file(s) in %s match the exclusion patterns "
+                    "%s; reviewing the unfiltered diff",
+                    template.name,
+                    len(diff_files),
+                    diff_ref,
+                    exclude_patterns,
+                )
+                exclude_patterns = None
         if not diff_files:
             raise EmptyDiffError(
                 f"{template.name} review resolved diff '{diff_ref}' to no changed files; "
@@ -215,7 +229,7 @@ async def run_review_with_profile(
     prompt, diff_injection, conventions_source = _inject_file_contents(
         prompt,
         inputs,
-        template.diff_exclude_patterns,
+        exclude_patterns,
         include_bodies=include_bodies,
         convention_root=convention_root,
     )

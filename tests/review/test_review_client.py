@@ -987,6 +987,35 @@ class TestEmptyDiffRefusesToRun:
         mock_provider.create_agent.assert_awaited()
 
     @pytest.mark.asyncio
+    async def test_all_files_excluded_reviews_the_unfiltered_diff(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """#265: a docs-only slice is reviewed whole instead of failing the run."""
+        from dataclasses import replace
+
+        mock_provider = _make_mock_provider()
+
+        def filenames(_ref: str, _cwd: str, exclude: list[str] | None = None) -> set[str]:
+            return set() if exclude else {"docs/guide.md"}
+
+        with (
+            caplog.at_level("WARNING", logger="squadron.review.review_client"),
+            patch(f"{_P}.get_profile", return_value=self._profile()),
+            patch(f"{_P}.get_provider", return_value=mock_provider),
+            patch(f"{_P}.ensure_provider_loaded"),
+            patch(f"{_P}._run_git_diff_filenames", side_effect=filenames),
+        ):
+            result = await run_review_with_profile(
+                replace(_make_template(), diff_exclude_patterns=["*.md"]),
+                {"diff": "abc123...HEAD", "input": "file.md"},
+                profile="openai",
+            )
+
+        assert isinstance(result, ReviewResult)
+        mock_provider.create_agent.assert_awaited()
+        assert "reviewing the unfiltered diff" in caplog.text
+
+    @pytest.mark.asyncio
     async def test_template_without_a_diff_input_is_unaffected(self) -> None:
         """Non-code templates resolve no diff and must not be gated on one."""
         mock_provider = _make_mock_provider()
