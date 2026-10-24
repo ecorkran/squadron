@@ -126,7 +126,7 @@ _DROPPED_TOKEN_TYPES = frozenset(
 _TOKEN_ERRORS: tuple[type[Exception], ...] = (tokenize.TokenError, SyntaxError)
 
 
-def _tokenize(text: str) -> list[tuple[str, int]]:
+def _tokenize(_path: str, text: str) -> list[tuple[str, int]]:
     """Code tokens with their start line; comments and layout dropped."""
     return [
         (token.string, token.start[0])

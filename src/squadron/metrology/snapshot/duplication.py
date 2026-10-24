@@ -38,8 +38,8 @@ DUPLICATION_COUNTING = (
     f"absent past {DUPLICATION_MAX_TOKENS} tokens"
 )
 
-#: File text in, ordered (token text, 1-based line) pairs out.
-Tokenizer = Callable[[str], list[tuple[str, int]]]
+#: Repo-relative path and file text in, ordered (token text, 1-based line) pairs out.
+Tokenizer = Callable[[str, str], list[tuple[str, int]]]
 
 _HASH_BASE = 1_000_003
 _HASH_MODULUS = (1 << 61) - 1
@@ -93,7 +93,7 @@ def _tokenize_file(
     if text is None:
         return None
     try:
-        tokens = tokenizer(text)
+        tokens = tokenizer(path, text)
     except MemoryError:
         raise
     except token_errors as exc:

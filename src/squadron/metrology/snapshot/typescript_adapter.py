@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from squadron.metrology.snapshot.contract import AdapterContext
-from squadron.metrology.snapshot.typescript_length import measure_typescript_lengths
+from squadron.metrology.snapshot.typescript_length import (
+    measure_typescript_duplication,
+    measure_typescript_lengths,
+)
 from squadron.metrology.snapshot.typescript_lint import measure_eslint_lint
 from squadron.metrology.snapshot_models import Measurement, SnapshotMetric, SourceLanguage
 
@@ -24,10 +27,15 @@ class TypeScriptAdapter:
             SnapshotMetric.FILE_LENGTH,
             SnapshotMetric.FUNCTION_LENGTH,
             SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+            SnapshotMetric.DUPLICATED_LINES,
             SnapshotMetric.LINT_COUNT,
         }
     )
     convention_exclusions: tuple[str, ...] = ("**/*.d.ts", "**/node_modules/**", "**/dist/**")
 
     def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-        return [*measure_typescript_lengths(ctx, files), measure_eslint_lint(ctx, list(files))]
+        return [
+            *measure_typescript_lengths(ctx, files),
+            measure_typescript_duplication(ctx, files),
+            measure_eslint_lint(ctx, list(files)),
+        ]

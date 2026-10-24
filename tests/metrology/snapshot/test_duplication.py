@@ -28,7 +28,7 @@ class FakeTokenError(ValueError):
     pass
 
 
-def whitespace_tokens(text: str) -> list[tuple[str, int]]:
+def whitespace_tokens(_path: str, text: str) -> list[tuple[str, int]]:
     """Whitespace-separated words with their 1-based line; the word BAD raises."""
     tokens: list[tuple[str, int]] = []
     for number, line in enumerate(text.splitlines(), start=1):
@@ -137,7 +137,7 @@ def test_token_count_past_the_ceiling_is_tool_failed(
 def test_memory_error_in_the_tokenizer_is_tool_failed(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    def exhausted(_text: str) -> list[tuple[str, int]]:
+    def exhausted(_path: str, _text: str) -> list[tuple[str, int]]:
         raise MemoryError
 
     with caplog.at_level(logging.WARNING):
