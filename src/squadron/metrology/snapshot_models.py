@@ -30,6 +30,10 @@ class SnapshotMetric(StrEnum):
     FUNCTION_LENGTH = "function_length"
     LINT_COUNT = "lint_count"
     TYPE_ERRORS = "type_errors"
+    CYCLOMATIC_COMPLEXITY = "cyclomatic_complexity"
+    DUPLICATED_LINES = "duplicated_lines"
+    COVERED_LINES = "covered_lines"
+    COVERABLE_LINES = "coverable_lines"
 
 
 #: Metrics whose present measurement must name the rule set it ran under.
@@ -53,6 +57,9 @@ class AbsenceReason(StrEnum):
     TOOL_MISSING = "tool_missing"
     TOOL_FAILED = "tool_failed"
     ENVIRONMENT_UNRESOLVED = "environment_unresolved"
+    COVERAGE_NOT_CONFIGURED = "coverage_not_configured"
+    REPORT_MISSING = "report_missing"
+    REPORT_STALE = "report_stale"
 
 
 class ToolIdentity(BaseModel):

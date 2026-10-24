@@ -48,6 +48,20 @@ def python_snapshot() -> CodeSnapshot:
             absent=AbsenceReason.ENVIRONMENT_UNRESOLVED,
             absent_detail=".venv not found",
         ),
+        *[
+            Measurement(
+                metric=metric,
+                language=language,
+                absent=AbsenceReason.TOOL_MISSING,
+                absent_detail="not measured in this fixture",
+            )
+            for metric in (
+                SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+                SnapshotMetric.DUPLICATED_LINES,
+                SnapshotMetric.COVERED_LINES,
+                SnapshotMetric.COVERABLE_LINES,
+            )
+        ],
     ]
     return CodeSnapshot(
         snapshot_id="snapshot-x-y",

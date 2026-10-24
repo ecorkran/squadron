@@ -57,7 +57,13 @@ def test_adapter_declares_its_metrics_and_pb2_conventions() -> None:
     adapter = PythonAdapter()
 
     assert adapter.language is SourceLanguage.PYTHON
-    assert adapter.metrics == set(SnapshotMetric)
+    # Each 401 metric joins this set in the task that measures it; Task 25 restores set(SnapshotMetric).
+    assert adapter.metrics == {
+        SnapshotMetric.FILE_LENGTH,
+        SnapshotMetric.FUNCTION_LENGTH,
+        SnapshotMetric.LINT_COUNT,
+        SnapshotMetric.TYPE_ERRORS,
+    }
     assert adapter.convention_exclusions == ("**/*_pb2.py", "**/*_pb2_grpc.py")
 
 

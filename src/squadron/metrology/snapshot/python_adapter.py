@@ -102,7 +102,14 @@ class PythonAdapter:
     """Measures Python: all four metrics."""
 
     language = SourceLanguage.PYTHON
-    metrics = frozenset(SnapshotMetric)
+    metrics = frozenset(
+        {
+            SnapshotMetric.FILE_LENGTH,
+            SnapshotMetric.FUNCTION_LENGTH,
+            SnapshotMetric.LINT_COUNT,
+            SnapshotMetric.TYPE_ERRORS,
+        }
+    )
     convention_exclusions: tuple[str, ...] = ("**/*_pb2.py", "**/*_pb2_grpc.py")
 
     def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:

@@ -242,6 +242,10 @@ class TestSerialization:
                         absent(SnapshotMetric.FUNCTION_LENGTH),
                         present(SnapshotMetric.LINT_COUNT, environment=None, per_file={"a.py": 3}),
                         present(SnapshotMetric.TYPE_ERRORS),
+                        absent(SnapshotMetric.CYCLOMATIC_COMPLEXITY),
+                        absent(SnapshotMetric.DUPLICATED_LINES),
+                        absent(SnapshotMetric.COVERED_LINES),
+                        absent(SnapshotMetric.COVERABLE_LINES),
                     ],
                 )
             ],
