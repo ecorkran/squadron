@@ -9,7 +9,7 @@ import pytest
 
 from squadron.metrology.snapshot import duplication
 from squadron.metrology.snapshot.python_adapter import measure_python_duplication
-from squadron.metrology.snapshot.typescript_length import measure_typescript_duplication
+from squadron.metrology.snapshot.typescript_duplication import measure_typescript_duplication
 from squadron.metrology.snapshot_models import AbsenceReason, Measurement
 from tests.metrology.snapshot.builders import make_context
 from tests.metrology.snapshot.conftest import FakeToolRunner

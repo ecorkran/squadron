@@ -113,20 +113,24 @@ def _mark(file: _TokenizedFile, start: int) -> None:
 def _find_repeats(files: Sequence[_TokenizedFile]) -> None:
     """Mark the tokens under every confirmed repeated window."""
     width = DUPLICATION_WINDOW_TOKENS
-    first_seen: dict[int, tuple[int, int]] = {}
+    # Every distinct window seen per hash: a collision adds an entry, so it can't hide a clone.
+    seen_by_hash: dict[int, list[tuple[int, int]]] = {}
     for file_index, file in enumerate(files):
         for start, window_hash in enumerate(_window_hashes(file.ids)):
-            seen = first_seen.setdefault(window_hash, (file_index, start))
-            if seen == (file_index, start):
+            window = file.ids[start : start + width]
+            candidates = seen_by_hash.setdefault(window_hash, [])
+            # Compare the ids themselves: a hash match alone is never a clone.
+            match = next(
+                (c for c in candidates if files[c[0]].ids[c[1] : c[1] + width] == window), None
+            )
+            if match is None:
+                candidates.append((file_index, start))
                 continue
-            other_index, other_start = seen
+            other_index, other_start = match
             if other_index == file_index and start - other_start < width:
                 continue  # overlapping runs in one file are not copies of each other
-            other = files[other_index]
-            # Compare the ids themselves: a hash collision must never make a clone.
-            if other.ids[other_start : other_start + width] == file.ids[start : start + width]:
-                _mark(other, other_start)
-                _mark(file, start)
+            _mark(files[other_index], other_start)
+            _mark(file, start)
 
 
 def _duplicated_line_counts(files: Sequence[_TokenizedFile]) -> dict[str, int]:

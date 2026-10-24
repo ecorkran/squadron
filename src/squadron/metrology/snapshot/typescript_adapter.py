@@ -13,10 +13,8 @@ from collections.abc import Sequence
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.coverage import read_coverage
 from squadron.metrology.snapshot.coverage_measurements import coverage_measurements
-from squadron.metrology.snapshot.typescript_length import (
-    measure_typescript_duplication,
-    measure_typescript_lengths,
-)
+from squadron.metrology.snapshot.typescript_duplication import measure_typescript_duplication
+from squadron.metrology.snapshot.typescript_length import measure_typescript_lengths
 from squadron.metrology.snapshot.typescript_lint import measure_eslint_lint
 from squadron.metrology.snapshot_models import Measurement, SnapshotMetric, SourceLanguage
 

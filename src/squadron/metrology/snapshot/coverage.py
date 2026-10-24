@@ -23,6 +23,7 @@ _logger = logging.getLogger(__name__)
 KEY_COVERAGE_REPORT = "metrology.coverage_report"
 
 _PARENT = ".."
+_COVERAGE_ROOT_TAG = "coverage"
 
 
 def parse_report_path(value: object) -> str | None:
@@ -48,9 +49,6 @@ def parse_report_path(value: object) -> str | None:
             f"{KEY_COVERAGE_REPORT} must stay inside the repository (no '..'), got {value!r}. {fix}"
         )
     return posix.as_posix()
-
-
-_COVERAGE_ROOT_TAG = "coverage"
 
 
 @dataclass(frozen=True)

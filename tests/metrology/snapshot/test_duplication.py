@@ -120,6 +120,21 @@ def test_distinct_windows_with_colliding_hashes_are_not_clones(
     assert measured.per_file == {}
 
 
+def test_a_hash_collision_does_not_hide_a_later_real_clone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        duplication,
+        "_window_hashes",
+        lambda ids: [0] * max(len(ids) - WIDTH + 1, 0),
+    )
+    copied = block("b")
+
+    measured = run(tmp_path, {"a.txt": block("a"), "b.txt": copied, "c.txt": copied})
+
+    assert measured.per_file == {"b.txt": 10, "c.txt": 10}
+
+
 def test_token_count_past_the_ceiling_is_tool_failed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -153,7 +168,8 @@ def test_tokenizer_error_and_unreadable_file_leave_the_other_files_compared(
     shared = block("s")
 
     with caplog.at_level(logging.WARNING):
-        measured = run(tmp_path, {"a.txt": shared, "b.txt": shared, "bad.txt": "BAD"})
+        for name, content in {"a.txt": shared, "b.txt": shared, "bad.txt": "BAD"}.items():
+            (tmp_path / name).write_text(content, encoding="utf-8")
         measured = measure_duplication(
             tmp_path,
             ["a.txt", "b.txt", "bad.txt", "missing.txt"],

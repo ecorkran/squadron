@@ -76,7 +76,8 @@ Complexity is counted on the function walk that already produces function length
 | `snapshot/python_complexity.py` | New. Decision-point count for one `ast` function node |
 | `snapshot/python_adapter.py` | The extractor sets `complexity`. Adds a `tokenize` tokenizer and calls duplication and coverage |
 | `snapshot/typescript_complexity.py` | New. Decision-point count for one tree-sitter function node |
-| `snapshot/typescript_length.py` | The extractor sets `complexity`. Adds a leaf-token tokenizer |
+| `snapshot/typescript_length.py` | The extractor sets `complexity`. Owns `parse_checked`, the one parse-and-error-check |
+| `snapshot/typescript_duplication.py` | New. The leaf-token tokenizer and `measure_typescript_duplication` |
 | `snapshot/typescript_adapter.py` | Declares the new metrics. Calls duplication and coverage |
 | `snapshot/coverage.py` | New. Owns the config key constant and its parser. `read_coverage(repo_root)` checks freshness and parses the report into a reading, an absence or a failure |
 | `snapshot/coverage_measurements.py` | New. `coverage_measurements(reading, language, files)` builds the two measurements for one language (split from `coverage.py` to keep both under ~300 lines) |
