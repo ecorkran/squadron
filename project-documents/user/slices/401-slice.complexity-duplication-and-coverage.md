@@ -8,8 +8,8 @@ dependencies:
 interfaces:
 - 403
 dateCreated: 20261022
-dateUpdated: 20261023
-status: not_started
+dateUpdated: 20261024
+status: complete
 turns: 20
 promptTokens: 1310434
 cachedTokens: 1200278
@@ -72,13 +72,14 @@ Complexity is counted on the function walk that already produces function length
 | `snapshot_models.py` | Four `SnapshotMetric` members and three `AbsenceReason` members. Model and validators unchanged |
 | `snapshot/lengths.py` | `FunctionLength` becomes `MeasuredFunction` (adds `complexity`). `measure_length_metrics` becomes `measure_parse_metrics` and also returns the complexity measurement. The read, decode and parse-error handling is unchanged |
 | `snapshot/complexity.py` | New. Builds the complexity measurement from `MeasuredFunction`s. Works for any language |
-| `snapshot/duplication.py` | New. `measure_duplication(repo_root, files, language, tool, tokenizer, token_errors)`: reads each file, tokenizes it, and runs the window pass. Works for any language |
+| `snapshot/duplication.py` | New. `measure_duplication(repo_root, files, language, tool, tokenizer, token_errors)`: reads each file, tokenizes it (the tokenizer takes the repo-relative path and the text, since `.tsx` needs a different grammar), and runs the window pass. Works for any language |
 | `snapshot/python_complexity.py` | New. Decision-point count for one `ast` function node |
 | `snapshot/python_adapter.py` | The extractor sets `complexity`. Adds a `tokenize` tokenizer and calls duplication and coverage |
 | `snapshot/typescript_complexity.py` | New. Decision-point count for one tree-sitter function node |
 | `snapshot/typescript_length.py` | The extractor sets `complexity`. Adds a leaf-token tokenizer |
 | `snapshot/typescript_adapter.py` | Declares the new metrics. Calls duplication and coverage |
-| `snapshot/coverage.py` | New. Owns the config key constant and its parser. `read_coverage(repo_root)` checks freshness and parses the report, then `coverage_measurements(reading, language, files)` builds the two measurements for one language |
+| `snapshot/coverage.py` | New. Owns the config key constant and its parser. `read_coverage(repo_root)` checks freshness and parses the report into a reading, an absence or a failure |
+| `snapshot/coverage_measurements.py` | New. `coverage_measurements(reading, language, files)` builds the two measurements for one language (split from `coverage.py` to keep both under ~300 lines) |
 | `snapshot/preflight.py` | Validates `metrology.coverage_report` through `coverage.py`'s parser |
 | `snapshot/render.py` | Summary lines for the new metrics |
 
@@ -136,12 +137,13 @@ Status: decided
   - each `except` handler, and each `case` in a `match`
   - an `if` expression
   - each extra operand of a `BoolOp` (`len(values) - 1`)
-  - each `for` and each `if` in a comprehension
+  - each `for` and each `if` in a comprehension (so a comprehension with one `if` adds 2)
   - `try`, `with`, `assert` and `else` clauses don't count.
 - TypeScript decision points:
   - `if_statement`, `for_statement`, `for_in_statement` (including `for…of`), `while_statement`, `do_statement`
   - each `switch_case` (not `switch_default`), `catch_clause`, and `ternary_expression`
   - each `binary_expression` whose operator is `&&`, `||` or `??`
+- The node and operator names were checked against the pinned grammar for both `typescript` and `tsx`; they match the names above exactly.
 - Each language's decision-point set is one module constant in its complexity module. Tests and the `counting` text read that constant, so the set is written in one place.
 - The values are a `distribution` over functions, with no `per_file`.
 - No complexity limit and no `over_limit` rows. `FunctionOverLimit.length` would mean something else for complexity, and the slice plan asks for no limit. Module-level code isn't in any function, so it isn't counted. The `counting` text says so.
@@ -176,6 +178,7 @@ Status: decided
   - Each puts absolute source roots in `<sources><source>` and file paths relative to a root in `<class filename=…>`.
   - Each writes `<line number=… hits=…/>` per executable line.
   - coverage.py sets the root `version` to its own version. Istanbul always writes `version="0.1"`.
+- Only `<line>` elements directly under `<class><lines>` count. They sum to the root `lines-valid` and `lines-covered` in both writers; Istanbul also repeats a function's first line inside `<method>`, which the root totals leave out (confirmed against the captured fixtures).
 - Paths map by joining each `<source>` with `filename` and taking the result relative to the repo root. Entries that don't resolve under the repo root are dropped. Line numbers are collected into per-file sets, which settles any repeated entry.
 - Two measurements per language, built from the one reading:
   - `coverable_lines`: per file, the lines the report lists.
@@ -221,6 +224,7 @@ Status: decided
 
 ### Patterns and Conventions
 - Node-type, token-type and decision-point sets are module constants in the language module that owns them, as `_FUNCTION_TYPES` is in 400.
+- A `MemoryError` raised by a tokenizer is not a per-file parse error: it fails the whole language's `duplicated_lines` (`tool_failed`), so the TypeScript adapter's token errors are `TypeScriptParseError` only.
 - Coverage failures are data (`absent`), not exceptions. Only a git failure raises.
 - Each absence and fallback logs at WARNING, following 400's `tool_support` builders.
 
@@ -263,7 +267,7 @@ No schema change, and no store change. The new metrics are enum values inside ex
 1. Python and TypeScript snapshots carry present `cyclomatic_complexity` and `duplicated_lines` measurements. Each has a `counting` text giving its definition (D2, D3).
 2. Complexity covers exactly the functions function length covers: the same count, and the same (path, qualified name) set.
 3. Known fixtures give the expected values:
-   - a function with `if`, `elif`, `and`, a comprehension `if` and an `except` scores 6
+   - a function with `if`, `elif`, `and`, a comprehension with one `if` and an `except` scores 7 (the comprehension's `for` counts as well as its `if`, per D2)
    - a TypeScript function with `if`, `??`, a ternary and two non-default `case`s scores 6
    - a nested function's decisions don't count toward its parent
 4. Two files sharing a block of at least 100 tokens report its lines as duplicated in both. A 99-token block isn't reported. Renamed identifiers aren't reported. A Python block and an identical TypeScript block aren't compared.
