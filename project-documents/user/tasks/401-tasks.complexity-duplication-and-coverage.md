@@ -74,6 +74,7 @@ revision_number: 1
 - [ ] The walk doesn't descend into a nested counted function; it does descend into an expression-bodied arrow (not counted, so its decisions belong to the parent)
 - [ ] Before writing the constant, confirm each node type name exists in the pinned grammar for both the `typescript` and `tsx` languages (parse a sample containing each construct and inspect node types). Record any difference from D2's names in the slice design's D2 and use the grammar's name
 - [ ] Export a short text built from the constants, for the `counting` text in Task 8
+- [ ] Success: module imports nothing from `typescript_length.py` or the adapter
 
 ## Task 6: TypeScript complexity tests — Effort 2
 - [ ] `tests/metrology/snapshot/test_typescript_complexity.py`, parsing source strings with the grammar (use `typescript_length`'s parser helper):
@@ -90,6 +91,7 @@ revision_number: 1
 - [ ] In `lengths.py`, rename `FunctionLength` to `MeasuredFunction` and add `complexity: int`. Read, decode and parse-error handling stay as they are
 - [ ] Python: `python_adapter._collect_functions` sets `complexity` from Task 3
 - [ ] TypeScript: `typescript_length._extract_functions` sets `complexity` from Task 5, passing `_is_counted`
+- [ ] Extract the read-and-decode step of `lengths._measure_source` into a helper that Task 10 reuses; length behavior is unchanged
 - [ ] No new measurement is emitted yet, and function length's `counting` text and values don't change (D1)
 - [ ] Success: 400's length tests pass with their expected values unchanged, edited only for the rename (Success Criterion 12)
 - [ ] Commit: `refactor(metrology): carry complexity on MeasuredFunction in both function walks`
@@ -99,7 +101,7 @@ revision_number: 1
 - [ ] Create `snapshot/complexity.py`: a measurement builder taking language, tool, the `MeasuredFunction`s and the unparsed files. `distribution` over function complexities; no `per_file`, no `limit`, no `over_limit`; `unparsed_files` identical to function length's
 - [ ] `measure_parse_metrics` takes a second `ToolIdentity` for complexity and returns file length, function length and cyclomatic complexity
 - [ ] Python complexity tool identity: same name and version as `ast_tool_identity()`, its own `counting`: Task 3's decision-point text, plus "module-level code is not in any function and is not counted"
-- [ ] TypeScript: same identity pattern beside `tree_sitter_tool_identity()`, `counting` from Task 5
+- [ ] TypeScript: same identity pattern beside `tree_sitter_tool_identity()`, `counting` from Task 5. `measure_typescript_lengths` passes it to `measure_parse_metrics`, so the complexity measurement reaches `TypeScriptAdapter.measure` through that call
 - [ ] Add `cyclomatic_complexity` to `PythonAdapter.metrics` and `TypeScriptAdapter.metrics`
 - [ ] Success: 400's length tests pass, edited only for the rename
 
@@ -116,7 +118,7 @@ revision_number: 1
 - [ ] Create `snapshot/duplication.py` with module constants `DUPLICATION_WINDOW_TOKENS = 100` and `DUPLICATION_MAX_TOKENS = 4_000_000`
 - [ ] Define a `Tokenizer` type: file text in, ordered (token text, line number) pairs out. Comment and layout tokens are already dropped by the tokenizer
 - [ ] `measure_duplication(repo_root, files, language, tool, tokenizer, token_errors)` returns one `duplicated_lines` measurement:
-  - [ ] read and decode each file with a helper extracted from `lengths._measure_source` and used by both (length behavior unchanged; never a copy). An `OSError`, a `UnicodeDecodeError` or one of `token_errors` puts the file in `unparsed_files` with a WARNING per file, and it contributes no tokens
+  - [ ] read and decode each file with the Task 7 helper (never a copy). An `OSError`, a `UnicodeDecodeError` or one of `token_errors` puts the file in `unparsed_files` with a WARNING per file, and it contributes no tokens
   - [ ] map each token text to an integer id; store each file as two `array`s (ids and lines)
   - [ ] keep a running token total; when it passes `DUPLICATION_MAX_TOKENS`, stop before building the window index and return `tool_failed` (via `tool_support.tool_failed`) naming the count and the ceiling. A `MemoryError` during the pass is handled the same way. Never a partial figure
   - [ ] a rolling hash gives every window's hash in one pass; a dict maps hash to first occurrence (file, start index); a repeat is confirmed by comparing the two id slices, so a collision is never a clone
@@ -283,6 +285,6 @@ revision_number: 1
 ## Task 30: Final validation — Effort 1
 - [ ] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
 - [ ] Every new module is at ~300 lines or less (`wc -l src/squadron/metrology/snapshot/*.py`)
-- [ ] `git diff main -- src/squadron/metrology/snapshot_models.py` shows enum members only; `take.py`, `contract.py`, `files.py` and `store.py` show no diff
+- [ ] `git diff <target> -- src/squadron/metrology/snapshot_models.py` shows enum members only, where `<target>` is `cf config get git.integration_branch`, or `main` if empty; `take.py`, `contract.py`, `files.py` and `store.py` show no diff
 - [ ] Every Success Criterion (Functional 1–12, Technical, Integration) maps to a passing test or a recorded walkthrough step
 - [ ] Commit any remaining changes on the slice branch
