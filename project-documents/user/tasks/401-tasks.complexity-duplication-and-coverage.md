@@ -41,7 +41,7 @@ pricedRounds: 1
 ## Task 2: Enum members (Technical Scope) — Effort 2
 - [ ] In `snapshot_models.py`, add `SnapshotMetric` members `cyclomatic_complexity`, `duplicated_lines`, `covered_lines`, `coverable_lines`, and `AbsenceReason` members `coverage_not_configured`, `report_missing`, `report_stale`. Nothing else in the file changes
 - [ ] `PythonAdapter.metrics` is `frozenset(SnapshotMetric)` today, so it would claim the new metrics and `take_snapshot` would raise. Replace it with the explicit set of the four 400 metrics. Later tasks add each new metric as it's measured
-- [ ] Success: the full `tests/metrology/` suite passes unchanged; a snapshot of a `snapshot_git_repo` repo shows the four new metrics as `metric_unsupported` for both languages (add this as one test in `test_take.py`)
+- [ ] Success: the full `tests/metrology/` suite passes unchanged
 - [ ] Commit: `feat(metrology): add complexity, duplication and coverage metric enums`
 
 ## Task 3: Python decision-point count (D2) — Effort 2
@@ -53,7 +53,7 @@ pricedRounds: 1
   - [ ] a comprehension adds 1 per `for` (`comprehension` node) plus 1 per `if` in it
   - [ ] `Try`, `With`, `Assert` and `else` clauses add nothing
 - [ ] The walk doesn't descend into a nested `FunctionDef` / `AsyncFunctionDef` (that function is scored on its own). It does descend into `Lambda`, whose decisions belong to the enclosing function
-- [ ] Export a short text built from the constant, for the `counting` text in Task 5
+- [ ] Export a short text built from the constant, for the `counting` text in Task 8
 - [ ] Success: module imports nothing from `lengths.py` or the adapter
 
 ## Task 4: Python complexity tests — Effort 2
@@ -67,12 +67,12 @@ pricedRounds: 1
 - [ ] Commit: `feat(metrology): add Python cyclomatic complexity counting`
 
 ## Task 5: TypeScript decision-point count (D2) — Effort 2
-- [ ] Create `snapshot/typescript_complexity.py` with one public function: the complexity of one tree-sitter function node. It takes the "is this node a counted function" predicate as a parameter (`typescript_length._is_counted` is passed in by Task 6), so the two modules don't import each other
+- [ ] Create `snapshot/typescript_complexity.py` with one public function: the complexity of one tree-sitter function node. It takes the "is this node a counted function" predicate as a parameter (`typescript_length._is_counted` is passed in by Task 7), so the two modules don't import each other
 - [ ] The decision-point node types are one module constant: `if_statement`, `for_statement`, `for_in_statement`, `while_statement`, `do_statement`, `switch_case`, `catch_clause`, `ternary_expression`. `switch_default` is not in it
 - [ ] The short-circuit operators `&&`, `||`, `??` are a second constant; a `binary_expression` counts when its `operator` field is one of them
 - [ ] The walk doesn't descend into a nested counted function; it does descend into an expression-bodied arrow (not counted, so its decisions belong to the parent)
 - [ ] Before writing the constant, confirm each node type name exists in the pinned grammar for both the `typescript` and `tsx` languages (parse a sample containing each construct and inspect node types). Record any difference from D2's names in the slice design's D2 and use the grammar's name
-- [ ] Export a short text built from the constants, for the `counting` text in Task 6
+- [ ] Export a short text built from the constants, for the `counting` text in Task 8
 
 ## Task 6: TypeScript complexity tests — Effort 2
 - [ ] `tests/metrology/snapshot/test_typescript_complexity.py`, parsing source strings with the grammar (use `typescript_length`'s parser helper):
@@ -85,17 +85,24 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): add TypeScript cyclomatic complexity counting`
 
-## Task 7: `MeasuredFunction` and the complexity measurement (D1, D2) — Effort 3
-- [ ] In `lengths.py`, rename `FunctionLength` to `MeasuredFunction` and add `complexity: int`. Rename `measure_length_metrics` to `measure_parse_metrics`. Read, decode and parse-error handling stay as they are
+## Task 7: `MeasuredFunction` carries complexity (D1, D2) — Effort 2
+- [ ] In `lengths.py`, rename `FunctionLength` to `MeasuredFunction` and add `complexity: int`. Read, decode and parse-error handling stay as they are
+- [ ] Python: `python_adapter._collect_functions` sets `complexity` from Task 3
+- [ ] TypeScript: `typescript_length._extract_functions` sets `complexity` from Task 5, passing `_is_counted`
+- [ ] No new measurement is emitted yet, and function length's `counting` text and values don't change (D1)
+- [ ] Success: 400's length tests pass with their expected values unchanged, edited only for the rename (Success Criterion 12)
+- [ ] Commit: `refactor(metrology): carry complexity on MeasuredFunction in both function walks`
+
+## Task 8: The complexity measurement (D1, D2) — Effort 2
+- [ ] Rename `measure_length_metrics` to `measure_parse_metrics`
 - [ ] Create `snapshot/complexity.py`: a measurement builder taking language, tool, the `MeasuredFunction`s and the unparsed files. `distribution` over function complexities; no `per_file`, no `limit`, no `over_limit`; `unparsed_files` identical to function length's
 - [ ] `measure_parse_metrics` takes a second `ToolIdentity` for complexity and returns file length, function length and cyclomatic complexity
-- [ ] Python: `python_adapter._collect_functions` sets `complexity` from Task 3. A complexity tool identity has the same name and version as `ast_tool_identity()` and its own `counting`: Task 3's decision-point text, plus "module-level code is not in any function and is not counted"
-- [ ] TypeScript: `typescript_length._extract_functions` sets `complexity` from Task 5, passing `_is_counted`. Same identity pattern beside `tree_sitter_tool_identity()`
+- [ ] Python complexity tool identity: same name and version as `ast_tool_identity()`, its own `counting`: Task 3's decision-point text, plus "module-level code is not in any function and is not counted"
+- [ ] TypeScript: same identity pattern beside `tree_sitter_tool_identity()`, `counting` from Task 5
 - [ ] Add `cyclomatic_complexity` to `PythonAdapter.metrics` and `TypeScriptAdapter.metrics`
-- [ ] Function length's `counting` text and values don't change (D1)
-- [ ] Success: 400's length tests pass, edited only for the two renames
+- [ ] Success: 400's length tests pass, edited only for the rename
 
-## Task 8: Complexity integration tests — Effort 2
+## Task 9: Complexity integration tests — Effort 2
 - [ ] Add to `test_python_length.py` and `test_typescript_length.py` (or a new `test_complexity.py`):
   - [ ] for a multi-file repo with methods, nested functions and lambdas (Python) and arrows and methods (TypeScript), complexity and function length have the same `distribution.count` and the same (path, qualified name, start line) set (Success Criterion 2)
   - [ ] a file with a parse error is in both measurements' `unparsed_files` and nowhere else; a `RecursionError` from deeply nested source is handled the same way (failure-mode table)
@@ -104,7 +111,7 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): record cyclomatic complexity on the function walk`
 
-## Task 9: Duplication pass (D3) — Effort 4
+## Task 10: Duplication pass (D3) — Effort 4
 - [ ] Create `snapshot/duplication.py` with module constants `DUPLICATION_WINDOW_TOKENS = 100` and `DUPLICATION_MAX_TOKENS = 4_000_000`
 - [ ] Define a `Tokenizer` type: file text in, ordered (token text, line number) pairs out. Comment and layout tokens are already dropped by the tokenizer
 - [ ] `measure_duplication(repo_root, files, language, tool, tokenizer, token_errors)` returns one `duplicated_lines` measurement:
@@ -118,7 +125,7 @@ pricedRounds: 1
 - [ ] Keep the hash step in a small module-level function so a test can force collisions
 - [ ] Success: module has no language-specific logic; under ~300 lines
 
-## Task 10: Duplication tests — Effort 3
+## Task 11: Duplication tests — Effort 3
 - [ ] `tests/metrology/snapshot/test_duplication.py`, using a whitespace-splitting test tokenizer over files written to `tmp_path`:
   - [ ] two files sharing a 100-token block report its lines in both; a 99-token block reports nothing (Success Criterion 4)
   - [ ] a block repeated in one file without overlap counts; a run of one repeated token (overlapping windows) doesn't
@@ -131,28 +138,28 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): add token-window duplication detection`
 
-## Task 11: Python tokenizer and duplication wiring (D3) — Effort 2
+## Task 12: Python tokenizer and duplication wiring (D3) — Effort 2
 - [ ] In `python_adapter.py`, add a tokenizer over `tokenize.generate_tokens`. The dropped token types (`COMMENT`, `NL`, `NEWLINE`, `INDENT`, `DEDENT`, `ENCODING`, `ENDMARKER`) are one module constant
 - [ ] Token errors are `tokenize.TokenError` and `SyntaxError` (which covers `IndentationError`)
-- [ ] `PythonAdapter.measure` calls `measure_duplication` with a duplication tool identity: same name and version as the ast identity, `counting` from Task 9
+- [ ] `PythonAdapter.measure` calls `measure_duplication` with a duplication tool identity: same name and version as the ast identity, `counting` from Task 10
 - [ ] Add `duplicated_lines` to `PythonAdapter.metrics`
 - [ ] Success: `python_adapter.py` stays under ~300 lines; if it would exceed, move the tokenizer into a new `snapshot/python_tokens.py` and update the slice design's module table
 
-## Task 12: Python duplication tests — Effort 2
+## Task 13: Python duplication tests — Effort 2
 - [ ] Add to `test_duplication.py` (or `test_python_duplication.py`), through `PythonAdapter` on a `snapshot_git_repo` repo:
   - [ ] two files with an identical function of over 100 tokens but different comments and blank lines report the function's lines in both
   - [ ] a file with an unterminated triple-quoted string and one with bad indentation are each in duplication's `unparsed_files` with a WARNING, while their function length is unaffected
-  - [ ] file length and function length values are identical to a run without duplication on the same repo (Success Criterion 12)
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): measure duplicated lines for Python`
 
-## Task 13: TypeScript tokenizer and duplication wiring (D3) — Effort 2
+## Task 14: TypeScript tokenizer and duplication wiring (D3) — Effort 2
 - [ ] In `typescript_length.py`, add a tokenizer over tree-sitter leaf nodes (no children), dropping types in a one-member module constant (`comment`). Line is the leaf's start row plus 1
 - [ ] An error-root tree raises `TypeScriptParseError`, as `_extract_functions` does, so a file unparsed for length is unparsed for duplication. Token errors are `TypeScriptParseError` and `MemoryError`
 - [ ] `TypeScriptAdapter.measure` calls `measure_duplication` with a duplication identity beside `tree_sitter_tool_identity()`
 - [ ] Add `duplicated_lines` to `TypeScriptAdapter.metrics`
+- [ ] Success: `typescript_length.py` stays under ~300 lines; if it would exceed, move the tokenizer into a new `snapshot/typescript_tokens.py` and update the slice design's module table
 
-## Task 14: TypeScript duplication tests — Effort 2
+## Task 15: TypeScript duplication tests — Effort 2
 - [ ] Through `TypeScriptAdapter` on a `snapshot_git_repo` repo:
   - [ ] two `.ts` files sharing a block of over 100 tokens, with different comments, report its lines in both; a `.tsx` file with a shared JSX block does too
   - [ ] a syntax-error file is in duplication's `unparsed_files` with a WARNING
@@ -160,27 +167,27 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): measure duplicated lines for TypeScript`
 
-## Task 15: Coverage config key and preflight validation (D6) — Effort 2
+## Task 16: Coverage config key and preflight validation (D6) — Effort 2
 - [ ] Add `metrology.coverage_report` (str, default None) to `CONFIG_KEYS` in `src/squadron/config/keys.py`, following the existing `metrology.*` entries
 - [ ] Create `snapshot/coverage.py` holding the key name constant and a path parser: rejects an empty value, an absolute path and any `..` segment, raising `SnapshotPreflightError` naming the value and the fix; returns the repo-relative path, or `None` when unset
 - [ ] `preflight.py` reads the key with `get_config(key, cwd=str(repo_root))` and calls the parser, importing both from `coverage.py`. The parsed value isn't added to `PreflightResult`; the reader resolves the key again at measurement time (D6)
 - [ ] Success: the key name string appears once in source, in `coverage.py`, apart from `CONFIG_KEYS`
 
-## Task 16: Config and preflight tests — Effort 1
+## Task 17: Config and preflight tests — Effort 1
 - [ ] Add to `test_preflight.py`: unset passes; `coverage.xml` and `build/cov.xml` pass; `/tmp/coverage.xml`, `../coverage.xml`, `a/../../x.xml` and an empty string each raise `SnapshotPreflightError` before any tool runs (Success Criterion 9); a path to a file that doesn't exist passes
 - [ ] The new `CONFIG_KEYS` entry has type str and default None
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): add metrology.coverage_report key and preflight check`
 
-## Task 17: Capture real Cobertura reports (Technical Requirements) — Effort 2
+## Task 18: Capture real Cobertura reports (Technical Requirements) — Effort 2
 - [ ] Store under `tests/metrology/fixtures/snapshot/` and add to its `README.md`, per file, the exact command, tool versions and source
 - [ ] coverage.py: in squadron, `uv run --with pytest-cov pytest --cov=src/squadron --cov-report=xml -q` on a small test subset (for example `tests/metrology/snapshot/`), keeping the report as it was written. The absolute `<source>` path is replaced with the existing `FIXTURE_ROOT_TOKEN` used by `read_fixture`, and the README says so
 - [ ] Istanbul: in a scratch directory outside squadron, create a vitest project with `@vitest/coverage-v8`, two `.ts` source files (one partly untested) and `coverage.reporter: ['cobertura']`; run `npx vitest run --coverage`; keep `coverage/cobertura-coverage.xml` with the same root-token substitution
-- [ ] Record in the README, from the captures: the root `version` of each, and how each writes `<source>` and `filename`. Task 18 parses what is recorded here
+- [ ] Record in the README, from the captures: the root `version` of each, and how each writes `<source>` and `filename`. Task 19 parses what is recorded here
 - [ ] Success: squadron's tree is clean apart from the new fixtures; the scratch project is removed
 - [ ] Commit: `test(metrology): add real Cobertura report fixtures`
 
-## Task 18: Cobertura reader (D4) — Effort 3
+## Task 19: Cobertura reader (D4) — Effort 3
 - [ ] In `coverage.py`, add a reading type: per repo-relative path, the set of coverable line numbers and the set with `hits > 0`; plus the report's root `version` and the report path
 - [ ] Parse with `xml.etree.ElementTree`:
   - [ ] each `<class filename=…>` is joined with each `<source>` and taken relative to the repo root with `tool_support.repo_relative`; entries that resolve outside the repo are dropped
@@ -188,8 +195,8 @@ pricedRounds: 1
 - [ ] Each problem returns a failure (not an exception) naming the report and the problem: malformed XML, a root other than `<coverage>`, no root `version`, a non-integer `number` or `hits`, an `OSError` reading the file
 - [ ] Success: no fallback version; a missing `version` is always a failure (D4)
 
-## Task 19: Cobertura reader tests — Effort 2
-- [ ] `tests/metrology/snapshot/test_coverage.py`, with the Task 17 fixtures rooted at a `tmp_path` repo:
+## Task 20: Cobertura reader tests — Effort 2
+- [ ] `tests/metrology/snapshot/test_coverage.py`, with the Task 18 fixtures rooted at a `tmp_path` repo:
   - [ ] coverage.py fixture: per-file coverable and covered counts match the report, and their totals equal the root `lines-valid` and `lines-covered` (Success Criterion 6)
   - [ ] Istanbul fixture: present, version `0.1`
   - [ ] a duplicated `<line>` entry is counted once; a `<source>` outside the repo drops its classes
@@ -197,18 +204,18 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): add Cobertura coverage report reader`
 
-## Task 20: Freshness check and `read_coverage` (D5, D6) — Effort 3
+## Task 21: Freshness check and `read_coverage` (D5, D6) — Effort 3
 - [ ] `read_coverage(repo_root)` in `coverage.py`, in this order:
   - [ ] key unset → `coverage_not_configured`
   - [ ] report file doesn't exist → `report_missing`, detail naming the path
   - [ ] `git ls-files -z` at the repo root via `run_git`; `None` or non-zero logs ERROR and raises `SnapshotIntegrityError` naming the call, as 400's git calls do
   - [ ] stat the report and every tracked file; an `OSError` on either is a failure naming the path, never fresh, never skipped
   - [ ] report mtime earlier than the newest tracked mtime → `report_stale`, detail naming the newest file
-  - [ ] otherwise parse with Task 18
+  - [ ] otherwise parse with Task 19
 - [ ] The result is either a reading or an absence (reason, detail); it holds no language. Each absence and failure logs at WARNING
 - [ ] Success: the only exception `read_coverage` raises is `SnapshotIntegrityError`
 
-## Task 21: Freshness tests — Effort 2
+## Task 22: Freshness tests — Effort 2
 - [ ] Add to `test_coverage.py`, on `snapshot_git_repo` repos with a gitignored report:
   - [ ] unset key → `coverage_not_configured`; key set to a missing file → `report_missing` (Success Criterion 5)
   - [ ] report written after the commit is fresh; `os.utime` setting one tracked file newer than the report → `report_stale`, detail naming that file
@@ -218,7 +225,7 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): add coverage report freshness check`
 
-## Task 22: Per-language coverage measurements (D4, D5) — Effort 2
+## Task 23: Per-language coverage measurements (D4, D5) — Effort 2
 - [ ] `coverage_measurements(reading, language, files)` returns `coverable_lines` and `covered_lines`:
   - [ ] an absence becomes both metrics absent with that reason and detail; a failure becomes both `tool_failed` via `tool_support.tool_failed`
   - [ ] `per_file` for every reported file in `files`, zeros included; files in `files` not in the report go in `tool_ignored_files` on both; report entries not in `files` are ignored
@@ -226,7 +233,7 @@ pricedRounds: 1
   - [ ] `ToolIdentity`: name `cobertura` (a module constant), version from the report, `counting` naming the report path, the D5 freshness rule and its gaps, that coverage depends on the report file and its mtime, and that Istanbul's fixed `0.1` hides a change of provider
 - [ ] Success: one reading builds both languages' measurements without re-reading the file
 
-## Task 23: Coverage measurement tests — Effort 2
+## Task 24: Coverage measurement tests — Effort 2
 - [ ] Add to `test_coverage.py`:
   - [ ] a reading covering some of `files` puts the rest in `tool_ignored_files` on both; a reported file with no hits has `0` in `covered_lines` and a non-zero `coverable_lines`
   - [ ] a reading with none of the language's files gives empty `per_file` and every file in `tool_ignored_files`
@@ -235,22 +242,23 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): build per-language coverage measurements`
 
-## Task 24: Adapter wiring for coverage — Effort 2
+## Task 25: Adapter wiring for coverage — Effort 2
 - [ ] `PythonAdapter.measure` and `TypeScriptAdapter.measure` each call `read_coverage(ctx.repo_root)` and `coverage_measurements(...)` with their own language and files. No cache, no change to `AdapterContext` (Data Flow)
 - [ ] Add `covered_lines` and `coverable_lines` to both adapters' `metrics`. `PythonAdapter.metrics` now equals the full `SnapshotMetric` set; keep it written out explicitly
 - [ ] Success: `registry.py`, `take.py` and `contract.py` are unchanged
 
-## Task 25: Snapshot-level tests — Effort 2
+## Task 26: Snapshot-level tests — Effort 2
 - [ ] Add to `test_take.py` (real adapters, `FakeToolRunner` scripted as 400's tests do, repos from `snapshot_git_repo`):
   - [ ] a Python+TypeScript repo with a fresh report covering files of both languages gives present coverage for each
   - [ ] a missing report gives `report_missing` on both languages, with its WARNING logged once per language
   - [ ] a stale report gives `report_stale` on both languages
   - [ ] two runs on one commit give identical JSON apart from `measured_at` (Success Criterion 11)
   - [ ] every language section holds all eight metrics
+  - [ ] after a snapshot with a fresh report, `git status --porcelain` is empty and the report's mtime is unchanged (read-only, Success Criterion 11)
 - [ ] Success: tests pass; full `tests/metrology/` passes; ruff and pyright clean
 - [ ] Commit: `feat(metrology): measure coverage in the Python and TypeScript adapters`
 
-## Task 26: Render lines (API Contracts) — Effort 2
+## Task 27: Render lines (API Contracts) — Effort 2
 - [ ] In `render.py`:
   - [ ] `cyclomatic_complexity` uses `_spread(..., 'function')` plus unparsed and tool text, like function length
   - [ ] `duplicated_lines`, `covered_lines`, `coverable_lines` use the existing "N in M file(s)" form
@@ -259,19 +267,19 @@ pricedRounds: 1
 - [ ] Success: tests pass; ruff and pyright clean
 - [ ] Commit: `feat(metrology): render complexity, duplication and coverage lines`
 
-## Task 27: Docs and CHANGELOG — Effort 1
+## Task 28: Docs and CHANGELOG — Effort 1
 - [ ] `docs/COMMANDS.md`: under `sq metrology snapshot`, the four new metrics with their definitions (one line each, pointing at `counting`), and `metrology.coverage_report` in the metrology config table, including that the report must be gitignored and fresh
 - [ ] `docs/COMMANDS.md` and the CHANGELOG bullet under Unreleased both state that snapshots from earlier versions are skipped and must be retaken
 - [ ] Commit: `docs: document snapshot complexity, duplication and coverage`
 
-## Task 28: Verification walkthrough — Effort 3
+## Task 29: Verification walkthrough — Effort 3
 - [ ] Run walkthrough steps 1–10 from the slice design against squadron, `../context-forge` and a scratch vitest project. Record each step's actual output summary in the slice design under a "Walkthrough Results" heading
 - [ ] Step 10 needs a 400-written snapshot in the store; if none exists, record that in the results and run the rest of the step
 - [ ] Any step that fails is a bug in this slice: fix it, add a regression test, rerun the step
 - [ ] Success: all steps match their expected structure; `git -C ../context-forge status --porcelain` empty afterwards; squadron's `.squadron.toml` key restored after steps 6 and 7; scratch project removed
 - [ ] Commit: `docs: record slice 401 walkthrough results`
 
-## Task 29: Final validation — Effort 1
+## Task 30: Final validation — Effort 1
 - [ ] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
 - [ ] Every new module is at ~300 lines or less (`wc -l src/squadron/metrology/snapshot/*.py`)
 - [ ] `git diff main -- src/squadron/metrology/snapshot_models.py` shows enum members only; `take.py`, `contract.py`, `files.py` and `store.py` show no diff
