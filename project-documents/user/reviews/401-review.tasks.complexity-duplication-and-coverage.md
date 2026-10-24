@@ -14,54 +14,55 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261023
 dateUpdated: 20261023
-reviewedSha: bc639c0d2b562a2ff1c94fec87aa165aa899dd25
+reviewedSha: 542cdfcbe991661fc2dea627265b9da360cb806f
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 2
-turns: 3
-promptTokens: 103738
-cachedTokens: 11222
-cacheWriteTokens: 92512
-completionTokens: 4618
-durationSeconds: 36.3
-costUsd: 0.418092
+toolCallsMade: 4
+turns: 5
+promptTokens: 277880
+cachedTokens: 181044
+cacheWriteTokens: 96828
+completionTokens: 5524
+durationSeconds: 44.2
+costUsd: 0.461406
 costBasis: provider
 runId: run-20261024-p5-b9ca268a
 squadronVersion: 0.23.7
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Wrong task references in Tasks 3 and 5 send the implementer to the wrong task"
-    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:56"
+    severity: pass
+    category: coverage
+    summary: "Success criteria traceability"
+    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
   - id: F002
-    severity: concern
-    category: test-sequencing
-    summary: "Task 2's `test_take.py` test goes stale as soon as later tasks add metrics"
-    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:44"
+    severity: pass
+    category: sequencing
+    summary: "Sequencing and test-with pattern"
+    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:42-269"
   - id: F003
     severity: concern
     category: task-sizing
-    summary: "Task 7 is overweight and has no checkpoint of its own"
-    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:88"
+    summary: "Task 10 bundles a refactor of 400's code with the whole duplication pass"
+    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:115-127"
   - id: F004
     severity: concern
-    category: scoping
-    summary: "Task 13 may push `typescript_length.py` past ~300 lines, and unlike Task 11 it has no fallback or success line"
-    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:149-153"
+    category: git-workflow
+    summary: "Final validation diffs against a hard-coded `main`"
+    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:286"
   - id: F005
     severity: note
-    category: coverage
-    summary: "Success Criterion 12 and the read-only property have thin direct coverage"
-    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:145"
+    category: task-definition
+    summary: "Task 5 has no Success line"
+    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:70-76"
   - id: F006
-    severity: pass
-    category: coverage
-    summary: "Success criteria trace to tasks, with no scope creep"
-    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    severity: note
+    category: task-definition
+    summary: "Task 8 doesn't name where the TypeScript complexity measurement is returned"
+    location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:97-104"
   - id: F007
-    severity: pass
-    category: sequencing
-    summary: "Sequencing and proportionality are sound"
+    severity: note
+    category: proportionality
+    summary: "Proportionality is acceptable"
     location: "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
 ---
 
@@ -72,93 +73,72 @@ findings:
 
 ## Findings
 
-### [CONCERN] Wrong task references in Tasks 3 and 5 send the implementer to the wrong task
+### [PASS] Success criteria traceability
 
-Task 3 says the exported text is "for the `counting` text in Task 5". Task 5 is the TypeScript decision-point count. The `counting` text is built in Task 7.
+Each success criterion maps to a task:
+- SC1–2: Tasks 8–9.
+- SC3: Tasks 4 and 6.
+- SC4: Tasks 11, 13 and 15.
+- SC5: Task 22.
+- SC6: Tasks 20 and 24.
+- SC7: Task 24.
+- SC8: Tasks 20 and 24.
+- SC9: Task 17.
+- SC10: Task 11.
+- SC11: Task 26.
+- SC12: Task 7.
 
-Task 5 has two matching errors:
-- It says `_is_counted` "is passed in by Task 6". Task 6 is the TypeScript complexity tests, and the wiring happens in Task 7.
-- It says its text is "for the `counting` text in Task 6". That should also be Task 7.
+Every row of the slice's failure-mode table has a test. These are the tokenizer errors, the token ceiling and `MemoryError`, `RecursionError`, malformed XML, `OSError` on stat, and `run_git` returning `None` or non-zero.
 
-A junior AI that follows these references literally will look in the wrong place. Change all three to Task 7.
+No task lacks a source in the slice, so I found no scope creep. Load tests and CI gating are not required. The slice states no NFR beyond the token ceiling, and Task 11 tests the ceiling by lowering the constant.
 
-### [CONCERN] Task 2's `test_take.py` test goes stale as soon as later tasks add metrics
+### [PASS] Sequencing and test-with pattern
 
-Task 2 adds a test asserting that all four new metrics are `metric_unsupported` for both languages. Task 7 then adds `cyclomatic_complexity` to both adapters' `metrics`. Tasks 11 and 13 add `duplicated_lines`, and Task 24 adds the coverage metrics. After Task 7 that test fails, and no later task says to update or remove it.
+The order is enum members, then the complexity counters, then `MeasuredFunction`, then the measurement. Duplication follows, then the config key, the Cobertura reader, freshness and the adapter wiring, and render and docs come last. There are no circular dependencies.
 
-The per-commit gate ("tests for the touched area") would then block the Task 8 commit. Either:
-- scope the Task 2 test to a throwaway fake adapter that claims no new metrics, or
-- add an explicit step in Tasks 7, 11, 13 and 24 to adjust or delete it.
+Task 2 handles the `PythonAdapter.metrics = frozenset(SnapshotMetric)` trap. I checked `typescript_adapter.py:22`. Its `metrics` is already an explicit set, so only the Python adapter needs the change.
 
-Task 25's "every language section holds all eight metrics" check could replace it.
+Task 18 captures the real report fixtures before Task 19 parses them. That follows the CLAUDE.md parser rule.
 
-### [CONCERN] Task 7 is overweight and has no checkpoint of its own
+### [CONCERN] Task 10 bundles a refactor of 400's code with the whole duplication pass
 
-Task 7 combines six changes:
-- the `FunctionLength` → `MeasuredFunction` rename
-- the `measure_length_metrics` → `measure_parse_metrics` rename
-- a new `complexity.py` module
-- a signature change taking a second `ToolIdentity`
-- Python wiring and a new tool identity
-- TypeScript wiring and a new tool identity
+Task 10 is rated effort 4, and it carries two kinds of work:
+- It extracts a shared read-and-decode helper from `lengths._measure_source`. That is a behavior-preserving change to 400's code, which Success Criterion 12 protects.
+- It builds the full hash and window index, the ceiling and `MemoryError` handling, and the `per_file` and `counting` output.
 
-It also changes the `metrics` sets of both adapters. It carries no commit, and its tests are deferred to Task 8.
+The Success line checks only module size and language-neutrality. It says nothing about 400's length tests still passing after the extraction. Nothing is committed or verified until Task 11.
 
-Split it in two:
-- **7a:** the renames plus `complexity.py` and the `measure_parse_metrics` signature, with the 400 length tests green and a commit.
-- **7b:** the Python and TypeScript wiring, with Task 8's tests.
+Fix: move the helper extraction into its own small task. Run 400's length tests after it, and make it a `refactor:` commit like Task 7. Alternatively, add "400's length tests pass unchanged" to Task 10's Success line.
 
-That leaves a safe checkpoint after the rename, which touches many call sites.
+### [CONCERN] Final validation diffs against a hard-coded `main`
 
-### [CONCERN] Task 13 may push `typescript_length.py` past ~300 lines, and unlike Task 11 it has no fallback or success line
+Task 30 runs `git diff main -- src/squadron/metrology/snapshot_models.py`. The Context Summary says the branch forks from the target, which is `cf config get git.integration_branch` or `main` if that is empty. CLAUDE.md says never to infer the target.
 
-Task 11 includes "if it would exceed, move the tokenizer into a new module and update the slice design's module table". Task 13 puts the tokenizer straight into `typescript_length.py`. That file already holds the function walk, the parser helper, `_is_counted` and `_extract_functions`, and Task 7 adds more to it. I did not check the file's current size.
+If an integration branch is set, `git diff main` also shows every unrelated commit on that branch. The enum-members-only and no-diff checks on `take.py`, `contract.py`, `files.py` and `store.py` then fail or mislead.
 
-Task 13 also has no `Success:` line, which every other implementation task has.
+Fix: diff against the target as read from config, or against the branch's fork point.
 
-Add a Success line that includes the line-count check and the same extraction fallback as Task 11.
+### [NOTE] Task 5 has no Success line
 
-### [NOTE] Success Criterion 12 and the read-only property have thin direct coverage
+Every other implementation task ends with a Success item. Task 5 doesn't. Its grammar node-name confirmation step is the riskiest part of the task, because a wrong node name would silently count zero.
 
-Task 12 asserts identical file-length and function-length values only for Python. For TypeScript the plan relies on 400's existing tests passing (Task 7). That is probably enough, but it is implicit.
+Suggested line: "constant node names confirmed against both grammars, and the module imports nothing from `typescript_length`". Task 6 does exercise the names later.
 
-No task asserts that the snapshot stays read-only (400 criterion 8, restated in Success Criterion 11). Task 25 covers determinism only. If 400's read-only test runs the real adapters, name it in Task 25. Otherwise add one assertion that the repo is unchanged.
+### [NOTE] Task 8 doesn't name where the TypeScript complexity measurement is returned
 
-### [PASS] Success criteria trace to tasks, with no scope creep
+Task 8 renames `measure_length_metrics` to `measure_parse_metrics` and adds complexity to its return. The TypeScript adapter's `measure()` currently returns `measure_typescript_lengths(ctx, files)` plus lint. Task 8 doesn't say that `measure_typescript_lengths` must pass the third measurement through.
 
-Each criterion maps to a task that tests it:
+`take_snapshot` raises if the measurements returned differ from `adapter.metrics`. A missed pass-through would fail Task 9's tests immediately. The cost is a short hunt for the cause, so one clause in Task 8 would help.
 
-| Criterion | Task |
-|---|---|
-| 1 | 7, 9, 11, 13 |
-| 2 | 8 |
-| 3 | 4, 6 |
-| 4 | 10, 14 |
-| 5 | 21 |
-| 6 | 19 |
-| 7 | 19, 23 |
-| 8 | 19 |
-| 9 | 16 |
-| 10 | 10 |
-| 11 | 25 |
-| 12 | 12 |
+### [NOTE] Proportionality is acceptable
 
-The technical and integration requirements map to Tasks 17, 26, 27 and 29. Every task traces to the design. There is no load-test requirement, so the NFR load-test and CI-gating checks don't apply. Merging is correctly left out of the task file.
-
-### [PASS] Sequencing and proportionality are sound
-
-Dependencies run forward with no cycles:
-- Fixtures (Task 17) come before the reader (Task 18).
-- The reader comes before freshness (Task 20), the measurements (Task 22) and the adapter wiring (Task 24).
-- Render, docs, the walkthrough and final validation come last.
-
-Commits fall at every test-bearing task from Task 2 to Task 29. A single task file for 29 tasks is proportionate to a slice that adds four metrics across two languages, and the test tasks stay within what the success criteria need.
+Thirty tasks in one file is a lot. It fits a slice that adds four metrics across two languages, with a new reader, a freshness rule and render, docs and walkthrough work. Tasks 4, 6, 11, 22 and 24 list many cases, but each traces to a decision or a failure-mode row, and the ones that share a pattern can be parametrized. I don't recommend merging or cutting any task.
 
 ### Run Digest
 
-- Response length: 5659 chars
+- Response length: 5393 chars
 - Response is newline-free: no
-- Tool calls made: 2
+- Tool calls made: 4
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -166,10 +146,10 @@ Commits fall at every test-bearing task from Task 2 to Task 29. A single task fi
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 3
-- Tokens — prompt / cached / cache write / completion / reasoning: 103738 / 11222 / 92512 / 4618 / not computed
-- Duration: 36.3 s
-- Cost: $0.42 (provider)
+- Turns: 5
+- Tokens — prompt / cached / cache write / completion / reasoning: 277880 / 181044 / 96828 / 5524 / not computed
+- Duration: 44.2 s
+- Cost: $0.46 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 7

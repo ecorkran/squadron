@@ -10,15 +10,16 @@ projectState: 0.24.0 released with slice 400 (sq metrology snapshot); slice 401 
 dateCreated: 20261023
 dateUpdated: 20261024
 status: not_started
-turns: 13
-promptTokens: 877165
-cachedTokens: 789673
-cacheWriteTokens: 87466
-completionTokens: 18241
-durationSeconds: 191.4
-costUsd: 1.222891
-usageRounds: 1
-pricedRounds: 1
+turns: 18
+promptTokens: 1412588
+cachedTokens: 1313080
+cacheWriteTokens: 99472
+completionTokens: 22916
+durationSeconds: 250.8
+costUsd: 1.51716
+usageRounds: 2
+pricedRounds: 2
+revision_number: 1
 ---
 
 # Tasks: Complexity, Duplication and Coverage
