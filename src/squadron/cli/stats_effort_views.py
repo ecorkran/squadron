@@ -226,7 +226,20 @@ def _artifact_spend(usage: ArtifactsUsageReport) -> str:
     for item in usage.by_kind:
         cost = UNREPORTED if item.cost_usd is None else format_usd(item.cost_usd)
         parts.append(f"{item.kind.value} {cost} ({item.priced_rounds} of {item.rounds} rounds)")
-    return f"artifact spend: {' · '.join(parts)} (floor)"
+    line = f"artifact spend: {' · '.join(parts)} (floor)"
+    return f"{line}\n{_model_spend(usage)}" if usage.by_model else line
+
+
+def _model_spend(usage: ArtifactsUsageReport) -> str:
+    """Stamped production cost per model; rounds stamped before the split are unattributed."""
+    parts = [
+        f"{item.model} {UNREPORTED if item.cost_usd is None else format_usd(item.cost_usd)} "
+        f"({item.rounds} rounds)"
+        for item in usage.by_model
+    ]
+    if usage.unattributed_rounds:
+        parts.append(f"no model recorded ({usage.unattributed_rounds} rounds)")
+    return f"by model: {' · '.join(parts)}"
 
 
 def _duration(value: timedelta | None) -> str:

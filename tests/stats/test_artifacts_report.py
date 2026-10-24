@@ -106,3 +106,18 @@ def test_report_needs_no_run_state(tmp_path: Path) -> None:
     _project(tmp_path)
     assert not (tmp_path / ".squadron").exists()
     assert len(artifacts_usage_report(tmp_path, None).rows) == 3
+
+
+def test_by_model_sums_shares_and_counts_unattributed_rounds(tmp_path: Path) -> None:
+    """#267: the design's two rounds predate the split; the tasks' rounds name models."""
+    write_doc(tmp_path, DESIGN_REL, _stamped(SLICE_FRONT))
+    split = (
+        "costUsd: 0.9\nusageRounds: 3\npricedRounds: 3\nusageByModel:\n"
+        "  opus: {rounds: 1, costUsd: 0.6}\n  sonnet: {rounds: 2, costUsd: 0.3}\n"
+    )
+    write_doc(tmp_path, TASKS_REL, _stamped(TASKS_FRONT, split))
+
+    report = artifacts_usage_report(tmp_path, None)
+
+    assert [(m.model, m.rounds) for m in report.by_model] == [("opus", 1), ("sonnet", 2)]
+    assert report.unattributed_rounds == 2

@@ -10,12 +10,18 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypeGuard
 
 from squadron.core.usage import UsageRecord, add_optional, add_optional_float
 from squadron.review.frontmatter_usage import record_from_frontmatter
+from squadron.review.model_share import (
+    UNKNOWN_MODEL,
+    USAGE_BY_MODEL_KEY,
+    ModelShare,
+    read_model_shares,
+)
 from squadron.review.run_cost import (
     KEY_CACHE_WRITE_TOKENS,
     KEY_CACHED_TOKENS,
@@ -50,12 +56,14 @@ class ArtifactUsage:
     """What an artifact cost to produce so far, over ``rounds`` dispatches.
 
     ``cost.cost_usd`` sums only the ``priced_rounds`` that had a cost; an unpriced round is
-    never counted as $0.
+    never counted as $0. ``by_model`` splits the rounds by the model that ran them (#267);
+    rounds stamped before it existed belong to no model, so its rounds may sum to less.
     """
 
     cost: RunCost
     rounds: int
     priced_rounds: int
+    by_model: Mapping[str, ModelShare] = field(default_factory=dict[str, ModelShare])
 
 
 def fold(prior: ArtifactUsage | None, record: UsageRecord) -> ArtifactUsage:
@@ -68,10 +76,13 @@ def fold(prior: ArtifactUsage | None, record: UsageRecord) -> ArtifactUsage:
         duration_seconds=add_optional_float(total.duration_seconds, record.duration_seconds),
         cost_usd=add_optional_float(total.cost_usd, record.cost_usd),
     )
+    model = record.model or UNKNOWN_MODEL
+    share = base.by_model.get(model, ModelShare(rounds=0, cost_usd=None, completion_tokens=None))
     return ArtifactUsage(
         cost=cost,
         rounds=base.rounds + 1,
         priced_rounds=base.priced_rounds + (0 if record.cost_usd is None else 1),
+        by_model={**base.by_model, model: share.plus(record)},
     )
 
 
@@ -80,6 +91,10 @@ def artifact_usage_fields(usage: ArtifactUsage) -> dict[str, object]:
     fields = {k: v for k, v in usage.cost.frontmatter_fields().items() if k != KEY_COST_BASIS}
     fields[USAGE_ROUNDS_KEY] = usage.rounds
     fields[PRICED_ROUNDS_KEY] = usage.priced_rounds
+    if usage.by_model:
+        fields[USAGE_BY_MODEL_KEY] = {
+            model: share.frontmatter_fields() for model, share in usage.by_model.items()
+        }
     return fields
 
 
@@ -105,7 +120,9 @@ def read_artifact_usage(path: Path, front: Mapping[str, object]) -> ArtifactUsag
         if value is not None and (isinstance(value, bool) or not isinstance(value, int | float)):
             return _malformed(path, key, value)
     cost = RunCost.from_record(record_from_frontmatter(path, front))
-    return ArtifactUsage(cost=cost, rounds=rounds, priced_rounds=priced)
+    return ArtifactUsage(
+        cost=cost, rounds=rounds, priced_rounds=priced, by_model=read_model_shares(path, front)
+    )
 
 
 def _is_int(value: object) -> TypeGuard[int]:

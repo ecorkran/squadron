@@ -51,10 +51,21 @@ class KindUsage:
 
 
 @dataclass(frozen=True)
+class ModelUsage:
+    """One model's stamped rounds across the artifacts, and the cost of its priced ones (#267)."""
+
+    model: str
+    cost_usd: float | None  # None when none of its rounds was priced; never $0
+    rounds: int
+
+
+@dataclass(frozen=True)
 class ArtifactsUsageReport:
     rows: tuple[ArtifactUsageRow, ...]
     by_kind: tuple[KindUsage, ...]  # only kinds with at least one stamped row
     skipped: int  # unreadable files
+    by_model: tuple[ModelUsage, ...]  # costliest first
+    unattributed_rounds: int  # stamped before the per-model split existed
 
     def to_json_dict(self) -> dict[str, object]:
         return to_json_dict(self)
@@ -76,7 +87,14 @@ def artifacts_usage_report(project_root: Path, slice_filter: str | None) -> Arti
             row = _row(path, kind, slice_index, front)
             if row is not None:
                 rows.append(row)
-    return ArtifactsUsageReport(rows=tuple(rows), by_kind=_by_kind(rows), skipped=skipped)
+    by_model = _by_model(rows)
+    return ArtifactsUsageReport(
+        rows=tuple(rows),
+        by_kind=_by_kind(rows),
+        skipped=skipped,
+        by_model=by_model,
+        unattributed_rounds=sum(r.usage.rounds for r in rows) - sum(m.rounds for m in by_model),
+    )
 
 
 def _read_front(path: Path) -> Mapping[str, object] | None:
@@ -99,6 +117,17 @@ def _row(
         return None
     usage = read_artifact_usage(path, front)
     return None if usage is None else ArtifactUsageRow(path, kind, slice_index, usage)
+
+
+def _by_model(rows: list[ArtifactUsageRow]) -> tuple[ModelUsage, ...]:
+    costs: dict[str, float | None] = {}
+    rounds: dict[str, int] = {}
+    for row in rows:
+        for model, share in row.usage.by_model.items():
+            costs[model] = add_optional_float(costs.get(model), share.cost_usd)
+            rounds[model] = rounds.get(model, 0) + share.rounds
+    totals = [ModelUsage(model, costs[model], rounds[model]) for model in rounds]
+    return tuple(sorted(totals, key=lambda m: (-(m.cost_usd or 0.0), m.model)))
 
 
 def _by_kind(rows: list[ArtifactUsageRow]) -> tuple[KindUsage, ...]:
