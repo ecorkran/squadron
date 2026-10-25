@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261024
 
+### Slice 402: Code-Review Normalization and Ingest — Task Breakdown Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md`, 29 tasks, test-with ordering, one commit per implementation and test pair.
+- Order: `AuditCategory` move to `core/finding_categories.py` → template flag → `code.yaml` vocabulary and sync test → `normalize_category` → model fields, client hook, frontmatter → findings-addressed mixed-round test → record models and store → read-side alias table → fixtures, ingest module, CLI → walkthrough 1–3, CHANGELOG, live step 4.
+- Ingest fixtures copy real frontmatter from `103-review.code.cli-foundation.md` (no `reviewedSha`), the 947 code review, the PR #116 review and `0-review.code.review-1.md`.
+- `review_path` is relative to `--cwd` when inside it, else absolute; identity's `_relative_review_path` falls back to the bare filename, so ingest doesn't reuse it.
+
 ### Release 0.24.1
 
 - **Contents:** slice 401 (complexity, duplication and coverage metrics); fixes #256, #265, #266, #267, and the non-interactive checkpoint warning text.
