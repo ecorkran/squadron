@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2] - 20261025
+
 ### Added
 
 - `sq squash slice|tasks|arch|plan <index>` collapses a planning artifact's create/review/revise commits into one commit, with a backup tag and `--dry-run`. The built-in planning pipelines (P4, P5, P45, P456, P56, slices-plan, tasks-plan) now do this after each revise loop.

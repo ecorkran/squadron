@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261025
 
+### Release 0.24.2
+
+- **Contents:** slice 948 (`sq squash slice|tasks|arch|plan`, squash step in the planning pipelines; fixes #257, #258) and `sq metr` shorthand.
+
 ### Slice 948: Squash Planning Commit Sets — Implementation Complete (Phase 6)
 
 - Branch `948-slice.squash-planning-commit-sets-command-and-pipeline-action`. New: `pipeline/squash.py` (`plan_squash`, `apply_squash`, `check_squash_scope`), `sq squash`, `squash` step/action/renderer, step after every planning loop in P4, P5, P45, P456, P56, `slices-plan`, `tasks-plan`. Part B: `sq metr` hidden mount, own commit.
