@@ -12,7 +12,9 @@ from contextlib import AbstractContextManager
 from pathlib import Path
 from unittest.mock import patch
 
+import click
 import pytest
+import typer
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
@@ -372,11 +374,8 @@ class TestMetrShorthand:
         assert short.output == full.output
 
     def test_root_help_shows_metrology_and_hides_metr(self) -> None:
-        result = runner.invoke(app, ["--help"])
-        tokens = [
-            line.strip(" │|").split(maxsplit=1)[0]
-            for line in result.output.splitlines()
-            if line.strip(" │|")
-        ]
-        assert "metrology" in tokens
-        assert "metr" not in tokens
+        """Read the registration, not ``--help`` text: CI forces colour, which breaks text parsing."""
+        root = typer.main.get_command(app)
+        assert isinstance(root, click.Group)
+        assert root.commands["metrology"].hidden is False
+        assert root.commands["metr"].hidden is True
