@@ -17,6 +17,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
 from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
@@ -117,35 +118,6 @@ class GraduatedConfig(BaseModel):
     artifact_level: ArtifactLevel
     evidence: EvidenceSnapshot
     graduated_at: datetime
-
-
-class AuditCategory(StrEnum):
-    """The closed issue-class vocabulary audit findings normalize into (323).
-
-    Nine values mirror the audit skill's nine prose dimensions; ``OTHER`` is
-    the tenth and is **load-bearing, not a dumping ground**. A finding whose
-    category the model invents outside this vocabulary normalizes to
-    ``OTHER`` with its original string retained on
-    ``AuditFinding.raw_category`` — nothing is discarded. A rising ``other``
-    share is evidence the vocabulary does not fit a codebase, which the
-    baseline report surfaces rather than hides.
-
-    The skill file enumerates these same ten values. That duplication spans
-    a process boundary (a markdown prompt and a Python enum cannot import
-    from each other) and is held in sync by
-    ``tests/metrology/test_audit_skill_sync.py``, so drift fails CI.
-    """
-
-    ARCHITECTURAL_DECAY = "architectural-decay"
-    CONSISTENCY_ROT = "consistency-rot"
-    TYPE_CONTRACT_DEBT = "type-contract-debt"
-    TEST_DEBT = "test-debt"
-    DEPENDENCY_CONFIG_DEBT = "dependency-config-debt"
-    PERFORMANCE_RESOURCE = "performance-resource"
-    ERROR_HANDLING_OBSERVABILITY = "error-handling-observability"
-    SECURITY_HYGIENE = "security-hygiene"
-    DOCUMENTATION_DRIFT = "documentation-drift"
-    OTHER = "other"
 
 
 class AuditSeverity(StrEnum):
