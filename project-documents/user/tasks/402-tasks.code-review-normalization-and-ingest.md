@@ -9,8 +9,22 @@ dependencies:
 projectState: 0.24.1 released with slice 401 merged; slice 402 design complete, all
   decisions decided
 dateCreated: 20261024
-dateUpdated: 20261024
+dateUpdated: 20261025
 status: not_started
+turns: 19
+promptTokens: 1101296
+cachedTokens: 1030591
+cacheWriteTokens: 70669
+completionTokens: 15887
+durationSeconds: 161.7
+costUsd: 1.08966
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 1.0896601000000001
+    completionTokens: 15887
 ---
 
 # Tasks: Code-Review Normalization and Ingest
