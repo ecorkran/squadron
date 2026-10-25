@@ -59,6 +59,10 @@ permission_mode: bypassPermissions
 model: sonnet
 setting_sources: [project]
 
+# Findings carry a category from the closed vocabulary below; the review client
+# normalizes what the model returns (slice 402). Other templates leave this unset.
+normalize_categories: true
+
 inputs:
   required: []
   optional:

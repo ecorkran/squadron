@@ -57,6 +57,8 @@ class ReviewTemplate:
     diff_exclude_patterns: list[str] | None = None
     tool_exclude_patterns: list[str] | None = None
     judge: dict[str, object] | None = None
+    # Opt-in write-time category normalization (402 D3). Only the code template sets it.
+    normalize_categories: bool = False
 
     # Prompt construction — exactly one of these is set (validated at load time)
     prompt_template: str | None = None
@@ -115,6 +117,15 @@ def _resolve_setting_sources(raw: object) -> list[str]:
     if not isinstance(raw, list):
         raise TemplateValidationError(f"setting_sources must be a list, got {raw!r}")
     return [str(source) for source in cast(list[object], raw)]
+
+
+def _resolve_normalize_categories(raw: object) -> bool:
+    """Absent → False; anything but a YAML bool is an error, never coerced."""
+    if raw is None:
+        return False
+    if not isinstance(raw, bool):
+        raise TemplateValidationError(f"normalize_categories must be true or false, got {raw!r}")
+    return raw
 
 
 def load_template(path: Path) -> ReviewTemplate:
@@ -179,6 +190,7 @@ def load_template(path: Path) -> ReviewTemplate:
             else None
         ),
         judge=dict(judge_raw) if isinstance(judge_raw, dict) else None,  # type: ignore[arg-type]
+        normalize_categories=_resolve_normalize_categories(data.get("normalize_categories")),
         prompt_template=(str(data["prompt_template"]) if "prompt_template" in data else None),
         prompt_builder=builder,
     )
