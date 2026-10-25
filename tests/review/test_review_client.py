@@ -1729,3 +1729,125 @@ async def test_pricing_warned_set_is_the_callers() -> None:
         )
 
     assert resolve.call_args.args[3] is run_warned
+
+
+_TAGGED_REVIEW = """\
+**Verdict:** CONCERNS
+
+## Findings
+
+### [CONCERN] Canonical
+category: security-hygiene
+location: src/a.py:1
+A secret is hardcoded.
+
+### [CONCERN] Non canonical
+category: Test Debt
+location: src/b.py:2
+No test covers the branch.
+
+### [CONCERN] Out of vocabulary
+category: error-handling
+location: src/c.py:3
+The exception is swallowed.
+
+### [CONCERN] Untagged
+location: src/d.py:4
+Something else is wrong.
+"""
+
+_UNTAGGED_REVIEW = """\
+**Verdict:** CONCERNS
+
+## Findings
+
+### [CONCERN] First
+location: src/a.py:1
+Problem one.
+
+### [CONCERN] Second
+location: src/b.py:2
+Problem two.
+"""
+
+_NO_FINDINGS_REVIEW = "**Verdict:** PASS\n\n## Findings\n"
+
+
+async def _review(response: str, *, name: str, normalize: bool) -> ReviewResult:
+    template = _make_template()
+    template.name = name
+    template.normalize_categories = normalize
+    mock_provider = _make_mock_provider(agent=_make_mock_agent(response))
+    with (
+        patch(f"{_P}.get_profile") as mock_get_profile,
+        patch(f"{_P}.get_provider", return_value=mock_provider),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        from squadron.providers.profiles import ProviderProfile
+
+        mock_get_profile.return_value = ProviderProfile(
+            name="openai", provider="openai", api_key_env="OPENAI_API_KEY"
+        )
+        return await run_review_with_profile(
+            template, {"input": "file.md"}, profile="openai", model="gpt-4o"
+        )
+
+
+def _category_warnings(caplog: pytest.LogCaptureFixture) -> list[logging.LogRecord]:
+    return [r for r in caplog.records if r.name == "squadron.review.categories"]
+
+
+class TestCategoryNormalization:
+    """The parse hook normalizes categories only for templates that opt in (slice 402)."""
+
+    @pytest.mark.asyncio
+    async def test_flagged_template_normalizes_every_finding(self) -> None:
+        result = await _review(_TAGGED_REVIEW, name="code", normalize=True)
+
+        assert [f.category for f in result.findings] == ["security-hygiene", "test-debt", "other", None]
+        assert [f.raw_category for f in result.findings] == [None, "Test Debt", "error-handling", None]
+        assert result.categories_normalized is True
+
+    @pytest.mark.asyncio
+    async def test_unflagged_template_keeps_the_raw_strings(self) -> None:
+        result = await _review(_TAGGED_REVIEW, name="arch", normalize=False)
+
+        assert [f.category for f in result.findings] == [
+            "security-hygiene",
+            "Test Debt",
+            "error-handling",
+            None,
+        ]
+        assert all(f.raw_category is None for f in result.findings)
+        assert result.categories_normalized is False
+
+    @pytest.mark.asyncio
+    async def test_no_tags_at_all_warns_and_never_becomes_other(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.review.categories"):
+            result = await _review(_UNTAGGED_REVIEW, name="code", normalize=True)
+
+        assert [f.category for f in result.findings] == [None, None]
+        assert "Template 'code'" in caplog.text
+        assert "none of its 2 findings" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_review_with_no_findings_logs_no_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.review.categories"):
+            result = await _review(_NO_FINDINGS_REVIEW, name="code", normalize=True)
+
+        assert result.findings == []
+        assert result.categories_normalized is True
+        assert _category_warnings(caplog) == []
+
+    @pytest.mark.asyncio
+    async def test_a_review_with_one_tagged_finding_logs_no_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.review.categories"):
+            await _review(_TAGGED_REVIEW, name="code", normalize=True)
+
+        assert _category_warnings(caplog) == []

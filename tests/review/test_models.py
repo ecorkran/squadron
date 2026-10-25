@@ -245,6 +245,40 @@ class TestReviewResult:
         assert d["findings"][0]["category"] == "naming"
         assert d["findings"][0]["location"] == "src/x.py:1"
 
+    def test_to_dict_carries_categories_normalized_and_raw_category(self) -> None:
+        r = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Normalized",
+                    description="Desc.",
+                    category="other",
+                    raw_category="error-handling",
+                ),
+                ReviewFinding(severity=Severity.CONCERN, title="Plain", description="Desc."),
+            ],
+            raw_output="",
+            template_name="code",
+            input_files={},
+            categories_normalized=True,
+        )
+
+        d = r.to_dict()
+
+        assert d["categories_normalized"] is True
+        assert d["findings"][0]["raw_category"] == "error-handling"
+        assert d["findings"][1]["raw_category"] is None
+        assert d["structured_findings"][0]["raw_category"] == "error-handling"
+        assert d["structured_findings"][1]["raw_category"] is None
+
+    def test_categories_normalized_defaults_to_false_in_the_json(self) -> None:
+        r = ReviewResult(
+            verdict=Verdict.PASS, findings=[], raw_output="", template_name="arch", input_files={}
+        )
+
+        assert r.to_dict()["categories_normalized"] is False
+
     def test_to_dict_has_structured_findings(self) -> None:
         r = ReviewResult(
             verdict=Verdict.CONCERNS,
