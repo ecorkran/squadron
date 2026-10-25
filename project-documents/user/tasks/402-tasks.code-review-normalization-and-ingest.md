@@ -63,7 +63,7 @@ revision_number: 1
 - [ ] Success: tests pass
 
 ## Task 5: `code.yaml` category vocabulary block (D3, Mitigation Strategies) — Effort 2
-- [ ] Add a block to the `code.yaml` prompt, placed before the output structure block, that starts with a line `Category vocabulary:` and lists all eleven `ReviewCategory` values, each backticked with a one-line definition. Take the ten audit definitions from the tech-debt-audit skill that `test_audit_skill_sync.py` reads. `correctness`: the code behaves wrongly (wrong result, broken contract, crash)
+- [ ] Add a block to the `code.yaml` prompt, placed before the output structure block, that starts with a line `Category vocabulary:` and lists all eleven `ReviewCategory` values, each backticked with a one-line definition. The definitions contain no backticked tokens other than the category value (Task 6 compares every backticked token in the block). Take the ten audit definitions from the tech-debt-audit skill that `test_audit_skill_sync.py` reads. `correctness`: the code behaves wrongly (wrong result, broken contract, crash)
 - [ ] Make the per-finding `category:` tag required in the prompt, following the arch template's `category:` tag pattern
 - [ ] The output structure block's category fill slot is the placeholder `<one value from the category vocabulary>`. No concrete category value appears in or near any fill slot (CLAUDE.md "Hallucination traps")
 - [ ] Success: `tests/review/test_builtin_code.py` passes; fix any assertion that pinned the old prompt text only where the prompt text itself changed
@@ -194,7 +194,7 @@ revision_number: 1
 
 ## Task 24: Ingest tests — Effort 3
 - [ ] Create `tests/metrology/test_review_ingest.py` over the Task 21 fixtures with a `MetrologyStore` in `tmp_path`:
-  - [ ] the four real code reviews and the new-format file are ingested; the arch review is `not-code-review`; the UNKNOWN file is `unknown-verdict`
+  - [ ] the four real code reviews and the new-format file are ingested; the arch review counts in `skipped_not_code` (label `not-code-review`); the UNKNOWN file counts in `skipped_unknown_verdict` (label `unknown-verdict`)
   - [ ] malformed and missing-`verdict` files are in `failed`, each logs a WARNING with its path (`caplog`), and the other files are still written
   - [ ] the 947 record has `slice_index == 947`, `commit_sha` equal to the file's `reviewedSha`, `error-handling` mapped to `error-handling-observability`, `read_side_mapped` true
   - [ ] the 103 record has `commit_sha is None`; the PR and `0-review` records have `slice_index is None`
@@ -213,7 +213,7 @@ revision_number: 1
 - [ ] Create `squadron/cli/commands/metrology_review_ingest.py` with `register_review_ingest_command(metrology_app)`, following `metrology_snapshot.py`: `PATHS` arguments (optional, multiple) and `--cwd`
 - [ ] Mount it in `cli/commands/metrology.py` beside `register_snapshot_command`
 - [ ] Derive the project id first; `MetrologyIdentityError` → error, exit 1, nothing written
-- [ ] Print the three summary lines from API Contracts, then each failed path with its reason. Zero files found → `Ingested 0`, a WARNING naming the directory, exit 0
+- [ ] Print the three summary lines from API Contracts (the counters print under the labels `not-code-review` and `unknown-verdict`), then each failed path with its reason. Zero files found → `Ingested 0`, a WARNING naming the directory, exit 0
 - [ ] Exit codes per the Data Flow failure-mode table. On `MetrologyStoreError`, print the counts from the result object it passed in (what was written so far) and the error, exit 1
 - [ ] Success: `sq metrology ingest-reviews --help` lists `PATHS` and `--cwd`
 
