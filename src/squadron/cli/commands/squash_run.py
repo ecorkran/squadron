@@ -15,8 +15,10 @@ import typer
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.git_ops import GitEnvironmentError, read_integration_target
 from squadron.pipeline.squash import (
+    SHORT_SHA_LENGTH,
     SquashKind,
     SquashPlan,
+    SquashRefusedError,
     SquashRewriteError,
     SquashTarget,
     apply_squash,
@@ -24,7 +26,6 @@ from squadron.pipeline.squash import (
 )
 
 _logger = logging.getLogger(__name__)
-_SHORT = 8
 
 
 def squash_run(
@@ -51,8 +52,13 @@ def squash_run(
             _print_dry_run(squash)
             return
         new_sha = apply_squash(squash, cwd)
-    except (ValueError, FileNotFoundError, SquashRewriteError) as exc:
-        # Refusals, unknown slices or initiatives and failed rewrites are logged where they happen.
+    except (SquashRefusedError, SquashRewriteError) as exc:
+        # Already logged where they happen (WARNING for a refusal, ERROR for a failed rewrite).
+        print(f"Error: {exc}", file=sys.stderr)
+        raise typer.Exit(code=1) from None
+    except (ValueError, FileNotFoundError) as exc:
+        # The slice is not in cf's plan, or the initiative has no such document.
+        _logger.warning("squash: cannot resolve %s %d: %s", kind, index, exc)
         print(f"Error: {exc}", file=sys.stderr)
         raise typer.Exit(code=1) from None
     except (GitEnvironmentError, ContextForgeError) as exc:
@@ -61,7 +67,7 @@ def squash_run(
         print(f"Error: {exc}", file=sys.stderr)
         raise typer.Exit(code=1) from None
 
-    print(f"squashed {len(squash.commits)} commits into {new_sha[:_SHORT]}")
+    print(f"squashed {len(squash.commits)} commits into {new_sha[:SHORT_SHA_LENGTH]}")
     print(f"backup tag: {squash.backup_tag}")
     print(f"remove it later with: git tag -d {squash.backup_tag}")
 
@@ -69,7 +75,7 @@ def squash_run(
 def _print_dry_run(squash: SquashPlan) -> None:
     print(f"run of {len(squash.commits)} commits (oldest first):")
     for commit in squash.commits:
-        print(f"  {commit.sha[:_SHORT]} {commit.subject}")
+        print(f"  {commit.sha[:SHORT_SHA_LENGTH]} {commit.subject}")
     print(f"surviving message: {squash.commits[0].subject}")
     print(f"backup tag: {squash.backup_tag}")
     print("dry run: nothing rewritten")

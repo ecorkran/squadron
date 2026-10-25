@@ -57,8 +57,10 @@ class SquashAction:
             SliceNotInPlanError,
             FileNotFoundError,
         ) as exc:
-            # This step failed; environment faults (GitEnvironmentError) raise past here
-            # and end the run.
+            # This step failed; the next item may still succeed. Environment faults raise
+            # past here and end the run, as they do for branch and commit: git that
+            # cannot answer (GitEnvironmentError, which also wraps a cf failure to read
+            # the target) and cf failing outright (ContextForgeError).
             return self._failure(str(exc))
         return ActionResult(success=True, action_type=self.action_type, outputs=outputs)
 

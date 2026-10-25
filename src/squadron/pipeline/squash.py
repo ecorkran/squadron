@@ -30,7 +30,7 @@ from squadron.review.persistence import CfClientProtocol
 _logger = logging.getLogger(__name__)
 
 BACKUP_TAG_PREFIX = "squash-backup/"
-_SHORT_SHA_LENGTH = 8
+SHORT_SHA_LENGTH = 8  # backup tags and printed shas use the same length
 _MINIMUM_RUN = 2
 
 
@@ -82,6 +82,7 @@ class SquashPlan:
     commits: tuple[RunCommit, ...]  # oldest first
     survivor: str  # the oldest commit: its message and author are kept (D5)
     parent: str  # the commit the run starts on; the soft reset target
+    head: str  # HEAD at plan time; apply refuses if it has moved
     tree: str  # HEAD^{tree} at plan time; the new commit must have it
     backup_tag: str
     tag_exists: bool  # the backup tag already points at HEAD (a rerun)
@@ -89,7 +90,7 @@ class SquashPlan:
 
 def backup_tag_name(target: SquashTarget, head_sha: str) -> str:
     """The backup tag for squashing ``target`` at ``head_sha`` (D4)."""
-    return f"{BACKUP_TAG_PREFIX}{target.kind}-{target.index}-{head_sha[:_SHORT_SHA_LENGTH]}"
+    return f"{BACKUP_TAG_PREFIX}{target.kind}-{target.index}-{head_sha[:SHORT_SHA_LENGTH]}"
 
 
 def plan_squash(
@@ -120,6 +121,7 @@ def plan_squash(
         commits=commits,
         survivor=oldest_sha,
         parent=parent.sha,
+        head=head,
         tree=_git(["rev-parse", "HEAD^{tree}"], cwd).strip(),
         backup_tag=tag,
         tag_exists=parent.tag_exists,
@@ -145,8 +147,10 @@ def apply_squash(plan: SquashPlan, cwd: Path) -> str:
     Raises:
         SquashRewriteError: the rewrite failed; HEAD was restored to the backup tag
             unless the error text says the restore failed too.
+        SquashRefusedError: HEAD moved or the tree got dirty since planning; nothing touched.
         GitEnvironmentError: git could not create the backup tag.
     """
+    _check_unchanged_since_plan(plan, cwd)
     if plan.tag_exists:
         _logger.info("squash: reusing existing backup tag %s at HEAD", plan.backup_tag)
     else:
@@ -168,6 +172,19 @@ def apply_squash(plan: SquashPlan, cwd: Path) -> str:
     return _git(["rev-parse", "HEAD"], cwd).strip()
 
 
+def _check_unchanged_since_plan(plan: SquashPlan, cwd: Path) -> None:
+    """Refuse if HEAD moved or the tree got dirty since ``plan_squash`` checked them.
+
+    The restore path runs ``reset --hard``, so it must only ever discard the squash itself.
+    """
+    head = _git(["rev-parse", "HEAD"], cwd).strip()
+    if head != plan.head:
+        moved = f"{plan.head[:SHORT_SHA_LENGTH]} -> {head[:SHORT_SHA_LENGTH]}"
+        _refuse(f"HEAD moved since the squash was planned ({moved}); nothing rewritten")
+    if _git(["status", "--porcelain"], cwd).strip():
+        _refuse("the working tree changed since the squash was planned; nothing rewritten")
+
+
 @dataclass(frozen=True)
 class _Checked:
     """What a passed refusal check learned."""
@@ -183,7 +200,7 @@ def _check_refusals(oldest_sha: str, head: str, tag: str, target_branch: str, cw
     parents = _git(["rev-list", "--parents", "-n", "1", oldest_sha], cwd).split()
     if len(parents) < 2:
         _refuse(
-            f"the run reaches the root commit {oldest_sha[:_SHORT_SHA_LENGTH]}; no parent to reset to"
+            f"the run reaches the root commit {oldest_sha[:SHORT_SHA_LENGTH]}; no parent to reset to"
         )
     branch = current_branch(str(cwd))
     if branch != target_branch:

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 
 import pytest
 
+import squadron.pipeline.squash as squash_module
+from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.squash import SquashKind, SquashRefusedError, plan_squash
+from squadron.review.git_utils import run_git
 from tests.conftest import run_test_git
 from tests.pipeline.commit_fixtures import (
     ARCH_FILE,
@@ -227,3 +231,18 @@ def test_backup_tag_at_head_is_reused(temp_git_repo: Path) -> None:
 
     assert again is not None
     assert again.tag_exists is True
+
+
+def test_git_that_cannot_answer_raises_environment_error(
+    temp_git_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    planning_run(temp_git_repo, 2)
+
+    def time_out_tag_lookup(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+        if args[:3] == ["rev-parse", "-q", "--verify"]:
+            return None
+        return run_git(args, cwd=cwd)
+
+    monkeypatch.setattr(squash_module, "run_git", time_out_tag_lookup)
+    with pytest.raises(GitEnvironmentError, match="timed out or could not run"):
+        _plan(temp_git_repo)
