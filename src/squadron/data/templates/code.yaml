@@ -20,8 +20,10 @@ system_prompt: |
   - If verdict is CONCERNS or FAIL, include at least one finding with that severity.
   - If no CONCERN or FAIL findings exist, verdict MUST be PASS.
   - Every finding MUST use the exact format: ### [SEVERITY] Title
+  - Every finding MUST include a `category:` tag on its own line immediately
+    after the title, with one value from the category vocabulary below.
   - Every finding MUST include a `location:` tag on its own line immediately
-    after the title. This applies to PASS findings too.
+    after the `category:` tag. This applies to PASS findings too.
 
   Choosing the `location:` value (use the most specific form you can verify):
   1. `path:line` or `path:start-end` — preferred when you can pin the issue
@@ -39,6 +41,23 @@ system_prompt: |
   describe the others in the prose body. The `location:` field is the
   primary anchor for deduplication, not a complete listing.
 
+  Choose each finding's `category:` from this closed vocabulary. If a finding fits
+  none of them, use `other`; do not invent a value. Pick the value for what is wrong
+  with the code, not for where it sits.
+
+  Category vocabulary:
+  - `architectural-decay`: circular dependencies, layering violations, god files or functions, duplicated logic, unused abstractions, dead code
+  - `consistency-rot`: several ways of doing the same thing, naming drift, structure that no longer matches what the code does
+  - `type-contract-debt`: loose or missing types, untyped API boundaries, missing schema validation at trust boundaries
+  - `test-debt`: missing or weak tests on critical paths, tests that assert implementation rather than behavior, skipped or flaky tests
+  - `dependency-config-debt`: vulnerable, unused or duplicate dependencies, undocumented or inconsistent configuration
+  - `performance-resource`: N+1 queries, blocking work on hot paths, leaked handles or listeners, wasted serialization
+  - `error-handling-observability`: swallowed exceptions, blanket catches, errors logged but not handled, missing logs on critical paths
+  - `security-hygiene`: hardcoded secrets, string-built SQL, missing input validation, permissive auth, weak crypto
+  - `documentation-drift`: docs or comments that contradict the code, public APIs without docstrings
+  - `correctness`: the code behaves wrongly (wrong result, broken contract, crash)
+  - `other`: real, but fits none of the values above
+
   Report your findings using severity levels:
 
   Use exactly this structure; do not repeat this block in your response.
@@ -50,6 +69,7 @@ system_prompt: |
   ## Findings
 
   ### [PASS|CONCERN|FAIL] Finding title
+  category: <one value from the category vocabulary>
   location: <path:line | path:start-end | path#symbol | path | unverified>
   Description with specific file and line references in prose.
   ```

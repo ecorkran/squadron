@@ -27,12 +27,7 @@ import pytest
 from squadron.metrology.audit import INDEPENDENT_RUN_MARKER
 from squadron.metrology.audit_models import AuditCategory
 from squadron.skills.resolver import _resolve_bundled  # pyright: ignore[reportPrivateUsage]
-
-#: The vocabulary is enumerated in the skill's category table as backticked
-#: kebab-case values. Matching backticked tokens (rather than a fixed table
-#: layout) keeps this lenient about formatting: reflowing the table, or
-#: switching it to a bullet list, must not break the guard.
-_BACKTICKED = re.compile(r"`([a-z][a-z-]*[a-z])`")
+from tests.metrology.sync_helpers import BACKTICKED
 
 
 @pytest.fixture
@@ -51,7 +46,7 @@ def test_category_vocabulary_matches_enum(skill_text: str) -> None:
     adding one to the enum without syncing the fork, both break it.
     """
     expected = {member.value for member in AuditCategory}
-    found = set(_BACKTICKED.findall(skill_text))
+    found = set(BACKTICKED.findall(skill_text))
 
     missing = expected - found
     assert not missing, (
@@ -63,7 +58,7 @@ def test_category_vocabulary_matches_enum(skill_text: str) -> None:
     # direction is scoped to the category table itself.
     table = skill_text.split("### Category vocabulary", 1)
     assert len(table) == 2, "skill file has no '### Category vocabulary' section"
-    table_values = set(_BACKTICKED.findall(table[1].split("## Phase 3", 1)[0]))
+    table_values = set(BACKTICKED.findall(table[1].split("## Phase 3", 1)[0]))
     extra = table_values - expected
     assert not extra, (
         f"skill file enumerates categories absent from AuditCategory: {sorted(extra)}. "
