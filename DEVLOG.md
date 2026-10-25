@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261025
 
+### Release 0.24.5
+
+- **Contents:** fix #271: `sq squash` finds a run buried under later commits (anywhere in unpushed first-parent history) and recreates the commits above it byte for byte with new parents, merges included (`pipeline/squash_rewrite.py`, `run_git_bytes`). Squash path sets now include parent documents (arch doc for slice/tasks, slice plan for arch) so review responses that amend them stay in the run; trailing parent-only commits are trimmed. Verified on a rebuild of context-forge's pre-squash 268 history: tasks 268, slice 268 and arch 260 each collapse to one commit under the merge.
+
 ### Release 0.24.4
 
 - **Contents:** certifi floor `>=2026.10.19` (lock moved to 2026.10.23) so installs drop the emSign root removed from Mozilla, Apple and Microsoft trust stores.
