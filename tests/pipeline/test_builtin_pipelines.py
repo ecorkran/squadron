@@ -105,3 +105,60 @@ def test_single_slice_code_pipelines_match_the_batch_body(name: str) -> None:
     assert _normalize(_enter_through_merge(_raw_steps(name))) == _normalize(
         _enter_through_merge(_batch_body())
     )
+
+
+# ---------------------------------------------------------------------------
+# Squash placement (slice 948 D6)
+# ---------------------------------------------------------------------------
+
+# (pipeline, [(index of the planning loop in the step list, squash subject)]); for the
+# batch pipelines the indices are inside the each body.
+_SQUASH_PLACEMENT: list[tuple[str, list[tuple[int, str]]]] = [
+    ("P4", [(1, "design")]),
+    ("P5", [(1, "tasks")]),
+    ("P45", [(1, "design"), (4, "tasks")]),
+    ("P456", [(1, "design"), (4, "tasks")]),
+    ("P56", [(1, "tasks")]),
+    ("slices-plan", [(2, "design")]),
+    ("tasks-plan", [(2, "tasks")]),
+]
+
+
+def _steps(name: str) -> list[tuple[str, dict[str, object]]]:
+    """The pipeline's top-level steps, or its each body, as (type, config) pairs."""
+    definition = load_pipeline(name)
+    if definition.steps[0].step_type == "each":
+        body: list[dict[str, dict[str, object]]] = definition.steps[0].config["steps"]  # type: ignore[assignment]
+        return [next(iter(step.items())) for step in body]
+    return [(step.step_type, step.config) for step in definition.steps]
+
+
+@pytest.mark.parametrize(("name", "placements"), _SQUASH_PLACEMENT)
+def test_squash_follows_each_planning_loop(name: str, placements: list[tuple[int, str]]) -> None:
+    steps = _steps(name)
+    for loop_index, subject in placements:
+        assert steps[loop_index][0] == "loop"
+        squash_type, squash_config = steps[loop_index + 1]
+        assert squash_type == "squash"
+        assert squash_config["subject"] == subject
+    assert sum(1 for step_type, _ in steps if step_type == "squash") == len(placements)
+
+
+def _is_code_review_loop(step_type: str, config: dict[str, object]) -> bool:
+    body = config.get("steps") if step_type == "loop" else None
+    if not isinstance(body, list):
+        return False
+    return any(
+        isinstance(review := step.get("review"), dict) and review.get("template") == "code"  # type: ignore[union-attr]
+        for step in body  # type: ignore[union-attr]
+    )
+
+
+@pytest.mark.parametrize("name", ["P456", "P56", "P6"])
+def test_no_squash_follows_a_code_review_loop(name: str) -> None:
+    steps = _steps(name)
+    code_loops = [i for i, (t, c) in enumerate(steps) if _is_code_review_loop(t, c)]
+    assert code_loops, f"{name} has no code-review loop to check"
+    for index in code_loops:
+        following = steps[index + 1][0] if index + 1 < len(steps) else None
+        assert following != "squash"

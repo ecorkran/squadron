@@ -87,3 +87,14 @@ def test_refusal_exits_one(in_repo: Path) -> None:
 
     assert result.exit_code == 1
     assert "not clean" in result.output
+
+
+def test_pipeline_dry_run_lists_squash_and_runs_no_git(in_repo: Path) -> None:
+    planning_run(in_repo, 3)
+    before = history(in_repo)
+
+    result = runner.invoke(app, ["run", "P4", "105", "--dry-run"])
+
+    assert result.exit_code == 0, result.output
+    assert "(squash)" in result.output
+    assert_history_unchanged(in_repo, before)
