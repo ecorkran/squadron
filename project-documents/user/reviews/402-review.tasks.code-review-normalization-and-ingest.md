@@ -6,7 +6,7 @@ slice: code-review-normalization-and-ingest
 conventionsSource: AGENTS.md
 projectRules: []
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md
 aiModel: claude-sonnet-5-5
@@ -14,133 +14,110 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261024
 dateUpdated: 20261024
-reviewedSha: df5485be677355545407258fc2e81be6ef8a748c
+reviewedSha: a8639308800797456533dd75d301d88320b39a68
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 3
-turns: 4
-promptTokens: 188169
-cachedTokens: 91403
-cacheWriteTokens: 96760
-completionTokens: 5591
-durationSeconds: 44.7
-costUsd: 0.452837
+toolCallsMade: 2
+turns: 3
+promptTokens: 102490
+cachedTokens: 11222
+cacheWriteTokens: 91264
+completionTokens: 5165
+durationSeconds: 42.5
+costUsd: 0.418569
 costBasis: provider
 runId: run-20261025-p5-b605399d
 squadronVersion: 0.24.1
 findings:
   - id: F001
-    severity: concern
-    category: sequencing
-    summary: "Partial-progress reporting conflicts with the ingest return design"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:181"
-  - id: F002
-    severity: concern
-    category: completeness
-    summary: "`replaced` count has no source in the store API"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:135"
-  - id: F003
-    severity: concern
-    category: test-coverage
-    summary: "Ingest behaviors in the design have no test in Task 21"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:185-195"
-  - id: F004
-    severity: concern
-    category: sequencing
-    summary: "Stale cross-reference in Task 7"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:87"
-  - id: F005
-    severity: concern
-    category: task-sizing
-    summary: "Task 20 is oversized"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:170-182"
-  - id: F006
-    severity: concern
-    category: sequencing
-    summary: "Test-with pattern is batched for Tasks 9–11"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:95-112"
-  - id: F007
-    severity: note
-    category: proportionality
-    summary: "Overlap between Task 4 and Task 6 item 3"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:61"
-  - id: F008
-    severity: note
-    category: task-format
-    summary: "Task 26 mixes a step with success criteria"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:232"
-  - id: F009
     severity: pass
     category: coverage
-    summary: "Coverage of success criteria"
-    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md"
+    summary: "Success criteria coverage is complete"
+    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:43-247"
+  - id: F002
+    severity: pass
+    category: sequencing
+    summary: "Sequencing and dependencies are sound"
+    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:47-231"
+  - id: F003
+    severity: note
+    category: process
+    summary: "Commits are batched across several tasks, against the \"commit at least once per task\" rule"
+    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:127"
+  - id: F004
+    severity: note
+    category: proportionality
+    summary: "Task 3/4 and the other implementation/test pairs are fine-grained"
+    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:56-63"
+  - id: F005
+    severity: note
+    category: test-robustness
+    summary: "Vocabulary-block extraction may pick up stray backticks"
+    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:66-74"
+  - id: F006
+    severity: note
+    category: clarity
+    summary: "Result field names and ingest skip-reason labels differ"
+    location: "project-documents/user/tasks/402-tasks.code-review-normalization-and-ingest.md:178-197"
 ---
 
 # Review: tasks — slice 402
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [CONCERN] Partial-progress reporting conflicts with the ingest return design
+### [PASS] Success criteria coverage is complete
 
-Task 20 returns a result dataclass only on completion, and `MetrologyStoreError` propagates. Task 22 requires that on `MetrologyStoreError` the CLI "print what was written so far". Task 23 tests that the partial count is printed. Once the exception propagates, the counts accumulated inside the ingest function are gone, so Task 22 cannot meet this. Task 20 needs a mechanism, for example a caller-supplied result object that is mutated as it goes, or an exception that carries the partial result. A junior would otherwise have to invent one.
+Every functional and technical requirement maps to at least one task:
+- **FR1:** Tasks 5, 11, 13 and 29 (live check).
+- **FR2:** Tasks 7, 8 and 11.
+- **FR3 and FR4:** Tasks 16–18 (store, replace-by-id) and 22–24 (ingest, re-ingest test).
+- **FR5:** Tasks 22, 24 and 26 cover the whole failure-mode table, including the nonexistent path, missing directory, empty directory, malformed file, non-UTF-8 file and store error.
+- **FR6:** Tasks 19, 20 and 23.
+- **FR7:** Task 12 asserts the `arch` template is unchanged.
+- **Sync test (D8):** Task 6.
+- **Disjoint-severity test unchanged:** Task 6.
+- **Integration requirement (findings-addressed mixed pair):** Task 15.
+- **CHANGELOG:** Task 28.
+- **Verification walkthrough steps 1–4:** Task 6 (step 1), Task 27 (steps 2–3) and Task 29 (step 4).
 
-### [CONCERN] `replaced` count has no source in the store API
+The slice states no NFR, so no load-test or CI-gating task is needed.
 
-Task 20 counts `replaced` when "a record with that id already existed". Task 15's `write_code_review(record) -> str` does not say what it returns or how existence is reported. Ingest could list existing records first, but no task says to. Specify one mechanism. For example, have `write_code_review` report whether it replaced a record, or have ingest read the project's existing ids once before the loop. Task 16 should then test it.
+### [PASS] Sequencing and dependencies are sound
 
-### [CONCERN] Ingest behaviors in the design have no test in Task 21
+There are no circular dependencies, and each dependency is built before it is used:
+- The leaf module (Task 2) comes before everything that imports it.
+- `lenient_category_key` (Task 7) comes before the alias table (Task 19).
+- The record models (Task 16) come before the store (Task 17).
+- The alias table and fixtures (Tasks 19 and 21) come before ingest (Tasks 22–23).
+- Ingest comes before the CLI (Task 25).
+- Live verification (Task 29) is last.
 
-Two behaviors that Task 20 implements are untested:
-- Dropping a finding whose severity is outside `Severity` and counting it in `unnormalized_count` (D6).
-- A write-time file whose stored category isn't a `ReviewCategory` value, which must fail the file.
+Each implementation task is followed by its own test task (3→4, 7→8, 9→10, 11→12, 13→14, 16/17→18, 19→20, 22/23→24, 25→26). Task 5 is the exception: the prompt block's test is Task 6, which is the sync test.
 
-Task 19 has no fixture for either. Add a synthetic fixture for each and one assertion each in Task 21.
+### [NOTE] Commits are batched across several tasks, against the "commit at least once per task" rule
 
-### [CONCERN] Stale cross-reference in Task 7
+Commit lines appear only at group ends. Tasks 7–14 (normalizer, model fields, client hook, persistence and their tests) share one commit at Task 14. Tasks 21–24 share one at Task 24. The project CLAUDE.md says to commit at least once per task. Checkpoints are spread through the file and not saved for the end, so this does not block progress. A junior implementer reading the file literally might still batch eight tasks into one commit. If you want per-task commits, add an intermediate commit after Task 10 and after Task 12.
 
-Task 7 says `lenient_category_key` is exposed "so Task 15 reuses it". Task 15 is the envelope and store task. The alias table in Task 17 is the consumer. A junior following the pointer would look in the wrong place. Change it to Task 17.
+### [NOTE] Task 3/4 and the other implementation/test pairs are fine-grained
 
-### [CONCERN] Task 20 is oversized
+Tasks 3 and 4 are Effort 2 and Effort 1. The same applies to Tasks 9/10 and 7/8. They could be merged without loss. Keeping them separate does follow the test-with pattern, and each is small enough for a junior to complete. There is no scope creep: every task traces to a success criterion, and nothing extra is added beyond the tests the slice requires.
 
-Task 20 is rated Effort 4 and bundles input resolution, per-file parsing and failure collection, skip classification, slice-index extraction, severity and category handling for two file formats, and replace counting. It must also stay within the ~50-line function limit. Split it into two tasks:
-- Path and directory resolution, plus the per-file read, parse and classify step.
-- Record building: slice index, findings, categories and the replace count.
+### [NOTE] Vocabulary-block extraction may pick up stray backticks
 
-Both would sit under the existing Task 21 test checkpoint.
+Task 5 copies the ten audit definitions from the skill into the `code.yaml` block. Task 6 item 2 compares every backticked token in that block to `ReviewCategory`, in both directions. If a copied definition contains an extra backticked token, the sync test will fail on legitimate prose. The implementer would need to reword the definition or narrow the extraction. Consider adding a line to Task 5: "definitions contain no backticked tokens other than the category value".
 
-### [CONCERN] Test-with pattern is batched for Tasks 9–11
+### [NOTE] Result field names and ingest skip-reason labels differ
 
-Tasks 9, 10 and 11 are three implementation tasks. Their tests all land in Task 12, with no verification between them except the existing suites. Task 12 is Effort 3 and covers models, persistence and the client. Move the model and persistence tests next to Tasks 9 and 11. Keep the client tests with Task 10. Each task then follows the test-with pattern.
-
-### [NOTE] Overlap between Task 4 and Task 6 item 3
-
-Task 4 asserts that the built-in `code` template loads with the flag true and `arch`/`slice`/`tasks` load with it false. Task 6 item 3 asserts the same facts from the YAML files. Keep the absent-key and non-bool cases in Task 4 and drop the built-in assertions. Task 6 already covers them and also fails on drift.
-
-### [NOTE] Task 26 mixes a step with success criteria
-
-The "ingest again; `read_side_mapped` is false" item is written as an action line. It is really a success criterion from the walkthrough. Mark it as `Success:`.
-
-### [PASS] Coverage of success criteria
-
-- FR1 and FR2: Tasks 5, 10, 11, 12 and 26.
-- FR3 and FR4: Tasks 20–23.
-- FR5: Tasks 21 and 23 (failure-mode table).
-- FR6: Tasks 17, 18 and 21.
-- FR7: the `arch` case in Task 12 and the flag tests in Tasks 4 and 6.
-- Integration requirement: the findings-addressed test in Task 13.
-- Sync test: Task 6.
-- Walkthrough steps 1–4: Tasks 24 and 26.
-- CHANGELOG and validation: Task 25.
-
-No task is scope creep. The slice states no NFR, so no load test or CI-gating task is needed. The four fixture files that Task 19 copies exist under `project-documents/user/reviews/`.
+Task 22 names the counters `skipped_not_code` and `skipped_unknown_verdict`. Task 24 asserts "`not-code-review`" and "`unknown-verdict`", which are the slice's labels for the summary. The mapping is obvious, but Task 24 should say it asserts the counters. Task 25 should say it prints the labels from the API Contracts.
 
 ### Run Digest
 
-- Response length: 5327 chars
+- Response length: 4490 chars
 - Response is newline-free: no
-- Tool calls made: 3
+- Tool calls made: 2
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -148,13 +125,13 @@ No task is scope creep. The slice states no NFR, so no load test or CI-gating ta
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 4
-- Tokens — prompt / cached / cache write / completion / reasoning: 188169 / 91403 / 96760 / 5591 / not computed
-- Duration: 44.7 s
-- Cost: $0.45 (provider)
+- Turns: 3
+- Tokens — prompt / cached / cache write / completion / reasoning: 102490 / 11222 / 91264 / 5165 / not computed
+- Duration: 42.5 s
+- Cost: $0.42 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 9
+- Finding-shaped matches — whole response: 6
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 9
-- Finding-shaped matches — surviving validation: 9
+- Finding-shaped matches — in findings section: 6
+- Finding-shaped matches — surviving validation: 6
