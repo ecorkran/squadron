@@ -21,6 +21,7 @@ import json
 import logging
 from typing import Any, cast
 
+from squadron.core.executables import resolve_argv
 from squadron.core.process_group import kill_process_group
 from squadron.events import EventType, register_event_action
 from squadron.events.builtin.document_scope import is_under_cf_document_root
@@ -72,7 +73,7 @@ class FrontmatterGateAction:
         args = ["cf", "validate", "frontmatter", "--json", *context.staged_paths]
         try:
             proc = await asyncio.create_subprocess_exec(
-                *args,
+                *resolve_argv(args),
                 cwd=context.cwd,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
