@@ -39,3 +39,11 @@ dateUpdated: 20261021
 - [x] #248: The end-of-run summary prints the exact recovery command(s) for a paused run or flagged items
 - [x] #248: Item resume commits uncommitted leftovers on the target when every dirty path belongs to an item of the batch (widened from "the item being retried": the reported case was item 130's file blocking item 128); any other dirty path still rejects
 - [x] #248: PIPELINES.md gives one recovery path per failure kind; rerun / resume / item-resume guidance is consistent
+
+## #271 sq squash: squash a run buried under later commits
+
+- [ ] Find the newest run for the artifact anywhere in unpushed first-parent history, not only at HEAD; commits already on a remote are never part of a run
+- [ ] Rewrite without touching the working tree: build the squashed commit, recreate every later commit (merges included) with its original tree, author, committer and message, then move the branch with one compare-and-swap ref update
+- [ ] `--dry-run` and the command's result report how many later commits are rewritten
+- [ ] Tests: run buried under foreign commits, under a merged slice branch, and under another artifact's run; rerun is a no-op; content and merge topology above the run are unchanged
+- [ ] PIPELINES.md and CHANGELOG describe the new behavior
