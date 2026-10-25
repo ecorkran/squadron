@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261025
 
+### Release 0.24.4
+
+- **Contents:** certifi floor `>=2026.10.19` (lock moved to 2026.10.23) so installs drop the emSign root removed from Mozilla, Apple and Microsoft trust stores.
+
 ### Release 0.24.3
 
 - **Contents:** first publish of 0.24.2 (slice 948, `sq metr`); 0.24.2's tag CI failed on `test_root_help_shows_metrology_and_hides_metr`, which parsed `--help` text that CI renders with ANSI colour. The test now reads the Click registration's `hidden` flag. Also ai-project-guide 0.22.7 guide updates.
