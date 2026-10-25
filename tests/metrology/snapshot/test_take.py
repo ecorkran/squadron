@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
+from collections.abc import Callable, Sequence
+from pathlib import Path
 
 import pytest
 
@@ -12,13 +15,18 @@ from squadron.metrology.errors import (
     SnapshotIntegrityError,
     SnapshotPreflightError,
 )
+from squadron.metrology.snapshot.contract import ToolResult
+from squadron.metrology.snapshot.registry import default_registry
 from squadron.metrology.snapshot.take import take_snapshot
 from squadron.metrology.snapshot_models import (
     AbsenceReason,
+    CodeSnapshot,
+    Measurement,
     SnapshotMetric,
     SourceLanguage,
 )
 from squadron.metrology.store import MetrologyStore
+from tests.conftest import run_test_git
 from tests.metrology.snapshot.builders import FakeAdapter, make_project_id
 from tests.metrology.snapshot.conftest import FakeToolRunner, SnapshotRepoFactory
 
@@ -198,3 +206,132 @@ def test_missing_project_identity_propagates_unchanged(
 
     with pytest.raises(MetrologyIdentityError, match="metrology.project_id"):
         take_snapshot(repo, {}, FakeToolRunner(), snapshot_store)
+
+
+# --- 401: coverage through the real adapters -------------------------------------------
+
+REPORT = "cov.xml"
+COVERAGE_METRICS = (SnapshotMetric.COVERABLE_LINES, SnapshotMetric.COVERED_LINES)
+COVERAGE_FILES = {
+    "a.py": "x = 1\ny = 2\n",
+    "b.ts": "const y = 1;\n",
+    ".gitignore": f"{REPORT}\n",
+}
+
+
+class UnscriptedToolsFail:
+    """A runner whose every tool call fails, so lint and type metrics are ``tool_failed``.
+
+    These tests are about coverage, not lint: what matters is that the real adapters run.
+    """
+
+    def run(self, argv: Sequence[str], *, cwd: Path, timeout_s: int) -> ToolResult:
+        return ToolResult(exit_code=2, stdout="", stderr="not available in this test", timed_out=False)
+
+
+def cobertura(repo: Path) -> str:
+    return (
+        '<coverage version="9.9"><sources>'
+        f"<source>{repo}</source></sources><packages><package><classes>"
+        '<class filename="a.py"><lines><line number="1" hits="1"/>'
+        '<line number="2" hits="0"/></lines></class>'
+        '<class filename="b.ts"><lines><line number="1" hits="1"/></lines></class>'
+        "</classes></package></packages></coverage>"
+    )
+
+
+def write_report_after_commit(repo: Path) -> Path:
+    report = repo / REPORT
+    report.write_text(cobertura(repo), encoding="utf-8")
+    later = report.stat().st_mtime_ns + 10_000_000_000
+    os.utime(report, ns=(later, later))
+    return report
+
+
+def real_snapshot(repo: Path, store: MetrologyStore) -> CodeSnapshot:
+    return take_snapshot(repo, default_registry(), UnscriptedToolsFail(), store)
+
+
+def coverage_of(snapshot: CodeSnapshot, language: SourceLanguage) -> dict[SnapshotMetric, Measurement]:
+    entry = next(e for e in snapshot.languages if e.language is language)
+    return {m.metric: m for m in entry.measurements if m.metric in COVERAGE_METRICS}
+
+
+def test_fresh_report_gives_present_coverage_for_both_languages(
+    snapshot_git_repo: SnapshotRepoFactory,
+    snapshot_store: MetrologyStore,
+    write_project_config: Callable[[Path, dict[str, object]], Path],
+) -> None:
+    repo = snapshot_git_repo(COVERAGE_FILES)
+    write_project_config(repo, {"metrology.coverage_report": REPORT})
+    write_report_after_commit(repo)
+
+    snapshot = real_snapshot(repo, snapshot_store)
+
+    python = coverage_of(snapshot, SourceLanguage.PYTHON)
+    typescript = coverage_of(snapshot, SourceLanguage.TYPESCRIPT)
+    assert python[SnapshotMetric.COVERABLE_LINES].per_file == {"a.py": 2}
+    assert python[SnapshotMetric.COVERED_LINES].per_file == {"a.py": 1}
+    assert typescript[SnapshotMetric.COVERABLE_LINES].per_file == {"b.ts": 1}
+    assert typescript[SnapshotMetric.COVERED_LINES].per_file == {"b.ts": 1}
+
+
+def test_missing_report_is_report_missing_with_one_warning_per_language(
+    snapshot_git_repo: SnapshotRepoFactory,
+    snapshot_store: MetrologyStore,
+    write_project_config: Callable[[Path, dict[str, object]], Path],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    repo = snapshot_git_repo(COVERAGE_FILES)
+    write_project_config(repo, {"metrology.coverage_report": "nope.xml"})
+
+    with caplog.at_level(logging.WARNING):
+        snapshot = real_snapshot(repo, snapshot_store)
+
+    for language in (SourceLanguage.PYTHON, SourceLanguage.TYPESCRIPT):
+        for measurement in coverage_of(snapshot, language).values():
+            assert measurement.absent is AbsenceReason.REPORT_MISSING
+    assert sum("nope.xml does not exist" in record.getMessage() for record in caplog.records) == 2
+
+
+def test_stale_report_is_report_stale_on_both_languages(
+    snapshot_git_repo: SnapshotRepoFactory,
+    snapshot_store: MetrologyStore,
+    write_project_config: Callable[[Path, dict[str, object]], Path],
+) -> None:
+    repo = snapshot_git_repo(COVERAGE_FILES)
+    write_project_config(repo, {"metrology.coverage_report": REPORT})
+    report = write_report_after_commit(repo)
+    newer = report.stat().st_mtime_ns + 5_000_000_000
+    os.utime(repo / "a.py", ns=(newer, newer))
+
+    snapshot = real_snapshot(repo, snapshot_store)
+
+    for language in (SourceLanguage.PYTHON, SourceLanguage.TYPESCRIPT):
+        for measurement in coverage_of(snapshot, language).values():
+            assert measurement.absent is AbsenceReason.REPORT_STALE
+            assert measurement.absent_detail is not None
+            assert "a.py" in measurement.absent_detail
+
+
+def test_real_adapters_are_deterministic_read_only_and_complete(
+    snapshot_git_repo: SnapshotRepoFactory,
+    snapshot_store: MetrologyStore,
+    write_project_config: Callable[[Path, dict[str, object]], Path],
+) -> None:
+    repo = snapshot_git_repo(COVERAGE_FILES)
+    write_project_config(repo, {"metrology.coverage_report": REPORT})
+    report = write_report_after_commit(repo)
+    mtime_before = report.stat().st_mtime_ns
+
+    first = real_snapshot(repo, snapshot_store)
+    second = real_snapshot(repo, snapshot_store)
+
+    assert first.model_dump(mode="json", exclude={"measured_at"}) == second.model_dump(
+        mode="json", exclude={"measured_at"}
+    )
+    for entry in first.languages:
+        assert {m.metric for m in entry.measurements} == set(SnapshotMetric)
+    # Only the exempt project config the test wrote; the snapshot left nothing else behind.
+    assert run_test_git(repo, "status", "--porcelain").strip() == "?? .squadron.toml"
+    assert report.stat().st_mtime_ns == mtime_before

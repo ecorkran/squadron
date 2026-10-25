@@ -14,6 +14,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from squadron.metrology.snapshot.complexity import complexity_measurement
 from squadron.metrology.snapshot_models import (
     Distribution,
     FunctionOverLimit,
@@ -35,13 +36,14 @@ _P90 = 90
 
 
 @dataclass(frozen=True)
-class FunctionLength:
-    """One measured function."""
+class MeasuredFunction:
+    """One measured function: its length and its cyclomatic complexity (401 D1)."""
 
     path: str
     qualified_name: str
     start_line: int
     length: int
+    complexity: int
 
 
 def physical_lines(text: str) -> list[str]:
@@ -118,7 +120,7 @@ def files_over_limit(measurement: Measurement) -> dict[str, int]:
 def function_length_measurement(
     language: SourceLanguage,
     tool: ToolIdentity,
-    functions: Sequence[FunctionLength],
+    functions: Sequence[MeasuredFunction],
     limit: int | None,
     unparsed_files: Sequence[str],
 ) -> Measurement:
@@ -150,7 +152,25 @@ def function_length_measurement(
 
 #: Parses one file's text into its functions. May raise any of the adapter's
 #: declared parse errors, which mark the file unparsed instead of failing the snapshot.
-FunctionExtractor = Callable[[str, str], list[FunctionLength]]
+FunctionExtractor = Callable[[str, str], list[MeasuredFunction]]
+
+
+def read_source_bytes(repo_root: Path, path: str, purpose: str) -> bytes | None:
+    """The file's bytes, or None (with a WARNING naming *purpose*) when it can't be read."""
+    try:
+        return (repo_root / path).read_bytes()
+    except OSError as exc:
+        _logger.warning("Can't read %s for %s (%s); not measured", path, purpose, exc)
+        return None
+
+
+def decode_source(raw: bytes, path: str, consequence: str) -> str | None:
+    """*raw* as UTF-8, or None (with a WARNING stating *consequence*) when it isn't valid."""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        _logger.warning("%s isn't valid UTF-8 (%s); %s", path, exc, consequence)
+        return None
 
 
 def _measure_source(
@@ -159,21 +179,17 @@ def _measure_source(
     extract: FunctionExtractor,
     parse_errors: tuple[type[Exception], ...],
     per_file: dict[str, int],
-    functions: list[FunctionLength],
+    functions: list[MeasuredFunction],
     unparsed: list[str],
 ) -> None:
-    try:
-        raw = (repo_root / path).read_bytes()
-    except OSError as exc:
-        _logger.warning("Can't read %s for length (%s); not measured", path, exc)
+    raw = read_source_bytes(repo_root, path, "length")
+    if raw is None:
         unparsed.append(path)
         return
-    try:
-        text = raw.decode("utf-8")
-    except UnicodeDecodeError as exc:
+    text = decode_source(raw, path, "no functions measured")
+    if text is None:
         # Still counts for file length (with replacement characters); it just
         # contributes no functions.
-        _logger.warning("%s isn't valid UTF-8 (%s); no functions measured", path, exc)
         per_file[path] = count_non_blank(raw.decode("utf-8", errors="replace"))
         unparsed.append(path)
         return
@@ -187,27 +203,34 @@ def _measure_source(
         unparsed.append(path)
 
 
-def measure_length_metrics(
+def measure_parse_metrics(
     repo_root: Path,
     files: Sequence[str],
     language: SourceLanguage,
     tool: ToolIdentity,
+    complexity_tool: ToolIdentity,
     limits: LengthLimits,
     extract: FunctionExtractor,
     parse_errors: tuple[type[Exception], ...],
 ) -> list[Measurement]:
-    """File length and function length for *files*, shared by every adapter.
+    """File length, function length and complexity for *files*, shared by every adapter.
 
     The adapter supplies only ``extract`` (text to functions) and the parse errors it
     can raise. Reading, decoding, counting, warnings and the measurement shape are
     defined once here, so the two languages can't drift apart.
     """
     per_file: dict[str, int] = {}
-    functions: list[FunctionLength] = []
+    functions: list[MeasuredFunction] = []
     unparsed: list[str] = []
     for path in files:
         _measure_source(repo_root, path, extract, parse_errors, per_file, functions, unparsed)
     return [
         file_length_measurement(language, tool, per_file, limits.max_file_lines),
         function_length_measurement(language, tool, functions, limits.max_function_lines, unparsed),
+        complexity_measurement(
+            language,
+            complexity_tool,
+            distribution([fn.complexity for fn in functions]),
+            unparsed,
+        ),
     ]

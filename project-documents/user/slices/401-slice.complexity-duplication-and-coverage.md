@@ -8,8 +8,8 @@ dependencies:
 interfaces:
 - 403
 dateCreated: 20261022
-dateUpdated: 20261023
-status: not_started
+dateUpdated: 20261024
+status: complete
 turns: 20
 promptTokens: 1310434
 cachedTokens: 1200278
@@ -72,13 +72,15 @@ Complexity is counted on the function walk that already produces function length
 | `snapshot_models.py` | Four `SnapshotMetric` members and three `AbsenceReason` members. Model and validators unchanged |
 | `snapshot/lengths.py` | `FunctionLength` becomes `MeasuredFunction` (adds `complexity`). `measure_length_metrics` becomes `measure_parse_metrics` and also returns the complexity measurement. The read, decode and parse-error handling is unchanged |
 | `snapshot/complexity.py` | New. Builds the complexity measurement from `MeasuredFunction`s. Works for any language |
-| `snapshot/duplication.py` | New. `measure_duplication(repo_root, files, language, tool, tokenizer, token_errors)`: reads each file, tokenizes it, and runs the window pass. Works for any language |
+| `snapshot/duplication.py` | New. `measure_duplication(repo_root, files, language, tool, tokenizer, token_errors)`: reads each file, tokenizes it (the tokenizer takes the repo-relative path and the text, since `.tsx` needs a different grammar), and runs the window pass. Works for any language |
 | `snapshot/python_complexity.py` | New. Decision-point count for one `ast` function node |
 | `snapshot/python_adapter.py` | The extractor sets `complexity`. Adds a `tokenize` tokenizer and calls duplication and coverage |
 | `snapshot/typescript_complexity.py` | New. Decision-point count for one tree-sitter function node |
-| `snapshot/typescript_length.py` | The extractor sets `complexity`. Adds a leaf-token tokenizer |
+| `snapshot/typescript_length.py` | The extractor sets `complexity`. Owns `parse_checked`, the one parse-and-error-check |
+| `snapshot/typescript_duplication.py` | New. The leaf-token tokenizer and `measure_typescript_duplication` |
 | `snapshot/typescript_adapter.py` | Declares the new metrics. Calls duplication and coverage |
-| `snapshot/coverage.py` | New. Owns the config key constant and its parser. `read_coverage(repo_root)` checks freshness and parses the report, then `coverage_measurements(reading, language, files)` builds the two measurements for one language |
+| `snapshot/coverage.py` | New. Owns the config key constant and its parser. `read_coverage(repo_root)` checks freshness and parses the report into a reading, an absence or a failure |
+| `snapshot/coverage_measurements.py` | New. `coverage_measurements(reading, language, files)` builds the two measurements for one language (split from `coverage.py` to keep both under ~300 lines) |
 | `snapshot/preflight.py` | Validates `metrology.coverage_report` through `coverage.py`'s parser |
 | `snapshot/render.py` | Summary lines for the new metrics |
 
@@ -136,12 +138,13 @@ Status: decided
   - each `except` handler, and each `case` in a `match`
   - an `if` expression
   - each extra operand of a `BoolOp` (`len(values) - 1`)
-  - each `for` and each `if` in a comprehension
+  - each `for` and each `if` in a comprehension (so a comprehension with one `if` adds 2)
   - `try`, `with`, `assert` and `else` clauses don't count.
 - TypeScript decision points:
   - `if_statement`, `for_statement`, `for_in_statement` (including `for…of`), `while_statement`, `do_statement`
   - each `switch_case` (not `switch_default`), `catch_clause`, and `ternary_expression`
   - each `binary_expression` whose operator is `&&`, `||` or `??`
+- The node and operator names were checked against the pinned grammar for both `typescript` and `tsx`; they match the names above exactly.
 - Each language's decision-point set is one module constant in its complexity module. Tests and the `counting` text read that constant, so the set is written in one place.
 - The values are a `distribution` over functions, with no `per_file`.
 - No complexity limit and no `over_limit` rows. `FunctionOverLimit.length` would mean something else for complexity, and the slice plan asks for no limit. Module-level code isn't in any function, so it isn't counted. The `counting` text says so.
@@ -176,6 +179,7 @@ Status: decided
   - Each puts absolute source roots in `<sources><source>` and file paths relative to a root in `<class filename=…>`.
   - Each writes `<line number=… hits=…/>` per executable line.
   - coverage.py sets the root `version` to its own version. Istanbul always writes `version="0.1"`.
+- Only `<line>` elements directly under `<class><lines>` count. They sum to the root `lines-valid` and `lines-covered` in both writers; Istanbul also repeats a function's first line inside `<method>`, which the root totals leave out (confirmed against the captured fixtures).
 - Paths map by joining each `<source>` with `filename` and taking the result relative to the repo root. Entries that don't resolve under the repo root are dropped. Line numbers are collected into per-file sets, which settles any repeated entry.
 - Two measurements per language, built from the one reading:
   - `coverable_lines`: per file, the lines the report lists.
@@ -221,6 +225,7 @@ Status: decided
 
 ### Patterns and Conventions
 - Node-type, token-type and decision-point sets are module constants in the language module that owns them, as `_FUNCTION_TYPES` is in 400.
+- A `MemoryError` raised by a tokenizer is not a per-file parse error: it fails the whole language's `duplicated_lines` (`tool_failed`), so the TypeScript adapter's token errors are `TypeScriptParseError` only.
 - Coverage failures are data (`absent`), not exceptions. Only a git failure raises.
 - Each absence and fallback logs at WARNING, following 400's `tool_support` builders.
 
@@ -263,7 +268,7 @@ No schema change, and no store change. The new metrics are enum values inside ex
 1. Python and TypeScript snapshots carry present `cyclomatic_complexity` and `duplicated_lines` measurements. Each has a `counting` text giving its definition (D2, D3).
 2. Complexity covers exactly the functions function length covers: the same count, and the same (path, qualified name) set.
 3. Known fixtures give the expected values:
-   - a function with `if`, `elif`, `and`, a comprehension `if` and an `except` scores 6
+   - a function with `if`, `elif`, `and`, a comprehension with one `if` and an `except` scores 7 (the comprehension's `for` counts as well as its `if`, per D2)
    - a TypeScript function with `if`, `??`, a ternary and two non-default `case`s scores 6
    - a nested function's decisions don't count toward its parent
 4. Two files sharing a block of at least 100 tokens report its lines as duplicated in both. A 99-token block isn't reported. Renamed identifiers aren't reported. A Python block and an identical TypeScript block aren't compared.
@@ -296,14 +301,36 @@ The command exists. The metrics and the config key don't yet. Outputs describe s
 
 1. **New metrics on squadron.** On a clean tree, run `sq metrology snapshot`. The `python` section shows `cyclomatic_complexity` (a function count equal to `function_length`'s) and `duplicated_lines`. `covered_lines` and `coverable_lines` show `absent: coverage_not_configured`. `shell` shows all eight metrics as `no_adapter`.
 2. **Function sets match.** Run `sq metrology snapshot --json | jq '.languages[] | select(.language=="python") | .measurements[] | select(.metric=="function_length" or .metric=="cyclomatic_complexity") | .distribution.count'`. Both numbers are equal.
-3. **Produce a coverage report.** Run `uv run --with pytest-cov pytest --cov=src/squadron --cov-report=xml -q`. This writes `coverage.xml` at the root, which is gitignored, and `git status --porcelain` stays empty. Add `"metrology.coverage_report" = "coverage.xml"` to `.squadron.toml`.
+3. **Produce a coverage report.** Run `uv run --with pytest-cov pytest --cov=src/squadron --cov-report=xml -q` (a subset such as `tests/metrology` is enough; the report must be written after the last change to any tracked file). This writes `coverage.xml` at the root, which is gitignored, and `git status --porcelain` stays empty. Add `"metrology.coverage_report" = "coverage.xml"` to `.squadron.toml`.
 4. **Coverage present.** Run `sq metrology snapshot`. Python `coverable_lines` and `covered_lines` are present with `[cobertura 7.x]`. Files outside `src/squadron`, such as `tests/`, are counted as not in the report. Check the totals against `coverage.xml`: `xmllint --xpath 'string(/coverage/@lines-valid)' coverage.xml` equals the `coverable_lines` total.
 5. **Stale report.** Run `touch src/squadron/__init__.py && sq metrology snapshot`. Coverage shows `absent: report_stale`, naming that file, and `git status --porcelain` is still empty because the content didn't change. Re-run step 3 to restore.
 6. **Missing report.** Set the key to `nope.xml`. Coverage shows `absent: report_missing`. Restore the key.
 7. **Bad key.** Set the key to `/tmp/coverage.xml`. The snapshot exits 1 with a preflight error before any tool runs. Restore the key.
 8. **TypeScript.** Run `sq metrology snapshot --cwd ../context-forge`. The `typescript` section shows complexity and duplication from `squadron-tree-sitter-ts`, and coverage shows `absent: coverage_not_configured`, since context-forge has no coverage provider installed. File length and function length match 400's walkthrough on the same commit.
 9. **TypeScript coverage.** In a scratch vitest project with `@vitest/coverage-v8`, a committed `.gitignore` for `coverage/`, and `coverage.reporter: ['cobertura']`, run `npx vitest run --coverage` and set `metrology.coverage_report = "coverage/cobertura-coverage.xml"`. Then `sq metrology snapshot --cwd <scratch>` shows TypeScript coverage present with `[cobertura 0.1]`.
-10. **Determinism and old records.** Two `--json` runs are identical apart from `measured_at`. `sq metrology list` logs a WARNING for each snapshot record 400 wrote. Re-snapshot those commits and the warnings stop.
+10. **Determinism and old records.** Two `--json` runs are identical apart from `measured_at` (compare with `jq -S 'del(.measured_at)'`). `sq metrology list` prints `Skipping unreadable metrology record: <path>` for each snapshot record 400 wrote. Snapshots only measure HEAD, so a 400 record of an older commit can't be re-snapshotted; the warning stops when the stale record file is deleted or when HEAD is the commit it covers.
+
+### Walkthrough Results
+
+Run 20261024 on the slice branch at 06eba343 (all code committed). Tools: ruff 0.15.1, pyright 1.1.408, pytest-cov 7.1.0 with coverage.py 7.17.0, vitest 5.0.5 with `@vitest/coverage-v8` 5.0.5, Python 3.13.7. Squadron's `.squadron.toml` carries limits 300/50 and two exclusions.
+
+| Step | Result |
+|---|---|
+| 1 | `python` section: `cyclomatic_complexity: 11204 functions, p50 1, p90 4, max 82`, `duplicated_lines: 1693 in 38 file(s)`, both from `squadron-python-ast 0.24.0+python3.13.7`; coverage `absent: coverage_not_configured`; `shell` all eight metrics `no_adapter` |
+| 2 | `function_length` and `cyclomatic_complexity` distribution counts: 11204 and 11204 |
+| 3 | `pytest --cov=src/squadron --cov-report=xml tests/metrology`: 6 minutes, all pass; `coverage.xml` written, `git status --porcelain` empty |
+| 4 | `coverable_lines: 27902 in 393 file(s); 552 not in report [cobertura 7.17.0]`, `covered_lines: 11529 ...`. `xmllint` gives `lines-valid` 27902 and `lines-covered` 11529: equal to the snapshot totals |
+| 5 | After `touch src/squadron/__init__.py`: `absent: report_stale (coverage.xml is older than tracked file src/squadron/__init__.py; ...)`; `git status --porcelain` empty |
+| 6 | Key `nope.xml`: `absent: report_missing (nope.xml does not exist)` |
+| 7 | Key `/tmp/coverage.xml`: `Error: metrology.coverage_report must be relative to the repository root, got '/tmp/coverage.xml'. Fix it with ...`, exit 1 |
+| 8 | A clean clone of context-forge (its working tree held another session's uncommitted edits, so the snapshot refused it with the dirty-tree error and nothing was written there): `typescript` with complexity (5417 functions, 17 unparsed) and duplication from `squadron-tree-sitter-ts`; coverage `coverage_not_configured`. The same commit measured by the pre-401 code (`main`) and by this branch gives identical `file_length` and `function_length` measurements (Success Criterion 12) |
+| 9 | Scratch vitest project, `coverage/` gitignored, `reporter: ['cobertura']`: `coverable_lines: 4 in 1 file(s); 2 not in report [cobertura 0.1]`, `covered_lines: 1 in 1 file(s)` |
+| 10 | Two `--json` runs identical apart from `measured_at`. `sq metrology list` skipped the three 400-written records with `Skipping unreadable metrology record`. The old-commit records can't be re-snapshotted (corrected above) and were left in the store |
+
+Caveats found while running it:
+- **Success Criterion 3's Python fixture was 6 but D2 gives 7.** A comprehension always has a `for`, and D2 counts each comprehension `for` and `if`. The criterion text now says so.
+- **Istanbul repeats a function's first line inside `<method>`.** Counting every `<line>` would not match the root `lines-valid`; the reader counts only `<class><lines>` entries (D4).
+- **The task's "function length unaffected" for an untokenizable Python file can't hold:** `tokenize` and `ast.parse` fail on the same files, so such a file is unparsed for function length too. The tests assert that its file length is still counted.
 
 ## Implementation Notes
 

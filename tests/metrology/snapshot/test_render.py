@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     file_length_measurement,
     function_length_measurement,
 )
@@ -14,6 +14,7 @@ from squadron.metrology.snapshot.render import render_summary
 from squadron.metrology.snapshot_models import (
     AbsenceReason,
     CodeSnapshot,
+    Distribution,
     EnvironmentIdentity,
     LanguageSnapshot,
     LengthLimits,
@@ -33,7 +34,7 @@ def python_snapshot() -> CodeSnapshot:
     measurements = [
         file_length_measurement(language, TOOL, {"a.py": 400, "b.py": 10}, limit=300),
         function_length_measurement(
-            language, TOOL, [FunctionLength("a.py", "f", 1, 70)], limit=50, unparsed_files=["c.py"]
+            language, TOOL, [MeasuredFunction("a.py", "f", 1, 70, 1)], limit=50, unparsed_files=["c.py"]
         ),
         Measurement(
             metric=SnapshotMetric.LINT_COUNT,
@@ -48,6 +49,20 @@ def python_snapshot() -> CodeSnapshot:
             absent=AbsenceReason.ENVIRONMENT_UNRESOLVED,
             absent_detail=".venv not found",
         ),
+        *[
+            Measurement(
+                metric=metric,
+                language=language,
+                absent=AbsenceReason.TOOL_MISSING,
+                absent_detail="not measured in this fixture",
+            )
+            for metric in (
+                SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+                SnapshotMetric.DUPLICATED_LINES,
+                SnapshotMetric.COVERED_LINES,
+                SnapshotMetric.COVERABLE_LINES,
+            )
+        ],
     ]
     return CodeSnapshot(
         snapshot_id="snapshot-x-y",
@@ -102,3 +117,58 @@ def test_environment_and_tool_ignored_files_are_shown() -> None:
 
     assert "type_errors: 0 in 0 file(s), rules tool-defaults, uv.lock abcdef01" in text
     assert "1 skipped by the tool's ignores" in text
+
+
+def test_new_metrics_render_in_the_contract_shapes() -> None:
+    language = SourceLanguage.PYTHON
+    snapshot = python_snapshot()
+    entry = snapshot.languages[0]
+    new_metrics = {
+        SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+        SnapshotMetric.DUPLICATED_LINES,
+        SnapshotMetric.COVERED_LINES,
+        SnapshotMetric.COVERABLE_LINES,
+    }
+    ast = ToolIdentity(name="squadron-python-ast", version="1", counting="c")
+    cobertura = ToolIdentity(name="cobertura", version="7.17.0", counting="c")
+    entry.measurements = [
+        *(m for m in entry.measurements if m.metric not in new_metrics),
+        Measurement(
+            metric=SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+            language=language,
+            tool=ast,
+            distribution=Distribution(count=3, total=9, min=1, p50=2, p90=6, max=6),
+            unparsed_files=["c.py"],
+        ),
+        Measurement(
+            metric=SnapshotMetric.DUPLICATED_LINES,
+            language=language,
+            tool=ast,
+            per_file={"a.py": 10, "b.py": 5},
+        ),
+        Measurement(
+            metric=SnapshotMetric.COVERABLE_LINES,
+            language=language,
+            tool=cobertura,
+            per_file={"a.py": 40},
+            tool_ignored_files=["b.py", "c.py"],
+        ),
+        Measurement(
+            metric=SnapshotMetric.COVERED_LINES,
+            language=language,
+            tool=cobertura,
+            per_file={"a.py": 30},
+            tool_ignored_files=["b.py", "c.py"],
+        ),
+    ]
+
+    text = "\n".join(render_summary(snapshot, Path("/r.json")))
+
+    assert (
+        "cyclomatic_complexity: 3 functions, p50 2, p90 6, max 6; 1 unparsed [squadron-python-ast 1]"
+        in text
+    )
+    assert "duplicated_lines: 15 in 2 file(s) [squadron-python-ast 1]" in text
+    assert "coverable_lines: 40 in 1 file(s); 2 not in report [cobertura 7.17.0]" in text
+    assert "covered_lines: 30 in 1 file(s); 2 not in report [cobertura 7.17.0]" in text
+    assert "skipped by the tool's ignores" not in text

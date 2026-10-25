@@ -9,17 +9,23 @@ imported or executed. Lint and type errors are added by the sibling modules
 from __future__ import annotations
 
 import ast
+import io
 import platform
+import tokenize
 from collections.abc import Sequence
 
 from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
+from squadron.metrology.snapshot.coverage import read_coverage
+from squadron.metrology.snapshot.coverage_measurements import coverage_measurements
+from squadron.metrology.snapshot.duplication import duplication_tool_identity, measure_duplication
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     count_non_blank_span,
-    measure_length_metrics,
+    measure_parse_metrics,
     physical_lines,
 )
+from squadron.metrology.snapshot.python_complexity import COMPLEXITY_COUNTING, python_complexity
 from squadron.metrology.snapshot.python_lint import measure_ruff_lint
 from squadron.metrology.snapshot.python_types import measure_pyright_types
 from squadron.metrology.snapshot_models import (
@@ -48,6 +54,11 @@ def ast_tool_identity() -> ToolIdentity:
     )
 
 
+def ast_complexity_tool_identity() -> ToolIdentity:
+    """The same in-process parser, with the complexity metric's own counting text."""
+    return ast_tool_identity().model_copy(update={"counting": COMPLEXITY_COUNTING})
+
+
 def _span_start(node: _FunctionNode) -> int:
     decorator_lines = [decorator.lineno for decorator in node.decorator_list]
     return min([node.lineno, *decorator_lines])
@@ -55,9 +66,9 @@ def _span_start(node: _FunctionNode) -> int:
 
 def _collect_functions(
     tree: ast.AST, path: str, lines: Sequence[str], prefix: str = ""
-) -> list[FunctionLength]:
+) -> list[MeasuredFunction]:
     """Every def and async def at any depth, named like ``__qualname__``."""
-    found: list[FunctionLength] = []
+    found: list[MeasuredFunction] = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             found.extend(_collect_functions(node, path, lines, f"{prefix}{node.name}."))
@@ -65,11 +76,12 @@ def _collect_functions(
             start = _span_start(node)
             end = node.end_lineno if node.end_lineno is not None else node.lineno
             found.append(
-                FunctionLength(
+                MeasuredFunction(
                     path=path,
                     qualified_name=f"{prefix}{node.name}",
                     start_line=start,
                     length=count_non_blank_span(lines, start, end),
+                    complexity=python_complexity(node),
                 )
             )
             found.extend(_collect_functions(node, path, lines, f"{prefix}{node.name}.<locals>."))
@@ -81,34 +93,86 @@ def _collect_functions(
 _PARSE_ERRORS: tuple[type[Exception], ...] = (SyntaxError, RecursionError, MemoryError, ValueError)
 
 
-def _extract_functions(path: str, text: str) -> list[FunctionLength]:
+def _extract_functions(path: str, text: str) -> list[MeasuredFunction]:
     return _collect_functions(ast.parse(text, filename=path), path, physical_lines(text))
 
 
 def measure_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-    """File length and function length for *files* (no external tool)."""
-    return measure_length_metrics(
+    """File length, function length and complexity for *files* (no external tool)."""
+    return measure_parse_metrics(
         ctx.repo_root,
         files,
         SourceLanguage.PYTHON,
         ast_tool_identity(),
+        ast_complexity_tool_identity(),
         ctx.limits,
         _extract_functions,
         _PARSE_ERRORS,
     )
 
 
+#: Token types that carry no code: comments and layout (D3).
+_DROPPED_TOKEN_TYPES = frozenset(
+    {
+        tokenize.COMMENT,
+        tokenize.NL,
+        tokenize.NEWLINE,
+        tokenize.INDENT,
+        tokenize.DEDENT,
+        tokenize.ENCODING,
+        tokenize.ENDMARKER,
+    }
+)
+
+#: ``SyntaxError`` covers ``IndentationError``.
+_TOKEN_ERRORS: tuple[type[Exception], ...] = (tokenize.TokenError, SyntaxError)
+
+
+def _tokenize(_path: str, text: str) -> list[tuple[str, int]]:
+    """Code tokens with their start line; comments and layout dropped."""
+    return [
+        (token.string, token.start[0])
+        for token in tokenize.generate_tokens(io.StringIO(text).readline)
+        if token.type not in _DROPPED_TOKEN_TYPES
+    ]
+
+
+def measure_python_duplication(ctx: AdapterContext, files: Sequence[str]) -> Measurement:
+    """Duplicated lines across *files* (the stdlib tokenizer, no external tool)."""
+    return measure_duplication(
+        ctx.repo_root,
+        files,
+        SourceLanguage.PYTHON,
+        duplication_tool_identity(ast_tool_identity()),
+        _tokenize,
+        _TOKEN_ERRORS,
+    )
+
+
 class PythonAdapter:
-    """Measures Python: all four metrics."""
+    """Measures Python: every snapshot metric."""
 
     language = SourceLanguage.PYTHON
-    metrics = frozenset(SnapshotMetric)
+    metrics = frozenset(
+        {
+            SnapshotMetric.FILE_LENGTH,
+            SnapshotMetric.FUNCTION_LENGTH,
+            SnapshotMetric.CYCLOMATIC_COMPLEXITY,
+            SnapshotMetric.DUPLICATED_LINES,
+            SnapshotMetric.LINT_COUNT,
+            SnapshotMetric.TYPE_ERRORS,
+            SnapshotMetric.COVERED_LINES,
+            SnapshotMetric.COVERABLE_LINES,
+        }
+    )
     convention_exclusions: tuple[str, ...] = ("**/*_pb2.py", "**/*_pb2_grpc.py")
 
     def measure(self, ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
         listed = list(files)
         return [
             *measure_lengths(ctx, listed),
+            measure_python_duplication(ctx, listed),
             measure_ruff_lint(ctx, listed),
             measure_pyright_types(ctx, listed),
+            *coverage_measurements(read_coverage(ctx.repo_root), self.language, listed),
         ]

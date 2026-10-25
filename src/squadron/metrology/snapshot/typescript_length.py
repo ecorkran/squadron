@@ -18,11 +18,12 @@ import tree_sitter_typescript
 from squadron import __version__
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.lengths import (
-    FunctionLength,
+    MeasuredFunction,
     count_non_blank_span,
-    measure_length_metrics,
+    measure_parse_metrics,
     physical_lines,
 )
+from squadron.metrology.snapshot.typescript_complexity import COMPLEXITY_COUNTING, typescript_complexity
 from squadron.metrology.snapshot_models import Measurement, SourceLanguage, ToolIdentity
 
 TREE_SITTER_TOOL_NAME = "squadron-tree-sitter-ts"
@@ -77,6 +78,11 @@ def tree_sitter_tool_identity() -> ToolIdentity:
     )
 
 
+def tree_sitter_complexity_tool_identity() -> ToolIdentity:
+    """The same in-process parser, with the complexity metric's own counting text."""
+    return tree_sitter_tool_identity().model_copy(update={"counting": COMPLEXITY_COUNTING})
+
+
 @functools.cache
 def _language(tsx: bool) -> tree_sitter.Language:
     grammar = (
@@ -116,23 +122,30 @@ def _is_counted(node: tree_sitter.Node) -> bool:
     return node.type != "arrow_function" or body.type == _BODY_BLOCK
 
 
-def _extract_functions(path: str, text: str) -> list[FunctionLength]:
+def parse_checked(path: str, text: str) -> tree_sitter.Tree:
+    """Parse *text* with the grammar *path*'s suffix selects; raise on an error node."""
     tree = _parser(Path(path).suffix.lower() == _TSX_SUFFIX).parse(text.encode("utf-8"))
     if tree.root_node.has_error:
         raise TypeScriptParseError("the syntax tree contains an error node")
+    return tree
+
+
+def _extract_functions(path: str, text: str) -> list[MeasuredFunction]:
+    tree = parse_checked(path, text)
     lines = physical_lines(text)
-    found: list[FunctionLength] = []
+    found: list[MeasuredFunction] = []
     pending = [tree.root_node]
     while pending:
         node = pending.pop()
         if _is_counted(node):
             start = _start_row(node) + 1
             found.append(
-                FunctionLength(
+                MeasuredFunction(
                     path=path,
                     qualified_name=_name(node),
                     start_line=start,
                     length=count_non_blank_span(lines, start, node.end_point.row + 1),
+                    complexity=typescript_complexity(node, _is_counted),
                 )
             )
         pending.extend(reversed(node.children))
@@ -140,12 +153,13 @@ def _extract_functions(path: str, text: str) -> list[FunctionLength]:
 
 
 def measure_typescript_lengths(ctx: AdapterContext, files: Sequence[str]) -> list[Measurement]:
-    """File length and function length for *files* (no external tool, no Node)."""
-    return measure_length_metrics(
+    """File length, function length and complexity for *files* (no external tool, no Node)."""
+    return measure_parse_metrics(
         ctx.repo_root,
         files,
         SourceLanguage.TYPESCRIPT,
         tree_sitter_tool_identity(),
+        tree_sitter_complexity_tool_identity(),
         ctx.limits,
         _extract_functions,
         (TypeScriptParseError, MemoryError),
