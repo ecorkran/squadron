@@ -17,10 +17,12 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
 from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
+from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.snapshot_models import CodeSnapshot
 from squadron.review.models import Verdict
 
@@ -38,6 +40,8 @@ RECORD_TYPE_PRODUCER_REPLAY = "producer_replay"
 RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
 #: Written by 400's code snapshot: one record per (project, commit).
 RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
+#: Written by 402's review ingest: one record per code-review file.
+RECORD_TYPE_CODE_REVIEW = "code_review"
 
 
 class JudgeResultRef(BaseModel):
@@ -117,35 +121,6 @@ class GraduatedConfig(BaseModel):
     artifact_level: ArtifactLevel
     evidence: EvidenceSnapshot
     graduated_at: datetime
-
-
-class AuditCategory(StrEnum):
-    """The closed issue-class vocabulary audit findings normalize into (323).
-
-    Nine values mirror the audit skill's nine prose dimensions; ``OTHER`` is
-    the tenth and is **load-bearing, not a dumping ground**. A finding whose
-    category the model invents outside this vocabulary normalizes to
-    ``OTHER`` with its original string retained on
-    ``AuditFinding.raw_category`` — nothing is discarded. A rising ``other``
-    share is evidence the vocabulary does not fit a codebase, which the
-    baseline report surfaces rather than hides.
-
-    The skill file enumerates these same ten values. That duplication spans
-    a process boundary (a markdown prompt and a Python enum cannot import
-    from each other) and is held in sync by
-    ``tests/metrology/test_audit_skill_sync.py``, so drift fails CI.
-    """
-
-    ARCHITECTURAL_DECAY = "architectural-decay"
-    CONSISTENCY_ROT = "consistency-rot"
-    TYPE_CONTRACT_DEBT = "type-contract-debt"
-    TEST_DEBT = "test-debt"
-    DEPENDENCY_CONFIG_DEBT = "dependency-config-debt"
-    PERFORMANCE_RESOURCE = "performance-resource"
-    ERROR_HANDLING_OBSERVABILITY = "error-handling-observability"
-    SECURITY_HYGIENE = "security-hygiene"
-    DOCUMENTATION_DRIFT = "documentation-drift"
-    OTHER = "other"
 
 
 class AuditSeverity(StrEnum):
@@ -281,3 +256,4 @@ class MetrologyRecord(BaseModel):
     producer_replay: ProducerReplay | None = None
     pairwise_judgment: PairwiseJudgment | None = None
     code_snapshot: CodeSnapshot | None = None
+    code_review: CodeReviewRecord | None = None

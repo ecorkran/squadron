@@ -9,8 +9,8 @@ dependencies:
 interfaces:
 - 403
 dateCreated: 20261022
-dateUpdated: 20261023
-status: not_started
+dateUpdated: 20261025
+status: complete
 turns: 38
 promptTokens: 2796590
 cachedTokens: 2695294
@@ -64,7 +64,7 @@ This slice puts code-review findings into the same buckets. The `code` template 
 ### Interfaces Required
 - `squadron.metrology.identity.derive_project_id(cwd)` for the record's project key.
 - `squadron.documents.frontmatter.parse_frontmatter(text)` to parse frontmatter from the text read once per file (D5, failure-mode table).
-- `squadron.review.reviews_dir.resolve_reviews_dir(cwd)` for the default ingest location.
+- `squadron.review.reviews_dir.resolve_reviews_dir(...)` for the default ingest location. It also needs host, owner and repository, which ingest takes from the project id (`host/owner/.../repository`); a project id with fewer than three segments fails with a message asking for `PATHS`.
 - `ReviewTemplate` loading in `squadron/review/templates/__init__.py`, which gets one new optional field.
 - The parse closure in `squadron/review/review_client.py`, the only call site of `parse_review_output`.
 
@@ -235,6 +235,7 @@ Ingested <n> code reviews into <store dir> (<n> replaced)
 Skipped: <n> not code reviews, <n> unknown verdict
 Failed: <n>
 ```
+- A `Dropped: <n> findings with a severity outside the review scale` line follows the skipped line when any finding was dropped (each drop also logs a WARNING with the file and finding id). Relative `PATHS` are relative to the shell's current directory, not `--cwd`.
 - Exit codes are in the failure-mode table under Data Flow.
 
 **Review output additions**
@@ -316,6 +317,23 @@ Run from the squadron repo root.
 3. **Inspect a record.** Open the store record for `947-review.code.*`. It has `record_type: code_review` and `slice_index: 947`. `commit_sha` equals the file's `reviewedSha`, `error-handling` is mapped to `error-handling-observability`, and `read_side_mapped` is true.
 
 4. **A new code review is categorized at write time.** Once the slice is implemented, run `sq review code 402 --model <alias>` with a model alias from the Project Manager's configuration. The frontmatter has `categoriesNormalized: true`, and every finding `category` is one of the eleven values or `uncategorized`. Ingest again and open the new record: `read_side_mapped` is false.
+
+### Walkthrough Results
+
+Run 20261025 on the slice branch.
+
+| Step | Result |
+|---|---|
+| 1 | `test_review_category_sync.py`, `test_audit_skill_sync.py` and `test_audit_models.py`: 18 passed. With the `correctness` line deleted from `code.yaml`'s vocabulary block: `AssertionError: ReviewCategory values missing from code.yaml: ['correctness']`. Reverted |
+| 2 | `sq metrology ingest-reviews`: `Ingested 89 code reviews ... (0 replaced)`, `Skipped: 289 not code reviews, 7 unknown verdict`, `Failed: 1`. The failure was a tasks review with the verdict `RESOLVED`, checked before its review type; fixed so a non-code review is skipped whatever its verdict. Second run: `Ingested 89 ... (89 replaced)`, `Failed: 0`, and 89 `codereview-*` files in the store before and after |
+| 3 | The 947 record: `record_type: code_review`, `slice_index: 947`, `commit_sha` equal to the file's `reviewedSha`, `error-handling` mapped to `error-handling-observability` (raw kept), `read_side_mapped: true`. Across all 89 records: 591 findings, 102 `other`, 113 missing, 55 `correctness`, 99 `error-handling-observability` |
+| 4 | `sq review code 402 --model sonnet`: frontmatter has `categoriesNormalized: true` and every finding category is a `ReviewCategory` value. After ingest the 402 record has `read_side_mapped: false` and `commit_sha` of the reviewed commit |
+
+Caveats found while running it:
+- **The corpus changed since the design.** `103-review.code.cli-foundation.md`, `0-review.code.review-1.md` and the PR review now have verdict `UNKNOWN`, so they are skipped. The ingest fixtures use `156-review.code.pipeline-executor-hardening.md` for the no-`reviewedSha` case and a synthetic PR review with a known verdict.
+- **`resolve_reviews_dir` needs host, owner and repository** (see Interfaces Required).
+- **The saved structured findings gained a null `raw_category` key** (pipeline `findings` output), so one golden test was updated. The review file itself is unchanged for non-normalizing templates.
+- **A review file deleted or renamed leaves its record behind.** Ingest never prunes; documented in `docs/COMMANDS.md`.
 
 ## Risk Assessment
 

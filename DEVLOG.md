@@ -11,6 +11,18 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261025
 
+### Slice 402: Code-Review Normalization and Ingest — Implementation Complete (Phase 6)
+
+- Branch `402-slice.code-review-normalization-and-ingest`. `sq review code` findings now carry a category from `ReviewCategory` (the ten audit values plus `correctness`), normalized in the review client for templates that set `normalize_categories` (only `code.yaml`). New `sq metrology ingest-reviews` writes one `code_review` record per code-review file; historical reviews are mapped through a fixed 16-string table and marked `read_side_mapped`. `AuditCategory` moved to `core/finding_categories.py`; the arch, slice and tasks review output is unchanged.
+- Live check: ingest over squadron's own reviews gave 89 records (591 findings: 102 `other`, 113 missing, 55 `correctness`), re-run replaces all 89. A live `sq review code 402 --model sonnet` wrote `categoriesNormalized: true` with every category canonical.
+- Surprises:
+  - The corpus drifted since the design: `103-review.code.cli-foundation.md`, `0-review.code.review-1.md` and the PR review are all `UNKNOWN` now, so they are skipped. Fixtures use 156 and a synthetic PR review instead.
+  - A tasks review with verdict `RESOLVED` failed the first real ingest, because the verdict was validated before the review type. Non-code reviews are now skipped whatever their verdict.
+  - `resolve_reviews_dir` needs host, owner and repository, not just `cwd`; ingest takes them from the project id.
+  - `review-verdict-gate` refuses to commit a `docType: review` file without a verdict, so the missing-verdict fixture has no `docType`.
+  - The pipeline's structured `findings` output gained a null `raw_category` key; one golden test was updated.
+- Code review (sonnet) found one real gap, dropped findings with an unrecognized severity were silent. Fixed with a WARNING and a `Dropped:` summary line.
+
 ### Release 0.24.5
 
 - **Contents:** fix #271: `sq squash` finds a run buried under later commits (anywhere in unpushed first-parent history) and recreates the commits above it byte for byte with new parents, merges included (`pipeline/squash_rewrite.py`, `run_git_bytes`). Squash path sets now include parent documents (arch doc for slice/tasks, slice plan for arch) so review responses that amend them stay in the run; trailing parent-only commits are trimmed. Verified on a rebuild of context-forge's pre-squash 268 history: tasks 268, slice 268 and arch 260 each collapse to one commit under the merge.

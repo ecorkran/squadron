@@ -34,6 +34,7 @@ from squadron.providers.errors import EmptyFinalTurnError, ProviderError
 from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, profile_credentials
 from squadron.providers.registry import get_provider
+from squadron.review.categories import normalize_result_categories
 from squadron.review.coverage import impose_diff_coverage, impose_output_coverage
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import DiffInjection, ReviewResult
@@ -308,7 +309,7 @@ async def run_review_with_profile(
     cwd_for_checks = Path(inputs.get("cwd", "."))
 
     def parse(raw_output: str) -> ReviewResult:
-        return parse_review_output(
+        result = parse_review_output(
             raw_output=raw_output,
             template_name=template.name,
             input_files=inputs,
@@ -317,6 +318,9 @@ async def run_review_with_profile(
             cwd=cwd_for_checks,
             score_decides_verdict=template.is_judge,
         )
+        if template.normalize_categories:
+            normalize_result_categories(result)
+        return result
 
     # Create agent, send prompt, collect response, shut down
     # The budget the request actually carries. SDK and Codex agents cannot send one (they

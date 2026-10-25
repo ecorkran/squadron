@@ -71,6 +71,8 @@ class StructuredFinding:
     location: str | None = None
     # Carried from ReviewFinding so JSON consumers see it (slice 195 D12, #139).
     location_verified: bool | None = None
+    # The model's own category string when normalization changed it (slice 402).
+    raw_category: str | None = None
 
 
 @dataclass
@@ -96,6 +98,9 @@ class ReviewFinding:
     # non-code templates. Written, never read — nothing in this slice consumes
     # it, and it is absent from StructuredFinding, to_dict, and frontmatter.
     location_verified: bool | None = None
+    # The category string the model emitted, kept when write-time normalization
+    # changed it (slice 402, D4). None when the emitted string was already canonical.
+    raw_category: str | None = None
 
 
 @dataclass(frozen=True)
@@ -198,6 +203,10 @@ class ReviewResult:
     output_budget_exhausted: bool = False
     # Slice 924 D4: the per-request output budget sent. None means no budget was sent.
     max_output_tokens: int | None = None
+    # Slice 402: finding categories were normalized against ReviewCategory at write time
+    # (the template set normalize_categories). Ingest reads this to tell prompted
+    # categories from historical free-form ones.
+    categories_normalized: bool = False
     # Parse-scan facts (slice 917 Part 3). None means "not produced by the
     # parser" — a hand-built result — the same convention provenance uses.
     # These feed the artifact's run digest (Part 6); no gate reads them, and they
@@ -315,6 +324,7 @@ class ReviewResult:
                     "description": f.description,
                     "file_ref": f.file_ref,
                     "category": f.category,
+                    "raw_category": f.raw_category,
                     "location": f.location,
                 }
                 for f in self.findings
@@ -324,6 +334,7 @@ class ReviewResult:
                     "id": sf.id,
                     "severity": sf.severity,
                     "category": sf.category,
+                    "raw_category": sf.raw_category,
                     "summary": sf.summary,
                     "location": sf.location,
                     "location_verified": sf.location_verified,
@@ -339,6 +350,7 @@ class ReviewResult:
             "provenance": self.provenance,
             "tools_given": self.tools_given,
             "tool_calls_made": self.tool_calls_made,
+            "categories_normalized": self.categories_normalized,
             # Slice 918: additive and always present, null when the provider stamped
             # nothing, exactly as the two telemetry keys above behave. Emitted
             # unconditionally rather than only-when-set so a consumer can tell "reported
@@ -402,6 +414,7 @@ class ReviewResult:
                     summary=f.title,
                     location=f.location or f.file_ref,
                     location_verified=f.location_verified,
+                    raw_category=f.raw_category,
                 )
             )
         return result

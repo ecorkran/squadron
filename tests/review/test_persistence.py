@@ -132,6 +132,46 @@ class TestFormatReviewMarkdown:
         assert f1["summary"] == "Missing error handling"
         assert f1["location"] == "src/foo.py:10"
 
+    def test_normalized_result_writes_the_marker_and_raw_category_only_where_set(self) -> None:
+        result = ReviewResult(
+            verdict=Verdict.CONCERNS,
+            findings=[
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Out of vocabulary",
+                    description="d",
+                    category="other",
+                    raw_category='error "handling"',
+                    location="src/a.py:1",
+                ),
+                ReviewFinding(
+                    severity=Severity.CONCERN,
+                    title="Canonical",
+                    description="d",
+                    category="test-debt",
+                    location="src/b.py:2",
+                ),
+            ],
+            raw_output="",
+            template_name="code",
+            input_files={},
+            categories_normalized=True,
+        )
+
+        md = format_review_markdown(result, "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+
+        assert data["categoriesNormalized"] is True
+        assert data["findings"][0]["rawCategory"] == 'error "handling"'
+        assert "rawCategory" not in data["findings"][1]
+
+    def test_non_normalized_result_writes_neither_key(self) -> None:
+        md = format_review_markdown(_make_result(), "code", _make_slice_info())
+        data = yaml.safe_load(md.split("---")[1])
+
+        assert "categoriesNormalized" not in data
+        assert all("rawCategory" not in finding for finding in data["findings"])
+
     def test_location_with_colon_space_round_trips(self, tmp_path: Path) -> None:
         """The corruption class this slice exists to close.
 

@@ -324,6 +324,27 @@ def test_screen_2_leaves_an_unmatched_finding_as_residue(no_transport: None) -> 
     assert [record.finding_id for record in result.residue] == ["F001"]
 
 
+def test_mixed_pre_and_post_normalization_categories_are_not_settled_as_recurring(
+    no_transport: None,
+) -> None:
+    """Slice 402: round 1 predates normalization (`error-handling`), round 2 follows it
+    (`error-handling-observability`). The keys differ, so screen 2 leaves the finding for
+    the judge, which is how any category mismatch is already handled."""
+    with patch("squadron.review.addressed.screens.run_git", _changed_diff()):
+        diff = compute_round_diff(cwd=_CWD)
+
+    result = run_deterministic_screens(
+        prior_findings=[_finding("F001", location="src/x.py:12", category="error-handling")],
+        fresh_findings=[
+            _finding("F009", location="src/x.py:12", category="error-handling-observability")
+        ],
+        diff=diff,
+    )
+
+    assert result.outcomes == []
+    assert [record.finding_id for record in result.residue] == ["F001"]
+
+
 def test_unverified_locations_never_settle_in_screen_2(no_transport: None) -> None:
     """904 normalizes every unknown location to one token; matching on it would
     collide two unrelated findings and trap the loop until exhaustion."""

@@ -23,6 +23,7 @@ from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
     RECORD_TYPE_AUDIT_FINDING,
     RECORD_TYPE_AUDIT_NOISE_FLOOR,
+    RECORD_TYPE_CODE_REVIEW,
     RECORD_TYPE_CODE_SNAPSHOT,
     RECORD_TYPE_GRADUATED_CONFIG,
     RECORD_TYPE_PAIRWISE_JUDGMENT,
@@ -42,6 +43,7 @@ from squadron.metrology.replay_models import (
     ProducerReplay,
     ReplayPhase,
 )
+from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.snapshot_models import CodeSnapshot
 
 _logger = logging.getLogger(__name__)
@@ -110,6 +112,13 @@ def generate_judgment_id(now: datetime | None = None) -> str:
     """Return a unique ``pair-{YYYYMMDD}-{uuid8}`` id."""
     stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
     return f"pair-{stamp}-{uuid.uuid4().hex[:8]}"
+
+
+def code_review_record_id(project_id: ProjectId, review_path: str) -> str:
+    """The deterministic record id of an ingested code review: one per (project, path)."""
+    project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
+    path_digest = hashlib.sha256(review_path.encode("utf-8")).hexdigest()[:12]
+    return f"codereview-{project_digest}-{path_digest}"
 
 
 def snapshot_record_id(project_id: ProjectId, commit_sha: str) -> str:
@@ -463,6 +472,44 @@ class MetrologyStore:
             snapshots.append(snapshot)
         snapshots.sort(key=lambda snap: snap.measured_at, reverse=True)
         return snapshots
+
+    def write_code_review(self, review: CodeReviewRecord) -> str:
+        """Envelope and persist an ingested code review; return its record id.
+
+        The id is deterministic per (project, review path), so re-ingesting a file
+        replaces its record in place (402 D5).
+        """
+        record_id = code_review_record_id(review.project_id, review.review_path)
+        if review.record_id != record_id:
+            raise MetrologyStoreError(
+                f"Code review id {review.record_id!r} does not match the record id "
+                f"{record_id!r} for this project and path"
+            )
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_CODE_REVIEW,
+            code_review=review,
+        )
+        self._write_atomic(
+            self._record_path(record_id), json.dumps(record.model_dump(mode="json"), indent=2)
+        )
+        return record_id
+
+    def list_code_reviews(self, project_id: ProjectId) -> list[CodeReviewRecord]:
+        """Return a project's ingested code reviews, newest ``reviewed_at`` first.
+
+        Tolerantly skips an unreadable sibling with a WARNING, like the other list methods.
+        """
+        reviews: list[CodeReviewRecord] = []
+        for _, record in self._iter_records():
+            review = record.code_review
+            if review is None or record.record_type != RECORD_TYPE_CODE_REVIEW:
+                continue
+            if review.project_id.value != project_id.value:
+                continue
+            reviews.append(review)
+        reviews.sort(key=lambda item: item.reviewed_at, reverse=True)
+        return reviews
 
     def load_record(self, sample_id: str) -> MetrologyRecord:
         """Load and validate one record by id.

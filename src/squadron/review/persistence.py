@@ -638,12 +638,20 @@ def format_review_markdown(
         for name, value in result.criteria.items():
             lines.append(f"  {name}: {value}")
 
+    if result.categories_normalized:
+        # Slice 402: marks the categories below as prompted and normalized, so ingest
+        # doesn't map them through the historical alias table. Only when set, so every
+        # other review's frontmatter is unchanged.
+        lines.append("categoriesNormalized: true")
+
     if result.findings:
         lines.append("findings:")
         for sf in result.structured_findings:
             lines.append(f"  - id: {sf.id}")
             lines.append(f"    severity: {sf.severity}")
             lines.append(f"    category: {sf.category}")
+            if sf.raw_category is not None:
+                lines.append(f'    rawCategory: "{yaml_escape(sf.raw_category)}"')
             lines.append(f'    summary: "{yaml_escape(sf.summary)}"')
             if sf.location:
                 # location and summary are the only fields in this hand-built

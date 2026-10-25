@@ -262,6 +262,21 @@ prompt_builder: nonexistent.module.func
         assert t.is_judge is False
         assert t.judge is None
 
+    def test_normalize_categories_defaults_to_false(self, tmp_path: Path) -> None:
+        assert load_template(_write_yaml(tmp_path, VALID_YAML)).normalize_categories is False
+
+    def test_normalize_categories_true_is_read(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML + "normalize_categories: true\n")
+
+        assert load_template(path).normalize_categories is True
+
+    @pytest.mark.parametrize("value", ['"yes"', "1", "[true]"])
+    def test_non_bool_normalize_categories_fails_to_load(self, tmp_path: Path, value: str) -> None:
+        path = _write_yaml(tmp_path, VALID_YAML + f"normalize_categories: {value}\n")
+
+        with pytest.raises(TemplateValidationError, match="normalize_categories"):
+            load_template(path)
+
 
 class TestBuildPrompt:
     """Test ReviewTemplate.build_prompt edge cases."""
