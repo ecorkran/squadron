@@ -41,6 +41,8 @@ dependencies = [
     "tree-sitter-typescript>=0.23.2",
     # Codex provider (openai-oauth): official SDK with a bundled runtime binary.
     "openai-codex>=0.159.3,<1",
+    # CA bundle floor: earlier releases still trust the emSign root removed from Mozilla/Apple/MS in Oct 2026.
+    "certifi>=2026.10.19",
 ]
 
 [project.scripts]

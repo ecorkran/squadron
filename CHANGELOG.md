@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Requires certifi 2026.10.19 or newer, so upgraded installs drop the emSign root that Mozilla, Apple and Microsoft removed in October 2026.
+
 ## [0.24.3] - 20261025
 
 - First published release of the 0.24.2 changes below; 0.24.2 was tagged but never reached PyPI (a help-text test failed under CI's forced colour).
