@@ -464,6 +464,7 @@ The tracked hook runs `cf validate frontmatter` on staged markdown. `sq doctor` 
 - **[docs/PIPELINES.md](docs/PIPELINES.md)**: pipeline authoring guide
 - **[docs/TEMPLATES.md](docs/TEMPLATES.md)**: review templates and how to write new ones
 - **[docs/EVENTS.md](docs/EVENTS.md)**: bind your own Python callables to squadron's lifecycle events
+- **[docs/CHEATSHEET.html](docs/CHEATSHEET.html)**: one-page printable quick reference (download and open in a browser)
 
 ## License
 
