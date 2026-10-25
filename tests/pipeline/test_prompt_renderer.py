@@ -23,6 +23,7 @@ from squadron.pipeline.prompt_renderer import (
     _render_devlog,
     _render_dispatch,
     _render_review,
+    _render_squash,
     _render_summary,
     render_loop_round_commit,
     render_step_instructions,
@@ -336,6 +337,42 @@ class TestRenderBranch:
         )
 
         assert [a.command for a in result.actions] == ["sq _branch merge --slice 152"]
+
+
+class TestRenderSquash:
+    def test_slice_squash_renders_sq_squash(self) -> None:
+        result = _render_squash({"kind": "slice", "index": "948"}, {})
+
+        assert result.action_type == ActionType.SQUASH
+        assert result.command == "sq squash slice 948"
+
+    def test_default_index_falls_back_to_the_pipeline_param(self) -> None:
+        assert _render_squash({"kind": "tasks", "index": "{slice}"}, {"slice": "948"}).command == (
+            "sq squash tasks 948"
+        )
+
+    def test_inside_each_the_item_index_renders(self) -> None:
+        """Inside an each the pipeline's slice param is a record; the step's resolved index wins."""
+        result = _render_squash({"kind": "slice", "index": "107"}, {"slice": {"index": 107}})
+        assert result.command == "sq squash slice 107"
+
+    @pytest.mark.parametrize("kind", ["arch", "plan"])
+    def test_initiative_kinds_render_their_index(self, kind: str) -> None:
+        assert _render_squash({"kind": kind, "index": "100"}, {}).command == f"sq squash {kind} 100"
+
+    def test_squash_step_renders_through_the_step_pipeline(self) -> None:
+        step = StepConfig(step_type="squash", name="squash-0", config={"kind": "slice"})
+
+        result = render_step_instructions(
+            step,
+            step_index=0,
+            total_steps=1,
+            params={"slice": "948"},
+            resolver=_make_resolver(),
+            run_id="run-test",
+        )
+
+        assert [a.command for a in result.actions] == ["sq squash slice 948"]
 
 
 class TestRenderLoopRoundCommit:

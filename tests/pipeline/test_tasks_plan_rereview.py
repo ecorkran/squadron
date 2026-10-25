@@ -110,6 +110,7 @@ async def test_tasked_slice_without_a_tasks_review_is_re_reviewed_and_revised(
             "cf-op": _ok("cf-op"),
             "checkpoint": _ok("checkpoint"),
             "commit": _ok("commit"),
+            "squash": _ok("squash"),
             "summary": _ok("summary"),
         },
     )

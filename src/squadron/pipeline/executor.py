@@ -523,6 +523,7 @@ async def execute_pipeline(
     import squadron.pipeline.actions.devlog as _a_devlog  # noqa: F401
     import squadron.pipeline.actions.dispatch as _a_dispatch  # noqa: F401
     import squadron.pipeline.actions.review as _a_review  # noqa: F401
+    import squadron.pipeline.actions.squash as _a_squash  # noqa: F401
     import squadron.pipeline.actions.summary as _a_summary  # noqa: F401
     import squadron.pipeline.intelligence.fan_in.reducers as _fan_in_reducers  # noqa: F401
 
@@ -535,6 +536,7 @@ async def execute_pipeline(
         _a_devlog,
         _a_dispatch,
         _a_review,
+        _a_squash,
         _a_summary,
         _fan_in_reducers,
     )

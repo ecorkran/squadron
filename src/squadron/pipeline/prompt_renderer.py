@@ -38,6 +38,9 @@ from squadron.pipeline.loop_commit import round_commit_params
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.steps import StepTypeName, get_step_type
 from squadron.pipeline.steps.branch import WHEN_PARAM
+from squadron.pipeline.steps.squash import DEFAULT_SLICE_REF
+from squadron.pipeline.steps.squash import INDEX_PARAM as SQUASH_INDEX_PARAM
+from squadron.pipeline.steps.squash import KIND_PARAM as SQUASH_KIND_PARAM
 from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
@@ -373,6 +376,26 @@ def _render_branch(
     )
 
 
+def _render_squash(
+    config: dict[str, object],
+    params: dict[str, object],
+) -> ActionInstruction:
+    """Build instruction for a squash action: ``sq squash <kind> <index>``."""
+    kind = config.get(SQUASH_KIND_PARAM)
+    if kind is None:
+        raise ValueError("squash action has no 'kind'; cannot render it")
+    index = config.get(SQUASH_INDEX_PARAM)
+    if index == DEFAULT_SLICE_REF:
+        index = params.get(SLICE_PARAM)
+    if not isinstance(index, str | int) or index == "":
+        raise ValueError(f"squash {kind} needs an index, got {index!r}")
+    return ActionInstruction(
+        action_type=ActionType.SQUASH,
+        instruction=f"Squash the {kind} commit run into one commit",
+        command=shlex.join(["sq", "squash", str(kind), str(index)]),
+    )
+
+
 def render_loop_round_commit(
     inner_steps: Sequence[StepConfig], params: dict[str, object], round_number: int
 ) -> ActionInstruction:
@@ -491,6 +514,7 @@ _BUILDERS: dict[str, object] = {
     ActionType.CHECKPOINT: _render_checkpoint,
     ActionType.COMMIT: _render_commit,
     ActionType.BRANCH: _render_branch,
+    ActionType.SQUASH: _render_squash,
     ActionType.COMPACT: _render_compact,
     ActionType.SUMMARY: _render_summary,
     ActionType.DEVLOG: _render_devlog,

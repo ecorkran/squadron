@@ -339,3 +339,44 @@ class TestFailureModes:
             result = runner.invoke(app, ["metrology", "list", "--cwd", str(capture_project.root)])
         assert result.exit_code != 0
         assert "store error" in result.output.lower()
+
+
+class TestMetrShorthand:
+    """``sq metr`` is a hidden second mount of the metrology group (slice 948 D7)."""
+
+    def test_help_lists_the_same_subcommands(self) -> None:
+        full = runner.invoke(app, ["metrology", "--help"])
+        short = runner.invoke(app, ["metr", "--help"])
+        assert full.exit_code == 0 and short.exit_code == 0, short.output
+        assert short.output.split("Commands")[1] == full.output.split("Commands")[1]
+
+    def test_list_output_matches(self, capture_project: CaptureProject, cli_store: Path) -> None:
+        with _budget(10):
+            runner.invoke(
+                app,
+                [
+                    "metrology",
+                    "sample",
+                    str(capture_project.review_index),
+                    "--type",
+                    capture_project.review_type,
+                    "--verdict",
+                    "PASS",
+                    "--cwd",
+                    str(capture_project.root),
+                ],
+            )
+        full = runner.invoke(app, ["metrology", "list", "--cwd", str(capture_project.root)])
+        short = runner.invoke(app, ["metr", "list", "--cwd", str(capture_project.root)])
+        assert short.exit_code == 0, short.output
+        assert short.output == full.output
+
+    def test_root_help_shows_metrology_and_hides_metr(self) -> None:
+        result = runner.invoke(app, ["--help"])
+        tokens = [
+            line.strip(" │|").split(maxsplit=1)[0]
+            for line in result.output.splitlines()
+            if line.strip(" │|")
+        ]
+        assert "metrology" in tokens
+        assert "metr" not in tokens

@@ -11,6 +11,17 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261025
 
+### Slice 948: Squash Planning Commit Sets — Implementation Complete (Phase 6)
+
+- Branch `948-slice.squash-planning-commit-sets-command-and-pipeline-action`. New: `pipeline/squash.py` (`plan_squash`, `apply_squash`, `check_squash_scope`), `sq squash`, `squash` step/action/renderer, step after every planning loop in P4, P5, P45, P456, P56, `slices-plan`, `tasks-plan`. Part B: `sq metr` hidden mount, own commit.
+- `commit_plan.subject_paths` returns a `SubjectPaths` (candidates + archive prefix rule); `build_commit_plan` uses it, so commit and squash share one path set. Shared cf mock moved to `tests/pipeline/commit_fixtures.py`.
+- Commit split deviates: T2–T5 code landed in one commit (refusals with run detection), since `squash.py` was written whole.
+- Live check passed in a temp clone. It needs the clone registered with cf (`cf init --lite` + `cf set plan`), else `PROJECT_NOT_FOUND`; walkthrough in the slice design records this.
+- PM syntax change after Phase 6: `sq squash <kind> <index>`, kind `slice|tasks|arch|plan` (`SquashKind`, `SquashTarget`); step YAML is `squash: { kind: slice }`, `index` defaults to `{slice}`. New `plan` kind: slice plan file + DEVLOG (`commit_plan.slice_plan_paths`, `persistence.resolve_slice_plan_file`); no review template targets a slice plan, so no reviews in that set. `arch` stays architecture-only for now.
+- Live check found plan-only commits folded under a slice squash (the slice plan is in the design's path set) with a plan commit as survivor. Fix: the run starts at the oldest commit that touches the artifact itself (`SubjectPaths.is_artifact`), replacing the DEVLOG-only trim.
+- A squash only takes the run ending at HEAD: `sq squash plan 900` under newer design commits is "nothing to squash".
+- Not done: code review (Phase 7), merge.
+
 ### Slice 948: Squash Planning Commit Sets — Task Breakdown Complete (Phase 5)
 
 - Tasks: `project-documents/user/tasks/948-tasks.squash-planning-commit-sets-command-and-pipeline-action.md`, 16 tasks, test-with ordering, all git tests on real temp repos.

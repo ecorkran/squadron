@@ -25,6 +25,7 @@ from squadron.review.persistence import (
     SliceInfo,
     resolve_arch_file,
     resolve_slice_info,
+    resolve_slice_plan_file,
 )
 from squadron.review.save_target import ArchTarget
 from squadron.review.template_inputs import review_artifact_stems
@@ -86,6 +87,14 @@ def subject_for_template(template: str) -> CommitSubject:
         ) from None
 
 
+def template_for_subject(subject: CommitSubject) -> str:
+    """The review template whose reviews ``subject``'s artifact gets; raises when none does."""
+    for template, mapped in _SUBJECT_BY_TEMPLATE.items():
+        if mapped is subject:
+            return template
+    raise UnmappedTemplateError(f"commit subject {subject!r} has no review template")
+
+
 @dataclass(frozen=True)
 class CommitTarget:
     """The work a commit covers."""
@@ -124,6 +133,71 @@ class _Candidate:
     is_review: bool = False
 
 
+@dataclass(frozen=True)
+class SubjectPaths:
+    """Every path a target's commits may touch, as the repository root names it.
+
+    The candidates are computed; archived review copies cannot be (their names carry
+    a timestamp), so they are matched by the prefix rule in ``is_archived_review``.
+    """
+
+    root: Path
+    candidates: tuple[_Candidate, ...]
+    archive_prefixes: tuple[str, ...]  # repo path of each review, ``.md`` removed, under archive/
+
+    def is_archived_review(self, repo_path: str) -> bool:
+        """Whether ``repo_path`` is an archived copy of one of the target's reviews."""
+        return any(
+            repo_path == f"{prefix}.md"
+            or (repo_path.startswith(f"{prefix}.") and repo_path.endswith(".md"))
+            for prefix in self.archive_prefixes
+        )
+
+    def is_artifact(self, repo_path: str) -> bool:
+        """Whether ``repo_path`` is the target's artifact itself (not a review, plan or DEVLOG)."""
+        return any(c.is_artifact and c.repo_path == repo_path for c in self.candidates)
+
+    def contains(self, repo_path: str) -> bool:
+        """Whether ``repo_path`` (relative to the repository root) belongs to the target."""
+        return any(c.repo_path == repo_path for c in self.candidates) or self.is_archived_review(
+            repo_path
+        )
+
+
+def subject_paths(target: CommitTarget, cwd: Path, cf_client: CfClientProtocol) -> SubjectPaths:
+    """The path set ``target`` covers; reads no git status, so dirtiness is irrelevant.
+
+    Raises:
+        GitEnvironmentError: git could not report the repository root.
+        ValueError: ``target`` lacks the slice or plan its subject needs.
+    """
+    root = _repo_root(cwd)
+    candidates = tuple(_candidates(target, cwd, root, cf_client))
+    prefixes: list[str] = []
+    for review in (c for c in candidates if c.is_review):
+        directory, _, filename = review.repo_path.rpartition("/")
+        prefixes.append(f"{directory}/{ARCHIVE_SUBDIR}/{filename.removesuffix('.md')}")
+    return SubjectPaths(root, candidates, tuple(prefixes))
+
+
+def slice_plan_paths(plan_index: int, cwd: Path) -> SubjectPaths:
+    """The path set of initiative ``plan_index``'s slice plan: the plan file and ``DEVLOG.md``.
+
+    No review template targets a slice plan, so there are no reviews to include.
+
+    Raises:
+        GitEnvironmentError: git could not report the repository root.
+        FileNotFoundError: no slice plan file exists for ``plan_index``.
+    """
+    root = _repo_root(cwd)
+    plan_file = resolve_slice_plan_file(plan_index, cwd)
+    candidates = (
+        _candidate(plan_file, cwd, root, is_artifact=True),
+        _candidate(DEVLOG_FILE, cwd, root),
+    )
+    return SubjectPaths(root, candidates, ())
+
+
 def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtocol) -> CommitPlan:
     """What ``target``'s commit stages, and the message to commit it with (D1, D2).
 
@@ -138,11 +212,10 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
     """
     from squadron.pipeline.commit_message import ArtifactChange, StagedFacts, compose_message
 
-    root = _repo_root(cwd)
+    subject = subject_paths(target, cwd, cf_client)
     dirty = _read_dirty_paths(cwd)
-    candidates = _candidates(target, cwd, root, cf_client)
-    present = [c for c in candidates if c.repo_path in dirty]
-    present += _archived_reviews(candidates, dirty, cwd, root)
+    present = [c for c in subject.candidates if c.repo_path in dirty]
+    present += _archived_reviews(subject, dirty, cwd)
 
     if target.subject is CommitSubject.CODE:
         # Code can touch any file (D3): everything dirty belongs to the slice.
@@ -192,27 +265,20 @@ def _staged_verdict(reviews: list[_Candidate], cwd: Path) -> str | None:
         return None
 
 
-def _archived_reviews(
-    candidates: list[_Candidate], dirty: dict[str, _Dirty], cwd: Path, root: Path
-) -> list[_Candidate]:
+def _archived_reviews(subject: SubjectPaths, dirty: dict[str, _Dirty], cwd: Path) -> list[_Candidate]:
     """Dirty archive copies of the reviews this commit covers.
 
     Saving a review archives the one it replaces under ``archive/``, with a timestamp in
     the name for older generations, so the exact names cannot be computed. They are
-    matched by prefix against what git reports as changed, and travel with their review.
+    matched against what git reports as changed, and travel with their review.
     """
-    found: list[_Candidate] = []
-    for review in (c for c in candidates if c.is_review):
-        directory, _, filename = review.repo_path.rpartition("/")
-        stem = filename.removesuffix(".md")
-        archive_prefix = f"{directory}/{ARCHIVE_SUBDIR}/{stem}"
-        for repo_path in sorted(dirty):
-            if repo_path == f"{archive_prefix}.md" or (
-                repo_path.startswith(f"{archive_prefix}.") and repo_path.endswith(".md")
-            ):
-                relative = Path(os.path.relpath(root / repo_path, cwd)).as_posix()
-                found.append(_Candidate(path=relative, repo_path=repo_path))
-    return found
+    return [
+        _Candidate(
+            path=Path(os.path.relpath(subject.root / repo_path, cwd)).as_posix(), repo_path=repo_path
+        )
+        for repo_path in sorted(dirty)
+        if subject.is_archived_review(repo_path)
+    ]
 
 
 def read_review_verdict(review_file: Path) -> str | None:
