@@ -46,7 +46,7 @@ For a patch, state the chosen version in one line and proceed.
 ```
 git tag -a vX.Y.Z -m "vX.Y.Z"
 git push
-git push --tags
+git push origin vX.Y.Z   # only the release tag; never --tags (local squash-backup tags must stay local)
 ```
 
 ## 6. Watch CI and PyPI
