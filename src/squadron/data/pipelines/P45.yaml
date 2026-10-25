@@ -28,7 +28,7 @@ steps:
       steps:
         - dispatch: { name: revise, model: "{design-model}", feedback: review, artifact: design }
         - review: { template: slice, model: "{review-model}", slice: "{slice}" }
-  - squash: { subject: design }
+  - squash: { kind: slice }
 
   - tasks:
       phase: 5
@@ -46,7 +46,7 @@ steps:
       steps:
         - dispatch: { name: revise, model: "{model}", feedback: review, artifact: tasks }
         - review: { template: tasks, model: "{review-model}", slice: "{slice}" }
-  - squash: { subject: tasks }
+  - squash: { kind: tasks }
 
   - summary:
       template: minimal-sdk

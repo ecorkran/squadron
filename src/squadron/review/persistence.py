@@ -117,13 +117,27 @@ def resolve_arch_file(index: int, cwd: str | Path = ".") -> str:
     Raises:
         FileNotFoundError: when no architecture document matches.
     """
+    return _resolve_initiative_file(index, "arch", cwd)
+
+
+def resolve_slice_plan_file(index: int, cwd: str | Path = ".") -> str:
+    """Resolve an initiative index to its slice plan path (``{index}-slices.*.md``).
+
+    Raises:
+        FileNotFoundError: when no slice plan matches.
+    """
+    return _resolve_initiative_file(index, "slices", cwd)
+
+
+def _resolve_initiative_file(index: int, doc_type: str, cwd: str | Path) -> str:
+    """The ``{index}-{doc_type}.*.md`` document under the architecture directory."""
     arch_dir = Path(ARCHITECTURE_DIR)
-    pattern = f"{index}-arch.*.md"
+    pattern = f"{index}-{doc_type}.*.md"
     matches = sorted((Path(cwd) / arch_dir).glob(pattern))
     if not matches:
-        raise FileNotFoundError(f"No architecture document matching '{pattern}' in {arch_dir}/")
+        raise FileNotFoundError(f"No {doc_type} document matching '{pattern}' in {arch_dir}/")
     if len(matches) > 1:
-        _logger.warning("Multiple arch docs for index %d, using %s", index, matches[0].name)
+        _logger.warning("Multiple %s docs for index %d, using %s", doc_type, index, matches[0].name)
     return str(arch_dir / matches[0].name)
 
 

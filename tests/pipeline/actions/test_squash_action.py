@@ -17,7 +17,7 @@ def _run(repo: Path, **params: object) -> ActionResult:
     context = ActionContext(
         pipeline_name="test-pipeline",
         run_id="run-001",
-        params={"subject": "design", "slice": "105", **params},
+        params={"kind": "slice", "index": "105", **params},
         step_name="squash-step",
         step_index=0,
         prior_outputs={},
@@ -60,7 +60,7 @@ def test_refusal_fails_the_step(temp_git_repo: Path) -> None:
 
 
 def test_bad_slice_value_fails_the_step(temp_git_repo: Path) -> None:
-    result = _run(temp_git_repo, slice={"index": 105})
+    result = _run(temp_git_repo, index={"index": 105})
 
     assert result.success is False
     assert result.error is not None and "slice index" in result.error

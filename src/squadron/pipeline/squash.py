@@ -11,7 +11,8 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import NoReturn
 
@@ -20,6 +21,7 @@ from squadron.pipeline.commit_plan import (
     CommitSubject,
     CommitTarget,
     SubjectPaths,
+    slice_plan_paths,
     subject_paths,
     template_for_subject,
 )
@@ -29,11 +31,26 @@ from squadron.review.persistence import CfClientProtocol
 
 _logger = logging.getLogger(__name__)
 
-# The planning artifacts a squash may collapse; every caller validates against this.
-SQUASHABLE_SUBJECTS = frozenset({CommitSubject.DESIGN, CommitSubject.TASKS, CommitSubject.ARCHITECTURE})
 BACKUP_TAG_PREFIX = "squash-backup/"
 _SHORT_SHA_LENGTH = 8
 _MINIMUM_RUN = 2
+
+
+class SquashKind(StrEnum):
+    """The planning artifact a squash collapses; the index names a slice or an initiative."""
+
+    SLICE = "slice"  # slice design
+    TASKS = "tasks"  # task breakdown
+    ARCH = "arch"  # initiative architecture
+    PLAN = "plan"  # initiative slice plan
+
+
+# The commit subject whose path set each kind uses; PLAN has none (``slice_plan_paths``).
+_SUBJECT_BY_KIND: dict[SquashKind, CommitSubject] = {
+    SquashKind.SLICE: CommitSubject.DESIGN,
+    SquashKind.TASKS: CommitSubject.TASKS,
+    SquashKind.ARCH: CommitSubject.ARCHITECTURE,
+}
 
 
 class SquashRefusedError(ValueError):
@@ -42,6 +59,14 @@ class SquashRefusedError(ValueError):
 
 class SquashRewriteError(RuntimeError):
     """The rewrite failed after it started; HEAD was restored unless the text says otherwise."""
+
+
+@dataclass(frozen=True)
+class SquashTarget:
+    """What to squash: a slice's design or tasks, or an initiative's architecture or plan."""
+
+    kind: SquashKind
+    index: int
 
 
 @dataclass(frozen=True)
@@ -64,56 +89,33 @@ class SquashPlan:
     tag_exists: bool  # the backup tag already points at HEAD (a rerun)
 
 
-def backup_tag_name(subject: CommitSubject, index: int | str, head_sha: str) -> str:
-    """The backup tag for a squash of ``subject`` ``index`` at ``head_sha`` (D4)."""
-    return f"{BACKUP_TAG_PREFIX}{subject}-{index}-{head_sha[:_SHORT_SHA_LENGTH]}"
-
-
-def check_squash_scope(subject: str, has_slice: bool, has_plan: bool) -> CommitSubject:
-    """The subject as a ``CommitSubject``, if it may be squashed with this scope.
-
-    ``architecture`` is initiative-scoped and takes a plan; ``design`` and ``tasks``
-    take a slice. Exactly one of the two is allowed.
-
-    Raises:
-        ValueError: the subject is not squashable, or the scope does not match it.
-    """
-    allowed = ", ".join(sorted(SQUASHABLE_SUBJECTS))
-    if subject not in SQUASHABLE_SUBJECTS:
-        raise ValueError(f"cannot squash {subject!r}: the subject must be one of {allowed}")
-    parsed = CommitSubject(subject)
-    if parsed is CommitSubject.ARCHITECTURE:
-        if has_slice or not has_plan:
-            raise ValueError("an architecture squash takes --plan N and no --slice")
-    elif has_plan or not has_slice:
-        raise ValueError(f"a {parsed} squash takes --slice N and no --plan")
-    return parsed
+def backup_tag_name(target: SquashTarget, head_sha: str) -> str:
+    """The backup tag for squashing ``target`` at ``head_sha`` (D4)."""
+    return f"{BACKUP_TAG_PREFIX}{target.kind}-{target.index}-{head_sha[:_SHORT_SHA_LENGTH]}"
 
 
 def plan_squash(
-    target: CommitTarget, target_branch: str, cwd: Path, cf_client: CfClientProtocol
+    target: SquashTarget, target_branch: str, cwd: Path, cf_client: CfClientProtocol
 ) -> SquashPlan | None:
     """The newest run for ``target``, or ``None`` when there is nothing to squash (D2).
 
     Raises:
-        ValueError: the target's subject or scope cannot be squashed.
+        ValueError: cf does not know the slice, or the initiative has no such document.
+        FileNotFoundError: the initiative has no architecture or slice plan file.
         SquashRefusedError: the repository state is unsafe to rewrite (D3).
         GitEnvironmentError: git could not answer.
     """
-    subject = check_squash_scope(
-        target.subject, target.slice_index is not None, target.plan is not None
-    )
-    scoped = replace(target, review_template=template_for_subject(subject))
-    paths = subject_paths(scoped, cwd, cf_client)
+    paths = _path_set(target, cwd, cf_client)
     run = _trim_devlog_only(_find_run(paths, cwd), _devlog_repo_path(paths, cwd))
     if len(run) < _MINIMUM_RUN:
-        _logger.info("squash: nothing to squash for %s (run of %d)", subject, len(run))
+        _logger.info(
+            "squash: nothing to squash for %s %d (run of %d)", target.kind, target.index, len(run)
+        )
         return None
 
     oldest_sha = run[0][0]
     head = _git(["rev-parse", "HEAD"], cwd).strip()
-    index = target.plan if target.slice_index is None else target.slice_index
-    tag = backup_tag_name(subject, str(index), head)
+    tag = backup_tag_name(target, head)
     parent = _check_refusals(oldest_sha, head, tag, target_branch, cwd)
     commits = tuple(RunCommit(sha, _commit_subject(sha, cwd)) for sha, _ in run)
     return SquashPlan(
@@ -124,6 +126,19 @@ def plan_squash(
         backup_tag=tag,
         tag_exists=parent.tag_exists,
     )
+
+
+def _path_set(target: SquashTarget, cwd: Path, cf_client: CfClientProtocol) -> SubjectPaths:
+    """The files ``target``'s commits may touch, from the same rules commits use."""
+    if target.kind is SquashKind.PLAN:
+        return slice_plan_paths(target.index, cwd)
+    subject = _SUBJECT_BY_KIND[target.kind]
+    template = template_for_subject(subject)
+    if subject is CommitSubject.ARCHITECTURE:
+        commit_target = CommitTarget(subject, None, str(target.index), template, 0)
+    else:
+        commit_target = CommitTarget(subject, target.index, None, template, 0)
+    return subject_paths(commit_target, cwd, cf_client)
 
 
 def apply_squash(plan: SquashPlan, cwd: Path) -> str:

@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from tests.conftest import run_test_git
-from tests.pipeline.commit_fixtures import cf_client
+from tests.pipeline.commit_fixtures import ARCH_FILE, PLAN_FILE, cf_client
 from tests.pipeline.squash_helpers import assert_history_unchanged, history, planning_run
 
 runner = CliRunner()
@@ -31,7 +31,7 @@ def _log(repo: Path) -> list[str]:
 def test_squash_collapses_the_run_and_names_the_tag(in_repo: Path) -> None:
     planning_run(in_repo, 3)
 
-    result = runner.invoke(app, ["squash", "design", "--slice", "105"])
+    result = runner.invoke(app, ["squash", "slice", "105"])
 
     assert result.exit_code == 0, result.output
     assert "squashed 3 commits into" in result.output
@@ -45,13 +45,13 @@ def test_dry_run_prints_the_run_and_rewrites_nothing(in_repo: Path) -> None:
     shas = planning_run(in_repo, 3)
     before = history(in_repo)
 
-    result = runner.invoke(app, ["squash", "design", "--slice", "105", "--dry-run"])
+    result = runner.invoke(app, ["squash", "slice", "105", "--dry-run"])
 
     assert result.exit_code == 0, result.output
     for sha in shas:
         assert sha[:8] in result.output
     assert "surviving message: docs: planning round 1" in result.output
-    assert f"squash-backup/design-105-{shas[-1][:8]}" in result.output
+    assert f"squash-backup/slice-105-{shas[-1][:8]}" in result.output
     assert "dry run: nothing rewritten" in result.output
     assert_history_unchanged(in_repo, before)
 
@@ -59,31 +59,49 @@ def test_dry_run_prints_the_run_and_rewrites_nothing(in_repo: Path) -> None:
 def test_run_of_one_is_nothing_to_squash(in_repo: Path) -> None:
     planning_run(in_repo, 1)
 
-    result = runner.invoke(app, ["squash", "design", "--slice", "105", "--dry-run"])
+    result = runner.invoke(app, ["squash", "slice", "105", "--dry-run"])
 
     assert result.exit_code == 0, result.output
     assert result.output.strip() == "nothing to squash"
 
 
-@pytest.mark.parametrize(
-    ("args", "message"),
-    [
-        (["squash", "code", "--slice", "1"], "must be one of"),
-        (["squash", "design", "--plan", "100"], "takes --slice N"),
-    ],
-)
-def test_bad_scope_exits_one(in_repo: Path, args: list[str], message: str) -> None:
-    result = runner.invoke(app, args)
+def test_arch_is_accepted_and_architecture_is_not(in_repo: Path) -> None:
+    planning_run(in_repo, 3, artifact=ARCH_FILE)
 
+    accepted = runner.invoke(app, ["squash", "arch", "100", "--dry-run"])
+    rejected = runner.invoke(app, ["squash", "architecture", "100"])
+
+    assert accepted.exit_code == 0, accepted.output
+    assert "run of 3 commits" in accepted.output
+    assert rejected.exit_code == 2
+
+
+def test_plan_squashes_the_slice_plan(in_repo: Path) -> None:
+    planning_run(in_repo, 2, artifact=PLAN_FILE)
+
+    result = runner.invoke(app, ["squash", "plan", "100"])
+
+    assert result.exit_code == 0, result.output
+    assert "squashed 2 commits" in result.output
+    assert "squash-backup/plan-100-" in result.output
+
+
+def test_unknown_kind_exits_two(in_repo: Path) -> None:
+    result = runner.invoke(app, ["squash", "code", "105"])
+    assert result.exit_code == 2
+
+
+def test_missing_slice_plan_exits_one(in_repo: Path) -> None:
+    result = runner.invoke(app, ["squash", "plan", "999"])
     assert result.exit_code == 1
-    assert message in result.output
+    assert "999-slices" in result.output
 
 
 def test_refusal_exits_one(in_repo: Path) -> None:
     planning_run(in_repo, 2)
     (in_repo / "README.md").write_text("dirty\n")
 
-    result = runner.invoke(app, ["squash", "design", "--slice", "105"])
+    result = runner.invoke(app, ["squash", "slice", "105"])
 
     assert result.exit_code == 1
     assert "not clean" in result.output

@@ -25,6 +25,7 @@ from squadron.review.persistence import (
     SliceInfo,
     resolve_arch_file,
     resolve_slice_info,
+    resolve_slice_plan_file,
 )
 from squadron.review.save_target import ArchTarget
 from squadron.review.template_inputs import review_artifact_stems
@@ -173,6 +174,24 @@ def subject_paths(target: CommitTarget, cwd: Path, cf_client: CfClientProtocol) 
         directory, _, filename = review.repo_path.rpartition("/")
         prefixes.append(f"{directory}/{ARCHIVE_SUBDIR}/{filename.removesuffix('.md')}")
     return SubjectPaths(root, candidates, tuple(prefixes))
+
+
+def slice_plan_paths(plan_index: int, cwd: Path) -> SubjectPaths:
+    """The path set of initiative ``plan_index``'s slice plan: the plan file and ``DEVLOG.md``.
+
+    No review template targets a slice plan, so there are no reviews to include.
+
+    Raises:
+        GitEnvironmentError: git could not report the repository root.
+        FileNotFoundError: no slice plan file exists for ``plan_index``.
+    """
+    root = _repo_root(cwd)
+    plan_file = resolve_slice_plan_file(plan_index, cwd)
+    candidates = (
+        _candidate(plan_file, cwd, root, is_artifact=True),
+        _candidate(DEVLOG_FILE, cwd, root),
+    )
+    return SubjectPaths(root, candidates, ())
 
 
 def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtocol) -> CommitPlan:

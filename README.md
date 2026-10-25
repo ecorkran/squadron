@@ -198,7 +198,7 @@ sq run P4 152                                  # design slice 152, revise until 
 sq run P456 152 --model {model-alias}          # design → tasks → implement → devlog
 sq run P4 152 -p review-model={model-alias}    # override any pipeline param
 sq run P4 152 --dry-run                        # show the plan without running it
-sq squash design --slice 152                   # collapse a design's commit run into one commit
+sq squash slice 152                            # collapse slice 152's design commits into one (also tasks, arch, plan)
 sq pipelines show P4                           # the YAML a pipeline name runs, and where it lives
 sq runs list                                   # running runs, and paused, failed and batch runs you can resume
 sq run P4 152 --run-id my-run-1                # choose the run id (every run prints run_id=<id> to stderr)

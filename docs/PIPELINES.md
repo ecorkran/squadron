@@ -416,34 +416,34 @@ Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter →
 
 ### `squash`
 
-**Purpose:** Collapse a planning artifact's commit run (create, review, one commit per loop round) into one commit, so `git log --oneline` shows one line per artifact. The built-in planning pipelines run it after each design or tasks revise loop. The same work runs from the command line as `sq squash`.
+**Purpose:** Collapse a planning artifact's commit run (create, review, one commit per loop round) into one commit, so `git log --oneline` shows one line per artifact. The built-in planning pipelines run it after each slice design or tasks revise loop. The same work runs from the command line as `sq squash`.
 
 ```yaml
-- squash: { subject: design }                          # slice defaults to "{slice}"
-- squash: { subject: tasks, slice: "{slice.index}" }   # inside an each
-- squash: { subject: architecture, plan: "{plan}" }
+- squash: { kind: slice }                           # index defaults to "{slice}"
+- squash: { kind: tasks, index: "{slice.index}" }   # inside an each
+- squash: { kind: arch, index: "{plan}" }
 ```
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `subject` | string | yes | `design`, `tasks` or `architecture` |
-| `slice` | string | no | Slice index for `design` and `tasks` (default `{slice}`; use `{slice.index}` inside an `each`) |
-| `plan` | string | `architecture` only | Initiative index; `architecture` takes no `slice` |
+| `kind` | string | yes | `slice` (slice design), `tasks` (task breakdown), `arch` (initiative architecture) or `plan` (initiative slice plan) |
+| `index` | string | `arch`, `plan` | Slice index for `slice` and `tasks` (default `{slice}`; use `{slice.index}` inside an `each`); initiative index for `arch` and `plan` |
 
 Any other key is rejected.
 
-**The run.** Starting at HEAD and walking first-parent history, the run is every commit whose changed files all belong to the artifact: the design, tasks or architecture file, its reviews and their archived copies, the slice plan file and `DEVLOG.md`. It ends at the first commit that touches anything else, or at a merge commit. Commits are matched by file, never by message. Commits that touch only `DEVLOG.md` are dropped from the oldest end, so the surviving commit is always an artifact commit. The rewrite is `git reset --soft` to the commit before the run, then one `git commit -C` that keeps the oldest commit's message, author and author date. A run of fewer than two commits is a successful no-op (`nothing to squash`).
+**The run.** Starting at HEAD and walking first-parent history, the run is every commit whose changed files all belong to the artifact: for `slice` and `tasks`, the design or tasks file, its reviews and their archived copies, the slice plan file and `DEVLOG.md`; for `arch`, the architecture file, its review and `DEVLOG.md`; for `plan`, the slice plan file and `DEVLOG.md`. It ends at the first commit that touches anything else, or at a merge commit. Commits are matched by file, never by message. Commits that touch only `DEVLOG.md` are dropped from the oldest end, so the surviving commit is always an artifact commit. The rewrite is `git reset --soft` to the commit before the run, then one `git commit -C` that keeps the oldest commit's message, author and author date. A run of fewer than two commits is a successful no-op (`nothing to squash`).
 
 **Refusals.** Before anything changes, the step fails and names the cause when the working tree is not clean, HEAD is not on the integration target (`git.integration_branch`, else `main`), the run reaches the repository's root commit, the run is already in a remote-tracking ref, or the backup tag already exists on another commit. The remote check reads refs as of your last fetch and never contacts the remote. If the new commit fails (a hook, signing) or its tree differs from the old HEAD's, HEAD is reset to the backup tag and the step fails; if even that reset fails, the error prints the `git reset --hard <tag>` to run.
 
-**Backup tags.** Every squash first tags the old HEAD `squash-backup/{subject}-{index}-{short sha}`. A rerun on the same HEAD reuses the tag. Tags are never deleted for you: list them with `git tag -l 'squash-backup/*'` and remove one with `git tag -d <tag>`.
+**Backup tags.** Every squash first tags the old HEAD `squash-backup/{kind}-{index}-{short sha}`. A rerun on the same HEAD reuses the tag. Tags are never deleted for you: list them with `git tag -l 'squash-backup/*'` and remove one with `git tag -d <tag>`.
 
 **From the command line:**
 
 ```bash
-sq squash design --slice 152 --dry-run   # list the run, the surviving message and the tag; rewrite nothing
-sq squash tasks --slice 152
-sq squash architecture --plan 180
+sq squash slice 152 --dry-run   # list the run, the surviving message and the tag; rewrite nothing
+sq squash tasks 152             # slice 152's task breakdown
+sq squash arch 180              # initiative 180's architecture
+sq squash plan 180              # initiative 180's slice plan
 ```
 
 Pipeline `--dry-run` lists the step and runs no git.

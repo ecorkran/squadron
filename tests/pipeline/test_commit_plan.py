@@ -10,6 +10,7 @@ from squadron.pipeline.commit_plan import (
     CommitSubject,
     CommitTarget,
     UnmappedTemplateError,
+    slice_plan_paths,
     subject_for_template,
     subject_paths,
     template_for_subject,
@@ -107,3 +108,19 @@ def test_architecture_target_contains_arch_file_review_and_devlog(temp_git_repo:
     for member in (ARCH_FILE, ARCH_REVIEW, "DEVLOG.md"):
         assert paths.contains(member), member
     assert not paths.contains(DESIGN_FILE)
+
+
+def test_slice_plan_paths_contain_the_plan_and_devlog_only(temp_git_repo: Path) -> None:
+    write_file(temp_git_repo, PLAN_FILE, "plan\n")
+
+    paths = slice_plan_paths(100, temp_git_repo)
+
+    assert paths.contains(PLAN_FILE)
+    assert paths.contains("DEVLOG.md")
+    assert not paths.contains(ARCH_FILE)
+    assert not paths.contains(DESIGN_FILE)
+
+
+def test_slice_plan_paths_without_a_plan_file_raise(temp_git_repo: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="100-slices"):
+        slice_plan_paths(100, temp_git_repo)

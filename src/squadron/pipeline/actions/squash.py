@@ -10,23 +10,18 @@ import asyncio
 from pathlib import Path
 
 from squadron.pipeline.actions import ActionType, register_action
-from squadron.pipeline.commit_plan import (
-    PLAN_PARAM,
-    SLICE_PARAM,
-    CommitSubject,
-    CommitTarget,
-    CommitTargetError,
-)
+from squadron.pipeline.commit_plan import CommitTargetError
 from squadron.pipeline.git_ops import SliceNotInPlanError, parse_slice_index, read_integration_target
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.squash import (
+    SquashKind,
     SquashRefusedError,
     SquashRewriteError,
+    SquashTarget,
     apply_squash,
-    check_squash_scope,
     plan_squash,
 )
-from squadron.pipeline.steps.squash import SUBJECT_PARAM
+from squadron.pipeline.steps.squash import INDEX_PARAM, KIND_PARAM
 
 SQUASHED_OUTPUT = "squashed"
 COMMIT_OUTPUT = "commit"
@@ -41,18 +36,27 @@ class SquashAction:
         return ActionType.SQUASH
 
     def validate(self, config: dict[str, object]) -> list[ValidationError]:
-        """The step type validates subject and scope; nothing more is checkable before run time."""
+        """The step type validates kind and index; nothing more is checkable before run time."""
         return []
 
     async def execute(self, context: ActionContext) -> ActionResult:
         try:
-            target = _target(context.params)
+            target = SquashTarget(
+                SquashKind(str(context.params.get(KIND_PARAM))),
+                parse_slice_index(context.params.get(INDEX_PARAM)),
+            )
         except ValueError as exc:
             return self._failure(str(exc))
         try:
             # git and cf run as subprocesses; keep them off the event loop.
             outputs = await asyncio.to_thread(_squash, target, context)
-        except (SquashRefusedError, SquashRewriteError, CommitTargetError, SliceNotInPlanError) as exc:
+        except (
+            SquashRefusedError,
+            SquashRewriteError,
+            CommitTargetError,
+            SliceNotInPlanError,
+            FileNotFoundError,
+        ) as exc:
             # This step failed; environment faults (GitEnvironmentError) raise past here
             # and end the run.
             return self._failure(str(exc))
@@ -62,19 +66,7 @@ class SquashAction:
         return ActionResult(success=False, action_type=self.action_type, outputs={}, error=error)
 
 
-def _target(params: dict[str, object]) -> CommitTarget:
-    """The squash target from the action params; raises ValueError for a bad value."""
-    subject = check_squash_scope(
-        str(params.get(SUBJECT_PARAM)),
-        params.get(SLICE_PARAM) is not None,
-        params.get(PLAN_PARAM) is not None,
-    )
-    if subject is CommitSubject.ARCHITECTURE:
-        return CommitTarget(subject, None, str(params[PLAN_PARAM]), None, 0)
-    return CommitTarget(subject, parse_slice_index(params[SLICE_PARAM]), None, None, 0)
-
-
-def _squash(target: CommitTarget, context: ActionContext) -> dict[str, object]:
+def _squash(target: SquashTarget, context: ActionContext) -> dict[str, object]:
     cwd = Path(context.cwd)
     branch = read_integration_target(context.cf_client)
     plan = plan_squash(target, branch, cwd, context.cf_client)

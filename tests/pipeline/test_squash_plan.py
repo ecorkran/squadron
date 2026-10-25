@@ -7,10 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from squadron.pipeline.commit_plan import CommitSubject
-from squadron.pipeline.squash import SquashRefusedError, check_squash_scope, plan_squash
+from squadron.pipeline.squash import SquashKind, SquashRefusedError, plan_squash
 from tests.conftest import run_test_git
-from tests.pipeline.commit_fixtures import ARCH_FILE, DESIGN_FILE, TASKS_FILE, cf_client
+from tests.pipeline.commit_fixtures import ARCH_FILE, DESIGN_FILE, PLAN_FILE, TASKS_FILE, cf_client
 from tests.pipeline.squash_helpers import (
     DEVLOG,
     FOREIGN_FILE,
@@ -115,37 +114,34 @@ def test_devlog_only_commits_stay_inside_but_are_trimmed_at_the_oldest_end(temp_
     assert_history_unchanged(temp_git_repo, before)
 
 
-def test_architecture_target_finds_its_run(temp_git_repo: Path) -> None:
+def test_arch_target_finds_its_run(temp_git_repo: Path) -> None:
     shas = planning_run(temp_git_repo, 3, artifact=ARCH_FILE)
     before = history(temp_git_repo)
 
-    plan = _plan(temp_git_repo, subject=CommitSubject.ARCHITECTURE, slice_index=None, plan="100")
+    plan = _plan(temp_git_repo, kind=SquashKind.ARCH, index=100)
 
     assert plan is not None
     assert [c.sha for c in plan.commits] == shas
-    assert plan.backup_tag.startswith("squash-backup/architecture-100-")
+    assert plan.backup_tag.startswith("squash-backup/arch-100-")
     assert_history_unchanged(temp_git_repo, before)
 
 
-@pytest.mark.parametrize(
-    ("subject", "has_slice", "has_plan"),
-    [
-        ("code", True, False),
-        ("devlog", True, False),
-        ("architecture", True, True),
-        ("architecture", False, False),
-        ("design", True, True),
-        ("tasks", False, False),
-    ],
-)
-def test_check_squash_scope_rejects(subject: str, has_slice: bool, has_plan: bool) -> None:
-    with pytest.raises(ValueError):
-        check_squash_scope(subject, has_slice, has_plan)
+def test_plan_target_finds_its_slice_plan_run(temp_git_repo: Path) -> None:
+    commit_files(temp_git_repo, "docs: plan and design", PLAN_FILE, DESIGN_FILE)
+    shas = planning_run(temp_git_repo, 3, artifact=PLAN_FILE)
+    before = history(temp_git_repo)
+
+    plan = _plan(temp_git_repo, kind=SquashKind.PLAN, index=100)
+
+    assert plan is not None
+    assert [c.sha for c in plan.commits] == shas
+    assert plan.backup_tag.startswith("squash-backup/plan-100-")
+    assert_history_unchanged(temp_git_repo, before)
 
 
-def test_check_squash_scope_accepts() -> None:
-    assert check_squash_scope("design", True, False) is CommitSubject.DESIGN
-    assert check_squash_scope("architecture", False, True) is CommitSubject.ARCHITECTURE
+def test_plan_without_a_slice_plan_file_raises(temp_git_repo: Path) -> None:
+    with pytest.raises(FileNotFoundError, match="999-slices"):
+        _plan(temp_git_repo, kind=SquashKind.PLAN, index=999)
 
 
 # ---------------------------------------------------------------------------

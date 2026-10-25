@@ -26,7 +26,7 @@ steps:
       steps:
         - dispatch: { name: revise, model: "{model}", feedback: review, artifact: tasks }
         - review: { template: tasks, model: "{review-model}", slice: "{slice}" }
-  - squash: { subject: tasks }
+  - squash: { kind: tasks }
 
   - summary:
       template: minimal-sdk

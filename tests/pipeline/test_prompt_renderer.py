@@ -340,28 +340,28 @@ class TestRenderBranch:
 
 
 class TestRenderSquash:
-    def test_design_squash_renders_sq_squash(self) -> None:
-        result = _render_squash({"subject": "design", "slice": "948"}, {})
+    def test_slice_squash_renders_sq_squash(self) -> None:
+        result = _render_squash({"kind": "slice", "index": "948"}, {})
 
         assert result.action_type == ActionType.SQUASH
-        assert result.command == "sq squash design --slice 948"
+        assert result.command == "sq squash slice 948"
 
-    def test_slice_falls_back_to_the_pipeline_param(self) -> None:
-        assert _render_squash({"subject": "tasks"}, {"slice": "948"}).command == (
-            "sq squash tasks --slice 948"
+    def test_default_index_falls_back_to_the_pipeline_param(self) -> None:
+        assert _render_squash({"kind": "tasks", "index": "{slice}"}, {"slice": "948"}).command == (
+            "sq squash tasks 948"
         )
 
     def test_inside_each_the_item_index_renders(self) -> None:
-        """Inside an each the pipeline's slice param is a record; the step's resolved slice wins."""
-        result = _render_squash({"subject": "design", "slice": "107"}, {"slice": {"index": 107}})
-        assert result.command == "sq squash design --slice 107"
+        """Inside an each the pipeline's slice param is a record; the step's resolved index wins."""
+        result = _render_squash({"kind": "slice", "index": "107"}, {"slice": {"index": 107}})
+        assert result.command == "sq squash slice 107"
 
-    def test_architecture_renders_the_plan(self) -> None:
-        result = _render_squash({"subject": "architecture", "plan": "100"}, {})
-        assert result.command == "sq squash architecture --plan 100"
+    @pytest.mark.parametrize("kind", ["arch", "plan"])
+    def test_initiative_kinds_render_their_index(self, kind: str) -> None:
+        assert _render_squash({"kind": kind, "index": "100"}, {}).command == f"sq squash {kind} 100"
 
     def test_squash_step_renders_through_the_step_pipeline(self) -> None:
-        step = StepConfig(step_type="squash", name="squash-0", config={"subject": "design"})
+        step = StepConfig(step_type="squash", name="squash-0", config={"kind": "slice"})
 
         result = render_step_instructions(
             step,
@@ -372,7 +372,7 @@ class TestRenderSquash:
             run_id="run-test",
         )
 
-        assert [a.command for a in result.actions] == ["sq squash design --slice 948"]
+        assert [a.command for a in result.actions] == ["sq squash slice 948"]
 
 
 class TestRenderLoopRoundCommit:

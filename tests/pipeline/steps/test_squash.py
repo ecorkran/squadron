@@ -16,9 +16,10 @@ def _config(config: dict[str, object]) -> StepConfig:
 @pytest.mark.parametrize(
     "config",
     [
-        {"subject": "design"},
-        {"subject": "tasks", "slice": "{slice.index}"},
-        {"subject": "architecture", "plan": "100"},
+        {"kind": "slice"},
+        {"kind": "tasks", "index": "{slice.index}"},
+        {"kind": "arch", "index": "100"},
+        {"kind": "plan", "index": "{plan}"},
     ],
 )
 def test_valid_configs_pass(config: dict[str, object]) -> None:
@@ -29,21 +30,21 @@ def test_valid_configs_pass(config: dict[str, object]) -> None:
     "config",
     [
         {},
-        {"subject": "code"},
-        {"subject": "architecture"},
-        {"subject": "design", "plan": "100"},
-        {"subject": "design", "colour": "blue"},
+        {"kind": "code"},
+        {"kind": "arch"},
+        {"kind": "plan"},
+        {"kind": "slice", "colour": "blue"},
     ],
 )
 def test_invalid_configs_give_one_error(config: dict[str, object]) -> None:
     assert len(SquashStepType().validate(_config(config))) == 1
 
 
-def test_design_expands_to_one_action_with_the_default_slice() -> None:
-    actions = SquashStepType().expand(_config({"subject": "design"}))
-    assert actions == [(ActionType.SQUASH, {"subject": "design", "slice": "{slice}"})]
+def test_slice_expands_to_one_action_with_the_default_index() -> None:
+    actions = SquashStepType().expand(_config({"kind": "slice"}))
+    assert actions == [(ActionType.SQUASH, {"kind": "slice", "index": "{slice}"})]
 
 
-def test_architecture_gets_no_slice() -> None:
-    actions = SquashStepType().expand(_config({"subject": "architecture", "plan": "100"}))
-    assert actions == [(ActionType.SQUASH, {"subject": "architecture", "plan": "100"})]
+def test_arch_gets_no_default_index() -> None:
+    actions = SquashStepType().expand(_config({"kind": "arch", "index": "100"}))
+    assert actions == [(ActionType.SQUASH, {"kind": "arch", "index": "100"})]

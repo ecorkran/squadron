@@ -13,13 +13,13 @@ from pathlib import Path
 import typer
 
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
-from squadron.pipeline.commit_plan import CommitTarget
 from squadron.pipeline.git_ops import GitEnvironmentError, read_integration_target
 from squadron.pipeline.squash import (
+    SquashKind,
     SquashPlan,
     SquashRewriteError,
+    SquashTarget,
     apply_squash,
-    check_squash_scope,
     plan_squash,
 )
 
@@ -28,19 +28,21 @@ _SHORT = 8
 
 
 def squash_run(
-    subject: str = typer.Argument(..., help="design, tasks or architecture."),
-    slice_index: int | None = typer.Option(None, "--slice", help="Slice index (design, tasks)."),
-    plan: int | None = typer.Option(None, "--plan", help="Initiative index (architecture)."),
+    kind: SquashKind = typer.Argument(
+        ..., help="slice (design), tasks, arch (architecture) or plan (slice plan)."
+    ),
+    index: int = typer.Argument(
+        ..., help="Slice index for slice/tasks; initiative index for arch/plan."
+    ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show the run and the backup tag; rewrite nothing."
     ),
 ) -> None:
     """Collapse the newest commit run of one planning artifact into a single commit."""
     try:
-        parsed = check_squash_scope(subject, slice_index is not None, plan is not None)
-        target = CommitTarget(parsed, slice_index, None if plan is None else str(plan), None, 0)
         cwd = Path.cwd()
         cf_client = ContextForgeClient()
+        target = SquashTarget(kind, index)
         squash = plan_squash(target, read_integration_target(cf_client), cwd, cf_client)
         if squash is None:
             print("nothing to squash")
@@ -49,8 +51,8 @@ def squash_run(
             _print_dry_run(squash)
             return
         new_sha = apply_squash(squash, cwd)
-    except (ValueError, SquashRewriteError) as exc:
-        # Refusals, bad scope and failed rewrites are already logged where they happen.
+    except (ValueError, FileNotFoundError, SquashRewriteError) as exc:
+        # Refusals, unknown slices or initiatives and failed rewrites are logged where they happen.
         print(f"Error: {exc}", file=sys.stderr)
         raise typer.Exit(code=1) from None
     except (GitEnvironmentError, ContextForgeError) as exc:

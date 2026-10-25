@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from squadron.pipeline.commit_plan import CommitSubject, CommitTarget
+from squadron.pipeline.squash import SquashKind, SquashTarget
 from tests.conftest import run_test_git
 from tests.pipeline.commit_fixtures import DESIGN_FILE, SLICE, write_file
 
@@ -45,10 +45,5 @@ def assert_history_unchanged(repo: Path, before: tuple[str, str, str]) -> None:
     assert history(repo) == before
 
 
-def squash_target(
-    subject: CommitSubject = CommitSubject.DESIGN,
-    *,
-    slice_index: int | None = SLICE,
-    plan: str | None = None,
-) -> CommitTarget:
-    return CommitTarget(subject, slice_index, plan, None, 0)
+def squash_target(kind: SquashKind = SquashKind.SLICE, index: int = SLICE) -> SquashTarget:
+    return SquashTarget(kind, index)

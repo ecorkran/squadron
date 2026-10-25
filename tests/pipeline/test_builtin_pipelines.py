@@ -111,15 +111,15 @@ def test_single_slice_code_pipelines_match_the_batch_body(name: str) -> None:
 # Squash placement (slice 948 D6)
 # ---------------------------------------------------------------------------
 
-# (pipeline, [(index of the planning loop in the step list, squash subject)]); for the
+# (pipeline, [(index of the planning loop in the step list, squash kind)]); for the
 # batch pipelines the indices are inside the each body.
 _SQUASH_PLACEMENT: list[tuple[str, list[tuple[int, str]]]] = [
-    ("P4", [(1, "design")]),
+    ("P4", [(1, "slice")]),
     ("P5", [(1, "tasks")]),
-    ("P45", [(1, "design"), (4, "tasks")]),
-    ("P456", [(1, "design"), (4, "tasks")]),
+    ("P45", [(1, "slice"), (4, "tasks")]),
+    ("P456", [(1, "slice"), (4, "tasks")]),
     ("P56", [(1, "tasks")]),
-    ("slices-plan", [(2, "design")]),
+    ("slices-plan", [(2, "slice")]),
     ("tasks-plan", [(2, "tasks")]),
 ]
 
@@ -136,11 +136,11 @@ def _steps(name: str) -> list[tuple[str, dict[str, object]]]:
 @pytest.mark.parametrize(("name", "placements"), _SQUASH_PLACEMENT)
 def test_squash_follows_each_planning_loop(name: str, placements: list[tuple[int, str]]) -> None:
     steps = _steps(name)
-    for loop_index, subject in placements:
+    for loop_index, kind in placements:
         assert steps[loop_index][0] == "loop"
         squash_type, squash_config = steps[loop_index + 1]
         assert squash_type == "squash"
-        assert squash_config["subject"] == subject
+        assert squash_config["kind"] == kind
     assert sum(1 for step_type, _ in steps if step_type == "squash") == len(placements)
 
 

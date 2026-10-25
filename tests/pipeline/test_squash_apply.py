@@ -47,7 +47,7 @@ def test_backup_tag_points_at_old_head_and_matches_format(temp_git_repo: Path) -
 
     apply_squash(plan, temp_git_repo)
 
-    assert re.fullmatch(rf"squash-backup/design-{SLICE}-[0-9a-f]{{8}}", plan.backup_tag)
+    assert re.fullmatch(rf"squash-backup/slice-{SLICE}-[0-9a-f]{{8}}", plan.backup_tag)
     assert plan.backup_tag.endswith(shas[-1][:8])
     assert run_test_git(temp_git_repo, "rev-parse", f"{plan.backup_tag}^{{commit}}").strip() == shas[-1]
 

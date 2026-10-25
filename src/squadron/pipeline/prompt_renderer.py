@@ -22,7 +22,6 @@ from squadron.pipeline.commit_plan import (
     REVIEW_TEMPLATE_PARAM,
     SLICE_PARAM,
     SUBJECT_PARAM,
-    CommitSubject,
 )
 from squadron.pipeline.compaction_templates import (
     load_compaction_template,
@@ -39,7 +38,9 @@ from squadron.pipeline.loop_commit import round_commit_params
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
 from squadron.pipeline.steps import StepTypeName, get_step_type
 from squadron.pipeline.steps.branch import WHEN_PARAM
-from squadron.pipeline.steps.squash import SUBJECT_PARAM as SQUASH_SUBJECT_PARAM
+from squadron.pipeline.steps.squash import DEFAULT_SLICE_REF
+from squadron.pipeline.steps.squash import INDEX_PARAM as SQUASH_INDEX_PARAM
+from squadron.pipeline.steps.squash import KIND_PARAM as SQUASH_KIND_PARAM
 from squadron.providers.profiles import is_sdk_profile
 
 if TYPE_CHECKING:
@@ -379,21 +380,19 @@ def _render_squash(
     config: dict[str, object],
     params: dict[str, object],
 ) -> ActionInstruction:
-    """Build instruction for a squash action: ``sq squash <subject> --slice N`` (or ``--plan N``)."""
-    subject = config.get(SQUASH_SUBJECT_PARAM)
-    if subject is None:
-        raise ValueError("squash action has no 'subject'; cannot render it")
-    if subject == CommitSubject.ARCHITECTURE:
-        scope = ["--plan", str(config.get(PLAN_PARAM))]
-    else:
-        slice_ref = config.get(SLICE_PARAM) or params.get(SLICE_PARAM)
-        if not isinstance(slice_ref, str | int) or slice_ref == "":
-            raise ValueError(f"squash {subject} needs a slice index, got {slice_ref!r}")
-        scope = ["--slice", str(slice_ref)]
+    """Build instruction for a squash action: ``sq squash <kind> <index>``."""
+    kind = config.get(SQUASH_KIND_PARAM)
+    if kind is None:
+        raise ValueError("squash action has no 'kind'; cannot render it")
+    index = config.get(SQUASH_INDEX_PARAM)
+    if index == DEFAULT_SLICE_REF:
+        index = params.get(SLICE_PARAM)
+    if not isinstance(index, str | int) or index == "":
+        raise ValueError(f"squash {kind} needs an index, got {index!r}")
     return ActionInstruction(
         action_type=ActionType.SQUASH,
-        instruction=f"Squash the {subject} commit run into one commit",
-        command=shlex.join(["sq", "squash", str(subject), *scope]),
+        instruction=f"Squash the {kind} commit run into one commit",
+        command=shlex.join(["sq", "squash", str(kind), str(index)]),
     )
 
 
