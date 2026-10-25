@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sq metrology ingest-reviews` writes one record per code-review file into the metrology store, so review findings can be counted. Re-running it is safe: it replaces each file's record.
+- `sq review code` now asks for a category on every finding from the same ten-value vocabulary the tech-debt audit uses, plus `correctness`. A category outside it is recorded as `other` with the model's own wording kept as `rawCategory`, and the review file is marked `categoriesNormalized: true`. Older reviews are mapped to the same vocabulary when ingested.
+
 ## [0.24.1] - 20261024
 
 ### Added

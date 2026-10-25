@@ -139,6 +139,24 @@ def test_an_unrecognized_severity_is_counted_and_dropped(reviews: Path, store: M
     assert record.findings[0].severity is Severity.CONCERN
 
 
+def test_a_non_code_review_is_skipped_whatever_its_verdict_but_a_code_review_is_checked(
+    reviews: Path, store: MetrologyStore
+) -> None:
+    (reviews / "tasks-resolved.md").write_text(
+        "---\nreviewType: tasks\nverdict: RESOLVED\n---\n", encoding="utf-8"
+    )
+    (reviews / "code-resolved.code.md").write_text(
+        "---\nreviewType: code\nverdict: RESOLVED\ndateCreated: 20261001\n---\n", encoding="utf-8"
+    )
+
+    result, _ = run(reviews, store)
+
+    assert result.skipped_not_code == 2
+    failed = {path.name: reason for path, reason in result.failed}
+    assert "unrecognized verdict" in failed["code-resolved.code.md"]
+    assert "tasks-resolved.md" not in failed
+
+
 def test_a_non_utf8_file_is_failed(reviews: Path, store: MetrologyStore) -> None:
     (reviews / "latin1.code.md").write_bytes(b"---\nreviewType: code\n---\n\xff\xfe")
 

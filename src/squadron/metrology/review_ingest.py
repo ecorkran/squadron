@@ -218,14 +218,22 @@ def _build_record(
     )
 
 
+def _review_type(frontmatter: dict[str, object]) -> str:
+    review_type = frontmatter.get("reviewType")
+    if review_type is None:
+        raise _FileProblem("is missing reviewType")
+    return str(review_type)
+
+
 def _verdict(frontmatter: dict[str, object]) -> Verdict:
-    """The review's verdict; a missing or unrecognized ``reviewType``/``verdict`` is a failure."""
-    if frontmatter.get("reviewType") is None or frontmatter.get("verdict") is None:
-        raise _FileProblem("is missing reviewType or verdict")
+    """The review's verdict; a missing or unrecognized one is a failure."""
+    raw = frontmatter.get("verdict")
+    if raw is None:
+        raise _FileProblem("is missing verdict")
     try:
-        return Verdict(str(frontmatter["verdict"]))
+        return Verdict(str(raw))
     except ValueError as exc:
-        raise _FileProblem(f"has an unrecognized verdict {frontmatter['verdict']!r}") from exc
+        raise _FileProblem(f"has an unrecognized verdict {raw!r}") from exc
 
 
 def ingest_reviews(
@@ -245,10 +253,11 @@ def ingest_reviews(
     for path in files:
         try:
             frontmatter = _read_frontmatter(path)
-            verdict = _verdict(frontmatter)
-            if str(frontmatter["reviewType"]) != CODE_REVIEW_TYPE:
+            if _review_type(frontmatter) != CODE_REVIEW_TYPE:
+                # Other review types use their own verdict vocabulary; they aren't checked.
                 result.skipped_not_code += 1
                 continue
+            verdict = _verdict(frontmatter)
             if verdict is Verdict.UNKNOWN:
                 result.skipped_unknown_verdict += 1
                 continue
