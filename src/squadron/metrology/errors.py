@@ -85,3 +85,8 @@ class SnapshotAdapterContractError(MetrologyError):
     This is a bug in the adapter, not in the measured project, so it fails the whole
     snapshot rather than being recorded as an absent metric.
     """
+
+
+class ReviewIngestInputError(MetrologyError):
+    """An ingest input can't be used: a named path doesn't exist, or the default reviews
+    directory is missing or can't be resolved. Raised before anything is written."""
