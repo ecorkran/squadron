@@ -124,6 +124,7 @@ async def test_item_resume_on_a_planning_batch(
                 "review": review_action,
                 "cf-op": ok_action("cf-op"),
                 "commit": ok_action("commit"),
+                "squash": ok_action("squash"),
                 "summary": ok_action("summary"),
                 "checkpoint": ok_action("checkpoint"),
             },

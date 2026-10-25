@@ -10,6 +10,7 @@ import pytest
 from squadron.data import data_dir
 from squadron.pipeline.actions.branch import BranchAction
 from squadron.pipeline.actions.commit import CommitAction
+from squadron.pipeline.actions.squash import SquashAction
 from squadron.pipeline.executor import ExecutionStatus, execute_pipeline
 from squadron.pipeline.loader import load_pipeline, validate_pipeline
 from squadron.pipeline.models import ActionContext, ActionResult
@@ -72,7 +73,7 @@ def test_code_pipelines_gate_on_the_revise_loop(name: str) -> None:
 def test_planning_steps_come_before_the_enter_and_stay_on_the_target(name: str) -> None:
     steps = [s.step_type for s in load_pipeline(name).steps]
     enter = steps.index("branch")
-    assert all(t in {"design", "tasks", "loop", "summary", "compact"} for t in steps[:enter])
+    assert all(t in {"design", "tasks", "loop", "squash", "summary", "compact"} for t in steps[:enter])
 
 
 def test_every_builtin_with_an_implement_step_passes_the_enter_rule() -> None:
@@ -253,6 +254,7 @@ async def test_a_non_pass_code_review_pauses_without_merging(
             "review": review_action,
             "checkpoint": _ok("checkpoint"),
             "commit": CommitAction(),
+            "squash": SquashAction(),
             "devlog": _ok("devlog"),
             "summary": _ok("summary"),
             "compact": _ok("compact"),
