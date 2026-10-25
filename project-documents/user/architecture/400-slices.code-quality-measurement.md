@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 400-arch.code-quality-measurement.md
 project: squadron
 dateCreated: 20261020
-dateUpdated: 20261020
+dateUpdated: 20261025
 status: not_started
 ---
 
@@ -93,6 +93,7 @@ Ordering:
    - **Interfaces:** Provides the baseline command that 440's probe advertises. Consumes 400's snapshot and 323's audit and noise-floor commands.
    - **Risk Level:** Low
    - **Relative Effort:** 2/5
+   - **Deferred (20261025):** 440 was re-scoped to `sq onboard` and no longer offers this baseline, and the probe it was advertised through is now internal. Revisit once `sq onboard` ships: either onboard offers this command or the slice is dropped. 403 is parked alongside it; nothing needs it before 420.
 
 ---
 
