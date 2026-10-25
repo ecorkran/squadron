@@ -125,6 +125,9 @@ async def test_single_task_file_review_is_unchanged(
             "summary": "Task 3 lacks a test",
             "location": _TASK_PATH,
             "location_verified": None,
+            # Slice 402: the structured finding gained this key; null unless a template
+            # normalizes categories. The saved review file above is unchanged.
+            "raw_category": None,
         }
     ]
     assert result.metadata == {
