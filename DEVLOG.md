@@ -2,12 +2,21 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261024'
+dateUpdated: '20261025'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261025
+
+### Slice 948: Squash Planning Commit Sets — Task Breakdown Complete (Phase 5)
+
+- Tasks: `project-documents/user/tasks/948-tasks.squash-planning-commit-sets-command-and-pipeline-action.md`, 16 tasks, test-with ordering, all git tests on real temp repos.
+- Order: path-set extraction from `commit_plan.py` → `plan_squash` (run + refusals) → `apply_squash` (backup tag, restore on failure) → `sq squash` → step/action/renderer → built-in pipeline placement → docs → Part B `sq metr` (own commit).
+- Settled here: `architecture` takes `--plan N`; step goes after planning loops in P4, P5, P45, P456, P56, `slices-plan`, `tasks-plan` (none after code loops); pushed check tests only the run's oldest commit; existing backup tag at HEAD is reused.
+- Design D5 is off: `git commit -C` keeps the first commit's author date. No code for it; tests assert message and author only.
 
 ## 20261024
 

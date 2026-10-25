@@ -20,7 +20,7 @@ Fixes [issue #257](https://github.com/ecorkran/squadron/issues/257) (the squash 
 
 ## Technical Scope
 In scope:
-- `sq squash <subject> --slice N [--dry-run]` (`--dry-run` prints the commits in the run, the surviving message, and the backup tag it would make, and rewrites nothing), where subject is `design`, `tasks` or `architecture` (the existing `CommitSubject` values that name a planning artifact).
+- `sq squash <subject> --slice N [--dry-run]` (`architecture` is initiative-scoped, so it takes `--plan N` instead of `--slice N`; exactly one of the two, by subject) (`--dry-run` prints the commits in the run, the surviving message, and the backup tag it would make, and rewrites nothing), where subject is `design`, `tasks` or `architecture` (the existing `CommitSubject` values that name a planning artifact).
 - A `squash` pipeline action over the same function, added to the planning pipelines after their revise loop.
 - Prompt-only runs call the same command, as they do for commit and branch.
 - Part B, unrelated and tiny: `sq metr` accepted as a shorthand for `sq metrology` (D7).
@@ -68,7 +68,7 @@ After the rewrite, the tree id is compared with the one taken before. A mismatch
 Before rewriting, a tag `squash-backup/{subject}-{index}-{short-sha-of-HEAD}` points at the old HEAD. It is never deleted by the command and is named in the output. Tags are local; a rerun on the same HEAD finds the tag already present and says so. Tags accumulate by design: one per squash, listed with `git tag -l 'squash-backup/*'`, deleted by hand with `git tag -d`. No cleanup command; they are small and the cost is a long tag list.
 
 ### D5 Survivor
-The first commit's message and author are kept (the issue's rule). Its date becomes the squash time, which `git log` shows as the author date of the new commit; this is accepted.
+The first commit's message, author and author date are kept (the issue's rule; `git commit -C` keeps all three). The committer date is the squash time.
 
 ### D6 Pipeline placement
 The action takes `subject` as a step param written in the YAML (design for a design loop, tasks for a tasks loop) and the slice index from the `{slice}` pipeline param, the way the loop's own `review:` step already does. Inside an `each` step that param is the current item, so several slices are squashed one after another, each on its own run, and one refusal fails only that item's step. The action runs after the revise loop and before the next phase. A loop that ends on `on_exhaust: checkpoint` pauses before the squash step, so nothing is squashed until a person resumes. The action finds its run by the same file rule as the command, not by "commits since the step started", which answers #258's open question: the loop's commits are the newest run by construction. Any refusal fails the step. The step goes after each planning loop in P4, P5, P45 (two), P456 (design and tasks loops) and P56 (tasks loop). P6's loops, the code-review loops in P456 and P56, and the batch pipelines `slices-plan` and `tasks-plan` are checked in the task breakdown; a batch loop gets the step only if its loop commits per artifact the way P4 and P5 do. Pipeline `--dry-run` lists the step and runs no git.
