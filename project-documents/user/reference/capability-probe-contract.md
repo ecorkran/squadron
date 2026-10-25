@@ -2,12 +2,17 @@
 docType: reference
 project: squadron
 dateCreated: 20261020
-dateUpdated: 20261020
-status: not_started
+dateUpdated: 20261025
+status: deprecated
 dependsOn: [001-initiative-plan.squadron.md]
 ---
 
 # Capability Probe Contract (`sq probe --json`)
+
+> **Deprecated 20261025 (PM decision via cf).** cf no longer runs or reads `sq probe`: squadron calls
+> cf, never the reverse. `sq onboard` (squadron) owns adoption orchestration and uses cf's detection
+> report and adoption prompt (cf slice 271). The probe stays for squadron's internal use only; its
+> fields are no longer a cross-repo contract and the cf-facing strings get retired with `sq onboard`.
 
 A cross-repo contract between squadron initiative 440 and context-forge initiative 260. Context Forge
 runs the probe during brownfield onboarding to decide whether to take squadron's path, and tests these
