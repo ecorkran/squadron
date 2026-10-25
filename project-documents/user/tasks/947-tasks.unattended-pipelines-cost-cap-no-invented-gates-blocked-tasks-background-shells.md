@@ -6,8 +6,8 @@ lld: user/slices/947-slice.unattended-pipelines-cost-cap-no-invented-gates-block
 dependencies: []
 projectState: 0.23.2 released; slice 947 design complete (revision 2, plus D12 for #239)
 dateCreated: 20261018
-dateUpdated: 20261018
-status: not_started
+dateUpdated: 20261024
+status: complete
 ---
 
 # Tasks: Unattended Pipelines — Cost Cap, No Invented Gates, BLOCKED Tasks, Background Shells
