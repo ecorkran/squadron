@@ -9,7 +9,6 @@ and a backup tag at the old HEAD makes every rewrite recoverable (D4).
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
@@ -17,7 +16,6 @@ from pathlib import Path
 from typing import NoReturn
 
 from squadron.pipeline.commit_plan import (
-    DEVLOG_FILE,
     CommitSubject,
     CommitTarget,
     SubjectPaths,
@@ -106,7 +104,7 @@ def plan_squash(
         GitEnvironmentError: git could not answer.
     """
     paths = _path_set(target, cwd, cf_client)
-    run = _trim_devlog_only(_find_run(paths, cwd), _devlog_repo_path(paths, cwd))
+    run = _trim_to_artifact(_find_run(paths, cwd), paths)
     if len(run) < _MINIMUM_RUN:
         _logger.info(
             "squash: nothing to squash for %s %d (run of %d)", target.kind, target.index, len(run)
@@ -230,18 +228,18 @@ def _find_run(paths: SubjectPaths, cwd: Path) -> list[tuple[str, frozenset[str]]
     return run
 
 
-def _trim_devlog_only(
-    run: list[tuple[str, frozenset[str]]], devlog: str
+def _trim_to_artifact(
+    run: list[tuple[str, frozenset[str]]], paths: SubjectPaths
 ) -> list[tuple[str, frozenset[str]]]:
-    """Drop DEVLOG-only commits from the oldest end, so the survivor is an artifact commit."""
+    """Drop commits that do not touch the artifact itself from the oldest end (D1).
+
+    The survivor's message names the artifact, so a leading commit that touched only
+    DEVLOG, the slice plan or a review is left out of the run.
+    """
     start = 0
-    while start < len(run) and run[start][1] <= {devlog}:
+    while start < len(run) and not any(paths.is_artifact(p) for p in run[start][1]):
         start += 1
     return run[start:]
-
-
-def _devlog_repo_path(paths: SubjectPaths, cwd: Path) -> str:
-    return Path(os.path.relpath((cwd / DEVLOG_FILE).resolve(), paths.root)).as_posix()
 
 
 def _commit_subject(sha: str, cwd: Path) -> str:

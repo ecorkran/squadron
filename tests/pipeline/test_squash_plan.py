@@ -9,7 +9,14 @@ import pytest
 
 from squadron.pipeline.squash import SquashKind, SquashRefusedError, plan_squash
 from tests.conftest import run_test_git
-from tests.pipeline.commit_fixtures import ARCH_FILE, DESIGN_FILE, PLAN_FILE, TASKS_FILE, cf_client
+from tests.pipeline.commit_fixtures import (
+    ARCH_FILE,
+    DESIGN_FILE,
+    DESIGN_REVIEW,
+    PLAN_FILE,
+    TASKS_FILE,
+    cf_client,
+)
 from tests.pipeline.squash_helpers import (
     DEVLOG,
     FOREIGN_FILE,
@@ -111,6 +118,22 @@ def test_devlog_only_commits_stay_inside_but_are_trimmed_at_the_oldest_end(temp_
     assert plan is not None
     assert [c.sha for c in plan.commits] == [first, middle, last]
     assert plan.survivor == first
+    assert_history_unchanged(temp_git_repo, before)
+
+
+def test_leading_plan_and_review_only_commits_are_trimmed(temp_git_repo: Path) -> None:
+    """Plan-only commits belong to the slice's path set but must not become the survivor."""
+    commit_files(temp_git_repo, "docs: plan round 1", PLAN_FILE)
+    commit_files(temp_git_repo, "review: design review", DESIGN_REVIEW)
+    first = commit_files(temp_git_repo, "docs: add design", DESIGN_FILE)
+    later = commit_files(temp_git_repo, "docs: plan touch-up", PLAN_FILE)
+    before = history(temp_git_repo)
+
+    plan = _plan(temp_git_repo)
+
+    assert plan is not None
+    assert [c.sha for c in plan.commits] == [first, later]
+    assert plan.commits[0].subject == "docs: add design"
     assert_history_unchanged(temp_git_repo, before)
 
 
