@@ -31,6 +31,7 @@ def cf_client() -> MagicMock:
         SliceEntry(index=SLICE, name="Batch Foo", design_file=DESIGN_FILE, status="in_progress")
     ]
     client.list_tasks.return_value = [TaskEntry(index=SLICE, files=["105-tasks.batch-foo.md"])]
+    client.get_config.return_value = ""  # git.integration_branch unset: the target is main
     client.get_project.return_value = ProjectInfo(
         arch_file=ARCH_FILE,
         slice_plan="100-slices.plan-name",

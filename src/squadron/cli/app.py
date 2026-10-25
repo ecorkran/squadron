@@ -40,6 +40,7 @@ from squadron.cli.commands.setup import setup
 from squadron.cli.commands.shutdown import shutdown
 from squadron.cli.commands.skills import skills_app
 from squadron.cli.commands.spawn import spawn
+from squadron.cli.commands.squash_run import squash_run
 from squadron.cli.commands.stats import stats_app
 from squadron.cli.commands.summary_instructions import summary_instructions
 from squadron.cli.commands.summary_run import summary_run
@@ -74,6 +75,7 @@ app.add_typer(replay_app, name="replay")
 app.command("run")(run_command)
 app.command("probe")(probe)
 app.command("doctor")(doctor)
+app.command("squash")(squash_run)
 app.command("setup")(setup)
 app.command("install-commands")(install_commands)
 app.command("uninstall-commands")(uninstall_commands)
