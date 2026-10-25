@@ -12,7 +12,13 @@ from typer.testing import CliRunner
 from squadron.cli.app import app
 from tests.conftest import run_test_git
 from tests.pipeline.commit_fixtures import ARCH_FILE, PLAN_FILE, cf_client
-from tests.pipeline.squash_helpers import assert_history_unchanged, history, planning_run
+from tests.pipeline.squash_helpers import (
+    FOREIGN_FILE,
+    assert_history_unchanged,
+    commit_files,
+    history,
+    planning_run,
+)
 
 runner = CliRunner()
 
@@ -54,6 +60,19 @@ def test_dry_run_prints_the_run_and_rewrites_nothing(in_repo: Path) -> None:
     assert f"squash-backup/slice-105-{shas[-1][:8]}" in result.output
     assert "dry run: nothing rewritten" in result.output
     assert_history_unchanged(in_repo, before)
+
+
+def test_buried_run_reports_the_recreated_later_commits(in_repo: Path) -> None:
+    planning_run(in_repo, 3)
+    commit_files(in_repo, "feat: code", FOREIGN_FILE)
+
+    dry = runner.invoke(app, ["squash", "slice", "105", "--dry-run"])
+    result = runner.invoke(app, ["squash", "slice", "105"])
+
+    assert "later commits recreated on top (content unchanged): 1" in dry.output
+    assert result.exit_code == 0, result.output
+    assert "recreated 1 later commits on top (content unchanged)" in result.output
+    assert _log(in_repo) == ["feat: code", "docs: planning round 1", "init"]
 
 
 def test_run_of_one_is_nothing_to_squash(in_repo: Path) -> None:

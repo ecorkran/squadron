@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- `sq squash` now works after other commits land on top. It finds the artifact's run anywhere in unpushed history, including under a merged slice branch. It collapses the run and recreates everything above it with unchanged content, so arch, slice and tasks can each be squashed after the slice merges. Review responses that also edit the architecture or slice plan no longer split a run. (#271)
+
 ## [0.24.4] - 20261025
 
 - Requires certifi 2026.10.19 or newer, so upgraded installs drop the emSign root that Mozilla, Apple and Microsoft removed in October 2026.

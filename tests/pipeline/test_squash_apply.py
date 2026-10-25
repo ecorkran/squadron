@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import squadron.pipeline.squash as squash_module
+import squadron.pipeline.squash_rewrite as squash_rewrite
 from squadron.pipeline.squash import (
     SquashPlan,
     SquashRefusedError,
@@ -18,7 +19,7 @@ from squadron.pipeline.squash import (
     apply_squash,
     plan_squash,
 )
-from squadron.review.git_utils import run_git
+from squadron.review.git_utils import run_git, run_git_bytes
 from tests.conftest import run_test_git
 from tests.pipeline.commit_fixtures import SLICE, cf_client
 from tests.pipeline.squash_helpers import head, planning_run, squash_target
@@ -61,22 +62,48 @@ def test_backup_tag_points_at_old_head_and_matches_format(temp_git_repo: Path) -
     assert run_test_git(temp_git_repo, "rev-parse", f"{plan.backup_tag}^{{commit}}").strip() == shas[-1]
 
 
-def test_failing_commit_hook_restores_head(
-    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+def _refuse_update_ref(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+    if args[0] == "update-ref":
+        return subprocess.CompletedProcess(args, 128, "", "fatal: simulated ref lock")
+    return run_git(args, cwd=cwd)
+
+
+def test_failing_ref_update_restores_head(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     planning_run(temp_git_repo, 3)
     old_head = head(temp_git_repo)
     plan = _plan(temp_git_repo)
-    hook = temp_git_repo / ".git" / "hooks" / "pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
+    monkeypatch.setattr(squash_module, "run_git", _refuse_update_ref)
 
     with caplog.at_level(logging.ERROR, logger=_LOGGER):
         with pytest.raises(SquashRewriteError, match="restored"):
             apply_squash(plan, temp_git_repo)
 
     assert head(temp_git_repo) == old_head
-    assert any(r.levelno == logging.ERROR and "git commit" in r.getMessage() for r in caplog.records)
+    assert any(r.levelno == logging.ERROR and "update-ref" in r.getMessage() for r in caplog.records)
+
+
+def test_failing_object_write_restores_head(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    planning_run(temp_git_repo, 3)
+    old_head = head(temp_git_repo)
+    plan = _plan(temp_git_repo)
+
+    def refuse_hash_object(
+        args: list[str], *, cwd: str, stdin: bytes | None = None
+    ) -> subprocess.CompletedProcess[bytes] | None:
+        if args[0] == "hash-object":
+            return subprocess.CompletedProcess(args, 128, b"", b"fatal: simulated disk full")
+        return run_git_bytes(args, cwd=cwd, stdin=stdin)
+
+    monkeypatch.setattr(squash_rewrite, "run_git_bytes", refuse_hash_object)
+    with caplog.at_level(logging.ERROR, logger=_LOGGER):
+        with pytest.raises(SquashRewriteError, match="simulated disk full"):
+            apply_squash(plan, temp_git_repo)
+
+    assert head(temp_git_repo) == old_head
 
 
 def test_tree_mismatch_restores_head(temp_git_repo: Path, caplog: pytest.LogCaptureFixture) -> None:
@@ -104,12 +131,6 @@ def test_existing_backup_tag_at_head_is_reused(
 
     assert run_test_git(temp_git_repo, "tag", "-l", "squash-backup/*").split() == [plan.backup_tag]
     assert any("reusing existing backup tag" in r.getMessage() for r in caplog.records)
-
-
-def _fail_hook(repo: Path) -> None:
-    hook = repo / ".git" / "hooks" / "pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
 
 
 def test_head_moved_since_plan_refuses_and_touches_nothing(temp_git_repo: Path) -> None:
@@ -141,12 +162,11 @@ def test_failed_restore_prints_the_recovery_command(
 ) -> None:
     planning_run(temp_git_repo, 3)
     plan = _plan(temp_git_repo)
-    _fail_hook(temp_git_repo)
 
     def refuse_hard_reset(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
         if args[:3] == ["reset", "-q", "--hard"]:
             return subprocess.CompletedProcess(args, 128, "", "fatal: simulated restore failure")
-        return run_git(args, cwd=cwd)
+        return _refuse_update_ref(args, cwd=cwd)
 
     monkeypatch.setattr(squash_module, "run_git", refuse_hard_reset)
     with caplog.at_level(logging.ERROR, logger=_LOGGER):

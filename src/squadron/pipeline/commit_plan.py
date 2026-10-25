@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import dataclass
+from collections.abc import Iterable
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -131,6 +132,7 @@ class _Candidate:
     repo_path: str  # relative to the repository root, which is how git status reports it
     is_artifact: bool = False
     is_review: bool = False
+    is_context: bool = False  # a parent planning document (slice plan, architecture)
 
 
 @dataclass(frozen=True)
@@ -162,6 +164,15 @@ class SubjectPaths:
         return any(c.repo_path == repo_path for c in self.candidates) or self.is_archived_review(
             repo_path
         )
+
+    def is_context(self, repo_path: str) -> bool:
+        """Whether ``repo_path`` is a parent planning document of the target."""
+        return any(c.is_context and c.repo_path == repo_path for c in self.candidates)
+
+    def with_context(self, paths: Iterable[str], cwd: Path) -> SubjectPaths:
+        """A copy that also covers ``paths`` (relative to ``cwd``) as parent documents."""
+        extra = tuple(_candidate(p, cwd, self.root, is_context=True) for p in paths)
+        return replace(self, candidates=(*self.candidates, *extra))
 
 
 def subject_paths(target: CommitTarget, cwd: Path, cf_client: CfClientProtocol) -> SubjectPaths:
@@ -329,7 +340,7 @@ def _slice_candidates(
     if slice_plan:
         # cf reports the plan as a bare stem; tolerate one that already has its suffix.
         plan_file = slice_plan if slice_plan.endswith(".md") else f"{slice_plan}.md"
-        found.append(_candidate(f"{ARCHITECTURE_DIR}/{plan_file}", cwd, root))
+        found.append(_candidate(f"{ARCHITECTURE_DIR}/{plan_file}", cwd, root, is_context=True))
     return found
 
 
@@ -379,10 +390,16 @@ def _require_slice(target: CommitTarget) -> int:
 
 
 def _candidate(
-    path: str, cwd: Path, root: Path, *, is_artifact: bool = False, is_review: bool = False
+    path: str,
+    cwd: Path,
+    root: Path,
+    *,
+    is_artifact: bool = False,
+    is_review: bool = False,
+    is_context: bool = False,
 ) -> _Candidate:
     repo_path = Path(os.path.relpath((cwd / path).resolve(), root)).as_posix()
-    return _Candidate(path, repo_path, is_artifact=is_artifact, is_review=is_review)
+    return _Candidate(path, repo_path, is_artifact, is_review, is_context)
 
 
 def _repo_root(cwd: Path) -> Path:

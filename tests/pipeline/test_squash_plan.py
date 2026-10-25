@@ -125,20 +125,52 @@ def test_devlog_only_commits_stay_inside_but_are_trimmed_at_the_oldest_end(temp_
     assert_history_unchanged(temp_git_repo, before)
 
 
-def test_leading_plan_and_review_only_commits_are_trimmed(temp_git_repo: Path) -> None:
-    """Plan-only commits belong to the slice's path set but must not become the survivor."""
+def test_plan_only_commits_are_trimmed_at_both_ends(temp_git_repo: Path) -> None:
+    """Plan-only commits belong to the slice's path set but not at either end of its run."""
     commit_files(temp_git_repo, "docs: plan round 1", PLAN_FILE)
     commit_files(temp_git_repo, "review: design review", DESIGN_REVIEW)
     first = commit_files(temp_git_repo, "docs: add design", DESIGN_FILE)
-    later = commit_files(temp_git_repo, "docs: plan touch-up", PLAN_FILE)
+    middle = commit_files(temp_git_repo, "docs: plan amended by the review", PLAN_FILE)
+    last = commit_files(temp_git_repo, "docs: revise design", DESIGN_FILE)
+    commit_files(temp_git_repo, "docs: plan touch-up", PLAN_FILE)
     before = history(temp_git_repo)
 
     plan = _plan(temp_git_repo)
 
     assert plan is not None
-    assert [c.sha for c in plan.commits] == [first, later]
+    assert [c.sha for c in plan.commits] == [first, middle, last]
     assert plan.commits[0].subject == "docs: add design"
     assert_history_unchanged(temp_git_repo, before)
+
+
+def test_design_review_response_that_amends_the_architecture_stays_in_the_run(
+    temp_git_repo: Path,
+) -> None:
+    first = commit_files(temp_git_repo, "docs: add design", DESIGN_FILE)
+    both = commit_files(temp_git_repo, "docs: address design review", DESIGN_FILE, ARCH_FILE)
+    before = history(temp_git_repo)
+
+    plan = _plan(temp_git_repo)
+
+    assert plan is not None
+    assert [c.sha for c in plan.commits] == [first, both]
+    assert_history_unchanged(temp_git_repo, before)
+
+
+def test_arch_run_keeps_slice_plan_edits_but_not_trailing_plan_commits(temp_git_repo: Path) -> None:
+    first = commit_files(temp_git_repo, "docs: add architecture", ARCH_FILE)
+    both = commit_files(temp_git_repo, "docs: address arch review", ARCH_FILE, PLAN_FILE)
+    commit_files(temp_git_repo, "docs: add slice plan", PLAN_FILE)
+    commit_files(temp_git_repo, "docs: revise slice plan", PLAN_FILE)
+
+    arch = _plan(temp_git_repo, kind=SquashKind.ARCH, index=100)
+    slice_plan = _plan(temp_git_repo, kind=SquashKind.PLAN, index=100)
+
+    assert arch is not None and [c.sha for c in arch.commits] == [first, both]
+    assert slice_plan is not None and [c.subject for c in slice_plan.commits] == [
+        "docs: add slice plan",
+        "docs: revise slice plan",
+    ]
 
 
 def test_arch_target_finds_its_run(temp_git_repo: Path) -> None:
@@ -205,10 +237,22 @@ def test_run_reaching_the_root_commit_refuses(tmp_path: Path, caplog: pytest.Log
     _assert_refused(repo, caplog, "root commit")
 
 
-def test_pushed_run_refuses(temp_git_repo: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_pushed_commits_are_never_part_of_the_run(temp_git_repo: Path) -> None:
     shas = planning_run(temp_git_repo, 3)
     run_test_git(temp_git_repo, "update-ref", "refs/remotes/origin/main", shas[0])
-    _assert_refused(temp_git_repo, caplog, "remote-tracking")
+
+    plan = _plan(temp_git_repo)
+
+    assert plan is not None
+    assert [c.sha for c in plan.commits] == shas[1:]
+    assert plan.parent == shas[0]
+
+
+def test_run_pushed_down_to_one_commit_is_nothing_to_squash(temp_git_repo: Path) -> None:
+    shas = planning_run(temp_git_repo, 3)
+    run_test_git(temp_git_repo, "update-ref", "refs/remotes/origin/main", shas[1])
+
+    assert _plan(temp_git_repo) is None
 
 
 def test_backup_tag_pointing_elsewhere_refuses(

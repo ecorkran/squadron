@@ -68,6 +68,8 @@ def squash_run(
         raise typer.Exit(code=1) from None
 
     print(f"squashed {len(squash.commits)} commits into {new_sha[:SHORT_SHA_LENGTH]}")
+    if squash.later:
+        print(f"recreated {squash.later} later commits on top (content unchanged)")
     print(f"backup tag: {squash.backup_tag}")
     print(f"remove it later with: git tag -d {squash.backup_tag}")
 
@@ -77,5 +79,7 @@ def _print_dry_run(squash: SquashPlan) -> None:
     for commit in squash.commits:
         print(f"  {commit.sha[:SHORT_SHA_LENGTH]} {commit.subject}")
     print(f"surviving message: {squash.commits[0].subject}")
+    if squash.later:
+        print(f"later commits recreated on top (content unchanged): {squash.later}")
     print(f"backup tag: {squash.backup_tag}")
     print("dry run: nothing rewritten")

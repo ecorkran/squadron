@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -37,8 +38,10 @@ def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | 
     pin (issue #63) is applied once, and so every call is bounded by
     ``GIT_COMMAND_TIMEOUT_SECONDS``.
     """
-    try:
-        return subprocess.run(
+    return _bounded(
+        args,
+        cwd,
+        lambda: subprocess.run(
             ["git", *args],
             capture_output=True,
             text=True,
@@ -46,7 +49,38 @@ def run_git(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | 
             cwd=cwd,
             check=False,
             timeout=GIT_COMMAND_TIMEOUT_SECONDS,
-        )
+        ),
+    )
+
+
+def run_git_bytes(
+    args: list[str], *, cwd: str, stdin: bytes | None = None
+) -> subprocess.CompletedProcess[bytes] | None:
+    """``run_git`` without text decoding, for raw git objects that must round-trip exactly.
+
+    Text mode would replace invalid bytes and translate line endings, which silently
+    changes a commit object read with ``cat-file`` and written back with ``hash-object``.
+    """
+    return _bounded(
+        args,
+        cwd,
+        lambda: subprocess.run(
+            ["git", *args],
+            input=stdin,
+            capture_output=True,
+            cwd=cwd,
+            check=False,
+            timeout=GIT_COMMAND_TIMEOUT_SECONDS,
+        ),
+    )
+
+
+def _bounded[T](
+    args: list[str], cwd: str, invoke: Callable[[], subprocess.CompletedProcess[T]]
+) -> subprocess.CompletedProcess[T] | None:
+    """Run ``invoke``, mapping a timeout or a missing git to ``None`` (see ``run_git``)."""
+    try:
+        return invoke()
     except subprocess.TimeoutExpired:
         # Same "git could not answer" signal as OSError for every caller, but
         # a timeout is a distinct operational fault (usually an unreachable
