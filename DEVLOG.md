@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261024
 
+### Release 0.24.1
+
+- **Contents:** slice 401 (complexity, duplication and coverage metrics); fixes #256, #265, #266, #267, and the non-interactive checkpoint warning text.
+
 ### Slice 401: Complexity, Duplication and Coverage — Implementation Complete (Phase 6)
 
 - Branch `401-slice.complexity-duplication-and-coverage`, one commit per task pair. Four metrics added to both adapters through the unchanged 400 contract: `cyclomatic_complexity`, `duplicated_lines`, `covered_lines`, `coverable_lines`. The only diff to `snapshot_models.py` is enum members; `take.py`, `contract.py`, `files.py`, `store.py` and `registry.py` are untouched.

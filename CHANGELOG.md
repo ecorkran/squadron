@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 20261024
+
 ### Added
 
 - `sq metrology snapshot` also records cyclomatic complexity, duplicated lines, and covered and coverable lines for Python and TypeScript. Coverage is read from a Cobertura XML report named by the new `metrology.coverage_report` key; a missing, stale or unconfigured report is recorded as absent with the reason.
