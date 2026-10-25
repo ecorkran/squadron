@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20261025
 dateUpdated: 20261025
-status: not_started
+status: complete
 ---
 
 # Slice Design: Squash Planning Commit Sets — Command and Pipeline Action
@@ -85,6 +85,37 @@ The action takes `subject` as a step param written in the YAML (design for a des
 
 ## Tests
 Real temporary git repositories, no mocked git output, because tests that feed git parsers hand-written output are what hid the dead merge-commit grep in `_find_merge_commit` (process journal, #14). Cases: run of 2, 7 and 1 commits; a foreign commit in the middle ends the run; a merge commit ends the run; a pushed commit refuses; dirty tree refuses; wrong branch refuses; tree-identity check trips on a forced difference; DEVLOG-only touches stay in the set; first message and author survive; `--dry-run` rewrites nothing; the action fails the step on refusal and succeeds on no-op.
+
+## Verification Walkthrough
+Run in a throwaway clone, never in a working checkout. `sq` resolves the slice through `cf`, so the clone must be a registered cf project with the slice plan set; the steps register it and remove it afterwards.
+
+```bash
+git clone -q -b main <squadron checkout> /tmp/sq-live && cd /tmp/sq-live
+cf init --lite --name sq-squash-live-check
+cf set plan 900-slices.maintenance-and-refactoring
+D=project-documents/user/slices/948-slice.squash-planning-commit-sets-command-and-pipeline-action.md
+for i in 1 2 3; do echo "live edit $i" >> $D; echo "live $i" >> DEVLOG.md; git add -A; git commit -qm "docs: live check round $i"; done
+sq squash design --slice 948 --dry-run
+```
+Expected (shas differ):
+```
+run of 3 commits (oldest first):
+  c060d29c docs: live check round 1
+  11d05219 docs: live check round 2
+  ce5bf060 docs: live check round 3
+surviving message: docs: live check round 1
+backup tag: squash-backup/design-948-ce5bf060
+dry run: nothing rewritten
+```
+Then:
+```bash
+sq squash design --slice 948      # squashed 3 commits into <sha>, backup tag, git tag -d line
+git log --oneline -2              # one "docs: live check round 1" above the previous main tip
+git diff squash-backup/design-948-<sha> HEAD   # empty: the tree is unchanged
+sq squash design --slice 948      # nothing to squash
+cf project rm sq-squash-live-check -y
+```
+Caveats found while verifying: without the cf registration the command exits 1 with cf's `PROJECT_NOT_FOUND` error (and logs the traceback); the run stops at the commit before the three because that one touches the 948 tasks file, which is outside the design's path set.
 
 ## Complexity
 Effort 3/5, Risk Medium. Three new modules (`pipeline/squash.py`, the action, the CLI command) plus one extraction from `commit_plan.py`, all outside the metrology and review paths. Part B lands as its own commit and reverts alone. The risk is the history rewrite, which D1 reduces to one soft reset and D3/D4 make recoverable.
