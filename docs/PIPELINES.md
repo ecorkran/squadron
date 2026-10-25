@@ -731,6 +731,7 @@ Actions are the internal execution units that step types expand into. Pipeline a
 | `checkpoint` | phase steps (when `checkpoint:` is set), `gate` step (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
 | `commit` | phase steps, `devlog`, loops with `commit_each_iteration` | Stages only the files the step produced and commits them — see [Commits](#commits) |
 | `branch` | `branch` step | Enters or merges a slice's branch |
+| `squash` | `squash` step | Collapses a planning artifact's newest commit run into one commit — see [`squash`](#squash) |
 | `compact` | compact step | Reduces context (session-rotate in true CLI; `/compact` dispatch in prompt-only) |
 | `summary` | summary step | Generates summary text and routes to emit destinations |
 | `devlog` | devlog step | Writes a DEVLOG entry (the step then commits it) |
