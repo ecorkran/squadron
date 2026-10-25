@@ -10,7 +10,7 @@ projectState: 0.24.1 released with slice 401 merged; slice 402 design complete, 
   decisions decided
 dateCreated: 20261024
 dateUpdated: 20261025
-status: in_progress
+status: complete
 turns: 27
 promptTokens: 1828370
 cachedTokens: 1736785
@@ -236,12 +236,12 @@ revision_number: 1
 
 ## Task 28: CHANGELOG and full validation — Effort 1
 - [x] Add `[Unreleased]` bullets: the new `sq metrology ingest-reviews` command, and code reviews now categorized into the audit vocabulary. User-facing, short
-- [ ] Run `ruff format`, `ruff check`, `pyright` (zero errors) and the full `tests/` suite
-- [ ] Success: all pass
+- [x] Run `ruff format`, `ruff check`, `pyright` (zero errors) and the full `tests/` suite
+- [x] Success: all pass
 - [x] Commit: `docs: add CHANGELOG entries for code-review categories and ingest`
 
 ## Task 29: Walkthrough step 4, live review — Effort 2
-- [ ] Pick a model alias from `sq models list` and run `sq review code 402 --model <alias>`, then run `sq metrology ingest-reviews`
-- [ ] Success: the review file has `categoriesNormalized: true`, every finding `category` is a `ReviewCategory` value or `uncategorized`, and any non-canonical emitted category carries `rawCategory`
-- [ ] Success: the new 402 record has `read_side_mapped` false
-- [ ] Commit the review file: `review: add slice 402 code review from live verification`
+- [x] Pick a model alias from `sq models list` and run `sq review code 402 --model <alias>`, then run `sq metrology ingest-reviews`
+- [x] Success: the review file has `categoriesNormalized: true`, every finding `category` is a `ReviewCategory` value or `uncategorized`, and any non-canonical emitted category carries `rawCategory`
+- [x] Success: the new 402 record has `read_side_mapped` false
+- [x] Commit the review file: `review: add slice 402 code review from live verification`

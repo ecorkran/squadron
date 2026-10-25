@@ -130,13 +130,21 @@ def test_new_format_file_keeps_write_time_categories(reviews: Path, store: Metro
     ]
 
 
-def test_an_unrecognized_severity_is_counted_and_dropped(reviews: Path, store: MetrologyStore) -> None:
-    _, records = run(reviews, store)
+def test_an_unrecognized_severity_is_counted_dropped_and_logged(
+    reviews: Path, store: MetrologyStore, caplog: pytest.LogCaptureFixture
+) -> None:
+    with caplog.at_level(logging.WARNING):
+        result, records = run(reviews, store)
     record = records["synthetic-bad-severity.code.md"]
 
     assert record.unnormalized_count == 1
+    assert result.dropped_findings == 1
     assert [f.finding_id for f in record.findings] == ["F001"]
     assert record.findings[0].severity is Severity.CONCERN
+    assert any(
+        "synthetic-bad-severity.code.md" in r.getMessage() and "F002" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 def test_a_non_code_review_is_skipped_whatever_its_verdict_but_a_code_review_is_checked(

@@ -31,6 +31,10 @@ def _echo_summary(result: IngestResult, store_dir: Path) -> None:
         f"Skipped: {result.skipped_not_code} not code reviews, "
         f"{result.skipped_unknown_verdict} unknown verdict"
     )
+    if result.dropped_findings:
+        typer.echo(
+            f"Dropped: {result.dropped_findings} findings with a severity outside the review scale"
+        )
     typer.echo(f"Failed: {len(result.failed)}")
     for path, reason in result.failed:
         typer.echo(f"  {path}: {reason}")
@@ -43,7 +47,10 @@ def register_review_ingest_command(metrology_app: typer.Typer) -> None:
     def ingest_reviews_command(  # pyright: ignore[reportUnusedFunction]
         paths: list[Path] | None = typer.Argument(
             None,
-            help="Review files or directories (default: the project's reviews directory)",
+            help=(
+                "Review files or directories, relative to the current directory "
+                "(default: the project's reviews directory)"
+            ),
         ),
         cwd: str | None = typer.Option(
             None, "--cwd", help="Project root (default: the current directory)"

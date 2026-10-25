@@ -56,7 +56,7 @@ Ordering:
    - **Risk Level:** Medium. Tool definitions of complexity and duplication differ, and that difference has to land in the tool identity.
    - **Relative Effort:** 3/5
 
-3. [ ] **(402) Code-Review Normalization and Ingest**: The `code` review template emits categories from the audit vocabulary plus the review-only `correctness`, keeping the model's raw string beside it. An ingest command reads code-review files into the store, one record per review file with findings inline. Historical reviews are mapped read-side and marked as mapped. Arch, slice and tasks reviews are untouched.
+3. [x] **(402) Code-Review Normalization and Ingest**: The `code` review template emits categories from the audit vocabulary plus the review-only `correctness`, keeping the model's raw string beside it. An ingest command reads code-review files into the store, one record per review file with findings inline. Historical reviews are mapped read-side and marked as mapped. Arch, slice and tasks reviews are untouched.
    - **Value:** Developer value. Review findings become countable next to audit findings for the first time.
    - **Success Criteria:**
      - New `code` reviews carry a category from the closed set, with the raw string kept. Out-of-vocabulary categories normalize to `other`.

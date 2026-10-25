@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from squadron.metrology.errors import MetrologyStoreError
+from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.store import MetrologyStore, code_review_record_id
 from tests.metrology.conftest import make_sample_verdict
 from tests.metrology.snapshot.builders import make_project_id
@@ -24,7 +25,9 @@ PATH_A = "project-documents/user/reviews/947-review.code.a.md"
 PATH_B = "project-documents/user/reviews/948-review.code.b.md"
 
 
-def record_for(path: str, project: str = "github.com/manta/example-repo", **overrides: object):
+def record_for(
+    path: str, project: str = "github.com/manta/example-repo", **overrides: object
+) -> CodeReviewRecord:
     base = make_record()
     return base.model_copy(
         update={

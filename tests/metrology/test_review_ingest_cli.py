@@ -71,6 +71,7 @@ def test_fixture_directory_prints_counts_and_exits_one_for_the_failed_files(
     assert code == 1, output
     assert f"Ingested 5 code reviews into {store_dir} (0 replaced)" in output
     assert "Skipped: 1 not code reviews, 2 unknown verdict" in output
+    assert "Dropped: 1 findings with a severity outside the review scale" in output
     assert "Failed: 3" in output
     for name in BAD_FILES:
         assert name in output

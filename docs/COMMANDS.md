@@ -553,7 +553,7 @@ sq metrology ingest-reviews [PATHS]... [--cwd PATH]
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
-| `PATHS` | files or directories | no | the project's reviews directory | Review files, or directories searched for `*.md` |
+| `PATHS` | files or directories | no | the project's reviews directory | Review files, or directories searched for `*.md`; relative paths are relative to the current directory, not `--cwd` |
 | `--cwd` | path | no | current directory | Project root; its git remote (or `metrology.project_id`) names the project |
 
 Output is three counts, then each failed file with its reason:
@@ -567,6 +567,8 @@ Failed: <n>
 A record is keyed on project and file path, so running the command again replaces the record of a file that was ingested before; it never adds a second one. Arch, slice and tasks reviews are skipped, and so are reviews with an `UNKNOWN` verdict (an unparsed review would otherwise count as zero findings). A file whose frontmatter can't be read, or that lacks `reviewType` or `verdict`, is listed as failed and the rest are still ingested.
 
 Each finding's category is one of the ten audit categories or `correctness`, or missing. Reviews written by `sq review code` carry `categoriesNormalized: true` and are recorded as written. Older reviews carry free-form categories; a fixed table maps the common ones (`error-handling`, `testing`, `design`, ...), everything else becomes `other`, and the record is marked `read_side_mapped`. The model's original string is kept as `raw_category`. The commit is the review's `reviewedSha` when it has one; the slice is read from the `sourceDocument` name (`{n}-slice.` or `{n}-tasks.`).
+
+A finding whose severity isn't a review severity is dropped from its record with a WARNING and a `Dropped:` line in the summary. A record is never removed: a review file that was deleted or renamed leaves its old record behind.
 
 Exit 1 if any file failed, a path doesn't exist, the reviews directory is missing, the project has no identity, or a store write fails (the counts so far are printed first).
 

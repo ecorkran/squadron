@@ -46,6 +46,8 @@ class IngestResult:
     replaced: int = 0
     skipped_not_code: int = 0
     skipped_unknown_verdict: int = 0
+    #: Findings dropped for a severity outside the review scale, across all ingested files.
+    dropped_findings: int = 0
     failed: list[tuple[Path, str]] = field(default_factory=list[tuple[Path, str]])
 
 
@@ -153,13 +155,19 @@ def _stored_category(raw: object, raw_category: object) -> tuple[ReviewCategory 
         raise _FileProblem(f"stores category {raw!r}, which isn't a ReviewCategory value") from exc
 
 
-def _finding(entry: object, *, read_side: bool) -> CodeReviewFinding | None:
-    """One finding, or None when its severity isn't on the review scale."""
+def _finding(entry: object, *, read_side: bool, path: Path) -> CodeReviewFinding | None:
+    """One finding, or None (with a WARNING) when its severity isn't on the review scale."""
     if not isinstance(entry, dict):
         raise _FileProblem("has a finding that isn't a mapping")
     fields = {str(key): value for key, value in cast("dict[object, object]", entry).items()}
     severity = _SEVERITIES.get(str(fields.get("severity", "")).strip().lower())
     if severity is None:
+        _logger.warning(
+            "%s: finding %s has severity %r, which isn't a review severity; dropped",
+            path,
+            fields.get("id"),
+            fields.get("severity"),
+        )
         return None
     if fields.get("id") is None or fields.get("summary") is None:
         raise _FileProblem("has a finding with no id or summary")
@@ -180,7 +188,7 @@ def _finding(entry: object, *, read_side: bool) -> CodeReviewFinding | None:
 
 
 def _findings(
-    frontmatter: dict[str, object], *, read_side: bool
+    frontmatter: dict[str, object], *, read_side: bool, path: Path
 ) -> tuple[list[CodeReviewFinding], int]:
     entries = frontmatter.get("findings")
     if entries is None:
@@ -190,7 +198,7 @@ def _findings(
     kept: list[CodeReviewFinding] = []
     dropped = 0
     for entry in cast("list[object]", entries):
-        finding = _finding(entry, read_side=read_side)
+        finding = _finding(entry, read_side=read_side, path=path)
         if finding is None:
             dropped += 1
         else:
@@ -199,10 +207,14 @@ def _findings(
 
 
 def _build_record(
-    frontmatter: dict[str, object], verdict: Verdict, review_path: str, project_id: ProjectId
+    frontmatter: dict[str, object],
+    verdict: Verdict,
+    path: Path,
+    review_path: str,
+    project_id: ProjectId,
 ) -> CodeReviewRecord:
     read_side = frontmatter.get("categoriesNormalized") is not True
-    findings, unnormalized = _findings(frontmatter, read_side=read_side)
+    findings, unnormalized = _findings(frontmatter, read_side=read_side, path=path)
     return CodeReviewRecord(
         record_id=code_review_record_id(project_id, review_path),
         project_id=project_id,
@@ -261,13 +273,16 @@ def ingest_reviews(
             if verdict is Verdict.UNKNOWN:
                 result.skipped_unknown_verdict += 1
                 continue
-            record = _build_record(frontmatter, verdict, _review_path(path, repo_root), project_id)
+            record = _build_record(
+                frontmatter, verdict, path, _review_path(path, repo_root), project_id
+            )
         except _FileProblem as exc:
             _logger.warning("Can't ingest %s: it %s", path, exc)
             result.failed.append((path, str(exc)))
             continue
         store.write_code_review(record)
         result.ingested += 1
+        result.dropped_findings += record.unnormalized_count
         if record.record_id in known_ids:
             result.replaced += 1
         known_ids.add(record.record_id)
