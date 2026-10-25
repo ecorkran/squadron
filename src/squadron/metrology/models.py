@@ -22,6 +22,7 @@ from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
+from squadron.metrology.review_models import CodeReviewRecord
 from squadron.metrology.snapshot_models import CodeSnapshot
 from squadron.review.models import Verdict
 
@@ -39,6 +40,8 @@ RECORD_TYPE_PRODUCER_REPLAY = "producer_replay"
 RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
 #: Written by 400's code snapshot: one record per (project, commit).
 RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
+#: Written by 402's review ingest: one record per code-review file.
+RECORD_TYPE_CODE_REVIEW = "code_review"
 
 
 class JudgeResultRef(BaseModel):
@@ -253,3 +256,4 @@ class MetrologyRecord(BaseModel):
     producer_replay: ProducerReplay | None = None
     pairwise_judgment: PairwiseJudgment | None = None
     code_snapshot: CodeSnapshot | None = None
+    code_review: CodeReviewRecord | None = None
