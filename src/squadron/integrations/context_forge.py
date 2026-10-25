@@ -13,6 +13,7 @@ import subprocess
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from squadron.core.executables import resolve_argv
 from squadron.core.subprocess_text import TEXT_DECODING
 
 #: cf's document root, relative to the project. Paths inside cf documents
@@ -123,7 +124,7 @@ class ContextForgeClient:
         """
         try:
             result = subprocess.run(
-                ["cf", *args],
+                resolve_argv(["cf", *args]),
                 capture_output=True,
                 text=True,
                 **TEXT_DECODING,

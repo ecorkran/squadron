@@ -38,6 +38,7 @@ from squadron.cli.commands.doctor_checks import (
     CONTEXT_FORGE_PACKAGE,
     GIT_HOOKS_PATH,
 )
+from squadron.core.executables import resolve_argv
 from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.skills.targets import DELIVERIES, CommandTarget
 
@@ -131,7 +132,7 @@ def _run_command(argv: list[str], *, label: str) -> InstallOutcome:
     """
     try:
         completed = subprocess.run(  # noqa: S603 - fixed argv, no shell, no user input
-            argv,
+            resolve_argv(argv),
             capture_output=True,
             text=True,
             **TEXT_DECODING,

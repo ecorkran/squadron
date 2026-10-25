@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from squadron.core.executables import resolve_argv
 from squadron.core.subprocess_text import TEXT_DECODING
 
 _logger = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ class SubprocessRunner:
         merged_env = {**os.environ, **env} if env is not None else None
         try:
             proc = subprocess.Popen(
-                list(argv),
+                resolve_argv(argv),
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
