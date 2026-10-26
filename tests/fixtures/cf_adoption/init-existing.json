@@ -1,0 +1,17 @@
+{
+  "reportVersion": 1,
+  "projectId": "project_1_fixture",
+  "projectName": "fixture-project",
+  "projectPath": "/abs/path/to/project",
+  "registration": "existing",
+  "steps": [
+    { "step": "git", "status": "skipped" },
+    { "step": "register", "status": "ok" },
+    { "step": "gitignore", "status": "ok" },
+    { "step": "guides", "status": "skipped" },
+    { "step": "commands", "status": "ok" },
+    { "step": "ide", "status": "skipped" }
+  ],
+  "notices": [],
+  "ok": true
+}

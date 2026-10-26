@@ -1,0 +1,19 @@
+{
+  "reportVersion": 1,
+  "projectRoot": "/abs/path/to/project",
+  "outcome": "opted-out",
+  "facts": {
+    "source": { "measured": true, "lines": 2000, "files": 37, "capped": true },
+    "history": { "known": true, "commits": 412, "shallow": false },
+    "docs": ["README.md", "docs"],
+    "adrs": ["docs/adr"],
+    "ci": [".github/workflows/ci.yml"],
+    "ruleFiles": ["CLAUDE.md"]
+  },
+  "artifacts": {
+    "concept": null,
+    "derivedArchitectures": [],
+    "existingStatePlan": null
+  },
+  "notices": ["fixture notice: opted-out"]
+}

@@ -1,0 +1,5 @@
+[
+  { "id": "project_1_a", "name": "registered-here", "projectPath": "/abs/path/to/project", "fileSlice": "", "isActive": false },
+  { "id": "project_2_b", "name": "registered-elsewhere", "projectPath": "/abs/path/to/other", "fileSlice": "", "isActive": false },
+  { "id": "project_3_c", "name": "no-path", "fileSlice": "", "isActive": false }
+]

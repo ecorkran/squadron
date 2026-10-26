@@ -1,0 +1,4 @@
+{
+  "reportVersion": 1,
+  "error": { "code": "worktree-of-registered-project", "message": "This looks like a worktree. Run cf worktree init instead." }
+}
