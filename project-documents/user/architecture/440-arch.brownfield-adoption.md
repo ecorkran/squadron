@@ -67,7 +67,7 @@ Squadron can already read an existing codebase: the understand skill (360) write
 |---|---|---|
 | `handoff` | greenfield, already-planned, or opted-out | nobody; the report says which normal flow applies (`/cf:onboard`, `cf next`) |
 | `ask-adopt` | brownfield, not registered with cf yet | agent asks the PM: `sq onboard register` on a yes, `sq onboard decline` on a no |
-| `build-graph` | graph absent or stale | agent asks the PM once, then runs the plugin's `/understand` |
+| `build-graph` | no comprehension doc yet, and graph absent or stale (slice 440 D2) | agent asks the PM once, then runs the plugin's `/understand` |
 | `comprehension` | no comprehension doc | agent runs `/sq:analysis understand comprehension` |
 | `concept` | cf reports no concept | agent runs `/sq:analysis understand concept` |
 | `adopt` | the rest is in place | agent runs `sq onboard prompt` and follows its output |

@@ -253,7 +253,7 @@ where its analysis template is the direct comparable.
 
 ## Integration Work
 
-6. [ ] **(366) Dispatcher Routing and Documentation** — Wire capability (a) into the advertised
+6. [x] **(366) Dispatcher Routing and Documentation** — Wire capability (a) into the advertised
    command surface and document both capabilities. Three edits to `commands/sq/analysis.md` — the
    valid-skills line, the usage block, and a new skill section — so `/sq:analysis understand` routes
    correctly, matching the shape the deprecated slice 344 established. Add the skill file to

@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261025
 
+### Slice 440: sq onboard — Design Complete (Phase 4)
+
+- `440-slice.sq-onboard.md`, `cf validate design` passes. Read-only `sq onboard` report with a closed step table (`decide_step`, D1), `register`/`decline`/`prompt` subcommands over a new `CfAdoptionClient`, `ContextForgeClient(cwd=…)` + `run_report` for cf's stdout error envelope, probe package folded into `onboard/` and `sq probe` deleted, retroactive entries refused at the pipeline's `set_slice` (covers P4–P6).
+- Findings from cf source: cwd resolution prefix-matches (a monorepo subdir resolves to its parent project), so "registered" comes from `cf project list --json` by exact path and `decline` passes `--project <root>` (cf config treats an unknown value as a directory). Adoption from a cf-registered worktree is excluded.
+- The stale-graph question can't be remembered without state, so the graph only gates until a comprehension doc exists (D2).
+- Next: Phase 5 task breakdown. Live run waits on cf 271/272 and guide #47.
+
 ### Slice 402: Code-Review Normalization and Ingest — Implementation Complete (Phase 6)
 
 - Branch `402-slice.code-review-normalization-and-ingest`. `sq review code` findings now carry a category from `ReviewCategory` (the ten audit values plus `correctness`), normalized in the review client for templates that set `normalize_categories` (only `code.yaml`). New `sq metrology ingest-reviews` writes one `code_review` record per code-review file; historical reviews are mapped through a fixed 16-string table and marked `read_side_mapped`. `AuditCategory` moved to `core/finding_categories.py`; the arch, slice and tasks review output is unchanged.
