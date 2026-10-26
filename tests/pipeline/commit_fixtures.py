@@ -28,7 +28,13 @@ def cf_client() -> MagicMock:
     """A cf client shaped like the real one: the slice plan arrives as a bare stem."""
     client = MagicMock()
     client.list_slices.return_value = [
-        SliceEntry(index=SLICE, name="Batch Foo", design_file=DESIGN_FILE, status="in_progress")
+        SliceEntry(
+            index=SLICE,
+            name="Batch Foo",
+            design_file=DESIGN_FILE,
+            status="in_progress",
+            retroactive=False,
+        )
     ]
     client.list_tasks.return_value = [TaskEntry(index=SLICE, files=["105-tasks.batch-foo.md"])]
     client.get_config.return_value = ""  # git.integration_branch unset: the target is main

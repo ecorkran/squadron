@@ -1356,7 +1356,11 @@ class TestRevisionNumberStamping:
         # dispatch is accepted; second call (the stamp) sees no design_file
         # registered at all, so _expected_artifact_paths returns [].
         good_slices = cf_client.list_slices.return_value
-        empty_slices = [SliceEntry(index=218, name="stub", design_file=None, status="in_progress")]
+        empty_slices = [
+            SliceEntry(
+                index=218, name="stub", design_file=None, status="in_progress", retroactive=False
+            )
+        ]
         cf_client.list_slices.side_effect = [good_slices, empty_slices]
 
         with caplog.at_level("WARNING"):
@@ -1767,9 +1771,13 @@ class TestCfUnfinishedSlices:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=1, name="slice-a", design_file=None, status="complete"),
-            SliceEntry(index=2, name="slice-b", design_file="f.md", status="in_progress"),
-            SliceEntry(index=3, name="slice-c", design_file=None, status="not_started"),
+            SliceEntry(index=1, name="slice-a", design_file=None, status="complete", retroactive=False),
+            SliceEntry(
+                index=2, name="slice-b", design_file="f.md", status="in_progress", retroactive=False
+            ),
+            SliceEntry(
+                index=3, name="slice-c", design_file=None, status="not_started", retroactive=False
+            ),
         ]
 
         result = await _cf_unfinished_slices([], cf_client, {}, cwd=os.getcwd())
@@ -1824,8 +1832,12 @@ class TestEachExecution:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=1, name="slice-a", design_file=None, status="not_started"),
-            SliceEntry(index=2, name="slice-b", design_file=None, status="in_progress"),
+            SliceEntry(
+                index=1, name="slice-a", design_file=None, status="not_started", retroactive=False
+            ),
+            SliceEntry(
+                index=2, name="slice-b", design_file=None, status="in_progress", retroactive=False
+            ),
         ]
 
         pipeline = make_pipeline(
@@ -1911,7 +1923,9 @@ class TestEachExecution:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=42, name="my-slice", design_file=None, status="not_started"),
+            SliceEntry(
+                index=42, name="my-slice", design_file=None, status="not_started", retroactive=False
+            ),
         ]
 
         pipeline = make_pipeline(
@@ -1957,8 +1971,8 @@ class TestEachExecution:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=1, name="a", design_file=None, status="not_started"),
-            SliceEntry(index=2, name="b", design_file=None, status="not_started"),
+            SliceEntry(index=1, name="a", design_file=None, status="not_started", retroactive=False),
+            SliceEntry(index=2, name="b", design_file=None, status="not_started", retroactive=False),
         ]
 
         pipeline = make_pipeline(
@@ -2007,8 +2021,8 @@ class TestEachExecution:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=1, name="a", design_file=None, status="not_started"),
-            SliceEntry(index=2, name="b", design_file=None, status="not_started"),
+            SliceEntry(index=1, name="a", design_file=None, status="not_started", retroactive=False),
+            SliceEntry(index=2, name="b", design_file=None, status="not_started", retroactive=False),
         ]
 
         pipeline = make_pipeline(
@@ -2080,8 +2094,8 @@ class TestEachExecution:
 
         cf_client = MagicMock()
         cf_client.list_slices.return_value = [
-            SliceEntry(index=1, name="a", design_file=None, status="not_started"),
-            SliceEntry(index=2, name="b", design_file=None, status="not_started"),
+            SliceEntry(index=1, name="a", design_file=None, status="not_started", retroactive=False),
+            SliceEntry(index=2, name="b", design_file=None, status="not_started", retroactive=False),
         ]
         pipeline = make_pipeline(
             [

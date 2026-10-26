@@ -90,7 +90,7 @@ def make_project(repo: Path, runs_dir: Path) -> Project:
     status[403] = "complete"
     cf = MagicMock()
     cf.list_slices.side_effect = lambda *_: [
-        SliceEntry(index=i, name=f"S{i}", design_file=design(i), status=status[i])
+        SliceEntry(index=i, name=f"S{i}", design_file=design(i), status=status[i], retroactive=False)
         for i in _DEPENDENCIES
     ]
     cf.list_tasks.return_value = [

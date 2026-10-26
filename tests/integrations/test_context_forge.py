@@ -87,11 +87,13 @@ _SLICES_JSON = {
             "name": "Project Setup",
             "designFile": "project-documents/user/slices/100-slice.project-setup.md",
             "status": "complete",
+            "retroactive": False,
         },
         {
             "index": 101,
             "name": "SDK Agent Provider",
             "status": "complete",
+            "retroactive": True,
         },
     ]
 }
@@ -111,6 +113,17 @@ class TestListSlices:
         with patch("subprocess.run", return_value=_mock_completed(json.dumps(_SLICES_JSON))):
             slices = ContextForgeClient().list_slices()
             assert slices[1].design_file is None
+
+    def test_list_slices_reads_retroactive_flag(self) -> None:
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(_SLICES_JSON))):
+            slices = ContextForgeClient().list_slices()
+        assert [s.retroactive for s in slices] == [False, True]
+
+    def test_list_slices_missing_retroactive_raises(self) -> None:
+        entries = {"entries": [{"index": 102, "name": "Old", "status": "complete"}]}
+        with patch("subprocess.run", return_value=_mock_completed(json.dumps(entries))):
+            with pytest.raises(ContextForgeError, match=r"102.*0\.19\.18"):
+                ContextForgeClient().list_slices()
 
     def test_list_slices_empty(self) -> None:
         with patch(

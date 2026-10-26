@@ -22,6 +22,7 @@ def _cf(task_files: list[str]) -> MagicMock:
             name="Batch Foo",
             design_file="project-documents/user/slices/105-slice.batch-foo.md",
             status="in_progress",
+            retroactive=False,
         )
     ]
     client.list_tasks.return_value = [TaskEntry(index=SLICE, files=task_files)]

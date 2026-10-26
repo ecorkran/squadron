@@ -54,7 +54,13 @@ def phase_artifact_cf_client(slice_index: int, design_file: str, task_file: str)
 
     cf_client = MagicMock()
     cf_client.list_slices.return_value = [
-        SliceEntry(index=slice_index, name="stub", design_file=design_file, status="in_progress"),
+        SliceEntry(
+            index=slice_index,
+            name="stub",
+            design_file=design_file,
+            status="in_progress",
+            retroactive=False,
+        ),
     ]
     cf_client.list_tasks.return_value = [
         TaskEntry(index=slice_index, files=[task_file]),

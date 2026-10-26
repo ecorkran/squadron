@@ -56,6 +56,7 @@ def test_slice_branch_with_design_and_tasks(tmp_path: Path) -> None:
                 name="Create a PR with a Good Message",
                 design_file="project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
                 status="not_started",
+                retroactive=False,
             )
         ],
         tasks=[TaskEntry(index=385, files=["385-tasks.create-a-pr-with-a-good-message.md"])],
@@ -108,6 +109,7 @@ def test_task_file_absent_leaves_design_present_and_items_empty(
                 name="Create a PR with a Good Message",
                 design_file="project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
                 status="not_started",
+                retroactive=False,
             )
         ],
         tasks=[TaskEntry(index=385, files=["385-tasks.create-a-pr-with-a-good-message.md"])],
@@ -132,6 +134,7 @@ def test_unreadable_design_degrades_to_absent_text_with_a_warning(
                 name="Create a PR with a Good Message",
                 design_file=design_file,
                 status="not_started",
+                retroactive=False,
             )
         ],
         tasks=[],

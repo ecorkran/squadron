@@ -33,7 +33,11 @@ _MODEL = "claude-sonnet-4-20250514"
 _DESIGN = "project-documents/user/slices/194-slice.loop-step-type.md"
 _TASK_NAMES = [f"194-tasks.loop-step-type-{n}.md" for n in (1, 2, 3)]
 
-_SLICES = [SliceEntry(index=194, name="Loop Step Type", design_file=_DESIGN, status="in_progress")]
+_SLICES = [
+    SliceEntry(
+        index=194, name="Loop Step Type", design_file=_DESIGN, status="in_progress", retroactive=False
+    )
+]
 _TASKS = [TaskEntry(index=194, files=_TASK_NAMES)]
 _PROJECT = ProjectInfo(
     arch_file="project-documents/user/architecture/100-arch.md",

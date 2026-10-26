@@ -215,7 +215,9 @@ def test_count_failure_raises_and_logs_error(
 
 _DESIGN = "105-slice.batch-foo.md"
 _BRANCH = "105-slice.batch-foo"
-_ENTRY = SliceEntry(index=105, name="Batch Foo", design_file=_DESIGN, status="in_progress")
+_ENTRY = SliceEntry(
+    index=105, name="Batch Foo", design_file=_DESIGN, status="in_progress", retroactive=False
+)
 
 
 def _commit(repo: Path, filename: str) -> None:
@@ -262,14 +264,18 @@ def test_missing_branch_is_not_merged_and_logs_nothing(
 
 
 def test_slice_without_a_design_file_is_not_merged(temp_git_repo: Path) -> None:
-    entry = SliceEntry(index=106, name="No Design", design_file=None, status="not_started")
+    entry = SliceEntry(
+        index=106, name="No Design", design_file=None, status="not_started", retroactive=False
+    )
     assert merged_slice_branches([entry], "main", cwd=str(temp_git_repo)) == set()
 
 
 def test_mixed_set_returns_only_the_merged_slices(temp_git_repo: Path) -> None:
     _slice_branch_with_work(temp_git_repo)
     run_test_git(temp_git_repo, "merge", "-q", "--no-ff", "-m", "merge slice", _BRANCH)
-    other = SliceEntry(index=107, name="Open", design_file="107-slice.open.md", status="x")
+    other = SliceEntry(
+        index=107, name="Open", design_file="107-slice.open.md", status="x", retroactive=False
+    )
     run_test_git(temp_git_repo, "checkout", "-q", "-b", "107-slice.open")
     _commit(temp_git_repo, "open.py")
     run_test_git(temp_git_repo, "checkout", "-q", "main")

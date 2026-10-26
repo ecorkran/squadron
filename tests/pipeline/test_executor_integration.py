@@ -204,6 +204,7 @@ class TestDesignPlanIntegration:
                     name=f"slice {i}",
                     design_file=None if plan == "900" else f"{i}-slice.stub.md",
                     status="not_started",
+                    retroactive=False,
                 )
                 for i in self._REVIEWS
             ]

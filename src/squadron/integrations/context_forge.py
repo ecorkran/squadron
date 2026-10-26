@@ -50,6 +50,7 @@ class SliceEntry:
     name: str
     design_file: str | None
     status: str
+    retroactive: bool
 
 
 @dataclass
@@ -155,6 +156,14 @@ class ContextForgeClient:
         """
         return self._exec(args, check=True).stdout
 
+    def run(self, args: list[str]) -> str:
+        """Public form of ``_run`` for callers outside this module."""
+        return self._run(args)
+
+    def run_json(self, args: list[str]) -> Any:
+        """Public form of ``_run_json`` for callers outside this module."""
+        return self._run_json(args)
+
     def run_report(self, args: list[str]) -> dict[str, Any]:
         """Run a ``cf`` command that reports as JSON and return the object.
 
@@ -225,15 +234,23 @@ class ContextForgeClient:
         """Return all slices from ``cf list slices [plan] --json``."""
         data: dict[str, Any] = self._run_json(self._list_args("slices", plan))
         raw_entries: list[dict[str, Any]] = data.get("entries", [])
-        return [
-            SliceEntry(
-                index=int(e["index"]),
-                name=str(e["name"]),
-                design_file=e.get("designFile"),
-                status=str(e.get("status", "")),
+        return [self._slice_entry(e) for e in raw_entries]
+
+    @staticmethod
+    def _slice_entry(raw: dict[str, Any]) -> SliceEntry:
+        """Build a ``SliceEntry``; ``retroactive`` has no default (440 D11)."""
+        if "retroactive" not in raw:
+            raise ContextForgeError(
+                f"cf list slices: entry {raw.get('index')} has no 'retroactive' field; "
+                "sq requires a cf with slice 263 (0.19.18 or later)"
             )
-            for e in raw_entries
-        ]
+        return SliceEntry(
+            index=int(raw["index"]),
+            name=str(raw["name"]),
+            design_file=raw.get("designFile"),
+            status=str(raw.get("status", "")),
+            retroactive=bool(raw["retroactive"]),
+        )
 
     def list_tasks(self, plan: str | None = None) -> list[TaskEntry]:
         """Return all task groups from ``cf list tasks [plan] --json``."""

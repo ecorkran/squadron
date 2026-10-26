@@ -24,7 +24,9 @@ DESIGN_REVIEW = "project-documents/user/reviews/105-review.slice.stub.md"
 def _cf() -> MagicMock:
     client = MagicMock()
     client.list_slices.return_value = [
-        SliceEntry(index=SLICE, name="Stub", design_file=DESIGN, status="in_progress")
+        SliceEntry(
+            index=SLICE, name="Stub", design_file=DESIGN, status="in_progress", retroactive=False
+        )
     ]
     client.list_tasks.return_value = [TaskEntry(index=SLICE, files=["105-tasks.stub.md"])]
     client.get_project.return_value = ProjectInfo(

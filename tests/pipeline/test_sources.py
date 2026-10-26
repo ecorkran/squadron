@@ -32,6 +32,7 @@ _SLICES_900 = {
             "index": 901,
             "name": "Pipeline Code-Review Diff Injection and UNKNOWN-Fails-Closed",
             "isChecked": True,
+            "retroactive": False,
             "designFile": f"{_SLICES_DIR}901-slice.pipeline-code-review-diff-injection.md",
             "status": "complete",
             "isActive": False,
@@ -41,6 +42,7 @@ _SLICES_900 = {
             "index": 907,
             "name": "Optional Dependency Split — `serve` and `codex` Extras",
             "isChecked": False,
+            "retroactive": False,
             "designFile": f"{_SLICES_DIR}907-slice.optional-dependency-split-serve-and-codex-extras.md",
             "status": "deferred",
             "isActive": False,
@@ -50,6 +52,7 @@ _SLICES_900 = {
             "index": 914,
             "name": "Strict Type Checking Over the Test Suite",
             "isChecked": False,
+            "retroactive": False,
             "designFile": f"{_SLICES_DIR}914-slice.strict-type-checking-over-the-test-suite.md",
             "status": "not_started",
             "isActive": False,
@@ -60,6 +63,7 @@ _SLICES_900 = {
                 "index": index,
                 "name": name,
                 "isChecked": False,
+                "retroactive": False,
                 "designFile": None,
                 "status": "not_started",
                 "isActive": False,
@@ -155,7 +159,13 @@ class TestDeprecatedSlices:
     _SLICES = {
         "entries": [
             *_SLICES_900["entries"],  # type: ignore[misc]
-            {"index": 930, "name": "Cancelled", "designFile": None, "status": "deprecated"},
+            {
+                "index": 930,
+                "name": "Cancelled",
+                "retroactive": False,
+                "designFile": None,
+                "status": "deprecated",
+            },
         ]
     }
 
@@ -390,6 +400,7 @@ class TestSlicesNeedingTasks:
             name="Strict Type Checking Over The Test Suite",
             design_file=f"{_SLICES_DIR}914-slice.strict-type-checking-over-the-test-suite.md",
             status="not_started",
+            retroactive=False,
         )
         self._write_tasks_review(_REVIEW_TEMPLATE.format(verdict="CONCERNS"))
 
@@ -474,7 +485,9 @@ class TestSliceDependencies:
     """Slice 196 D9: dependencies come from the design's frontmatter, leniently parsed."""
 
     def _entry(self, design_file: str | None, index: int = 196) -> SliceEntry:
-        return SliceEntry(index=index, name="Slice", design_file=design_file, status="not_started")
+        return SliceEntry(
+            index=index, name="Slice", design_file=design_file, status="not_started", retroactive=False
+        )
 
     def _design(self, tmp_path: Path, frontmatter_line: str | None) -> str:
         lines = ["---", "docType: slice-design"]
@@ -640,7 +653,13 @@ class TestSlicesReadyToImplement:
         if design is not None:
             Path(design).write_text(f"---\ndependencies: {list(dependencies)}\n---\n")
         self.slices.append(
-            {"index": index, "name": f"S{index}", "designFile": design, "status": status}
+            {
+                "index": index,
+                "name": f"S{index}",
+                "retroactive": False,
+                "designFile": design,
+                "status": status,
+            }
         )
         if tasks is not None:
             self.tasks.append(

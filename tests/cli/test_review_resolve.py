@@ -26,12 +26,14 @@ SLICE_ENTRIES = [
         name="Claude Code Commands — Composed Workflows",
         design_file="project-documents/user/slices/118-slice.composed-workflows.md",
         status="complete",
+        retroactive=False,
     ),
     SliceEntry(
         index=119,
         name="Conversation Persistence",
         design_file=None,
         status="not_started",
+        retroactive=False,
     ),
 ]
 
@@ -169,6 +171,7 @@ def test_review_tasks_split_files_reviews_each_part(
                 "project-documents/user/slices/161-slice.summary-step-with-emit-destinations.md"
             ),
             status="not_started",
+            retroactive=False,
         ),
     ]
 
@@ -267,6 +270,7 @@ def test_review_tasks_split_files_aggregates_verdict(
                 "project-documents/user/slices/161-slice.summary-step-with-emit-destinations.md"
             ),
             status="not_started",
+            retroactive=False,
         ),
     ]
 
@@ -324,6 +328,7 @@ def test_review_tasks_split_files_unknown_part_does_not_crash(
                 "project-documents/user/slices/161-slice.summary-step-with-emit-destinations.md"
             ),
             status="not_started",
+            retroactive=False,
         ),
     ]
 

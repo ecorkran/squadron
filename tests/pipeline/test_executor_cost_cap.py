@@ -190,7 +190,9 @@ async def test_each_items_share_one_tally_and_the_cap_stops_the_batch_under_eith
     )
     cf_client = MagicMock()
     cf_client.list_slices.return_value = [
-        SliceEntry(index=i, name=f"slice-{i}", design_file=None, status="not_started")
+        SliceEntry(
+            index=i, name=f"slice-{i}", design_file=None, status="not_started", retroactive=False
+        )
         for i in range(1, 6)
     ]
     action = _priced_action(0.4)

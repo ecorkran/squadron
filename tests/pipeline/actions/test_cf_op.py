@@ -7,8 +7,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from squadron.integrations.context_forge import GUIDE_VERSION_FILE, ContextForgeError
-from squadron.pipeline.actions.cf_op import CfOpAction, CfOperation
+from squadron.integrations.context_forge import (
+    GUIDE_VERSION_FILE,
+    ContextForgeError,
+    SliceEntry,
+)
+from squadron.pipeline.actions.cf_op import RETROACTIVE_REFUSAL, CfOpAction, CfOperation
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.models import ActionContext, ActionResult
 
@@ -306,3 +310,66 @@ async def test_other_operations_carry_no_version_keys(
 
     assert "cf_version" not in result.outputs
     assert "guide_version" not in result.outputs
+
+
+# --- SET_SLICE retroactive guard (440 D11) ---
+
+
+def _slice(index: int, *, retroactive: bool) -> SliceEntry:
+    return SliceEntry(
+        index=index, name="s", design_file=None, status="complete", retroactive=retroactive
+    )
+
+
+def _set_slice_context(mock_context: ActionContext, entries: list[SliceEntry]) -> MagicMock:
+    mock_context.params = {"operation": CfOperation.SET_SLICE, "slice": "110"}
+    client = MagicMock()
+    client.list_slices.return_value = entries
+    client.set_slice.return_value = "ok"
+    mock_context.cf_client = client
+    return client
+
+
+@pytest.mark.asyncio
+async def test_set_slice_refuses_retroactive_entry(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    client = _set_slice_context(mock_context, [_slice(110, retroactive=True)])
+    result = await action.execute(mock_context)
+    assert not result.success
+    assert result.error == RETROACTIVE_REFUSAL.format(index=110)
+    client.set_slice.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_set_slice_proceeds_for_planned_entry(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    client = _set_slice_context(
+        mock_context, [_slice(110, retroactive=False), _slice(111, retroactive=True)]
+    )
+    result = await action.execute(mock_context)
+    assert result.success
+    client.set_slice.assert_called_once_with("110")
+
+
+@pytest.mark.asyncio
+async def test_set_slice_proceeds_when_index_absent_from_plan(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    client = _set_slice_context(mock_context, [_slice(111, retroactive=True)])
+    result = await action.execute(mock_context)
+    assert result.success
+    client.set_slice.assert_called_once_with("110")
+
+
+@pytest.mark.asyncio
+async def test_set_slice_fails_with_list_slices_error(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    client = _set_slice_context(mock_context, [])
+    client.list_slices.side_effect = ContextForgeError("cf list slices: boom")
+    result = await action.execute(mock_context)
+    assert not result.success
+    assert result.error == "cf list slices: boom"
+    client.set_slice.assert_not_called()

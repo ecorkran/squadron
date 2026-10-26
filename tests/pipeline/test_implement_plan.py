@@ -70,8 +70,15 @@ def _setup_repo(repo: Path) -> None:
 def _cf() -> MagicMock:
     client = MagicMock()
     client.list_slices.return_value = [
-        SliceEntry(index=i, name=f"S{i}", design_file=_design(i), status="not_started") for i in _PLAN
-    ] + [SliceEntry(index=_UNDESIGNED, name="S308", design_file=None, status="not_started")]
+        SliceEntry(
+            index=i, name=f"S{i}", design_file=_design(i), status="not_started", retroactive=False
+        )
+        for i in _PLAN
+    ] + [
+        SliceEntry(
+            index=_UNDESIGNED, name="S308", design_file=None, status="not_started", retroactive=False
+        )
+    ]
     client.list_tasks.return_value = [
         TaskEntry(index=i, files=[f"{i}-tasks.s{i}.md"], completed=0, total=4)
         for i, (_, tasked) in _PLAN.items()

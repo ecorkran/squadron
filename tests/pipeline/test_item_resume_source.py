@@ -76,7 +76,7 @@ async def test_an_undesigned_slice_is_rejected(project: Project) -> None:
 
     def without_401_design(*args: object) -> list[SliceEntry]:
         return [
-            SliceEntry(e.index, e.name, None, e.status) if e.index == 401 else e
+            SliceEntry(e.index, e.name, None, e.status, retroactive=False) if e.index == 401 else e
             for e in original(*args)
         ]
 

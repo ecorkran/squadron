@@ -31,7 +31,13 @@ TASK_FILE = "105-tasks.batch-foo.md"
 def _cf() -> MagicMock:
     client = MagicMock()
     client.list_slices.return_value = [
-        SliceEntry(index=SLICE, name="Batch Foo", design_file=DESIGN_FILE, status="in_progress")
+        SliceEntry(
+            index=SLICE,
+            name="Batch Foo",
+            design_file=DESIGN_FILE,
+            status="in_progress",
+            retroactive=False,
+        )
     ]
     client.list_tasks.return_value = [TaskEntry(index=SLICE, files=[TASK_FILE])]
     client.get_project.return_value = ProjectInfo(

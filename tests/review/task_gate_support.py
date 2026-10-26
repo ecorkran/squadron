@@ -36,7 +36,13 @@ _PROJECT = ProjectInfo(
 def cf_client(task_names: list[str]) -> MagicMock:
     client = MagicMock()
     client.list_slices.return_value = [
-        SliceEntry(index=194, name="Loop Step Type", design_file=DESIGN, status="in_progress")
+        SliceEntry(
+            index=194,
+            name="Loop Step Type",
+            design_file=DESIGN,
+            status="in_progress",
+            retroactive=False,
+        )
     ]
     client.list_tasks.return_value = [TaskEntry(index=194, files=task_names)]
     client.get_project.return_value = _PROJECT

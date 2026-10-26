@@ -20,6 +20,12 @@ from squadron.providers.profiles import is_sdk_profile
 
 _logger = logging.getLogger(__name__)
 
+#: Why SET_SLICE refuses a retroactive plan entry (440 D11).
+RETROACTIVE_REFUSAL = (
+    "slice {index} is a retroactive entry (recorded history, not planned work); "
+    "phase steps do not run on it"
+)
+
 
 class CfOperation(StrEnum):
     """Supported ContextForge operations."""
@@ -116,8 +122,9 @@ class CfOpAction:
                     phase = context.params["phase"]
                     stdout = cf_client._run(["set", "phase", str(phase)])  # pyright: ignore[reportPrivateUsage]
                 case CfOperation.SET_SLICE:
-                    slice_id = context.params["slice"]
-                    stdout = cf_client.set_slice(str(slice_id))
+                    slice_id = str(context.params["slice"])
+                    _refuse_retroactive(cf_client, slice_id)
+                    stdout = cf_client.set_slice(slice_id)
                 case CfOperation.BUILD_CONTEXT:
                     build_args = ["build", "--json"]
                     # Use --embed when the step model can't read files natively,
@@ -162,6 +169,16 @@ class CfOpAction:
             action_type=self.action_type,
             outputs={"stdout": stdout, "operation": operation.value, **extra_outputs},
         )
+
+
+def _refuse_retroactive(cf_client: ContextForgeClient, slice_id: str) -> None:
+    """Raise ``ContextForgeError`` when *slice_id* is a retroactive plan entry.
+
+    An index absent from the plan is left for ``cf set slice`` to judge.
+    """
+    for entry in cf_client.list_slices():
+        if str(entry.index) == slice_id and entry.retroactive:
+            raise ContextForgeError(RETROACTIVE_REFUSAL.format(index=entry.index))
 
 
 def _best_effort_cf_version(cf_client: ContextForgeClient) -> str | None:

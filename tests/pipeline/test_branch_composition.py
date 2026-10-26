@@ -48,7 +48,7 @@ def _commit_finished_task_files(repo: Path) -> None:
 def _cf() -> MagicMock:
     client = MagicMock()
     client.list_slices.return_value = [
-        SliceEntry(index=i, name=name, design_file=design, status="in_progress")
+        SliceEntry(index=i, name=name, design_file=design, status="in_progress", retroactive=False)
         for i, (name, design) in SLICES.items()
     ]
     client.list_tasks.return_value = [TaskEntry(index=i, files=[_task_file(i)]) for i in SLICES]

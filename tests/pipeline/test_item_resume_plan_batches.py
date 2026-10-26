@@ -36,7 +36,9 @@ def _cf(pipeline: str) -> MagicMock:
         # slices-plan selects the slice while it has no design; afterwards (the design
         # step's post-condition) it resolves to the file the dispatch wrote.
         undesigned = pipeline == "slices-plan" and plan == PLAN
-        return [SliceEntry(SLICE, "stub", None if undesigned else DESIGN, "not_started")]
+        return [
+            SliceEntry(SLICE, "stub", None if undesigned else DESIGN, "not_started", retroactive=False)
+        ]
 
     cf = MagicMock()
     cf.list_slices.side_effect = list_slices
