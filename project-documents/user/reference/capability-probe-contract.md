@@ -9,6 +9,8 @@ dependsOn: [001-initiative-plan.squadron.md]
 
 # Capability Probe Contract (`sq probe --json`)
 
+> **Superseded by slice 440 (20261026).** `sq probe` is removed; `sq onboard` replaces it. This document is kept as history only.
+
 > **Deprecated 20261025 (PM decision via cf).** cf no longer runs or reads `sq probe`: squadron calls
 > cf, never the reverse. `sq onboard` (squadron) owns adoption orchestration and uses cf's detection
 > report and adoption prompt (cf slice 271). The probe stays for squadron's internal use only; its

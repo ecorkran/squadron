@@ -17,8 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `sq onboard` reports where an existing codebase stands on adoption into Context Forge and names the next step. `/sq:onboard` (Codex: `$sq-onboard`) runs the steps for you; `sq onboard register`, `decline` and `prompt` make the cf calls. Cf calls made by `sq onboard` time out after `cf.cli_timeout_s` seconds (default 300).
 - `sq metrology ingest-reviews` writes one record per code-review file into the metrology store, so review findings can be counted. Re-running it is safe: it replaces each file's record.
 - `sq review code` now asks for a category on every finding from the same ten-value vocabulary the tech-debt audit uses, plus `correctness`. A category outside it is recorded as `other` with the model's own wording kept as `rawCategory`, and the review file is marked `categoriesNormalized: true`. Older reviews are mapped to the same vocabulary when ingested.
+
+### Changed
+
+- Context Forge 0.19.18 or later is now required: squadron reads each slice-plan entry's `retroactive` flag, and an older cf now fails with an error naming the requirement. Phase steps now refuse a retroactive slice-plan entry.
+
+### Removed
+
+- `sq probe`; `sq onboard` replaces it.
 
 ## [0.24.5] - 20261025
 

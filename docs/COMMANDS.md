@@ -721,19 +721,30 @@ sq shutdown --all
 | `AGENT_NAME` | string | no | Agent to shut down |
 | `--all` | flag | no | Shutdown all agents |
 
-## probe
+## onboard
 
-Report which brownfield capabilities are available here: whether the analysis skill and the `understand-anything` plugin are installed for Claude Code and Codex, and the state of the project's knowledge graph.
+Adopt an existing (brownfield) codebase into Context Forge. `sq onboard` is a read-only report: it asks cf what it finds, checks the knowledge graph and any comprehension document, and names the next step. Run it through the agent loop `/sq:onboard` (Claude Code) or `$sq-onboard` (Codex), which does each step and asks again.
 
 ```
-sq probe [--json]
+sq onboard [--path DIR] [--json]
+sq onboard register [--path DIR] [--ide TARGET]
+sq onboard decline [--path DIR]
+sq onboard prompt [--path DIR]
 ```
 
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
-| `--json` | flag | no | Print one compact JSON line instead of indented JSON |
+| `--path` | directory | no | Project directory. Default: the current directory. Used as given, never widened to the git root. Give it after the subcommand. |
+| `--json` | flag | no | Print the report as one JSON object (report only) |
+| `--ide` | string | no | `register` only: IDE target passed to `cf init` unvalidated (`agents` for Codex) |
 
-A field the probe cannot determine is `null`, with a warning on stderr. Exit codes: `0` whenever the probe can report, including when everything is absent; `1` only when the probe itself fails. Fields are defined in the [capability probe contract](../project-documents/user/reference/capability-probe-contract.md).
+The report names one next step: `handoff` (new or already-planned project; the report says whether `/cf:onboard` or `cf next`), `ask-adopt`, `build-graph`, `comprehension`, `concept` or `adopt`. It exits `0` whenever it can report; `1` with one line on stderr when cf is missing, fails, times out, answers with an error or an unknown report version or outcome, or `--path` is not a directory.
+
+- `register` runs `cf init --json` in the project, prints the project name and each step's result, and exits `1` if a step failed. It is safe to re-run.
+- `decline` opts the project out of adoption in cf; `/cf:onboard` then treats it as new.
+- `prompt` prints cf's adoption prompt for the newest comprehension document, and exits `1` if there is none.
+
+Requires cf 0.19.18 or later. Every cf call is bounded by the `cf.cli_timeout_s` config key (seconds, default `300`).
 
 ## events
 

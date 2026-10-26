@@ -401,7 +401,7 @@ It needs the `understand-anything` plugin to build the graph first, with the plu
 
 The skill's flows and other requirements are in [`commands/analysis/understand.md`](commands/analysis/understand.md).
 
-`sq probe --json` reports what is installed and the graph's state; see [`sq probe`](docs/COMMANDS.md#probe).
+`/sq:onboard` (Codex: `$sq-onboard`) adopts an existing codebase into Context Forge step by step; `sq onboard` reports where you stand. See [`sq onboard`](docs/COMMANDS.md#onboard).
 
 ## Exit codes
 
