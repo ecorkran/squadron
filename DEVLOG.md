@@ -11,6 +11,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261026
 
+### Slice 440: sq onboard — Implementation Complete (Phase 6)
+
+- Branch `440-slice.sq-onboard`, all 26 tasks. `sq onboard` (report, `register`, `decline`, `prompt`), `CfAdoptionClient` + report parsers in `integrations/cf_adoption.py`, `ContextForgeClient(cwd, timeout_s)` + `run_report`, `onboard/` package (`decide_step`, graph, surfaces, comprehension finder), `/sq:onboard` and `sq-onboard` command files, `sq probe` deleted. `SliceEntry.retroactive` is required and `set_slice` refuses a retroactive entry.
+- Not done: the live walkthrough. Installed cf is 0.19.19 and has no `cf detect`, so the fixtures are still copied from the cf 271 design, not recorded from real cf. Tracked as #273; the slice stays incomplete until it passes.
+- Surprises:
+  - The strict `retroactive` key broke 45 `test_sources.py` tests that mock raw cf JSON, and ~47 `SliceEntry(` constructors across the tests needed the new field. Nothing in `src` constructed one.
+  - `ContextForgeClient` had only private `_run`/`_run_json`, so `CfAdoptionClient` needed public `run`/`run_json` delegates (the pipeline reaches the private ones with `pyright: ignore`).
+  - A full `pytest` takes about 14 minutes.
+
 ### Slice 440: sq onboard — Task Breakdown Complete (Phase 5)
 
 - `440-tasks.sq-onboard.md`: 26 tasks in seven parts (fixtures, cf client + retroactive guard, `CfAdoptionClient`, probe move then delete, onboard core, CLI, agent surfaces, docs/validation), test-with throughout.
