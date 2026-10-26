@@ -126,3 +126,95 @@ def test_path_defaults_to_the_current_directory(
     result = _invoke(fake, "--json")
     assert result.exit_code == 0
     assert json.loads(result.stdout)["root"] == os.path.realpath(tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# register, decline, prompt (T20/T21)
+# ---------------------------------------------------------------------------
+
+
+def _write_comprehension(root: Path, index: int) -> Path:
+    doc = root / ANALYSIS_DIR / f"{index}{COMPREHENSION_SUFFIX}"
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text("doc")
+    return doc
+
+
+def test_register_prints_the_steps(tmp_path: Path) -> None:
+    result = _invoke(FakeAdoptionClient(), "register", "--path", str(tmp_path))
+    assert result.exit_code == 0
+    assert "Project: fixture-project (created)" in result.stdout
+    assert "register: ok" in result.stdout
+
+
+def test_register_failed_step_exits_1_naming_it(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient(init_fixture="init-failed-step")
+    result = _invoke(fake, "register", "--path", str(tmp_path))
+    assert result.exit_code == 1
+    assert "guides: failed - fixture: guide install failed" in result.stdout
+    assert "guides" in result.stderr
+
+
+def test_register_again_after_a_failed_run_calls_init_again(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient(init_fixture="init-failed-step")
+    _invoke(fake, "register", "--path", str(tmp_path))
+    _invoke(fake, "register", "--path", str(tmp_path))
+    assert fake.call_names == ["init_project", "init_project"]
+
+
+def test_register_worktree_error_prints_cf_message_and_guidance(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient(init_fixture="init-error-worktree")
+    result = _invoke(fake, "register", "--path", str(tmp_path))
+    assert result.exit_code == 1
+    assert "This looks like a worktree." in result.stderr
+    assert "cf worktree init" in result.stderr
+    assert "primary checkout" in result.stderr
+
+
+def test_register_passes_ide_through(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient()
+    _invoke(fake, "register", "--path", str(tmp_path), "--ide", "agents")
+    assert fake.calls == [("init_project", (tmp_path.resolve(), "agents"))]
+
+
+def test_decline_passes_the_root(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient()
+    result = _invoke(fake, "decline", "--path", str(tmp_path))
+    assert result.exit_code == 0
+    assert fake.calls == [("decline", (tmp_path.resolve(),))]
+    assert "Opted out" in result.stdout
+
+
+def test_prompt_uses_the_newest_doc_and_prints_verbatim(tmp_path: Path) -> None:
+    _write_comprehension(tmp_path, 940)
+    newest = _write_comprehension(tmp_path, 1002)
+    fake = FakeAdoptionClient(prompt_text="line one\n\nline two\n")
+    result = _invoke(fake, "prompt", "--path", str(tmp_path))
+    assert result.exit_code == 0
+    assert result.stdout == "line one\n\nline two\n"
+    assert fake.calls == [("adoption_prompt", (tmp_path.resolve(), newest.resolve()))]
+
+
+def test_prompt_without_a_doc_exits_1_and_calls_nothing(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient()
+    result = _invoke(fake, "prompt", "--path", str(tmp_path))
+    assert result.exit_code == 1
+    assert result.stderr.strip() == "No comprehension doc; run the comprehension step first"
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("subcommand", ["register", "decline", "prompt"])
+def test_subcommands_exit_1_with_one_line_when_cf_is_missing(tmp_path: Path, subcommand: str) -> None:
+    _write_comprehension(tmp_path, 940)
+    error = ContextForgeNotAvailable("'cf' (Context-Forge CLI) is not installed or not on PATH.")
+    result = _invoke(FakeAdoptionClient(raises=error), subcommand, "--path", str(tmp_path))
+    assert result.exit_code == 1
+    assert result.stderr.strip() == str(error)
+
+
+def test_options_before_a_subcommand_are_refused(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient()
+    result = _invoke(fake, "--path", str(tmp_path), "decline")
+    assert result.exit_code == 1
+    assert "after the subcommand" in result.stderr
+    assert fake.calls == []

@@ -26,6 +26,10 @@ ADOPTION_PROMPT_KEY = "brownfield-adoption"
 #: The cf config key holding the opt-out state, and the value that opts out.
 ADOPTION_STATE_KEY = "adoption.state"
 ADOPTION_STATE_DECLINED = "declined"
+#: ``cf init --json``'s error code for a worktree of a registered project (cf 271 D8).
+WORKTREE_ERROR_CODE = "worktree-of-registered-project"
+#: ``InitStep.status`` of a step that failed (the others are ``ok`` and ``skipped``).
+STEP_STATUS_FAILED = "failed"
 
 
 class AdoptionOutcome(StrEnum):

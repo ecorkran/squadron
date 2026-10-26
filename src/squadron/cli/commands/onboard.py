@@ -12,13 +12,21 @@ import json
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import cast
+from typing import Annotated, cast
 
 import typer
 
-from squadron.integrations.cf_adoption import AdoptionClient, CfAdoptionClient
+from squadron.integrations.cf_adoption import (
+    STEP_STATUS_FAILED,
+    WORKTREE_ERROR_CODE,
+    AdoptionClient,
+    CfAdoptionClient,
+    ContextForgeReportError,
+    InitReport,
+)
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
 from squadron.onboard import build_onboard_report
+from squadron.onboard.comprehension import newest_comprehension
 from squadron.onboard.render import format_report_text
 
 onboard_app = typer.Typer(
@@ -28,7 +36,15 @@ onboard_app = typer.Typer(
     no_args_is_help=False,
 )
 
-PATH_OPTION_HELP = "Project directory (default: the current directory). Used as given."
+PathOption = Annotated[
+    Path | None,
+    typer.Option("--path", help="Project directory (default: the current directory). Used as given."),
+]
+
+NO_COMPREHENSION_MESSAGE = "No comprehension doc; run the comprehension step first"
+WORKTREE_GUIDANCE = (
+    "Run `cf worktree init` in this directory, or run `sq onboard` in the primary checkout."
+)
 
 
 def _fail(message: str) -> typer.Exit:
@@ -62,8 +78,8 @@ def get_client(ctx: typer.Context) -> AdoptionClient:
 @onboard_app.callback()
 def onboard(
     ctx: typer.Context,
-    path: Path | None = typer.Option(None, "--path", help=PATH_OPTION_HELP),
-    as_json: bool = typer.Option(False, "--json", help="Print the report as JSON."),
+    path: PathOption = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the report as JSON.")] = False,
 ) -> None:
     """With no subcommand, print the adoption report for ``--path``."""
     if ctx.obj is None:
@@ -78,3 +94,58 @@ def onboard(
     with cf_errors():
         report = build_onboard_report(root, get_client(ctx))
     typer.echo(json.dumps(report.to_json(), indent=2) if as_json else format_report_text(report))
+
+
+def _print_init_report(report: InitReport) -> None:
+    typer.echo(f"Project: {report.project_name} ({report.registration})")
+    for step in report.steps:
+        detail = f" - {step.message}" if step.message else ""
+        typer.echo(f"  {step.step}: {step.status}{detail}")
+    for notice in report.notices:
+        typer.echo(f"Notice: {notice}")
+
+
+@onboard_app.command()
+def register(
+    ctx: typer.Context,
+    path: PathOption = None,
+    ide: Annotated[
+        str | None,
+        typer.Option("--ide", help="IDE target for cf init, passed to cf unvalidated."),
+    ] = None,
+) -> None:
+    """Register the project with cf (``cf init``); safe to re-run after a failure."""
+    root = resolve_root(path)
+    with cf_errors():
+        try:
+            report = get_client(ctx).init_project(root, ide)
+        except ContextForgeReportError as exc:
+            if exc.code != WORKTREE_ERROR_CODE:
+                raise
+            typer.echo(exc.message, err=True)
+            raise _fail(WORKTREE_GUIDANCE) from exc
+    _print_init_report(report)
+    if not report.ok:
+        failed = [step.step for step in report.steps if step.status == STEP_STATUS_FAILED]
+        raise _fail(f"cf init failed steps: {', '.join(failed) or 'none named'}")
+
+
+@onboard_app.command()
+def decline(ctx: typer.Context, path: PathOption = None) -> None:
+    """Opt this project out of brownfield adoption."""
+    root = resolve_root(path)
+    with cf_errors():
+        get_client(ctx).decline(root)
+    typer.echo(f"Opted out of brownfield adoption for {root}; /cf:onboard now treats it as new.")
+
+
+@onboard_app.command()
+def prompt(ctx: typer.Context, path: PathOption = None) -> None:
+    """Print cf's adoption prompt, built from the newest comprehension doc."""
+    root = resolve_root(path)
+    comprehension = newest_comprehension(root)
+    if comprehension is None:
+        raise _fail(NO_COMPREHENSION_MESSAGE)
+    with cf_errors():
+        text = get_client(ctx).adoption_prompt(root, comprehension)
+    typer.echo(text, nl=False)
