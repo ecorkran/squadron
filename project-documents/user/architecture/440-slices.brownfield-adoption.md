@@ -42,7 +42,7 @@ One slice, as the architecture says. The report, the step table, the subcommands
 
 ## Integration Work
 
-- **Retroactive entries in squadron's gates.** Squadron must not start P5 or P6 on a retroactive slice-plan entry. Slice design checks whether cf's slice listing already exposes the marker. If it doesn't, file a cf issue; squadron doesn't parse cf's plan format.
+- **Retroactive entries in squadron's gates.** Squadron must not start P5 or P6 on a retroactive slice-plan entry. `cf list slices --json` already carries `retroactive: bool` per entry. `SliceEntry` gains the field and the pipeline refuses such an entry with an error naming it. This is part of slice 440.
 
 ## Notes
 

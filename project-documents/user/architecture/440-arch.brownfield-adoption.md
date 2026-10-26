@@ -96,7 +96,7 @@ A run on a stale graph doesn't force a rebuild. The PM is told how many commits 
 
 - **Which prompt.** `brownfield-adoption` is the guide's prompt key. It is a constant in one place in squadron. If the installed guide lacks it, or its profile drops `fileComprehension`, cf's error is shown as is. There is no fallback prompt.
 
-- **Retroactive entries in squadron's gates.** A retroactive slice-plan entry counts as complete and is never treated as reviewed (cf 260 arch). Squadron's pipeline must not start P5 or P6 on one. Whether squadron can see the marker through `cf` today, or needs it in cf's slice listing, has to be checked during slice design. If cf has to add it, that is a cf issue, not a squadron parser for cf's plan format.
+- **Retroactive entries in squadron's gates.** A retroactive slice-plan entry counts as complete and is never treated as reviewed (cf 260 arch). Squadron's pipeline must not start P5 or P6 on one. `cf list slices --json` already gives each entry a `retroactive` boolean (cf, since slice 263), so squadron's `SliceEntry` reads that field and never parses cf's plan format. cf's own `cf check` already errors on a retroactive entry that has a slice design or task file, so squadron's guard is a second check. The listing has no version field. The field has been stable since 263, so squadron reads it unversioned.
 
 - **Interim guide.** Until cf 272 ships the reworked guide prompt, the installed prompt still expects the old Adoption Facts section. The live end-to-end run waits for 272 and ai-project-guide issue #47.
 
