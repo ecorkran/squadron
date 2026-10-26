@@ -470,6 +470,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "covering spawn, initialize, and the tool call together."
         ),
     ),
+    "cf.cli_timeout_s": ConfigKey(
+        name="cf.cli_timeout_s",
+        type_=int,
+        default=300,
+        description=(
+            "Wall-clock cap in seconds on each cf CLI call made by sq onboard "
+            "(detect, init, project list, config set, prompt get). A call that "
+            "exceeds it fails with an error naming the command."
+        ),
+    ),
     "codex.turn_timeout_s": ConfigKey(
         name="codex.turn_timeout_s",
         type_=int,

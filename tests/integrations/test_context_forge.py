@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +16,7 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
     ContextForgeNotAvailable,
 )
+from tests.fixtures.cf_adoption import fixture_text
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -363,3 +367,73 @@ class TestCfVersion:
         with patch("subprocess.run", side_effect=err):
             with pytest.raises(ContextForgeError, match="boom"):
                 ContextForgeClient().cf_version()
+
+
+# ---------------------------------------------------------------------------
+# 440 — cwd, timeout and run_report()
+# ---------------------------------------------------------------------------
+
+
+class TestCwdAndTimeout:
+    def test_default_client_passes_no_cwd_or_timeout(self) -> None:
+        with patch("subprocess.run", return_value=_mock_completed("ok")) as run:
+            ContextForgeClient()._run(["--version"])
+        assert run.call_args.kwargs["cwd"] is None
+        assert run.call_args.kwargs["timeout"] is None
+
+    def test_cwd_and_timeout_are_passed_through(self, tmp_path: Path) -> None:
+        with patch("subprocess.run", return_value=_mock_completed("ok")) as run:
+            ContextForgeClient(cwd=tmp_path, timeout_s=7)._run(["--version"])
+        assert run.call_args.kwargs["cwd"] == tmp_path
+        assert run.call_args.kwargs["timeout"] == 7
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="uses a shell-script fake cf")
+    def test_slow_cf_raises_naming_command_and_timeout(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        fake_cf = tmp_path / "cf"
+        fake_cf.write_text("#!/bin/sh\nsleep 5\n")
+        fake_cf.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+        with pytest.raises(ContextForgeError, match=r"cf slow command.*1s"):
+            ContextForgeClient(timeout_s=1)._run(["slow", "command"])
+
+
+class TestRunReport:
+    def test_exit_zero_returns_object(self) -> None:
+        stdout = fixture_text("detect-brownfield")
+        with patch("subprocess.run", return_value=_mock_completed(stdout)):
+            report = ContextForgeClient().run_report(["detect", "--json"])
+        assert report["outcome"] == "brownfield"
+
+    def test_exit_one_with_envelope_returns_envelope(self) -> None:
+        completed = _mock_completed(fixture_text("detect-error-path-not-found"))
+        completed.returncode = 1
+        with patch("subprocess.run", return_value=completed) as run:
+            report = ContextForgeClient().run_report(["detect", "--json"])
+        assert run.call_args.kwargs["check"] is False
+        assert report["error"]["code"] == "path-not-found"
+
+    def test_exit_one_with_garbage_raises_with_stderr(self) -> None:
+        completed = _mock_completed("garbage", stderr="boom on stderr")
+        completed.returncode = 1
+        with patch("subprocess.run", return_value=completed):
+            with pytest.raises(ContextForgeError, match="boom on stderr"):
+                ContextForgeClient().run_report(["detect", "--json"])
+
+    def test_other_exit_code_raises_even_with_valid_json(self) -> None:
+        completed = _mock_completed(fixture_text("detect-brownfield"), stderr="crashed")
+        completed.returncode = 2
+        with patch("subprocess.run", return_value=completed):
+            with pytest.raises(ContextForgeError, match="exit 2.*crashed"):
+                ContextForgeClient().run_report(["detect", "--json"])
+
+    def test_json_array_raises(self) -> None:
+        with patch("subprocess.run", return_value=_mock_completed("[]")):
+            with pytest.raises(ContextForgeError, match="not a JSON object"):
+                ContextForgeClient().run_report(["detect", "--json"])
+
+    def test_cf_missing_raises_not_available(self) -> None:
+        with patch("subprocess.run", side_effect=FileNotFoundError):
+            with pytest.raises(ContextForgeNotAvailable):
+                ContextForgeClient().run_report(["detect", "--json"])

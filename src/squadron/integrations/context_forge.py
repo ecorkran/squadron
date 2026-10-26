@@ -11,6 +11,7 @@ import logging
 import re
 import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, cast
 
 from squadron.core.subprocess_text import TEXT_DECODING
@@ -111,32 +112,74 @@ def cf_project_name() -> str:
 class ContextForgeClient:
     """Typed interface to Context Forge CLI operations."""
 
-    def __init__(self) -> None:
+    def __init__(self, cwd: Path | None = None, timeout_s: int | None = None) -> None:
+        """*cwd* is the directory cf runs in (cf resolves the project from it);
+        *timeout_s* bounds each call. ``None`` keeps the process cwd / no bound."""
         self._cf_version: str | None = None
+        self._cwd = cwd
+        self._timeout_s = timeout_s
+
+    def _exec(self, args: list[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        """Run ``cf`` with this client's cwd and timeout.
+
+        Raises:
+            ContextForgeNotAvailable: if ``cf`` is not on PATH.
+            ContextForgeError: on timeout, or on non-zero exit when *check*.
+        """
+        try:
+            return subprocess.run(
+                ["cf", *args],
+                capture_output=True,
+                text=True,
+                **TEXT_DECODING,
+                check=check,
+                cwd=self._cwd,
+                timeout=self._timeout_s,
+            )
+        except FileNotFoundError as exc:
+            raise ContextForgeNotAvailable(
+                "'cf' (Context-Forge CLI) is not installed or not on PATH."
+            ) from exc
+        except subprocess.TimeoutExpired as exc:
+            raise ContextForgeError(f"cf {' '.join(args)}: timed out after {self._timeout_s}s") from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = exc.stderr.strip() if exc.stderr else str(exc)
+            raise ContextForgeError(f"cf {' '.join(args)}: {stderr}") from exc
 
     def _run(self, args: list[str]) -> str:
         """Run a ``cf`` CLI command and return stdout.
 
         Raises:
             ContextForgeNotAvailable: if ``cf`` is not on PATH.
-            ContextForgeError: if the command exits non-zero.
+            ContextForgeError: if the command exits non-zero or times out.
         """
+        return self._exec(args, check=True).stdout
+
+    def run_report(self, args: list[str]) -> dict[str, Any]:
+        """Run a ``cf`` command that reports as JSON and return the object.
+
+        Unlike ``_run_json``, exit code 1 is not an error here: cf's report
+        commands print their error envelope to stdout and exit 1, so both
+        exit 0 and exit 1 are parsed. Interpreting the object (version,
+        envelope) is the caller's job.
+
+        Raises:
+            ContextForgeNotAvailable: if ``cf`` is not on PATH.
+            ContextForgeError: on any other exit code, stdout that is not a
+                JSON object, or a timeout; includes stderr.
+        """
+        result = self._exec(args, check=False)
+        command = f"cf {' '.join(args)}"
+        stderr = result.stderr.strip()
+        if result.returncode not in (0, 1):
+            raise ContextForgeError(f"{command}: exit {result.returncode}: {stderr}")
         try:
-            result = subprocess.run(
-                ["cf", *args],
-                capture_output=True,
-                text=True,
-                **TEXT_DECODING,
-                check=True,
-            )
-        except FileNotFoundError as exc:
-            raise ContextForgeNotAvailable(
-                "'cf' (Context-Forge CLI) is not installed or not on PATH."
-            ) from exc
-        except subprocess.CalledProcessError as exc:
-            stderr = exc.stderr.strip() if exc.stderr else str(exc)
-            raise ContextForgeError(f"cf {' '.join(args)}: {stderr}") from exc
-        return result.stdout
+            data: object = json.loads(result.stdout)
+        except json.JSONDecodeError as exc:
+            raise ContextForgeError(f"{command}: invalid JSON output: {exc}: {stderr}") from exc
+        if not isinstance(data, dict):
+            raise ContextForgeError(f"{command}: output is not a JSON object: {stderr}")
+        return cast("dict[str, Any]", data)
 
     def _run_json(self, args: list[str]) -> Any:
         """Run a ``cf`` CLI command and parse stdout as JSON.

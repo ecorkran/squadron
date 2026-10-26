@@ -208,3 +208,10 @@ class TestLivenessConfigKeys:
         set_config(key_name, value)
         with pytest.raises(ValueError, match=key_name):
             get_positive_int_config(key_name)
+
+
+class TestCfCliTimeoutKey:
+    def test_cf_cli_timeout_registered(self) -> None:
+        key = CONFIG_KEYS["cf.cli_timeout_s"]
+        assert key.type_ is int
+        assert key.default == 300
