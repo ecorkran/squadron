@@ -21,6 +21,7 @@ EXPECTED_FILES = {
     "analysis.md",
     "auth.md",
     "list.md",
+    "onboard.md",
     "pr.md",
     "replay.md",
     "review.md",
