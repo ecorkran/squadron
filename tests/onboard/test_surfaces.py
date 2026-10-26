@@ -5,8 +5,8 @@ from typing import Any
 
 import pytest
 
-from squadron.probe import surfaces
-from squadron.probe.surfaces import SURFACES
+from squadron.onboard import surfaces
+from squadron.onboard.surfaces import SURFACES
 from squadron.skills.targets import DELIVERIES, CommandTarget
 
 CLAUDE = SURFACES[CommandTarget.CLAUDE]

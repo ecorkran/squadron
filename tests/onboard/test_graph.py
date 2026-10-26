@@ -4,13 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from squadron.probe.graph import (
+from squadron.onboard.graph import (
     COMMIT_KEY,
     GRAPH_DIR_NAME,
     GRAPH_FILE_NAME,
     META_FILE_NAME,
     probe_graph,
-    project_root,
 )
 from tests.conftest import run_test_git
 
@@ -79,10 +78,8 @@ def test_non_repository_with_graph_has_unknown_commits_behind(
 ) -> None:
     _write_graph(tmp_path, _meta_for(FABRICATED_COMMIT))
 
-    root = project_root(tmp_path)
-    report = probe_graph(root)
+    report = probe_graph(tmp_path)
 
-    assert root == tmp_path
     assert report["present"] is True
     assert report["commits_behind"] is None
     assert _warnings(caplog)
@@ -110,10 +107,3 @@ def test_unusable_meta_leaves_commit_unknown(
     assert report["commit"] is None
     assert report["commits_behind"] is None
     assert _warnings(caplog)
-
-
-def test_project_root_from_subdirectory_is_repository_root(temp_git_repo: Path) -> None:
-    subdirectory = temp_git_repo / "nested" / "deeper"
-    subdirectory.mkdir(parents=True)
-
-    assert project_root(subdirectory).resolve() == temp_git_repo.resolve()

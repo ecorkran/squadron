@@ -1,8 +1,8 @@
 """Detect the understand-anything knowledge graph and how stale it is.
 
 Read-only: runs only ``git rev-parse``, ``merge-base --is-ancestor`` and
-``rev-list --count``, and never reads the graph's contents. Every value the probe
-cannot determine is ``None`` with a WARNING naming the cause.
+``rev-list --count``, and never reads the graph's contents. Every value that
+cannot be determined is ``None`` with a WARNING naming the cause.
 """
 
 from __future__ import annotations
@@ -10,9 +10,8 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
 
-from squadron.probe.report import GraphReport
 from squadron.review.git_utils import run_git
 
 logger = logging.getLogger(__name__)
@@ -23,12 +22,11 @@ META_FILE_NAME = "meta.json"
 COMMIT_KEY = "gitCommitHash"
 
 
-def project_root(cwd: Path) -> Path:
-    """The git toplevel containing ``cwd``, else ``cwd`` itself."""
-    result = run_git(["rev-parse", "--show-toplevel"], cwd=str(cwd))
-    if result is None or result.returncode != 0:
-        return cwd
-    return Path(result.stdout.strip())
+class GraphReport(TypedDict):
+    present: bool
+    path: str | None
+    commit: str | None
+    commits_behind: int | None
 
 
 def probe_graph(root: Path) -> GraphReport:

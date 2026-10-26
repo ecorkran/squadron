@@ -1,8 +1,8 @@
 """Read the skill names a dispatcher command declares.
 
 A dispatcher (``/sq:analysis``, ``$sq-analysis``) lists the skills it routes
-to on a ``Valid skills:`` line. The dispatcher drift test and the capability
-probe both read that line through ``dispatcher_skills``.
+to on a ``Valid skills:`` line. The dispatcher drift test and `sq onboard`
+both read that line through ``dispatcher_skills``.
 """
 
 from __future__ import annotations

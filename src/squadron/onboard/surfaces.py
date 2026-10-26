@@ -1,8 +1,7 @@
-"""Per-surface probe specs: the contract strings and how each surface is detected.
+"""Per-surface specs: how each agent surface's install state is detected.
 
-One ``SurfaceSpec`` per ``CommandTarget``. The contract strings (``entry``,
-``concept``, ``graph_build``) are defined here and nowhere else; the contract
-document is their source of truth.
+One ``SurfaceSpec`` per ``CommandTarget``. The command names each surface runs
+live in its command file (slice 440 D10), not here.
 """
 
 from __future__ import annotations
@@ -32,15 +31,12 @@ USER_PLUGIN_SCOPE = "user"
 
 @dataclass(frozen=True)
 class SurfaceSpec:
-    """What the probe reports for one agent surface, and how it detects the skill."""
+    """One agent surface and how its skill and plugin are detected."""
 
     key: str
-    entry: str
-    concept: str
-    graph_build: str
-    #: Given the project root; None means the probe could not determine it.
+    #: Given the project root; None means it could not be determined.
     analysis_skill_installed: Callable[[Path], bool | None]
-    #: Given the project root; None means the probe could not determine it.
+    #: Given the project root; None means it could not be determined.
     understand_plugin_installed: Callable[[Path], bool | None]
 
 
@@ -48,7 +44,7 @@ def _install_roots(target: CommandTarget, project_root: Path) -> list[Path]:
     """Machine root and project root for a target.
 
     ``resolve_root(local=True)`` reads ``Path.cwd()``, which is wrong when
-    ``sq probe`` runs from a subdirectory, so the project root is joined here.
+    ``sq onboard`` runs from a subdirectory, so the project root is joined here.
     """
     delivery = DELIVERIES[target]
     return [delivery.resolve_root(local=False), project_root / delivery.local_root]
@@ -137,17 +133,11 @@ def _claude_plugin_installed(project_root: Path) -> bool | None:
 SURFACES: dict[CommandTarget, SurfaceSpec] = {
     CommandTarget.CLAUDE: SurfaceSpec(
         key="claude-code",
-        entry="/sq:analysis understand",
-        concept="/sq:analysis understand concept",
-        graph_build="/understand",
         analysis_skill_installed=_claude_skill_installed,
         understand_plugin_installed=_claude_plugin_installed,
     ),
     CommandTarget.AGENTS: SurfaceSpec(
         key="codex",
-        entry="analysis-understand",
-        concept="analysis-understand concept",
-        graph_build="understand",
         analysis_skill_installed=_codex_skill_installed,
         understand_plugin_installed=_codex_plugin_installed,
     ),
