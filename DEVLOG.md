@@ -2,12 +2,20 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261025'
+dateUpdated: '20261026'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261026
+
+### Slice 440: sq onboard — Task Breakdown Complete (Phase 5)
+
+- `440-tasks.sq-onboard.md`: 26 tasks in seven parts (fixtures, cf client + retroactive guard, `CfAdoptionClient`, probe move then delete, onboard core, CLI, agent surfaces, docs/validation), test-with throughout.
+- Recorded fixtures come from cf 271 design D3/D5/D8 at context-forge `93ee3511`.
+- The live walkthrough (needs cf 271, 272, guide #47) is a slice precondition tracked as #273, not a task; the slice stays incomplete until it passes.
 
 ## 20261025
 
