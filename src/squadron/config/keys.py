@@ -18,6 +18,7 @@ class ConfigKey:
 # Keys read through squadron.config.manager.get_positive_int_config (slice 174 D1).
 FOREGROUND_IDLE_TIMEOUT_KEY = "pipeline.foreground_idle_timeout_s"
 RUN_HEARTBEAT_INTERVAL_KEY = "pipeline.run_heartbeat_interval_s"
+CF_CLI_TIMEOUT_KEY = "cf.cli_timeout_s"
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
 COST_CAP_KEY = "pipeline.max_cost_usd"
 
@@ -470,8 +471,8 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "covering spawn, initialize, and the tool call together."
         ),
     ),
-    "cf.cli_timeout_s": ConfigKey(
-        name="cf.cli_timeout_s",
+    CF_CLI_TIMEOUT_KEY: ConfigKey(
+        name=CF_CLI_TIMEOUT_KEY,
         type_=int,
         default=300,
         description=(
