@@ -8,48 +8,14 @@ from typing import cast
 
 import pytest
 
-from squadron.integrations.cf_adoption import (
-    AdoptionClient,
-    DetectionReport,
-    InitReport,
-    parse_detect_report,
-)
+from squadron.integrations.cf_adoption import AdoptionClient
 from squadron.onboard import build_onboard_report
 from squadron.onboard.comprehension import ANALYSIS_DIR, COMPREHENSION_SUFFIX
 from squadron.onboard.graph import GRAPH_DIR_NAME, GRAPH_FILE_NAME
 from squadron.onboard.steps import OnboardStep
-from tests.fixtures.cf_adoption import load_fixture
+from tests.onboard.fakes import FakeAdoptionClient
 
 DOC_NAME = f"940{COMPREHENSION_SUFFIX}"
-
-
-class FakeAdoptionClient:
-    """Fixture-backed ``AdoptionClient`` that records every call."""
-
-    def __init__(self, detect_fixture: str, registered: bool) -> None:
-        self._detect_fixture = detect_fixture
-        self._registered = registered
-        self.calls: list[str] = []
-
-    def detect(self, root: Path) -> DetectionReport:
-        self.calls.append("detect")
-        return parse_detect_report(cast("dict[str, object]", load_fixture(self._detect_fixture)))
-
-    def is_registered(self, root: Path) -> bool:
-        self.calls.append("is_registered")
-        return self._registered
-
-    def init_project(self, root: Path, ide: str | None) -> InitReport:
-        self.calls.append("init_project")
-        raise AssertionError("onboard report must not register")
-
-    def decline(self, root: Path) -> None:
-        self.calls.append("decline")
-        raise AssertionError("onboard report must not decline")
-
-    def adoption_prompt(self, root: Path, comprehension: Path) -> str:
-        self.calls.append("adoption_prompt")
-        raise AssertionError("onboard report must not fetch the prompt")
 
 
 def _write_doc(root: Path, mtime: float | None = None) -> Path:
@@ -134,7 +100,7 @@ def test_comprehension_older_than_graph(
 def test_report_only_reads_from_cf(tmp_path: Path) -> None:
     fake = FakeAdoptionClient("detect-brownfield", registered=False)
     build_onboard_report(tmp_path, _client(fake))
-    assert fake.calls == ["detect", "is_registered"]
+    assert fake.call_names == ["detect", "is_registered"]
 
 
 def test_a_resumed_run_with_doc_and_concept_goes_to_adopt(tmp_path: Path) -> None:

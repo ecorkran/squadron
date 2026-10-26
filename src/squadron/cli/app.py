@@ -21,6 +21,7 @@ from squadron.cli.commands.list import agents_app
 from squadron.cli.commands.message import message
 from squadron.cli.commands.metrology import metrology_app
 from squadron.cli.commands.models import models_app
+from squadron.cli.commands.onboard import onboard_app
 from squadron.cli.commands.pipelines import pipelines_app
 from squadron.cli.commands.pools import pools_app
 from squadron.cli.commands.pr import pr_app
@@ -72,6 +73,7 @@ app.add_typer(events_app, name="events")
 app.add_typer(pr_app, name="pr")
 app.add_typer(stats_app, name="stats")
 app.add_typer(replay_app, name="replay")
+app.add_typer(onboard_app, name="onboard")
 app.command("run")(run_command)
 app.command("doctor")(doctor)
 app.command("squash")(squash_run)
