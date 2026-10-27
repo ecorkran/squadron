@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.6] - 20261027
+
 ### Added
 
 - `sq onboard` reports where an existing codebase stands on adoption into Context Forge and names the next step. `/sq:onboard` (Codex: `$sq-onboard`) runs the steps for you; `sq onboard register`, `decline` and `prompt` make the cf calls. Cf calls made by `sq onboard` time out after `cf.cli_timeout_s` seconds (default 300).

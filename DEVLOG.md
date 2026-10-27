@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261026'
+dateUpdated: '20261027'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261027
+
+### Release 0.24.6
+
+- **Contents:** slice 440 `sq onboard` (replaces `sq probe`; live adoption run on a tank-game clone passed, #273), slice 402 code-review category normalization and `sq metrology ingest-reviews`. Follow-ups: #275, #276.
 
 ## 20261026
 
