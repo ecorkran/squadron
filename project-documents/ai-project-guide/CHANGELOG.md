@@ -12,6 +12,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.10] - 2026-10-27
+
+### Changed
+- The `slice-design-phase-4` context profile now includes `fileArch`, so a slice design starts with the architecture (`[fileArch, fileSlicePlan, fileSlice]`). Found in a live adoption run, where the Phase 4 context named the slice plan and slice but not the derived architecture.
+
+## [0.22.9] - 2026-10-27
+
+### Changed
+- `rules/fixes.md`: a feature gets its own slice only when it is a vertical slice of functionality (it needs design, spans several components or steps, or changes a file or state format others depend on). Smaller features, such as a new flag, a behavior change or a few dozen lines, take the small-fix path and are committed as `feat:` with no slice, branch, task file or review. The small-fix step now covers small features and no longer requires an issue.
+
+## [0.22.8] - 2026-10-26
+
+### Changed
+- Brownfield adoption now runs through squadron's `sq onboard`, which fetches the Brownfield Adoption prompt with `cf prompt get brownfield-adoption`. The prompt reads cf's appended Adoption Inputs section and starts from the concept `sq onboard` confirmed. It no longer drafts a concept, reads Adoption Facts or squadron probe output, picks a squadron or CF-only path, or runs `cf build`. Project rule files come from `cf detect --json` (`facts.ruleFiles`). The adoption guide's How It Is Run and After Adoption sections match. Context Forge requires this release as its minimum guide version (#47).
+
 ## [0.22.7] - 2026-10-25
 
 ### Added
