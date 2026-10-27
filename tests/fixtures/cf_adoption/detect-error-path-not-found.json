@@ -1,4 +1,7 @@
 {
   "reportVersion": 1,
-  "error": { "code": "path-not-found", "message": "Path does not exist or is not a directory: /abs/missing" }
+  "error": {
+    "code": "path-not-found",
+    "message": "Path does not exist: /abs/missing"
+  }
 }

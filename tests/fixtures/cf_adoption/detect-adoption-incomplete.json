@@ -3,17 +3,39 @@
   "projectRoot": "/abs/path/to/project",
   "outcome": "adoption-incomplete",
   "facts": {
-    "source": { "measured": true, "lines": 2000, "files": 37, "capped": true },
-    "history": { "known": true, "commits": 412, "shallow": false },
-    "docs": ["README.md", "docs"],
-    "adrs": ["docs/adr"],
-    "ci": [".github/workflows/ci.yml"],
-    "ruleFiles": ["CLAUDE.md"]
+    "source": {
+      "measured": true,
+      "lines": 2100,
+      "files": 1,
+      "capped": true
+    },
+    "history": {
+      "known": true,
+      "commits": 1,
+      "shallow": false
+    },
+    "docs": [
+      "README.md",
+      "docs"
+    ],
+    "adrs": [
+      "docs/adr"
+    ],
+    "ci": [
+      ".github/workflows/ci.yml"
+    ],
+    "ruleFiles": [
+      "CLAUDE.md"
+    ]
   },
   "artifacts": {
-    "concept": "project-documents/user/concept.md",
-    "derivedArchitectures": [],
+    "concept": "project-documents/user/project-guides/000-concept.example.md",
+    "derivedArchitectures": [
+      "project-documents/user/architecture/100-arch.example.md"
+    ],
     "existingStatePlan": null
   },
-  "notices": ["fixture notice: adoption-incomplete"]
+  "notices": [
+    "A derived architecture exists, but no slice plan has retroactive entries, so adoption is incomplete. It resumes through sq onboard. To treat the project as new: cf config set adoption.state declined"
+  ]
 }

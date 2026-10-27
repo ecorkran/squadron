@@ -32,13 +32,14 @@ def _fixture(name: str) -> dict[str, Any]:
 class TestParseDetectReport:
     @pytest.mark.parametrize("outcome", list(AdoptionOutcome))
     def test_each_outcome_parses(self, outcome: AdoptionOutcome) -> None:
-        report = parse_detect_report(_fixture(f"detect-{outcome.value}"))
+        data = _fixture(f"detect-{outcome.value}")
+        report = parse_detect_report(data)
         assert report.outcome is outcome
-        assert report.notices == (f"fixture notice: {outcome.value}",)
+        assert report.notices == tuple(data["notices"])
 
     def test_artifacts_are_read(self) -> None:
         artifacts = parse_detect_report(_fixture("detect-already-planned")).artifacts
-        assert artifacts.concept == "project-documents/user/concept.md"
+        assert artifacts.concept == "project-documents/user/project-guides/000-concept.example.md"
         assert artifacts.derived_architectures == (
             "project-documents/user/architecture/100-arch.example.md",
         )
@@ -126,7 +127,13 @@ class TestParseInitReport:
         report = parse_init_report(_fixture("init-failed-step"))
         assert report.ok is False
         failed = [s for s in report.steps if s.status == "failed"]
-        assert [(s.step, s.message) for s in failed] == [("guides", "fixture: guide install failed")]
+        assert [(s.step, s.message) for s in failed] == [
+            (
+                "ide",
+                "Invalid target 'bogus'. Valid targets: claude, copilot, cursor, agents "
+                "(aliases: openai, codex → agents)",
+            )
+        ]
 
 
 # ---------------------------------------------------------------------------

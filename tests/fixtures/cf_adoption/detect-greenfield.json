@@ -3,17 +3,35 @@
   "projectRoot": "/abs/path/to/project",
   "outcome": "greenfield",
   "facts": {
-    "source": { "measured": true, "lines": 40, "files": 2, "capped": false },
-    "history": { "known": true, "commits": 3, "shallow": false },
-    "docs": ["README.md", "docs"],
-    "adrs": ["docs/adr"],
-    "ci": [".github/workflows/ci.yml"],
-    "ruleFiles": ["CLAUDE.md"]
+    "source": {
+      "measured": true,
+      "lines": 40,
+      "files": 1,
+      "capped": false
+    },
+    "history": {
+      "known": true,
+      "commits": 1,
+      "shallow": false
+    },
+    "docs": [
+      "README.md",
+      "docs"
+    ],
+    "adrs": [
+      "docs/adr"
+    ],
+    "ci": [
+      ".github/workflows/ci.yml"
+    ],
+    "ruleFiles": [
+      "CLAUDE.md"
+    ]
   },
   "artifacts": {
     "concept": null,
     "derivedArchitectures": [],
     "existingStatePlan": null
   },
-  "notices": ["fixture notice: greenfield"]
+  "notices": []
 }

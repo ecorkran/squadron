@@ -1,4 +1,4 @@
-"""Recorded cf adoption reports (cf 271 D3, D5, D8) for tests."""
+"""cf adoption reports recorded from cf 0.19.20 (paths normalized) for tests."""
 
 import json
 from pathlib import Path

@@ -151,8 +151,8 @@ def test_register_failed_step_exits_1_naming_it(tmp_path: Path) -> None:
     fake = FakeAdoptionClient(init_fixture="init-failed-step")
     result = _invoke(fake, "register", "--path", str(tmp_path))
     assert result.exit_code == 1
-    assert "guides: failed - fixture: guide install failed" in result.stdout
-    assert "guides" in result.stderr
+    assert "ide: failed - Invalid target 'bogus'" in result.stdout
+    assert "ide" in result.stderr
 
 
 def test_register_again_after_a_failed_run_calls_init_again(tmp_path: Path) -> None:

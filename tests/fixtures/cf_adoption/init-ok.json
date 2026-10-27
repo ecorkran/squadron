@@ -1,17 +1,38 @@
 {
   "reportVersion": 1,
-  "projectId": "project_1_fixture",
+  "projectId": "project_1793100256182_i6krsjp5w",
   "projectName": "fixture-project",
   "projectPath": "/abs/path/to/project",
   "registration": "created",
   "steps": [
-    { "step": "git", "status": "skipped" },
-    { "step": "register", "status": "ok" },
-    { "step": "gitignore", "status": "ok" },
-    { "step": "guides", "status": "ok" },
-    { "step": "commands", "status": "ok" },
-    { "step": "ide", "status": "skipped" }
+    {
+      "step": "git",
+      "status": "skipped",
+      "message": "already inside a git work tree"
+    },
+    {
+      "step": "register",
+      "status": "ok"
+    },
+    {
+      "step": "gitignore",
+      "status": "ok"
+    },
+    {
+      "step": "guides",
+      "status": "ok"
+    },
+    {
+      "step": "commands",
+      "status": "ok"
+    },
+    {
+      "step": "ide",
+      "status": "ok"
+    }
   ],
-  "notices": [],
+  "notices": [
+    "This project has existing code and no planning artifacts. Adopting an existing codebase arrives with sq onboard. To treat the project as new: cf config set adoption.state declined"
+  ],
   "ok": true
 }

@@ -1,17 +1,40 @@
 {
   "reportVersion": 1,
-  "projectId": "project_1_fixture",
+  "projectId": "project_1793100287251_jwe2gb00r",
   "projectName": "fixture-project",
   "projectPath": "/abs/path/to/project",
   "registration": "created",
   "steps": [
-    { "step": "git", "status": "skipped" },
-    { "step": "register", "status": "ok" },
-    { "step": "gitignore", "status": "ok" },
-    { "step": "guides", "status": "failed", "message": "fixture: guide install failed" },
-    { "step": "commands", "status": "ok" },
-    { "step": "ide", "status": "skipped" }
+    {
+      "step": "git",
+      "status": "skipped",
+      "message": "already inside a git work tree"
+    },
+    {
+      "step": "register",
+      "status": "ok"
+    },
+    {
+      "step": "gitignore",
+      "status": "ok"
+    },
+    {
+      "step": "guides",
+      "status": "ok"
+    },
+    {
+      "step": "commands",
+      "status": "skipped",
+      "message": "the IDE target has no command delivery"
+    },
+    {
+      "step": "ide",
+      "status": "failed",
+      "message": "Invalid target 'bogus'. Valid targets: claude, copilot, cursor, agents (aliases: openai, codex → agents)"
+    }
   ],
-  "notices": [],
+  "notices": [
+    "This project has existing code and no planning artifacts. Adopting an existing codebase arrives with sq onboard. To treat the project as new: cf config set adoption.state declined"
+  ],
   "ok": false
 }

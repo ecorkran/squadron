@@ -13,6 +13,7 @@ from squadron.onboard import build_onboard_report
 from squadron.onboard.comprehension import ANALYSIS_DIR, COMPREHENSION_SUFFIX
 from squadron.onboard.graph import GRAPH_DIR_NAME, GRAPH_FILE_NAME
 from squadron.onboard.steps import OnboardStep
+from tests.fixtures.cf_adoption import load_fixture
 from tests.onboard.fakes import FakeAdoptionClient
 
 DOC_NAME = f"940{COMPREHENSION_SUFFIX}"
@@ -70,7 +71,7 @@ def test_json_matches_the_api_contract(tmp_path: Path) -> None:
     surfaces = cast("dict[str, dict[str, object]]", data["surfaces"])
     assert set(surfaces) == {"claude-code", "codex"}
     assert set(surfaces["codex"]) == {"analysis_skill_installed", "understand_plugin_installed"}
-    assert data["notices"] == ["fixture notice: brownfield"]
+    assert data["notices"] == cast("dict[str, object]", load_fixture("detect-brownfield"))["notices"]
     assert data["next"] == {
         "step": "concept",
         "reason": "cf reports no concept",
@@ -110,4 +111,4 @@ def test_a_resumed_run_with_doc_and_concept_goes_to_adopt(tmp_path: Path) -> Non
     report = build_onboard_report(tmp_path, _client(fake))
 
     assert report.next.step is OnboardStep.ADOPT
-    assert report.to_json()["concept"] == "project-documents/user/concept.md"
+    assert report.to_json()["concept"] == "project-documents/user/project-guides/000-concept.example.md"
