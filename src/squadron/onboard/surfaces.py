@@ -67,7 +67,7 @@ def _claude_scope_has_skill(commands_root: Path) -> bool | None:
     try:
         skills = dispatcher_skills(dispatcher_file.read_text(encoding="utf-8"))
     except OSError as error:
-        # An unreadable dispatcher means the install state is unknown, not a probe failure.
+        # An unreadable dispatcher means the install state is unknown, not a report failure.
         logger.warning("analysis_skill_installed unknown: cannot read %s: %s", dispatcher_file, error)
         return None
     if skills is None:
@@ -108,7 +108,7 @@ def _claude_plugin_installed(project_root: Path) -> bool | None:
     try:
         data = json.loads(plugins_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        # An unreadable or malformed plugin registry means unknown, not a probe failure.
+        # An unreadable or malformed plugin registry means unknown, not a report failure.
         logger.warning("understand_plugin_installed unknown: cannot read %s: %s", plugins_file, error)
         return None
     plugins = cast(dict[str, object], data).get("plugins") if isinstance(data, dict) else None
@@ -143,5 +143,5 @@ SURFACES: dict[CommandTarget, SurfaceSpec] = {
     ),
 }
 
-# A new target without a surface spec is a missing probe entry, not a default.
+# A new target without a surface spec is a missing surface entry, not a default.
 assert set(SURFACES) == set(CommandTarget), "every CommandTarget needs a SurfaceSpec"

@@ -100,11 +100,11 @@ async def test_execute_set_phase(action: CfOpAction, mock_context: ActionContext
         "operation": CfOperation.SET_PHASE,
         "phase": "4",
     }
-    mock_context.cf_client._run = MagicMock(return_value="Phase set to 4")  # type: ignore[union-attr]
+    mock_context.cf_client.run = MagicMock(return_value="Phase set to 4")  # type: ignore[union-attr]
 
     result = await action.execute(mock_context)
 
-    mock_context.cf_client._run.assert_called_once_with(["set", "phase", "4"])  # type: ignore[union-attr]
+    mock_context.cf_client.run.assert_called_once_with(["set", "phase", "4"])  # type: ignore[union-attr]
     assert result.success is True
     assert result.outputs["stdout"] == "Phase set to 4"
     assert result.outputs["operation"] == "set_phase"
@@ -113,13 +113,13 @@ async def test_execute_set_phase(action: CfOpAction, mock_context: ActionContext
 @pytest.mark.asyncio
 async def test_execute_build_context(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
-    mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
+    mock_context.cf_client.run_json = MagicMock(  # type: ignore[union-attr]
         return_value={"context": "Context built"},
     )
 
     result = await action.execute(mock_context)
 
-    mock_context.cf_client._run_json.assert_called_once_with(["build", "--json"])  # type: ignore[union-attr]
+    mock_context.cf_client.run_json.assert_called_once_with(["build", "--json"])  # type: ignore[union-attr]
     assert result.success is True
     assert result.outputs["stdout"] == "Context built"
     assert result.outputs["operation"] == "build_context"
@@ -136,14 +136,14 @@ async def test_execute_build_context_resolution_failure_skips_embed_and_logs(
 
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT, "model": "some-alias"}
     mock_context.resolver.resolve.side_effect = ModelResolutionError("no model could be resolved")  # type: ignore[union-attr]
-    mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
+    mock_context.cf_client.run_json = MagicMock(  # type: ignore[union-attr]
         return_value={"context": "Context built"},
     )
 
     with caplog.at_level("ERROR", logger="squadron.pipeline.actions.cf_op"):
         result = await action.execute(mock_context)
 
-    mock_context.cf_client._run_json.assert_called_once_with(["build", "--json"])  # type: ignore[union-attr]
+    mock_context.cf_client.run_json.assert_called_once_with(["build", "--json"])  # type: ignore[union-attr]
     assert result.success is True
     assert any(record.levelname == "ERROR" for record in caplog.records)
 
@@ -151,11 +151,11 @@ async def test_execute_build_context_resolution_failure_skips_embed_and_logs(
 @pytest.mark.asyncio
 async def test_execute_summarize(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.SUMMARIZE}
-    mock_context.cf_client._run = MagicMock(return_value="Summary done")  # type: ignore[union-attr]
+    mock_context.cf_client.run = MagicMock(return_value="Summary done")  # type: ignore[union-attr]
 
     result = await action.execute(mock_context)
 
-    mock_context.cf_client._run.assert_called_once_with(["summarize"])  # type: ignore[union-attr]
+    mock_context.cf_client.run.assert_called_once_with(["summarize"])  # type: ignore[union-attr]
     assert result.success is True
     assert result.outputs["stdout"] == "Summary done"
 
@@ -163,7 +163,7 @@ async def test_execute_summarize(action: CfOpAction, mock_context: ActionContext
 @pytest.mark.asyncio
 async def test_execute_success_outputs(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
-    mock_context.cf_client._run = MagicMock(return_value="ok")  # type: ignore[union-attr]
+    mock_context.cf_client.run = MagicMock(return_value="ok")  # type: ignore[union-attr]
 
     result = await action.execute(mock_context)
 
@@ -176,7 +176,7 @@ async def test_execute_success_outputs(action: CfOpAction, mock_context: ActionC
 @pytest.mark.asyncio
 async def test_execute_cf_error(action: CfOpAction, mock_context: ActionContext) -> None:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
-    mock_context.cf_client._run_json = MagicMock(  # type: ignore[union-attr]
+    mock_context.cf_client.run_json = MagicMock(  # type: ignore[union-attr]
         side_effect=ContextForgeError("cf build failed")
     )
 
@@ -200,7 +200,7 @@ def test_validate_set_arch_without_plan(action: CfOpAction) -> None:
 async def test_execute_set_arch_passes_the_index_to_cf(action: CfOpAction) -> None:
     """A new initiative has no slice plan yet; cf resolves the index itself."""
     cf_client = MagicMock()
-    cf_client._run.return_value = "ok"
+    cf_client.run.return_value = "ok"
     ctx = ActionContext(
         pipeline_name="test-pipeline",
         run_id="run-001",
@@ -216,13 +216,13 @@ async def test_execute_set_arch_passes_the_index_to_cf(action: CfOpAction) -> No
     result = await action.execute(ctx)
 
     assert result.success is True
-    cf_client._run.assert_called_once_with(["set", "arch", "200"])
+    cf_client.run.assert_called_once_with(["set", "arch", "200"])
 
 
 def _build_context_ctx(mock_context: ActionContext, cwd: Path) -> ActionContext:
     mock_context.params = {"operation": CfOperation.BUILD_CONTEXT}
     mock_context.cwd = str(cwd)
-    mock_context.cf_client._run_json = MagicMock(return_value={"context": "ctx"})  # type: ignore[union-attr]
+    mock_context.cf_client.run_json = MagicMock(return_value={"context": "ctx"})  # type: ignore[union-attr]
     mock_context.cf_client.cf_version = MagicMock(return_value="0.19.13")  # type: ignore[union-attr]
     return mock_context
 
@@ -304,7 +304,7 @@ async def test_other_operations_carry_no_version_keys(
     action: CfOpAction, mock_context: ActionContext
 ) -> None:
     mock_context.params = {"operation": CfOperation.SUMMARIZE}
-    mock_context.cf_client._run = MagicMock(return_value="s")  # type: ignore[union-attr]
+    mock_context.cf_client.run = MagicMock(return_value="s")  # type: ignore[union-attr]
 
     result = await action.execute(mock_context)
 

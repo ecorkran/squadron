@@ -9,7 +9,7 @@ from squadron.onboard.graph import (
     GRAPH_DIR_NAME,
     GRAPH_FILE_NAME,
     META_FILE_NAME,
-    probe_graph,
+    read_graph,
 )
 from tests.conftest import run_test_git
 
@@ -44,7 +44,7 @@ def test_graph_at_head_is_zero_commits_behind(temp_git_repo: Path) -> None:
     head = _commit(temp_git_repo, "a")
     _write_graph(temp_git_repo, _meta_for(head))
 
-    report = probe_graph(temp_git_repo)
+    report = read_graph(temp_git_repo)
 
     assert report["present"] is True
     assert report["path"] == str(temp_git_repo / GRAPH_DIR_NAME / GRAPH_FILE_NAME)
@@ -58,7 +58,7 @@ def test_graph_two_commits_behind(temp_git_repo: Path) -> None:
     _commit(temp_git_repo, "b")
     _commit(temp_git_repo, "c")
 
-    assert probe_graph(temp_git_repo)["commits_behind"] == 2
+    assert read_graph(temp_git_repo)["commits_behind"] == 2
 
 
 def test_commit_that_is_not_an_ancestor_is_unknown(
@@ -66,7 +66,7 @@ def test_commit_that_is_not_an_ancestor_is_unknown(
 ) -> None:
     _write_graph(temp_git_repo, _meta_for(FABRICATED_COMMIT))
 
-    report = probe_graph(temp_git_repo)
+    report = read_graph(temp_git_repo)
 
     assert report["commit"] == FABRICATED_COMMIT
     assert report["commits_behind"] is None
@@ -78,7 +78,7 @@ def test_non_repository_with_graph_has_unknown_commits_behind(
 ) -> None:
     _write_graph(tmp_path, _meta_for(FABRICATED_COMMIT))
 
-    report = probe_graph(tmp_path)
+    report = read_graph(tmp_path)
 
     assert report["present"] is True
     assert report["commits_behind"] is None
@@ -86,7 +86,7 @@ def test_non_repository_with_graph_has_unknown_commits_behind(
 
 
 def test_no_graph_reports_absent(temp_git_repo: Path) -> None:
-    report = probe_graph(temp_git_repo)
+    report = read_graph(temp_git_repo)
 
     assert report == {"present": False, "path": None, "commit": None, "commits_behind": None}
 
@@ -101,7 +101,7 @@ def test_unusable_meta_leaves_commit_unknown(
 ) -> None:
     _write_graph(temp_git_repo, meta)
 
-    report = probe_graph(temp_git_repo)
+    report = read_graph(temp_git_repo)
 
     assert report["present"] is True
     assert report["commit"] is None

@@ -120,6 +120,12 @@ class TestParseInitReport:
         assert report.project_name == "fixture-project"
         assert [s.step for s in report.steps][:2] == ["git", "register"]
 
+    def test_non_object_step_raises(self) -> None:
+        data = _fixture("init-ok")
+        data["steps"] = ["git"]
+        with pytest.raises(ContextForgeError, match="'steps' entry is not an object"):
+            parse_init_report(data)
+
     def test_existing_registration(self) -> None:
         assert parse_init_report(_fixture("init-existing")).registration == "existing"
 
@@ -199,6 +205,13 @@ class TestCfAdoptionClient:
         listing = fixture_text("project-list")
         with patch("subprocess.run", return_value=_completed(listing)):
             assert client.is_registered(tmp_path) is False
+
+    def test_is_registered_rejects_non_object_entry(
+        self, client: CfAdoptionClient, tmp_path: Path
+    ) -> None:
+        with patch("subprocess.run", return_value=_completed('["not-an-object"]')):
+            with pytest.raises(ContextForgeError, match="entry is not an object"):
+                client.is_registered(tmp_path)
 
     def test_is_registered_rejects_non_list_output(
         self, client: CfAdoptionClient, tmp_path: Path

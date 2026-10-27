@@ -29,7 +29,7 @@ class GraphReport(TypedDict):
     commits_behind: int | None
 
 
-def probe_graph(root: Path) -> GraphReport:
+def read_graph(root: Path) -> GraphReport:
     """Report the graph under ``root``: presence, path, build commit, staleness."""
     graph_file = root / GRAPH_DIR_NAME / GRAPH_FILE_NAME
     if not graph_file.is_file():
@@ -50,7 +50,7 @@ def _graph_commit(meta_file: Path) -> str | None:
     try:
         meta = json.loads(meta_file.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        # An unreadable or malformed meta file means the commit is unknown, not a probe failure.
+        # An unreadable or malformed meta file means the commit is unknown, not a report failure.
         logger.warning("graph commit unknown: cannot read %s: %s", meta_file, error)
         return None
     commit = cast(dict[str, object], meta).get(COMMIT_KEY) if isinstance(meta, dict) else None

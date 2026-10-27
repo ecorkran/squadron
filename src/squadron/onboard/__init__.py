@@ -12,7 +12,7 @@ from pathlib import Path
 
 from squadron.integrations.cf_adoption import AdoptionClient, AdoptionOutcome
 from squadron.onboard.comprehension import newest_comprehension
-from squadron.onboard.graph import GRAPH_DIR_NAME, GRAPH_FILE_NAME, GraphReport, probe_graph
+from squadron.onboard.graph import GraphReport, read_graph
 from squadron.onboard.steps import NextStep, decide_step
 from squadron.onboard.surfaces import SURFACES
 
@@ -76,19 +76,18 @@ def _relative(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
-def _doc_older_than_graph(root: Path, comprehension: Path | None) -> bool | None:
+def _doc_older_than_graph(graph: GraphReport, comprehension: Path | None) -> bool | None:
     """Doc mtime earlier than the graph file's; ``None`` when either file is absent."""
-    graph_file = root / GRAPH_DIR_NAME / GRAPH_FILE_NAME
-    if comprehension is None or not graph_file.is_file():
+    if comprehension is None or graph["path"] is None:
         return None
-    return comprehension.stat().st_mtime < graph_file.stat().st_mtime
+    return comprehension.stat().st_mtime < Path(graph["path"]).stat().st_mtime
 
 
 def build_onboard_report(root: Path, cf: AdoptionClient) -> OnboardReport:
     """Gather the facts under *root* and decide the next step. Read-only."""
     detection = cf.detect(root)
     registered = cf.is_registered(root)
-    graph = probe_graph(root)
+    graph = read_graph(root)
     comprehension = newest_comprehension(root)
     concept = detection.artifacts.concept
     return OnboardReport(
@@ -97,7 +96,7 @@ def build_onboard_report(root: Path, cf: AdoptionClient) -> OnboardReport:
         registered=registered,
         graph=graph,
         comprehension=comprehension,
-        comprehension_older_than_graph=_doc_older_than_graph(root, comprehension),
+        comprehension_older_than_graph=_doc_older_than_graph(graph, comprehension),
         concept=concept,
         surfaces={
             spec.key: SurfaceState(

@@ -117,10 +117,10 @@ class CfOpAction:
                     # cf resolves the index (arch doc, else initiative-plan entry)
                     # and switches the initiative and its slice plan together.
                     plan = str(context.params["plan"])
-                    stdout = cf_client._run(["set", "arch", plan])  # pyright: ignore[reportPrivateUsage]
+                    stdout = cf_client.run(["set", "arch", plan])
                 case CfOperation.SET_PHASE:
                     phase = context.params["phase"]
-                    stdout = cf_client._run(["set", "phase", str(phase)])  # pyright: ignore[reportPrivateUsage]
+                    stdout = cf_client.run(["set", "phase", str(phase)])
                 case CfOperation.SET_SLICE:
                     slice_id = str(context.params["slice"])
                     _refuse_retroactive(cf_client, slice_id)
@@ -147,7 +147,7 @@ class CfOpAction:
                             "cf_op build_context: model resolution failed; --embed skipped "
                             "(prompt may reference files unreadable by the eventual model)"
                         )
-                    raw = cf_client._run_json(build_args)  # pyright: ignore[reportPrivateUsage]
+                    raw = cf_client.run_json(build_args)
                     data_dict = cast(dict[str, object], raw) if isinstance(raw, dict) else {}
                     stdout = str(data_dict.get("context", ""))
                     extra_outputs = {
@@ -155,7 +155,7 @@ class CfOpAction:
                         "guide_version": _read_guide_version(Path(context.cwd)),
                     }
                 case CfOperation.SUMMARIZE:
-                    stdout = cf_client._run(["summarize"])  # pyright: ignore[reportPrivateUsage]
+                    stdout = cf_client.run(["summarize"])
         except ContextForgeError as exc:
             return ActionResult(
                 success=False,

@@ -177,7 +177,10 @@ def parse_init_report(data: dict[str, Any]) -> InitReport:
     if not isinstance(steps_raw, list):
         raise ContextForgeError(f"cf {command}: 'steps' is not a list")
     steps: list[InitStep] = []
-    for raw in cast("list[dict[str, Any]]", steps_raw):
+    for item in cast("list[object]", steps_raw):
+        if not isinstance(item, dict):
+            raise ContextForgeError(f"cf {command}: a 'steps' entry is not an object")
+        raw = cast("dict[str, Any]", item)
         message = raw.get("message")
         steps.append(
             InitStep(
@@ -238,8 +241,10 @@ class CfAdoptionClient:
         if not isinstance(entries, list):
             raise ContextForgeError("cf project list --json: output is not a list")
         wanted = root.resolve()
-        for entry in cast("list[dict[str, Any]]", entries):
-            path = entry.get("projectPath")
+        for entry in cast("list[object]", entries):
+            if not isinstance(entry, dict):
+                raise ContextForgeError("cf project list --json: an entry is not an object")
+            path = cast("dict[str, Any]", entry).get("projectPath")
             if path is not None and Path(str(path)).resolve() == wanted:
                 return True
         return False
