@@ -36,3 +36,16 @@ def test_no_progress_stop_section_is_not_empty(surface: Path) -> None:
 
 def test_codex_skill_registers_with_the_agents_ide() -> None:
     assert "--ide agents" in CODEX_SKILL.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("surface", SURFACE_FILES, ids=lambda p: p.parent.name)
+def test_build_graph_step_excludes_cf_installed_tooling(surface: Path) -> None:
+    """#275: the graph must not be dominated by the guide, agent config and cf state."""
+    text = surface.read_text(encoding="utf-8")
+    for needle in (
+        ".understand-anything/.understandignore",
+        "project-documents/ai-project-guide/",
+        ".claude/",
+        ".context-forge/",
+    ):
+        assert needle in text

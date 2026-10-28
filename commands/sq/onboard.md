@@ -30,7 +30,7 @@ The project has existing code that Context Forge does not know about. Ask the us
 The comprehension analysis reads an `understand-anything` knowledge graph, and the graph is absent, behind HEAD, or of unknown staleness. Tell the user which: absent, how many commits behind (`graph.commits_behind`), or that staleness is unknown. Ask whether to build it.
 
 - First check `surfaces` → `claude-code` → `understand_plugin_installed`. If it is not true, show how to install the plugin (`/plugin install understand-anything`) and stop. Never install it yourself.
-- Yes: run the plugin's `/understand`.
+- Yes: first make sure `<dir>/.understand-anything/.understandignore` excludes the tooling `cf init` installed, so the graph describes the project's code and not the guide: create the file if it is absent and append only the missing lines among `project-documents/ai-project-guide/`, `.claude/` and `.context-forge/`. Then run the plugin's `/understand`.
 - No, and the graph is absent: stop. The comprehension step needs a graph.
 - No, and the graph is present: go straight to the `comprehension` step without running `sq onboard` again.
 

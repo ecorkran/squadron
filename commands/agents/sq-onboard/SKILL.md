@@ -46,7 +46,10 @@ behind HEAD, or of unknown staleness. Tell the user which: absent, how many comm
 
 - First check `surfaces` → `codex` → `understand_plugin_installed`. If it is not true, tell the user
   to install the `understand-anything` plugin for Codex and stop. Never install it yourself.
-- Yes: run the plugin's `$understand` skill.
+- Yes: first make sure `<dir>/.understand-anything/.understandignore` excludes the tooling `cf init`
+  installed, so the graph describes the project's code and not the guide: create the file if it is
+  absent and append only the missing lines among `project-documents/ai-project-guide/`, `.claude/` and
+  `.context-forge/`. Then run the plugin's `$understand` skill.
 - No, and the graph is absent: stop. The comprehension step needs a graph.
 - No, and the graph is present: go straight to the `comprehension` step without running
   `sq onboard` again.
