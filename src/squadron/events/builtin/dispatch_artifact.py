@@ -20,7 +20,12 @@ from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.dispatch import SKIPPED_KEY
 from squadron.pipeline.commit_plan import PLAN_PARAM, SLICE_PARAM
-from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY, FAILURE_KIND_KEY, FailureKind
+from squadron.pipeline.failure_kind import (
+    AGENT_QUESTION_KEY,
+    AGENT_TEXT_KEY,
+    FAILURE_KIND_KEY,
+    FailureKind,
+)
 from squadron.pipeline.models import ActionResult, ValidationError
 from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.pipeline.text_tail import tail_text
@@ -148,7 +153,7 @@ def _failure_metadata(response: str, final_text: str) -> dict[str, object]:
             FAILURE_KIND_KEY: FailureKind.AGENT_QUESTION.value,
             AGENT_QUESTION_KEY: final_text,
         }
-    return {FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value}
+    return {FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value, AGENT_TEXT_KEY: final_text}
 
 
 class DispatchArtifactAction:

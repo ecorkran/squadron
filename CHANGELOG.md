@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sq runs wait --json` reports `failure.agent_text`, the agent's final text, when a step failed because it wrote no artifact, so a supervisor no longer parses it out of `failure.message`.
+
 ## [0.24.8] - 20261028
 ### Fixed
 

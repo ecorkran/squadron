@@ -18,6 +18,8 @@ FAILURE_KIND_KEY = "failure_kind"
 USAGE_LIMIT_RESETS_AT_KEY = "usage_limit_resets_at"
 #: ``ActionResult.metadata`` key holding what an agent asked when it ended on a question (#249).
 AGENT_QUESTION_KEY = "agent_question"
+#: ``ActionResult.metadata`` key holding the agent's final text when a dispatch wrote no artifact.
+AGENT_TEXT_KEY = "agent_text"
 
 
 class FailureKind(StrEnum):

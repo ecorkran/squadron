@@ -22,7 +22,12 @@ from squadron.events.dispatcher import (  # pyright: ignore[reportPrivateUsage]
 )
 from squadron.events.manifest import Binding
 from squadron.integrations.context_forge import ContextForgeError
-from squadron.pipeline.failure_kind import AGENT_QUESTION_KEY, FAILURE_KIND_KEY, FailureKind
+from squadron.pipeline.failure_kind import (
+    AGENT_QUESTION_KEY,
+    AGENT_TEXT_KEY,
+    FAILURE_KIND_KEY,
+    FailureKind,
+)
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.steps.phase import ArtifactKind
 
@@ -156,3 +161,14 @@ async def test_no_artifact_without_a_final_question_stays_artifact_missing(respo
     assert outcome.result is not None
     assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.ARTIFACT_MISSING.value
     assert AGENT_QUESTION_KEY not in outcome.result.metadata
+
+
+async def test_artifact_missing_carries_the_agents_final_text() -> None:
+    """a supervisor reads the agent's words from a field, not from the message suffix."""
+    response = "I could not find the design.\n\nNothing was written."
+
+    outcome = await _run_binding(_QUESTION_BINDING, _cf_failing_context(response), 5)
+
+    assert outcome.result is not None
+    assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.ARTIFACT_MISSING.value
+    assert outcome.result.metadata[AGENT_TEXT_KEY] == " ".join(response.split())

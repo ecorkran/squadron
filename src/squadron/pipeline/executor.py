@@ -50,6 +50,7 @@ from squadron.pipeline.control_params import (
 )
 from squadron.pipeline.failure_kind import (
     AGENT_QUESTION_KEY,
+    AGENT_TEXT_KEY,
     FAILURE_KIND_KEY,
     FailureKind,
     pauses_run,
@@ -1129,7 +1130,7 @@ async def _execute_step_once(
                 result.error = outcome.result.error
                 # An event can hand the run to a person (slice 947 D7), as an action can.
                 result.awaits_human = outcome.result.awaits_human
-                for key in (FAILURE_KIND_KEY, AGENT_QUESTION_KEY):
+                for key in (FAILURE_KIND_KEY, AGENT_QUESTION_KEY, AGENT_TEXT_KEY):
                     if (value := outcome.result.metadata.get(key)) is not None:
                         result.metadata[key] = value
                 break

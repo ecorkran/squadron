@@ -664,7 +664,7 @@ sq runs wait <RUN_ID> [--timeout SECONDS] [--json]
 | `pipeline` | Pipeline name |
 | `started_at`, `updated_at` | ISO 8601 timestamps; `updated_at` gives a pause's age |
 | `checkpoint` | When paused, else `null`: `kind` (`loop_exhausted`, `interactive_checkpoint`, `awaits_human`, `usage_limit`, `agent_question`, `other`), `step`, `step_type`, `is_loop`, `round` and `max_rounds` (loops only), `verdict` (last review), `review_file` (that review's artifact path), `reason`, `paused_at`, `question` (`agent_question` only, else `null`: what the agent asked), `resets_at` (`usage_limit` only, else `null`: when the account's usage limit resets, UTC ISO 8601; `null` if the CLI gave no time) |
-| `failure` | When failed, else `null`: `kind` (`provider_error`, `stall`, `artifact_missing`, `cost_cap`, or `null` when untagged), `step`, `message` |
+| `failure` | When failed, else `null`: `kind` (`provider_error`, `stall`, `artifact_missing`, `cost_cap`, or `null` when untagged), `step`, `message`, `agent_text` (the agent's final text, whitespace-collapsed and cut to its last 400 characters, when a dispatch wrote no artifact; else `null`) |
 | `reviews` | Every review the run recorded, in the order written (an empty list when there were none): `path` (the review artifact), `paths` (every part file of a split review, else `null`), `template`, `verdict`, `step`, and `round` for a loop step (else `null`). A resumed step's reviews follow its earlier ones |
 
 `--decision accept` on resume needs `checkpoint.is_loop` to be true. No prompt text is included.

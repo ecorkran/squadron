@@ -148,7 +148,36 @@ async def test_a_failed_run_reports_kind_step_and_message(tmp_path: Path) -> Non
     doc = run_outcome(run_id, WaitOutcome.FAILED, sm.load(run_id))
 
     assert doc["status"] == ExecutionStatus.FAILED.value and doc["checkpoint"] is None
-    assert doc["failure"] == {"kind": "cost_cap", "step": "implement", "message": "cost cap crossed"}
+    assert doc["failure"] == {
+        "kind": "cost_cap",
+        "step": "implement",
+        "message": "cost cap crossed",
+        "agent_text": None,
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_failed_artifact_check_reports_the_agents_text(tmp_path: Path) -> None:
+    """failure.agent_text is the agent's final text, separate from the message."""
+    from squadron.pipeline.failure_kind import AGENT_TEXT_KEY
+
+    missing = ActionResult(
+        success=False,
+        action_type="work",
+        outputs={},
+        error='no artifact; agent\'s final text: "I gave up."',
+        metadata={FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value, AGENT_TEXT_KEY: "I gave up."},
+    )
+    sm, run_id = await _run(tmp_path, _single("design", "work"), {"work": _action([missing])})
+
+    doc = run_outcome(run_id, WaitOutcome.FAILED, sm.load(run_id))
+
+    assert doc["failure"] == {
+        "kind": "artifact_missing",
+        "step": "design",
+        "message": 'no artifact; agent\'s final text: "I gave up."',
+        "agent_text": "I gave up.",
+    }
 
 
 def test_an_unreadable_run_carries_only_its_id_and_outcome() -> None:

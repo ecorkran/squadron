@@ -21,6 +21,7 @@ from squadron.pipeline.actions.review_outputs import ReviewOutputKey
 from squadron.pipeline.executor import ExecutionStatus, resolve_placeholders
 from squadron.pipeline.failure_kind import (
     AGENT_QUESTION_KEY,
+    AGENT_TEXT_KEY,
     FAILURE_KIND_KEY,
     USAGE_LIMIT_RESETS_AT_KEY,
     FailureKind,
@@ -225,8 +226,10 @@ def _failure(state: RunState) -> dict[str, object]:
     metadata = failed.get("metadata") if failed is not None else None
     kind = metadata.get(FAILURE_KIND_KEY) if isinstance(metadata, dict) else None  # type: ignore[union-attr]
     message = failed.get("error") if failed is not None else None
+    agent_text = metadata.get(AGENT_TEXT_KEY) if isinstance(metadata, dict) else None  # type: ignore[union-attr]
     return {
         "kind": kind if isinstance(kind, str) else None,
         "step": step.step_name if step is not None else None,
         "message": message if isinstance(message, str) else None,
+        "agent_text": agent_text if isinstance(agent_text, str) else None,
     }
