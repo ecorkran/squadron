@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.24.7] - 20261028
+## [0.24.8] - 20261028
 ### Fixed
 
 - `/sq:onboard` adds `project-documents/ai-project-guide/`, `.claude/` and `.context-forge/` to the `/understand` ignore file before building the graph, so the guide's markdown no longer dominates it (#275).

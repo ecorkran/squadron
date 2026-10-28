@@ -478,7 +478,7 @@ class TestShadowing:
 
 def _override_without_steps(directory: Path, builtin_name: str, drop_step_type: str) -> None:
     """Copy built-in *builtin_name* into *directory* minus every step of *drop_step_type*."""
-    raw = yaml.safe_load((data_dir() / "pipelines" / f"{builtin_name}.yaml").read_text())
+    raw = yaml.safe_load((data_dir() / "pipelines" / f"{builtin_name.upper()}.yaml").read_text())
     raw["steps"] = [s for s in raw["steps"] if drop_step_type not in s]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / f"{builtin_name}.yaml").write_text(yaml.safe_dump(raw))
@@ -502,7 +502,7 @@ def test_builtin_and_complete_override_do_not_warn(
 ) -> None:
     user = tmp_path / "user"
     user.mkdir()
-    (user / "p5.yaml").write_text((data_dir() / "pipelines" / "p5.yaml").read_text())
+    (user / "p5.yaml").write_text((data_dir() / "pipelines" / "P5.yaml").read_text())
 
     with caplog.at_level("WARNING"):
         load_pipeline("p5", project_dir=tmp_path / "none", user_dir=tmp_path / "empty")
