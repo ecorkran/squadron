@@ -15,11 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- An implement step whose agent stops on a question now pauses the run (`checkpoint.kind: agent_question`) instead of counting as done and going on to review and merge. Answer with `sq run --resume <id> --instructions "<answer>"`.
+
 ### Added
 
 - `sq runs wait --json` reports `failure.agent_text`, the agent's final text, when a step failed because it wrote no artifact, so a supervisor no longer parses it out of `failure.message`.
 
 ## [0.24.8] - 20261028
+
 ### Fixed
 
 - `/sq:onboard` adds `project-documents/ai-project-guide/`, `.claude/` and `.context-forge/` to the `/understand` ignore file before building the graph, so the guide's markdown no longer dominates it (#275).

@@ -172,3 +172,66 @@ async def test_artifact_missing_carries_the_agents_final_text() -> None:
     assert outcome.result is not None
     assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.ARTIFACT_MISSING.value
     assert outcome.result.metadata[AGENT_TEXT_KEY] == " ".join(response.split())
+
+
+# --- an implementing agent that stops to ask has not finished (no artifact to miss) ---
+
+
+def _implement_context(response: str, *, step_type: str = "implement") -> PostActionContext:
+    return PostActionContext(
+        event=EventType.POST_ACTION,
+        cwd=".",
+        params={"slice": "127"},
+        action_type="dispatch",
+        result=ActionResult(success=True, action_type="dispatch", outputs={"response": response}),
+        run_id="run-1",
+        run_started_at=None,
+        run_state_error=None,
+        step_name=step_type,
+        step_type=step_type,
+        expected_artifact_kind=None,
+        iteration=0,
+        cf_client=MagicMock(),
+    )
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "Built the parser.\n\nShould the cache be per-process or shared?",
+        "Which do you want?\nA) per-process\nB) shared\n\nI'd pick A.",
+        "Done with part one. Want me to continue?  \n",
+    ],
+)
+async def test_implement_step_ending_on_a_question_is_an_agent_question(response: str) -> None:
+    outcome = await _run_binding(_QUESTION_BINDING, _implement_context(response), 5)
+
+    assert outcome.result is not None
+    assert outcome.result.success is False
+    assert outcome.result.metadata[FAILURE_KIND_KEY] == FailureKind.AGENT_QUESTION.value
+    assert outcome.result.metadata[AGENT_QUESTION_KEY] == " ".join(response.split())
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        "Implemented all tasks. Tests pass.",
+        "",
+        # A "?" line far above the tail of a long report is not the agent waiting for an answer.
+        "Why did the old parser fail?\n" + "Rewrote it and covered every case. " * 40 + "\nAll done.",
+    ],
+)
+async def test_implement_step_not_ending_on_a_question_succeeds(response: str) -> None:
+    outcome = await _run_binding(_QUESTION_BINDING, _implement_context(response), 5)
+
+    assert outcome.result is not None
+    assert outcome.result.success is True
+
+
+async def test_a_dispatch_step_without_an_artifact_is_not_checked_for_questions() -> None:
+    outcome = await _run_binding(
+        _QUESTION_BINDING, _implement_context("Which one?", step_type="dispatch"), 5
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.success is True

@@ -27,8 +27,9 @@ from squadron.pipeline.failure_kind import (
     FailureKind,
 )
 from squadron.pipeline.models import ActionResult, ValidationError
+from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.phase import ArtifactKind
-from squadron.pipeline.text_tail import tail_text
+from squadron.pipeline.text_tail import FINAL_TEXT_TAIL_CHARS, tail_text
 from squadron.review.persistence import CfClientProtocol
 
 _logger = logging.getLogger(__name__)
@@ -156,6 +157,34 @@ def _failure_metadata(response: str, final_text: str) -> dict[str, object]:
     return {FAILURE_KIND_KEY: FailureKind.ARTIFACT_MISSING.value, AGENT_TEXT_KEY: final_text}
 
 
+def _implement_question_check(context: PostActionContext, action_name: str) -> ActionResult:
+    """An implementing agent that stops on a question has not finished the work.
+
+    Implement has no artifact whose absence would show it, so the only signal is the
+    agent's last words: a question within the tail we report (``FINAL_TEXT_TAIL_CHARS``)
+    pauses the step, so a question followed by an options list still counts and a
+    question asked early in a long report does not. Other steps without an artifact
+    are not checked.
+    """
+    ok = ActionResult(success=True, action_type=action_name, outputs={})
+    if context.step_type != StepTypeName.IMPLEMENT:
+        return ok
+    response = str(context.result.outputs.get("response", ""))
+    if not _asks_question(response[-FINAL_TEXT_TAIL_CHARS:]):
+        return ok
+    final_text = tail_text(response)
+    return ActionResult(
+        success=False,
+        action_type=action_name,
+        outputs={},
+        error=f'agent ended on a question; answer it with --resume --instructions: "{final_text}"',
+        metadata={
+            FAILURE_KIND_KEY: FailureKind.AGENT_QUESTION.value,
+            AGENT_QUESTION_KEY: final_text,
+        },
+    )
+
+
 class DispatchArtifactAction:
     """POST_ACTION event action: fail a dispatch that wrote no artifact."""
 
@@ -171,11 +200,12 @@ class DispatchArtifactAction:
         if (
             context.action_type != ActionType.DISPATCH
             or not context.result.success
-            or context.expected_artifact_kind is None
             # A step that kept its existing artifact wrote nothing this run, by design.
             or context.result.outputs.get(SKIPPED_KEY)
         ):
             return ActionResult(success=True, action_type=self.name, outputs={})
+        if context.expected_artifact_kind is None:
+            return _implement_question_check(context, self.name)
 
         error = _dispatch_artifact_post_condition_error(
             kind=context.expected_artifact_kind,
