@@ -121,17 +121,18 @@ revision_number: 2
 - [ ] `fast_forward_landing` resolves one `fast_forward` landing; `rebased_branch` → `FORK_NOT_ANCESTOR`; `empty_branch` → `EMPTY_BRANCH`; `landed_elsewhere` → `LANDED_ELSEWHERE`; `not_landed` → `NOT_LANDED`; a repo with no slice branch and no merge → `NO_LANDING`; `fast_forward_landing` after `git reflog expire --expire=now --all` → `REFLOG_UNAVAILABLE`
 - [ ] Each reason's INFO line is asserted with `caplog`. A faked `run_git` returning `None` at the reflog step returns `GIT_ERROR` with the WARNING
 - [ ] Success: tests pass
+- [ ] Commit: `feat(metrology): resolve slice landings from git topology`
 
 ## Task 13: `record_slice_ranges` (D1, D4, concurrent-write row) — Effort 3
 - [ ] In `slice_range.py`, add `record_slice_ranges(indices, repo_root, target, store, project_id)` returning a per-slice result (landings with a `new` flag, or the reason). It reads `get_slice_ranges` once at the start
-- [ ] Per slice: merged = stored landings ∪ resolved landings, keyed on `after_sha`; stored landings are never changed. An unresolved reason adds nothing. `GIT_ERROR` persists nothing for that slice
+- [ ] Per slice: merged = stored landings ∪ resolved landings, keyed on `after_sha`; stored landings are never changed. Order is oldest first: stored landings keep their stored order, new landings follow in resolver order (the resolver returns oldest first) An unresolved reason adds nothing. `GIT_ERROR` persists nothing for that slice
 - [ ] If any slice gained a landing: re-read the record, merge the new landings into that fresh copy, log WARNING naming the record if the fresh copy differs from the start read, then call `write_slice_ranges` once. No new landing → no write
 - [ ] A slice with stored landings but an unresolved resolution keeps its stored landings and reports them (a fast-forward whose reflog expired)
 - [ ] Success: pyright clean
 
 ## Task 14: `record_slice_ranges` tests (criteria 2, 3) — Effort 2
 - [ ] Persist `fast_forward_landing`, delete the branch and expire the reflog, run again: still resolves from the store, no write
-- [ ] A second run with no new landings doesn't write (assert file mtime or a spy store). A stored range plus one new merge gains exactly that landing, and the stored landing is byte-identical
+- [ ] A second run with no new landings doesn't write (assert file mtime or a spy store). A stored range plus one new merge gains exactly that landing, and the stored landing is byte-identical; the merged list stays oldest first (stored landing, then the new one)
 - [ ] Concurrent write: a store fake whose second read returns an extra landing → both runs' landings kept, WARNING asserted
 - [ ] `GIT_ERROR` for one of two slices: the other is persisted, the failing one isn't
 - [ ] Success: tests pass
@@ -143,7 +144,7 @@ revision_number: 2
 - [ ] Success: `sq metrology slice-ranges --help` lists the options
 
 ## Task 16: `slice-ranges` CLI tests — Effort 1
-- [ ] In `tests/metrology/test_quality_cli.py` with `CliRunner` and a temp store dir: resolved line, unresolved line, `(new)` only on the first run, `--json` parses, exit 1 on `GIT_ERROR`
+- [ ] In `tests/metrology/test_quality_cli.py` with `CliRunner` and a temp store dir: resolved line, unresolved line, `(new)` only on the first run, `--json` parses, exit 1 on `GIT_ERROR`, exit 1 with the message on stderr when the store write raises
 - [ ] Success: tests pass
 - [ ] Commit: `feat(metrology): resolve and persist slice ranges`
 
