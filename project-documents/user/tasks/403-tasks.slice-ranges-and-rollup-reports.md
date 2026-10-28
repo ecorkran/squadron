@@ -8,11 +8,25 @@ dependencies:
 - 401
 - 402
 - 323
-projectState: 0.24.6 released; slices 400, 401 and 402 complete on main; slice 403 design
-  complete, all decisions decided
+projectState: 0.24.6 released; slices 400, 401 and 402 complete on main; slice 403
+  design complete, all decisions decided
 dateCreated: 20261027
-dateUpdated: 20261027
+dateUpdated: 20261028
 status: not_started
+turns: 18
+promptTokens: 1221616
+cachedTokens: 1135903
+cacheWriteTokens: 85679
+completionTokens: 23129
+durationSeconds: 223.6
+costUsd: 1.375634
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 1.3756339999999996
+    completionTokens: 23129
 ---
 
 # Tasks: Slice Ranges and Rollup Reports
