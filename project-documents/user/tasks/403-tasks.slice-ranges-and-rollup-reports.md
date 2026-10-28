@@ -91,7 +91,7 @@ revision_number: 1
   7. `landed_elsewhere`: slice merged into a side branch, which is then merged into `main`
   8. `not_landed`: branch with commits, never merged
 - [ ] Add a helper that `git clone`s a fixture repo to a second `tmp_path` directory (no local slice branches in the clone)
-- [ ] Success: each builder runs, and a smoke test per builder asserts `git log --oneline` length
+- [ ] Success: pyright clean. Tasks 10 and 12 exercise every builder
 
 ## Task 9: Resolver — merge-commit path (D2, D3, Data Flow) — Effort 3
 - [ ] Create `src/squadron/metrology/slice_range.py` with `resolve_slice_landings(index, repo_root, target) -> list[SliceLanding] | RangeUnresolvedReason`
@@ -200,6 +200,7 @@ revision_number: 1
   6. `run_git` returning `None` for `archive` → `SnapshotExportError` naming the timeout, temp directory removed
   7. extraction `OSError` (monkeypatched `tarfile` extract) → `SnapshotExportError`, temp directory removed
   8. `node_modules` symlink present only when the live one exists
+  9. symlink creation failing (monkeypatched `os.symlink` raising `OSError`) → `SnapshotExportError`, temp directory removed
 - [ ] Each error case asserts its ERROR record with `caplog`
 - [ ] Success: tests pass
 - [ ] Commit: `feat(metrology): export a commit to a temp tree for measurement`
@@ -289,14 +290,18 @@ revision_number: 1
 - [ ] Tests in `tests/metrology/test_quality_render.py`: each renderer's key lines for a built report, including a break line and an unresolved slice's reason line
 - [ ] Success: tests pass
 
-## Task 41: Report commands (D10, API Contracts) — Effort 2
-- [ ] In `metrology_quality.py`, add `report slice INDEX`, `report project` and `report history`, each with `--cwd` and `--json` (`--json` prints the report model). `report slice` runs `record_slice_ranges` for its slice, then `build_slice_report` with the real `take_snapshot_at`, and its help text says it measures missing boundaries. `report history` gets the first-parent list with `run_git(["rev-list", "--first-parent", "--reverse", target])`; `None` → stderr, exit 1
+## Task 41: Report commands (D10, API Contracts) — Effort 3
+- [ ] In `metrology_quality.py`, add three commands, each with `--cwd` and `--json` (`--json` prints the report model, otherwise the Task 40 renderer):
+  1. `report slice INDEX`: runs `record_slice_ranges` for its slice, then `build_slice_report` with the real `take_snapshot_at` and a real `commit_exists`. Its help text says it measures missing boundaries
+  2. `report project`: `build_project_report` with the indices that have stored landings in `get_slice_ranges`
+  3. `report history`: gets the first-parent list with `run_git(["rev-list", "--first-parent", "--reverse", target])`; `None` → stderr, exit 1
+- [ ] `commit_exists(sha)`: `run_git(["cat-file", "-e", f"{sha}^{{commit}}"])`. Exit 0 → true, non-zero → false, `None` → stderr naming the call, exit 1
 - [ ] Update the `report` group help text in `metrology.py`, which describes only samples
 - [ ] Keep `metrology_quality.py` under ~300 lines; move helpers out if it isn't
 - [ ] Success: each command's `--help` renders
 
 ## Task 42: Report command tests — Effort 2
-- [ ] In `test_quality_cli.py` with a temp store and fixture repos: `report slice` on an unresolved slice prints the reason; on a resolved slice with stored boundary snapshots prints the landing (no snapshot taken); `--json` parses for all three; a boundary snapshot failure exits 1. Help assertions check the command's options, not `--help` text styling
+- [ ] In `test_quality_cli.py` with a temp store and fixture repos: `report slice` on an unresolved slice prints the reason; on a resolved slice with stored boundary snapshots prints the landing (no snapshot taken); a stored landing naming a sha absent from the fixture repo prints `commit <sha> not found`; `--json` parses for all three; a boundary snapshot failure exits 1. Help assertions check the command's options, not `--help` text styling
 - [ ] `report baseline`, `audit delta`, `ingest-reviews` and plain `snapshot` tests pass unchanged
 - [ ] Success: tests pass
 - [ ] Commit: `feat(cli): add report slice, project and history`
