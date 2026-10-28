@@ -312,7 +312,7 @@ usageByModel:
 - [ ] Commit any fixes: `fix: address 403 validation findings`
 
 ## Task 45: Verification walkthrough (design → Verification Walkthrough) — Effort 2
-- [ ] Run the eight walkthrough steps from the squadron root in order. For step 1's `squadron-brownfield` slice, pick one from `git log --merges --first-parent main --grep=squadron-brownfield` and the slice merges on that branch
+- [ ] Run the eight walkthrough steps from the squadron root in order. For step 1's `squadron-brownfield` slice, use any slice whose landing is on the `squadron-brownfield` branch's history and not on `main`'s first-parent line
 - [ ] Step 3: the `diff` of the two snapshots minus `measured_at` prints nothing
 - [ ] Step 4: `git status --porcelain` and `ls -la .git` are unchanged
 - [ ] Step 6: restore `metrology.max_function_lines` to 50 and re-snapshot afterward
