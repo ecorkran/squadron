@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261028
 
+### Release 0.24.9
+
+- **Contents:** an implement step whose agent ends on a question pauses the run (`agent_question`); `failure.agent_text` in `sq runs wait --json` for steps that wrote no artifact. Both requested by Amoeba.
+
 ### Release 0.24.8
 
 - **Contents:** (0.24.7 was tagged but never published: two new loader tests read `p5.yaml` where the built-in is `P5.yaml`, which fails on case-sensitive CI.) #276 (`sq squash` finds runs past one-commit stretches, explains no-ops, warns on pipeline overrides that lack built-in steps), #275 (onboard graph build excludes cf-installed tooling), slice 403 task breakdown and review fixes.

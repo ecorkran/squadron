@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.9] - 20261028
+
 ### Fixed
 
 - An implement step whose agent stops on a question now pauses the run (`checkpoint.kind: agent_question`) instead of counting as done and going on to review and merge. Answer with `sq run --resume <id> --instructions "<answer>"`.
