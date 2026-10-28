@@ -16,6 +16,7 @@ from squadron.integrations.context_forge import ContextForgeClient, ContextForge
 from squadron.pipeline.git_ops import GitEnvironmentError, read_integration_target
 from squadron.pipeline.squash import (
     SHORT_SHA_LENGTH,
+    NothingToSquash,
     SquashKind,
     SquashPlan,
     SquashRefusedError,
@@ -45,8 +46,8 @@ def squash_run(
         cf_client = ContextForgeClient()
         target = SquashTarget(kind, index)
         squash = plan_squash(target, read_integration_target(cf_client), cwd, cf_client)
-        if squash is None:
-            print("nothing to squash")
+        if isinstance(squash, NothingToSquash):
+            print(f"nothing to squash: {squash.reason}")
             return
         if dry_run:
             _print_dry_run(squash)

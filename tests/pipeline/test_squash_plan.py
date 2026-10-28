@@ -10,7 +10,13 @@ import pytest
 
 import squadron.pipeline.squash as squash_module
 from squadron.pipeline.git_ops import GitEnvironmentError
-from squadron.pipeline.squash import SquashKind, SquashRefusedError, plan_squash
+from squadron.pipeline.squash import (
+    NothingToSquash,
+    SquashKind,
+    SquashPlan,
+    SquashRefusedError,
+    plan_squash,
+)
 from squadron.review.git_utils import run_git
 from tests.conftest import run_test_git
 from tests.pipeline.commit_fixtures import (
@@ -50,7 +56,7 @@ def test_run_is_found_oldest_first_with_oldest_as_survivor(temp_git_repo: Path, 
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == shas
     assert plan.commits[0].subject == "docs: planning round 1"
     assert plan.survivor == shas[0]
@@ -64,7 +70,7 @@ def test_run_of_one_is_nothing_to_squash(temp_git_repo: Path) -> None:
     planning_run(temp_git_repo, 1)
     before = history(temp_git_repo)
 
-    assert _plan(temp_git_repo) is None
+    assert isinstance(_plan(temp_git_repo), NothingToSquash)
     assert_history_unchanged(temp_git_repo, before)
 
 
@@ -76,7 +82,7 @@ def test_foreign_commit_ends_the_run(temp_git_repo: Path) -> None:
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == newer
     assert_history_unchanged(temp_git_repo, before)
 
@@ -91,7 +97,7 @@ def test_merge_commit_ends_the_run(temp_git_repo: Path) -> None:
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == newer
     assert_history_unchanged(temp_git_repo, before)
 
@@ -104,7 +110,7 @@ def test_commit_touching_two_artifacts_ends_the_run(temp_git_repo: Path) -> None
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == newer
     assert_history_unchanged(temp_git_repo, before)
 
@@ -119,7 +125,7 @@ def test_devlog_only_commits_stay_inside_but_are_trimmed_at_the_oldest_end(temp_
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == [first, middle, last]
     assert plan.survivor == first
     assert_history_unchanged(temp_git_repo, before)
@@ -137,7 +143,7 @@ def test_plan_only_commits_are_trimmed_at_both_ends(temp_git_repo: Path) -> None
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == [first, middle, last]
     assert plan.commits[0].subject == "docs: add design"
     assert_history_unchanged(temp_git_repo, before)
@@ -152,7 +158,7 @@ def test_design_review_response_that_amends_the_architecture_stays_in_the_run(
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == [first, both]
     assert_history_unchanged(temp_git_repo, before)
 
@@ -166,8 +172,8 @@ def test_arch_run_keeps_slice_plan_edits_but_not_trailing_plan_commits(temp_git_
     arch = _plan(temp_git_repo, kind=SquashKind.ARCH, index=100)
     slice_plan = _plan(temp_git_repo, kind=SquashKind.PLAN, index=100)
 
-    assert arch is not None and [c.sha for c in arch.commits] == [first, both]
-    assert slice_plan is not None and [c.subject for c in slice_plan.commits] == [
+    assert isinstance(arch, SquashPlan) and [c.sha for c in arch.commits] == [first, both]
+    assert isinstance(slice_plan, SquashPlan) and [c.subject for c in slice_plan.commits] == [
         "docs: add slice plan",
         "docs: revise slice plan",
     ]
@@ -179,7 +185,7 @@ def test_arch_target_finds_its_run(temp_git_repo: Path) -> None:
 
     plan = _plan(temp_git_repo, kind=SquashKind.ARCH, index=100)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == shas
     assert plan.backup_tag.startswith("squash-backup/arch-100-")
     assert_history_unchanged(temp_git_repo, before)
@@ -192,7 +198,7 @@ def test_plan_target_finds_its_slice_plan_run(temp_git_repo: Path) -> None:
 
     plan = _plan(temp_git_repo, kind=SquashKind.PLAN, index=100)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == shas
     assert plan.backup_tag.startswith("squash-backup/plan-100-")
     assert_history_unchanged(temp_git_repo, before)
@@ -243,7 +249,7 @@ def test_pushed_commits_are_never_part_of_the_run(temp_git_repo: Path) -> None:
 
     plan = _plan(temp_git_repo)
 
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     assert [c.sha for c in plan.commits] == shas[1:]
     assert plan.parent == shas[0]
 
@@ -252,7 +258,7 @@ def test_run_pushed_down_to_one_commit_is_nothing_to_squash(temp_git_repo: Path)
     shas = planning_run(temp_git_repo, 3)
     run_test_git(temp_git_repo, "update-ref", "refs/remotes/origin/main", shas[1])
 
-    assert _plan(temp_git_repo) is None
+    assert isinstance(_plan(temp_git_repo), NothingToSquash)
 
 
 def test_backup_tag_pointing_elsewhere_refuses(
@@ -260,7 +266,7 @@ def test_backup_tag_pointing_elsewhere_refuses(
 ) -> None:
     planning_run(temp_git_repo, 2)
     plan = _plan(temp_git_repo)
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     run_test_git(temp_git_repo, "tag", plan.backup_tag, plan.parent)
     _assert_refused(temp_git_repo, caplog, "already exists")
 

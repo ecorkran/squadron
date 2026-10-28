@@ -1,7 +1,8 @@
 """Collapse the newest planning commit run into one commit (slice 948 D1-D4, #271).
 
 The run is the newest stretch of consecutive first-parent commits whose changed paths
-all belong to one planning artifact's path set (D1). It may sit anywhere in the
+all belong to one planning artifact's path set (D1), with at least two commits left
+after trimming (#276). It may sit anywhere in the
 unpushed history, not only at HEAD; the commits above it are recreated unchanged
 (``squash_rewrite``). It is found by file, never by commit subject (D2). Unsafe
 states refuse before anything is touched (D3), and a backup tag at the old HEAD
@@ -88,6 +89,13 @@ class RunCommit:
 
 
 @dataclass(frozen=True)
+class NothingToSquash:
+    """No run of two or more commits exists for the target; ``reason`` says what was found (#276)."""
+
+    reason: str
+
+
+@dataclass(frozen=True)
 class SquashPlan:
     """A run to collapse, and everything the rewrite needs to do and verify it."""
 
@@ -108,8 +116,8 @@ def backup_tag_name(target: SquashTarget, head_sha: str) -> str:
 
 def plan_squash(
     target: SquashTarget, target_branch: str, cwd: Path, cf_client: CfClientProtocol
-) -> SquashPlan | None:
-    """The newest run for ``target``, or ``None`` when there is nothing to squash (D2).
+) -> SquashPlan | NothingToSquash:
+    """The newest run for ``target``, or ``NothingToSquash`` saying why there is none (D2).
 
     Raises:
         ValueError: cf does not know the slice, or the initiative has no such document.
@@ -118,12 +126,12 @@ def plan_squash(
         GitEnvironmentError: git could not answer.
     """
     paths = _path_set(target, cwd, cf_client)
-    run = _trim_to_artifact(_find_run(paths, cwd), paths)
-    if len(run) < _MINIMUM_RUN:
-        _logger.info(
-            "squash: nothing to squash for %s %d (run of %d)", target.kind, target.index, len(run)
-        )
-        return None
+    stretches = _find_stretches(paths, cwd)
+    run = _newest_run(stretches, paths)
+    if not run:
+        reason = _no_run_reason(target, stretches, cwd)
+        _logger.info("squash: nothing to squash: %s", reason)
+        return NothingToSquash(reason)
 
     run_shas = [sha for sha, _ in run]
     head = git_stdout(["rev-parse", "HEAD"], cwd).strip()
@@ -263,16 +271,33 @@ def _check_refusals(run: list[str], head: str, tag: str, target_branch: str, cwd
     return _Checked(parents[1], tag_exists)
 
 
-def _find_run(paths: SubjectPaths, cwd: Path) -> list[tuple[str, frozenset[str]]]:
-    """The newest run, oldest first, with each commit's changed paths (D1, #271).
+@dataclass(frozen=True)
+class _Ender:
+    """The commit that ended a stretch, and the files it touched outside the path set."""
+
+    sha: str
+    outside: tuple[str, ...]  # empty for a merge commit
+
+
+@dataclass(frozen=True)
+class _Stretch:
+    """Consecutive first-parent commits inside the path set, at least one touching the artifact."""
+
+    commits: list[tuple[str, frozenset[str]]]  # oldest first, with each commit's changed paths
+    ender: _Ender | None  # None when the walk ran out of unpushed history
+
+
+def _find_stretches(paths: SubjectPaths, cwd: Path) -> list[_Stretch]:
+    """Every stretch that touches the artifact, newest first (D1, #271, #276).
 
     Walks unpushed first-parent history from HEAD. A merge or a commit touching any
-    other file ends a stretch; the run is the newest stretch with at least one commit
-    that touches the artifact itself. Stretches without one (DEVLOG-only commits
-    between other work) are skipped. Commits in a remote-tracking ref are never
-    walked, so a pushed commit is never rewritten.
+    other file ends a stretch. Stretches without a commit that touches the artifact
+    itself (DEVLOG-only commits between other work) are dropped. The caller takes the
+    newest one that still has two commits after trimming. Commits in a remote-tracking
+    ref are never walked, so a pushed commit is never rewritten.
     """
-    stretch: list[tuple[str, frozenset[str]]] = []
+    stretches: list[_Stretch] = []
+    current: list[tuple[str, frozenset[str]]] = []
     unpushed = git_stdout(
         ["rev-list", "--first-parent", "--parents", "HEAD", "--not", "--remotes"], cwd
     )
@@ -280,15 +305,46 @@ def _find_run(paths: SubjectPaths, cwd: Path) -> list[tuple[str, frozenset[str]]
         sha, *parents = line.split()
         changed = _changed_paths(sha, cwd) if len(parents) < 2 else None
         if changed is not None and all(paths.contains(p) for p in changed):
-            stretch.append((sha, changed))
+            current.append((sha, changed))
             continue
-        if _touches_artifact(stretch, paths):
-            break
-        stretch = []
-    if not _touches_artifact(stretch, paths):
-        return []
-    stretch.reverse()
-    return stretch
+        if _touches_artifact(current, paths):
+            outside = tuple(sorted(p for p in changed if not paths.contains(p))) if changed else ()
+            stretches.append(_Stretch(current[::-1], _Ender(sha, outside)))
+        current = []
+    if _touches_artifact(current, paths):
+        stretches.append(_Stretch(current[::-1], None))
+    return stretches
+
+
+def _newest_run(stretches: list[_Stretch], paths: SubjectPaths) -> list[tuple[str, frozenset[str]]]:
+    """The newest stretch that still has two commits after trimming, or empty (#276)."""
+    for stretch in stretches:
+        run = _trim_to_artifact(stretch.commits, paths)
+        if len(run) >= _MINIMUM_RUN:
+            return run
+    return []
+
+
+def _no_run_reason(target: SquashTarget, stretches: list[_Stretch], cwd: Path) -> str:
+    """Why no stretch made a run: what the newest one was and what ended it (#276)."""
+    name = f"{target.kind} {target.index}"
+    if not stretches:
+        return f"no unpushed commit touches the {name} artifact"
+    newest = stretches[0]
+    count = len(newest.commits)
+    reason = (
+        f"{len(stretches)} stretch(es) touch the {name} artifact and none has 2 or more commits "
+        f"after trimming; the newest is {count} commit(s) ending at "
+        f"{newest.commits[-1][0][:SHORT_SHA_LENGTH]}"
+    )
+    ender = newest.ender
+    if ender is None:
+        return f"{reason}, and it reaches the start of the unpushed history"
+    subject = _commit_subject(ender.sha, cwd)
+    stop = f"{ender.sha[:SHORT_SHA_LENGTH]} {subject!r}"
+    if not ender.outside:
+        return f"{reason}; it was cut by {stop}, a merge commit"
+    return f"{reason}; it was cut by {stop}, which also touches {', '.join(ender.outside)}"
 
 
 def _changed_paths(sha: str, cwd: Path) -> frozenset[str]:

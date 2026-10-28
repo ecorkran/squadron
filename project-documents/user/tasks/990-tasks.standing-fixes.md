@@ -47,3 +47,17 @@ dateUpdated: 20261021
 - [x] `--dry-run` and the command's result report how many later commits are rewritten
 - [x] Tests: run buried under foreign commits, under a merged slice branch, and under another artifact's run; rerun is a no-op; content and merge topology above the run are unchanged
 - [x] PIPELINES.md and CHANGELOG describe the new behavior
+
+## #276 sq squash almost never finds a run
+
+- [x] `_find_run` keeps walking past a stretch that is under two commits after trimming; the run is the newest stretch with at least two
+- [x] A "nothing to squash" result carries a reason: the newest stretch found (or none), and the commit that ended it with the files outside the path set; `sq squash` prints it
+- [x] Mixed bookkeeping commits stay outside the path set (widening it would sweep status-flip commits into the wrong run); the refusal text names them instead
+- [x] A user or project pipeline that shadows a built-in and lacks a step type the built-in has logs a WARNING naming the missing step types when it loads
+- [x] Regression tests from the slice 440 shape: old run then a one-commit artifact stretch near HEAD; a mixed bookkeeping commit above the run; the no-op reason text; the shadow warning
+- [x] CHANGELOG bullet; PIPELINES.md note on the shadow warning
+
+## #275 sq onboard: exclude cf-installed tooling from the knowledge graph build
+
+- [x] The build-graph step adds the cf-installed tooling directories to `.understand-anything/.understandignore` before `/understand` scans
+- [x] Test, CHANGELOG bullet

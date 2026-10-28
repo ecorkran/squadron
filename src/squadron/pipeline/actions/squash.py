@@ -14,6 +14,7 @@ from squadron.pipeline.commit_plan import CommitTargetError
 from squadron.pipeline.git_ops import SliceNotInPlanError, parse_slice_index, read_integration_target
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.squash import (
+    NothingToSquash,
     SquashKind,
     SquashRefusedError,
     SquashRewriteError,
@@ -72,7 +73,7 @@ def _squash(target: SquashTarget, context: ActionContext) -> dict[str, object]:
     cwd = Path(context.cwd)
     branch = read_integration_target(context.cf_client)
     plan = plan_squash(target, branch, cwd, context.cf_client)
-    if plan is None:
+    if isinstance(plan, NothingToSquash):
         return {SQUASHED_OUTPUT: 0}
     return {
         SQUASHED_OUTPUT: len(plan.commits),

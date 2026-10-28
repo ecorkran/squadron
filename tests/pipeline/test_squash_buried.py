@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from squadron.pipeline.squash import (
+    NothingToSquash,
     SquashKind,
     SquashPlan,
     SquashRefusedError,
@@ -16,8 +17,15 @@ from squadron.pipeline.squash import (
     plan_squash,
 )
 from tests.conftest import run_test_git
-from tests.pipeline.commit_fixtures import TASKS_FILE, cf_client
-from tests.pipeline.squash_helpers import FOREIGN_FILE, commit_files, head, planning_run, squash_target
+from tests.pipeline.commit_fixtures import DESIGN_FILE, PLAN_FILE, TASKS_FILE, cf_client
+from tests.pipeline.squash_helpers import (
+    DEVLOG,
+    FOREIGN_FILE,
+    commit_files,
+    head,
+    planning_run,
+    squash_target,
+)
 
 
 def _plan(repo: Path, kind: SquashKind = SquashKind.SLICE) -> SquashPlan | None:
@@ -26,7 +34,7 @@ def _plan(repo: Path, kind: SquashKind = SquashKind.SLICE) -> SquashPlan | None:
 
 def _squash(repo: Path, kind: SquashKind = SquashKind.SLICE) -> str:
     plan = _plan(repo, kind)
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     return apply_squash(plan, repo)
 
 
@@ -50,7 +58,7 @@ def test_run_under_foreign_commits_is_squashed_and_later_commits_kept(temp_git_r
     second = commit_files(temp_git_repo, "feat: code two", FOREIGN_FILE)
     before_tree = _tree(temp_git_repo)
     plan = _plan(temp_git_repo)
-    assert plan is not None and plan.later == 2
+    assert isinstance(plan, SquashPlan) and plan.later == 2
 
     squashed = apply_squash(plan, temp_git_repo)
 
@@ -105,8 +113,8 @@ def test_slice_and_tasks_runs_both_squash_after_a_merge(temp_git_repo: Path) -> 
         "init",
     ]
     assert _tree(temp_git_repo) == before_tree
-    assert _plan(temp_git_repo, SquashKind.TASKS) is None
-    assert _plan(temp_git_repo, SquashKind.SLICE) is None
+    assert isinstance(_plan(temp_git_repo, SquashKind.TASKS), NothingToSquash)
+    assert isinstance(_plan(temp_git_repo, SquashKind.SLICE), NothingToSquash)
 
 
 def test_branch_forked_before_the_run_keeps_its_commits(temp_git_repo: Path) -> None:
@@ -159,3 +167,53 @@ def test_message_bytes_that_are_not_utf8_survive_the_rewrite(temp_git_repo: Path
 def _raw_message(repo: Path, rev: str) -> bytes:
     raw = subprocess.run(["git", "cat-file", "commit", rev], cwd=repo, capture_output=True, check=True)
     return raw.stdout.partition(b"\n\n")[2]
+
+
+# ---------------------------------------------------------------------------
+# #276: the run is the newest stretch with two commits, not the newest stretch
+# ---------------------------------------------------------------------------
+
+
+def test_old_run_is_found_past_a_newer_one_commit_stretch(temp_git_repo: Path) -> None:
+    shas = planning_run(temp_git_repo, 3)
+    commit_files(temp_git_repo, "feat: code", FOREIGN_FILE)
+    commit_files(temp_git_repo, "docs: devlog entry", DEVLOG)
+    commit_files(temp_git_repo, "docs: check off tasks", DESIGN_FILE)
+
+    plan = _plan(temp_git_repo)
+
+    assert isinstance(plan, SquashPlan)
+    assert [c.sha for c in plan.commits] == shas
+    assert plan.later == 3
+
+
+def test_mixed_bookkeeping_commit_above_the_run_does_not_hide_it(temp_git_repo: Path) -> None:
+    shas = planning_run(temp_git_repo, 3)
+    commit_files(temp_git_repo, "docs: mark slice complete", DESIGN_FILE, PLAN_FILE, FOREIGN_FILE)
+
+    plan = _plan(temp_git_repo)
+
+    assert isinstance(plan, SquashPlan)
+    assert [c.sha for c in plan.commits] == shas
+
+
+def test_nothing_to_squash_names_the_commit_that_cut_the_stretch(temp_git_repo: Path) -> None:
+    commit_files(temp_git_repo, "docs: planning round 1", DESIGN_FILE)
+    cutter = commit_files(temp_git_repo, "docs: mark other slice complete", DESIGN_FILE, FOREIGN_FILE)
+    commit_files(temp_git_repo, "docs: planning round 2", DESIGN_FILE)
+
+    plan = _plan(temp_git_repo)
+
+    assert isinstance(plan, NothingToSquash)
+    assert cutter[:8] in plan.reason
+    assert FOREIGN_FILE in plan.reason
+    assert "1 commit" in plan.reason
+
+
+def test_nothing_to_squash_without_any_artifact_commit_says_so(temp_git_repo: Path) -> None:
+    commit_files(temp_git_repo, "feat: code", FOREIGN_FILE)
+
+    plan = _plan(temp_git_repo)
+
+    assert isinstance(plan, NothingToSquash)
+    assert "no unpushed commit touches" in plan.reason

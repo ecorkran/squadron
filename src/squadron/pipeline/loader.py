@@ -162,7 +162,34 @@ def load_pipeline(
     source_file = pipeline_file_path(name_or_path)
     if source_file is not None:
         return _load_yaml(source_file)
-    return _load_yaml(resolve_pipeline(name_or_path, project_dir=project_dir, user_dir=user_dir).path)
+    location = resolve_pipeline(name_or_path, project_dir=project_dir, user_dir=user_dir)
+    definition = _load_yaml(location.path)
+    _warn_on_missing_builtin_steps(location, definition)
+    return definition
+
+
+def _warn_on_missing_builtin_steps(location: PipelineLocation, definition: PipelineDefinition) -> None:
+    """Warn when an override of a built-in pipeline lacks a step type the built-in has (#276).
+
+    An override written before a step existed silently skips it (the squash step on a
+    P5 copied before slice 948), so say which step types are missing and whose file it is.
+    """
+    if location.source is PipelineSource.BUILT_IN:
+        return
+    builtin_path = _find_by_identity(_BUILTIN_DIR, location.name)
+    if builtin_path is None:
+        return
+    missing = {s.step_type for s in _load_yaml(builtin_path).steps} - {
+        s.step_type for s in definition.steps
+    }
+    if missing:
+        _logger.warning(
+            "pipeline %s (%s) overrides the built-in and lacks its %s step(s); "
+            "compare it with the built-in and add them",
+            location.name,
+            location.path,
+            ", ".join(sorted(missing)),
+        )
 
 
 def resolve_pipeline(

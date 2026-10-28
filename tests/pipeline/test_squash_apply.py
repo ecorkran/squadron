@@ -29,7 +29,7 @@ _LOGGER = "squadron.pipeline.squash"
 
 def _plan(repo: Path) -> SquashPlan:
     plan = plan_squash(squash_target(), "main", repo, cf_client())
-    assert plan is not None
+    assert isinstance(plan, SquashPlan)
     return plan
 
 

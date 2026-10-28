@@ -81,7 +81,7 @@ def test_run_of_one_is_nothing_to_squash(in_repo: Path) -> None:
     result = runner.invoke(app, ["squash", "slice", "105", "--dry-run"])
 
     assert result.exit_code == 0, result.output
-    assert result.output.strip() == "nothing to squash"
+    assert result.output.startswith("nothing to squash: ")
 
 
 def test_arch_is_accepted_and_architecture_is_not(in_repo: Path) -> None:

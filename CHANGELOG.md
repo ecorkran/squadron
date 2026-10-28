@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `/sq:onboard` adds `project-documents/ai-project-guide/`, `.claude/` and `.context-forge/` to the `/understand` ignore file before building the graph, so the guide's markdown no longer dominates it (#275).
+- `sq squash` finds the revise-loop run even when a one-commit stretch (a checkbox update, a status flip) sits nearer HEAD, instead of reporting `nothing to squash`. When there is truly nothing, it now says why and names the commit that cut the newest stretch (#276).
+- A user or project pipeline that overrides a built-in and lacks one of its steps (such as `squash`) now logs a warning when it loads (#276).
+
 ## [0.24.6] - 20261027
 
 ### Added
