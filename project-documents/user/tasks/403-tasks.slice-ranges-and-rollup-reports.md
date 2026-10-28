@@ -13,21 +13,21 @@ projectState: 0.24.6 released; slices 400, 401 and 402 complete on main; slice 4
 dateCreated: 20261027
 dateUpdated: 20261028
 status: not_started
-turns: 22
-promptTokens: 1616541
-cachedTokens: 1527709
-cacheWriteTokens: 88790
-completionTokens: 24290
-durationSeconds: 243.7
-costUsd: 1.502135
-usageRounds: 2
-pricedRounds: 2
+turns: 29
+promptTokens: 2134744
+cachedTokens: 2040813
+cacheWriteTokens: 93879
+completionTokens: 26875
+durationSeconds: 272.5
+costUsd: 1.697208
+usageRounds: 3
+pricedRounds: 3
 usageByModel:
   claude-opus-5-5:
-    rounds: 2
-    costUsd: 1.5021351999999994
-    completionTokens: 24290
-revision_number: 1
+    rounds: 3
+    costUsd: 1.6972079999999998
+    completionTokens: 26875
+revision_number: 2
 ---
 
 # Tasks: Slice Ranges and Rollup Reports
