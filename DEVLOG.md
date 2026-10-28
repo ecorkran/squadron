@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261027
 
+### Slice 403: Slice Ranges and Rollup Reports — Task Breakdown Complete (Phase 5)
+
+- `user/tasks/403-tasks.slice-ranges-and-rollup-reports.md`: 45 tasks, 307 lines, test-with ordering, commit per checkpoint.
+- Decision at breakdown (refines D2): the existing `_find_slice_branch` / `_resolve_fork_point` collapse a failed git call into "not found", and `_search_merge_commit` returns only the newest merge. The resolver therefore calls `run_git` itself (needs every landing and the `GIT_ERROR` distinction). `git_utils` gains only `slice_merge_grep_pattern`, `parse_slice_branch` and `parse_fork_point`; no helper renames, no `first_parent` argument.
+- Coverage at an export is absent and never reaches its `git ls-files` call; squadron sets no `metrology.coverage_report`, so in-place-equals-export holds.
+- Slice plan still marks 403 parked behind 404 (deferred 20261025); nothing needs it before 420.
+
 ### Release 0.24.6
 
 - **Contents:** slice 440 `sq onboard` (replaces `sq probe`; live adoption run on a tank-game clone passed, #273), slice 402 code-review category normalization and `sq metrology ingest-reviews`. Follow-ups: #275, #276.
