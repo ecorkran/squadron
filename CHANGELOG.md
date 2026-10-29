@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.10] - 20261029
+
 ### Added
 
 - `sq onboard register-comprehension` tells cf where the newest codebase comprehension doc is. The comprehension analysis runs it after writing or refreshing the doc, so cf's Phase 2–4 builds can point at it. Needs cf 0.19.22 or later.

@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261028'
+dateUpdated: '20261029'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261029
+
+### Release 0.24.10
+
+- **Contents:** `sq onboard register-comprehension` registers the codebase comprehension doc with cf (`cf set comprehension`, cf 0.19.22+); the comprehension analysis flow runs it after writing or refreshing the doc. Requested by cf slice 274.
 
 ## 20261028
 
