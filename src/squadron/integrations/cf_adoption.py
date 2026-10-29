@@ -211,6 +211,8 @@ class AdoptionClient(Protocol):
 
     def adoption_prompt(self, root: Path, comprehension: Path) -> str: ...
 
+    def register_comprehension(self, root: Path, comprehension: Path) -> None: ...
+
 
 class CfAdoptionClient:
     """``AdoptionClient`` over the cf CLI; every call is bounded by *timeout_s*."""
@@ -273,3 +275,7 @@ class CfAdoptionClient:
                 str(comprehension.resolve()),
             ]
         )
+
+    def register_comprehension(self, root: Path, comprehension: Path) -> None:
+        """``cf set comprehension <doc>`` in *root*; cf stores the path root-relative."""
+        self._cf(root).run(["set", "comprehension", str(comprehension.resolve())])

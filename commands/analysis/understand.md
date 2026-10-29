@@ -659,6 +659,13 @@ Fallback: `[GAP: ...]` naming the specific file that could not be read.
 generation is **Flow: Concept Generation** below and initiative candidates are **Flow: Initiative
 Candidates** below; neither is written here.
 
+### Register with cf
+
+After the document is written, or rewritten by a refresh, run `sq onboard register-comprehension`
+from the project root. It tells cf where the newest comprehension document is so cf's later phases
+can cite it. If it exits non-zero, show its stderr line and carry on: the document is written, and
+cf simply shows none registered until the command succeeds.
+
 ## Flow: Concept Generation
 
 Writes `000-concept.{project}.md` for an existing codebase that has no concept document — the Phase 0

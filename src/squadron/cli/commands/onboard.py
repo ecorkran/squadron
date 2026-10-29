@@ -149,3 +149,15 @@ def prompt(ctx: typer.Context, path: PathOption = None) -> None:
     with cf_errors():
         text = get_client(ctx).adoption_prompt(root, comprehension)
     typer.echo(text, nl=False)
+
+
+@onboard_app.command("register-comprehension")
+def register_comprehension(ctx: typer.Context, path: PathOption = None) -> None:
+    """Tell cf where the newest comprehension doc is, so its later phases can cite it."""
+    root = resolve_root(path)
+    comprehension = newest_comprehension(root)
+    if comprehension is None:
+        raise _fail(NO_COMPREHENSION_MESSAGE)
+    with cf_errors():
+        get_client(ctx).register_comprehension(root, comprehension)
+    typer.echo(f"Registered {comprehension.relative_to(root)} with cf as the codebase comprehension.")

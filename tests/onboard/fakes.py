@@ -63,3 +63,6 @@ class FakeAdoptionClient:
     def adoption_prompt(self, root: Path, comprehension: Path) -> str:
         self._record("adoption_prompt", root, comprehension)
         return self._prompt_text
+
+    def register_comprehension(self, root: Path, comprehension: Path) -> None:
+        self._record("register_comprehension", root, comprehension)

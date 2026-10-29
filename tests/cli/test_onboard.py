@@ -203,7 +203,25 @@ def test_prompt_without_a_doc_exits_1_and_calls_nothing(tmp_path: Path) -> None:
     assert fake.calls == []
 
 
-@pytest.mark.parametrize("subcommand", ["register", "decline", "prompt"])
+def test_register_comprehension_sends_the_newest_doc_to_cf(tmp_path: Path) -> None:
+    _write_comprehension(tmp_path, 940)
+    newest = _write_comprehension(tmp_path, 1002)
+    fake = FakeAdoptionClient()
+    result = _invoke(fake, "register-comprehension", "--path", str(tmp_path))
+    assert result.exit_code == 0
+    assert "1002-analysis.codebase-comprehension.md" in result.stdout
+    assert fake.calls == [("register_comprehension", (tmp_path.resolve(), newest.resolve()))]
+
+
+def test_register_comprehension_without_a_doc_exits_1_and_calls_nothing(tmp_path: Path) -> None:
+    fake = FakeAdoptionClient()
+    result = _invoke(fake, "register-comprehension", "--path", str(tmp_path))
+    assert result.exit_code == 1
+    assert result.stderr.strip() == "No comprehension doc; run the comprehension step first"
+    assert fake.calls == []
+
+
+@pytest.mark.parametrize("subcommand", ["register", "decline", "prompt", "register-comprehension"])
 def test_subcommands_exit_1_with_one_line_when_cf_is_missing(tmp_path: Path, subcommand: str) -> None:
     _write_comprehension(tmp_path, 940)
     error = ContextForgeNotAvailable("'cf' (Context-Forge CLI) is not installed or not on PATH.")
