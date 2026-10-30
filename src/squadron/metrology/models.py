@@ -23,6 +23,7 @@ from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
 from squadron.metrology.replay_models import PairwiseJudgment, ProducerReplay
 from squadron.metrology.review_models import CodeReviewRecord
+from squadron.metrology.slice_range_models import SliceRanges
 from squadron.metrology.snapshot_models import CodeSnapshot
 from squadron.review.models import Verdict
 
@@ -42,6 +43,8 @@ RECORD_TYPE_PAIRWISE_JUDGMENT = "pairwise_judgment"
 RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
 #: Written by 402's review ingest: one record per code-review file.
 RECORD_TYPE_CODE_REVIEW = "code_review"
+#: Written by 403's slice-range resolver: one record per project.
+RECORD_TYPE_SLICE_RANGES = "slice_ranges"
 
 
 class JudgeResultRef(BaseModel):
@@ -257,3 +260,4 @@ class MetrologyRecord(BaseModel):
     pairwise_judgment: PairwiseJudgment | None = None
     code_snapshot: CodeSnapshot | None = None
     code_review: CodeReviewRecord | None = None
+    slice_ranges: SliceRanges | None = None

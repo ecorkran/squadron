@@ -29,6 +29,7 @@ from squadron.metrology.models import (
     RECORD_TYPE_PAIRWISE_JUDGMENT,
     RECORD_TYPE_PRODUCER_REPLAY,
     RECORD_TYPE_SAMPLE,
+    RECORD_TYPE_SLICE_RANGES,
     AuditNoiseFloor,
     AuditRun,
     GraduatedConfig,
@@ -44,6 +45,7 @@ from squadron.metrology.replay_models import (
     ReplayPhase,
 )
 from squadron.metrology.review_models import CodeReviewRecord
+from squadron.metrology.slice_range_models import SliceRanges
 from squadron.metrology.snapshot_models import CodeSnapshot
 
 _logger = logging.getLogger(__name__)
@@ -125,6 +127,12 @@ def snapshot_record_id(project_id: ProjectId, commit_sha: str) -> str:
     """The deterministic record id of a code snapshot: one per (project, commit)."""
     project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
     return f"snapshot-{project_digest}-{commit_sha[:12]}"
+
+
+def slice_ranges_record_id(project_id: ProjectId) -> str:
+    """The deterministic record id of a project's slice ranges: one per project."""
+    project_digest = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()[:12]
+    return f"sliceranges-{project_digest}"
 
 
 def _judge_config_matches(stored: JudgeConfigId, wanted: JudgeConfigId) -> bool:
@@ -510,6 +518,44 @@ class MetrologyStore:
             reviews.append(review)
         reviews.sort(key=lambda item: item.reviewed_at, reverse=True)
         return reviews
+
+    def write_slice_ranges(self, ranges: SliceRanges) -> str:
+        """Envelope and persist a project's slice ranges; return the record id.
+
+        One record per project (403 D1): writing replaces the earlier record in place.
+        """
+        record_id = slice_ranges_record_id(ranges.project_id)
+        if ranges.record_id != record_id:
+            raise MetrologyStoreError(
+                f"Slice ranges id {ranges.record_id!r} does not match the record id "
+                f"{record_id!r} for this project"
+            )
+        record = MetrologyRecord(
+            schema_version=_SCHEMA_VERSION,
+            record_type=RECORD_TYPE_SLICE_RANGES,
+            slice_ranges=ranges,
+        )
+        self._write_atomic(
+            self._record_path(record_id), json.dumps(record.model_dump(mode="json"), indent=2)
+        )
+        return record_id
+
+    def get_slice_ranges(self, project_id: ProjectId) -> SliceRanges | None:
+        """Return the project's slice ranges, or None when none are stored.
+
+        A record that exists but cannot be read raises: a corrupt range record
+        is never treated as empty, because the next write would replace it.
+        """
+        path = self._record_path(slice_ranges_record_id(project_id))
+        if not path.exists():
+            return None
+        try:
+            record = self._load_raw(path)
+        except (OSError, ValueError, SchemaVersionError) as exc:
+            raise MetrologyStoreError(f"Unreadable slice ranges record {path}: {exc}") from exc
+        if record.record_type != RECORD_TYPE_SLICE_RANGES or record.slice_ranges is None:
+            raise MetrologyStoreError(f"Record {path} is not a slice ranges record")
+        return record.slice_ranges
 
     def load_record(self, sample_id: str) -> MetrologyRecord:
         """Load and validate one record by id.
