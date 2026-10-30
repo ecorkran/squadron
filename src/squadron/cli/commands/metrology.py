@@ -20,6 +20,7 @@ from rich import print as rprint
 from rich.markup import escape
 
 from squadron.cli.commands.metrology_preemption import preempt_app, register_delta_command
+from squadron.cli.commands.metrology_quality import register_quality_commands
 from squadron.cli.commands.metrology_review_ingest import register_review_ingest_command
 from squadron.cli.commands.metrology_snapshot import register_snapshot_command
 from squadron.config.manager import get_config, get_typed_config
@@ -96,6 +97,7 @@ metrology_app.add_typer(preempt_app)
 register_delta_command(audit_app)
 register_snapshot_command(metrology_app)
 register_review_ingest_command(metrology_app)
+register_quality_commands(metrology_app, report_app)
 
 _VERDICT_CHOICES = "/".join(v.value for v in (Verdict.PASS, Verdict.CONCERNS, Verdict.FAIL))
 

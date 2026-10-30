@@ -9,13 +9,18 @@ from an answer; the shared parsing lives in ``review.git_utils``.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from squadron.metrology.models import ProjectId
 from squadron.metrology.slice_range_models import (
     LandingMethod,
     RangeUnresolvedReason,
     SliceLanding,
+    SliceRanges,
 )
+from squadron.metrology.store import MetrologyStore, slice_ranges_record_id
 from squadron.review.git_utils import (
     parse_fork_point,
     parse_slice_branch,
@@ -150,3 +155,91 @@ def _fast_forward_landing(
             resolved_at=datetime.now(UTC),
         )
     ]
+
+
+@dataclass(frozen=True)
+class RecordedLanding:
+    """A landing in a slice's range; ``is_new`` when this run added it to the store."""
+
+    landing: SliceLanding
+    is_new: bool
+
+
+@dataclass(frozen=True)
+class SliceRangeResult:
+    """One slice after recording: its stored-plus-new landings, oldest first.
+
+    ``reason`` is why this run's resolution found nothing (or ``GIT_ERROR``); stored
+    landings are still listed beside it, because a stored range outlives its reflog.
+    """
+
+    index: int
+    landings: list[RecordedLanding]
+    reason: RangeUnresolvedReason | None
+
+
+def record_slice_ranges(
+    indices: Sequence[int],
+    repo_root: str,
+    target: str,
+    store: MetrologyStore,
+    project_id: ProjectId,
+) -> list[SliceRangeResult]:
+    """Resolve each slice, persist every landing the store lacks, and report per slice (D1, D4).
+
+    Stored landings are never changed; new ones follow them in resolver order. The store is
+    read once up front and written at most once, and only when some slice gained a landing.
+    """
+    stored = store.get_slice_ranges(project_id)
+    stored_slices = stored.slices if stored is not None else {}
+    results: list[SliceRangeResult] = []
+    gained: dict[int, list[SliceLanding]] = {}
+    for index in dict.fromkeys(indices):
+        outcome = resolve_slice_landings(index, repo_root, target)
+        result, new = _merge_outcome(index, stored_slices.get(index, []), outcome)
+        results.append(result)
+        if new:
+            gained[index] = new
+    if gained:
+        _persist_gained(store, project_id, stored, gained)
+    return results
+
+
+def _merge_outcome(
+    index: int,
+    kept: list[SliceLanding],
+    outcome: list[SliceLanding] | RangeUnresolvedReason,
+) -> tuple[SliceRangeResult, list[SliceLanding]]:
+    """Merge a resolution into the stored landings, keyed on ``after_sha``."""
+    if isinstance(outcome, RangeUnresolvedReason):
+        return SliceRangeResult(index, [RecordedLanding(x, False) for x in kept], outcome), []
+    known = {landing.after_sha for landing in kept}
+    new = [landing for landing in outcome if landing.after_sha not in known]
+    landings = [RecordedLanding(x, False) for x in kept] + [RecordedLanding(x, True) for x in new]
+    return SliceRangeResult(index, landings, None), new
+
+
+def _persist_gained(
+    store: MetrologyStore,
+    project_id: ProjectId,
+    read_at_start: SliceRanges | None,
+    gained: dict[int, list[SliceLanding]],
+) -> None:
+    """Merge new landings into a fresh read of the record and write it once.
+
+    Concurrent runs aren't supported, but a lost write is detected: when the record
+    changed since the start read, the merge still keeps both runs' landings and a
+    WARNING says so. The window left is the gap between this re-read and the write.
+    """
+    record_id = slice_ranges_record_id(project_id)
+    fresh = store.get_slice_ranges(project_id)
+    if fresh != read_at_start:
+        _logger.warning(
+            "Slice ranges record %s changed during this run; merging into the newer copy", record_id
+        )
+    slices = {index: list(landings) for index, landings in (fresh.slices if fresh else {}).items()}
+    for index, landings in gained.items():
+        merged = slices.setdefault(index, [])
+        known = {landing.after_sha for landing in merged}
+        merged.extend(landing for landing in landings if landing.after_sha not in known)
+    store.write_slice_ranges(SliceRanges(record_id=record_id, project_id=project_id, slices=slices))
