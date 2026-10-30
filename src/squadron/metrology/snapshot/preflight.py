@@ -39,6 +39,15 @@ _PAIRED_STATUS_CODES = frozenset("RC")
 
 
 @dataclass(frozen=True)
+class SnapshotConfig:
+    """The project's snapshot settings, read from config with no repository checks."""
+
+    limits: LengthLimits
+    project_exclusions: tuple[str, ...]
+    tool_timeout_s: int
+
+
+@dataclass(frozen=True)
 class PreflightResult:
     """What a passing preflight hands to the orchestrator."""
 
@@ -145,15 +154,12 @@ def _head_sha(repo_root: Path) -> str:
     return head.strip()
 
 
-def preflight(repo_root: Path) -> PreflightResult:
-    """Validate that *repo_root* is a clean git checkout with valid snapshot config."""
-    head_sha = _head_sha(repo_root)
-    dirty = _dirty_paths(repo_root, SnapshotPreflightError)
-    if dirty:
-        raise SnapshotPreflightError(
-            f"The working tree is not clean: {', '.join(sorted(dirty))}. "
-            "Commit, stash or remove these paths, then re-run `sq metrology snapshot`."
-        )
+def read_snapshot_config(repo_root: Path) -> SnapshotConfig:
+    """Read and validate the snapshot settings for *repo_root*.
+
+    No clean-tree or HEAD check: a commit export measures an earlier commit with the
+    live checkout's settings, whatever state that checkout is in (403 D5).
+    """
     max_file = _read_limit(KEY_MAX_FILE_LINES, repo_root)
     max_function = _read_limit(KEY_MAX_FUNCTION_LINES, repo_root)
     # Validated here so a bad value fails before any tool runs; the reader resolves the
@@ -164,11 +170,28 @@ def preflight(repo_root: Path) -> PreflightResult:
         max_function_lines=max_function,
         limits_declared=max_file is not None or max_function is not None,
     )
-    return PreflightResult(
-        head_sha=head_sha,
+    return SnapshotConfig(
         limits=limits,
         project_exclusions=_read_exclusions(repo_root),
         tool_timeout_s=_read_timeout(repo_root),
+    )
+
+
+def preflight(repo_root: Path) -> PreflightResult:
+    """Validate that *repo_root* is a clean git checkout with valid snapshot config."""
+    head_sha = _head_sha(repo_root)
+    dirty = _dirty_paths(repo_root, SnapshotPreflightError)
+    if dirty:
+        raise SnapshotPreflightError(
+            f"The working tree is not clean: {', '.join(sorted(dirty))}. "
+            "Commit, stash or remove these paths, then re-run `sq metrology snapshot`."
+        )
+    config = read_snapshot_config(repo_root)
+    return PreflightResult(
+        head_sha=head_sha,
+        limits=config.limits,
+        project_exclusions=config.project_exclusions,
+        tool_timeout_s=config.tool_timeout_s,
     )
 
 

@@ -12,7 +12,7 @@ import pytest
 from squadron.config.keys import CONFIG_KEYS
 from squadron.metrology.errors import SnapshotIntegrityError, SnapshotPreflightError
 from squadron.metrology.snapshot import preflight as preflight_module
-from squadron.metrology.snapshot.preflight import check_integrity, preflight
+from squadron.metrology.snapshot.preflight import check_integrity, preflight, read_snapshot_config
 from tests.conftest import run_test_git
 from tests.metrology.snapshot.conftest import SnapshotRepoFactory
 
@@ -175,6 +175,42 @@ class TestLimitsAndConfig:
         for name, (type_, default) in expected.items():
             assert CONFIG_KEYS[name].type_ is type_
             assert CONFIG_KEYS[name].default == default
+
+
+class TestReadSnapshotConfig:
+    """403 D5: the settings reader has no clean-tree check, so an export can use it."""
+
+    def test_dirty_tree_returns_config_while_preflight_refuses(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        write_project_config(repo, {"metrology.max_file_lines": 300})
+        (repo / "src" / "a.py").write_text("x = 2\n")
+
+        config = read_snapshot_config(repo)
+
+        assert config.limits.max_file_lines == 300
+        with pytest.raises(SnapshotPreflightError, match="not clean"):
+            preflight(repo)
+
+    def test_invalid_limit_raises_the_same_error_as_preflight(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        write_project_config(repo, {"metrology.max_file_lines": 0})
+
+        with pytest.raises(SnapshotPreflightError, match=r"metrology\.max_file_lines"):
+            read_snapshot_config(repo)
+        with pytest.raises(SnapshotPreflightError, match=r"metrology\.max_file_lines"):
+            preflight(repo)
+
+    def test_returns_exclusions_and_timeout(
+        self, repo: Path, write_project_config: ConfigWriter
+    ) -> None:
+        write_project_config(repo, {"metrology.snapshot_exclude": "a/**,b/**"})
+
+        config = read_snapshot_config(repo)
+
+        assert config.project_exclusions == ("a/**", "b/**")
+        assert config.tool_timeout_s == preflight(repo).tool_timeout_s
 
 
 class TestIntegrity:
