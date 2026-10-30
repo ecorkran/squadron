@@ -189,6 +189,65 @@ class TestEnvironmentUnresolved:
         )
 
 
+def export_tree(tmp_path: Path, lock: bytes | None) -> Path:
+    """A separate tree standing in for an exported commit, with *lock* as its uv.lock."""
+    root = tmp_path / "export"
+    root.mkdir()
+    if lock is not None:
+        (root / "uv.lock").write_bytes(lock)
+    return root
+
+
+class TestLockfileGateAtAnExport:
+    """403 D6: the live environment is trusted only for an identical lockfile."""
+
+    def measure_export(self, env: Env, export: Path, caplog: pytest.LogCaptureFixture) -> Measurement:
+        ctx = make_context(export, env.runner, environment_root=env.repo)
+        with caplog.at_level(logging.WARNING):
+            return measure_pyright_types(ctx, ["mod.py"])
+
+    def test_different_lockfiles_are_environment_unresolved(
+        self, env: Env, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        export = export_tree(tmp_path, b"version = 2\n")
+
+        measurement = self.measure_export(env, export, caplog)
+
+        assert_absent(
+            measurement,
+            AbsenceReason.ENVIRONMENT_UNRESOLVED,
+            "differs from the live environment's",
+            caplog,
+        )
+        assert not any(call[0] == str(env.uv) for call in env.runner.calls)
+
+    def test_export_without_a_lockfile_is_environment_unresolved(
+        self, env: Env, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        measurement = self.measure_export(env, export_tree(tmp_path, None), caplog)
+
+        assert_absent(measurement, AbsenceReason.ENVIRONMENT_UNRESOLVED, "uv.lock not found", caplog)
+
+    def test_equal_lockfiles_run_the_normal_environment_check(
+        self, env: Env, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        export = export_tree(tmp_path, LOCK_BYTES)
+        env.runner.script(
+            (str(env.pyright), "--outputjson"),
+            ToolResult(1, read_fixture("pyright_scratch_findings.stdout", export), "", False),
+        )
+
+        measurement = self.measure_export(env, export, caplog)
+
+        assert measurement.absent is None
+        assert any(call[:2] == (str(env.uv), "sync") for call in env.runner.calls)
+
+    def test_in_place_never_compares_lockfiles(self, env: Env) -> None:
+        env.measure()
+
+        assert env.measure().absent is None
+
+
 class TestPyrightFailureModes:
     def test_missing_tool(self, env: Env, caplog: pytest.LogCaptureFixture) -> None:
         env.pyright.unlink()

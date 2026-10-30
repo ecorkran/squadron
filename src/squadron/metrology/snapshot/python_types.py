@@ -81,6 +81,22 @@ def _check_lock_and_venv(repo_root: Path, environment_root: Path) -> str | None:
         return f"{LOCKFILE} not found"
     if not (environment_root / VENV_DIR).is_dir():
         return f"{VENV_DIR} not found"
+    if repo_root.resolve() != environment_root.resolve():
+        return _lockfile_differs(repo_root, environment_root)
+    return None
+
+
+def _lockfile_differs(repo_root: Path, environment_root: Path) -> str | None:
+    """At an export, the live environment is valid only for an identical lockfile (403 D6).
+
+    Returns the failing detail, or None when the two lockfiles are byte-identical.
+    """
+    live = environment_root / LOCKFILE
+    if not live.is_file():
+        return f"{LOCKFILE} not found in the live environment"
+    exported = file_content_hash(repo_root / LOCKFILE)
+    if exported != file_content_hash(live):
+        return f"{LOCKFILE} at {exported[:12]} differs from the live environment's"
     return None
 
 
