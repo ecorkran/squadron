@@ -171,3 +171,32 @@ class TestOtherCommandsUnchanged:
         after = self.run_all(repo, tmp_path)
 
         assert after == before
+
+
+def test_commit_flag_measures_the_commit_from_an_export_and_says_so(
+    repo: Path, store_dir: Path
+) -> None:
+    (repo / "scratch.txt").write_text("x\n", encoding="utf-8")  # a dirty checkout is fine
+
+    result = runner.invoke(app, ["metrology", "snapshot", "--cwd", str(repo), "--commit", "HEAD"])
+
+    assert result.exit_code == 0, result.output
+    assert "(exported)" in result.output
+    assert len(snapshot_files(store_dir)) == 1
+
+
+def test_without_commit_the_summary_has_no_exported_marker(repo: Path, store_dir: Path) -> None:
+    result = runner.invoke(app, ["metrology", "snapshot", "--cwd", str(repo)])
+
+    assert result.exit_code == 0, result.output
+    assert "(exported)" not in result.output
+
+
+def test_unknown_commit_exits_one_naming_it_and_writes_nothing(repo: Path, store_dir: Path) -> None:
+    result = runner.invoke(
+        app, ["metrology", "snapshot", "--cwd", str(repo), "--commit", "no-such-rev"]
+    )
+
+    assert result.exit_code == 1
+    assert "no-such-rev" in result.stderr
+    assert snapshot_files(store_dir) == []

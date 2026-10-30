@@ -80,8 +80,11 @@ def _language_lines(entry: LanguageSnapshot) -> list[str]:
     return [header, *(f"  {m.metric.value}: {_summarize(m)}" for m in entry.measurements)]
 
 
-def render_summary(snapshot: CodeSnapshot, record_path: Path) -> list[str]:
-    """Lines to print: a section per language, then limits, exclusion count and record path."""
+def render_summary(snapshot: CodeSnapshot, record_path: Path, *, exported: bool = False) -> list[str]:
+    """Lines to print: a section per language, then limits, exclusion count and record path.
+
+    ``exported`` marks a snapshot measured from a temp export of the commit (403 D5).
+    """
     limits = snapshot.limits
     if limits.limits_declared:
         declared = (
@@ -89,7 +92,8 @@ def render_summary(snapshot: CodeSnapshot, record_path: Path) -> list[str]:
         )
     else:
         declared = "none declared"
-    lines = [f"snapshot of {snapshot.commit_sha[:12]} ({snapshot.project_id.value})"]
+    marker = " (exported)" if exported else ""
+    lines = [f"snapshot of {snapshot.commit_sha[:12]}{marker} ({snapshot.project_id.value})"]
     for entry in snapshot.languages:
         lines.extend(_language_lines(entry))
     lines.append(f"limits: {declared}")
