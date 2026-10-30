@@ -11,6 +11,7 @@ from squadron.metrology.snapshot.contract import AdapterContext, ToolRunner
 from squadron.metrology.snapshot_models import (
     AbsenceReason,
     CodeSnapshot,
+    Distribution,
     EnvironmentIdentity,
     LanguageSnapshot,
     LengthLimits,
@@ -139,3 +140,105 @@ class FakeAdapter:
         if self._write_into_repo is not None:
             (ctx.repo_root / self._write_into_repo).write_text("written\n", encoding="utf-8")
         return [present(metric, self.language) for metric in self._reports]
+
+
+def make_measured_snapshot(
+    *,
+    commit_sha: str = "a" * 40,
+    lint_version: str = "0.15.1",
+    lint_rules_hash: str = "a" * 64,
+    lockfile_hash: str = "b" * 64,
+    interpreter: str = "3.12.4",
+    limits: LengthLimits | None = None,
+    exclusions: Sequence[str] = (),
+    file_total: int = 100,
+    lint_total: int = 4,
+    types_resolved: bool = True,
+    measured_at: datetime | None = None,
+) -> CodeSnapshot:
+    """A Python snapshot with file/function length, lint and type errors present.
+
+    The identity of each measurement (tool version, rule-set hash, lockfile hash,
+    interpreter) is a parameter, so a test changes exactly the thing it wants broken.
+    """
+    declared = limits or LengthLimits(
+        max_file_lines=None, max_function_lines=None, limits_declared=False
+    )
+    ruff = ToolIdentity(name="ruff", version=lint_version, counting="ruff findings per file")
+    pyright = ToolIdentity(name="pyright", version="1.1.408", counting="pyright errors per file")
+    rules = RuleSetIdentity(source="pyproject.toml[tool.ruff]", content_hash=lint_rules_hash)
+    spread = Distribution(count=4, total=file_total, min=10, p50=25, p90=40, max=60)
+    by_metric: dict[SnapshotMetric, Measurement] = {
+        SnapshotMetric.FILE_LENGTH: Measurement(
+            metric=SnapshotMetric.FILE_LENGTH,
+            language=SourceLanguage.PYTHON,
+            tool=TOOL,
+            per_file={"a.py": file_total},
+            distribution=spread,
+            limit=declared.max_file_lines,
+        ),
+        SnapshotMetric.FUNCTION_LENGTH: Measurement(
+            metric=SnapshotMetric.FUNCTION_LENGTH,
+            language=SourceLanguage.PYTHON,
+            tool=TOOL,
+            distribution=Distribution(count=10, total=200, min=2, p50=15, p90=40, max=55),
+            limit=declared.max_function_lines,
+        ),
+        SnapshotMetric.LINT_COUNT: Measurement(
+            metric=SnapshotMetric.LINT_COUNT,
+            language=SourceLanguage.PYTHON,
+            tool=ruff,
+            rule_set=rules,
+            per_file={"a.py": lint_total},
+        ),
+    }
+    if types_resolved:
+        by_metric[SnapshotMetric.TYPE_ERRORS] = Measurement(
+            metric=SnapshotMetric.TYPE_ERRORS,
+            language=SourceLanguage.PYTHON,
+            tool=pyright,
+            rule_set=RuleSetIdentity(source="pyrightconfig.json", content_hash="c" * 64),
+            environment=EnvironmentIdentity(
+                lockfile_path="uv.lock",
+                lockfile_sha256=lockfile_hash,
+                interpreter_version=interpreter,
+            ),
+            per_file={"a.py": 2},
+        )
+    else:
+        by_metric[SnapshotMetric.TYPE_ERRORS] = Measurement(
+            metric=SnapshotMetric.TYPE_ERRORS,
+            language=SourceLanguage.PYTHON,
+            absent=AbsenceReason.ENVIRONMENT_UNRESOLVED,
+            absent_detail="uv.lock not found",
+        )
+    measurements = [
+        by_metric.get(
+            metric,
+            Measurement(
+                metric=metric,
+                language=SourceLanguage.PYTHON,
+                absent=AbsenceReason.METRIC_UNSUPPORTED,
+                absent_detail="not measured by this fixture",
+            ),
+        )
+        for metric in SnapshotMetric
+    ]
+    project_id = make_project_id()
+    return CodeSnapshot(
+        snapshot_id=snapshot_record_id(project_id, commit_sha),
+        project_id=project_id,
+        commit_sha=commit_sha,
+        measured_at=measured_at if measured_at is not None else datetime(2026, 10, 22, tzinfo=UTC),
+        squadron_version="0.24.10",
+        limits=declared,
+        exclusions=list(exclusions),
+        languages=[
+            LanguageSnapshot(
+                language=SourceLanguage.PYTHON,
+                file_count=4,
+                adapter="PythonAdapter",
+                measurements=measurements,
+            )
+        ],
+    )
