@@ -23,6 +23,8 @@ from squadron.review.git_utils import resolve_diff_base, run_git
 
 _logger = logging.getLogger(__name__)
 
+_SHA_PREVIEW_CHARS = 12
+
 
 @dataclass(frozen=True)
 class QualityContext:
@@ -60,7 +62,11 @@ def load_context(cwd: str | None) -> QualityContext:
 
 
 def take_commit(repo_root: Path, commit: str, store: MetrologyStore) -> CodeSnapshot:
-    """Measure *commit* from a temp export with the default adapters."""
+    """Measure *commit* from a temp export with the default adapters.
+
+    Says so on stderr first: measuring can take minutes, and it writes a snapshot record.
+    """
+    typer.echo(f"No stored snapshot at {commit[:_SHA_PREVIEW_CHARS]}; measuring it now", err=True)
     return take_snapshot_at(repo_root, commit, default_registry(), SubprocessToolRunner(), store)
 
 

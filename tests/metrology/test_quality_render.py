@@ -11,6 +11,7 @@ from squadron.metrology.quality_report.history_report import build_history_repor
 from squadron.metrology.quality_report.models import SliceReport
 from squadron.metrology.quality_report.project_report import build_project_report
 from squadron.metrology.quality_report.render import (
+    comparison_lines,
     render_history_report,
     render_project_report,
     render_slice_report,
@@ -18,7 +19,7 @@ from squadron.metrology.quality_report.render import (
 from squadron.metrology.quality_report.slice_report import build_slice_report
 from squadron.metrology.slice_range import RecordedLanding, SliceRangeResult
 from squadron.metrology.slice_range_models import RangeUnresolvedReason
-from squadron.metrology.snapshot_models import CodeSnapshot, LengthLimits
+from squadron.metrology.snapshot_models import CodeSnapshot, LengthLimits, SnapshotMetric
 from squadron.metrology.store import MetrologyStore, code_review_record_id
 from tests.metrology.snapshot.builders import make_measured_snapshot, make_project_id
 from tests.metrology.test_quality_slice_report import landing
@@ -140,3 +141,30 @@ def test_history_report_prints_a_break_marker_and_the_off_line_count(
     assert lines[0] == "History — 2 snapshots on the first-parent line"
     assert any(line.strip().startswith("--- not compared: tool_changed") for line in lines)
     assert lines[-1] == "1 snapshots of commits off this line not shown"
+
+
+def test_a_metric_absent_at_both_commits_for_the_same_reason_prints_one_short_line(
+    store: MetrologyStore,
+) -> None:
+    lines = render_slice_report(two_landing_report(store))
+
+    rows = [line for line in lines if "coverable_lines" in line]
+
+    assert len(rows) == 2  # one per landing
+    for line in rows:
+        assert "absent at both commits: metric_unsupported: not measured by this fixture" in line
+        assert "absent_before" not in line
+
+
+def test_long_metric_names_keep_a_space_before_the_figures(store: MetrologyStore) -> None:
+    result = SliceRangeResult(940, [RecordedLanding(landing(FIRST_BEFORE, FIRST_AFTER), False)], None)
+    report = build_slice_report(940, result, store, PROJECT, lambda sha: True, snapshot_for)
+    row = (
+        report.landings[0]
+        .comparisons[0]
+        .model_copy(update={"metric": SnapshotMetric.CYCLOMATIC_COMPLEXITY})
+    )
+
+    [line] = comparison_lines([row])
+
+    assert "cyclomatic_complexity " in line

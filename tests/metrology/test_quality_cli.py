@@ -241,6 +241,23 @@ class TestReportCommands:
         assert "latest snapshot" in output
         assert "Audit baseline: no audit run recorded" in output
 
+    def test_a_missing_boundary_snapshot_is_announced_on_stderr_before_it_is_measured(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo, shas = repos.no_ff_landing(tmp_path)
+        with_identity(repo, write_project_config)
+        self.seed_boundaries(store_dir, shas.before)
+
+        with patch(
+            f"{CLI_MODULE}.take_snapshot_at",
+            side_effect=lambda root, commit, *rest: make_measured_snapshot(commit_sha=commit),
+        ):
+            code, output = self.report(repo, "slice", "401")
+
+        assert code == 0, output
+        assert f"No stored snapshot at {shas.after[:12]}; measuring it now" in output
+        assert f"No stored snapshot at {shas.before[:12]}" not in output
+
     def test_boundary_snapshot_failure_exits_one(
         self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
     ) -> None:

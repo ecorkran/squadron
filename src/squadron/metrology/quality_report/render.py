@@ -11,6 +11,7 @@ from squadron.metrology.quality_report.models import (
     AuditSection,
     BoundarySettings,
     BreakDetail,
+    ComparabilityBreak,
     HistoryReport,
     LandingReport,
     LanguageMetricSummary,
@@ -22,8 +23,9 @@ from squadron.metrology.quality_report.models import (
 )
 
 _SHA = 8
-_METRIC_WIDTH = 20
+_METRIC_WIDTH = 22
 _CATEGORY_WIDTH = 30
+_ABSENT_KINDS = frozenset({ComparabilityBreak.ABSENT_BEFORE, ComparabilityBreak.ABSENT_AFTER})
 _FLOOR_STATE_TEXT = {
     AuditFloorState.WITHIN_FLOOR: "within the noise floor",
     AuditFloorState.BEYOND_FLOOR: "beyond the noise floor",
@@ -45,6 +47,16 @@ def _break_text(breaks: list[BreakDetail]) -> str:
     return "not compared: " + "; ".join(f"{b.kind.value} ({b.detail})" for b in breaks)
 
 
+def _unmeasured_text(row: MetricComparison) -> str | None:
+    """A row absent at both commits for the same reason, in one short phrase; else None."""
+    if row.before is not None or row.after is not None:
+        return None
+    absent = [b for b in row.breaks if b.kind in _ABSENT_KINDS]
+    if len(absent) == 2 and absent[0].detail == absent[1].detail:
+        return f"absent at both commits: {absent[0].detail}"
+    return None
+
+
 def comparison_lines(rows: list[MetricComparison]) -> list[str]:
     """Rows grouped by language, the language named on its first row."""
     lines: list[str] = []
@@ -53,6 +65,10 @@ def comparison_lines(rows: list[MetricComparison]) -> list[str]:
         language = row.language.value if row.language != previous_language else ""
         previous_language = row.language
         label = f"  {language:<8}{row.metric.value:<{_METRIC_WIDTH}}"
+        unmeasured = _unmeasured_text(row)
+        if unmeasured is not None:
+            lines.append(f"{label}{unmeasured}")
+            continue
         if row.breaks or row.before is None or row.after is None:
             lines.append(f"{label}{_break_text(row.breaks)}")
             lines.extend(f"{' ' * len(label)}fix: {b.fix}" for b in row.breaks if b.fix)
