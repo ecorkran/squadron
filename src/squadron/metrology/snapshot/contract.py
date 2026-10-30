@@ -47,9 +47,15 @@ class ToolRunner(Protocol):
 
 @dataclass(frozen=True)
 class AdapterContext:
-    """What an adapter needs to measure one language."""
+    """What an adapter needs to measure one language.
+
+    ``repo_root`` is the tree being measured; ``environment_root`` is where its tools and
+    interpreters live. They are the same directory for an in-place snapshot and differ
+    for a commit export (403 D5).
+    """
 
     repo_root: Path
+    environment_root: Path
     limits: LengthLimits
     runner: ToolRunner
     tool_timeout_s: int
@@ -62,6 +68,9 @@ class LanguageAdapter(Protocol):
     - ``measure`` returns exactly one ``Measurement`` per member of ``metrics``.
     - ``files`` are repo-relative POSIX paths.
     - An adapter never writes inside ``repo_root``.
+    - Tools and environments (virtualenvs, ``node_modules``, interpreters) are resolved
+      from ``ctx.environment_root``. Sources, rule-set configs and the lockfile identity
+      are read from ``ctx.repo_root``, and tools run with ``cwd=repo_root``.
     """
 
     language: SourceLanguage

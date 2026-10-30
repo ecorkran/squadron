@@ -24,6 +24,7 @@ def context(
 ) -> AdapterContext:
     return AdapterContext(
         repo_root=repo,
+        environment_root=repo,
         limits=LengthLimits(
             max_file_lines=max_file,
             max_function_lines=max_function,

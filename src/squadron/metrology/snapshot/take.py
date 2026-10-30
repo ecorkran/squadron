@@ -100,6 +100,7 @@ def _measure_all(
     grouped = group_by_language(resolve_files(repo_root, exclusions))
     ctx = AdapterContext(
         repo_root=repo_root,
+        environment_root=repo_root,
         limits=checked.limits,
         runner=runner,
         tool_timeout_s=checked.tool_timeout_s,

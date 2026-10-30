@@ -69,28 +69,31 @@ def _unresolved(detail: str) -> Measurement:
     return absent(_LANGUAGE, _METRIC, AbsenceReason.ENVIRONMENT_UNRESOLVED, detail)
 
 
-def _check_lock_and_venv(repo_root: Path) -> str | None:
-    """The failing condition among conditions 1 and 2 of D7, or None if both hold."""
+def _check_lock_and_venv(repo_root: Path, environment_root: Path) -> str | None:
+    """The failing condition among conditions 1 and 2 of D7, or None if both hold.
+
+    The lockfile belongs to the tree being measured; the virtualenv to the environment.
+    """
     if not (repo_root / LOCKFILE).is_file():
         for other in _UNSUPPORTED_LOCKFILES:
             if (repo_root / other).is_file():
                 return f"lockfile type not supported: {other}"
         return f"{LOCKFILE} not found"
-    if not (repo_root / VENV_DIR).is_dir():
+    if not (environment_root / VENV_DIR).is_dir():
         return f"{VENV_DIR} not found"
     return None
 
 
 def resolve_environment(ctx: AdapterContext) -> EnvironmentIdentity | Measurement:
     """The environment identity if resolved, else the absent measurement to return."""
-    failing = _check_lock_and_venv(ctx.repo_root)
+    failing = _check_lock_and_venv(ctx.repo_root, ctx.environment_root)
     if failing is not None:
         return _unresolved(failing)
-    uv = resolve_tool(ctx.repo_root, UV_TOOL_NAME, (), use_path=True)
+    uv = resolve_tool(ctx.environment_root, UV_TOOL_NAME, (), use_path=True)
     if uv is None:
         return tool_missing(_LANGUAGE, _METRIC, UV_TOOL_NAME, "PATH")
     argv = [str(uv), "sync", "--check", "--locked", "--offline"]
-    result = ctx.runner.run(argv, cwd=ctx.repo_root, timeout_s=ctx.tool_timeout_s)
+    result = ctx.runner.run(argv, cwd=ctx.environment_root, timeout_s=ctx.tool_timeout_s)
     command = " ".join(argv)
     if result.timed_out:
         return tool_failed(
@@ -110,7 +113,9 @@ def resolve_environment(ctx: AdapterContext) -> EnvironmentIdentity | Measuremen
             command=command,
             stderr=result.stderr,
         )
-    python = probe_version(ctx.runner, ctx.repo_root / VENV_PYTHON, ctx.repo_root, ctx.tool_timeout_s)
+    python = probe_version(
+        ctx.runner, ctx.environment_root / VENV_PYTHON, ctx.repo_root, ctx.tool_timeout_s
+    )
     if python.version is None:
         return tool_failed(
             _LANGUAGE,
@@ -164,7 +169,7 @@ def measure_pyright_types(ctx: AdapterContext, files: list[str]) -> Measurement:
     environment = resolve_environment(ctx)
     if isinstance(environment, Measurement):
         return environment
-    tool_path = resolve_tool(ctx.repo_root, PYRIGHT_TOOL_NAME, PROJECT_TOOL_DIRS, use_path=True)
+    tool_path = resolve_tool(ctx.environment_root, PYRIGHT_TOOL_NAME, PROJECT_TOOL_DIRS, use_path=True)
     if tool_path is None:
         return tool_missing(_LANGUAGE, _METRIC, PYRIGHT_TOOL_NAME, f"{PROJECT_TOOL_DIRS[0]} or on PATH")
     version = probe_or_failure(ctx, _LANGUAGE, _METRIC, tool_path)
@@ -195,7 +200,7 @@ def measure_pyright_types(ctx: AdapterContext, files: list[str]) -> Measurement:
             str(tool_path),
             "--outputjson",
             "--pythonpath",
-            VENV_PYTHON,
+            str(ctx.environment_root / VENV_PYTHON),
             *chunk,
         ],
         ok_exits=_PYRIGHT_REPORT_EXITS,

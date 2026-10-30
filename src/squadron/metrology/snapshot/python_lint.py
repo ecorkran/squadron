@@ -82,7 +82,7 @@ def _count_findings(stdout: str, repo_root: Path) -> dict[str, int] | str:
 def measure_ruff_lint(ctx: AdapterContext, files: list[str]) -> Measurement:
     """Lint count for *files*; absent (never partial) when ruff can't give a full answer."""
     language, metric = SourceLanguage.PYTHON, SnapshotMetric.LINT_COUNT
-    tool_path = resolve_tool(ctx.repo_root, RUFF_TOOL_NAME, PROJECT_TOOL_DIRS, use_path=True)
+    tool_path = resolve_tool(ctx.environment_root, RUFF_TOOL_NAME, PROJECT_TOOL_DIRS, use_path=True)
     if tool_path is None:
         return tool_missing(language, metric, RUFF_TOOL_NAME, f"{PROJECT_TOOL_DIRS[0]} or on PATH")
     version = probe_or_failure(ctx, language, metric, tool_path)

@@ -75,10 +75,15 @@ def make_context(
     max_file: int | None = None,
     max_function: int | None = None,
     timeout_s: int = 5,
+    environment_root: Path | None = None,
 ) -> AdapterContext:
-    """An adapter context over *repo* with the given runner and optional limits."""
+    """An adapter context over *repo* with the given runner and optional limits.
+
+    The environment root defaults to *repo* (an in-place snapshot).
+    """
     return AdapterContext(
         repo_root=repo,
+        environment_root=environment_root if environment_root is not None else repo,
         limits=LengthLimits(
             max_file_lines=max_file,
             max_function_lines=max_function,

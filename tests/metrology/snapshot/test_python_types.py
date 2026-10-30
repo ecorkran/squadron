@@ -116,7 +116,7 @@ class TestMeasured:
         env.measure()
 
         run = next(call for call in env.runner.calls if "--outputjson" in call)
-        assert run[1:] == ("--outputjson", "--pythonpath", ".venv/bin/python", "mod.py")
+        assert run[1:] == ("--outputjson", "--pythonpath", str(env.python), "mod.py")
 
     def test_counting_states_that_pyright_include_is_ignored(self, env: Env) -> None:
         measurement = env.measure()

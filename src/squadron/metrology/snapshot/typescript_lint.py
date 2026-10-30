@@ -113,7 +113,9 @@ def _read_report(
 
 def measure_eslint_lint(ctx: AdapterContext, files: list[str]) -> Measurement:
     """Lint count for *files*; absent (never partial) when ESLint can't give a full answer."""
-    tool_path = resolve_tool(ctx.repo_root, ESLINT_TOOL_NAME, ESLINT_PROJECT_DIRS, use_path=False)
+    tool_path = resolve_tool(
+        ctx.environment_root, ESLINT_TOOL_NAME, ESLINT_PROJECT_DIRS, use_path=False
+    )
     if tool_path is None:
         return tool_missing(_LANGUAGE, _METRIC, ESLINT_BINARY)
     rule_set = resolve_eslint_rule_set(ctx.repo_root)
