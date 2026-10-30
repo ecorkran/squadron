@@ -2,12 +2,20 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261029'
+dateUpdated: '20261030'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261030
+
+### Slice 404: Adoption Baseline Command — Task Breakdown Complete
+
+- **Output:** `404-tasks.adoption-baseline-command.md`, 14 tasks, test-with ordering, commits after Tasks 2, 6, 8, 11, 12. Phase 6 not started.
+- **Decisions at breakdown:** D7 (probe flip) dropped — 440 deleted `sq probe` and `BaselineReport`; walkthrough step 7 void. `prepare_baseline` takes the adapter registry so scope and snapshot share one exclusion set. `run_audit_series` takes an injectable `sleep`.
+- **Found:** existing `audit variance` CLI tests sleep the real 60s cooldown (~120s per test); left as is.
 
 ## 20261029
 

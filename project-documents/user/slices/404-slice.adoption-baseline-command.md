@@ -6,11 +6,10 @@ parent: project-documents/user/architecture/400-slices.code-quality-measurement.
 dependencies:
 - 400
 - 323
-- 366
 interfaces:
 - 440
 dateCreated: 20261022
-dateUpdated: 20261023
+dateUpdated: 20261030
 status: not_started
 turns: 28
 promptTokens: 1524671
@@ -34,7 +33,6 @@ The command composes code that already exists. It adds no record type, metric, c
 ## Value
 
 - **User value.** A project gets a full baseline (deterministic snapshot, audit run and audit noise floor) from one command, without editing its config files or code. Every later slice on that project can then be measured against it with 403's reports.
-- **Adoption.** 440 offers this command at brownfield adoption. When it ships, `sq probe --json` reports `baseline.available: true`, the value the probe contract reserved for this slice.
 - **Spend is predictable.** The scope report and the up-front preflight mean a run that would fail on config (no pinned model, no project identity, a dirty tree) fails before any token is spent, and the operator sees the size of the job before the first audit starts.
 
 ## Technical Scope
@@ -45,7 +43,6 @@ The command composes code that already exists. It adds no record type, metric, c
 - The scope report (D5).
 - Extracting the per-project variance-series loop from `audit_variance` into a shared library function that both commands call (D4). `sq metrology audit variance` behaves exactly as it does today.
 - Moving the audit progress and outcome printers out of `metrology.py` into a small shared CLI module, so the new command doesn't import private names.
-- The probe's `baseline.available` changes from constant `false` to constant `true`, and the probe contract's meaning line is updated (D7).
 - Docs: a `metrology baseline` section in `docs/COMMANDS.md` and a CHANGELOG bullet.
 
 **Excluded**
@@ -60,7 +57,6 @@ The command composes code that already exists. It adds no record type, metric, c
 ### Prerequisites
 - **400 (complete):** `take_snapshot`, `default_registry`, `SubprocessToolRunner`, snapshot `preflight`, `effective_exclusions`, `resolve_files`, `render_summary`, `MetrologyStore.write_snapshot`.
 - **323 (complete):** `run_audit`, `preflight_project`, `resolve_audit_skill`, `resolve_audit_profile`, `resolve_audit_model`, `reduce_noise_floor`, `MIN_USABLE_RUNS`, `store.write_noise_floor`, and the config keys `metrology.audit_variance_runs`, `metrology.audit_run_cooldown_s`, `metrology.audit_profile`, `metrology.audit_model`.
-- **366 (complete):** `sq probe` and `BaselineReport` in `squadron/probe/`.
 
 ### Interfaces Required
 - `derive_project_id(cwd=...)`: snapshot and audit both call it with the project path, so they key on the same `ProjectId`.
@@ -74,12 +70,10 @@ The command composes code that already exists. It adds no record type, metric, c
 | Module | Change | Responsibility |
 |---|---|---|
 | `cli/commands/metrology_baseline.py` | new | `register_baseline_command(metrology_app)`: the Typer shell. Runs preflight, prints the scope report, takes the snapshot, runs the series, prints the summary, sets the exit code |
-| `metrology/baseline.py` | new | `prepare_baseline(project_path, *, profile, model) -> BaselinePlan`: the combined preflight and scope computation, with no side effects and no spend |
+| `metrology/baseline.py` | new | `prepare_baseline(project_path, registry, *, profile, model) -> BaselinePlan`: the combined preflight and scope computation, with no side effects and no spend |
 | `metrology/audit_series.py` | new | `run_audit_series(request, *, store, observer) -> AuditSeriesResult`: the per-project series loop moved out of `audit_variance` (pinning, cooldown, rate-limit stop, reduce and write the floor) |
 | `cli/commands/metrology_audit_output.py` | new | `make_progress_reporter`, `report_run_outcome` and `campaign_summary`, moved unchanged from `metrology.py` |
 | `cli/commands/metrology.py` | edit | `audit_variance` calls `run_audit_series` per project. `audit_run` and `audit_variance` import the moved printers. Registers the baseline command |
-| `probe/__init__.py` | edit | `BaselineReport(available=True)` |
-| `project-documents/user/reference/capability-probe-contract.md` | edit | `baseline.available` meaning line (D7) |
 
 `metrology/baseline.py` and `metrology/audit_series.py` are library code with no Typer or Rich imports, following the snapshot package's split between `take.py` and its CLI shell. The CLI talks to `run_audit_series` through a small observer protocol (run started, cooldown, outcome), so `audit variance` and `baseline` keep their own output wording without duplicating the loop.
 
@@ -143,7 +137,7 @@ Status: decided
 Status: decided
 - The per-project body of `audit_variance` (pin the SHA, cool down between runs, stop on rate limit, require `MIN_USABLE_RUNS`, reduce, write the floor) moves to `run_audit_series` in `metrology/audit_series.py`. `audit_variance` loops over its paths and calls it. The baseline calls it once.
 - Input: an `AuditSeriesRequest` dataclass (project path, runs, cooldown, profile, model, `expected_sha`, config cwd). Output: an `AuditSeriesResult` dataclass (successful runs, failed count, the floor or the reason there's none, and whether the series stopped on a rate limit).
-- The caller supplies an observer (`on_run_start`, `on_cooldown`, `on_outcome`) for output, so the library function never prints.
+- The caller supplies an observer (`on_run_start`, `on_cooldown`, `on_outcome`, and `progress_callback` for the live progress line) for output, so the library function never prints.
 - The baseline passes `expected_sha` = the snapshot's commit from the first run on, so a HEAD that moves after the snapshot fails the series instead of measuring a different commit. `audit variance` keeps passing `None` for the first run, as now.
 - `audit variance`'s output and exit codes stay as they are. Its existing tests are the check.
 
@@ -171,11 +165,9 @@ Each run persists independently or not at all (323's `run_audit` rule), so whate
 
 **The analysis file.** The audit skill writes an untracked analysis file into the project (`find_audit_file`'s globs: `analysis/` or `project-documents/user/analysis/`). Runs 2..N still pass `require_clean=True` because 323's `preflight_project` ignores paths matching `_AUDIT_ARTIFACT_PATTERN`. The snapshot has no such exemption (400's clean-tree rule, unchanged here), so after a baseline, `sq metrology snapshot`, 403's in-place snapshots and a re-run of the baseline are refused until the file is removed or committed. The final summary therefore names the file (`find_audit_file(PATH, newer_than=<command start>)`) and says to remove or commit it before the next measurement. The same lines print on every exit after the first run.
 
-### D7 — `baseline.available` becomes constant true
-Status: decided
-- The probe reports whether the baseline is part of this squadron, not whether this project is ready for it. Readiness is D2's job, and it fails explicitly before any spend. Computing it in the probe would mean reading audit config there and adding unknown (`null`) cases to a field typed bool.
-- The contract reserved the field for this flip ("False until 400 ships"; 366's design: "the field initiative 400 flips when its baseline ships"). Name, type and `probe_version` are unchanged. The meaning line is rewritten to name the command: "`sq metrology baseline` is available (slice 404). False in squadron versions before that slice shipped." It names no release version, so nothing has to be filled in later.
-- No new probe field for the command string. That would be an additive contract change that needs agreement with CF first, and CF hasn't asked for it.
+### D7 — Withdrawn
+Status: withdrawn
+- Slice 440 deleted `sq probe` and its `baseline.available` field, so there is nothing to flip. 404 makes no probe change.
 
 ### Technology Choices
 - No new dependencies. Typer and Rich as in the sibling commands. Bytes come from `Path.stat().st_size`.
@@ -231,7 +223,8 @@ class BaselinePlan:
     profile: str
     model: str
 
-def prepare_baseline(project_path: Path, *, profile: str | None, model: str | None) -> BaselinePlan: ...
+def prepare_baseline(project_path: Path, registry: AdapterRegistry, *,
+                     profile: str | None, model: str | None) -> BaselinePlan: ...
 def run_audit_series(request: AuditSeriesRequest, *, store: MetrologyStore,
                      observer: AuditSeriesObserver, audit: AuditCallable = run_audit) -> AuditSeriesResult: ...
 ```
@@ -239,7 +232,6 @@ def run_audit_series(request: AuditSeriesRequest, *, store: MetrologyStore,
 ## Integration Points
 
 ### Provides to Other Slices
-- **440 / CF 260:** the baseline command, advertised by `sq probe --json` as `baseline.available: true`.
 - **403:** a snapshot, audit runs and a floor at the adoption commit, which its project and history reports read like any others.
 - **Squadron itself:** `run_audit_series` as the one series loop.
 
@@ -263,7 +255,6 @@ def run_audit_series(request: AuditSeriesRequest, *, store: MetrologyStore,
 - A series without a floor exits 1, keeps the snapshot and successful runs, and prints the `audit variance` command that completes it. An interrupt exits 130 with the same information. Each failure mode in D6's table produces its listed signal.
 - Every exit after the first audit run names the analysis file the audit wrote, and says to remove or commit it before the next snapshot.
 - The command succeeds on a git repository with a remote and no `.squadron.toml`, no `project-documents/`, and no cf project, given user-level audit profile and model config.
-- `sq probe --json` reports `"baseline": {"available": true}`.
 
 ### Technical Requirements
 - `sq metrology audit variance` output and exit codes are unchanged, and its existing tests pass without edits other than imports.
@@ -274,7 +265,6 @@ def run_audit_series(request: AuditSeriesRequest, *, store: MetrologyStore,
 
 ### Integration Requirements
 - `sq metrology report baseline --project <id>` shows the baseline's project with a measured floor (not `no floor measured`) after a successful run.
-- The probe contract document and `sq probe --json` agree on `baseline.available`.
 
 ### Verification Walkthrough
 
@@ -301,8 +291,7 @@ Uses a small scratch clone so the three audits stay cheap. Any small repository 
    ls ~/.config/squadron/metrology/                                   # one code_snapshot, three audit_run, one floor for this commit
    ```
 6. Re-run refusal: `sq metrology baseline .` exits 1, naming the audit's untracked analysis file (D6).
-7. Probe: `sq probe --json` shows `"baseline":{"available":true}`.
-8. Regression: `sq metrology audit variance --help` and the existing `audit variance` tests are unchanged.
+7. Regression: `sq metrology audit variance --help` and the existing `audit variance` tests are unchanged.
 
 ## Implementation Notes
 
@@ -311,8 +300,7 @@ Uses a small scratch clone so the three audits stay cheap. Any small repository 
 2. Extract `run_audit_series` from `audit_variance`, with its tests. `audit variance` tests pass.
 3. `prepare_baseline` and `BaselinePreflightError`, with tests for each preflight failure.
 4. The CLI command and its tests.
-5. Probe flip, contract line, probe test update.
-6. Docs and CHANGELOG, then the walkthrough.
+5. Docs and CHANGELOG, then the walkthrough.
 
 Effort: 2/5.
 
