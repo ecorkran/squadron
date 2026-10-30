@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -30,6 +30,7 @@ from squadron.cli.commands.metrology_snapshot import register_snapshot_command
 from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.audit import (
     AuditPreflightError,
+    AuditProgress,
     AuditRunFailure,
     AuditRunResult,
     AuditSkillError,
@@ -37,10 +38,14 @@ from squadron.metrology.audit import (
 )
 from squadron.metrology.audit_models import AuditCategory
 from squadron.metrology.audit_report import baseline_report
+from squadron.metrology.audit_series import (
+    AuditSeriesRequest,
+    AuditSeriesResult,
+    NoFloorReason,
+    run_audit_series,
+)
 from squadron.metrology.audit_variance import (
     MIN_USABLE_RUNS,
-    AuditVarianceError,
-    reduce_noise_floor,
 )
 from squadron.metrology.calibration import read_current_template_content_hash, recommend_thresholds
 from squadron.metrology.calibration_models import RecommendationDirection, RecommendationReport
@@ -60,7 +65,7 @@ from squadron.metrology.graduation import list_graduations, select_residual_offe
 from squadron.metrology.graduation import write_graduation as write_graduation_record
 from squadron.metrology.identity import derive_judge_config_id, read_review_frontmatter
 from squadron.metrology.levels import ArtifactLevel, derive_artifact_level
-from squadron.metrology.models import AuditRun, EvidenceSnapshot, GraduatedConfig, JudgeConfigId
+from squadron.metrology.models import EvidenceSnapshot, GraduatedConfig, JudgeConfigId
 from squadron.metrology.report import agreement_report, dispersion_report, trend_report
 from squadron.metrology.report_models import (
     AgreementReport,
@@ -816,6 +821,39 @@ def audit_run(
         raise typer.Exit(code=1)
 
 
+class _VarianceObserver:
+    """Prints ``audit variance``'s cooldown, run and live-progress lines."""
+
+    def __init__(self, label: str, n_runs: int) -> None:
+        self._label = label
+        self._n_runs = n_runs
+
+    def on_run_start(self, run_number: int) -> None:
+        """Nothing is printed at run start; the progress line shows it."""
+
+    def on_cooldown(self, run_number: int, cooldown_s: int) -> None:
+        rprint(f"  [dim]cooling down {cooldown_s}s before run {run_number}[/dim]")
+
+    def on_outcome(self, run_number: int, outcome: AuditRunResult) -> None:
+        report_run_outcome(outcome, prefix=f"  run {run_number}/{self._n_runs}  ")
+
+    def progress_callback(self, run_number: int) -> Callable[[AuditProgress], None] | None:
+        return make_progress_reporter(f"{self._label} run {run_number}/{self._n_runs}")
+
+
+def _print_no_floor(project_path: Path, result: AuditSeriesResult) -> None:
+    """Say why a series produced no floor; a short series is silent only when empty."""
+    name = escape(str(project_path))
+    if result.no_floor_reason is NoFloorReason.UNREDUCIBLE:
+        rprint(f"[yellow]No floor for {name}: {escape(result.reduce_error or '')}[/yellow]")
+    elif result.runs:
+        rprint(
+            f"[yellow]No floor for {name}: only {len(result.runs)} usable run(s); "
+            f"{MIN_USABLE_RUNS} are required. The runs are persisted and can be "
+            "reduced later once more land.[/yellow]"
+        )
+
+
 @audit_app.command("variance")
 def audit_variance(
     project_paths: list[str] = typer.Argument(help="One or more project directories to measure"),
@@ -838,83 +876,49 @@ def audit_variance(
     total_succeeded = 0
     total_failed = 0
     floors_written = 0
-    rate_limited = False
 
     for raw_path in project_paths:
         project_path = Path(raw_path).expanduser().resolve()
-        series: list[AuditRun] = []
-        # Pinned from run 1 so later runs assert HEAD has not moved rather
-        # than silently measuring a different commit.
-        pinned_sha: str | None = None
         rprint(f"[bold]{escape(str(project_path))}[/bold]  ({n_runs} runs)")
-
-        for index in range(n_runs):
-            # Spacing between runs lowers the request rate the series presents,
-            # rather than absorbing throttles after they fire. Not before the
-            # first run — nothing has been spent yet.
-            if index > 0 and cooldown_s > 0:
-                rprint(f"  [dim]cooling down {cooldown_s}s before run {index + 1}[/dim]")
-                time.sleep(cooldown_s)
-            try:
-                outcome = asyncio.run(
-                    run_audit(
-                        project_path,
-                        store=store,
-                        profile=profile,
-                        model=model,
-                        independent_run=True,
-                        require_clean=True,
-                        expected_sha=pinned_sha,
-                        on_progress=make_progress_reporter(
-                            f"{project_path.name} run {index + 1}/{n_runs}"
-                        ),
-                        cwd=resolved_cwd,
-                    )
-                )
-            except (AuditPreflightError, AuditSkillError, MetrologyIdentityError) as exc:
-                rprint(f"[red]Error: {escape(str(exc))}[/red]")
-                total_failed += n_runs - index
-                break
-            except MetrologyStoreError as exc:
-                rprint(f"[red]Store error: {escape(str(exc))}[/red]")
-                raise typer.Exit(code=1) from exc
-
-            report_run_outcome(outcome, prefix=f"  run {index + 1}/{n_runs}  ")
-            if outcome.succeeded and outcome.run is not None:
-                series.append(outcome.run)
-                pinned_sha = outcome.run.commit_sha
-                total_succeeded += 1
-            else:
-                total_failed += 1
-                if outcome.failure is AuditRunFailure.RATE_LIMITED:
-                    rate_limited = True
-                    rprint(
-                        "[yellow]Stopping: the provider is rate limiting. Completed runs "
-                        "are persisted — re-run later and the series can be reduced then."
-                        "[/yellow]"
-                    )
-                    break
-
-        if rate_limited and not series:
-            break
-        if len(series) < MIN_USABLE_RUNS:
-            if series:
-                rprint(
-                    f"[yellow]No floor for {escape(str(project_path))}: "
-                    f"only {len(series)} usable run(s); "
-                    f"{MIN_USABLE_RUNS} are required. The runs are persisted and can be "
-                    "reduced later once more land.[/yellow]"
-                )
-            continue
-
+        request = AuditSeriesRequest(
+            project_path=project_path,
+            runs=n_runs,
+            cooldown_s=cooldown_s,
+            profile=profile,
+            model=model,
+            # Pinned from run 1 so later runs assert HEAD has not moved rather
+            # than silently measuring a different commit.
+            expected_sha=None,
+            config_cwd=resolved_cwd,
+        )
         try:
-            floor = reduce_noise_floor(series)
-        except AuditVarianceError as exc:
-            rprint(f"[yellow]No floor for {escape(str(project_path))}: {escape(str(exc))}[/yellow]")
-            continue
+            result = run_audit_series(
+                request,
+                store=store,
+                observer=_VarianceObserver(project_path.name, n_runs),
+                audit=run_audit,
+            )
+        except MetrologyStoreError as exc:
+            rprint(f"[red]Store error: {escape(str(exc))}[/red]")
+            raise typer.Exit(code=1) from exc
 
-        store.write_noise_floor(floor)
+        total_succeeded += len(result.runs)
+        total_failed += result.failed
+        if result.stop_error is not None:
+            rprint(f"[red]Error: {escape(result.stop_error)}[/red]")
+        if result.rate_limited:
+            rprint(
+                "[yellow]Stopping: the provider is rate limiting. Completed runs "
+                "are persisted — re-run later and the series can be reduced then."
+                "[/yellow]"
+            )
+            if not result.runs:
+                break
+        if result.floor is None:
+            _print_no_floor(project_path, result)
+            continue
         floors_written += 1
+        floor = result.floor
         rprint(
             f"[green]floor[/green] {floor.project_id.value} @{floor.commit_sha[:8]}  "
             f"total {floor.total.min}-{floor.total.max} "
