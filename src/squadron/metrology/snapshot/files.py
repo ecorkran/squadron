@@ -32,6 +32,11 @@ def effective_exclusions(
     return sorted(patterns)
 
 
+def exclude_pathspecs(exclusions: Iterable[str]) -> list[str]:
+    """*exclusions* as the ``:(exclude,glob)`` pathspecs git matches itself."""
+    return [f"{_EXCLUDE_MAGIC}{pattern}" for pattern in exclusions]
+
+
 def resolve_files(repo_root: Path, exclusions: Iterable[str]) -> list[str]:
     """Tracked files at HEAD, less *exclusions*, as sorted repo-relative POSIX paths.
 
@@ -39,7 +44,7 @@ def resolve_files(repo_root: Path, exclusions: Iterable[str]) -> list[str]:
     A git call that returns nothing or fails is never an empty file set: it logs
     ERROR and raises ``SnapshotIntegrityError`` naming the call.
     """
-    args = ["ls-files", "-z", "--", ".", *(f"{_EXCLUDE_MAGIC}{p}" for p in exclusions)]
+    args = ["ls-files", "-z", "--", ".", *exclude_pathspecs(exclusions)]
     completed = run_git(args, cwd=str(repo_root))
     if completed is None or completed.returncode != 0:
         _logger.error("git ls-files failed in %s", repo_root)

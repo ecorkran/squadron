@@ -79,6 +79,15 @@ class SnapshotIntegrityError(MetrologyError):
     """
 
 
+class SnapshotExportError(MetrologyError):
+    """A commit can't be exported to a temp tree for measurement (403 D5).
+
+    Raised when the revision is unknown, ``git archive`` fails or times out, extraction
+    fails or an archive member is refused, or the ``node_modules`` link can't be made.
+    Every message names the failing call or path. Nothing is written when this is raised.
+    """
+
+
 class SnapshotAdapterContractError(MetrologyError):
     """A language adapter broke the contract: it returned an undeclared metric, or omitted one.
 
