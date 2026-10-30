@@ -70,14 +70,14 @@ revision_number: 2
 - [x] Commit: `feat(metrology): add baseline preflight and scope plan`
 
 ## Task 5: `sq metrology baseline` command with tests (D1, D5, D6, API Contracts) — Effort 3
-- [ ] Create `src/squadron/cli/commands/metrology_baseline.py` with `register_baseline_command(metrology_app)` following `metrology_snapshot.py`, registered in `metrology.py`. `PATH` (default the current directory), `--profile`, `--model`; the help repeats 400's security warning
-- [ ] Flow per the design's Data Flow and Output shape: one `default_registry()` passed to `prepare_baseline` and `take_snapshot`; scope report; snapshot summary; `run_audit_series` with `expected_sha=snapshot.commit_sha` and `audit=run_audit` from this module; summary. Exit 0 with a floor; any no-floor result prints its line plus `sq metrology audit variance <PATH>` and exits 1. Preflight and snapshot errors print `Error: …` and exit 1
-- [ ] Create `tests/metrology/test_baseline_cli.py` (patch `resolve_store_dir`, `default_registry` and `run_audit` in `metrology_baseline`; user config with model, profile and cooldown 0):
-  1. Success on a repo with a remote and no `.squadron.toml` or `project-documents/`: exit 0; one snapshot, three runs, one floor, same `ProjectId` and commit; the `Scope:` line precedes a marker the fake audit echoes on its first call
-  2. Each preflight failure (no model, no profile, `audit_variance_runs = 1`, dirty tree, no remote), parametrized: exit 1, cause named, store empty, fake audit never called
-  3. Each D6 row this task handles: snapshot failure, a `TIMEOUT` run (printed with its detail, floor still written), rate limit, moved HEAD, too few runs, each with its signal and exit
-- [ ] Success: tests pass; pyright clean; module under ~300 lines
-- [ ] Commit: `feat(metrology): add sq metrology baseline command`
+- [x] Create `src/squadron/cli/commands/metrology_baseline.py` with `register_baseline_command(metrology_app)` following `metrology_snapshot.py`, registered in `metrology.py`. `PATH` (default the current directory), `--profile`, `--model`; the help repeats 400's security warning
+- [x] Flow per the design's Data Flow and Output shape: one `default_registry()` passed to `prepare_baseline` and `take_snapshot`; scope report; snapshot summary; `run_audit_series` with `expected_sha=snapshot.commit_sha` and `audit=run_audit` from this module; summary. Exit 0 with a floor; any no-floor result prints its line plus `sq metrology audit variance <PATH>` and exits 1. Preflight and snapshot errors print `Error: …` and exit 1
+- [x] Create `tests/metrology/test_baseline_cli.py` (patch `resolve_store_dir`, `default_registry` and `run_audit` in `metrology_baseline`; user config with model, profile and cooldown 0):
+  1. [x] Success on a repo with a remote and no `.squadron.toml` or `project-documents/`: exit 0; one snapshot, three runs, one floor, same `ProjectId` and commit; the `Scope:` line precedes a marker the fake audit echoes on its first call
+  2. [x] Each preflight failure (no model, no profile, `audit_variance_runs = 1`, dirty tree, no remote), parametrized: exit 1, cause named, store empty, fake audit never called
+  3. [x] Each D6 row this task handles: snapshot failure, a `TIMEOUT` run (printed with its detail, floor still written), rate limit, moved HEAD, too few runs, each with its signal and exit
+- [x] Success: tests pass; pyright clean; module under ~300 lines
+- [x] Commit: `feat(metrology): add sq metrology baseline command`
 
 ## Task 6: Interrupt, store error and analysis file with tests (D6) — Effort 2
 - [ ] `MetrologyStoreError`: `_logger.exception`, a `Store error:` line naming the store dir and persisted run count, the recovery command, exit 1

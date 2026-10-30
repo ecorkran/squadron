@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -14,7 +15,7 @@ from typer.testing import CliRunner
 
 from squadron.cli.app import app
 from squadron.metrology.audit import AuditPreflightError, AuditRunFailure, AuditRunResult
-from squadron.metrology.errors import SnapshotIntegrityError
+from squadron.metrology.errors import MetrologyStoreError, SnapshotIntegrityError
 from squadron.metrology.project_id import ProjectId, ProjectIdSource
 from squadron.metrology.snapshot.contract import AdapterRegistry
 from squadron.metrology.snapshot_models import SnapshotMetric, SourceLanguage
@@ -50,17 +51,22 @@ class FakeAudit:
 
     store: MetrologyStore
     repo: Path
-    script: list[AuditRunFailure | Exception | None]
+    script: list[AuditRunFailure | BaseException | None]
+    analysis_file: str | None = None
     calls: int = 0
     shas: list[str | None] = field(default_factory=lambda: [])
 
     async def __call__(self, project_path: Path, **kwargs: object) -> AuditRunResult:
         if self.calls == 0:
             typer.echo(MARKER)
+            if self.analysis_file is not None:
+                target = self.repo / self.analysis_file
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("# audit\n", encoding="utf-8")
         step = self.script[self.calls] if self.calls < len(self.script) else None
         self.calls += 1
         self.shas.append(str(kwargs.get("expected_sha")))
-        if isinstance(step, Exception):
+        if isinstance(step, BaseException):
             raise step
         if step is not None:
             return AuditRunResult(
@@ -86,8 +92,13 @@ class Harness:
     store_dir: Path
     store: MetrologyStore
 
-    def audit(self, repo: Path, *script: AuditRunFailure | Exception | None) -> FakeAudit:
-        return FakeAudit(self.store, repo, list(script))
+    def audit(
+        self,
+        repo: Path,
+        *script: AuditRunFailure | BaseException | None,
+        analysis_file: str | None = None,
+    ) -> FakeAudit:
+        return FakeAudit(self.store, repo, list(script), analysis_file=analysis_file)
 
     def is_empty(self) -> bool:
         return not self.store_dir.exists() or not any(self.store_dir.iterdir())
@@ -276,3 +287,76 @@ def test_too_few_usable_runs_exits_one_and_keeps_them(
     assert f"sq metrology audit variance {audited_repo}" in output
     assert len(harness.store.list_audit_runs()) == 1
     assert harness.store.list_noise_floors() == []
+
+
+ANALYSIS_FILE = "analysis/940-analysis.example-repo.md"
+
+
+def test_success_names_the_analysis_file_to_remove_or_commit(
+    audited_repo: Path, harness: Harness, write_user_config: UserConfigWriter
+) -> None:
+    write_user_config(CONFIG)
+    audit = harness.audit(audited_repo, analysis_file=ANALYSIS_FILE)
+
+    code, output = _invoke(audited_repo, audit)
+
+    assert code == 0, output
+    assert f"The audit wrote {ANALYSIS_FILE}. Remove or commit it before the next snapshot." in output
+
+
+def test_interrupt_on_run_two_keeps_what_was_measured_and_exits_130(
+    audited_repo: Path, harness: Harness, write_user_config: UserConfigWriter
+) -> None:
+    write_user_config(CONFIG)
+    audit = harness.audit(audited_repo, None, KeyboardInterrupt(), analysis_file=ANALYSIS_FILE)
+
+    code, output = _invoke(audited_repo, audit)
+
+    snapshot = harness.store.list_snapshots(PROJECT)[0]
+    assert code == 130
+    assert f"Snapshot {snapshot.snapshot_id} is kept; 1 run(s) completed." in output
+    assert f"sq metrology audit variance {audited_repo}" in output
+    assert ANALYSIS_FILE in output
+    assert len(harness.store.list_audit_runs()) == 1
+    assert harness.store.list_noise_floors() == []
+
+
+def test_interrupt_during_the_snapshot_says_nothing_was_recorded(
+    audited_repo: Path, harness: Harness, write_user_config: UserConfigWriter
+) -> None:
+    write_user_config(CONFIG)
+    audit = harness.audit(audited_repo)
+
+    with patch("squadron.cli.commands.metrology_baseline.take_snapshot", side_effect=KeyboardInterrupt):
+        code, output = _invoke(audited_repo, audit)
+
+    assert code == 130
+    assert "Nothing was recorded or spent" in output
+    assert audit.calls == 0
+    assert harness.is_empty()
+
+
+def test_floor_write_failure_logs_error_and_names_the_store_and_recovery(
+    audited_repo: Path,
+    harness: Harness,
+    write_user_config: UserConfigWriter,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    write_user_config(CONFIG)
+    audit = harness.audit(audited_repo, analysis_file=ANALYSIS_FILE)
+    failure = MetrologyStoreError("disk full")
+
+    with (
+        caplog.at_level(logging.ERROR),
+        patch.object(MetrologyStore, "write_noise_floor", side_effect=failure),
+    ):
+        code, output = _invoke(audited_repo, audit)
+
+    assert code == 1
+    assert "Store error: disk full" in output
+    assert f"Store: {harness.store_dir}; 3 run(s) persisted this session." in output
+    assert f"sq metrology audit variance {audited_repo}" in output
+    assert ANALYSIS_FILE in output
+    assert any(
+        record.levelno == logging.ERROR and record.exc_info is not None for record in caplog.records
+    )
