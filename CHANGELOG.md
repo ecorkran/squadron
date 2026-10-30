@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `sq metrology slice-ranges`, `sq metrology snapshot --commit REV` and `sq metrology report slice|project|history`: record where each slice landed, measure any commit without touching your checkout, and roll up what a slice changed.
+
 ## [0.24.10] - 20261029
 
 ### Added

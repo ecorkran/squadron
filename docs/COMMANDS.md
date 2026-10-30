@@ -506,15 +506,18 @@ model is stored on each record, so an audit can say what produced it.
 Measure the clean HEAD of a repository and record one `code_snapshot` per commit in the metrology store. Each language with an adapter gets eight metrics: file length, function length, cyclomatic complexity, duplicated lines, lint count, type-error count, covered lines and coverable lines. Python measures all eight; TypeScript measures every metric but type errors, which it records as absent (`metric_unsupported`). A metric that can't be measured is absent with a reason and detail, never zero.
 
 ```
-sq metrology snapshot [--cwd PATH] [--json]
+sq metrology snapshot [--cwd PATH] [--json] [--commit REV]
 ```
 
 | Option | Type | Required | Default | Description |
 |--------|------|----------|---------|-------------|
 | `--cwd` | path | no | current directory | Repository root to measure. A subdirectory of a repository is refused |
 | `--json` | flag | no | off | Print the `CodeSnapshot` record as JSON instead of the summary |
+| `--commit` | revision | no | clean `HEAD` | Measure this commit from a temp export instead. The summary shows `(exported)` after the commit |
 
 The working tree must be clean; an untracked `.squadron.toml` is the one exception. Snapshotting writes nothing into the repository and exits 1, recording nothing, if it finds the repository changed afterwards. Re-snapshotting a commit replaces its record.
+
+`--commit REV` measures any commit without touching your checkout. The commit is written out with `git archive` into a temporary directory, and measured there with *this* checkout's tools, limits and exclusions. The checkout can be in any state: there is no clean-tree check. Type errors are measured only when the commit's `uv.lock` is byte-identical to the checkout's; otherwise they are absent with `environment_unresolved`. Coverage is absent at an export, because a fresh export has no coverage report. Re-measuring a commit replaces its record.
 
 Lengths count non-blank lines. The limits (`metrology.max_file_lines`, `metrology.max_function_lines`) and exclusions (`metrology.snapshot_exclude`) come from the measured repository's own `.squadron.toml`; see [Metrology keys](#metrology-keys). Without limits the record says none were declared and reports the distributions only.
 
@@ -541,7 +544,53 @@ Coverage comes from a report your project already produces (for example `pytest 
 | `report_missing` | The configured coverage report file doesn't exist |
 | `report_stale` | A tracked file is newer than the coverage report; the detail names it |
 
-Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`) before `PATH`, and never installed. **Snapshotting a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only snapshot repositories you trust. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
+Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`) before `PATH`, and never installed. **Snapshotting a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only snapshot repositories you trust. `--commit` has the same trust boundary: an export runs the checkout's tools on an older tree, including that tree's `eslint.config.*`, which is JavaScript. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
+
+## metrology slice-ranges
+
+Resolve where each slice landed on the target branch and record every landing, so a slice's before and after survive the reflog that proves them.
+
+```
+sq metrology slice-ranges INDEX... [--cwd PATH] [--json]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `INDEX` | integers | yes | | Slice indices, e.g. `403 404` |
+| `--cwd` | path | no | current directory | Repository root |
+| `--json` | flag | no | off | Print the results as JSON |
+
+The target is `git.integration_branch`, or `main` when it is unset. A slice lands as a merge commit on the target's first-parent history (found by the slice number in the message, as in `sq review code`), or as a fast-forward that only the branch's reflog remembers. A slice can land more than once; each landing is kept separately, oldest first. A stored landing is never changed, and a later run only adds landings it did not have.
+
+One line per slice, then the record's path:
+
+```
+403  merge_commit  1 landing  (new)
+388  unresolved: reflog_unavailable
+Record: <store dir>/sliceranges-<id>.json
+```
+
+`(new)` appears only when this run added a landing. The reasons a slice stays unresolved are `no_landing`, `not_landed` (an in-progress branch, not recorded), `landed_elsewhere`, `reflog_unavailable`, `empty_branch` and `fork_not_ancestor`. To force a slice to be re-resolved, delete its record from the file named on the `Record:` line. Exit 1 when git cannot answer (`git_error`) or the store write fails.
+
+## metrology report slice | project | history
+
+Rollup reports over stored snapshots, audits and review findings. Each figure carries its sample size, and nothing combines sources: a code measurement, an audit delta and a review count are always separate. There is no score.
+
+```
+sq metrology report slice INDEX [--cwd PATH] [--json]
+sq metrology report project [--cwd PATH] [--json]
+sq metrology report history [--cwd PATH] [--json]
+```
+
+`--json` prints the report model instead of the text.
+
+**`report slice`** resolves and records the slice's landings, then compares the code before and after each landing. **It writes:** a boundary commit with no stored snapshot is measured from a temp export (as `snapshot --commit` does) and recorded, and new landings are added to the slice ranges. It never runs an audit; the audit section reads stored runs only and names a missing one. Two measurements are compared only when their tool, rule set and environment are identical; otherwise the row prints `not compared: <reason> (<detail>)` and, where one exists, the command that fixes it (for example re-measuring both commits after a tool upgrade). An unresolved slice prints only its reason. Reviews are listed for a slice only when it has a resolved landing; the review figures are marked `no floor measured`.
+
+**`report project`** shows the latest snapshot, the latest audit baseline with its noise floor, and review findings per category, split into those attributed to a slice with a stored landing and those that are project-only.
+
+**`report history`** lists snapshots in the target's first-parent order, with a marker between rows that cannot be compared. Snapshots of commits off that line are counted, not listed.
+
+Exit 1 on a snapshot, export, git or store failure.
 
 ## metrology ingest-reviews
 
