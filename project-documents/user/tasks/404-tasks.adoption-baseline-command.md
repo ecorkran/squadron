@@ -10,7 +10,7 @@ projectState: 0.24.10 released; slices 400, 401, 402 and 403 complete; 440 remov
   sq probe; slice 404 design complete, all decisions decided
 dateCreated: 20261030
 dateUpdated: 20261030
-status: not_started
+status: in_progress
 turns: 45
 promptTokens: 3825664
 cachedTokens: 3703628
@@ -45,10 +45,10 @@ revision_number: 2
 - Next slice: 420 (consumes 403's `take_snapshot_at` and `get_slice_ranges`).
 
 ## Task 1: Branch and move the audit printers (Development Approach 1) — Effort 1
-- [ ] Create `404-slice.adoption-baseline-command` from the target
-- [ ] Create `src/squadron/cli/commands/metrology_audit_output.py` and move `_make_progress_reporter`, `_report_run_outcome` and `_campaign_summary` from `cli/commands/metrology.py` into it, without the leading underscore. Bodies unchanged; `audit_run` and `audit_variance` import them
-- [ ] Success: `tests/metrology/test_audit_cli.py` passes with no edits; pyright clean
-- [ ] Commit: `refactor(metrology): move audit output printers into their own module`
+- [x] Create `404-slice.adoption-baseline-command` from the target
+- [x] Create `src/squadron/cli/commands/metrology_audit_output.py` and move `_make_progress_reporter`, `_report_run_outcome` and `_campaign_summary` from `cli/commands/metrology.py` into it, without the leading underscore. Bodies unchanged; `audit_run` and `audit_variance` import them
+- [x] Success: `tests/metrology/test_audit_cli.py` passes with no edits; pyright clean
+- [x] Commit: `refactor(metrology): move audit output printers into their own module`
 
 ## Task 2: `run_audit_series` with tests (D4, D6) — Effort 3
 - [ ] Create `src/squadron/metrology/audit_series.py` (no Typer or Rich imports) with `AuditSeriesRequest`, `AuditSeriesResult`, the `AuditSeriesObserver` Protocol (`on_run_start`, `on_cooldown`, `on_outcome`, `progress_callback`), `AuditCallable`, and `run_audit_series` per the design's Library contracts and D4. `AuditSeriesResult` also carries `stop_error: str | None` (the preflight, skill or identity error that ended the series) and a `NoFloorReason` StrEnum (`too_few_runs`, `unreducible`) for why there is no floor
