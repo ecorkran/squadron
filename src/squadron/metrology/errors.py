@@ -99,3 +99,11 @@ class SnapshotAdapterContractError(MetrologyError):
 class ReviewIngestInputError(MetrologyError):
     """An ingest input can't be used: a named path doesn't exist, or the default reviews
     directory is missing or can't be resolved. Raised before anything is written."""
+
+
+class BaselinePreflightError(MetrologyError):
+    """``sq metrology baseline`` refused to start: a setting it needs is missing or unusable.
+
+    Raised before any snapshot or audit, so nothing is written or spent. Every
+    message names the setting and the command that fixes it.
+    """

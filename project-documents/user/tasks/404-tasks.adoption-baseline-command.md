@@ -58,9 +58,9 @@ revision_number: 2
 - [x] Commit: `feat(metrology): add shared audit series loop`
 
 ## Task 3: `audit variance` calls the series (D4) — Effort 2
-- [ ] Replace `audit_variance`'s per-project body with one `run_audit_series` call per path. A private observer in `metrology.py` prints today's cooldown, run and progress lines; the result drives today's error, rate-limit, no-floor and floor lines in today's order, the campaign summary and the exit code
-- [ ] Success: `tests/metrology/test_audit_cli.py` passes with no edits; `sq metrology audit variance --help` matches the target's
-- [ ] Commit: `refactor(metrology): run audit variance through the shared series loop`
+- [x] Replace `audit_variance`'s per-project body with one `run_audit_series` call per path. A private observer in `metrology.py` prints today's cooldown, run and progress lines; the result drives today's error, rate-limit, no-floor and floor lines in today's order, the campaign summary and the exit code
+- [x] Success: `tests/metrology/test_audit_cli.py` passes with no edits; `sq metrology audit variance --help` matches the target's
+- [x] Commit: `refactor(metrology): run audit variance through the shared series loop`
 
 ## Task 4: `prepare_baseline` with tests (D1, D2, D5) — Effort 3
 - [ ] Add `BaselinePreflightError(MetrologyError)` to `metrology/errors.py`

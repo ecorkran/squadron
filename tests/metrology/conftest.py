@@ -246,6 +246,18 @@ def non_repo_dir(tmp_path: Path, isolated_user_config: Path) -> Path:
 
 
 @pytest.fixture
+def write_user_config(isolated_user_config: Path) -> Callable[[dict[str, object]], Path]:
+    """Return a writer that replaces the per-test user config with ``values``."""
+
+    def _write(values: dict[str, object]) -> Path:
+        with open(isolated_user_config, "wb") as handle:
+            tomli_w.dump(values, handle)
+        return isolated_user_config
+
+    return _write
+
+
+@pytest.fixture
 def write_project_config() -> Callable[[Path, dict[str, object]], Path]:
     """Return a writer that dumps keys into ``<cwd>/.squadron.toml``."""
 
