@@ -13,16 +13,18 @@ import typer
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.metrology.errors import MetrologyStoreError
-from squadron.metrology.slice_range_models import RangeUnresolvedReason
-from squadron.metrology.store import MetrologyStore
+from squadron.metrology.errors import MetrologyStoreError, SnapshotExportError
+from squadron.metrology.slice_range_models import RangeUnresolvedReason, SliceRanges
+from squadron.metrology.store import MetrologyStore, slice_ranges_record_id
 from tests.metrology import slice_range_repos as repos
+from tests.metrology.snapshot.builders import make_measured_snapshot, make_project_id
+from tests.metrology.test_slice_range_models import make_landing
 
 runner = CliRunner()
 
 ConfigWriter = Callable[[Path, dict[str, object]], Path]
 PROJECT = "github.com/manta/example-repo"
-CLI_MODULE = "squadron.cli.commands.metrology_quality"
+CLI_MODULE = "squadron.cli.commands.metrology_quality_support"
 
 
 @pytest.fixture
@@ -148,3 +150,118 @@ def test_command_exposes_the_documented_options() -> None:
     options = {opt for param in command.params for opt in param.opts}
     assert {"--cwd", "--json"} <= options
     assert not any(param.hidden for param in command.params if isinstance(param, click.Option))
+
+
+class TestReportCommands:
+    """``report slice|project|history`` (slice 403, D10)."""
+
+    def stored_snapshots(self, store_dir: Path) -> list[Path]:
+        return sorted(store_dir.glob("snapshot-*.json"))
+
+    def seed_boundaries(self, store_dir: Path, *shas: str) -> None:
+        store = MetrologyStore(store_dir=store_dir)
+        for sha in shas:
+            store.write_snapshot(make_measured_snapshot(commit_sha=sha))
+
+    def report(self, repo: Path, *args: str) -> tuple[int, str]:
+        result = runner.invoke(app, ["metrology", "report", *args, "--cwd", str(repo)])
+        return result.exit_code, result.output
+
+    def test_unresolved_slice_prints_its_reason(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo = repos.not_landed(tmp_path)
+        with_identity(repo, write_project_config)
+
+        code, output = self.report(repo, "slice", "408")
+
+        assert code == 0, output
+        assert "Slice 408 — unresolved: not_landed" in output
+
+    def test_resolved_slice_with_stored_boundaries_takes_no_snapshot(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo, shas = repos.no_ff_landing(tmp_path)
+        with_identity(repo, write_project_config)
+        self.seed_boundaries(store_dir, shas.before, shas.after)
+
+        code, output = self.report(repo, "slice", "401")
+
+        assert code == 0, output
+        assert "Slice 401 — 1 landing on main" in output
+        assert "Landing 1  merge" in output
+        assert len(self.stored_snapshots(store_dir)) == 2
+
+    def test_stored_landing_naming_a_missing_commit_prints_not_found(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo, _ = repos.no_ff_landing(tmp_path)
+        with_identity(repo, write_project_config)
+        gone = "e" * 40
+        project = make_project_id()
+        MetrologyStore(store_dir=store_dir).write_slice_ranges(
+            SliceRanges(
+                record_id=slice_ranges_record_id(project),
+                project_id=project,
+                slices={500: [make_landing("f" * 40).model_copy(update={"before_sha": gone})]},
+            )
+        )
+
+        code, output = self.report(repo, "slice", "500")
+
+        assert code == 0, output
+        assert f"commit {gone} not found" in output
+
+    def test_json_parses_for_all_three_reports(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo, shas = repos.no_ff_landing(tmp_path)
+        with_identity(repo, write_project_config)
+        self.seed_boundaries(store_dir, shas.before, shas.after)
+
+        _, slice_out = self.report(repo, "slice", "401", "--json")
+        _, project_out = self.report(repo, "project", "--json")
+        _, history_out = self.report(repo, "history", "--json")
+
+        assert json.loads(slice_out)["index"] == 401
+        assert json.loads(project_out)["snapshot_commit"] in (shas.before, shas.after)
+        history = json.loads(history_out)
+        assert {row["commit_sha"] for row in history["rows"]} == {shas.before, shas.after}
+
+    def test_project_report_counts_a_stored_slice_as_resolved(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo, shas = repos.no_ff_landing(tmp_path)
+        with_identity(repo, write_project_config)
+        self.seed_boundaries(store_dir, shas.after)
+
+        code, output = self.report(repo, "project")
+
+        assert code == 0, output
+        assert "latest snapshot" in output
+        assert "Audit baseline: no audit run recorded" in output
+
+    def test_boundary_snapshot_failure_exits_one(
+        self, tmp_path: Path, store_dir: Path, write_project_config: ConfigWriter
+    ) -> None:
+        repo, _ = repos.no_ff_landing(tmp_path)
+        with_identity(repo, write_project_config)
+
+        with patch(
+            f"{CLI_MODULE}.take_snapshot_at", side_effect=SnapshotExportError("export exploded")
+        ):
+            code, output = self.report(repo, "slice", "401")
+
+        assert code == 1
+        assert "export exploded" in output
+
+    def test_commands_expose_cwd_and_json(self) -> None:
+        root = typer.main.get_command(app)
+        assert isinstance(root, click.Group)
+        metrology = root.commands["metrology"]
+        assert isinstance(metrology, click.Group)
+        report = metrology.commands["report"]
+        assert isinstance(report, click.Group)
+        for name in ("slice", "project", "history"):
+            options = {opt for param in report.commands[name].params for opt in param.opts}
+            assert {"--cwd", "--json"} <= options

@@ -8,25 +8,43 @@ join it.
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 
 import typer
+from pydantic import BaseModel
 
-from squadron.metrology.errors import MetrologyIdentityError, MetrologyStoreError
-from squadron.metrology.identity import derive_project_id
+from squadron.cli.commands.metrology_quality_support import (
+    QualityContext,
+    commit_exists,
+    exit_on_failure,
+    first_parent_history,
+    load_context,
+    take_commit,
+)
+from squadron.metrology.quality_report.history_report import build_history_report
+from squadron.metrology.quality_report.project_report import build_project_report
+from squadron.metrology.quality_report.render import (
+    render_history_report,
+    render_project_report,
+    render_slice_report,
+)
+from squadron.metrology.quality_report.slice_report import (
+    TakeSnapshotAt,
+    build_slice_report,
+    ensure_snapshot,
+)
 from squadron.metrology.slice_range import SliceRangeResult, record_slice_ranges
 from squadron.metrology.slice_range_models import RangeUnresolvedReason
-from squadron.metrology.store import MetrologyStore, resolve_store_dir, slice_ranges_record_id
-from squadron.review.git_utils import resolve_diff_base
-
-_logger = logging.getLogger(__name__)
+from squadron.metrology.store import slice_ranges_record_id
 
 
 def register_quality_commands(metrology_app: typer.Typer, report_app: typer.Typer) -> None:
     """Mount the quality commands onto the parent module's existing apps."""
-    _ = report_app  # the report commands mount here as they land
+    _mount_slice_ranges(metrology_app)
+    _mount_reports(report_app)
 
+
+def _mount_slice_ranges(metrology_app: typer.Typer) -> None:
     @metrology_app.command("slice-ranges")
     def slice_ranges(  # pyright: ignore[reportUnusedFunction]
         indices: list[int] = typer.Argument(..., help="Slice indices to resolve, e.g. 403 404"),
@@ -42,30 +60,95 @@ def register_quality_commands(metrology_app: typer.Typer, report_app: typer.Type
         they resolve and never changed, so a range outlives the reflog that produced it.
         An in-progress branch is not recorded.
         """
-        repo_root = Path(cwd).expanduser().resolve() if cwd else Path.cwd().resolve()
-        try:
-            project_id = derive_project_id(str(repo_root))
-            store = MetrologyStore(store_dir=resolve_store_dir(cwd=str(repo_root)))
+        with exit_on_failure():
+            ctx = load_context(cwd)
             results = record_slice_ranges(
-                indices, str(repo_root), resolve_diff_base(str(repo_root)), store, project_id
+                indices, str(ctx.repo_root), ctx.target, ctx.store, ctx.project_id
             )
-        except MetrologyIdentityError as exc:
-            typer.echo(f"Error: {exc}", err=True)
-            raise typer.Exit(code=1) from exc
-        except MetrologyStoreError as exc:
-            _logger.error("Slice ranges store failure: %s", exc)
-            typer.echo(f"Store error: {exc}", err=True)
-            raise typer.Exit(code=1) from exc
-        record_path = store.record_location(slice_ranges_record_id(project_id))
+        record_path = ctx.store.record_location(slice_ranges_record_id(ctx.project_id))
         if as_json:
             typer.echo(json.dumps(_as_json(results, record_path), indent=2))
         else:
             for line in _render_lines(results, record_path):
                 typer.echo(line)
-        failed = [r.index for r in results if r.reason is RangeUnresolvedReason.GIT_ERROR]
-        if failed:
-            typer.echo(f"Error: git failed while resolving slice(s) {failed}", err=True)
-            raise typer.Exit(code=1)
+        _exit_if_git_failed(results)
+
+
+def _exit_if_git_failed(results: list[SliceRangeResult]) -> None:
+    failed = [r.index for r in results if r.reason is RangeUnresolvedReason.GIT_ERROR]
+    if failed:
+        typer.echo(f"Error: git failed while resolving slice(s) {failed}", err=True)
+        raise typer.Exit(code=1)
+
+
+def _emit(report: BaseModel, lines: list[str], as_json: bool) -> None:
+    typer.echo(report.model_dump_json(indent=2) if as_json else "\n".join(lines))
+
+
+def _mount_reports(report_app: typer.Typer) -> None:
+    cwd_option = typer.Option(None, "--cwd", help="Repository root (default: the current directory)")
+    json_option = typer.Option(False, "--json", help="Print the report model as JSON")
+
+    @report_app.command("slice")
+    def report_slice(  # pyright: ignore[reportUnusedFunction]
+        index: int = typer.Argument(..., help="Slice index, e.g. 403"),
+        cwd: str | None = cwd_option,
+        as_json: bool = json_option,
+    ) -> None:
+        """Report what a slice changed: static figures, audit delta and review findings.
+
+        Resolves and records the slice's landings, then compares the code before and after
+        each one. A boundary commit with no stored snapshot is measured from a temp export
+        and recorded, so this command writes snapshots and slice ranges. It never runs an audit.
+        """
+        with exit_on_failure():
+            ctx = load_context(cwd)
+            [result] = record_slice_ranges(
+                [index], str(ctx.repo_root), ctx.target, ctx.store, ctx.project_id
+            )
+            report = build_slice_report(
+                index,
+                result,
+                ctx.store,
+                ctx.project_id,
+                lambda sha: commit_exists(ctx.repo_root, sha),
+                lambda commit: ensure_snapshot(
+                    commit, ctx.repo_root, ctx.store, ctx.project_id, take_commit_for(ctx)
+                ),
+            )
+        _emit(report, render_slice_report(report), as_json)
+        _exit_if_git_failed([result])
+
+    @report_app.command("project")
+    def report_project(  # pyright: ignore[reportUnusedFunction]
+        cwd: str | None = cwd_option, as_json: bool = json_option
+    ) -> None:
+        """Report the project's current state: latest snapshot, audit baseline and reviews.
+
+        Reviews count toward a slice only when that slice has a stored landing.
+        """
+        with exit_on_failure():
+            ctx = load_context(cwd)
+            stored = ctx.store.get_slice_ranges(ctx.project_id)
+            resolved = sorted(stored.slices) if stored is not None else []
+            report = build_project_report(ctx.store, ctx.project_id, resolved)
+        _emit(report, render_project_report(report), as_json)
+
+    @report_app.command("history")
+    def report_history(  # pyright: ignore[reportUnusedFunction]
+        cwd: str | None = cwd_option, as_json: bool = json_option
+    ) -> None:
+        """Report snapshots in the target's first-parent order, marking where they break."""
+        with exit_on_failure():
+            ctx = load_context(cwd)
+            history = first_parent_history(ctx.repo_root, ctx.target)
+            report = build_history_report(ctx.store, ctx.project_id, history)
+        _emit(report, render_history_report(report), as_json)
+
+
+def take_commit_for(ctx: QualityContext) -> TakeSnapshotAt:
+    """A snapshot source bound to *ctx*'s store."""
+    return lambda repo_root, commit: take_commit(repo_root, commit, ctx.store)
 
 
 def _render_lines(results: list[SliceRangeResult], record_path: Path) -> list[str]:

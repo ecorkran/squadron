@@ -79,7 +79,10 @@ metrology_app = typer.Typer(
 
 report_app = typer.Typer(
     name="report",
-    help="Report agreement, dispersion, and trend over captured samples (read-only).",
+    help=(
+        "Report agreement, dispersion and trend over captured samples, the audit baseline, "
+        "and code-quality rollups: slice, project and history."
+    ),
     no_args_is_help=True,
 )
 metrology_app.add_typer(report_app)

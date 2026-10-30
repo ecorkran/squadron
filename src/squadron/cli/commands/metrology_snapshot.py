@@ -27,7 +27,8 @@ from squadron.metrology.store import MetrologyStore, resolve_store_dir
 
 _logger = logging.getLogger(__name__)
 
-_FAILURES = (
+#: Failures a snapshot-taking command reports on stderr and turns into exit 1.
+SNAPSHOT_FAILURES = (
     SnapshotPreflightError,
     SnapshotIntegrityError,
     SnapshotAdapterContractError,
@@ -82,7 +83,7 @@ def register_snapshot_command(metrology_app: typer.Typer) -> None:
                 taken = take_snapshot_at(
                     repo_root, commit, default_registry(), SubprocessToolRunner(), store
                 )
-        except _FAILURES as exc:
+        except SNAPSHOT_FAILURES as exc:
             typer.echo(f"Error: {exc}", err=True)
             raise typer.Exit(code=1) from exc
         except MetrologyStoreError as exc:
