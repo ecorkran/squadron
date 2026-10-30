@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 
@@ -14,6 +16,7 @@ from squadron.cli.commands.metrology_snapshot import SNAPSHOT_FAILURES
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.models import ProjectId
+from squadron.metrology.preview import SHA_PREVIEW_CHARS
 from squadron.metrology.snapshot.registry import default_registry
 from squadron.metrology.snapshot.runner import SubprocessToolRunner
 from squadron.metrology.snapshot.take import take_snapshot_at
@@ -22,8 +25,6 @@ from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.review.git_utils import resolve_diff_base, run_git
 
 _logger = logging.getLogger(__name__)
-
-_SHA_PREVIEW_CHARS = 12
 
 
 @dataclass(frozen=True)
@@ -66,27 +67,35 @@ def take_commit(repo_root: Path, commit: str, store: MetrologyStore) -> CodeSnap
 
     Says so on stderr first: measuring can take minutes, and it writes a snapshot record.
     """
-    typer.echo(f"No stored snapshot at {commit[:_SHA_PREVIEW_CHARS]}; measuring it now", err=True)
+    typer.echo(f"No stored snapshot at {commit[:SHA_PREVIEW_CHARS]}; measuring it now", err=True)
     return take_snapshot_at(repo_root, commit, default_registry(), SubprocessToolRunner(), store)
+
+
+def _exit_git_failed(args: tuple[str, ...], repo_root: Path) -> NoReturn:
+    call = f"git {' '.join(args)}"
+    _logger.error("%s failed in %s", call, repo_root)
+    typer.echo(f"Error: `{call}` failed in {repo_root}.", err=True)
+    raise typer.Exit(code=1)
+
+
+def _run_git(repo_root: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run git in *repo_root*; a call that can't answer at all exits 1."""
+    completed = run_git(list(args), cwd=str(repo_root))
+    if completed is None:
+        _exit_git_failed(args, repo_root)
+    return completed
 
 
 def commit_exists(repo_root: Path, sha: str) -> bool:
     """Whether *sha* names a commit in the repo; a git call that can't answer exits 1."""
-    call = f"git cat-file -e {sha}^{{commit}}"
-    completed = run_git(["cat-file", "-e", f"{sha}^{{commit}}"], cwd=str(repo_root))
-    if completed is None:
-        _logger.error("%s returned no result in %s", call, repo_root)
-        typer.echo(f"Error: `{call}` could not be run in {repo_root}.", err=True)
-        raise typer.Exit(code=1)
-    return completed.returncode == 0
+    # cat-file -e exits non-zero for a missing object: that is the answer, not a failure.
+    return _run_git(repo_root, "cat-file", "-e", f"{sha}^{{commit}}").returncode == 0
 
 
 def first_parent_history(repo_root: Path, target: str) -> list[str]:
     """The target's first-parent commits, oldest first; a failing git call exits 1."""
-    call = f"git rev-list --first-parent --reverse {target}"
-    completed = run_git(["rev-list", "--first-parent", "--reverse", target], cwd=str(repo_root))
-    if completed is None or completed.returncode != 0:
-        _logger.error("%s failed in %s", call, repo_root)
-        typer.echo(f"Error: `{call}` failed in {repo_root}.", err=True)
-        raise typer.Exit(code=1)
+    args = ("rev-list", "--first-parent", "--reverse", target)
+    completed = _run_git(repo_root, *args)
+    if completed.returncode != 0:
+        _exit_git_failed(args, repo_root)
     return completed.stdout.split()

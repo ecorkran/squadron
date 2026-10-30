@@ -11,6 +11,7 @@ import json
 import logging
 from pathlib import Path
 
+from squadron.metrology.preview import SHA_PREVIEW_CHARS
 from squadron.metrology.snapshot.config_hash import file_content_hash, pyproject_table_hash
 from squadron.metrology.snapshot.contract import AdapterContext
 from squadron.metrology.snapshot.python_lint import PROJECT_TOOL_DIRS
@@ -96,7 +97,7 @@ def _lockfile_differs(repo_root: Path, environment_root: Path) -> str | None:
         return f"{LOCKFILE} not found in the live environment"
     exported = file_content_hash(repo_root / LOCKFILE)
     if exported != file_content_hash(live):
-        return f"{LOCKFILE} at {exported[:12]} differs from the live environment's"
+        return f"{LOCKFILE} at {exported[:SHA_PREVIEW_CHARS]} differs from the live environment's"
     return None
 
 

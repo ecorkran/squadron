@@ -9,6 +9,7 @@ Each row is one language; languages are never compared with each other.
 
 from __future__ import annotations
 
+from squadron.metrology.preview import COMPACT_PREVIEW_CHARS, SHA_PREVIEW_CHARS
 from squadron.metrology.quality_report.models import (
     BreakDetail,
     ComparabilityBreak,
@@ -24,7 +25,6 @@ from squadron.metrology.snapshot_models import (
     SourceLanguage,
 )
 
-_HASH_PREVIEW_CHARS = 8
 _NO_HASH = "defaults"
 
 #: One side of a row: the measurement and the file count of its language, or None when
@@ -47,7 +47,7 @@ def _figure(side: _Side) -> MetricFigure | None:
 
 
 def _hash(value: str | None) -> str:
-    return value[:_HASH_PREVIEW_CHARS] if value else _NO_HASH
+    return value[:COMPACT_PREVIEW_CHARS] if value else _NO_HASH
 
 
 def _absent_break(
@@ -131,8 +131,8 @@ def compare_snapshots(before: CodeSnapshot, after: CodeSnapshot) -> list[MetricC
     old, new = _index(before), _index(after)
     settings = _settings_break(before, after)
     remeasure = (
-        f"re-measure both with sq metrology snapshot --commit {before.commit_sha[:12]} "
-        f"and --commit {after.commit_sha[:12]}"
+        f"re-measure both with sq metrology snapshot --commit {before.commit_sha[:SHA_PREVIEW_CHARS]} "
+        f"and --commit {after.commit_sha[:SHA_PREVIEW_CHARS]}"
     )
     rows: list[MetricComparison] = []
     for language, metric in sorted(

@@ -6,6 +6,7 @@ numbers and the breaks come from the report models unchanged.
 
 from __future__ import annotations
 
+from squadron.metrology.preview import abbrev
 from squadron.metrology.quality_report.models import (
     AuditFloorState,
     AuditSection,
@@ -22,7 +23,6 @@ from squadron.metrology.quality_report.models import (
     SliceReport,
 )
 
-_SHA = 8
 _METRIC_WIDTH = 22
 _CATEGORY_WIDTH = 30
 _ABSENT_KINDS = frozenset({ComparabilityBreak.ABSENT_BEFORE, ComparabilityBreak.ABSENT_AFTER})
@@ -99,16 +99,16 @@ def _settings_text(settings: BoundarySettings) -> str:
         if limits.limits_declared
         else "none declared"
     )
-    return f"{settings.commit_sha[:_SHA]} limits {declared}; {len(settings.exclusions)} exclusions"
+    return f"{abbrev(settings.commit_sha)} limits {declared}; {len(settings.exclusions)} exclusions"
 
 
 def _landing_lines(number: int, entry: LandingReport) -> list[str]:
     landing = entry.landing
-    merge = f"merge {landing.merge_sha[:_SHA]}" if landing.merge_sha else "fast-forward"
+    merge = f"merge {abbrev(landing.merge_sha)}" if landing.merge_sha else "fast-forward"
     head = f"Landing {number}  {merge}"
     if entry.missing_commit is not None:
         return [f"{head}  commit {entry.missing_commit} not found"]
-    lines = [f"{head}  before {landing.before_sha[:_SHA]} → after {landing.after_sha[:_SHA]}"]
+    lines = [f"{head}  before {abbrev(landing.before_sha)} → after {abbrev(landing.after_sha)}"]
     for settings in (entry.before, entry.after):
         if settings is not None:
             lines.append(f"  measured under {_settings_text(settings)}")
@@ -163,7 +163,9 @@ def render_project_report(report: ProjectReport) -> list[str]:
     if report.snapshot_commit is None:
         lines = [f"Project {report.project_id.value} — no snapshot recorded"]
     else:
-        lines = [f"Project {report.project_id.value} — latest snapshot {report.snapshot_commit[:_SHA]}"]
+        lines = [
+            f"Project {report.project_id.value} — latest snapshot {abbrev(report.snapshot_commit)}"
+        ]
         lines.extend(f"  {_summary_text(summary)}" for summary in report.summaries)
     if report.audit is None:
         lines.append("Audit baseline: no audit run recorded")
@@ -177,7 +179,7 @@ def render_project_report(report: ProjectReport) -> list[str]:
                 else "no floor measured"
             )
             lines.append(
-                f"  {baseline.commit_sha[:_SHA]}  prompt {baseline.audit_prompt_hash[:_SHA]}  "
+                f"  {abbrev(baseline.commit_sha)}  prompt {abbrev(baseline.audit_prompt_hash)}  "
                 f"{baseline.total_findings} findings; {floor}"
             )
     lines.extend(review_lines(report.slice_reviews, "Reviews attributed to a slice"))
@@ -191,7 +193,7 @@ def render_history_report(report: HistoryReport) -> list[str]:
     for row in report.rows:
         if row.breaks_from_previous:
             lines.append(f"  --- {_break_text(row.breaks_from_previous)} ---")
-        lines.append(f"  {row.commit_sha[:_SHA]}  {row.measured_at:%Y-%m-%d}")
+        lines.append(f"  {abbrev(row.commit_sha)}  {row.measured_at:%Y-%m-%d}")
         lines.extend(f"    {_summary_text(summary)}" for summary in row.summaries)
     if report.off_line_snapshots:
         lines.append(f"{report.off_line_snapshots} snapshots of commits off this line not shown")

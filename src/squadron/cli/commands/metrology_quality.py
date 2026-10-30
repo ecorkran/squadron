@@ -7,7 +7,6 @@ join it.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import typer
@@ -34,7 +33,7 @@ from squadron.metrology.quality_report.slice_report import (
     ensure_snapshot,
 )
 from squadron.metrology.slice_range import SliceRangeResult, record_slice_ranges
-from squadron.metrology.slice_range_models import RangeUnresolvedReason
+from squadron.metrology.slice_range_models import RangeUnresolvedReason, SliceLanding
 from squadron.metrology.store import slice_ranges_record_id
 
 
@@ -67,7 +66,7 @@ def _mount_slice_ranges(metrology_app: typer.Typer) -> None:
             )
         record_path = ctx.store.record_location(slice_ranges_record_id(ctx.project_id))
         if as_json:
-            typer.echo(json.dumps(_as_json(results, record_path), indent=2))
+            typer.echo(_as_json(results, record_path))
         else:
             for line in _render_lines(results, record_path):
                 typer.echo(line)
@@ -113,7 +112,7 @@ def _mount_reports(report_app: typer.Typer) -> None:
                 ctx.project_id,
                 lambda sha: commit_exists(ctx.repo_root, sha),
                 lambda commit: ensure_snapshot(
-                    commit, ctx.repo_root, ctx.store, ctx.project_id, take_commit_for(ctx)
+                    commit, ctx.repo_root, ctx.store, ctx.project_id, _take_commit_for(ctx)
                 ),
             )
         _emit(report, render_slice_report(report), as_json)
@@ -146,7 +145,7 @@ def _mount_reports(report_app: typer.Typer) -> None:
         _emit(report, render_history_report(report), as_json)
 
 
-def take_commit_for(ctx: QualityContext) -> TakeSnapshotAt:
+def _take_commit_for(ctx: QualityContext) -> TakeSnapshotAt:
     """A snapshot source bound to *ctx*'s store."""
     return lambda repo_root, commit: take_commit(repo_root, commit, ctx.store)
 
@@ -170,18 +169,36 @@ def _render_slice(result: SliceRangeResult) -> str:
     return f"{result.index}  {methods}  {count} {noun}{new_flag}"
 
 
-def _as_json(results: list[SliceRangeResult], record_path: Path) -> dict[str, object]:
-    return {
-        "record_path": str(record_path) if record_path.exists() else None,
-        "slices": [
-            {
-                "slice": result.index,
-                "reason": result.reason.value if result.reason is not None else None,
-                "landings": [
-                    {**entry.landing.model_dump(mode="json"), "is_new": entry.is_new}
+class _LandingOutput(SliceLanding):
+    is_new: bool
+
+
+class _SliceOutput(BaseModel):
+    slice: int
+    reason: RangeUnresolvedReason | None
+    landings: list[_LandingOutput]
+
+
+class _SliceRangesOutput(BaseModel):
+    """The ``slice-ranges --json`` document."""
+
+    record_path: str | None
+    slices: list[_SliceOutput]
+
+
+def _as_json(results: list[SliceRangeResult], record_path: Path) -> str:
+    output = _SliceRangesOutput(
+        record_path=str(record_path) if record_path.exists() else None,
+        slices=[
+            _SliceOutput(
+                slice=result.index,
+                reason=result.reason,
+                landings=[
+                    _LandingOutput(**entry.landing.model_dump(), is_new=entry.is_new)
                     for entry in result.landings
                 ],
-            }
+            )
             for result in results
         ],
-    }
+    )
+    return output.model_dump_json(indent=2)

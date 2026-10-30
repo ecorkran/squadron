@@ -15,6 +15,7 @@ from squadron.metrology.audit_delta import compute_delta
 from squadron.metrology.audit_models import AuditRun, ProjectBaseline
 from squadron.metrology.audit_report import baseline_report
 from squadron.metrology.models import ProjectId
+from squadron.metrology.preview import COMPACT_PREVIEW_CHARS, SHA_PREVIEW_CHARS
 from squadron.metrology.quality_report.compare import compare_snapshots
 from squadron.metrology.quality_report.models import (
     AuditFloorState,
@@ -31,8 +32,6 @@ from squadron.metrology.store import MetrologyStore
 
 _logger = logging.getLogger(__name__)
 
-_SHA_PREVIEW_CHARS = 12
-_HASH_PREVIEW_CHARS = 8
 
 #: Takes a commit and returns its snapshot, measuring it when none is stored.
 EnsureSnapshot = Callable[[str], CodeSnapshot]
@@ -52,7 +51,7 @@ def ensure_snapshot(
     stored = store.list_snapshots(project_id, commit_sha=commit)
     if stored:
         return stored[0]
-    _logger.info("No stored snapshot at %s; measuring it now", commit[:_SHA_PREVIEW_CHARS])
+    _logger.info("No stored snapshot at %s; measuring it now", commit[:SHA_PREVIEW_CHARS])
     return take_at(repo_root, commit)
 
 
@@ -67,15 +66,19 @@ def _latest_at(runs: list[AuditRun], commit: str) -> AuditRun | None:
     return next((run for run in runs if run.commit_sha == commit), None)
 
 
-def _audit_section(store: MetrologyStore, project_id: ProjectId, landing: SliceLanding) -> AuditSection:
-    """The audit delta across the landing from stored runs, or which run is missing (D8)."""
-    runs = store.list_audit_runs(project_id=project_id.value)
+def _audit_section(
+    runs: list[AuditRun], baselines: list[ProjectBaseline], landing: SliceLanding
+) -> AuditSection:
+    """The audit delta across the landing from stored runs, or which run is missing (D8).
+
+    *runs* (newest first) and *baselines* are read once per report, not once per landing.
+    """
     before_sha, after_sha = landing.before_sha, landing.after_sha
     after_run = _latest_at(runs, after_sha)
     before_run = _latest_at(runs, before_sha)
     if after_run is None or before_run is None:
         missing = [
-            f"no audit run at {sha[:_SHA_PREVIEW_CHARS]}"
+            f"no audit run at {sha[:SHA_PREVIEW_CHARS]}"
             for sha, run in ((before_sha, before_run), (after_sha, after_run))
             if run is None
         ]
@@ -86,13 +89,13 @@ def _audit_section(store: MetrologyStore, project_id: ProjectId, landing: SliceL
     if paired is None:
         return AuditSection(
             missing=(
-                f"no audit run at {before_sha[:_SHA_PREVIEW_CHARS]} under the audit prompt "
-                f"{prompt[:_HASH_PREVIEW_CHARS]} used at {after_sha[:_SHA_PREVIEW_CHARS]}"
+                f"no audit run at {before_sha[:SHA_PREVIEW_CHARS]} under the audit prompt "
+                f"{prompt[:COMPACT_PREVIEW_CHARS]} used at {after_sha[:SHA_PREVIEW_CHARS]}"
             )
         )
-    baseline = _baseline_for(store, project_id, paired)
+    baseline = _baseline_for(baselines, paired)
     if baseline is None:
-        return AuditSection(missing=f"no audit baseline at {before_sha[:_SHA_PREVIEW_CHARS]}")
+        return AuditSection(missing=f"no audit baseline at {before_sha[:SHA_PREVIEW_CHARS]}")
     delta = compute_delta(baseline, after_run)
     state = {
         True: AuditFloorState.WITHIN_FLOOR,
@@ -102,14 +105,11 @@ def _audit_section(store: MetrologyStore, project_id: ProjectId, landing: SliceL
     return AuditSection(delta=delta, floor_state=state, floor_n_runs=baseline.floor_n_runs)
 
 
-def _baseline_for(
-    store: MetrologyStore, project_id: ProjectId, run: AuditRun
-) -> ProjectBaseline | None:
-    report = baseline_report(store, project_filter=project_id.value)
+def _baseline_for(baselines: list[ProjectBaseline], run: AuditRun) -> ProjectBaseline | None:
     return next(
         (
             b
-            for b in report.projects
+            for b in baselines
             if b.commit_sha == run.commit_sha and b.audit_prompt_hash == run.audit_prompt_hash
         ),
         None,
@@ -119,8 +119,8 @@ def _baseline_for(
 def _landing_report(
     index: int,
     landing: SliceLanding,
-    store: MetrologyStore,
-    project_id: ProjectId,
+    runs: list[AuditRun],
+    baselines: list[ProjectBaseline],
     commit_exists: CommitExists,
     ensure: EnsureSnapshot,
 ) -> LandingReport:
@@ -134,7 +134,7 @@ def _landing_report(
         before=_settings(before),
         after=_settings(after),
         comparisons=compare_snapshots(before, after),
-        audit=_audit_section(store, project_id, landing),
+        audit=_audit_section(runs, baselines, landing),
     )
 
 
@@ -153,8 +153,10 @@ def build_slice_report(
     """
     if not record_result.landings:
         return SliceReport(index=index, reason=record_result.reason)
+    runs = store.list_audit_runs(project_id=project_id.value)
+    baselines = baseline_report(store, project_filter=project_id.value).projects
     landings = [
-        _landing_report(index, entry.landing, store, project_id, commit_exists, ensure)
+        _landing_report(index, entry.landing, runs, baselines, commit_exists, ensure)
         for entry in record_result.landings
     ]
     reviews = [r for r in store.list_code_reviews(project_id) if r.slice_index == index]

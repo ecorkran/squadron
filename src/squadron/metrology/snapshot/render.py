@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from squadron.metrology.preview import COMPACT_PREVIEW_CHARS, SHA_PREVIEW_CHARS
 from squadron.metrology.snapshot.lengths import files_over_limit
 from squadron.metrology.snapshot_models import (
     CodeSnapshot,
@@ -15,8 +16,6 @@ from squadron.metrology.snapshot_models import (
     Measurement,
     SnapshotMetric,
 )
-
-_HASH_PREVIEW_CHARS = 8
 
 #: Coverage metrics list files the report doesn't mention, not files a tool's ignores skipped.
 _REPORT_METRICS = frozenset({SnapshotMetric.COVERABLE_LINES, SnapshotMetric.COVERED_LINES})
@@ -63,7 +62,7 @@ def _summarize(measurement: Measurement) -> str:
     if measurement.rule_set is not None:
         detail += f", rules {measurement.rule_set.source}"
     if measurement.environment is not None:
-        digest = measurement.environment.lockfile_sha256[:_HASH_PREVIEW_CHARS]
+        digest = measurement.environment.lockfile_sha256[:COMPACT_PREVIEW_CHARS]
         detail += f", {measurement.environment.lockfile_path} {digest}"
     if measurement.tool_ignored_files:
         reason = (
@@ -93,7 +92,9 @@ def render_summary(snapshot: CodeSnapshot, record_path: Path, *, exported: bool 
     else:
         declared = "none declared"
     marker = " (exported)" if exported else ""
-    lines = [f"snapshot of {snapshot.commit_sha[:12]}{marker} ({snapshot.project_id.value})"]
+    lines = [
+        f"snapshot of {snapshot.commit_sha[:SHA_PREVIEW_CHARS]}{marker} ({snapshot.project_id.value})"
+    ]
     for entry in snapshot.languages:
         lines.extend(_language_lines(entry))
     lines.append(f"limits: {declared}")
