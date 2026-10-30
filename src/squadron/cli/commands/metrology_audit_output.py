@@ -8,6 +8,7 @@ import typer
 from rich import print as rprint
 
 from squadron.metrology.audit import AuditProgress, AuditRunResult
+from squadron.metrology.models import AuditNoiseFloor
 
 
 def make_progress_reporter(label: str) -> Callable[[AuditProgress], None]:
@@ -63,3 +64,32 @@ def campaign_summary(succeeded: int, failed: int, floors_written: int | None = N
         parts.append(f"{floors_written} floor(s) written")
     style = "yellow" if failed else "dim"
     rprint(f"[{style}]Campaign: {', '.join(parts)}.[/{style}]")
+
+
+def print_floor(floor: AuditNoiseFloor) -> None:
+    """Print the one-line noise floor a series produced."""
+    rprint(
+        f"[green]floor[/green] {floor.project_id.value} @{floor.commit_sha[:8]}  "
+        f"total {floor.total.min}-{floor.total.max} "
+        f"(mean {floor.total.mean:.1f}, sd {floor.total.stddev:.2f}, n={floor.n_runs})"
+    )
+
+
+class SeriesPrinter:
+    """Prints a series' cooldown, run and live-progress lines (an ``AuditSeriesObserver``)."""
+
+    def __init__(self, label: str, n_runs: int) -> None:
+        self._label = label
+        self._n_runs = n_runs
+
+    def on_run_start(self, run_number: int) -> None:
+        """Nothing is printed at run start; the progress line shows it."""
+
+    def on_cooldown(self, run_number: int, cooldown_s: int) -> None:
+        rprint(f"  [dim]cooling down {cooldown_s}s before run {run_number}[/dim]")
+
+    def on_outcome(self, run_number: int, outcome: AuditRunResult) -> None:
+        report_run_outcome(outcome, prefix=f"  run {run_number}/{self._n_runs}  ")
+
+    def progress_callback(self, run_number: int) -> Callable[[AuditProgress], None] | None:
+        return make_progress_reporter(f"{self._label} run {run_number}/{self._n_runs}")

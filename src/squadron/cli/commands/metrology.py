@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,10 +18,13 @@ from rich import print as rprint
 from rich.markup import escape
 
 from squadron.cli.commands.metrology_audit_output import (
+    SeriesPrinter,
     campaign_summary,
     make_progress_reporter,
+    print_floor,
     report_run_outcome,
 )
+from squadron.cli.commands.metrology_baseline import register_baseline_command
 from squadron.cli.commands.metrology_preemption import preempt_app, register_delta_command
 from squadron.cli.commands.metrology_quality import register_quality_commands
 from squadron.cli.commands.metrology_review_ingest import register_review_ingest_command
@@ -30,7 +32,6 @@ from squadron.cli.commands.metrology_snapshot import register_snapshot_command
 from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.audit import (
     AuditPreflightError,
-    AuditProgress,
     AuditRunFailure,
     AuditRunResult,
     AuditSkillError,
@@ -107,6 +108,7 @@ metrology_app.add_typer(audit_app)
 metrology_app.add_typer(preempt_app)
 register_delta_command(audit_app)
 register_snapshot_command(metrology_app)
+register_baseline_command(metrology_app)
 register_review_ingest_command(metrology_app)
 register_quality_commands(metrology_app, report_app)
 
@@ -821,26 +823,6 @@ def audit_run(
         raise typer.Exit(code=1)
 
 
-class _VarianceObserver:
-    """Prints ``audit variance``'s cooldown, run and live-progress lines."""
-
-    def __init__(self, label: str, n_runs: int) -> None:
-        self._label = label
-        self._n_runs = n_runs
-
-    def on_run_start(self, run_number: int) -> None:
-        """Nothing is printed at run start; the progress line shows it."""
-
-    def on_cooldown(self, run_number: int, cooldown_s: int) -> None:
-        rprint(f"  [dim]cooling down {cooldown_s}s before run {run_number}[/dim]")
-
-    def on_outcome(self, run_number: int, outcome: AuditRunResult) -> None:
-        report_run_outcome(outcome, prefix=f"  run {run_number}/{self._n_runs}  ")
-
-    def progress_callback(self, run_number: int) -> Callable[[AuditProgress], None] | None:
-        return make_progress_reporter(f"{self._label} run {run_number}/{self._n_runs}")
-
-
 def _print_no_floor(project_path: Path, result: AuditSeriesResult) -> None:
     """Say why a series produced no floor; a short series is silent only when empty."""
     name = escape(str(project_path))
@@ -895,7 +877,7 @@ def audit_variance(
             result = run_audit_series(
                 request,
                 store=store,
-                observer=_VarianceObserver(project_path.name, n_runs),
+                observer=SeriesPrinter(project_path.name, n_runs),
                 audit=run_audit,
             )
         except MetrologyStoreError as exc:
@@ -918,12 +900,7 @@ def audit_variance(
             _print_no_floor(project_path, result)
             continue
         floors_written += 1
-        floor = result.floor
-        rprint(
-            f"[green]floor[/green] {floor.project_id.value} @{floor.commit_sha[:8]}  "
-            f"total {floor.total.min}-{floor.total.max} "
-            f"(mean {floor.total.mean:.1f}, sd {floor.total.stddev:.2f}, n={floor.n_runs})"
-        )
+        print_floor(result.floor)
 
     campaign_summary(total_succeeded, total_failed, floors_written)
     if total_failed:

@@ -63,11 +63,11 @@ revision_number: 2
 - [x] Commit: `refactor(metrology): run audit variance through the shared series loop`
 
 ## Task 4: `prepare_baseline` with tests (D1, D2, D5) — Effort 3
-- [ ] Add `BaselinePreflightError(MetrologyError)` to `metrology/errors.py`
-- [ ] Create `src/squadron/metrology/baseline.py` (no Typer or Rich imports) with `BaselinePlan` and `prepare_baseline` per the Library contracts. It runs the D2 checks in Data Flow order with `cwd = str(project_path)` for every config read: snapshot `preflight`, `derive_project_id`, `preflight_project(require_clean=True)`, skill, profile, model (`None` → `BaselinePreflightError` naming `metrology.audit_model` and `--model`), runs (below `MIN_USABLE_RUNS` → `BaselinePreflightError`), cooldown, then the D5 file set and counts from the same calls `take_snapshot` makes. No tool runs, store writes or LLM calls
-- [ ] Create `tests/metrology/test_baseline.py` on `audited_repo` with user config: the success plan matches HEAD, identity, file and byte counts and config; with a fake registry and a project exclusion, `plan.file_count` equals `len(resolve_files(repo, snapshot.exclusions))` for the snapshot `take_snapshot` then writes, and the snapshot's per-language `file_count` values sum to no more than it
-- [ ] Success: tests pass; pyright clean
-- [ ] Commit: `feat(metrology): add baseline preflight and scope plan`
+- [x] Add `BaselinePreflightError(MetrologyError)` to `metrology/errors.py`
+- [x] Create `src/squadron/metrology/baseline.py` (no Typer or Rich imports) with `BaselinePlan` and `prepare_baseline` per the Library contracts. It runs the D2 checks in Data Flow order with `cwd = str(project_path)` for every config read: snapshot `preflight`, `derive_project_id`, `preflight_project(require_clean=True)`, skill, profile, model (`None` → `BaselinePreflightError` naming `metrology.audit_model` and `--model`), runs (below `MIN_USABLE_RUNS` → `BaselinePreflightError`), cooldown, then the D5 file set and counts from the same calls `take_snapshot` makes. No tool runs, store writes or LLM calls
+- [x] Create `tests/metrology/test_baseline.py` on `audited_repo` with user config: the success plan matches HEAD, identity, file and byte counts and config; with a fake registry and a project exclusion, `plan.file_count` equals `len(resolve_files(repo, snapshot.exclusions))` for the snapshot `take_snapshot` then writes, and the snapshot's per-language `file_count` values sum to no more than it
+- [x] Success: tests pass; pyright clean
+- [x] Commit: `feat(metrology): add baseline preflight and scope plan`
 
 ## Task 5: `sq metrology baseline` command with tests (D1, D5, D6, API Contracts) — Effort 3
 - [ ] Create `src/squadron/cli/commands/metrology_baseline.py` with `register_baseline_command(metrology_app)` following `metrology_snapshot.py`, registered in `metrology.py`. `PATH` (default the current directory), `--profile`, `--model`; the help repeats 400's security warning
