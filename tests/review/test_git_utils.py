@@ -29,9 +29,12 @@ from squadron.review.git_utils import (
     assert_reviewable_scope,
     commit_diff_spec,
     normalize_diff_spec,
+    parse_fork_point,
+    parse_slice_branch,
     resolve_diff_base,
     resolve_slice_diff_range,
     run_git,
+    slice_merge_grep_pattern,
 )
 
 _GIT_UTILS_SUBPROCESS = "squadron.review.git_utils.subprocess.run"
@@ -800,3 +803,63 @@ class TestExtractDiffPathsIsBounded:
             assert extract_diff_paths("main...HEAD", ".", None) == ["app.py"]
 
         assert mock_run.call_args.kwargs["timeout"] == GIT_COMMAND_TIMEOUT_SECONDS
+
+
+class TestSliceMergeGrepPattern:
+    """The shared ERE both the review resolver and slice-ranges use."""
+
+    @pytest.mark.parametrize(
+        ("message", "expected"),
+        [
+            ("Merge slice 303: x", True),
+            ("Merge branch '303-slice.foo' into main", True),
+            ("303-slice.foo", True),
+            ("Merge slice 3033: x", False),
+            ("Merge slice 1303: x", False),
+            ("Merge branch '3033-slice.foo'", False),
+        ],
+    )
+    def test_matches_only_the_exact_slice_number(self, message: str, expected: bool) -> None:
+        result = subprocess.run(
+            ["grep", "-E", slice_merge_grep_pattern(303)],
+            input=message,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert (result.returncode == 0) is expected
+
+
+class TestParseSliceBranch:
+    def test_plain_branch_line(self) -> None:
+        assert parse_slice_branch("  303-slice.foo\n") == "303-slice.foo"
+
+    def test_strips_current_branch_marker(self) -> None:
+        assert parse_slice_branch("* 303-slice.foo\n") == "303-slice.foo"
+
+    def test_first_branch_wins(self) -> None:
+        assert parse_slice_branch("  303-slice.a\n  303-slice.b\n") == "303-slice.a"
+
+    @pytest.mark.parametrize("stdout", ["", "\n", "   \n"])
+    def test_empty_output_is_none(self, stdout: str) -> None:
+        assert parse_slice_branch(stdout) is None
+
+
+class TestParseForkPoint:
+    def test_returns_created_from_sha(self) -> None:
+        reflog = "bbb222 commit: more work\naaa111 branch: Created from main\n"
+        assert parse_fork_point(reflog) == "aaa111"
+
+    def test_ignores_reset_and_checkout_entries(self) -> None:
+        reflog = (
+            "ccc333 branch: Reset to HEAD~1\n"
+            "ddd444 checkout: moving from main to 303-slice.x\n"
+            "aaa111 branch: Created from main\n"
+        )
+        assert parse_fork_point(reflog) == "aaa111"
+
+    def test_no_creating_entry_is_none(self) -> None:
+        assert parse_fork_point("ccc333 branch: Reset to HEAD~1\n") is None
+
+    def test_empty_output_is_none(self) -> None:
+        assert parse_fork_point("") is None

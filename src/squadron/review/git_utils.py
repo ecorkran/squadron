@@ -209,6 +209,18 @@ class EmptyDiffError(Exception):
     """
 
 
+def parse_slice_branch(stdout: str) -> str | None:
+    """Return the first branch name in ``git branch --list`` output, or None.
+
+    Strips the ``* `` marker git puts on the current branch.
+    """
+    for line in stdout.splitlines():
+        branch = line.strip().lstrip("* ")
+        if branch:
+            return branch
+    return None
+
+
 def _find_slice_branch(slice_number: int, cwd: str) -> str | None:
     """Find a local branch matching '{slice_number}-slice.*'.
 
@@ -217,10 +229,20 @@ def _find_slice_branch(slice_number: int, cwd: str) -> str | None:
     result = run_git(["branch", "--list", f"{slice_number}-slice.*"], cwd=cwd)
     if result is None or result.returncode != 0:
         return None
-    for line in result.stdout.splitlines():
-        branch = line.strip().lstrip("* ")
-        if branch:
-            return branch
+    return parse_slice_branch(result.stdout)
+
+
+def parse_fork_point(reflog_stdout: str) -> str | None:
+    """Return the creating commit from ``git reflog show --format='%H %gs'`` output.
+
+    The creating entry is "branch: Created from <rev>"; git also writes
+    "branch: Reset to <rev>" and checkout entries, which are not forks.
+    Returns None when no creating entry is present.
+    """
+    for line in reflog_stdout.splitlines():
+        sha, _, subject = line.partition(" ")
+        if subject.startswith("branch: Created from") and sha.strip():
+            return sha.strip()
     return None
 
 
@@ -243,29 +265,29 @@ def _resolve_fork_point(branch: str, cwd: str) -> str | None:
     result = run_git(["reflog", "show", "--format=%H %gs", branch], cwd=cwd)
     if result is None or result.returncode != 0:
         return None
-    for line in result.stdout.splitlines():
-        sha, _, subject = line.partition(" ")
-        # The creating entry is "branch: Created from <rev>"; git also writes
-        # "branch: Reset to <rev>" and checkout entries, which are not forks.
-        if subject.startswith("branch: Created from") and sha.strip():
-            return sha.strip()
-    return None
+    return parse_fork_point(result.stdout)
+
+
+def slice_merge_grep_pattern(slice_number: int) -> str:
+    """Return the ERE that matches commit messages naming this slice.
+
+    Matches both "Merge slice 303: ..." (message prose, the convention real
+    merge commits use on this project) and "303-slice..." (branch-name
+    convention). POSIX ERE has no word-boundary escape, so number boundaries
+    are anchored explicitly with (^|[^0-9]) / ([^0-9]|$) to avoid slice 303
+    matching a commit about slice 3033.
+    """
+    return rf"slice[^0-9]{slice_number}([^0-9]|$)|(^|[^0-9]){slice_number}-slice"
 
 
 def _search_merge_commit(slice_number: int, cwd: str, ref: str) -> str | None:
     """Search ``ref`` for the newest merge commit naming this slice.
 
-    Matches merge commit messages regardless of word order around the
-    slice number — e.g. both "Merge slice 303: ..." (message prose,
-    the actual convention real merge commits use on this project) and
-    "303-slice..." (branch-name convention). POSIX ERE has no word-boundary
-    escape, so number boundaries are anchored explicitly with
-    (^|[^0-9]) / ([^0-9]|$) to avoid slice 303 matching a commit about
-    slice 3033.
+    Matches via ``slice_merge_grep_pattern``.
 
     Returns the commit hash or None if not found.
     """
-    grep_pattern = rf"slice[^0-9]{slice_number}([^0-9]|$)|(^|[^0-9]){slice_number}-slice"
+    grep_pattern = slice_merge_grep_pattern(slice_number)
     result = run_git(
         ["log", "--merges", "--oneline", "--extended-regexp", f"--grep={grep_pattern}", ref, "-1"],
         cwd=cwd,
