@@ -11,8 +11,8 @@ dependencies:
 projectState: 0.24.6 released; slices 400, 401 and 402 complete on main; slice 403
   design complete, all decisions decided
 dateCreated: 20261027
-dateUpdated: 20261028
-status: not_started
+dateUpdated: 20261029
+status: complete
 turns: 29
 promptTokens: 2134744
 cachedTokens: 2040813
@@ -313,16 +313,31 @@ revision_number: 2
 - [x] Commit: `docs: document slice ranges, commit export and rollup reports`
 
 ## Task 44: Full validation — Effort 1
-- [ ] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
-- [ ] `git diff <target> -- src/squadron/review/git_utils.py` shows only Task 2's additions and the helpers calling them
-- [ ] Every new module is under ~300 lines (`wc -l`)
-- [ ] Commit any fixes: `fix: address 403 validation findings`
+- [x] `.venv/bin/ruff format`, `.venv/bin/ruff check`, `.venv/bin/pyright` (zero errors), and the full test suite pass
+- [x] `git diff <target> -- src/squadron/review/git_utils.py` shows only Task 2's additions and the helpers calling them
+- [x] Every new module is under ~300 lines (`wc -l`)
+- [x] Commit any fixes: `fix: address 403 validation findings`
 
 ## Task 45: Verification walkthrough (design → Verification Walkthrough) — Effort 2
-- [ ] Run the eight walkthrough steps from the squadron root in order. For step 1's `squadron-brownfield` slice, use any slice whose landing is on the `squadron-brownfield` branch's history and not on `main`'s first-parent line
-- [ ] Step 3: the `diff` of the two snapshots minus `measured_at` prints nothing
-- [ ] Step 4: `git status --porcelain` and `ls -la .git` are unchanged
-- [ ] Step 6: restore `metrology.max_function_lines` to 50 and re-snapshot afterward
-- [ ] Record each step's outcome (pass, or the actual output when it differs) in a `## Verification` section at the end of this file
-- [ ] Success: every step passes, or a failing step is fixed (with its test) before checking it off
-- [ ] Commit: `docs: record slice 403 verification walkthrough`
+- [x] Run the eight walkthrough steps from the squadron root in order. For step 1's `squadron-brownfield` slice, use any slice whose landing is on the `squadron-brownfield` branch's history and not on `main`'s first-parent line
+- [x] Step 3: the `diff` of the two snapshots minus `measured_at` prints nothing
+- [x] Step 4: `git status --porcelain` and `ls -la .git` are unchanged
+- [x] Step 6: restore `metrology.max_function_lines` to 50 and re-snapshot afterward
+- [x] Record each step's outcome (pass, or the actual output when it differs) in a `## Verification` section at the end of this file
+- [x] Success: every step passes, or a failing step is fixed (with its test) before checking it off
+- [x] Commit: `docs: record slice 403 verification walkthrough`
+
+## Verification
+
+Walkthrough run live from the squadron root on 20261029, on the slice branch with `main`'s history. Slice 386 stands in for the "landed elsewhere" case: it merged into `squadron-pr` and has no local branch, so it resolves to `no_landing`.
+
+1. **Persist ranges: pass.** `sq metrology slice-ranges 172 305 400 940 946 947 386` printed `merge_commit  2 landings  (new)` for 172, 305 and 940, `merge_commit  1 landing  (new)` for 400, 946 and 947, and `386  unresolved: no_landing`, then `Record: …/sliceranges-a12c1f529ad3.json`. One `sliceranges-*` file. A second run printed the same lines with no `(new)`.
+2. **Fresh clone: pass, with a correction.** `git clone . /tmp/sq-clone` as written cloned the slice branch (the checkout was not on `main`), so the clone had no local `main` and the resolver returned `git_error` with the WARNING `Slice 400: git call failed (merge search); landings not resolved`, exit 1. That is the designed loud failure, and the walkthrough now says `git clone -b main`. With it: `merge_commit`, `before_sha` 3c7d2253e2f7…, `after_sha` 640b7df57c38…, identical to step 1, and no local slice branch in the clone. The clone's record (different project id, from its local-path remote) was deleted.
+3. **Export equals in place: pass.** The `diff` of the two JSON snapshots minus `measured_at` printed nothing.
+4. **Old commit, nothing written: pass.** `sq metrology snapshot --commit 3c7d2253…` printed `snapshot of 3c7d2253e2f7 (exported)`, `type_errors: absent: environment_unresolved (uv.lock at c202f9a4fcc6 differs from the live environment's)`, with file length, function length and lint present. `git --no-optional-locks status --porcelain` and `ls -la .git` were identical before and after.
+5. **Slice report: pass, with a fix.** The report printed the landing, the limits and exclusions each boundary was measured under, a row per metric with n, `audit   no audit run at …`, and the review section marked `no floor measured`. Two defects found and fixed in d6a724a1: the "no stored snapshot" notice was an INFO log that the CLI never displayed (it is now a stderr line, `No stored snapshot at <sha12>; measuring it now`), and `cyclomatic_complexity` ran into its figures (the metric column is wider). Metrics absent at both commits for the same reason (every shell metric, coverage) now print as one `absent at both commits: …` line.
+6. **Comparability break: pass.** With `metrology.max_function_lines` at 40 and the after commit re-snapshotted, every measured row printed `not compared: settings_changed (limits file 300, function 50 -> file 300, function 40)`. After restoring 50 and re-snapshotting, `.squadron.toml` was byte-identical to the original and no row said `settings_changed`.
+7. **Unresolved slice: pass.** `report slice 386` printed `Slice 386 — unresolved: no_landing` only. `report project` lists its reviews under `Reviews attributed to the project only`.
+8. **Project and history: pass.** `report project` printed the latest snapshot (640b7df5), the audit baseline with `floor 17–79 (n_runs=3)`, and both review sections. `report history` printed the two snapshotted commits on `main`'s first-parent line in order, with no break marker (same tools, settings and environment shape), and no off-line count.
+
+Side effects in the user store: slice ranges for 172, 305, 400, 940, 946 and 947, and snapshots of 3c7d2253 and 640b7df5. Not covered by a live run: the TypeScript conformance case (no `node_modules/.bin/eslint` is installed here; the test skips with that reason).

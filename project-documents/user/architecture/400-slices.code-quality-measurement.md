@@ -69,7 +69,7 @@ Ordering:
    - **Risk Level:** Medium. Changing the review template's output parsing touches a heavily used path.
    - **Relative Effort:** 3/5
 
-4. [ ] **(403) Slice Ranges and Rollup Reports**: Durable slice-range records, commit export for measuring non-HEAD commits, and the reports. A slice's range is resolved from git topology or the existing `git_utils` resolver and written to the store the first time it resolves. Reports take missing fork and merge snapshots on demand through commit export, then show per-slice, per-project and over-time breakdowns across snapshots, audit runs and review records.
+4. [x] **(403) Slice Ranges and Rollup Reports**: Durable slice-range records, commit export for measuring non-HEAD commits, and the reports. A slice's range is resolved from git topology or the existing `git_utils` resolver and written to the store the first time it resolves. Reports take missing fork and merge snapshots on demand through commit export, then show per-slice, per-project and over-time breakdowns across snapshots, audit runs and review records.
    - **Value:** Developer value. "Did this slice make the code better?" gets a measured answer, and trends become visible.
    - **Success Criteria:**
      - A slice merged with a real merge commit resolves from topology alone, with no reflog. A fast-forward merge resolves through the existing resolver while its reflog lasts. Either way the range is persisted, and it still resolves after reflog expiry or in a fresh clone.

@@ -11,6 +11,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261029
 
+### Slice 403: Slice Ranges and Rollup Reports — Complete
+
+- **Branch:** `403-slice.slice-ranges-and-rollup-reports`, 19 commits from `d694cd2a` to `d6a724a1`; not merged. Full suite 8387 passed, 5 skipped; ruff and pyright clean. All 45 tasks checked; the walkthrough passed live (`## Verification` in the task file).
+- **Delivered:** `sq metrology slice-ranges`, `snapshot --commit REV`, `report slice|project|history`. Durable slice-range record (`slice_ranges`, one per project, landings append-only); commit export via `git archive` into a temp tree measured with the live checkout's tools (`AdapterContext.environment_root`); lockfile gate for type errors at an export; comparison with named breaks; review counts per category.
+- **Decision:** the resolver calls `run_git` itself rather than reusing `_find_slice_branch` and friends; `git_utils` gained only `slice_merge_grep_pattern`, `parse_slice_branch` and `parse_fork_point`. The design wording was aligned with this (f0c537df).
+- **Surprises:** a clone of a checkout that is not on `main` has no local `main`, so slice resolution there returns `git_error` (loud, by design); the walkthrough uses `git clone -b main`. The "no stored snapshot" notice was an INFO log the CLI never showed; it is now a stderr line. A metric absent at both commits is not a history break. `git status` rewrites `.git/index` on racy timestamps, so the export test uses `--no-optional-locks`.
+- **Pending:** the TypeScript conformance case is skipped locally (no live `node_modules/.bin/eslint`). `report slice` for the walkthrough wrote slice ranges and two snapshots into the user store. Review file for the code review does not exist yet. Optional review findings left: F005 (merging Effort-1 tasks) was not done.
+- **Also this session:** ai-project-guide updated to v0.22.11 (`36a33b91`, on `main`); cf #138 closed as not planned at squadron's request.
+
 ### Release 0.24.10
 
 - **Contents:** `sq onboard register-comprehension` registers the codebase comprehension doc with cf (`cf set comprehension`, cf 0.19.22+); the comprehension analysis flow runs it after writing or refreshing the doc. Requested by cf slice 274.

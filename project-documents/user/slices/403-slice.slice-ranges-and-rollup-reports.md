@@ -10,8 +10,8 @@ dependencies:
 interfaces:
 - 420
 dateCreated: 20261022
-dateUpdated: 20261023
-status: not_started
+dateUpdated: 20261029
+status: complete
 turns: 27
 promptTokens: 2192201
 cachedTokens: 2060306
@@ -363,16 +363,16 @@ SliceLanding
 
 ### Verification Walkthrough
 
-None of these commands exist yet, and the expected outputs describe structure, not exact numbers. Run from the squadron root, with 400's `.squadron.toml` values in place and 402's `ingest-reviews` already run.
+Run from the squadron root on `main`, with 400's `.squadron.toml` values in place (`max_file_lines` 300, `max_function_lines` 50) and 402's `ingest-reviews` already run. The expected outputs describe structure, not exact numbers. Verified live on 20261029 (see the task file's `## Verification`).
 
-1. **Persist ranges.** Run `sq metrology slice-ranges 172 305 400 940 946 947 <a squadron-brownfield slice>`. Expect one line per slice. 400, 946 and 947 show `merge_commit`. 940, 305 and 172 show two landings. Slices that landed only on `squadron-brownfield` shows `unresolved: landed_elsewhere` (branch still local) or `unresolved: no_landing`. `ls ~/.config/squadron/metrology/sliceranges-*` shows one file. Run it again: no line says `(new)`.
-2. **Durable in a fresh clone.** Run `git clone . /tmp/sq-clone && sq metrology slice-ranges 400 --cwd /tmp/sq-clone`. Expect `merge_commit` with the same `before_sha` and `after_sha` as step 1, with no local slice branch in the clone.
+1. **Persist ranges.** Run `sq metrology slice-ranges 172 305 400 940 946 947 386`. Expect one line per slice: 400, 946 and 947 show `merge_commit  1 landing  (new)`; 940, 305 and 172 show `merge_commit  2 landings  (new)`. Slice 386 (merged into `squadron-pr`, which never reached `main`'s first-parent line, and with no local branch) shows `unresolved: no_landing`. The last line is `Record: ~/.config/squadron/metrology/sliceranges-<id>.json`, and `ls ~/.config/squadron/metrology/sliceranges-*` shows one file. Run it again: no line says `(new)`.
+2. **Durable in a fresh clone.** Run `git clone -b main . /tmp/sq-clone && sq metrology slice-ranges 400 --cwd /tmp/sq-clone --json`. Expect `merge_commit` with the same `before_sha` and `after_sha` as step 1 and no local slice branch in the clone. (`-b main` matters: a clone of a checkout that is on another branch has no local `main`, and the resolver then reports `git_error` with a WARNING naming the merge search.) The clone's remote is the local path, so it records under a different project id; delete that record afterwards.
 3. **Export equals in place.** On a clean HEAD, run `sq metrology snapshot --json > a.json`, then `sq metrology snapshot --commit HEAD --json > b.json`. `diff <(jq 'del(.measured_at)' a.json) <(jq 'del(.measured_at)' b.json)` prints nothing.
-4. **Old commit, nothing written to the repo.** Note `git status --porcelain` and `ls -la .git`. Run `sq metrology snapshot --commit <400's before_sha>`. Expect type errors `absent: environment_unresolved (uv.lock at … differs …)` if the lockfile changed since then. Lint and length are present. `git status --porcelain` and `.git` are unchanged.
-5. **Slice report.** Run `sq metrology report slice 400`. Expect the INFO line for any boundary snapshot it takes, then the static rows with n, the audit line (`no audit run at …` unless one exists), and the review section with `no floor measured`.
-6. **Comparability break.** Change `metrology.max_function_lines` to 40, then run `sq metrology snapshot --commit <400's after_sha>` and `report slice 400`. Expect the rows between that snapshot and the earlier one marked `settings_changed`, naming the limits. Restore the value and re-snapshot.
-7. **Unresolved slice.** Take the slice from step 1 marked unresolved. `report slice <n>` shows only the reason. `report project` counts its reviews as project-only.
-8. **Project and history.** `sq metrology report project` and `report history` print the sections described under API Contracts.
+4. **Old commit, nothing written to the repo.** Note `git --no-optional-locks status --porcelain` and `ls -la .git`. Run `sq metrology snapshot --commit <400's before_sha>`. The header says `snapshot of <sha12> (exported)`. Expect `type_errors: absent: environment_unresolved (uv.lock at <sha12> differs from the live environment's)` if the lockfile changed since then. Lint and the length metrics are present. `git status --porcelain` and `.git` are unchanged.
+5. **Slice report.** Run `sq metrology report slice 400`. For any boundary with no stored snapshot, stderr first says `No stored snapshot at <sha12>; measuring it now`. Then stdout shows the landing header, the limits and exclusions each boundary was measured under, one row per metric with n (`total a → b (+d)  over N: a → b  n=… files`), the audit line (`no audit run at …` unless one exists), and the review section marked `no floor measured`. A metric absent at both commits for the same reason prints as one `absent at both commits: …` line.
+6. **Comparability break.** Run `sq config set metrology.max_function_lines 40 --project`, then `sq metrology snapshot --commit <400's after_sha>` and `report slice 400`. Expect every row that was measured at either commit marked `not compared: settings_changed (limits file 300, function 50 -> file 300, function 40)`. Restore the value with `sq config set metrology.max_function_lines 50 --project`, re-run the snapshot of that commit, and `.squadron.toml` is byte-identical to the original and no row says `settings_changed`.
+7. **Unresolved slice.** `sq metrology report slice 386` prints `Slice 386 — unresolved: no_landing` and nothing else. `report project` counts its reviews under `Reviews attributed to the project only`.
+8. **Project and history.** `sq metrology report project` prints the latest snapshot's figures, the audit baseline with its floor, and the two review sections. `report history` prints one block per snapshotted commit on `main`'s first-parent line, a `--- not compared: … ---` marker between blocks that can't be compared, and a closing count of snapshots off the line.
 
 ## Risk Assessment
 
