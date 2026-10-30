@@ -15,7 +15,7 @@ from squadron.metrology.quality_report.models import (
     MetricComparison,
     MetricFigure,
 )
-from squadron.metrology.snapshot.lengths import files_over_limit
+from squadron.metrology.quality_report.summary import measurement_figure
 from squadron.metrology.snapshot_models import (
     CodeSnapshot,
     LengthLimits,
@@ -24,8 +24,6 @@ from squadron.metrology.snapshot_models import (
     SourceLanguage,
 )
 
-#: Metrics whose sample is functions, not files.
-_FUNCTION_METRICS = frozenset({SnapshotMetric.FUNCTION_LENGTH, SnapshotMetric.CYCLOMATIC_COMPLEXITY})
 _HASH_PREVIEW_CHARS = 8
 _NO_HASH = "defaults"
 
@@ -45,24 +43,7 @@ def _index(snapshot: CodeSnapshot) -> dict[_Key, tuple[Measurement, int]]:
 
 def _figure(side: _Side) -> MetricFigure | None:
     """The headline figure of a present measurement, else None."""
-    if side is None or side[0].absent is not None:
-        return None
-    measurement, file_count = side
-    distribution = measurement.distribution
-    if distribution is None:
-        return MetricFigure(total=sum(measurement.per_file.values()), n=file_count, n_unit="files")
-    is_function = measurement.metric in _FUNCTION_METRICS
-    if measurement.limit is None:
-        over = None
-    else:
-        over = len(measurement.over_limit) if is_function else len(files_over_limit(measurement))
-    return MetricFigure(
-        total=distribution.total,
-        n=distribution.count,
-        n_unit="functions" if is_function else "files",
-        over_limit=over,
-        limit=measurement.limit,
-    )
+    return None if side is None else measurement_figure(*side)
 
 
 def _hash(value: str | None) -> str:
