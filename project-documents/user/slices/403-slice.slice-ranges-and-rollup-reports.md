@@ -49,7 +49,7 @@ This slice adds three things:
 
 **Included**
 - The `slice_ranges` record type: one record per project, holding every slice's landings (D1). Store read and write methods.
-- A structured range resolver. Merge-commit landings come from the target's first-parent history, and fast-forward landings come from the reflog through the existing `git_utils` helpers.
+- A structured range resolver. Merge-commit landings come from the target's first-parent history, and fast-forward landings come from the reflog. The resolver runs git itself and shares only the pure parsing pieces in `git_utils`.
 - `sq metrology slice-ranges INDEX...`: resolves and persists the named slices' ranges (D4).
 - Commit export (`snapshot/export.py`) and `take_snapshot_at(commit)`. The snapshot command gains `--commit REV`.
 - One contract field: `AdapterContext.environment_root`. Tools and environments are resolved there, and the measured tree is `repo_root` (D5).
@@ -75,7 +75,7 @@ This slice adds three things:
 - **401 (designed, not implemented):** a prerequisite, so 401 is implemented before 403. The reports iterate over `SnapshotMetric`, so 401's metrics appear in them unchanged. 401 adds no tool-resolving code: complexity (`complexity.py`, `python_complexity.py`, `typescript_complexity.py`) and duplication (`duplication.py`) are counted in-process on the measured tree, and coverage (`coverage.py`) reads a report file located from `repo_root`. None of them moves to `environment_root`, and 403 changes none of them. At an export, `repo_root` is the export directory, so coverage is absent, as 401 states. The export conformance test (D5) covers 401's adapter code along with 400's.
 
 ### Interfaces Required
-- `squadron.review.git_utils`: `run_git`, `resolve_diff_base` (the target), and the slice helpers `_find_slice_branch`, `_resolve_fork_point` and `_search_merge_commit`. The helpers are renamed to public names, and the slice-number grep pattern is moved into one module function that both the review resolver and this slice call (D2).
+- `squadron.review.git_utils`: `run_git` and `resolve_diff_base` (the target). The existing slice helpers `_find_slice_branch`, `_resolve_fork_point` and `_search_merge_commit` return `None` both when git fails and when nothing is found, and `_search_merge_commit` returns only the newest merge. The resolver needs every landing and must tell a failed git call from an answer, so it calls `run_git` itself and `git_utils` gains only the shared pieces: `slice_merge_grep_pattern(n)`, `parse_slice_branch(stdout)` and `parse_fork_point(reflog_stdout)`. The private helpers call these and keep their names and behavior (D2).
 - 400's `preflight`, split so that config reading (limits, exclusions, timeout) can run without the clean-tree check (D4).
 - `derive_project_id`, `MetrologyStore`, and the `MetrologyRecord` envelope.
 
@@ -87,7 +87,7 @@ This slice adds three things:
 |---|---|
 | `metrology/slice_range_models.py` | `LandingMethod`, `SliceLanding`, `SliceRanges`, `RangeUnresolvedReason` |
 | `metrology/slice_range.py` | `resolve_slice_landings(index, repo_root, target) -> list[SliceLanding] \| RangeUnresolvedReason`, `record_slice_ranges(...)` (merge new landings into the project's record and write it once) |
-| `review/git_utils.py` | Helpers made public, `slice_merge_grep_pattern(n)`, and a `first_parent` argument on the merge search |
+| `review/git_utils.py` | `slice_merge_grep_pattern(n)`, `parse_slice_branch` and `parse_fork_point`; the private helpers call them |
 | `metrology/snapshot/export.py` | `export_commit(repo_root, sha, exclusions, environment_root)`, a context manager yielding the export directory and its file list |
 | `metrology/snapshot/preflight.py` | `read_snapshot_config(repo_root)`, split out of `preflight` |
 | `metrology/snapshot/take.py` | `take_snapshot_at(repo_root, commit, registry, runner, store)` beside `take_snapshot`, sharing `_measure_all` |
@@ -196,7 +196,7 @@ Status: decided
 - For a merge M: before = `M^1`, after = M, tip = `M^2`, and fork = `merge-base(M^1, M^2)`. This is pure topology, with no reflog.
 - The fallback to `main` in `_find_merge_commit` isn't used. It can return a merge whose diff spans a batch promotion, which is acceptable as a logged warning for a review diff, but not for a record that's kept forever.
 - Consequence: a slice that landed on a branch that was later merged into the target (squadron's `squadron-brownfield` worktree branch) isn't on the target's first-parent line. The fast-forward path refuses it too: a real fast-forward puts the tip on the target's first-parent line, so a tip that's only reachable through another merge is `LANDED_ELSEWHERE`, not a fast-forward. It resolves when `slice-ranges` runs in a checkout whose target is that branch. Otherwise it stays unresolved.
-- The grep pattern moves into `slice_merge_grep_pattern(n)` in `git_utils`, used by both resolvers, and `_search_merge_commit` gains `first_parent: bool`. `sq review code`'s own resolution is unchanged.
+- The grep pattern moves into `slice_merge_grep_pattern(n)` in `git_utils`, used by both resolvers. The first-parent restriction is applied by the slice-ranges resolver's own `git log --first-parent` call, so `_search_merge_commit` gains no argument. `sq review code`'s own resolution is unchanged.
 
 ### D3 — Before and after are the target just before and just after the landing
 Status: decided
@@ -348,7 +348,7 @@ SliceLanding
 
 ### Technical Requirements
 - ruff format, ruff check and pyright (zero errors) are clean, and the full test suite passes.
-- New modules stay at ~300 lines or less. `git_utils.py` doesn't grow beyond the rename, the pattern function and the `first_parent` argument.
+- New modules stay at ~300 lines or less. `git_utils.py` doesn't grow beyond the pattern function and the two parse functions.
 - Resolver tests build throwaway repos under `tmp_path` covering a `--no-ff` landing, a fast-forward, a sync merge into the slice branch, two landings of one slice, a rebased branch (`FORK_NOT_ANCESTOR`), an empty branch, a slice merged into a side branch that was then merged into the target (`LANDED_ELSEWHERE`), and a fresh `git clone` of the `--no-ff` repo.
 - Export tests: the in-place equals export check, the adapter conformance test (D5), a link outside the tree (error), an unknown revision, a `git archive` timeout and an extraction `OSError` (error, temp directory removed), a different `uv.lock` (absent), and a `.git` listing (paths, sizes, mtimes) that's identical before and after.
 - Each failure mode's signal is asserted with `caplog`: the resolver's INFO line for an unresolved slice, the WARNING and `GIT_ERROR` reason when a faked `run_git` returns `None` (with nothing persisted), the WARNING when the stored record changed between the start read and the write (both runs' landings kept), the WARNING for a missing landing commit, and the ERROR for each export failure.
@@ -388,7 +388,7 @@ None of these commands exist yet, and the expected outputs describe structure, n
 ## Implementation Notes
 
 ### Development Approach
-1. `git_utils`: make the helpers public, add the pattern function and `first_parent`, and confirm the review resolver tests still pass.
+1. `git_utils`: add the pattern function and the two parse functions, have the private helpers call them, and confirm the review resolver tests still pass.
 2. Slice-range models, envelope field and store methods, with a back-compat load test.
 3. Resolver and `slice-ranges`, with the throwaway-repo fixtures.
 4. `read_snapshot_config` split, `environment_root` in the contract and adapters (in place: `environment_root == repo_root`, and the 400 tests pass unchanged).
