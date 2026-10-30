@@ -11,7 +11,6 @@ import asyncio
 import logging
 import sys
 import time
-from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,6 +18,11 @@ import typer
 from rich import print as rprint
 from rich.markup import escape
 
+from squadron.cli.commands.metrology_audit_output import (
+    campaign_summary,
+    make_progress_reporter,
+    report_run_outcome,
+)
 from squadron.cli.commands.metrology_preemption import preempt_app, register_delta_command
 from squadron.cli.commands.metrology_quality import register_quality_commands
 from squadron.cli.commands.metrology_review_ingest import register_review_ingest_command
@@ -26,7 +30,6 @@ from squadron.cli.commands.metrology_snapshot import register_snapshot_command
 from squadron.config.manager import get_config, get_typed_config
 from squadron.metrology.audit import (
     AuditPreflightError,
-    AuditProgress,
     AuditRunFailure,
     AuditRunResult,
     AuditSkillError,
@@ -745,61 +748,6 @@ def _audit_variance_runs(cwd: str) -> int:
     return int(value)
 
 
-def _make_progress_reporter(label: str) -> Callable[[AuditProgress], None]:
-    """Return a callback that keeps a live audit visibly alive.
-
-    A full audit takes 5-20 minutes and emits no prose until it finishes, so
-    without this the command looks hung — and an operator cannot tell a
-    working run from a stalled one. Writes to stderr on a single rewritten
-    line so ``--json`` on stdout stays machine-readable.
-    """
-
-    def _report(progress: AuditProgress) -> None:
-        typer.echo(
-            f"\r  {label} working… {progress.tool_events} tool calls, "
-            f"{progress.bytes_received:,} bytes",
-            err=True,
-            nl=False,
-        )
-
-    return _report
-
-
-def _report_run_outcome(outcome: AuditRunResult, *, prefix: str = "") -> None:
-    """Print one run's result. A 12-audit campaign must not look hung."""
-    # Clear the in-place progress line before printing the durable result.
-    typer.echo("\r" + " " * 78 + "\r", err=True, nl=False)
-    if outcome.succeeded and outcome.run is not None:
-        run = outcome.run
-        rprint(
-            f"{prefix}[green]ok[/green] {run.project_id.value} "
-            f"@{run.commit_sha[:8]}  {len(run.findings)} findings"
-            + (
-                f" ([yellow]{run.unnormalized_count} unnormalized[/yellow])"
-                if run.unnormalized_count
-                else ""
-            )
-        )
-        if outcome.rate_limit_summary:
-            rprint(f"{prefix}[dim]{outcome.rate_limit_summary}[/dim]")
-        return
-    rprint(
-        f"{prefix}[red]failed[/red] {outcome.project_path}  "
-        f"{outcome.failure.value if outcome.failure else 'unknown'}: {outcome.detail or ''}"
-    )
-    if outcome.rate_limit_summary:
-        rprint(f"{prefix}[dim]{outcome.rate_limit_summary}[/dim]")
-
-
-def _campaign_summary(succeeded: int, failed: int, floors_written: int | None = None) -> None:
-    """Report the campaign honestly — a failed run is never hidden."""
-    parts = [f"{succeeded} succeeded", f"{failed} failed"]
-    if floors_written is not None:
-        parts.append(f"{floors_written} floor(s) written")
-    style = "yellow" if failed else "dim"
-    rprint(f"[{style}]Campaign: {', '.join(parts)}.[/{style}]")
-
-
 @audit_app.command("run")
 def audit_run(
     project_paths: list[str] = typer.Argument(help="One or more project directories to audit"),
@@ -829,7 +777,7 @@ def audit_run(
                     store=store,
                     profile=profile,
                     model=model,
-                    on_progress=None if as_json else _make_progress_reporter(project_path.name),
+                    on_progress=None if as_json else make_progress_reporter(project_path.name),
                     cwd=resolved_cwd,
                 )
             )
@@ -842,7 +790,7 @@ def audit_run(
             raise typer.Exit(code=1) from exc
 
         if not as_json:
-            _report_run_outcome(outcome)
+            report_run_outcome(outcome)
         if outcome.succeeded:
             succeeded.append(outcome)
         else:
@@ -862,7 +810,7 @@ def audit_run(
             if outcome.run is not None:
                 typer.echo(outcome.run.model_dump_json())
     else:
-        _campaign_summary(len(succeeded), failed)
+        campaign_summary(len(succeeded), failed)
 
     if failed:
         raise typer.Exit(code=1)
@@ -917,7 +865,7 @@ def audit_variance(
                         independent_run=True,
                         require_clean=True,
                         expected_sha=pinned_sha,
-                        on_progress=_make_progress_reporter(
+                        on_progress=make_progress_reporter(
                             f"{project_path.name} run {index + 1}/{n_runs}"
                         ),
                         cwd=resolved_cwd,
@@ -931,7 +879,7 @@ def audit_variance(
                 rprint(f"[red]Store error: {escape(str(exc))}[/red]")
                 raise typer.Exit(code=1) from exc
 
-            _report_run_outcome(outcome, prefix=f"  run {index + 1}/{n_runs}  ")
+            report_run_outcome(outcome, prefix=f"  run {index + 1}/{n_runs}  ")
             if outcome.succeeded and outcome.run is not None:
                 series.append(outcome.run)
                 pinned_sha = outcome.run.commit_sha
@@ -973,7 +921,7 @@ def audit_variance(
             f"(mean {floor.total.mean:.1f}, sd {floor.total.stddev:.2f}, n={floor.n_runs})"
         )
 
-    _campaign_summary(total_succeeded, total_failed, floors_written)
+    campaign_summary(total_succeeded, total_failed, floors_written)
     if total_failed:
         raise typer.Exit(code=1)
 
