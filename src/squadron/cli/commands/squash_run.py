@@ -25,22 +25,35 @@ from squadron.pipeline.squash import (
     apply_squash,
     plan_squash,
 )
+from squadron.pipeline.squash_backups import backup_tags, drop_backup_tags
 
 _logger = logging.getLogger(__name__)
 
 
 def squash_run(
-    kind: SquashKind = typer.Argument(
-        ..., help="slice (design), tasks, arch (architecture) or plan (slice plan)."
+    kind: SquashKind | None = typer.Argument(
+        None, help="slice (design), tasks, arch (architecture) or plan (slice plan)."
     ),
-    index: int = typer.Argument(
-        ..., help="Slice index for slice/tasks; initiative index for arch/plan."
+    index: int | None = typer.Argument(
+        None, help="Slice index for slice/tasks; initiative index for arch/plan."
     ),
     dry_run: bool = typer.Option(
         False, "--dry-run", help="Show the run and the backup tag; rewrite nothing."
     ),
+    drop_backups: bool = typer.Option(
+        False,
+        "--drop-backups",
+        help="Delete every squash backup tag once you are happy with the squashes.",
+    ),
 ) -> None:
     """Collapse the newest commit run of one planning artifact into a single commit."""
+    if drop_backups:
+        if kind is not None or index is not None:
+            raise typer.BadParameter("--drop-backups takes no KIND or INDEX")
+        _drop_backups(dry_run)
+        return
+    if kind is None or index is None:
+        raise typer.BadParameter("KIND and INDEX are required (or pass --drop-backups)")
     try:
         cwd = Path.cwd()
         cf_client = ContextForgeClient()
@@ -72,7 +85,26 @@ def squash_run(
     if squash.later:
         print(f"recreated {squash.later} later commits on top (content unchanged)")
     print(f"backup tag: {squash.backup_tag}")
-    print(f"remove it later with: git tag -d {squash.backup_tag}")
+    print(f"remove it later with: git tag -d {squash.backup_tag} (or sq squash --drop-backups)")
+
+
+def _drop_backups(dry_run: bool) -> None:
+    """Delete (or with ``dry_run`` list) every squash backup tag."""
+    try:
+        cwd = Path.cwd()
+        tags = backup_tags(cwd) if dry_run else drop_backup_tags(cwd)
+    except GitEnvironmentError as exc:
+        # CLI process boundary: an environment failure ends the command.
+        _logger.exception("squash: could not drop backup tags")
+        print(f"Error: {exc}", file=sys.stderr)
+        raise typer.Exit(code=1) from None
+    if not tags:
+        print("no squash backup tags")
+        return
+    for tag in tags:
+        print(f"  {tag}")
+    action = "would delete" if dry_run else "deleted"
+    print(f"{action} {len(tags)} backup tag(s)")
 
 
 def _print_dry_run(squash: SquashPlan) -> None:

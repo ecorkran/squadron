@@ -110,6 +110,44 @@ def test_unknown_kind_exits_two(in_repo: Path) -> None:
     assert result.exit_code == 2
 
 
+def test_missing_kind_and_index_exits_two(in_repo: Path) -> None:
+    result = runner.invoke(app, ["squash"])
+    assert result.exit_code == 2
+
+
+def test_drop_backups_with_a_target_exits_two(in_repo: Path) -> None:
+    result = runner.invoke(app, ["squash", "slice", "105", "--drop-backups"])
+    assert result.exit_code == 2
+
+
+def test_drop_backups_deletes_only_squash_backup_tags(in_repo: Path) -> None:
+    planning_run(in_repo, 2)
+    runner.invoke(app, ["squash", "slice", "105"])
+    planning_run(in_repo, 2)
+    runner.invoke(app, ["squash", "slice", "105"])
+    run_test_git(in_repo, "tag", "v1.0.0")
+    backups = run_test_git(in_repo, "tag", "-l", "squash-backup/*").split()
+    assert len(backups) == 2
+
+    preview = runner.invoke(app, ["squash", "--drop-backups", "--dry-run"])
+    assert preview.exit_code == 0, preview.output
+    assert "would delete 2 backup tag(s)" in preview.output
+    assert run_test_git(in_repo, "tag", "-l", "squash-backup/*").split() == backups
+
+    result = runner.invoke(app, ["squash", "--drop-backups"])
+
+    assert result.exit_code == 0, result.output
+    assert all(tag in result.output for tag in backups)
+    assert "deleted 2 backup tag(s)" in result.output
+    assert run_test_git(in_repo, "tag", "-l").split() == ["v1.0.0"]
+
+
+def test_drop_backups_with_none_says_so(in_repo: Path) -> None:
+    result = runner.invoke(app, ["squash", "--drop-backups"])
+    assert result.exit_code == 0, result.output
+    assert "no squash backup tags" in result.output
+
+
 def test_missing_slice_plan_exits_one(in_repo: Path) -> None:
     result = runner.invoke(app, ["squash", "plan", "999"])
     assert result.exit_code == 1
