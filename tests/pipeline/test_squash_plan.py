@@ -274,6 +274,30 @@ def test_run_pushed_down_to_one_commit_is_nothing_to_squash(temp_git_repo: Path)
     assert isinstance(_plan(temp_git_repo), NothingToSquash)
 
 
+def test_commits_pushed_since_the_last_fetch_are_never_part_of_the_run(
+    temp_git_repo: Path, tmp_path: Path
+) -> None:
+    """Another clone pushed the run; this checkout's remote-tracking ref is stale."""
+    remote = tmp_path / "remote.git"
+    run_test_git(tmp_path, "init", "-q", "--bare", str(remote))
+    run_test_git(temp_git_repo, "remote", "add", "origin", str(remote))
+    planning_run(temp_git_repo, 3)
+    run_test_git(temp_git_repo, "push", "-q", "origin", "main")
+    run_test_git(temp_git_repo, "update-ref", "-d", "refs/remotes/origin/main")
+
+    assert isinstance(_plan(temp_git_repo), NothingToSquash)
+
+
+def test_failed_fetch_refuses(temp_git_repo: Path, tmp_path: Path) -> None:
+    run_test_git(temp_git_repo, "remote", "add", "origin", str(tmp_path / "missing.git"))
+    planning_run(temp_git_repo, 2)
+    before = history(temp_git_repo)
+
+    with pytest.raises(SquashRefusedError, match="git fetch failed"):
+        _plan(temp_git_repo)
+    assert_history_unchanged(temp_git_repo, before)
+
+
 def test_backup_tag_pointing_elsewhere_refuses(
     temp_git_repo: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

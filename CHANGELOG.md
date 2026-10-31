@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `sq squash` fetches before searching, so it never rewrites commits someone already pushed from another clone. It refuses if the fetch fails.
+
 ## [0.24.11] - 20261031
 
 ### Added

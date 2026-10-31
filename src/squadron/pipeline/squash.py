@@ -128,6 +128,7 @@ def plan_squash(
         GitEnvironmentError: git could not answer.
     """
     paths = _path_set(target, cwd, cf_client)
+    _fetch_remotes(cwd)
     stretches = _find_stretches(paths, cwd)
     run = _newest_run(stretches, paths)
     if not run:
@@ -176,6 +177,20 @@ def _path_set(target: SquashTarget, cwd: Path, cf_client: CfClientProtocol) -> S
         # A task review response often amends the slice design, the tasks' own parent.
         parents += expected_artifact_paths(ArtifactKind.DESIGN, target.index, cf_client)
     return paths.with_context(parents, cwd)
+
+
+def _fetch_remotes(cwd: Path) -> None:
+    """Refresh remote-tracking refs, so commits pushed from elsewhere count as pushed (D3).
+
+    The run search stops at remote-tracking refs; stale ones would let a squash
+    rewrite commits that are already on the remote.
+    """
+    fetched = run_git(["fetch", "--all", "--no-tags", "--quiet"], cwd=str(cwd))
+    if fetched is None or fetched.returncode != 0:
+        _refuse(
+            f"git fetch failed ({failure_text(fetched)}); squash needs current remote refs "
+            "to know which commits are already pushed"
+        )
 
 
 def _existing(resolve: Callable[[int, Path], str], index: int, cwd: Path) -> list[str]:
