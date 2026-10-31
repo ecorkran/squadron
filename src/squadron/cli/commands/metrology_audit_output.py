@@ -6,8 +6,10 @@ from collections.abc import Callable
 
 import typer
 from rich import print as rprint
+from rich.markup import escape
 
 from squadron.metrology.audit import AuditProgress, AuditRunResult
+from squadron.metrology.audit_series import AuditSeriesResult
 from squadron.metrology.models import AuditNoiseFloor
 
 
@@ -64,6 +66,14 @@ def campaign_summary(succeeded: int, failed: int, floors_written: int | None = N
         parts.append(f"{floors_written} floor(s) written")
     style = "yellow" if failed else "dim"
     rprint(f"[{style}]Campaign: {', '.join(parts)}.[/{style}]")
+
+
+def print_series_stop(result: AuditSeriesResult, rate_limit_message: str) -> None:
+    """Say why a series ended early, whether or not it still produced a floor."""
+    if result.stop_error is not None:
+        rprint(f"[red]Error: {escape(result.stop_error)}[/red]")
+    if result.rate_limited:
+        rprint(f"[yellow]{rate_limit_message}[/yellow]")
 
 
 def print_floor(floor: AuditNoiseFloor) -> None:

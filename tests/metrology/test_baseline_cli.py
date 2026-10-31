@@ -272,6 +272,34 @@ def test_moved_head_fails_the_remaining_runs_and_names_the_error(
     assert harness.store.list_noise_floors() == []
 
 
+def test_floor_written_beside_a_stop_error_still_names_the_cause(
+    audited_repo: Path, harness: Harness, write_user_config: UserConfigWriter
+) -> None:
+    """Runs 1-2 succeed and run 3 finds HEAD moved: the floor stands, the cause is shown."""
+    write_user_config(CONFIG)
+    audit = harness.audit(audited_repo, None, None, AuditPreflightError("HEAD moved from a to b"))
+
+    code, output = _invoke(audited_repo, audit)
+
+    assert code == 0, output
+    assert "Error: HEAD moved from a to b" in output
+    assert "2 succeeded, 1 failed, 1 floor(s) written" in output
+    assert len(harness.store.list_noise_floors()) == 1
+
+
+def test_floor_written_beside_a_rate_limit_still_says_so(
+    audited_repo: Path, harness: Harness, write_user_config: UserConfigWriter
+) -> None:
+    write_user_config(CONFIG)
+    audit = harness.audit(audited_repo, None, None, AuditRunFailure.RATE_LIMITED)
+
+    code, output = _invoke(audited_repo, audit)
+
+    assert code == 0, output
+    assert "provider is rate limiting" in output
+    assert len(harness.store.list_noise_floors()) == 1
+
+
 def test_too_few_usable_runs_exits_one_and_keeps_them(
     audited_repo: Path, harness: Harness, write_user_config: UserConfigWriter
 ) -> None:

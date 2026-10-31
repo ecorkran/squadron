@@ -21,6 +21,7 @@ from squadron.cli.commands.metrology_audit_output import (
     SeriesPrinter,
     campaign_summary,
     print_floor,
+    print_series_stop,
 )
 from squadron.cli.commands.metrology_snapshot import SNAPSHOT_FAILURES
 from squadron.metrology.audit import (
@@ -77,10 +78,6 @@ def _print_scope(plan: BaselinePlan) -> None:
 
 def _print_no_floor(plan: BaselinePlan, result: AuditSeriesResult) -> None:
     """Say why there is no floor, and how to get one."""
-    if result.stop_error is not None:
-        rprint(f"[red]Error: {escape(result.stop_error)}[/red]")
-    if result.rate_limited:
-        rprint("[yellow]Stopping: the provider is rate limiting.[/yellow]")
     if result.no_floor_reason is NoFloorReason.UNREDUCIBLE:
         rprint(f"[yellow]No floor: {escape(result.reduce_error or '')}[/yellow]")
     else:
@@ -161,6 +158,7 @@ def _print_analysis_file(session: _Session) -> None:
 
 def _report_result(session: _Session, result: AuditSeriesResult) -> int:
     plan = session.plan
+    print_series_stop(result, "Stopping: the provider is rate limiting.")
     if result.floor is None:
         _print_no_floor(plan, result)
         _print_analysis_file(session)

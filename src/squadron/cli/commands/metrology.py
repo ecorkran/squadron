@@ -22,6 +22,7 @@ from squadron.cli.commands.metrology_audit_output import (
     campaign_summary,
     make_progress_reporter,
     print_floor,
+    print_series_stop,
     report_run_outcome,
 )
 from squadron.cli.commands.metrology_baseline import register_baseline_command
@@ -886,16 +887,13 @@ def audit_variance(
 
         total_succeeded += len(result.runs)
         total_failed += result.failed
-        if result.stop_error is not None:
-            rprint(f"[red]Error: {escape(result.stop_error)}[/red]")
-        if result.rate_limited:
-            rprint(
-                "[yellow]Stopping: the provider is rate limiting. Completed runs "
-                "are persisted — re-run later and the series can be reduced then."
-                "[/yellow]"
-            )
-            if not result.runs:
-                break
+        print_series_stop(
+            result,
+            "Stopping: the provider is rate limiting. Completed runs "
+            "are persisted — re-run later and the series can be reduced then.",
+        )
+        if result.rate_limited and not result.runs:
+            break
         if result.floor is None:
             _print_no_floor(project_path, result)
             continue
