@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq metrology baseline [PATH]`: start measuring an existing project in one command. It checks your settings, prints the scope, snapshots the clean HEAD, runs the audit series there and writes the noise floor.
 - `sq metrology slice-ranges`, `sq metrology snapshot --commit REV` and `sq metrology report slice|project|history`: record where each slice landed, measure any commit without touching your checkout, and roll up what a slice changed.
 
+### Fixed
+
+- `sq squash tasks N` no longer stops at a task review response that also edits the slice design.
+- `sq squash` no longer says "no unpushed commit touches the artifact" when commits do touch it alongside other files; it names the newest one and the extra files.
+
 ## [0.24.10] - 20261029
 
 ### Added

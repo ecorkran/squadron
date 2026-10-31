@@ -217,3 +217,16 @@ def test_nothing_to_squash_without_any_artifact_commit_says_so(temp_git_repo: Pa
 
     assert isinstance(plan, NothingToSquash)
     assert "no unpushed commit touches" in plan.reason
+
+
+def test_nothing_to_squash_names_commits_that_touch_the_artifact_and_more(temp_git_repo: Path) -> None:
+    commit_files(temp_git_repo, "docs: design and code", DESIGN_FILE, FOREIGN_FILE)
+    newest = commit_files(temp_git_repo, "docs: design and more code", DESIGN_FILE, FOREIGN_FILE)
+
+    plan = _plan(temp_git_repo)
+
+    assert isinstance(plan, NothingToSquash)
+    assert "no unpushed commit touches" not in plan.reason
+    assert "2 unpushed commit(s) touch" in plan.reason
+    assert newest[:8] in plan.reason
+    assert FOREIGN_FILE in plan.reason

@@ -18,6 +18,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import NoReturn
 
+from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.pipeline.commit_plan import (
     CommitSubject,
     CommitTarget,
@@ -34,6 +35,7 @@ from squadron.pipeline.squash_rewrite import (
     later_commits,
     rewrite_run,
 )
+from squadron.pipeline.steps.phase import ArtifactKind
 from squadron.review.git_utils import run_git
 from squadron.review.persistence import (
     CfClientProtocol,
@@ -129,7 +131,7 @@ def plan_squash(
     stretches = _find_stretches(paths, cwd)
     run = _newest_run(stretches, paths)
     if not run:
-        reason = _no_run_reason(target, stretches, cwd)
+        reason = _no_run_reason(target, stretches, paths, cwd)
         _logger.info("squash: nothing to squash: %s", reason)
         return NothingToSquash(reason)
 
@@ -169,7 +171,11 @@ def _path_set(target: SquashTarget, cwd: Path, cf_client: CfClientProtocol) -> S
     commit_target = CommitTarget(subject, target.index, None, template, 0)
     paths = subject_paths(commit_target, cwd, cf_client)
     arch_file = cf_client.get_project().arch_file  # the client already made it a path
-    return paths.with_context([arch_file] if arch_file else [], cwd)
+    parents = [arch_file] if arch_file else []
+    if target.kind is SquashKind.TASKS:
+        # A task review response often amends the slice design, the tasks' own parent.
+        parents += expected_artifact_paths(ArtifactKind.DESIGN, target.index, cf_client)
+    return paths.with_context(parents, cwd)
 
 
 def _existing(resolve: Callable[[int, Path], str], index: int, cwd: Path) -> list[str]:
@@ -325,11 +331,13 @@ def _newest_run(stretches: list[_Stretch], paths: SubjectPaths) -> list[tuple[st
     return []
 
 
-def _no_run_reason(target: SquashTarget, stretches: list[_Stretch], cwd: Path) -> str:
+def _no_run_reason(
+    target: SquashTarget, stretches: list[_Stretch], paths: SubjectPaths, cwd: Path
+) -> str:
     """Why no stretch made a run: what the newest one was and what ended it (#276)."""
     name = f"{target.kind} {target.index}"
     if not stretches:
-        return f"no unpushed commit touches the {name} artifact"
+        return _no_stretch_reason(name, paths, cwd)
     newest = stretches[0]
     count = len(newest.commits)
     reason = (
@@ -345,6 +353,25 @@ def _no_run_reason(target: SquashTarget, stretches: list[_Stretch], cwd: Path) -
     if not ender.outside:
         return f"{reason}; it was cut by {stop}, a merge commit"
     return f"{reason}; it was cut by {stop}, which also touches {', '.join(ender.outside)}"
+
+
+def _no_stretch_reason(name: str, paths: SubjectPaths, cwd: Path) -> str:
+    """No stretch formed: nothing touched the artifact, or every commit that did left the path set."""
+    artifacts = paths.artifact_repo_paths()
+    touching = git_stdout(
+        ["rev-list", "--first-parent", "HEAD", "--not", "--remotes", "--", *artifacts],
+        paths.root,
+    ).split()
+    if not touching:
+        return f"no unpushed commit touches the {name} artifact"
+    newest = touching[0]
+    outside = sorted(p for p in _changed_paths(newest, cwd) if not paths.contains(p))
+    what = f"also touches {', '.join(outside)}" if outside else "is a merge commit"
+    return (
+        f"{len(touching)} unpushed commit(s) touch the {name} artifact, but none stays inside "
+        f"its path set; the newest, {newest[:SHORT_SHA_LENGTH]} "
+        f"{_commit_subject(newest, cwd)!r}, {what}"
+    )
 
 
 def _changed_paths(sha: str, cwd: Path) -> frozenset[str]:

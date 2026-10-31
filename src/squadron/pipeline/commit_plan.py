@@ -159,6 +159,10 @@ class SubjectPaths:
         """Whether ``repo_path`` is the target's artifact itself (not a review, plan or DEVLOG)."""
         return any(c.is_artifact and c.repo_path == repo_path for c in self.candidates)
 
+    def artifact_repo_paths(self) -> list[str]:
+        """The target's artifact files, as the repository root names them."""
+        return [c.repo_path for c in self.candidates if c.is_artifact]
+
     def contains(self, repo_path: str) -> bool:
         """Whether ``repo_path`` (relative to the repository root) belongs to the target."""
         return any(c.repo_path == repo_path for c in self.candidates) or self.is_archived_review(

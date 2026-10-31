@@ -163,6 +163,19 @@ def test_design_review_response_that_amends_the_architecture_stays_in_the_run(
     assert_history_unchanged(temp_git_repo, before)
 
 
+def test_task_review_response_that_amends_the_design_stays_in_the_run(temp_git_repo: Path) -> None:
+    first = commit_files(temp_git_repo, "docs: add tasks", TASKS_FILE)
+    both = commit_files(temp_git_repo, "docs: address task review", TASKS_FILE, DESIGN_FILE)
+    last = commit_files(temp_git_repo, "docs: revise tasks", TASKS_FILE)
+    before = history(temp_git_repo)
+
+    plan = _plan(temp_git_repo, kind=SquashKind.TASKS)
+
+    assert isinstance(plan, SquashPlan)
+    assert [c.sha for c in plan.commits] == [first, both, last]
+    assert_history_unchanged(temp_git_repo, before)
+
+
 def test_arch_run_keeps_slice_plan_edits_but_not_trailing_plan_commits(temp_git_repo: Path) -> None:
     first = commit_files(temp_git_repo, "docs: add architecture", ARCH_FILE)
     both = commit_files(temp_git_repo, "docs: address arch review", ARCH_FILE, PLAN_FILE)
