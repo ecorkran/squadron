@@ -11,6 +11,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261030
 
+### Slice 404: Adoption Baseline Command — Implementation Complete, Review Pending
+
+- **Branch:** `404-slice.adoption-baseline-command`, 6 code commits plus docs; not merged. All 8 tasks checked; the walkthrough passed live on a scratch repository (`## Verification` in the task file).
+- **Delivered:** `sq metrology baseline [PATH] [--profile] [--model]`. `prepare_baseline` runs every check and the scope plan before anything is written; `run_audit_series` is the loop `audit variance` now shares; printers moved to `metrology_audit_output.py` (`SeriesPrinter`, `print_floor`). Exits 0 with a floor, 1 without one or on a failed check, 130 on interrupt.
+- **Decisions:** a model must be pinned (`BaselinePreflightError`); no floor means exit 1 plus `sq metrology audit variance PATH`, since no command reduces stored runs. `audit variance --help` is byte-identical to `main`'s and `test_audit_cli.py` is unedited.
+- **Surprises:** each audit run writes its own analysis file, so a three-run baseline leaves three untracked files. The end-of-run line names only the newest; the next refusal lists all. The dirty-tree text is 400's and still says "re-run `sq metrology snapshot`". The profile is checked before the model, so a bare `baseline .` with no profile names the profile first.
+- **Pending:** the live walkthrough wrote a `github.com/manta/baseline-demo` snapshot, three runs and a floor into the user store. Code review not run.
+
 ### Slice 404: Adoption Baseline Command — Task Breakdown Complete
 
 - **Output:** `404-tasks.adoption-baseline-command.md`, 14 tasks, test-with ordering, commits after Tasks 2, 6, 8, 11, 12. Phase 6 not started.

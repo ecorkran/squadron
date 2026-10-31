@@ -10,7 +10,7 @@ projectState: 0.24.10 released; slices 400, 401, 402 and 403 complete; 440 remov
   sq probe; slice 404 design complete, all decisions decided
 dateCreated: 20261030
 dateUpdated: 20261030
-status: in_progress
+status: complete
 turns: 45
 promptTokens: 3825664
 cachedTokens: 3703628
@@ -80,27 +80,40 @@ revision_number: 2
 - [x] Commit: `feat(metrology): add sq metrology baseline command`
 
 ## Task 6: Interrupt, store error and analysis file with tests (D6) — Effort 2
-- [ ] `MetrologyStoreError`: `_logger.exception`, a `Store error:` line naming the store dir and persisted run count, the recovery command, exit 1
-- [ ] `KeyboardInterrupt` caught once around the snapshot and series (process boundary, commented), exit 130: before a snapshot, one line saying nothing was recorded or spent; after, the snapshot id, runs completed and the recovery command
-- [ ] On every exit after the first run started, name the file `find_audit_file(path, newer_than=<command start>)` returns and say to remove or commit it before the next snapshot
-- [ ] Tests in `test_baseline_cli.py`: interrupt on run 2; interrupt from a patched `take_snapshot` (store empty, fake audit never called); `write_noise_floor` raising (ERROR in `caplog`); the analysis-file line on success and on interrupt
-- [ ] Success: tests pass; pyright clean
-- [ ] Commit: `feat(metrology): handle baseline interrupts and store errors`
+- [x] `MetrologyStoreError`: `_logger.exception`, a `Store error:` line naming the store dir and persisted run count, the recovery command, exit 1
+- [x] `KeyboardInterrupt` caught once around the snapshot and series (process boundary, commented), exit 130: before a snapshot, one line saying nothing was recorded or spent; after, the snapshot id, runs completed and the recovery command
+- [x] On every exit after the first run started, name the file `find_audit_file(path, newer_than=<command start>)` returns and say to remove or commit it before the next snapshot
+- [x] Tests in `test_baseline_cli.py`: interrupt on run 2; interrupt from a patched `take_snapshot` (store empty, fake audit never called); `write_noise_floor` raising (ERROR in `caplog`); the analysis-file line on success and on interrupt
+- [x] Success: tests pass; pyright clean
+- [x] Commit: `feat(metrology): handle baseline interrupts and store errors`
 
 ## Task 7: Docs, CHANGELOG and full validation — Effort 1
-- [ ] `## metrology baseline` in `docs/COMMANDS.md` after `metrology snapshot`: usage, what it writes, preflight checks, scope report, exits 0/1/130, config keys read, the analysis-file note, the security warning
-- [ ] One user-facing bullet under `## [Unreleased]` → `### Added` in `CHANGELOG.md`
-- [ ] Full suite, ruff and pyright pass; `git diff <target> -- tests/metrology/test_audit_cli.py` is empty
-- [ ] Commit: `docs: add metrology baseline command reference`
+- [x] `## metrology baseline` in `docs/COMMANDS.md` after `metrology snapshot`: usage, what it writes, preflight checks, scope report, exits 0/1/130, config keys read, the analysis-file note, the security warning
+- [x] One user-facing bullet under `## [Unreleased]` → `### Added` in `CHANGELOG.md`
+- [x] Full suite, ruff and pyright pass; `git diff <target> -- tests/metrology/test_audit_cli.py` is empty
+- [x] Commit: `docs: add metrology baseline command reference`
 
 ## Task 8: Verification walkthrough (design → Verification Walkthrough) — Effort 2
-- [ ] Run each walkthrough step on a small repository with a remote, cloned to `/tmp/baseline-demo`:
-  1. Scratch clone with no `.squadron.toml` or `project-documents/`
-  2. Missing model: exit 1 naming `metrology.audit_model` and `--model`, no report entry; restore the model value noted first
-  3. Dirty tree: exit 1 naming `scratch.txt`; remove it
-  4. Full run: scope report first, no prompt, snapshot summary, three runs, floor, exit 0, `Next:` line
-  5. Records: `report baseline --project <id>` shows a floor; the store has one snapshot, three runs and one floor for the commit
-  6. Re-run: exit 1 naming the untracked analysis file
-  7. Regression: `sq metrology audit variance --help` matches the target's
-- [ ] Record each step's outcome in a `## Verification` section at the end of this file; a failing step is fixed (with its test) before it is checked
-- [ ] Commit: `docs: record slice 404 verification walkthrough`
+- [x] Run each walkthrough step on a small repository with a remote, cloned to `/tmp/baseline-demo`:
+  1. [x] Scratch clone with no `.squadron.toml` or `project-documents/`
+  2. [x] Missing model: exit 1 naming `metrology.audit_model` and `--model`, no report entry; restore the model value noted first
+  3. [x] Dirty tree: exit 1 naming `scratch.txt`; remove it
+  4. [x] Full run: scope report first, no prompt, snapshot summary, three runs, floor, exit 0, `Next:` line
+  5. [x] Records: `report baseline --project <id>` shows a floor; the store has one snapshot, three runs and one floor for the commit
+  6. [x] Re-run: exit 1 naming the untracked analysis file
+  7. [x] Regression: `sq metrology audit variance --help` matches the target's
+- [x] Record each step's outcome in a `## Verification` section at the end of this file; a failing step is fixed (with its test) before it is checked
+- [x] Commit: `docs: record slice 404 verification walkthrough`
+- [x] Commit: `docs: record slice 404 verification walkthrough`
+
+## Verification
+
+Run 20261030 against a scratch repository at `/tmp/baseline-demo` (two files, local history, `origin` set to `https://github.com/manta/baseline-demo.git`, no `.squadron.toml`, no `project-documents/`). The real audit agent ran with `--profile sdk --model claude-sonnet-5`; the scratch repository has no audit config, and the user config sets neither key.
+
+1. **Scratch repository.** `ls .squadron.toml project-documents` reports both absent. Pass.
+2. **Missing model.** `sq metrology baseline . --profile demo-profile` exits 1 with `Error: No audit model is pinned. … 'sq config set metrology.audit_model <model>' or pass --model.` `sq metrology report baseline --json` has no `baseline-demo` entry. Nothing to restore: the model was never set in user config. Pass. Caveat: the profile is resolved before the model, so without `--profile` the first error names the profile.
+3. **Dirty tree.** With `scratch.txt` present the command exits 1 with `Error: The working tree is not clean: scratch.txt. …`; `scratch.txt` removed afterwards. Pass. Caveat: that text comes from 400's snapshot preflight and ends "re-run `sq metrology snapshot`".
+4. **Full run.** Scope report first (`Scope: 2 files, 56 bytes after exclusions (5 excluded patterns)`), no prompt, the snapshot summary, three runs (6, 4 and 5 findings) with 60 s cooldowns, `floor … total 4-6 (mean 5.0, sd 1.00, n=3)`, `Campaign: 3 succeeded, 0 failed, 1 floor(s) written.`, the analysis-file line, then `Next: sq metrology report baseline --project github.com/manta/baseline-demo`. Exit 0. Pass.
+5. **Records.** `sq metrology report baseline --project github.com/manta/baseline-demo` shows `5 findings  floor 4-6 (sd 1.00, n=3)`. The store holds one `snapshot-…-de9285e62583.json`, three `audit-*.json` and one `floor-*.json` for that project and commit. Pass.
+6. **Re-run refusal.** Exit 1, `Error: The working tree is not clean: analysis/940-…, analysis/941-…, analysis/942-….` Pass. Caveat: each run writes its own analysis file, so three files are left behind. The end-of-run line names only the newest (`analysis/942-analysis.baseline-demo.md`); the refusal names all three.
+7. **Regression.** `sq metrology audit variance --help` is identical on `main` and on the branch (diffed at width 100). `tests/metrology/test_audit_cli.py` passes unedited (15 passed) and `git diff main -- tests/metrology/test_audit_cli.py` is empty. Pass.

@@ -82,7 +82,7 @@ Ordering:
    - **Risk Level:** Medium. Range resolution across fast-forward merges and fresh clones has known gaps, so the persistence has to be right the first time.
    - **Relative Effort:** 4/5
 
-5. [ ] **(404) Adoption Baseline Command**: One standalone command that takes a snapshot of the project and runs 323's audit baseline with its noise floor. Before spending, it reports the file count and byte count after exclusions and the number of audit runs. It uses 320's configured audit profile and model.
+5. [x] **(404) Adoption Baseline Command**: One standalone command that takes a snapshot of the project and runs 323's audit baseline with its noise floor. Before spending, it reports the file count and byte count after exclusions and the number of audit runs. It uses 320's configured audit profile and model.
    - **Value:** User value. An existing project gets a measured starting point in one step. 440 offers this at adoption.
    - **Success Criteria:**
      - One command produces a snapshot record, an audit run and an audit noise floor for the project.

@@ -10,7 +10,7 @@ interfaces:
 - 440
 dateCreated: 20261022
 dateUpdated: 20261030
-status: not_started
+status: complete
 turns: 28
 promptTokens: 1524671
 cachedTokens: 1431691
@@ -268,30 +268,37 @@ def run_audit_series(request: AuditSeriesRequest, *, store: MetrologyStore,
 
 ### Verification Walkthrough
 
-Uses a small scratch clone so the three audits stay cheap. Any small repository with a remote works; the commands below don't assume a particular one.
+Uses a small scratch repository so the three audits stay cheap; run once on 20261030 (results in the tasks file's `## Verification`). The audit settings below are the ones squadron's own repository uses. Substitute your own profile and model.
 
-1. Set up a scratch clone with no squadron or cf files:
+1. Set up a scratch repository with a remote and no squadron or cf files:
    ```bash
-   git clone <small-repo-url> /tmp/baseline-demo && cd /tmp/baseline-demo
-   ls .squadron.toml project-documents 2>&1   # both absent
+   mkdir /tmp/baseline-demo && cd /tmp/baseline-demo && git init -q -b main
+   printf 'def add(a: int, b: int) -> int:\n    return a + b\n' > calc.py && printf '# demo\n' > README.md
+   git add -A && git commit -q -m init
+   git remote add origin https://github.com/manta/baseline-demo.git
+   ls .squadron.toml project-documents 2>&1   # both: No such file or directory
    ```
-2. Missing-model failure, nothing spent:
+2. Missing-model failure, nothing spent. Pass `--profile` so the profile check, which runs first, doesn't answer instead:
    ```bash
-   sq config get metrology.audit_model          # note the current value
-   sq config unset metrology.audit_model
-   sq metrology baseline .                      # exit 1, names metrology.audit_model and --model
-   sq metrology report baseline --json          # no entry for this project
-   sq config set metrology.audit_model <the value noted above>
+   sq config get metrology.audit_model          # (not set) in user config; if set, note it and unset it
+   sq metrology baseline . --profile demo-profile
+   # exit 1: "Error: No audit model is pinned. … 'sq config set metrology.audit_model <model>' or pass --model."
+   sq metrology report baseline --json          # no entry for github.com/manta/baseline-demo
    ```
-3. Dirty-tree failure: `touch scratch.txt && sq metrology baseline .` exits 1 naming `scratch.txt`, then `rm scratch.txt`.
-4. Full run: `sq metrology baseline .`. Confirm the scope report prints first and the command continues without a prompt, then a snapshot summary, then three runs and a floor line, ending with exit 0 and a `Next:` line.
+3. Dirty-tree failure: `touch scratch.txt && sq metrology baseline . --profile demo-profile --model demo-model` exits 1 with `Error: The working tree is not clean: scratch.txt. …`, then `rm scratch.txt`.
+4. Full run:
+   ```bash
+   sq metrology baseline . --profile sdk --model claude-sonnet-5
+   ```
+   Output order: `Baseline for github.com/manta/baseline-demo @…`, `Scope: …`, `Audit: 3 runs, profile sdk, model claude-sonnet-5, 60s between runs` (no prompt follows), `Snapshot` and its summary, `Audit`, `run 1/3  ok …`, `run 2/3  ok …`, `run 3/3  ok …` (with `cooling down 60s` lines between), `floor … total A-B (mean …, sd …, n=3)`, `Campaign: 3 succeeded, 0 failed, 1 floor(s) written.`, `The audit wrote analysis/NNN-analysis.baseline-demo.md. …`, `Next: sq metrology report baseline --project github.com/manta/baseline-demo`. Exit 0. Takes about eight minutes.
 5. Check the records:
    ```bash
-   sq metrology report baseline --project <id from the Next: line>   # floor shown, not "no floor measured"
-   ls ~/.config/squadron/metrology/                                   # one code_snapshot, three audit_run, one floor for this commit
+   sq metrology report baseline --project github.com/manta/baseline-demo   # "floor A-B (sd …, n=3)", not "no floor measured"
+   ls ~/.config/squadron/metrology/ | grep -E 'snapshot-.*-<first 12 chars of the commit>|^audit-|^floor-'
    ```
-6. Re-run refusal: `sq metrology baseline .` exits 1, naming the audit's untracked analysis file (D6).
-7. Regression: `sq metrology audit variance --help` and the existing `audit variance` tests are unchanged.
+   For this project and commit the store holds one `snapshot-*`, three `audit-*` and one `floor-*` file.
+6. Re-run refusal: `sq metrology baseline . --profile sdk --model claude-sonnet-5` exits 1 with `Error: The working tree is not clean:` and every untracked analysis file. Each audit run writes its own file, so after a three-run baseline there are three. The end-of-run line names only the newest.
+7. Regression: `sq metrology audit variance --help` prints the same text on `main` and on this branch, and `git diff main -- tests/metrology/test_audit_cli.py` is empty.
 
 ## Implementation Notes
 
