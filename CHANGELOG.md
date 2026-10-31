@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.11] - 20261031
+
 ### Added
 
 - `sq metrology baseline [PATH]`: start measuring an existing project in one command. It checks your settings, prints the scope, snapshots the clean HEAD, runs the audit series there and writes the noise floor.

@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261030'
+dateUpdated: '20261031'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261031
+
+### Release 0.24.11
+
+- **Contents:** slice 403 (slice ranges, `snapshot --commit`, rollup reports), slice 404 (`sq metrology baseline`), completing initiative 400; `sq squash` fixes (tasks runs survive design edits, clearer no-run reason) and `sq squash --drop-backups`.
 
 ## 20261030
 
