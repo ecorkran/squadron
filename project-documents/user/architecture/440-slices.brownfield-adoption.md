@@ -3,8 +3,8 @@ docType: slice-plan
 parent: 440-arch.brownfield-adoption.md
 project: squadron
 dateCreated: 20261026
-dateUpdated: 20261026
-status: not_started
+dateUpdated: 20261030
+status: complete
 ---
 
 # Slice Plan: Brownfield Adoption
