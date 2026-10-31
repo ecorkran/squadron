@@ -546,6 +546,34 @@ Coverage comes from a report your project already produces (for example `pytest 
 
 Tools are resolved from the measured project (`.venv/bin`, `node_modules/.bin`) before `PATH`, and never installed. **Snapshotting a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only snapshot repositories you trust. `--commit` has the same trust boundary: an export runs the checkout's tools on an older tree, including that tree's `eslint.config.*`, which is JavaScript. Exit 1 on a dirty tree, a missing project identity, a repository change during measurement, or a store write failure.
 
+## metrology baseline
+
+Start measuring an existing project in one command: check every setting up front, print the scope, take a code snapshot of the clean `HEAD`, then run the audit variance series at that commit and write its noise floor.
+
+```
+sq metrology baseline [PATH] [--profile PROFILE] [--model MODEL]
+```
+
+| Option | Type | Required | Default | Description |
+|--------|------|----------|---------|-------------|
+| `PATH` | path | no | current directory | Project directory to baseline |
+| `--profile` | string | no | `metrology.audit_profile` | Provider profile for the audit runs |
+| `--model` | string | no | `metrology.audit_model` | Model for the audit runs. One must be pinned, here or in config |
+
+**Writes.** One `code_snapshot`, one `audit_run` per successful run and one `audit_noise_floor`, all for the same project and commit. All runs are independent audits (`audit_variance_runs` of them, default 3). View the result with `sq metrology report baseline --project <id>`.
+
+**Checks first.** Before any snapshot or audit, and with nothing written or spent on failure: a clean working tree, a project identity (a git remote or `metrology.project_id`), the audit skill, a provider profile, a pinned audit model (`sq config set metrology.audit_model <model>`, or `--model`), and `metrology.audit_variance_runs` of at least 2.
+
+**Scope report.** The command prints the commit, the files and bytes the snapshot measures after exclusions, the run count, profile, model and the cooldown between runs. It does not prompt and does not estimate wall-clock time. The audit agent reads the repository itself; exclusions do not limit it.
+
+**Exits.** `0`: a snapshot and a floor were written (some runs may have failed; the summary says so). `1`: a check failed, the snapshot failed, or the series produced no floor (rate limit, moved `HEAD`, fewer than 2 successful runs); the snapshot and completed runs are kept, and the command prints `sq metrology audit variance PATH` to run a fresh series. `130`: interrupted; the snapshot and completed runs are kept.
+
+**Config read** (from `PATH`'s own `.squadron.toml`, then user config, for the snapshot and the audit alike): `metrology.audit_model`, `metrology.audit_profile`, `metrology.audit_variance_runs`, `metrology.audit_run_cooldown_s`, `metrology.audit_timeout_s`, plus the snapshot keys under [Metrology keys](#metrology-keys).
+
+**The analysis file.** The audit skill writes an untracked analysis file into the project (`analysis/` or `project-documents/user/analysis/`). The snapshot refuses a dirty tree, so after a baseline `sq metrology snapshot` and a re-run of the baseline are refused until that file is removed or committed. The command names the file on every exit after the first run.
+
+**Baselining a repository runs executables and config from that repository: its `.venv/bin/ruff`, `.venv/bin/pyright` and `.venv/bin/python`, its `node_modules/.bin/eslint` and its JavaScript config. That executes the repository's code with your full environment inherited, secrets included.** Only baseline repositories you trust.
+
 ## metrology slice-ranges
 
 Resolve where each slice landed on the target branch and record every landing, so a slice's before and after survive the reflog that proves them.
