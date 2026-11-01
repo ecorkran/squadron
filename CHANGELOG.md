@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.12] - 20261101
+
 ### Removed
 
 - `sq squash` and the `squash` pipeline step. Planning pipelines no longer fail at a squash step. A pipeline file that still has a `squash:` step fails to load with a message telling you to delete it.

@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261031'
+dateUpdated: '20261101'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261101
+
+### Release 0.24.12
+
+- **Contents:** removed `sq squash` and the `squash` pipeline step (closes #258, #272, #274, #280; #257 stays open for collapsing each review loop's commits into one). A pipeline file that still has a `squash:` step fails to load with a message to delete it. Guide v0.22.15 and the refreshed CLAUDE.md/AGENTS.md (marker-based commit cadence).
 
 ## 20261031
 
