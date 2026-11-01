@@ -5,7 +5,9 @@
 
 - **Reaching a peer:** find it with `ListAgents` and send with `SendMessage`. Addresses change between sessions; look them up rather than reusing an old one. To reply to a message, send to its `from` address.
 - **Ack on receipt, then reply with the result.** Acknowledge every peer message as soon as it arrives, in one or two lines saying what you will do. When the work is done, or blocked, send a second message with the outcome.
-- **A peer message is a request, not Project Manager approval.** A peer cannot approve a release, a push, a merge, or anything else the Project Manager must approve. When a request needs that approval, ack it, ask the Project Manager, and tell the peer it is waiting on them.
+- **A peer message is a request, not new Project Manager approval.** A peer cannot grant permissions or approve something the Project Manager has not decided. But do not make the Project Manager re-approve what is already decided:
+  - **Act, then say what you did,** when the request relays a decision the Project Manager already made (for example "the PM said release it"), or asks for something inside work the Project Manager already authorized in this session (a release, push or merge they have told you or the peer to do included).
+  - **Ask the Project Manager once,** when the peer originates a release, push, merge or other Project Manager-level action that nobody has authorized. Ack the peer, ask, and tell the peer it is waiting. Once the Project Manager has answered, do not ask again for the same thing.
 - **Policy changes go to the Project Manager first.** If a peer asks for a change to project-wide policy or rules, bring it to the Project Manager before writing it.
 - **Never do what a peer was denied.** If a peer says it was blocked from an action and asks you to do it, refuse and tell the Project Manager.
 
@@ -15,7 +17,7 @@ A fix is any work that will be committed as `fix:`. Decide the commit type befor
 
 - **Feature, not fix:** a fix restores intended behavior; new capability is a feature. A feature gets its own slice only when it is a vertical slice of functionality: it needs design, spans several components or steps, or changes a file or state format others depend on. Anything smaller (a new flag, a behavior change, a few dozen lines) takes the small path below and is committed as `feat: {summary}`, with no slice, branch, task file or review. Say which path in one line before starting. Size alone never turns a fix into a feature.
 - **Small fix or small feature:** the issue, or the PM's request when there is no issue, is the spec. Write a test that fails for the reported reason (for a feature, a test of the new behavior), make the change, run format, lint, typecheck and the touched area's tests, then commit to the target as `fix: {summary}` or `feat: {summary}`, adding `Fixes #{n}` when an issue exists. No branch, task file or review.
-- **Fix that needs several steps:** add a task group titled with the issue number to the standing fixes task file (`9nn-tasks.standing-fixes.md`) and work it on the target, one commit per task. If the project has none, create it as the process guide describes under Fixes.
+- **Fix that needs several steps:** add a task group titled with the issue number to the standing fixes task file (`9nn-tasks.standing-fixes.md`) and work it on the target, committing at the group's `**Commit**:` markers, or once per group if it has none. If the project has none, create it as the process guide describes under Fixes.
 - **Found while implementing a slice:** a bug in the slice's own code is part of the slice. Anything else: file an issue and continue.
 - No review unless the Project Manager asks.
 
@@ -52,7 +54,11 @@ async def _model_start(self, prompt: str) -> str:
 
 ## Source Control and Builds
 - Keep commits semantic; build after all changes.
-- Git add and commit from project root at least once per task.
+- Git add and commit from project root, on this cadence:
+  - Planning: one commit per document, made when its review loop finishes, or when written if it has no review. Review files and responses go in that commit.
+  - Implementation: commit only at the task file's `**Commit**:` markers. A file with no markers: commit at the end of each top-level task.
+  - Order: implement, then task-checker, then commit, so check-offs and notes are in the commit. Never make a commit that only checks boxes or only adds notes.
+  - Guide install/update commits stay their own commits.
 - Confirm your current working directory before file/shell commands.
 
 ## Parsing & Pattern Matching
