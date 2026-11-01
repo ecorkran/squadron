@@ -12,6 +12,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.22.15] - 2026-11-01
+
+### Changed
+- Agent-communication rule: agents now act on peer requests that relay a decision the Project Manager already made, or that fall inside work the Project Manager already authorized, and state what they did. They ask the Project Manager once only when a peer originates an unauthorized release, push or merge. A peer still cannot grant permissions, policy changes still go to the Project Manager first, and "never do what a peer was denied" is unchanged. Removes the repeated approval round-trips.
+
+## [0.22.14] - 2026-11-01
+
+### Changed
+- Phase 6 completion step 2 now runs the cf check fix with no-commit (`workflow_check` with `fix: true, noCommit: true`, or `cf check --fix --no-commit`), so fixes stay uncommitted in every checkout and land in the closing commit. Requires cf 0.19.24 or later.
+
+## [0.22.13] - 2026-11-01
+
+### Changed
+- Commit cadence is now marker-based, replacing "commit at least once per task", to cut the docs/review commit noise. Planning: one commit per document, when its review loop finishes (or when written if it has no review). Implementation: commit only at the task file's plain-line `**Commit**:` markers, or at the end of each top-level task if the file has none. Order is implement, task-checker, commit; never a check-off-only or notes-only commit. Phase 6 ends with one closing commit (walkthrough, `cf check` fixes, status, CHANGELOG). Phase 7 gets one commit per code-review round. Multi-step fix groups commit at their markers, or once per group. The Task Breakdown guide's Commit Strategy and the Phase 5 prompt now have the breakdown write the markers (never as checkboxes). Existing task files keep working.
+
+### Fixed
+- Removed references to the deleted task-expansion guide from the process guide and `project-guides/readme.md`.
+
 ## [0.22.12] - 2026-10-29
 
 ### Changed

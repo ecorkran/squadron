@@ -154,7 +154,7 @@ Slices are grouped under architectural initiatives, each with its own architectu
      - Success criteria clearly defined (what done looks like)
    - Common Task Considerations:
 	   - If this project contains package.json, ensure a project setup task is created and add the scripts contained in `snippets/npm-scripts.ai-support.json` to its scripts block. This also applies when creating package.json.
-   - **Optional: Task Enhancement and Expansion** — If tasks are unusually complex or the implementing agent has demonstrated difficulty with similar work, enhance or subdivide tasks to improve the chances that junior AI workers can complete them independently. Use `guide.ai-project.006-task-expansion` for detailed guidance. Skip when the task breakdown is already sufficiently detailed, which is the common case.
+   - **Optional: Task Enhancement and Expansion** — If tasks are unusually complex or the implementing agent has demonstrated difficulty with similar work, enhance or subdivide tasks to improve the chances that junior AI workers can complete them independently. Skip when the task breakdown is already sufficiently detailed, which is the common case.
    - Outcome: _A detailed task list that can be executed in a single context session._
 
 6. **Phase 6: Slice Execution (AI/Human Collaboration)**
@@ -166,6 +166,7 @@ Slices are grouped under architectural initiatives, each with its own architectu
 7. **Phase 7: Slice Integration (review, revise, merge)**
    Every slice goes through this phase once its tasks are complete.
    1. **Review and revise.** The slice gets one or more rounds of code review, each followed by revisions. Reviews may be manual or automated (for example, squadron pipelines).
+      - Each code-review round gets one commit on the slice branch: the review file, the response, and the fixes from that round. Do not commit fixes one finding at a time.
       - The Project Manager or the orchestrating pipeline starts each review and decides when review is done. The implementing agent never starts a review on its own, never picks how a review runs, and never decides that one round is enough.
    2. **Merge.** After the code review has passed, merge the slice branch into the target per the Git Rules. The merge may be done directly or as part of a release step (for example, a `/release` skill). Merging is never a Phase 6 task.
    3. **Close out.**
@@ -194,7 +195,7 @@ Projects use the same phases but differ in scope and entry point:
 - Phase 1 (Update initiative plan) → Phase 2 (Architecture: component doc) → Phase 3 (Slice Planning) → execute slices
 
 **Fixes** (any work committed as `fix:`):
-- Follow `rules/fixes.md`. A small fix is made and committed straight to the target branch, with no slice, task file or review. A fix that needs several steps becomes a task group in the project's standing fixes slice.
+- Follow `rules/fixes.md`. A small fix is made and committed straight to the target branch, with no slice, task file or review. A fix that needs several steps becomes a task group in the project's standing fixes slice, committed at the group's `**Commit**:` markers, or once per group if it has none.
 - **Creating the standing fixes slice** (once per project, the first time a fix needs tasks): use index 990 (reserved for standing slices; see `file-naming-conventions`), then add
   - `user/slices/990-slice.standing-fixes.md`: slice-design frontmatter with `status: in_progress` and `review: none`. Body: it is a permanent container for fixes and is never complete; unrelated fixes belong together; closed items may be reopened.
   - `user/tasks/990-tasks.standing-fixes.md`: tasks frontmatter, then one `## #{issue} {title}` checklist group per fix.
@@ -296,8 +297,6 @@ These files, shared by all of our projects, are contained in {project-root}/proj
   for individual slices.
 * guide.ai-project.005-task-breakdown: guidance on converting slice designs
   into granular task lists.  
-* guide.ai-project.006-task-expansion (aka: AI Task Expansion Guide): specific
-  guidance on task expansion for slice-based development.  Optional, rarely needed.
 * guide.ui-development.ai (aka: AI Development Guide - UI): specific guidance 
   pertaining to UI/UX tasks.
 * prompt.ai-project.system (aka: AI Project Prompt Templates): parameterized 
