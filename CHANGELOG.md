@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Pipeline summary steps now read the slice's design and task files, so a summary written after `sq run --resume` carries the slice's content, not just commit subjects (#282).
+- Pipeline summary steps now read the slice's design and task files and the run's reviews, so a summary written after `sq run --resume` carries the slice's content, not just commit subjects. A summary model that is not Claude gets `read_file` for this unless the step declares its own tools (#282).
 - `/sq:summary --restore` with no key restores the session's own summary (`interactive`) even when a pipeline run saved a newer one; with no interactive summary it still takes the most recent. Restore a pipeline summary with `--key` (#282).
 
 ## [0.24.12] - 20261101

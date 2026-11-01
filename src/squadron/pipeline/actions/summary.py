@@ -12,7 +12,11 @@ from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_em
 from squadron.pipeline.failure_kind import usage_limit_stamp
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ResolvedModel
-from squadron.pipeline.summary_artifacts import slice_artifact_paths, with_artifact_section
+from squadron.pipeline.summary_artifacts import (
+    SummarySources,
+    summary_sources,
+    with_artifact_section,
+)
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
 from squadron.pipeline.usage_capture import read_effort_sent, require_capture, stamp
 from squadron.providers.errors import ProviderError
@@ -186,6 +190,22 @@ class SummaryAction:
         )
 
 
+def _log_sources(
+    context: ActionContext, *, is_sdk: bool, declared: list[str] | None, allows_tools: bool
+) -> SummarySources:
+    """Resolve the files this summary reads and log them, so the inputs are visible (#282)."""
+    sources = summary_sources(
+        context, is_sdk=is_sdk, declared_tools=declared, model_allows_tools=allows_tools
+    )
+    _logger.info(
+        "summary step '%s' is pointed at %d file(s): %s",
+        context.step_name,
+        len(sources.paths),
+        ", ".join(sources.paths) or "none",
+    )
+    return sources
+
+
 async def _execute_summary(
     *,
     context: ActionContext,
@@ -274,15 +294,9 @@ async def _execute_summary(
             assert context.sdk_session is not None  # narrowed above
             restore_model = context.sdk_session.current_model
             session_effort = capture.effort_for_session(resolved)
-            artifact_paths = slice_artifact_paths(context)
-            _logger.info(
-                "summary step '%s': inputs are the live session plus %d slice file(s): %s",
-                context.step_name,
-                len(artifact_paths),
-                ", ".join(artifact_paths) or "none",
-            )
+            sources = _log_sources(context, is_sdk=True, declared=None, allows_tools=True)
             reply = await context.sdk_session.capture_summary(
-                instructions=with_artifact_section(instructions, artifact_paths),
+                instructions=with_artifact_section(instructions, sources.paths),
                 summary_model=model_id,
                 restore_model=restore_model,
             )
@@ -301,15 +315,22 @@ async def _execute_summary(
             assert profile is not None  # narrowed by is_sdk_profile False
             from squadron.pipeline.summary_context import assemble_dispatch_context
 
+            sources = _log_sources(
+                context,
+                is_sdk=False,
+                declared=resolve_allowed_tools(context, action_type),
+                allows_tools=model_allows_tools,
+            )
+            read_instructions = with_artifact_section(instructions, sources.paths)
             context_block = assemble_dispatch_context(context.prior_outputs)
             augmented_instructions = (
-                f"{context_block}\n\n{instructions}" if context_block else instructions
+                f"{context_block}\n\n{read_instructions}" if context_block else read_instructions
             )
             summary, tool_telemetry = await capture_summary_via_profile_with_telemetry(
                 instructions=augmented_instructions,
                 model_id=model_id,
                 profile=profile,
-                allowed_tools=resolve_allowed_tools(context, action_type),
+                allowed_tools=sources.tools,
                 model_allows_tools=model_allows_tools,
                 cwd=context.cwd,
                 effort=effort,
