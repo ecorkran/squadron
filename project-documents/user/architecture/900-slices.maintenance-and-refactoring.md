@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 900-arch.maintenance-and-refactoring.md
 project: squadron
 dateCreated: 20260325
-dateUpdated: 20261101
+dateUpdated: 20261014
 status: in_progress
 ---
 
@@ -508,8 +508,6 @@ Sequenced **before 914**: Part A adds and moves conftest fixtures, and 914 then 
 42. [x] **(948) Squash Planning Commit Sets — Command and Pipeline Action** *(added 20261025)* — Fixes [issue #257](https://github.com/ecorkran/squadron/issues/257) and [issue #258](https://github.com/ecorkran/squadron/issues/258). A planning artifact (slice design, task breakdown, architecture) accumulates a commit per create, review, revise and loop round; the reviews are already archived in files, so the extra commits only add noise. `sq squash <subject> --slice N` collapses the newest run of commits that touch only that artifact's files (its reviews and `DEVLOG.md` included) into one commit that keeps the first commit's message. Detection is by file, never by subject; the run ends at HEAD, so the rewrite is a soft reset plus one commit, with no rebase. It refuses on a dirty tree, off the target, when any commit in the run is on a remote-tracking ref, or when the tree changes; it tags a backup first. A `squash` pipeline action wraps the same function and runs after the revise loop in the planning pipelines; a refusal fails the step. Out of scope: code commits, sets in the middle of history, pushing. **Part B:** `sq metr` works as a hidden shorthand for `sq metrology` (one extra `add_typer` mount, no alias table). Dependencies: none. Risk: Medium (rewrites the target's tail). Effort: 3/5.
 
 **Slice design:** `user/slices/948-slice.squash-planning-commit-sets-command-and-pipeline-action.md`
-
-43. [ ] **(949) One Commit Per Planning Document — Loops Collapse Their Own Round Commits** *(added 20261101)* — Fixes [issue #257](https://github.com/ecorkran/squadron/issues/257). Slice 948's `sq squash` and its pipeline step were removed in 0.24.12: they inferred the commit run after the fact from file path sets, and broke on ordinary history. Planning pipelines still make one commit per review round (`commit_each_iteration: true`), against the guide's rule of one commit per planning document when its review loop finishes. The loop that makes the commits is the one place that knows exactly which ones are its own. A loop step records HEAD when it starts and the sha of each round commit it makes (commit action outputs already include `sha`), and at loop end collapses those commits, plus the preceding phase step's commit, into one commit per document. It rewrites only commits it can prove it made; if HEAD moved for any other reason, or a commit is on a remote-tracking ref, it leaves history alone and warns in one line. Per-round commits stay during the loop: the findings-addressed gate uses the prior round's commit as its base (`review/addressed/screens.py`). Design decides the collapse mechanism (soft reset plus one commit, as 948 used, or another), the surviving commit message, how a resumed loop reconstructs the commits it made before the resume, and the observable signal for each refusal. Dependencies: none. Risk: Medium (rewrites the target's tail). Effort: 3/5.
 
 ---
 
