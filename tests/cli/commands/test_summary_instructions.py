@@ -430,7 +430,7 @@ class TestRestoreSiblingExclusion:
         of #103 and strictly worse than the unfixed behavior.
         """
         cwd, summaries = self._layout(tmp_path, project="squadron-pr", sibling="squadron")
-        _write_summary(summaries, "squadron-pr-interactive.md", "pr older", 1000.0)
+        _write_summary(summaries, "squadron-pr-p4a.md", "pr older", 1000.0)
         _write_summary(summaries, "squadron-pr-p5a.md", "pr newest", 2000.0)
 
         result = self._run(summaries, cwd, "squadron-pr")
@@ -439,3 +439,25 @@ class TestRestoreSiblingExclusion:
         assert "pr newest" in result.output
         assert "Using: squadron-pr-p5a.md" in result.output
         assert "excluded from default" not in result.output
+
+    def test_default_prefers_interactive_over_a_newer_pipeline_summary(self, tmp_path: Path) -> None:
+        """#282: a pipeline run's summary must not displace the session's own."""
+        cwd, summaries = self._layout(tmp_path, project="squadron", sibling="squadron-pr")
+        _write_summary(summaries, "squadron-interactive.md", "session summary", 1000.0)
+        _write_summary(summaries, "squadron-p5.md", "pipeline summary", 2000.0)
+
+        result = self._run(summaries, cwd, "squadron")
+
+        assert result.exit_code == 0, result.output
+        assert "Using: squadron-interactive.md" in result.output
+        assert "pipeline summary" not in result.output.split("Using:")[1]
+
+    def test_key_still_restores_the_pipeline_summary(self, tmp_path: Path) -> None:
+        cwd, summaries = self._layout(tmp_path, project="squadron", sibling="squadron-pr")
+        _write_summary(summaries, "squadron-interactive.md", "session summary", 1000.0)
+        _write_summary(summaries, "squadron-p5.md", "pipeline summary", 2000.0)
+
+        result = self._run(summaries, cwd, "squadron", "--key", "p5")
+
+        assert result.exit_code == 0, result.output
+        assert "Using: squadron-p5.md" in result.output

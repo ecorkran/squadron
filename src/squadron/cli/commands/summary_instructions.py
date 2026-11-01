@@ -21,6 +21,10 @@ from squadron.pipeline.summary_render import (
 
 _logger = logging.getLogger(__name__)
 
+# Key of the summary `/sq:summary` saves from a session (`{project}-interactive.md`);
+# every other key names a pipeline's summary file.
+INTERACTIVE_KEY = "interactive"
+
 
 # Conventional directory where pipeline summary files are stored.
 def _summaries_dir() -> Path:
@@ -145,8 +149,9 @@ def _handle_restore(cwd: str, key: str | None = None) -> None:
     """Find and print a saved summary file for the current project.
 
     Resolves the project name via CF and globs the summaries directory. Without
-    ``key``, prints the most recently modified match that is *not* owned by a
-    sibling project whose name extends this one (#103). With ``key``, prints the
+    ``key``, prints the interactive summary, or else the most recently modified
+    match, that is *not* owned by a sibling project whose name extends this one
+    (#103, #282). With ``key``, prints the
     summary saved under that key — sibling-owned files included — matched
     case-insensitively so the same argument resolves identically on
     case-sensitive and case-insensitive filesystems. If multiple summaries
@@ -218,16 +223,19 @@ def _handle_restore(cwd: str, key: str | None = None) -> None:
 
 
 def _select_summary(matches: list[Path], clean: list[Path], project: str, key: str | None) -> Path:
-    """Pick the summary to restore: the keyed one, else the most recent clean one.
+    """Pick the summary to restore: the keyed one, else the best clean one.
 
     Both lists are ordered most-recent-first. The no-key default selects from
-    ``clean`` (sibling-owned files excluded, #103); ``--key`` searches the full
-    ``matches`` list so an excluded file remains reachable by its exact key.
-    Key comparison is case-insensitive; when several files differ only by case,
-    the most recent wins, consistent with the no-key default.
+    ``clean`` (sibling-owned files excluded, #103) and prefers the interactive
+    summary, so a pipeline run's newer summary does not displace the one written
+    from a session (#282); with no interactive summary it takes the most recent.
+    ``--key`` searches the full ``matches`` list so any file is reachable by its
+    exact key. Key comparison is case-insensitive; when several files differ only
+    by case, the most recent wins.
     """
     if not key:
-        return clean[0]
+        interactive = [m for m in clean if _summary_key(m, project).casefold() == INTERACTIVE_KEY]
+        return (interactive or clean)[0]
 
     wanted = key.casefold()
     for match in matches:
