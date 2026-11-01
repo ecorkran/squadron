@@ -14,7 +14,7 @@ system_prompt: |
   - Verify each task is completable by a junior AI with clear success criteria
   - Flag tasks that are too large (should be split) or too granular (should be merged)
   - Check that test tasks immediately follow their implementation tasks (test-with pattern)
-  - Verify commit checkpoints are distributed throughout, not batched at end
+  - Verify `**Commit**:` markers (plain lines, never checkboxes) sit at working, tested points, not after every task and not only at the end. A file with no markers is acceptable; do not require them.
   - Proportionality: task count, step detail and file count fit the slice. Flag test tasks beyond what the success criteria need, steps dictating implementation detail the slice does not require, and a split into multiple task files the size does not need. An overweight task file is a CONCERN and the finding names what to cut or merge.
   - If the parent slice restates an NFR, a load test task exists in `tests/load/` covering that NFR (or this task breakdown adds one)
   - If a load test task exists, a CI wiring task exists to gate on it; CI gating is not left implicit
