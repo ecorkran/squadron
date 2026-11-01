@@ -31,7 +31,6 @@ class ActionType(StrEnum):
     DEVLOG = "devlog"
     GATE = "gate"
     BRANCH = "branch"
-    SQUASH = "squash"
 
 
 # Module-level registry: action type name -> Action instance

@@ -171,8 +171,8 @@ def load_pipeline(
 def _warn_on_missing_builtin_steps(location: PipelineLocation, definition: PipelineDefinition) -> None:
     """Warn when an override of a built-in pipeline lacks a step type the built-in has (#276).
 
-    An override written before a step existed silently skips it (the squash step on a
-    P5 copied before slice 948), so say which step types are missing and whose file it is.
+    An override written before a step existed silently skips it, so say which step
+    types are missing and whose file it is.
     """
     if location.source is PipelineSource.BUILT_IN:
         return
@@ -284,6 +284,12 @@ def discover_pipelines(
     return sorted(found.values(), key=lambda p: p.name)
 
 
+# Step types that once existed; a pipeline still using one gets told what to do.
+_REMOVED_STEP_TYPES: dict[str, str] = {
+    "squash": "The 'squash' step was removed in 0.24.12; delete it from this pipeline file.",
+}
+
+
 def validate_pipeline(
     definition: PipelineDefinition,
 ) -> list[ValidationError]:
@@ -331,12 +337,10 @@ def validate_pipeline(
     for step in definition.steps:
         # Check step type is registered
         if step.step_type not in registered:
+            removed = _REMOVED_STEP_TYPES.get(step.step_type)
+            message = removed or f"Unknown step type '{step.step_type}'. Registered: {registered}"
             errors.append(
-                ValidationError(
-                    field="step_type",
-                    message=(f"Unknown step type '{step.step_type}'. Registered: {registered}"),
-                    action_type=step.step_type,
-                )
+                ValidationError(field="step_type", message=message, action_type=step.step_type)
             )
         else:
             # Delegate to step type's own validate()

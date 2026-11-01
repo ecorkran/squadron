@@ -264,7 +264,6 @@ class TestDesignPlanIntegration:
             "summary": summary,
             "checkpoint": ok,
             "commit": ok,
-            "squash": ok,
         }
 
         run_id = StateManager(runs_dir=tmp_path).init_run("slices-plan", {"plan": "900"})

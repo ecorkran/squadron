@@ -15,9 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+### Removed
 
-- `sq squash` fetches before searching, so it never rewrites commits someone already pushed from another clone. It refuses if the fetch fails.
+- `sq squash` and the `squash` pipeline step. Planning pipelines no longer fail at a squash step. A pipeline file that still has a `squash:` step fails to load with a message telling you to delete it.
 
 ## [0.24.11] - 20261031
 

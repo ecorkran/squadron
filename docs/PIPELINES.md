@@ -414,45 +414,6 @@ Built-in code pipelines (`P6`, `implement`, `P456`, `P56`) run `branch enter →
 
 ---
 
-### `squash`
-
-**Purpose:** Collapse a planning artifact's commit run (create, review, one commit per loop round) into one commit, so `git log --oneline` shows one line per artifact. The built-in planning pipelines run it after each slice design or tasks revise loop. The same work runs from the command line as `sq squash`.
-
-```yaml
-- squash: { kind: slice }                           # index defaults to "{slice}"
-- squash: { kind: tasks, index: "{slice.index}" }   # inside an each
-- squash: { kind: arch, index: "{plan}" }
-```
-
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `kind` | string | yes | `slice` (slice design), `tasks` (task breakdown), `arch` (initiative architecture) or `plan` (initiative slice plan) |
-| `index` | string | `arch`, `plan` | Slice index for `slice` and `tasks` (default `{slice}`; use `{slice.index}` inside an `each`); initiative index for `arch` and `plan` |
-
-Any other key is rejected.
-
-**The run.** A run is a stretch of consecutive first-parent commits whose changed files all belong to the artifact: for `slice` and `tasks`, the design or tasks file, its reviews and their archived copies, the slice plan, the initiative's architecture document, `DEVLOG.md` and, for `tasks`, the slice design; for `arch`, the architecture file, its review, the slice plan and `DEVLOG.md`; for `plan`, the slice plan file and `DEVLOG.md`. A merge commit or a commit touching anything else ends a stretch. The run is the newest stretch that touches the artifact itself and still has two commits after trimming; a shorter stretch (a lone checkbox commit near HEAD) is skipped and the search goes on to older ones. It need not end at HEAD: after a slice merges, `sq squash arch`, `slice` and `tasks` each still find their run under it. Only unpushed commits are searched: squash runs `git fetch --all` first, so a commit already on any remote, even one pushed from another clone, is never rewritten. Commits are matched by file, never by message. Commits at the oldest end that don't touch the artifact itself are dropped, so the surviving commit is always an artifact commit. Trailing commits that only edit a parent document (the slice plan or architecture) are dropped too, because they belong to that document's run. The squashed commit keeps the oldest commit's message and author and has the newest run commit's tree. Every commit above the run, merges included, is then recreated with its own tree, author, committer and message, and only its parents change. Nothing is re-applied, so nothing can conflict, and the working tree is never touched. When no stretch has two commits, it is a successful no-op that prints why: how many stretches touch the artifact, the newest one, and the commit that cut it off with the files it touches outside the artifact's set. `--dry-run` shows how many later commits would be recreated.
-
-**Refusals.** Before anything changes, the step fails and names the cause when the working tree is not clean, HEAD is not on the integration target (`git.integration_branch`, else `main`), the run reaches the repository's root commit, a branch forked from inside the run was merged above it, the backup tag already exists on another commit, or `git fetch` fails. If writing the new commits or moving the branch fails, or the new HEAD's tree differs from the old HEAD's, HEAD is reset to the backup tag and the step fails; if even that reset fails, the error prints the `git reset --hard <tag>` to run.
-
-**Overridden pipelines.** A user or project pipeline that shadows a built-in is not updated when the built-in gains a step. Loading one that lacks a step type the built-in has (the `squash` step, for example) logs a WARNING naming the file and the missing step types.
-
-**Backup tags.** Every squash first tags the old HEAD `squash-backup/{kind}-{index}-{short sha}`. A rerun on the same HEAD reuses the tag. Tags are never deleted for you. Once you are happy with the result, `sq squash --drop-backups` deletes all of them (`--dry-run` lists them first); `git tag -d <tag>` removes one.
-
-**From the command line:**
-
-```bash
-sq squash slice 152 --dry-run   # list the run, the surviving message and the tag; rewrite nothing
-sq squash tasks 152             # slice 152's task breakdown
-sq squash arch 180              # initiative 180's architecture
-sq squash plan 180              # initiative 180's slice plan
-sq squash --drop-backups        # delete every squash-backup/* tag
-```
-
-Pipeline `--dry-run` lists the step and runs no git.
-
----
-
 ### Commits
 
 Phase steps, `devlog`, and loops with `commit_each_iteration` commit through one plan: only the files that step produced are staged, and the message says what they are.
@@ -474,8 +435,6 @@ Phase steps, `devlog`, and loops with `commit_each_iteration` commit through one
 | `devlog` | `docs: add DEVLOG entry for slice 105` |
 
 The verdict is read from the review file's frontmatter. The review clause is left out when no review file is committed. Nothing staged means no commit and a WARNING.
-
-The built-in planning pipelines then collapse each loop's commits into one with a [`squash`](#squash) step.
 
 ---
 
@@ -734,7 +693,6 @@ Actions are the internal execution units that step types expand into. Pipeline a
 | `checkpoint` | phase steps (when `checkpoint:` is set), `gate` step (when `checkpoint:` is set) | Pauses pipeline; user decides to continue or abort |
 | `commit` | phase steps, `devlog`, loops with `commit_each_iteration` | Stages only the files the step produced and commits them — see [Commits](#commits) |
 | `branch` | `branch` step | Enters or merges a slice's branch |
-| `squash` | `squash` step | Collapses a planning artifact's newest commit run into one commit — see [`squash`](#squash) |
 | `compact` | compact step | Reduces context (session-rotate in true CLI; `/compact` dispatch in prompt-only) |
 | `summary` | summary step | Generates summary text and routes to emit destinations |
 | `devlog` | devlog step | Writes a DEVLOG entry (the step then commits it) |

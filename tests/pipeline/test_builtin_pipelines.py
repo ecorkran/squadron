@@ -15,6 +15,7 @@ from squadron.data import data_dir
 from squadron.pipeline.classification import classify_pipeline
 from squadron.pipeline.intelligence.pools.backend import DefaultPoolBackend
 from squadron.pipeline.loader import load_pipeline, validate_pipeline
+from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.resolver import ModelResolver
 
 _BUILTIN_PIPELINES = sorted(p.stem for p in (data_dir() / "pipelines").glob("*.yaml"))
@@ -108,57 +109,21 @@ def test_single_slice_code_pipelines_match_the_batch_body(name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Squash placement (slice 948 D6)
+# Removed squash step
 # ---------------------------------------------------------------------------
 
-# (pipeline, [(index of the planning loop in the step list, squash kind)]); for the
-# batch pipelines the indices are inside the each body.
-_SQUASH_PLACEMENT: list[tuple[str, list[tuple[int, str]]]] = [
-    ("P4", [(1, "slice")]),
-    ("P5", [(1, "tasks")]),
-    ("P45", [(1, "slice"), (4, "tasks")]),
-    ("P456", [(1, "slice"), (4, "tasks")]),
-    ("P56", [(1, "tasks")]),
-    ("slices-plan", [(2, "slice")]),
-    ("tasks-plan", [(2, "tasks")]),
-]
+
+def test_no_builtin_pipeline_has_a_squash_step() -> None:
+    for path in sorted((data_dir() / "pipelines").glob("*.yaml")):
+        assert "squash:" not in path.read_text(), path.name
 
 
-def _steps(name: str) -> list[tuple[str, dict[str, object]]]:
-    """The pipeline's top-level steps, or its each body, as (type, config) pairs."""
-    definition = load_pipeline(name)
-    if definition.steps[0].step_type == "each":
-        body: list[dict[str, dict[str, object]]] = definition.steps[0].config["steps"]  # type: ignore[assignment]
-        return [next(iter(step.items())) for step in body]
-    return [(step.step_type, step.config) for step in definition.steps]
-
-
-@pytest.mark.parametrize(("name", "placements"), _SQUASH_PLACEMENT)
-def test_squash_follows_each_planning_loop(name: str, placements: list[tuple[int, str]]) -> None:
-    steps = _steps(name)
-    for loop_index, kind in placements:
-        assert steps[loop_index][0] == "loop"
-        squash_type, squash_config = steps[loop_index + 1]
-        assert squash_type == "squash"
-        assert squash_config["kind"] == kind
-    assert sum(1 for step_type, _ in steps if step_type == "squash") == len(placements)
-
-
-def _is_code_review_loop(step_type: str, config: dict[str, object]) -> bool:
-    body = config.get("steps") if step_type == "loop" else None
-    if not isinstance(body, list):
-        return False
-    return any(
-        isinstance(review := step.get("review"), dict) and review.get("template") == "code"  # type: ignore[union-attr]
-        for step in body  # type: ignore[union-attr]
+def test_a_pipeline_with_a_squash_step_is_told_to_delete_it() -> None:
+    definition = PipelineDefinition(
+        name="old",
+        description="",
+        params={},
+        steps=[StepConfig(step_type="squash", name="squash-0", config={})],
     )
-
-
-@pytest.mark.parametrize("name", ["P456", "P56", "P6"])
-def test_no_squash_follows_a_code_review_loop(name: str) -> None:
-    steps = _steps(name)
-    code_loops = [i for i, (t, c) in enumerate(steps) if _is_code_review_loop(t, c)]
-    assert code_loops, f"{name} has no code-review loop to check"
-    for index in code_loops:
-        following = steps[index + 1][0] if index + 1 < len(steps) else None
-        assert following != "squash"
+    messages = [e.message for e in validate_pipeline(definition)]
+    assert any("removed in 0.24.12" in m and "delete it" in m for m in messages)

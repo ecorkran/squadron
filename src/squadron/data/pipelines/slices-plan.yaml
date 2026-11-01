@@ -36,4 +36,3 @@ steps:
             steps:
               - dispatch: { name: revise, model: "{model}", feedback: review }
               - review: { template: slice, model: "{review-model}", slice: "{slice.index}" }
-        - squash: { kind: slice, index: "{slice.index}" }

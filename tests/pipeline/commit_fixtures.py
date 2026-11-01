@@ -1,4 +1,4 @@
-"""Shared planning-file paths and cf mock for commit-plan and squash tests."""
+"""Shared planning-file paths and cf mock for commit-plan tests."""
 
 from __future__ import annotations
 

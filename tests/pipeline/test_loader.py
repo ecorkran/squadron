@@ -45,7 +45,7 @@ class TestLoadPipelineBuiltIn:
         )
         assert isinstance(defn, PipelineDefinition)
         assert defn.name == "p456"
-        assert len(defn.steps) == 15
+        assert len(defn.steps) == 13
 
     def test_unknown_name_raises(self) -> None:
         with pytest.raises(FileNotFoundError, match="no-such-pipeline"):
@@ -488,13 +488,13 @@ def test_override_missing_a_builtin_step_type_warns(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     user = tmp_path / "user"
-    _override_without_steps(user, "p5", "squash")
+    _override_without_steps(user, "p5", "summary")
 
     with caplog.at_level("WARNING"):
         load_pipeline("p5", project_dir=tmp_path / "none", user_dir=user)
 
     warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
-    assert any("squash" in w and str(user / "p5.yaml") in w for w in warnings)
+    assert any("summary" in w and str(user / "p5.yaml") in w for w in warnings)
 
 
 def test_builtin_and_complete_override_do_not_warn(
