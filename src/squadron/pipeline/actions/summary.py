@@ -12,6 +12,7 @@ from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_em
 from squadron.pipeline.failure_kind import usage_limit_stamp
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.summary_artifacts import slice_artifact_paths, with_artifact_section
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
 from squadron.pipeline.usage_capture import read_effort_sent, require_capture, stamp
 from squadron.providers.errors import ProviderError
@@ -273,8 +274,15 @@ async def _execute_summary(
             assert context.sdk_session is not None  # narrowed above
             restore_model = context.sdk_session.current_model
             session_effort = capture.effort_for_session(resolved)
+            artifact_paths = slice_artifact_paths(context)
+            _logger.info(
+                "summary step '%s': inputs are the live session plus %d slice file(s): %s",
+                context.step_name,
+                len(artifact_paths),
+                ", ".join(artifact_paths) or "none",
+            )
             reply = await context.sdk_session.capture_summary(
-                instructions=instructions,
+                instructions=with_artifact_section(instructions, artifact_paths),
                 summary_model=model_id,
                 restore_model=restore_model,
             )

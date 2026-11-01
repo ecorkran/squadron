@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Pipeline summary steps now read the slice's design and task files, so a summary written after `sq run --resume` carries the slice's content, not just commit subjects (#282).
+
 ## [0.24.12] - 20261101
 
 ### Removed
