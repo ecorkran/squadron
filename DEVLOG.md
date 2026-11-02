@@ -13,9 +13,9 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ### Slice 949: Isolated File-In, File-Out Dispatch Steps — Design Complete
 
-- **Output:** `949-slice.isolated-file-in-file-out-dispatch-steps.md`; `cf validate design` passes. Fixes #284 (Amoeba's answering pipeline). Phase 5 not started.
-- **Decisions:** new dispatch keys `prompt_files`, `reply_from`, `reply_format` (`text`|`json`), `reply_file`, `delivered_prompt_file`. The prompt is `prompt`, then the files, then the earlier reply, joined by a blank line, with file contents never substituted. JSON rule: the first `{` where `raw_decode` succeeds, kept byte for byte. Output files are written atomically, on success only. Paths stay inside cwd. `allowed_tools: []` on a provider with `can_read_files` (SDK session or one-shot, Codex) fails before dispatch with `failure_kind: tool_isolation`. A required `known_keys` on every step type (dispatch's comes from `FORWARDED_KEYS`, which `expand` also uses) plus a `ContainsSteps` walker drive `--validate --strict`. Plain `--validate` only warns.
-- **Behavior change to note at release:** existing `allowed_tools: []` on SDK or Codex dispatch steps now fails. No built-in pipeline or template uses it.
+- **Output:** `949-slice.isolated-file-in-file-out-dispatch-steps.md` (rewritten from the template after the first draft was deleted); `cf validate design` passes. Fixes #284. Phase 5 not started.
+- **Decisions:** dispatch keys `prompt_files` (list), `reply_from`, `reply_format` (`text`|`json`), `reply_file`, `delivered_prompt_file`. `reply_from` is limited to top-level steps naming an earlier top-level dispatch step. A failed, skipped or reply-less named result fails the reading step. JSON rule: the first `{` that `raw_decode` accepts (NaN/Infinity rejected), kept byte for byte as `outputs["reply_json"]`. Both output files are staged together and written only on success. `allowed_tools: []` fails before dispatch with `failure_kind: tool_isolation` on the session path or a `can_read_files` provider. Required `StepType.known_keys` plus `ContainsSteps`/`walk_steps` drive `--validate --strict`. Plain `--validate` is unchanged (no warnings). `--prompt-only` rejects the new keys.
+- **Behavior change to note at release:** `allowed_tools: []` on SDK or Codex dispatch steps now fails. No built-in pipeline or template uses it.
 
 ### Release 0.24.13
 
