@@ -1588,6 +1588,8 @@ async def _execute_loop_body(
     )
     result.loop_commits = ledger
     if ledger is not None and commit_params is not None and result.status == ExecutionStatus.COMPLETED:
+        # Refusals only log. GitStateUnknownError (a timed-out ref write) is left to
+        # propagate: nobody knows where HEAD is, so the run must stop, not continue.
         await asyncio.to_thread(
             collapse_completed_loop, ledger, commit_params, step.name, cwd, cf_client
         )

@@ -35,6 +35,8 @@ _logger = logging.getLogger(__name__)
 # ``git branch``/``git tag`` never see them (D5).
 BACKUP_REF_PREFIX = "refs/squadron/pre-collapse"
 _SHORT_SHA_LENGTH = 7
+# Failure detail for a git command that timed out, could not run, or printed no stderr.
+_NO_GIT_OUTPUT = "timed out or could not run"
 
 GitRunner = Callable[..., subprocess.CompletedProcess[str] | None]
 
@@ -63,12 +65,17 @@ class CollapseGitError(Exception):
     """A git read failed or timed out; the message carries the command text."""
 
 
+def _failure_detail(result: subprocess.CompletedProcess[str] | None) -> str:
+    """Why a git command failed: its stderr, or ``_NO_GIT_OUTPUT`` when it printed none."""
+    stderr = result.stderr.strip() if result is not None else ""
+    return stderr or _NO_GIT_OUTPUT
+
+
 def run_checked(args: list[str], cwd: str) -> str:
     """Stdout of ``git args``; raises ``CollapseGitError`` naming the command on any failure."""
     result = run_git(args, cwd=cwd)
     if result is None or result.returncode != 0:
-        detail = (result.stderr.strip() if result is not None else "") or "timed out or could not run"
-        raise CollapseGitError(f"git {' '.join(args)}: {detail}")
+        raise CollapseGitError(f"git {' '.join(args)}: {_failure_detail(result)}")
     return result.stdout
 
 
@@ -119,7 +126,11 @@ def _range_problem(ledger: LoopCommitLedger, cwd: str) -> str | None:
     merges = run_checked(["rev-list", "--merges", f"{base}..HEAD"], cwd).split()
     if merges:
         return f"the commits from {base} to HEAD include a merge, {merges[0]}"
-    actual = int(run_checked(["rev-list", "--count", f"{base}..HEAD"], cwd))
+    counted = run_checked(["rev-list", "--count", f"{base}..HEAD"], cwd)
+    try:
+        actual = int(counted)
+    except ValueError as exc:
+        raise CollapseGitError(f"git rev-list --count printed {counted.strip()!r}") from exc
     if actual != ledger.commit_count:
         return f"{actual} commits lie between {base} and HEAD, not the {ledger.commit_count} claimed"
     return None
@@ -129,8 +140,7 @@ def _is_ancestor(commit: str, cwd: str) -> bool:
     """Whether ``commit`` is an ancestor of HEAD; git exits 1 for no, and anything else is a failure."""
     result = run_git(["merge-base", "--is-ancestor", commit, "HEAD"], cwd=cwd)
     if result is None or result.returncode not in (0, 1):
-        detail = (result.stderr.strip() if result is not None else "") or "timed out or could not run"
-        raise CollapseGitError(f"git merge-base --is-ancestor {commit} HEAD: {detail}")
+        raise CollapseGitError(f"git merge-base --is-ancestor {commit} HEAD: {_failure_detail(result)}")
     return result.returncode == 0
 
 
@@ -152,7 +162,7 @@ def collapse_message(
     """
     target = commit_target_from_params(commit_params, 0)
     if target is None:
-        raise ValueError("loop commit params name no commit subject")
+        raise CommitTargetError("loop commit params name no commit subject")
     subject = subject_paths(target, Path(cwd), cf_client)
     changes = {
         path: status
@@ -306,8 +316,7 @@ def _update_ref(run: GitRunner, args: list[str], cwd: str) -> subprocess.Complet
 
 
 def _git_failed(label: str, result: subprocess.CompletedProcess[str] | None) -> CollapseResult:
-    detail = (result.stderr.strip() if result is not None else "") or "timed out or could not run"
-    return CollapseResult(CollapseOutcome.GIT_FAILED, f"{label}: {detail}")
+    return CollapseResult(CollapseOutcome.GIT_FAILED, f"{label}: {_failure_detail(result)}")
 
 
 def _log_outcome(result: CollapseResult, commit_count: int, step_name: str) -> None:

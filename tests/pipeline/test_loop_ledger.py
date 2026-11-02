@@ -11,7 +11,12 @@ import pytest
 from squadron.pipeline.commit_plan import CommitSubject
 from squadron.pipeline.executor import ExecutionStatus, StepResult
 from squadron.pipeline.head_stamp import HEAD_AFTER_KEY, HEAD_BEFORE_KEY
-from squadron.pipeline.loop_ledger import LoopCommitLedger, claim_actions, open_ledger
+from squadron.pipeline.loop_ledger import (
+    LoopCommitLedger,
+    claim_actions,
+    open_ledger,
+    start_ledger,
+)
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager, StepState
 from tests.conftest import run_test_git
@@ -62,7 +67,7 @@ def test_step_without_a_ledger_persists_none(tmp_path: Path) -> None:
 
 
 def test_state_file_written_without_loop_commits_still_loads() -> None:
-    older = {
+    older: dict[str, object] = {
         "step_name": "rounds",
         "step_type": "loop",
         "status": "paused",
@@ -317,3 +322,26 @@ def test_nothing_is_claimed_once_the_ledger_is_unprovable(temp_git_repo: Path) -
     claim_actions(ledger, [_stamped("dispatch", base, agent)], str(temp_git_repo))
 
     assert ledger.tip_sha == base and ledger.commit_count == 0
+
+
+def test_a_resume_with_no_run_state_warns_and_opens_a_fresh_ledger(
+    temp_git_repo: Path, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    base = _head(temp_git_repo)
+    phase = _commit_file(temp_git_repo, "design.md")
+    prior = {"design:commit:0": _phase_commit(base, phase)}
+
+    with caplog.at_level(logging.WARNING, logger="squadron.pipeline.loop_ledger"):
+        ledger = start_ledger(
+            commit_params=_loop_params(),
+            prior_outputs=prior,
+            cwd=str(temp_git_repo),
+            resumed=True,
+            run_id="no-such-run",
+            step_name="design-loop",
+            runs_dir=tmp_path / "runs",
+        )
+
+    assert ledger == LoopCommitLedger(base_sha=base, tip_sha=phase, commit_count=1)
+    assert [r.levelno for r in caplog.records] == [logging.WARNING]
+    assert "no run state for no-such-run" in caplog.records[0].getMessage()

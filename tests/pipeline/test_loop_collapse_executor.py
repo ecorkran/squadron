@@ -18,6 +18,7 @@ import squadron.pipeline.steps.loop  # noqa: F401  # pyright: ignore[reportUnuse
 from squadron.pipeline.actions.commit import CommitAction
 from squadron.pipeline.control_params import ACCEPT_DECISION
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, execute_pipeline
+from squadron.pipeline.git_ops import GitStateUnknownError
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.state import StateManager
 from squadron.pipeline.steps import register_step_type
@@ -522,3 +523,17 @@ async def test_accepting_an_exhausted_loop_after_its_checkpoint_collapses_agent_
 
     assert resumed.step_results[-1].accepted is True
     assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: CONCERNS)"]
+
+
+@pytest.mark.asyncio
+async def test_a_state_unknown_ref_write_stops_the_run_instead_of_continuing(
+    temp_git_repo: Path, runs_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def timed_out(*_args: object, **_kwargs: object) -> None:
+        raise GitStateUnknownError("git update-ref HEAD timed out")
+
+    monkeypatch.setattr("squadron.pipeline.executor.collapse_completed_loop", timed_out)
+    run = _start(_pipeline("unknown", max_rounds=3), temp_git_repo, [Review("PASS")], runs_dir)
+
+    with pytest.raises(GitStateUnknownError, match="update-ref"):
+        await _execute(run)
