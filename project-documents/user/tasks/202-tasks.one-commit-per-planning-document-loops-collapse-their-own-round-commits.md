@@ -83,24 +83,27 @@ revision_number: 2
 
 ### 3. Open a ledger at loop start (effort 3)
 
-- [ ] **3.1 Implement `open_ledger` in `loop_ledger.py`** (design Data Flow step 1, D1, D7)
-  - [ ] Inputs: `inner_steps`, merged params, `prior_outputs`, `cwd`. Returns `None` when
+- [x] **3.1 Implement `open_ledger` in `loop_ledger.py`** (design Data Flow step 1, D1, D7)
+  - [x] Inputs: `inner_steps`, merged params, `prior_outputs`, `cwd`. Returns `None` when
         `round_commit_params` raises, or when the round subject is `CommitSubject.CODE` (compare
         enum, not names)
-  - [ ] Read `HEAD` with `run_git(["rev-parse", "HEAD"])` as `start_head`; if unreadable, return
+  - [x] Read `HEAD` with `run_git(["rev-parse", "HEAD"])` as `start_head`; if unreadable, return
         an `unprovable` ledger and log WARNING
-  - [ ] Find the newest commit result in `prior_outputs` with `committed: true`. If its `sha`
+  - [x] Find the newest commit result in `prior_outputs` with `committed: true`. If its `sha`
         equals `start_head` and its `commit_subject` and scope equal the loop's
         `round_commit_params`, then `commits = [start_head]` and `base_sha = start_head^`
         (via `git rev-parse <start_head>^`)
-  - [ ] Otherwise `commits = []`, `base_sha = start_head`. If a phase commit exists but does not
+  - [x] Otherwise `commits = []`, `base_sha = start_head`. If a phase commit exists but does not
         match, log one WARNING naming why it was left out; if none exists, log nothing
-- [ ] **3.2 Test `open_ledger`** in `tests/pipeline/test_loop_ledger.py` (temp git repo)
-  - [ ] Matching phase commit at HEAD: included, `base_sha` is its parent
-  - [ ] Phase commit for a different document: excluded, WARNING logged, `base_sha == HEAD`
-  - [ ] Phase commit sha not at HEAD (an operator commit followed): excluded
-  - [ ] No prior commit result: empty ledger, no warning
-  - [ ] Code-subject loop: returns `None`
+  - Deviation (a): takes the computed `round_commit_params` result, not `inner_steps` and merged params. The executor computes it once per loop invocation (fresh and resumed) and passes it in. The caller handles a raise, so `open_ledger` never sees that case.
+  - Deviation (b): a phase commit that is the root commit (no parent) gives an `unprovable` ledger, with a WARNING.
+  - Deviation (c): scope matching reuses `commit_target_outputs(target)` from `actions/commit.py`. This also replaces `_target_from_params`: it is now the public `commit_target_from_params(params, round_number)`, done early as the 5.4 refactor.
+- [x] **3.2 Test `open_ledger`** in `tests/pipeline/test_loop_ledger.py` (temp git repo)
+  - [x] Matching phase commit at HEAD: included, `base_sha` is its parent
+  - [x] Phase commit for a different document: excluded, WARNING logged, `base_sha == HEAD`
+  - [x] Phase commit sha not at HEAD (an operator commit followed): excluded
+  - [x] No prior commit result: empty ledger, no warning
+  - [x] Code-subject loop: returns `None`
 
 **Commit**: `feat: open a commit ledger at planning-loop start`
 
@@ -161,6 +164,7 @@ revision_number: 2
         and a round number rather than an `ActionContext` (the commit action passes
         `context.iteration`, collapse passes 0), and have both callers use it. Never read subject or scope
         from commit messages
+    - Done in Task 3: `commit_target_from_params(params, round_number)` in `actions/commit.py` is the public replacement for `_target_from_params`, and both callers use it.
   - [ ] Call `compose_message` with that target and the facts. No new message template and no parsing of
         existing commit messages
 - [ ] **5.5 Test the message** in `tests/pipeline/test_loop_collapse.py`

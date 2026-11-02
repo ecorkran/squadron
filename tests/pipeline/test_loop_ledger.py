@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
+from squadron.pipeline.commit_plan import CommitSubject
 from squadron.pipeline.executor import ExecutionStatus, StepResult
-from squadron.pipeline.loop_ledger import LoopCommitLedger
+from squadron.pipeline.loop_ledger import LoopCommitLedger, open_ledger
+from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager, StepState
+from tests.conftest import run_test_git
 
 BASE_SHA = "a" * 40
 COMMIT_SHAS = ["b" * 40, "c" * 40]
@@ -65,3 +71,123 @@ def test_state_file_written_without_loop_commits_still_loads() -> None:
     }
 
     assert StepState.model_validate(older).loop_commits is None
+
+
+# ---------------------------------------------------------------------------
+# open_ledger (D1, D7)
+# ---------------------------------------------------------------------------
+
+LEDGER_LOGGER = "squadron.pipeline.loop_ledger"
+SLICE = 202
+
+
+def _loop_params(subject: CommitSubject = CommitSubject.DESIGN) -> dict[str, object]:
+    return {"commit_subject": subject, "review_template": "slice", "slice": str(SLICE)}
+
+
+def _commit_file(repo: Path, name: str) -> str:
+    (repo / name).write_text(f"{name}\n")
+    run_test_git(repo, "add", name)
+    run_test_git(repo, "commit", "-q", "-m", f"add {name}")
+    return run_test_git(repo, "rev-parse", "HEAD").strip()
+
+
+def _phase_commit(sha: str, *, subject: str = "design", slice_index: int = SLICE) -> ActionResult:
+    return ActionResult(
+        success=True,
+        action_type="commit",
+        outputs={"committed": True, "sha": sha, "commit_subject": subject, "slice": slice_index},
+    )
+
+
+def test_matching_phase_commit_at_head_joins_the_ledger(temp_git_repo: Path) -> None:
+    parent = run_test_git(temp_git_repo, "rev-parse", "HEAD").strip()
+    head = _commit_file(temp_git_repo, "design.md")
+    prior = {"design:commit:0": _phase_commit(head)}
+
+    ledger = open_ledger(_loop_params(), prior, str(temp_git_repo))
+
+    assert ledger == LoopCommitLedger(base_sha=parent, commits=[head])
+
+
+def test_phase_commit_for_a_different_document_is_left_out_with_a_warning(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    head = _commit_file(temp_git_repo, "tasks.md")
+    prior = {"tasks:commit:0": _phase_commit(head, subject="tasks")}
+
+    with caplog.at_level(logging.WARNING, logger=LEDGER_LOGGER):
+        ledger = open_ledger(_loop_params(), prior, str(temp_git_repo))
+
+    assert ledger == LoopCommitLedger(base_sha=head)
+    assert sum("different document" in r.message for r in caplog.records) == 1
+
+
+def test_phase_commit_for_a_different_slice_is_left_out(temp_git_repo: Path) -> None:
+    head = _commit_file(temp_git_repo, "design.md")
+    prior = {"design:commit:0": _phase_commit(head, slice_index=SLICE + 1)}
+
+    ledger = open_ledger(_loop_params(), prior, str(temp_git_repo))
+
+    assert ledger == LoopCommitLedger(base_sha=head)
+
+
+def test_phase_commit_not_at_head_is_left_out(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    phase_sha = _commit_file(temp_git_repo, "design.md")
+    operator_sha = _commit_file(temp_git_repo, "operator.md")
+    prior = {"design:commit:0": _phase_commit(phase_sha)}
+
+    with caplog.at_level(logging.WARNING, logger=LEDGER_LOGGER):
+        ledger = open_ledger(_loop_params(), prior, str(temp_git_repo))
+
+    assert ledger == LoopCommitLedger(base_sha=operator_sha)
+    assert sum("is not HEAD" in r.message for r in caplog.records) == 1
+
+
+def test_no_prior_commit_result_gives_an_empty_ledger_without_a_warning(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    head = run_test_git(temp_git_repo, "rev-parse", "HEAD").strip()
+    skipped = ActionResult(success=True, action_type="commit", outputs={"committed": False})
+
+    with caplog.at_level(logging.WARNING, logger=LEDGER_LOGGER):
+        ledger = open_ledger(_loop_params(), {"design:commit:0": skipped}, str(temp_git_repo))
+
+    assert ledger == LoopCommitLedger(base_sha=head)
+    assert caplog.records == []
+
+
+def test_code_loop_gets_no_ledger(temp_git_repo: Path) -> None:
+    params = {**_loop_params(CommitSubject.CODE), "review_template": "code"}
+
+    assert open_ledger(params, {}, str(temp_git_repo)) is None
+
+
+def test_phase_commit_that_is_the_root_commit_is_unprovable(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    repo = tmp_path / "root-repo"
+    repo.mkdir()
+    run_test_git(repo, "init", "-q", "-b", "main")
+    head = _commit_file(repo, "design.md")
+    prior = {"design:commit:0": _phase_commit(head)}
+
+    with caplog.at_level(logging.WARNING, logger=LEDGER_LOGGER):
+        ledger = open_ledger(_loop_params(), prior, str(repo))
+
+    assert ledger is not None
+    assert ledger.unprovable is True
+    assert sum("has no parent" in r.message for r in caplog.records) == 1
+
+
+def test_unreadable_head_is_unprovable(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    not_a_repo = tmp_path / "plain"
+    not_a_repo.mkdir()
+
+    with caplog.at_level(logging.WARNING, logger=LEDGER_LOGGER):
+        ledger = open_ledger(_loop_params(), {}, str(not_a_repo))
+
+    assert ledger == LoopCommitLedger(base_sha="", unprovable=True)
+    assert sum("cannot read HEAD" in r.message for r in caplog.records) == 1

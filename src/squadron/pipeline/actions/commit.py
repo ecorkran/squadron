@@ -61,7 +61,7 @@ class CommitAction:
     def _commit(self, context: ActionContext) -> ActionResult:
         cwd = Path(context.cwd)
         try:
-            target = _target_from_params(context)
+            target = commit_target_from_params(context.params, context.iteration)
         except ValueError as exc:
             return self._failure(str(exc))
         explicit_paths = _explicit_paths(context.params)
@@ -136,7 +136,7 @@ class CommitAction:
                 "committed": True,
                 "sha": sha,
                 "message": plan.message,
-                **_target_outputs(target),
+                **commit_target_outputs(target),
             },
         )
 
@@ -153,29 +153,33 @@ class CommitAction:
         return ActionResult(success=False, action_type=self.action_type, outputs={}, error=error)
 
 
-def _target_from_params(context: ActionContext) -> CommitTarget | None:
-    """The commit target the step described, or ``None`` when it named no subject."""
-    raw_subject = context.params.get(SUBJECT_PARAM)
+def commit_target_from_params(params: dict[str, object], round_number: int) -> CommitTarget | None:
+    """The commit target ``params`` describe, or ``None`` when they name no subject.
+
+    The commit action passes its iteration; a loop's collapse passes 0 (slice 202).
+    """
+    raw_subject = params.get(SUBJECT_PARAM)
     if raw_subject is None:
         return None
     subject = CommitSubject(str(raw_subject))  # ValueError names the bad subject
-    raw_slice = context.params.get(SLICE_PARAM)
-    raw_plan = context.params.get(PLAN_PARAM)
-    raw_template = context.params.get(REVIEW_TEMPLATE_PARAM)
+    raw_slice = params.get(SLICE_PARAM)
+    raw_plan = params.get(PLAN_PARAM)
+    raw_template = params.get(REVIEW_TEMPLATE_PARAM)
     return CommitTarget(
         subject=subject,
         slice_index=_slice_index(raw_slice),
         plan=str(raw_plan) if raw_plan not in (None, "") else None,
         review_template=str(raw_template) if raw_template else None,
-        round=context.iteration,
+        round=round_number,
     )
 
 
-def _target_outputs(target: CommitTarget | None) -> dict[str, object]:
+def commit_target_outputs(target: CommitTarget | None) -> dict[str, object]:
     """The subject and scope a commit covered, taken from the target, never the message.
 
-    A loop's collapse (slice 202) matches these against its own round commit params.
-    An explicit-paths commit has no target and reports neither.
+    A loop (slice 202) builds the same dict from its own round commit params to
+    recognize the phase commit just before it. An explicit-paths commit has no
+    target and reports neither.
     """
     if target is None:
         return {}
