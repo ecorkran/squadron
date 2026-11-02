@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
@@ -251,7 +251,7 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
             else ArtifactChange.REVISE
         ),
         review_staged=bool(reviews),
-        review_verdict=_staged_verdict(reviews, cwd),
+        review_verdict=staged_verdict([cwd / review.path for review in reviews]),
     )
     return CommitPlan(
         paths=paths,
@@ -261,13 +261,13 @@ def build_commit_plan(target: CommitTarget, cwd: Path, cf_client: CfClientProtoc
     )
 
 
-def _staged_verdict(reviews: list[_Candidate], cwd: Path) -> str | None:
-    """The worst verdict across the staged review parts, or None if any is unreadable.
+def staged_verdict(review_files: Sequence[Path]) -> str | None:
+    """The worst verdict across the review parts, or None if any is unreadable.
 
     A split review is judged by its worst part, as the review action folds it; a
     part with no readable verdict leaves the message without one (each is logged).
     """
-    verdicts = [read_review_verdict(cwd / review.path) for review in reviews]
+    verdicts = [read_review_verdict(review_file) for review_file in review_files]
     readable = [v for v in verdicts if v is not None]
     if not readable or len(readable) < len(verdicts):
         return None

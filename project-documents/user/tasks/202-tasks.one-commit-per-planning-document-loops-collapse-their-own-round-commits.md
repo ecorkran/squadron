@@ -131,47 +131,50 @@ revision_number: 2
 
 ### 5. Collapse: proof checks and message (effort 4)
 
-- [ ] **5.1 Create `src/squadron/pipeline/loop_collapse.py` with `CollapseOutcome`**
-  - [ ] `CollapseOutcome` StrEnum: `collapsed`, `nothing_to_collapse`, `refused`, `git_failed`
-  - [ ] A result type carrying the outcome, a `reason` string (for `refused`/`git_failed`), and the
+- [x] **5.1 Create `src/squadron/pipeline/loop_collapse.py` with `CollapseOutcome`**
+  - [x] `CollapseOutcome` StrEnum: `collapsed`, `nothing_to_collapse`, `refused`, `git_failed`
+  - [x] A result type carrying the outcome, a `reason` string (for `refused`/`git_failed`), and the
         new sha when collapsed
-  - [ ] `collapse_loop_commits(ledger, target, commit_params, step_name, cwd, cf_client)`, where
+  - [x] `collapse_loop_commits(ledger, target, commit_params, step_name, cwd, cf_client)`, where
         `target` is the integration target branch and `commit_params` is the loop's
         `round_commit_params` result (the subject and scope source for 5.4). Fewer than two commits returns `nothing_to_collapse`, silently
-- [ ] **5.2 Implement the proof checks (D3), in this order, first failure wins**
-  - [ ] 1. ledger not `unprovable`
-  - [ ] 2. current branch equals the target (`read_integration_target`); detached HEAD fails
-  - [ ] 3. `HEAD == commits[-1]`
-  - [ ] 4. `git rev-list --first-parent <base_sha>..HEAD` equals `reversed(commits)` exactly
-  - [ ] 5. `git for-each-ref --contains <commits[0]> refs/remotes` is empty
-  - [ ] Any failing or timed-out git command gives `git_failed` with the command text (D6)
-  - [ ] The refusal reason names the shas or the remote ref involved
-- [ ] **5.3 Test the proof checks** in `tests/pipeline/test_loop_collapse.py` (temp git repos, a
+  - Deviation (a): Task 5 exposes `check_collapse` and `collapse_message`; the full `collapse_loop_commits` that joins them with the writes is built in Task 6. `cf_client` stays in the signature because `subject_paths` uses it in the message step.
+  - Deviation (b): An unprovable ledger is refused before the fewer-than-two-commits check, so a pre-slice resumed record gives `refused` (7.5); `nothing_to_collapse` applies only to provable ledgers.
+  - Deviation (c): Errors composing the message (cf or slice lookup) are handled in Task 6 as `refused`.
+- [x] **5.2 Implement the proof checks (D3), in this order, first failure wins**
+  - [x] 1. ledger not `unprovable`
+  - [x] 2. current branch equals the target (`read_integration_target`); detached HEAD fails
+  - [x] 3. `HEAD == commits[-1]`
+  - [x] 4. `git rev-list --first-parent <base_sha>..HEAD` equals `reversed(commits)` exactly
+  - [x] 5. `git for-each-ref --contains <commits[0]> refs/remotes` is empty
+  - [x] Any failing or timed-out git command gives `git_failed` with the command text (D6)
+  - [x] The refusal reason names the shas or the remote ref involved
+- [x] **5.3 Test the proof checks** in `tests/pipeline/test_loop_collapse.py` (temp git repos, a
       small helper that makes N loop-style commits and a ledger for them)
-  - [ ] Each of the five refusals leaves `HEAD` and the branch byte-identical, with the reason text
+  - [x] Each of the five refusals leaves `HEAD` and the branch byte-identical, with the reason text
         naming the relevant sha/ref
-  - [ ] An operator commit made mid-range (HEAD still equals the last ledger commit) is refused by
+  - [x] An operator commit made mid-range (HEAD still equals the last ledger commit) is refused by
         check 4
-  - [ ] A merge commit in the range is refused by check 4
-  - [ ] A remote-tracking ref containing `commits[0]` (created with `git update-ref
+  - [x] A merge commit in the range is refused by check 4
+  - [x] A remote-tracking ref containing `commits[0]` (created with `git update-ref
         refs/remotes/origin/x`) is refused by check 5
-- [ ] **5.4 Implement the surviving message (D4)**
-  - [ ] Derive `StagedFacts` from the collapsed range: `git diff --name-status <base_sha> HEAD`
+- [x] **5.4 Implement the surviving message (D4)**
+  - [x] Derive `StagedFacts` from the collapsed range: `git diff --name-status <base_sha> HEAD`
         limited to `subject_paths`; `A` is ADD, `M` is REVISE; whether a review file is in range;
         verdict from the newest review file via `read_review_verdict`
-  - [ ] Build the `CommitTarget` from `commit_params` (subject, slice or plan, review template)
+  - [x] Build the `CommitTarget` from `commit_params` (subject, slice or plan, review template)
         with `round = 0`, using the same params-to-`CommitTarget` conversion as the commit
         action: extract `_target_from_params` (`actions/commit.py`) so it takes the params dict
         and a round number rather than an `ActionContext` (the commit action passes
         `context.iteration`, collapse passes 0), and have both callers use it. Never read subject or scope
         from commit messages
     - Done in Task 3: `commit_target_from_params(params, round_number)` in `actions/commit.py` is the public replacement for `_target_from_params`, and both callers use it.
-  - [ ] Call `compose_message` with that target and the facts. No new message template and no parsing of
+  - [x] Call `compose_message` with that target and the facts. No new message template and no parsing of
         existing commit messages
-- [ ] **5.5 Test the message** in `tests/pipeline/test_loop_collapse.py`
-  - [ ] Phase commit included (document added in range): `docs: add slice {n} design (review: PASS)`
-  - [ ] Only rounds collapsed (document pre-existing): `revise` wording
-  - [ ] Verdict reflects the final review, not the first
+- [x] **5.5 Test the message** in `tests/pipeline/test_loop_collapse.py`
+  - [x] Phase commit included (document added in range): `docs: add slice {n} design (review: PASS)`
+  - [x] Only rounds collapsed (document pre-existing): `revise` wording
+  - [x] Verdict reflects the final review, not the first
 
 **Commit**: `feat: loop collapse proof checks and composed message`
 
