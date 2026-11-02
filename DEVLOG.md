@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261102
 
+### Slice 949: Isolated File-In, File-Out Dispatch Steps — Task Breakdown Complete
+
+- **Output:** `949-tasks.isolated-file-in-file-out-dispatch-steps.md`, 19 tasks in five parts (A strict validation, B no-tools guard, C new keys and reply lookup, D `dispatch_io` and `_dispatch` restructure, E prompt-only, docs, verification), with five commit markers. Tests follow their implementation. Not yet reviewed or implemented.
+- **Note:** the design body (Component Structure, D8) uses `inner_steps` with a `getattr` test for recursion; the tasks follow that. The earlier DEVLOG line naming `ContainsSteps`/`walk_steps` does not match the design body.
+- **Walkthrough:** T19 runs walkthrough steps 1–3 and 7 directly; steps 4–6 need a live `deepseek4-flash` route and are run only if one is configured.
+
 ### Slice 949: Isolated File-In, File-Out Dispatch Steps — Design Complete
 
 - **Output:** `949-slice.isolated-file-in-file-out-dispatch-steps.md` (rewritten from the template after the first draft was deleted); `cf validate design` passes. Fixes #284. Phase 5 not started.
