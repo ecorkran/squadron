@@ -12,6 +12,7 @@ from squadron.pipeline.actions import dispatch_io
 from squadron.pipeline.actions.dispatch_io import (
     DispatchInputError,
     OutputWriteError,
+    apply_reply_contract,
     assemble_prompt,
     extract_json_object,
     step_reply,
@@ -305,3 +306,47 @@ def test_unsafe_output_paths_are_refused_before_any_write(tmp_path: Path, relati
             reply="r",
         )
     assert not (tmp_path / "prompt.md").exists()
+
+
+# --- apply_reply_contract (D4, D5) ---
+
+
+def _ok(response: str) -> ActionResult:
+    return ActionResult(success=True, action_type="dispatch", outputs={"response": response})
+
+
+def test_a_json_step_records_reply_json_and_writes_it(tmp_path: Path) -> None:
+    reply = 'Sure!\n```json\n{"a": 1}\n```\nDone.'
+    params = {"reply_format": "json", "reply_file": "claims.json", "delivered_prompt_file": "p.md"}
+
+    result = apply_reply_contract(_ok(reply), params, str(tmp_path), "DELIVERED")
+
+    assert result.success is True
+    assert result.outputs == {"response": reply, "reply_json": '{"a": 1}'}
+    assert (tmp_path / "claims.json").read_bytes() == b'{"a": 1}'
+    assert (tmp_path / "p.md").read_bytes() == b"DELIVERED"
+
+
+def test_a_text_step_writes_the_full_response(tmp_path: Path) -> None:
+    result = apply_reply_contract(_ok("plain reply"), {"reply_file": "r.txt"}, str(tmp_path), "D")
+
+    assert result.outputs == {"response": "plain reply"}
+    assert (tmp_path / "r.txt").read_bytes() == b"plain reply"
+
+
+def test_a_json_step_with_no_object_fails_and_writes_nothing(tmp_path: Path) -> None:
+    (tmp_path / "claims.json").write_bytes(b"previous")
+    params = {"reply_format": "json", "reply_file": "claims.json", "delivered_prompt_file": "p.md"}
+
+    result = apply_reply_contract(_ok("no json here"), params, str(tmp_path), "D")
+
+    assert result.success is False
+    assert result.error == "reply contains no JSON object"
+    assert result.outputs == {"response": "no json here"}
+    assert (tmp_path / "claims.json").read_bytes() == b"previous"
+    assert not (tmp_path / "p.md").exists()
+
+
+def test_a_bad_reply_format_is_refused() -> None:
+    with pytest.raises(DispatchInputError, match="reply_format"):
+        apply_reply_contract(_ok("x"), {"reply_format": "yaml"}, "/unused", "D")

@@ -8,10 +8,12 @@ output files (D5). The key names and ``ReplyFormat`` live in ``pipeline/dispatch
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 from collections.abc import Mapping, Sequence
 from pathlib import Path
+from typing import cast
 
 from squadron.core.file_write import write_new_file
 from squadron.pipeline.actions import ActionType
@@ -19,7 +21,9 @@ from squadron.pipeline.dispatch_keys import (
     DELIVERED_PROMPT_FILE_KEY,
     PROMPT_FILES_KEY,
     REPLY_FILE_KEY,
+    REPLY_FORMAT_KEY,
     REPLY_FROM_KEY,
+    ReplyFormat,
     path_error,
 )
 from squadron.pipeline.models import ActionResult, results_for_step
@@ -102,6 +106,32 @@ def assemble_prompt(
     if reply is not None:
         parts.append(reply)
     return _PART_SEPARATOR.join(parts)
+
+
+def uses_io_prompt(params: Mapping[str, object]) -> bool:
+    """Whether the step names files or an earlier reply to build its prompt from."""
+    return PROMPT_FILES_KEY in params or REPLY_FROM_KEY in params
+
+
+def assemble_step_prompt(
+    params: Mapping[str, object], prior_outputs: Mapping[str, ActionResult], cwd: str
+) -> str:
+    """The prompt for a step that uses ``prompt_files`` or ``reply_from`` (D2, D3).
+
+    Built from the step's ``prompt``, its files and the earlier reply, and nothing else:
+    the build_context fallback does not apply.
+    """
+    files = params.get(PROMPT_FILES_KEY, [])
+    if not isinstance(files, list) or not all(isinstance(entry, str) for entry in files):  # pyright: ignore[reportUnknownVariableType]
+        raise DispatchInputError(f"'{PROMPT_FILES_KEY}' must be a list of paths, got {files!r}")
+    reply_from = params.get(REPLY_FROM_KEY)
+    prompt = params.get("prompt")
+    return assemble_prompt(
+        prompt=None if prompt is None else str(prompt),
+        prompt_files=cast(list[str], files),
+        reply=None if reply_from is None else step_reply(prior_outputs, str(reply_from)),
+        cwd=Path(cwd),
+    )
 
 
 def step_reply(prior_outputs: Mapping[str, ActionResult], step_name: str) -> str:
@@ -196,3 +226,54 @@ def write_step_files(
         if prompt_path is not None:
             _restore(prompt_path, prior)
         raise
+
+
+def has_reply_contract(params: Mapping[str, object]) -> bool:
+    """Whether the step asks for a JSON reply or for any output file."""
+    return any(key in params for key in (REPLY_FORMAT_KEY, REPLY_FILE_KEY, DELIVERED_PROMPT_FILE_KEY))
+
+
+def _reply_format(params: Mapping[str, object]) -> ReplyFormat:
+    raw = params.get(REPLY_FORMAT_KEY, ReplyFormat.TEXT)
+    try:
+        return ReplyFormat(str(raw))
+    except ValueError as exc:
+        valid = [fmt.value for fmt in ReplyFormat]
+        raise DispatchInputError(f"'{REPLY_FORMAT_KEY}' must be one of {valid}, got {raw!r}") from exc
+
+
+def _optional_path(params: Mapping[str, object], key: str) -> str | None:
+    value = params.get(key)
+    return None if value is None else str(value)
+
+
+def apply_reply_contract(
+    result: ActionResult, params: Mapping[str, object], cwd: str, delivered_prompt: str
+) -> ActionResult:
+    """Apply a step's reply format and output files to its successful *result* (D4, D5).
+
+    A JSON step whose reply holds no object comes back failed, with ``response`` kept for
+    diagnosis and no file written. Otherwise ``reply_json`` is recorded for a JSON step
+    and the files are written: ``reply_file`` gets ``reply_json`` or ``response``,
+    ``delivered_prompt_file`` gets *delivered_prompt*. Raises ``OutputWriteError``.
+    """
+    response = result.outputs.get(RESPONSE_KEY)
+    reply = response if isinstance(response, str) else ""
+    outputs = dict(result.outputs)
+    if _reply_format(params) is ReplyFormat.JSON:
+        extracted = extract_json_object(reply)
+        if extracted is None:
+            return dataclasses.replace(result, success=False, error="reply contains no JSON object")
+        outputs[REPLY_JSON_KEY] = extracted
+        reply = extracted
+    reply_file = _optional_path(params, REPLY_FILE_KEY)
+    prompt_file = _optional_path(params, DELIVERED_PROMPT_FILE_KEY)
+    if reply_file is not None or prompt_file is not None:
+        write_step_files(
+            cwd=Path(cwd),
+            delivered_prompt_file=prompt_file,
+            delivered_prompt=delivered_prompt,
+            reply_file=reply_file,
+            reply=reply,
+        )
+    return dataclasses.replace(result, outputs=outputs)

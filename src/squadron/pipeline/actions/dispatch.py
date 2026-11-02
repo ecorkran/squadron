@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import time
 from enum import StrEnum
@@ -26,6 +27,14 @@ from squadron.core.usage import UsageRecord
 from squadron.integrations.context_forge import ContextForgeError
 from squadron.metrology.preemption import read_fragment_body, read_fragment_header
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.dispatch_io import (
+    DispatchInputError,
+    OutputWriteError,
+    apply_reply_contract,
+    assemble_step_prompt,
+    has_reply_contract,
+    uses_io_prompt,
+)
 from squadron.pipeline.actions.dispatch_outcome import assess_tool_outcome
 from squadron.pipeline.actions.dispatch_rules import (
     dispatch_requires_writes,
@@ -420,7 +429,7 @@ class DispatchAction:
         """
         try:
             return await self._dispatch(context)
-        except DispatchFeedbackError as exc:
+        except (DispatchFeedbackError, DispatchInputError) as exc:
             _logger.warning("dispatch: step %s: %s", context.step_name, exc)
             return ActionResult(success=False, action_type=self.action_type, outputs={}, error=str(exc))
         except GitEnvironmentError:
@@ -651,6 +660,9 @@ class DispatchAction:
         resolved = context.resolver.resolve_full(action_model, step_model)
         model_id = resolved.model_id
 
+        # Resolved before the model switch: a prompt file that cannot be read fails the
+        # step first (slice 949 D2). Off the event loop, because it reads files.
+        resolved_prompt = await asyncio.to_thread(self._resolve_prompt, context)
         try:
             await session.set_model(model_id)
         except ProviderError as exc:
@@ -658,7 +670,6 @@ class DispatchAction:
             named = ProviderError(f"model {alias}: {exc}")
             return self._provider_failure(context, named, None, None)
 
-        resolved_prompt = self._resolve_prompt(context)
         effort_sent = capture.effort_for_session(resolved)
         started = time.monotonic()
         try:
@@ -704,12 +715,13 @@ class DispatchAction:
             "project_rules": sdk_native_record(),
         }
         stamp(metadata, record)
-        return ActionResult(
+        result = ActionResult(
             success=True,
             action_type=self.action_type,
             outputs={"response": response_text},
             metadata=metadata,
         )
+        return await self._with_reply_contract(context, result, resolved_prompt.text)
 
     def _resolve_prompt(self, context: ActionContext) -> ResolvedPrompt:
         """Return the delivered prompt for this dispatch, with its source (D8).
@@ -736,6 +748,9 @@ class DispatchAction:
         if context.params.get("feedback") is not None:
             prompt = self._resolve_feedback_prompt(context, explicit)
             source = PromptSource.FEEDBACK
+        elif uses_io_prompt(context.params):
+            # Files and an earlier reply, not the fallbacks below (slice 949 D2).
+            prompt = assemble_step_prompt(context.params, context.prior_outputs, context.cwd)
         elif explicit is not None:
             prompt = str(explicit)
         else:
@@ -935,7 +950,7 @@ class DispatchAction:
         requires_writes = dispatch_requires_writes(context.params)
         capture = require_capture(context.usage_capture, self.action_type)
         usage_metadata: dict[str, object] = {}
-        resolved_prompt = self._resolve_prompt(context)
+        resolved_prompt = await asyncio.to_thread(self._resolve_prompt, context)
 
         started = time.monotonic()
         try:
@@ -994,12 +1009,34 @@ class DispatchAction:
                 error=outcome.fail_reason,
                 metadata=metadata,
             )
-        return ActionResult(
+        result = ActionResult(
             success=True,
             action_type=self.action_type,
             outputs={"response": response_text},
             metadata=metadata,
         )
+        return await self._with_reply_contract(context, result, resolved_prompt.text)
+
+    async def _with_reply_contract(
+        self, context: ActionContext, result: ActionResult, delivered_prompt: str
+    ) -> ActionResult:
+        """Apply the step's reply format and output files to a successful dispatch (D4, D5).
+
+        Extraction and the file writes run off the event loop. A step without those keys
+        is returned untouched.
+        """
+        if not has_reply_contract(context.params):
+            return result
+        try:
+            applied = await asyncio.to_thread(
+                apply_reply_contract, result, context.params, context.cwd, delivered_prompt
+            )
+        except OutputWriteError as exc:
+            _logger.warning("dispatch: step %s: %s", context.step_name, exc)
+            return dataclasses.replace(result, success=False, error=str(exc))
+        if not applied.success:
+            _logger.warning("dispatch: step %s: %s", context.step_name, applied.error)
+        return applied
 
     async def _one_shot(
         self,

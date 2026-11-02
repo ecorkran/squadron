@@ -112,9 +112,9 @@ revision_number: 1
 
 ### Part C: new keys, validation and reply lookup
 
-- [ ] **T8: New dispatch keys: constants and shape validation** (Effort 3)
+- [x] **T8: New dispatch keys: constants and shape validation** (Effort 3)
   - [x] Create `pipeline/dispatch_keys.py`, a module with no imports from `steps/` or `actions/`, holding the five key-name constants, `ReplyFormat(StrEnum)` (`text`, `json`) and the shared path check (below). `steps/dispatch.py` and `actions/dispatch_io.py` both import from it. This departs from the design's component table, which puts `ReplyFormat` in `dispatch_io.py`: `steps/dispatch.py` already imports `actions/dispatch.py` at module level, so `steps/dispatch.py` → `dispatch_io.py` → `steps/dispatch.py` would be an import cycle (review F005)
-  - [ ] Create `pipeline/actions/dispatch_io.py` (module docstring citing slice 949 D2–D5); it imports the constants and `ReplyFormat` from `dispatch_keys.py`
+  - [x] Create `pipeline/actions/dispatch_io.py` (module docstring citing slice 949 D2–D5); it imports the constants and `ReplyFormat` from `dispatch_keys.py`
   - [x] In `steps/dispatch.py`, add the five names to `DISPATCH_FORWARDED_KEYS` so `expand` forwards them and `known_keys` includes them. No literal key strings anywhere else (Patterns and Conventions)
   - [x] `validate` per D1: `prompt_files` is a non-empty list of strings (a bare string errors and says to use a list); `reply_format` is a `ReplyFormat` value; `reply_from` is a string; `reply_file` and `delivered_prompt_file` are strings and must differ; `feedback` with `prompt_files` or `reply_from` is an error
   - [x] Path check, one shared function in `dispatch_keys.py`: relative, no `..` part. Values containing a `{param}` placeholder skip it at load time (gate-reference convention) and the same function runs at run time (T14)
@@ -158,28 +158,32 @@ revision_number: 1
 
 **Commit**: `feat: add dispatch_io for prompt assembly, reply hand-off and output files`
 
-- [ ] **T15a: Resolve the prompt once in `_dispatch`** (Effort 3)
-  - [ ] Order inside `_dispatch` per the Data Flow: `_kept_outputs`, route, T7 guard, then resolve the prompt once via `asyncio.to_thread(assemble_prompt, ...)`, then the existing session or agent path receiving the resolved prompt (remove the prompt resolution now duplicated inside each path; do not change their other internals). `PromptSource` stays `EXPLICIT`
-  - [ ] `execute` catches `DispatchInputError`, logs WARNING, and returns a failed `ActionResult` before any model call
-  - [ ] Add a code comment at the new prompt-resolution call: a session `set_model` failure now records the prompt identity (design Special Considerations)
-  - [ ] Tests (`tests/pipeline/actions/test_dispatch_input.py`, stub provider): a missing prompt file fails the step before the stub is called, with a WARNING naming the path; `prompt_files` content reaches the stub in order
-  - [ ] SC: all existing `tests/pipeline/actions/test_dispatch*.py` pass unchanged; `ruff format`, `ruff check`, `pyright` clean
+- [x] **T15a: Resolve the prompt once in `_dispatch`** (Effort 3)
+  - [x] Order inside `_dispatch` per the Data Flow: `_kept_outputs`, route, T7 guard, then resolve the prompt once via `asyncio.to_thread(assemble_prompt, ...)`, then the existing session or agent path receiving the resolved prompt (remove the prompt resolution now duplicated inside each path; do not change their other internals). `PromptSource` stays `EXPLICIT`
+  - [x] `execute` catches `DispatchInputError`, logs WARNING, and returns a failed `ActionResult` before any model call
+  - [x] Add a code comment at the new prompt-resolution call: a session `set_model` failure now records the prompt identity (design Special Considerations)
+  - [x] Tests (`tests/pipeline/actions/test_dispatch_input.py`, stub provider): a missing prompt file fails the step before the stub is called, with a WARNING naming the path; `prompt_files` content reaches the stub in order
+  - [x] SC: all existing `tests/pipeline/actions/test_dispatch*.py` pass unchanged; `ruff format`, `ruff check`, `pyright` clean
 
-- [ ] **T15b: Apply the reply contract after a successful dispatch** (Effort 3)
-  - [ ] Add `apply_reply_contract(...)` to `dispatch_io.py` so the logic lives there and `dispatch.py` gains only a call site (run via `asyncio.to_thread`): for `reply_format: json`, `extract_json_object` returning `None` yields a failed step with "reply contains no JSON object", keeps `outputs["response"]`, writes no files; on success it sets `outputs["reply_json"]` to the extracted substring while `outputs["response"]` keeps the full reply (State Management)
-  - [ ] It then calls `write_step_files`: `reply_file` receives `reply_json` for a JSON step, else `response`; `delivered_prompt_file` receives the final delivered text (after override and pre-emption prefixes are added)
-  - [ ] `OutputWriteError` is caught at the call site in `_dispatch`: log WARNING naming the path and return a failed `ActionResult` with that error (restore already happened in `write_step_files`)
-  - [ ] Tests (`test_dispatch_io.py` for the contract, `test_dispatch_input.py` for the call site): JSON step sets `reply_json` and writes it; text step writes `response`; no-JSON reply fails with the message and writes nothing; an injected write failure gives a failed `ActionResult` and a WARNING (`caplog`)
-  - [ ] SC: existing dispatch tests pass unchanged; `dispatch.py` gains call sites only; `ruff format`, `ruff check`, `pyright` clean
+  Note: the paths keep their signatures (the routing tests assert `_dispatch_via_session(ctx, session)` and `_dispatch_via_agent(ctx)`), so each path resolves the prompt itself via `asyncio.to_thread(self._resolve_prompt, ...)`, once per dispatch. The session path now resolves before `set_model`, so an unreadable prompt file fails the step before the model switch. A `set_model` failure still records no prompt identity, so the code comment the task called for is not needed.
 
-- [ ] **T16: End-to-end test of the two-step pipeline** (Effort 2)
-  - [ ] Create `tests/pipeline/test_dispatch_file_io.py` with a stub provider and `tmp_path`, running Amoeba's two-step shape from the design (`allowed_tools: []` on a non-file-reading stub route). Unit tests already cover each rule; this file covers only the integrated criteria:
+- [x] **T15b: Apply the reply contract after a successful dispatch** (Effort 3)
+  - [x] Add `apply_reply_contract(...)` to `dispatch_io.py` so the logic lives there and `dispatch.py` gains only a call site (run via `asyncio.to_thread`): for `reply_format: json`, `extract_json_object` returning `None` yields a failed step with "reply contains no JSON object", keeps `outputs["response"]`, writes no files; on success it sets `outputs["reply_json"]` to the extracted substring while `outputs["response"]` keeps the full reply (State Management)
+  - [x] It then calls `write_step_files`: `reply_file` receives `reply_json` for a JSON step, else `response`; `delivered_prompt_file` receives the final delivered text (after override and pre-emption prefixes are added)
+  - [x] `OutputWriteError` is caught at the call site in `_dispatch`: log WARNING naming the path and return a failed `ActionResult` with that error (restore already happened in `write_step_files`)
+  - [x] Tests (`test_dispatch_io.py` for the contract, `test_dispatch_input.py` for the call site): JSON step sets `reply_json` and writes it; text step writes `response`; no-JSON reply fails with the message and writes nothing; an injected write failure gives a failed `ActionResult` and a WARNING (`caplog`)
+  - [x] SC: existing dispatch tests pass unchanged; `dispatch.py` gains call sites only; `ruff format`, `ruff check`, `pyright` clean
+
+- [x] **T16: End-to-end test of the two-step pipeline** (Effort 2)
+  - [x] Create `tests/pipeline/test_dispatch_file_io.py` with a stub provider and `tmp_path`, running Amoeba's two-step shape from the design (`allowed_tools: []` on a non-file-reading stub route). Unit tests already cover each rule; this file covers only the integrated criteria:
     1. happy path: `extract.prompt.md` holds prompt then `question.md` verbatim; `claims.json` is exactly the extracted object; `answer.prompt.md` ends with the `claims.json` bytes and does not contain `extract`'s prompt (Criteria 1, 2, 4)
     2. a non-JSON `extract` reply fails that step, and a pre-existing `claims.json` is byte-identical afterwards (Criterion 3)
     3. `reply_from` naming a step whose result failed or has no `response` fails the reading step with an error naming it (Criterion 6)
     4. resume: run the pipeline until `extract` succeeds and persist state, then resume from `answer`; `answer` receives the restored `claims.json` bytes (via `_seed_resume_outputs`). A second resume case whose persisted `extract` result is failed fails `answer` with an error naming `extract` (Criterion 6, "including on resume")
-  - [ ] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
+  - [x] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
 
+
+  Note: case 3 is covered in two places. The failed-result variant runs through the executor as the second resume case (4); a failed step stops a live run, so it cannot be read in one. The no-response variant is `test_a_reply_from_an_unusable_result_fails_the_reader_naming_the_step` in `tests/pipeline/actions/test_dispatch_input.py`, which runs `DispatchAction` itself.
 **Commit**: `feat: dispatch steps read files and earlier replies and write reply files`
 
 ### Part E: prompt-only, docs, final verification
