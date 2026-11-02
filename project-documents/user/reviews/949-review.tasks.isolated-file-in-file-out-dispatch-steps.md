@@ -126,3 +126,9 @@ There are 19 tasks in one file for an Effort 3/5 slice. Splitting the test tasks
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 6
 - Finding-shaped matches — surviving validation: 6
+
+## Response
+
+- **F005 — fixed.** The cycle is real: `steps/dispatch.py` already imports `actions/dispatch.py` at module level, so `dispatch_io.py` importing `steps/dispatch.py` for the key constants would close a loop. T8 now creates `pipeline/dispatch_keys.py` (no `steps/` or `actions/` imports) holding the key constants, `ReplyFormat` and the path check; both modules import from it. This departs from the design's component table, and T8 says so.
+- **F004 — no change.** `_dispatch` already resolves the route (`_resolve_model`, then the session, SDK-profile and agent branches) before any path runs; T7 inserts the guard there. The agent path's profile name is extracted by T5.
+- **F006 — no change.** Noted; the test tasks keep the commit points clean.

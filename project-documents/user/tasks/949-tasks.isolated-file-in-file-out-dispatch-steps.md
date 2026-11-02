@@ -111,10 +111,11 @@ revision_number: 1
 ### Part C: new keys, validation and reply lookup
 
 - [ ] **T8: New dispatch keys: constants and shape validation** (Effort 3)
-  - [ ] Create `pipeline/actions/dispatch_io.py` (module docstring citing slice 949 D2–D5) holding `ReplyFormat(StrEnum)` (`text`, `json`), as the design's component table places it; `steps/dispatch.py` imports it
-  - [ ] In `steps/dispatch.py`, define the five key names as constants; add the five to `DISPATCH_FORWARDED_KEYS` so `expand` forwards them and `known_keys` includes them. No literal key strings anywhere else (Patterns and Conventions)
+  - [ ] Create `pipeline/dispatch_keys.py`, a module with no imports from `steps/` or `actions/`, holding the five key-name constants, `ReplyFormat(StrEnum)` (`text`, `json`) and the shared path check (below). `steps/dispatch.py` and `actions/dispatch_io.py` both import from it. This departs from the design's component table, which puts `ReplyFormat` in `dispatch_io.py`: `steps/dispatch.py` already imports `actions/dispatch.py` at module level, so `steps/dispatch.py` → `dispatch_io.py` → `steps/dispatch.py` would be an import cycle (review F005)
+  - [ ] Create `pipeline/actions/dispatch_io.py` (module docstring citing slice 949 D2–D5); it imports the constants and `ReplyFormat` from `dispatch_keys.py`
+  - [ ] In `steps/dispatch.py`, add the five names to `DISPATCH_FORWARDED_KEYS` so `expand` forwards them and `known_keys` includes them. No literal key strings anywhere else (Patterns and Conventions)
   - [ ] `validate` per D1: `prompt_files` is a non-empty list of strings (a bare string errors and says to use a list); `reply_format` is a `ReplyFormat` value; `reply_from` is a string; `reply_file` and `delivered_prompt_file` are strings and must differ; `feedback` with `prompt_files` or `reply_from` is an error
-  - [ ] Path check, one shared function: relative, no `..` part. Values containing a `{param}` placeholder skip it at load time (gate-reference convention) and the same function runs at run time (T14)
+  - [ ] Path check, one shared function in `dispatch_keys.py`: relative, no `..` part. Values containing a `{param}` placeholder skip it at load time (gate-reference convention) and the same function runs at run time (T14)
   - [ ] SC: `ruff format`, `ruff check`, `pyright` clean
 
 - [ ] **T9: Test key validation** (Effort 2)
