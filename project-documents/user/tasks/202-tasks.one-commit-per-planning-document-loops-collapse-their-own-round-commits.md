@@ -68,16 +68,16 @@ revision_number: 2
 
 ### 2. Ledger model and state persistence (effort 2)
 
-- [ ] **2.1 Create `src/squadron/pipeline/loop_ledger.py` with `LoopCommitLedger`**
-  - [ ] Pydantic model with fields `base_sha: str`, `commits: list[str]` (oldest first),
+- [x] **2.1 Create `src/squadron/pipeline/loop_ledger.py` with `LoopCommitLedger`**
+  - [x] Pydantic model with fields `base_sha: str`, `commits: list[str]` (oldest first),
         `unprovable: bool = False` (design State Management table)
-  - [ ] `StepResult` (`executor.py`) gains `loop_commits: LoopCommitLedger | None = None`
-  - [ ] `StepState` (`state.py`) gains `loop_commits: LoopCommitLedger | None = None`, and the
+  - [x] `StepResult` (`executor.py`) gains `loop_commits: LoopCommitLedger | None = None`
+  - [x] `StepState` (`state.py`) gains `loop_commits: LoopCommitLedger | None = None`, and the
         code that converts a `StepResult` into a `StepState` copies it
-  - [ ] Avoid an import cycle: `loop_ledger.py` must not import `executor.py` at module level
-- [ ] **2.2 Test persistence** in `tests/pipeline/test_loop_ledger.py`
-  - [ ] A ledger on a `StepState` round-trips through the state file
-  - [ ] A state file written without `loop_commits` still loads, with `None`
+  - [x] Avoid an import cycle: `loop_ledger.py` must not import `executor.py` at module level
+- [x] **2.2 Test persistence** in `tests/pipeline/test_loop_ledger.py`
+  - [x] A ledger on a `StepState` round-trips through the state file
+  - [x] A state file written without `loop_commits` still loads, with `None`
 
 **Commit**: `feat: add loop commit ledger model and state field`
 

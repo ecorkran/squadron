@@ -65,6 +65,7 @@ from squadron.pipeline.loop_config import (
     last_with_verdict,
     parse_loop_config,
 )
+from squadron.pipeline.loop_ledger import LoopCommitLedger
 from squadron.pipeline.models import (
     ActionContext,
     ActionResult,
@@ -242,6 +243,9 @@ class StepResult:
     # sees every round (#170), and persisted per round (slice 176 D3); conditions and
     # failure reporting keep reading the final round.
     prior_rounds: list[list[ActionResult]] = field(default_factory=lambda: [])
+    # The commits a planning loop made, so a pause carries them across a resume and
+    # completion can collapse them into one (slice 202); None for any other step.
+    loop_commits: LoopCommitLedger | None = None
 
 
 @dataclass

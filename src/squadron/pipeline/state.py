@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, cast
 from pydantic import BaseModel, ValidationError
 
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult
+from squadron.pipeline.loop_ledger import LoopCommitLedger
 from squadron.pipeline.models import ActionResult, prior_output_key
 
 if TYPE_CHECKING:
@@ -129,6 +130,8 @@ class StepState(BaseModel):
     # Slice 176 D3: a loop's earlier rounds, one list of action dicts per round, in
     # order; the final round stays in ``action_results``. Defaults let older files load.
     prior_round_results: list[list[dict[str, object]]] = []
+    # Slice 202: the commits a planning loop made. None for older files and other steps.
+    loop_commits: LoopCommitLedger | None = None
     accepted: bool = False
     exhausted: bool = False
     iteration: int = 0
@@ -574,6 +577,7 @@ class StateManager:
             outputs=outputs,
             action_results=action_results_dicts,
             prior_round_results=prior_round_dicts,
+            loop_commits=step_result.loop_commits,
             accepted=step_result.accepted,
             exhausted=step_result.exhausted,
             iteration=step_result.iteration,
