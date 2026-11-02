@@ -195,10 +195,10 @@ revision_number: 1
 
 **Commit**: `feat: reject dispatch file keys in prompt-only mode`
 
-- [ ] **T18: Docs and CHANGELOG** (Effort 2)
-  - [ ] `docs/PIPELINES.md` dispatch section documents: the five keys with the Amoeba example; the JSON extraction rule; the file-write guarantee (whole-file replace, written only on success, both files unchanged on failure); the no-tools guard being dispatch-only and enforced only by `sq run` (not `--prompt-only`); `reply_from` top-level only; `--validate --strict`
-  - [ ] CHANGELOG: short user-facing bullets for the new keys, `--validate --strict`, and the behavior change that `allowed_tools: []` on an SDK or Codex dispatch step now fails. Technical detail goes in DEVLOG, not CHANGELOG
-  - [ ] SC: no code changes; links and key names match the implementation (grep each documented key in `src/`)
+- [x] **T18: Docs and CHANGELOG** (Effort 2)
+  - [x] `docs/PIPELINES.md` dispatch section documents: the five keys with the Amoeba example; the JSON extraction rule; the file-write guarantee (whole-file replace, written only on success, both files unchanged on failure); the no-tools guard being dispatch-only and enforced only by `sq run` (not `--prompt-only`); `reply_from` top-level only; `--validate --strict`
+  - [x] CHANGELOG: short user-facing bullets for the new keys, `--validate --strict`, and the behavior change that `allowed_tools: []` on an SDK or Codex dispatch step now fails. Technical detail goes in DEVLOG, not CHANGELOG
+  - [x] SC: no code changes; links and key names match the implementation (grep each documented key in `src/`)
 
 **Commit**: `docs: document dispatch file keys, tool guard and validate --strict`
 

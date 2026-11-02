@@ -219,6 +219,11 @@ A step whose only destination is `rotate` is skipped, with no model call, when t
 | `model` | string | no | Model alias for the dispatch |
 | `feedback` | string | no | `review` — revise against the most recent review in scope. The prompt becomes the step's `prompt` (if any), then that review's findings, then `Revise `<file>` in place; do not create a new file.` naming the file the review read. Takes precedence over a prior `build_context` output, which inside a batch item is the original "create a design" prompt. With no review in scope the step fails: `feedback: review but no prior review in scope` |
 | `artifact` | string | no | `design` or `tasks` — the artifact this dispatch rewrites. Gives the step the same post-action handling a design or tasks phase step gets: the dispatch post-condition (the file must be written this run), the `revision_number` stamp and the usage stamp. Set it on every revise step that rewrites a design or task file |
+| `prompt_files` | list of strings | no | Files whose content is added to the prompt, in the order listed. See [File-in, file-out steps](#file-in-file-out-dispatch-steps) |
+| `reply_from` | string | no | Name of an earlier top-level `dispatch` step whose reply is added to the prompt |
+| `reply_format` | string | no | `text` (default) or `json` — with `json` the first JSON object in the reply is extracted |
+| `reply_file` | string | no | File that receives the step's reply |
+| `delivered_prompt_file` | string | no | File that receives the exact prompt sent to the model |
 
 **Example:**
 
@@ -233,6 +238,38 @@ A revise round inside a loop:
 ```yaml
 - dispatch: { name: revise, model: "{model}", feedback: review, artifact: design }
 ```
+
+#### File-in, file-out dispatch steps
+
+A dispatch step can be isolated: it sees only the files and earlier replies you name, and it leaves its reply in files. Two steps that answer a question from a file, where the second sees only the first's claims:
+
+```yaml
+steps:
+  - dispatch:
+      name: extract
+      model: deepseek4-flash
+      allowed_tools: []
+      prompt: "Extract the claims as one JSON object."
+      prompt_files: [question.md]
+      reply_format: json
+      reply_file: claims.json
+      delivered_prompt_file: extract.prompt.md
+  - dispatch:
+      name: answer
+      model: deepseek4-flash
+      allowed_tools: []
+      prompt: "Answer using only these claims."
+      reply_from: extract
+      reply_file: answer.md
+      delivered_prompt_file: answer.prompt.md
+```
+
+- **Prompt:** the step's `prompt`, then each `prompt_files` entry, then the `reply_from` reply, joined by a blank line. With any of these keys the step uses only them: there is no `build_context` fallback. Files are read as UTF-8 and added verbatim; `{...}` text inside a file is never substituted. `feedback` cannot be combined with `prompt_files` or `reply_from`.
+- **Paths** (`prompt_files`, `reply_file`, `delivered_prompt_file`) are relative to the run's working directory and must not contain `..`. `reply_file` and `delivered_prompt_file` must differ. A missing file, a directory, an unreadable file or invalid UTF-8 fails the step before any model call.
+- **`reply_from`** names an earlier **top-level** `dispatch` step; it is not supported inside `loop`, `each` or `fan_out` bodies. The reply is that step's `reply_json` when it extracted one, else its full response. The step fails, naming the earlier step, if that step failed, never ran, or recorded no reply. After `sq run --resume` the reply comes from the saved run state.
+- **JSON extraction** (`reply_format: json`): each `{` in the reply is tried in order, and the first span that parses as a JSON object is used, exactly as written (code fences and surrounding prose are skipped; `NaN` and `Infinity` are refused). A reply with no object fails the step with `reply contains no JSON object`, and no file is written.
+- **Files are written only when the step succeeds**, each replaced whole, never partially. The prompt file is written first and the reply file last. If the reply write fails, the prompt file is put back as it was, so a failed step leaves both files unchanged. If even that restore fails, an ERROR names the prompt file.
+- **`allowed_tools: []` means no tools.** On a dispatch step it fails before any model call with `failure_kind: tool_isolation` when the model runs on the SDK session or on a provider that reads files itself (the SDK, Codex). Use a model whose provider runs no tools of its own, such as an OpenRouter alias. Only dispatch steps are checked, and only `sq run` enforces it, not `--prompt-only`.
 
 ---
 
@@ -1132,7 +1169,7 @@ The wait is bounded by `pipeline.background_idle_timeout_s` (default 1800), seco
 
 1. Create `<project-root>/project-documents/user/pipelines/<name>.yaml`
 2. Use `example.yaml` as a template (`sq run example --validate` to see the reference pipeline, then copy `src/squadron/data/pipelines/example.yaml`)
-3. Validate: `sq run <name> --validate`
+3. Validate: `sq run <name> --validate`. Add `--strict` to also report any step key the step type does not read (a typo such as `colour: red` is otherwise ignored)
 4. Dry-run: `sq run <name> <target> --dry-run`
 
 **Minimal custom pipeline:**
@@ -1170,6 +1207,8 @@ sq run --step-done <run-id>                            # mark current step compl
 ```
 
 The `/sq:run` slash command (installed via `sq install-commands`) wraps this loop automatically — you don't need to manage run IDs manually.
+
+A `dispatch` step that uses `prompt_files`, `reply_from`, `reply_format`, `reply_file` or `delivered_prompt_file` is refused here, with an error naming the key: the session cannot read the files, hand a reply between steps or write the output files. Run it with `sq run`.
 
 Branch and commit steps render as the hidden `sq _branch enter|merge --slice N` and `sq _commit --subject … --slice N` commands, which run the same code the in-process executor does.
 
