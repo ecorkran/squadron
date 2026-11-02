@@ -140,21 +140,21 @@ revision_number: 1
 
 ### Part D: `dispatch_io` and the dispatch restructure
 
-- [ ] **T12: `extract_json_object`** (Effort 2)
-  - [ ] Add to `dispatch_io.py` `extract_json_object(text) -> str | None` exactly per D4: scan each `{` in order with `json.JSONDecoder(parse_constant=_reject).raw_decode`, return the original substring of the first success, reject `NaN`/`Infinity`/`-Infinity`, no re-serialization
-  - [ ] Tests in `tests/pipeline/actions/test_dispatch_io.py` (parametrized): bare object, fenced object, prose before and after, nested object returns the outer, malformed outer with valid inner returns the inner, `NaN`-only candidate returns `None`, no object returns `None`; returned text is byte-identical to the input span
-  - [ ] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
+- [x] **T12: `extract_json_object`** (Effort 2)
+  - [x] Add to `dispatch_io.py` `extract_json_object(text) -> str | None` exactly per D4: scan each `{` in order with `json.JSONDecoder(parse_constant=_reject).raw_decode`, return the original substring of the first success, reject `NaN`/`Infinity`/`-Infinity`, no re-serialization
+  - [x] Tests in `tests/pipeline/actions/test_dispatch_io.py` (parametrized): bare object, fenced object, prose before and after, nested object returns the outer, malformed outer with valid inner returns the inner, `NaN`-only candidate returns `None`, no object returns `None`; returned text is byte-identical to the input span
+  - [x] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
 
-- [ ] **T13: `assemble_prompt` and `DispatchInputError`** (Effort 3)
-  - [ ] Add `DispatchInputError` and `assemble_prompt(...)` to `dispatch_io.py` per D2: parts in order `prompt`, each file, the reply, joined by `"\n\n"`; a prompt-only step is returned unchanged; no placeholder substitution inside file content; each path must satisfy the T8 path check, then `Path.is_file()` before opening; read UTF-8; `OSError` (incl. `PermissionError`) and `UnicodeDecodeError` become `DispatchInputError` naming the path
-  - [ ] Tests (`test_dispatch_io.py`): order and separator; `{slice}` inside a file arrives unchanged; prompt-only unchanged; missing file, directory, FIFO (`os.mkfifo`; assert it does not block), permission denied (`chmod 000`; skip when running as root), invalid UTF-8, absolute and `..` run-time paths each raise `DispatchInputError` naming the path
-  - [ ] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
+- [x] **T13: `assemble_prompt` and `DispatchInputError`** (Effort 3)
+  - [x] Add `DispatchInputError` and `assemble_prompt(...)` to `dispatch_io.py` per D2: parts in order `prompt`, each file, the reply, joined by `"\n\n"`; a prompt-only step is returned unchanged; no placeholder substitution inside file content; each path must satisfy the T8 path check, then `Path.is_file()` before opening; read UTF-8; `OSError` (incl. `PermissionError`) and `UnicodeDecodeError` become `DispatchInputError` naming the path
+  - [x] Tests (`test_dispatch_io.py`): order and separator; `{slice}` inside a file arrives unchanged; prompt-only unchanged; missing file, directory, FIFO (`os.mkfifo`; assert it does not block), permission denied (`chmod 000`; skip when running as root), invalid UTF-8, absolute and `..` run-time paths each raise `DispatchInputError` naming the path
+  - [x] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
 
-- [ ] **T14: `step_reply` and `write_step_files`** (Effort 3)
-  - [ ] `step_reply(prior_outputs, step_name)` per D3: take the last `dispatch` result from `results_for_step`; return `outputs["reply_json"]` when present, else `outputs["response"]`; raise `DispatchInputError` naming the step when there is no dispatch result, it failed, or it has no `response`; an empty reply is never passed on
-  - [ ] `write_step_files(...)` per D5: record the prompt file's current bytes (or absence); write `delivered_prompt_file` first, then `reply_file` last, each with `write_new_file(path, content, force=True)`, UTF-8, nothing appended; any `OSError` from a write is wrapped in `OutputWriteError` (defined in `dispatch_io.py`, message names the path); on an `OSError` from the `reply_file` write, first restore the prompt file (or remove it if it was new), then raise `OutputWriteError`; if the restore itself fails, log at ERROR naming the prompt file and say a changed file remains
-  - [ ] Tests (`test_dispatch_io.py`): `step_reply` for response, `reply_json`, failed step, skipped step (no `response`), missing step; `write_step_files` writes exact bytes with no trailing newline; a failure injected on the `reply_file` write restores a pre-existing prompt file byte-identically and removes a new one; a failure injected on the restore logs ERROR (`caplog`) naming the prompt file; both targets unchanged after the failure
-  - [ ] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean; `dispatch_io.py` stays under ~300 lines
+- [x] **T14: `step_reply` and `write_step_files`** (Effort 3)
+  - [x] `step_reply(prior_outputs, step_name)` per D3: take the last `dispatch` result from `results_for_step`; return `outputs["reply_json"]` when present, else `outputs["response"]`; raise `DispatchInputError` naming the step when there is no dispatch result, it failed, or it has no `response`; an empty reply is never passed on
+  - [x] `write_step_files(...)` per D5: record the prompt file's current bytes (or absence); write `delivered_prompt_file` first, then `reply_file` last, each with `write_new_file(path, content, force=True)`, UTF-8, nothing appended; any `OSError` from a write is wrapped in `OutputWriteError` (defined in `dispatch_io.py`, message names the path); on an `OSError` from the `reply_file` write, first restore the prompt file (or remove it if it was new), then raise `OutputWriteError`; if the restore itself fails, log at ERROR naming the prompt file and say a changed file remains
+  - [x] Tests (`test_dispatch_io.py`): `step_reply` for response, `reply_json`, failed step, skipped step (no `response`), missing step; `write_step_files` writes exact bytes with no trailing newline; a failure injected on the `reply_file` write restores a pre-existing prompt file byte-identically and removes a new one; a failure injected on the restore logs ERROR (`caplog`) naming the prompt file; both targets unchanged after the failure
+  - [x] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean; `dispatch_io.py` stays under ~300 lines
 
 **Commit**: `feat: add dispatch_io for prompt assembly, reply hand-off and output files`
 
