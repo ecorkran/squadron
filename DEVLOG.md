@@ -11,6 +11,14 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261101
 
+### Slice 202: One Commit Per Planning Document — Implementation Complete, Review Pending
+
+- **Branch:** `202-slice.one-commit-per-planning-document-loops-collapse-their-own-round-commits`, task commits plus a rework commit; not merged, nothing pushed. Full suite, ruff and pyright clean. All tasks checked; the Verification Walkthrough passed live on a scratch clone (`## Verification Walkthrough` in the slice design).
+- **Delivered:** a `commit_each_iteration` planning loop collapses its phase commit and round commits (and the dispatch agents' commits among them) into one commit when it completes: `commit-tree` with the same tree, a `refs/squadron/pre-collapse/<sha>` backup ref, a compare-and-swap `update-ref`. It refuses with one WARNING when it cannot prove the commits are its own, unpublished and the tip of the target. Code loops never collapse.
+- **Decision (D1 revised):** the ledger claims commits by HEAD stamps (`head_stamp.py`, on every dispatch and commit result), not by listing shas. The first design listed the commit action's shas, and the first live run refused: the SDK dispatch agents commit their own work, so those commits sat between the pipeline's. A commit made between two of the loop's actions (an operator's during a pause) breaks the chain and the loop will not collapse.
+- **Surprises:** the live runs found two bugs the scripted tests had not: the agent commits above, and a double claim of the last round when a loop paused at its exhaustion checkpoint. Both now have tests. A commit landing while an agent is mid-action cannot be told from the agent's own; only a person committing in the same checkout during a run can cause it.
+- **Pending:** code review not run. The scratch clone directory under the session scratchpad was left for the PM to delete (the removal was blocked by a safety check). `main` still carries the seven task-planning commits unsquashed; backup tag `backup/pre-squash-202` is local.
+
 ### Slice 202: One Commit Per Planning Document — Design Complete
 
 - **Output:** `202-slice.one-commit-per-planning-document-loops-collapse-their-own-round-commits.md`; `cf validate design` passes. Fixes #257. Phase 5 not started.
