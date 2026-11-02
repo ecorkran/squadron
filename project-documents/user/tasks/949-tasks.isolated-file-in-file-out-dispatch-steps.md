@@ -188,10 +188,10 @@ revision_number: 1
 
 ### Part E: prompt-only, docs, final verification
 
-- [ ] **T17: Reject the new keys in prompt-only mode** (Effort 2)
-  - [ ] In `prompt_renderer.py`, `_render_dispatch` raises the renderer's existing error type when the step config has any of the five new keys; the message names the key and says to run with `sq run` (D9). `allowed_tools: []` behavior is unchanged
-  - [ ] Tests in `tests/pipeline/test_prompt_renderer.py` (and `test_dispatch_render.py` if it covers `_render_dispatch`): one case per key raises and names it; a dispatch step without them renders as before; `allowed_tools: []` still renders (Success Criterion 9)
-  - [ ] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
+- [x] **T17: Reject the new keys in prompt-only mode** (Effort 2)
+  - [x] In `prompt_renderer.py`, `_render_dispatch` raises the renderer's existing error type when the step config has any of the five new keys; the message names the key and says to run with `sq run` (D9). `allowed_tools: []` behavior is unchanged
+  - [x] Tests in `tests/pipeline/test_prompt_renderer.py` (and `test_dispatch_render.py` if it covers `_render_dispatch`): one case per key raises and names it; a dispatch step without them renders as before; `allowed_tools: []` still renders (Success Criterion 9)
+  - [x] SC: tests pass; `ruff format`, `ruff check`, `pyright` clean
 
 **Commit**: `feat: reject dispatch file keys in prompt-only mode`
 

@@ -10,6 +10,7 @@ import pytest
 
 from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.dispatch_keys import DISPATCH_IO_KEYS
 from squadron.pipeline.loop_commit import CommitScopeUnknownError
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.prompt_renderer import (
@@ -181,6 +182,17 @@ class TestRenderDispatch:
         result = _render_dispatch({"model": None}, {}, resolver)
         assert result.model is None
         assert result.model_switch is None
+
+    @pytest.mark.parametrize("key", DISPATCH_IO_KEYS)
+    def test_file_and_reply_keys_are_refused_in_prompt_only_mode(self, key: str) -> None:
+        resolver = _make_resolver("claude-opus-4-20250514")
+        with pytest.raises(ValueError, match=rf"{key}.*sq run"):
+            _render_dispatch({"model": "opus", key: "x"}, {}, resolver)
+
+    def test_empty_allowed_tools_still_renders(self) -> None:
+        resolver = _make_resolver("claude-opus-4-20250514")
+        result = _render_dispatch({"model": "opus", "allowed_tools": []}, {}, resolver)
+        assert result.action_type == ActionType.DISPATCH
 
 
 class TestRenderReview:

@@ -27,6 +27,7 @@ from squadron.pipeline.compaction_templates import (
     load_compaction_template,
     render_instructions,
 )
+from squadron.pipeline.dispatch_keys import DISPATCH_IO_KEYS
 from squadron.pipeline.executor import (
     CHECKPOINT_KEY_ACCEPT,
     CHECKPOINT_KEY_EXIT,
@@ -177,7 +178,16 @@ def _render_dispatch(
 
     SDK profiles: in-session path (model_switch, no command).
     Non-SDK profiles: emits a ``sq _dispatch-run`` command for the harness.
+
+    The file and reply keys (slice 949) need ``sq run``: the harness cannot read the
+    files, hand a reply between steps or write the output files, so rendering them
+    would silently drop them.
     """
+    if unsupported := [key for key in DISPATCH_IO_KEYS if key in config]:
+        raise ValueError(
+            f"dispatch step uses {', '.join(unsupported)}, which prompt-only mode cannot "
+            "honor; run the pipeline with `sq run`"
+        )
     action_model = str(config["model"]) if config.get("model") else None
 
     if action_model is None:
