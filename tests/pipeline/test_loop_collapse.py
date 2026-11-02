@@ -2,18 +2,26 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from squadron.integrations.context_forge import ProjectInfo, SliceEntry
+import pytest
+
+from squadron.integrations.context_forge import ContextForgeError, ProjectInfo, SliceEntry
 from squadron.pipeline.commit_plan import CommitSubject
+from squadron.pipeline.git_ops import GitStateUnknownError
 from squadron.pipeline.loop_collapse import (
     CollapseOutcome,
     CollapseResult,
     check_collapse,
+    collapse_loop_commits,
     collapse_message,
+    write_collapse,
 )
 from squadron.pipeline.loop_ledger import LoopCommitLedger
+from squadron.review.git_utils import run_git
 from tests.conftest import run_test_git
 
 SLICE = 105
@@ -263,3 +271,174 @@ def test_the_message_never_reads_the_replaced_commit_messages(temp_git_repo: Pat
     message = collapse_message(ledger, _loop_params(), str(temp_git_repo), _cf())
 
     assert "999" not in message
+
+
+# ---------------------------------------------------------------------------
+# The writes: backup ref, new commit, compare-and-swap (D2, D5, D6)
+# ---------------------------------------------------------------------------
+
+COLLAPSE_LOGGER = "squadron.pipeline.loop_collapse"
+STEP = "revise-design"
+
+
+def _design_loop(repo: Path) -> LoopCommitLedger:
+    """A phase commit and two rounds of the design, and the ledger that proves them."""
+    base = _head(repo)
+    phase = _commit(repo, {DESIGN_FILE: "v1\n"})
+    first = _round(repo, "v2\n", "CONCERNS")
+    last = _round(repo, "v3\n", "PASS")
+    return LoopCommitLedger(base_sha=base, commits=[phase, first, last])
+
+
+def _collapse(repo: Path, ledger: LoopCommitLedger) -> CollapseResult:
+    return collapse_loop_commits(ledger, TARGET, _loop_params(), STEP, str(repo), _cf())
+
+
+def test_a_collapse_leaves_one_commit_with_the_same_tree(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ledger = _design_loop(temp_git_repo)
+    old_head = _head(temp_git_repo)
+    old_tree = _git(temp_git_repo, "rev-parse", "HEAD^{tree}")
+
+    with caplog.at_level(logging.INFO, logger=COLLAPSE_LOGGER):
+        result = _collapse(temp_git_repo, ledger)
+
+    assert result.outcome is CollapseOutcome.COLLAPSED
+    new_sha = result.new_sha
+    assert new_sha == _head(temp_git_repo)
+    assert _git(temp_git_repo, "rev-parse", "HEAD^") == ledger.base_sha
+    assert _git(temp_git_repo, "rev-parse", "HEAD^{tree}") == old_tree
+    assert (
+        _git(temp_git_repo, "log", "-1", "--format=%s") == "docs: add slice 105 design (review: PASS)"
+    )
+    backup = f"refs/squadron/pre-collapse/{new_sha}"
+    assert _git(temp_git_repo, "rev-parse", backup) == old_head
+    assert _git(temp_git_repo, "diff", "--stat", str(new_sha), backup) == ""
+    infos = [r for r in caplog.records if r.levelno == logging.INFO]
+    assert len(infos) == 1
+    assert "collapsed 3 commits" in infos[0].getMessage()
+
+
+def test_every_original_commit_stays_reachable_from_the_backup_ref(temp_git_repo: Path) -> None:
+    ledger = _design_loop(temp_git_repo)
+
+    result = _collapse(temp_git_repo, ledger)
+
+    backup = f"refs/squadron/pre-collapse/{result.new_sha}"
+    for sha in ledger.commits:
+        _git(temp_git_repo, "merge-base", "--is-ancestor", sha, backup)  # exits 1 if not
+
+
+def test_operator_edits_survive_the_collapse_untouched(temp_git_repo: Path) -> None:
+    ledger = _design_loop(temp_git_repo)
+    (temp_git_repo / DESIGN_FILE).write_text("operator edit, unstaged\n")
+    (temp_git_repo / "staged.txt").write_text("staged\n")
+    _git(temp_git_repo, "add", "staged.txt")
+    (temp_git_repo / "untracked.txt").write_text("untracked\n")
+    before = _git(temp_git_repo, "status", "--porcelain", "-uall")
+
+    result = _collapse(temp_git_repo, ledger)
+
+    assert result.outcome is CollapseOutcome.COLLAPSED
+    assert _git(temp_git_repo, "status", "--porcelain", "-uall") == before
+    assert (temp_git_repo / DESIGN_FILE).read_text() == "operator edit, unstaged\n"
+
+
+def test_a_refusal_logs_one_warning_and_leaves_history(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ledger = _design_loop(temp_git_repo)
+    operator = _commit(temp_git_repo, {"operator.md": "mine\n"})
+
+    with caplog.at_level(logging.INFO, logger=COLLAPSE_LOGGER):
+        result = _collapse(temp_git_repo, ledger)
+
+    assert result.outcome is CollapseOutcome.REFUSED
+    assert _head(temp_git_repo) == operator
+    assert [r.levelno for r in caplog.records] == [logging.WARNING]
+    assert "left 3 commits uncollapsed" in caplog.records[0].getMessage()
+
+
+def test_nothing_to_collapse_logs_nothing(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    ledger = _loop_of(temp_git_repo, 1)
+
+    with caplog.at_level(logging.DEBUG, logger=COLLAPSE_LOGGER):
+        result = _collapse(temp_git_repo, ledger)
+
+    assert result.outcome is CollapseOutcome.NOTHING_TO_COLLAPSE
+    assert caplog.records == []
+
+
+def test_a_message_that_cannot_be_composed_refuses_and_leaves_history(
+    temp_git_repo: Path,
+) -> None:
+    ledger = _design_loop(temp_git_repo)
+    head = _head(temp_git_repo)
+    cf = _cf()
+    cf.list_slices.side_effect = ContextForgeError("cf is down")
+
+    result = collapse_loop_commits(ledger, TARGET, _loop_params(), STEP, str(temp_git_repo), cf)
+
+    assert result.outcome is CollapseOutcome.REFUSED
+    assert "cf is down" in result.reason
+    assert _head(temp_git_repo) == head
+
+
+def test_a_stale_old_head_loses_the_race_and_loses_no_commit(temp_git_repo: Path) -> None:
+    ledger = _loop_of(temp_git_repo, 2)
+    stale_old_head = ledger.commits[-1]
+    operator = _commit(temp_git_repo, {"operator.md": "landed after the checks\n"})
+
+    result = write_collapse(
+        base_sha=ledger.base_sha,
+        old_head=stale_old_head,
+        message="docs: collapsed",
+        step_name=STEP,
+        cwd=str(temp_git_repo),
+    )
+
+    assert result.outcome is CollapseOutcome.REFUSED
+    assert _head(temp_git_repo) == operator
+    _git(temp_git_repo, "merge-base", "--is-ancestor", stale_old_head, "HEAD")
+
+
+def test_a_backup_ref_that_cannot_be_written_is_git_failed_and_head_stays(
+    temp_git_repo: Path,
+) -> None:
+    ledger = _loop_of(temp_git_repo, 2)
+    head = _head(temp_git_repo)
+    # A ref named like the backup namespace itself blocks every ref beneath it.
+    _git(temp_git_repo, "update-ref", "refs/squadron/pre-collapse", head)
+
+    result = write_collapse(
+        base_sha=ledger.base_sha,
+        old_head=head,
+        message="docs: collapsed",
+        step_name=STEP,
+        cwd=str(temp_git_repo),
+    )
+
+    assert result.outcome is CollapseOutcome.GIT_FAILED
+    assert "backup ref" in result.reason
+    assert _head(temp_git_repo) == head
+
+
+def _timing_out_on_update_ref(args: list[str], *, cwd: str) -> subprocess.CompletedProcess[str] | None:
+    return None if args[0] == "update-ref" else run_git(args, cwd=cwd)
+
+
+def test_an_update_ref_timeout_raises_state_unknown(temp_git_repo: Path) -> None:
+    ledger = _loop_of(temp_git_repo, 2)
+
+    with pytest.raises(GitStateUnknownError, match="update-ref"):
+        write_collapse(
+            base_sha=ledger.base_sha,
+            old_head=ledger.commits[-1],
+            message="docs: collapsed",
+            step_name=STEP,
+            cwd=str(temp_git_repo),
+            run=_timing_out_on_update_ref,
+        )

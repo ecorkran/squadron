@@ -180,37 +180,41 @@ revision_number: 2
 
 ### 6. Collapse: writes, backup ref, race (effort 3)
 
-- [ ] **6.1 Implement the git writes (D2, D5, D6)**
-  - [ ] `git commit-tree <HEAD>^{tree} -p <base_sha> -F <message>` (message via a temp file or
+- [x] **6.1 Implement the git writes (D2, D5, D6)**
+  - [x] `git commit-tree <HEAD>^{tree} -p <base_sha> -F <message>` (message via a temp file or
         stdin, not shell quoting)
-  - [ ] `git update-ref -m "squadron: collapse loop <step>" refs/squadron/pre-collapse/<new> <old_head>`
+  - [x] `git update-ref -m "squadron: collapse loop <step>" refs/squadron/pre-collapse/<new> <old_head>`
         (backup ref; failure means no rewrite, `git_failed`)
-  - [ ] `git update-ref -m "squadron: collapse loop <step>" HEAD <new> <old_head>` as the
+  - [x] `git update-ref -m "squadron: collapse loop <step>" HEAD <new> <old_head>` as the
         compare-and-swap. A refused swap is `refused` (HEAD moved after the checks)
-  - [ ] A timeout on either `update-ref` raises `GitStateUnknownError` (reuse the commit action's
+  - [x] A timeout on either `update-ref` raises `GitStateUnknownError` (reuse the commit action's
         existing class/behavior); all other failures return `git_failed` and never raise
-  - [ ] Never touch the index or working tree
-  - [ ] Log INFO on `collapsed` and WARNING on `refused`/`git_failed`, with the formats in the
+  - [x] Never touch the index or working tree
+  - [x] Log INFO on `collapsed` and WARNING on `refused`/`git_failed`, with the formats in the
         design's Patterns and Conventions; no log for `nothing_to_collapse`
-- [ ] **6.2 Test the writes** in `tests/pipeline/test_loop_collapse.py`
-  - [ ] Happy path: one commit with parent `base_sha`, tree identical to the old HEAD's tree,
+  - Note (a): the message goes to `git commit-tree` via `-m` as an argv element through `run_git` (no shell involved), not via a temp file.
+  - Note (b): any non-zero exit from the HEAD compare-and-swap is `refused` (HEAD moved; nothing changed); a backup ref left by a refused swap is harmless per D5.
+  - Note (c): message-composition errors (cf or slice lookup) return `refused`.
+  - Note (d): the INFO line names the full backup ref (`refs/squadron/pre-collapse/<full sha>`) because the ref uses the full sha.
+- [x] **6.2 Test the writes** in `tests/pipeline/test_loop_collapse.py`
+  - [x] Happy path: one commit with parent `base_sha`, tree identical to the old HEAD's tree,
         `refs/squadron/pre-collapse/<new>` points at the old head, `git diff <new> <ref>` empty
-  - [ ] Staged and unstaged operator edits present before collapse are still staged/unstaged and
+  - [x] Staged and unstaged operator edits present before collapse are still staged/unstaged and
         unchanged after
-  - [ ] CAS race: split collapse into a check function and a write function, and have the test
+  - [x] CAS race: split collapse into a check function and a write function, and have the test
         call the write function directly with a stale `old_head` after moving `HEAD` in the
         temp repo. No patching; outcome is `refused`, no commit lost
-  - [ ] Backup-ref write failure (pre-create a conflicting ref path) gives `git_failed` and
+  - [x] Backup-ref write failure (pre-create a conflicting ref path) gives `git_failed` and
         HEAD unchanged
-  - [ ] `GitStateUnknownError` raised when an `update-ref` times out: the write function takes
+  - [x] `GitStateUnknownError` raised when an `update-ref` times out: the write function takes
         its git runner as a parameter (defaulting to `run_git`), and the test passes a runner
         that returns a timeout for `update-ref`. This is the only injected fake; all other
         tests use real git
-  - [ ] Every original round sha is still reachable from `refs/squadron/pre-collapse/<new>`
+  - [x] Every original round sha is still reachable from `refs/squadron/pre-collapse/<new>`
         (`git merge-base --is-ancestor`). This is the test for the design's `sq review resolve`
         integration criterion: reachability is the property D5 provides, and no resolve-command
         test is added
-  - [ ] WARNING and INFO lines each appear once for refused/collapsed (assert via `caplog`
+  - [x] WARNING and INFO lines each appear once for refused/collapsed (assert via `caplog`
         alongside the enum assertion)
 
 **Commit**: `feat: collapse loop commits with backup ref and compare-and-swap`

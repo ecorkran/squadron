@@ -8,16 +8,30 @@ A failed proof leaves history exactly as it is; it never changes the loop's stat
 
 from __future__ import annotations
 
+import logging
+import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions.commit import commit_target_from_params
 from squadron.pipeline.commit_message import ArtifactChange, StagedFacts, compose_message
-from squadron.pipeline.commit_plan import staged_verdict, subject_paths
+from squadron.pipeline.commit_plan import CommitTargetError, staged_verdict, subject_paths
+from squadron.pipeline.git_ops import GitEnvironmentError, GitStateUnknownError, SliceNotInPlanError
 from squadron.pipeline.loop_ledger import LoopCommitLedger
 from squadron.review.git_utils import run_git
 from squadron.review.persistence import CfClientProtocol
+
+_logger = logging.getLogger(__name__)
+
+# Namespace of the backup refs; outside refs/heads and refs/tags, so a normal push and
+# ``git branch``/``git tag`` never see them (D5).
+BACKUP_REF_PREFIX = "refs/squadron/pre-collapse"
+_SHORT_SHA_LENGTH = 7
+
+GitRunner = Callable[..., subprocess.CompletedProcess[str] | None]
 
 # ``git diff --name-status`` letter for a path the range added.
 _ADDED = "A"
@@ -37,6 +51,7 @@ class CollapseResult:
     outcome: CollapseOutcome
     reason: str = ""
     new_sha: str | None = None
+    message: str = ""  # the collapsed commit's message, when collapsed
 
 
 class CollapseGitError(Exception):
@@ -143,3 +158,130 @@ def _changed_paths(base_sha: str, cwd: str) -> dict[str, str]:
     tokens = output.split("\0")
     # Tokens alternate status, path; the trailing NUL leaves one empty token to drop.
     return dict(zip(tokens[1::2], tokens[0::2], strict=False))
+
+
+def collapse_loop_commits(
+    ledger: LoopCommitLedger,
+    target_branch: str,
+    commit_params: dict[str, object],
+    step_name: str,
+    cwd: str,
+    cf_client: CfClientProtocol,
+) -> CollapseResult:
+    """Replace the ledger's commits with one, or leave history alone and say why.
+
+    ``target_branch`` is the integration target and ``commit_params`` the loop's
+    ``round_commit_params`` result. The outcome is logged once (INFO collapsed, WARNING
+    refused or failed, nothing for nothing-to-collapse). Never raises for a refusal or a
+    failed git command; only ``GitStateUnknownError`` (a timed-out ref write) propagates.
+    """
+    result = _collapse(ledger, target_branch, commit_params, step_name, cwd, cf_client)
+    _log_outcome(result, len(ledger.commits), step_name)
+    return result
+
+
+def _collapse(
+    ledger: LoopCommitLedger,
+    target_branch: str,
+    commit_params: dict[str, object],
+    step_name: str,
+    cwd: str,
+    cf_client: CfClientProtocol,
+) -> CollapseResult:
+    refusal = check_collapse(ledger, target_branch, cwd)
+    if refusal is not None:
+        return refusal
+    try:
+        message = collapse_message(ledger, commit_params, cwd, cf_client)
+    except CollapseGitError as exc:
+        return CollapseResult(CollapseOutcome.GIT_FAILED, str(exc))
+    except (
+        CommitTargetError,
+        SliceNotInPlanError,
+        FileNotFoundError,
+        ContextForgeError,
+        GitEnvironmentError,
+    ) as exc:
+        # cf or the plan cannot name the document, so there is no message to write.
+        # The loop's commits stay as they are, and the warning carries the reason.
+        return _refused(f"cannot compose the collapse message: {exc}")
+    return write_collapse(
+        base_sha=ledger.base_sha,
+        old_head=ledger.commits[-1],
+        message=message,
+        step_name=step_name,
+        cwd=cwd,
+    )
+
+
+def write_collapse(
+    *,
+    base_sha: str,
+    old_head: str,
+    message: str,
+    step_name: str,
+    cwd: str,
+    run: GitRunner = run_git,
+) -> CollapseResult:
+    """Write the collapsed commit, its backup ref, then move HEAD to it (D2, D5, D6).
+
+    The new commit reuses ``old_head``'s tree, so the index and working tree are never
+    touched. The final ``update-ref`` names ``old_head`` as the expected value, so if
+    HEAD moved since the checks git refuses and nothing changes. A backup ref left
+    behind by a refused swap points at the unchanged head and is harmless.
+
+    Raises:
+        GitStateUnknownError: an ``update-ref`` timed out; whether it landed is unknown.
+    """
+    created = run(["commit-tree", f"{old_head}^{{tree}}", "-p", base_sha, "-m", message], cwd=cwd)
+    if created is None or created.returncode != 0:
+        return _git_failed("git commit-tree", created)
+    new_sha = created.stdout.strip()
+
+    note = f"squadron: collapse loop {step_name}"
+    saved = _update_ref(run, ["-m", note, f"{BACKUP_REF_PREFIX}/{new_sha}", old_head], cwd)
+    if saved.returncode != 0:
+        return _git_failed("git update-ref (backup ref)", saved)
+    swapped = _update_ref(run, ["-m", note, "HEAD", new_sha, old_head], cwd)
+    if swapped.returncode != 0:
+        return _refused(f"HEAD moved after the checks, so nothing changed: {swapped.stderr.strip()}")
+    return CollapseResult(CollapseOutcome.COLLAPSED, new_sha=new_sha, message=message)
+
+
+def _update_ref(run: GitRunner, args: list[str], cwd: str) -> subprocess.CompletedProcess[str]:
+    """Run ``git update-ref``; a timeout means nobody knows whether the write landed."""
+    result = run(["update-ref", *args], cwd=cwd)
+    if result is None:
+        message = (
+            f"git update-ref {' '.join(args)} timed out or could not run: "
+            "the ref may be left in an unknown state"
+        )
+        _logger.error(message)
+        raise GitStateUnknownError(message)
+    return result
+
+
+def _git_failed(label: str, result: subprocess.CompletedProcess[str] | None) -> CollapseResult:
+    detail = (result.stderr.strip() if result is not None else "") or "timed out or could not run"
+    return CollapseResult(CollapseOutcome.GIT_FAILED, f"{label}: {detail}")
+
+
+def _log_outcome(result: CollapseResult, commit_count: int, step_name: str) -> None:
+    match result.outcome:
+        case CollapseOutcome.COLLAPSED:
+            new_sha = result.new_sha or ""
+            _logger.info(
+                'loop %s: collapsed %d commits into %s "%s" (pre-collapse head: %s/%s)',
+                step_name,
+                commit_count,
+                new_sha[:_SHORT_SHA_LENGTH],
+                result.message,
+                BACKUP_REF_PREFIX,
+                new_sha,
+            )
+        case CollapseOutcome.REFUSED | CollapseOutcome.GIT_FAILED:
+            _logger.warning(
+                "loop %s: left %d commits uncollapsed: %s", step_name, commit_count, result.reason
+            )
+        case CollapseOutcome.NOTHING_TO_COLLAPSE:
+            pass  # nothing was attempted, so there is nothing to report
