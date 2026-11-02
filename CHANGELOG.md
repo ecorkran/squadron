@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Planning loops now leave one commit per document. When a loop that commits each round finishes, its round commits and the phase commit before it become a single commit (`docs: add slice 202 design (review: PASS)`). History is rewritten only when the commits are provably the loop's own, unpublished, and still the tip of the target branch; otherwise it is left alone with a warning. The old round commits stay reachable under `refs/squadron/pre-collapse/` (#257).
+
 ### Fixed
 - Pipeline summary steps now read the slice's design and task files and the run's reviews, so a summary written after `sq run --resume` carries the slice's content, not just commit subjects. A summary model that is not Claude gets `read_file` for this unless the step declares its own tools (#282).
 - `/sq:summary --restore` with no key restores the session's own summary (`interactive`) even when a pipeline run saved a newer one; with no interactive summary it still takes the most recent. Restore a pipeline summary with `--key` (#282).

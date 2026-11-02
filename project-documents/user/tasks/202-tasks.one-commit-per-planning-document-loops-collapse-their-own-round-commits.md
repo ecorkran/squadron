@@ -267,12 +267,16 @@ revision_number: 2
 
 ### 8. CHANGELOG and validation (effort 2)
 
-- [ ] **8.1 Add the CHANGELOG bullet**: planning loops now leave one commit per document (short,
+- [x] **8.1 Add the CHANGELOG bullet**: planning loops now leave one commit per document (short,
       user-facing)
-- [ ] **8.2 Full validation**
-  - [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite pass
-  - [ ] `loop_ledger.py` and `loop_collapse.py` each under ~300 lines; `executor.py` changes are
+- [x] **8.2 Full validation**
+  - [x] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite pass
+  - [x] `loop_ledger.py` and `loop_collapse.py` each under ~300 lines; `executor.py` changes are
         call sites only
+- Note: `loop_ledger.py` is 164 lines and `loop_collapse.py` is 313 lines (about 300, accepted
+  rather than split). `executor.py` gained a thin wrapper `_execute_loop_body` (~100 lines
+  including the `_loop_commit_params` helper) plus one record call in the renamed
+  `_run_loop_rounds`, with all logic in the two new modules.
 
 **Commit**: `docs: add loop collapse changelog entry`
 
