@@ -11,15 +11,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261102
 
-### Slice 949: Isolated File-In, File-Out Dispatch Steps — Implementation Complete, Walkthrough 4–7 and Review Pending
+### Slice 949: Isolated File-In, File-Out Dispatch Steps — Implementation Complete, Review Pending
 
 - **Branch:** `949-slice.isolated-file-in-file-out-dispatch-steps`, seven task commits (A known keys and `--validate --strict`, B no-tools guard, C new keys, D `dispatch_io` and the dispatch call sites, E prompt-only refusal and docs); not merged, nothing pushed.
 - **Delivered:** `prompt_files`, `reply_from`, `reply_format`, `reply_file`, `delivered_prompt_file` on `dispatch`; `known_keys` on every step type and `sq run --validate --strict`; `allowed_tools: []` fails with `failure_kind: tool_isolation` on the SDK session or a file-reading provider; prompt-only refuses the new keys.
 - **Departures from the tasks:** key names and the path check live in `pipeline/dispatch_keys.py` (import cycle, review F005); the dispatch paths keep their signatures and each resolve the prompt through `asyncio.to_thread` (the routing tests pin them), the session path now before `set_model`; `body_steps` added to loop, each and fan_out because fan_out's `inner_steps` is a synthetic classification step.
 - **Surprise:** strict validation over the built-ins found a dead `slice:` key on the `close-out` dispatch step of P6, P56, P456, implement and implement-plan. Removed from the YAMLs.
 - **Caught late:** `Path.is_file()` raises `PermissionError` when a parent directory cannot be searched, which escaped as a raw error instead of `DispatchInputError`; fixed, with a test.
-- **Walkthrough:** steps 1–3 run with the real `sq` and match. Steps 4–7 launch runs and were left to the PM (4 and 5 need a `deepseek4-flash` route). Covered by tests meanwhile.
-- **Pending:** code review not run; the slice is not marked complete until walkthrough 4–7 is run.
+- **Walkthrough:** all seven steps run with the real `sq` and match, with `glm-flash` (an openrouter alias) instead of `deepseek4-flash`. `sq run` needs a cf-registered project, so the scratch files lived in `.sq949/` under the repo root, since removed. Step 7 first showed a raw `ValueError` traceback; it now raises `PromptOnlyUnsupportedError`, which the CLI turns into a one-paragraph error and exit 1. The walkthrough text records the real commands and outputs.
+- **Pending:** code review not run.
 
 ### Slice 949: Isolated File-In, File-Out Dispatch Steps — Task Breakdown Complete
 

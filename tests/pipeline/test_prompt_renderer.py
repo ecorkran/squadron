@@ -16,6 +16,7 @@ from squadron.pipeline.models import StepConfig
 from squadron.pipeline.prompt_renderer import (
     ActionInstruction,
     CompletionResult,
+    PromptOnlyUnsupportedError,
     StepInstructions,
     _render_branch,
     _render_cf_op,
@@ -186,7 +187,7 @@ class TestRenderDispatch:
     @pytest.mark.parametrize("key", DISPATCH_IO_KEYS)
     def test_file_and_reply_keys_are_refused_in_prompt_only_mode(self, key: str) -> None:
         resolver = _make_resolver("claude-opus-4-20250514")
-        with pytest.raises(ValueError, match=rf"{key}.*sq run"):
+        with pytest.raises(PromptOnlyUnsupportedError, match=rf"{key}.*sq run"):
             _render_dispatch({"model": "opus", key: "x"}, {}, resolver)
 
     def test_empty_allowed_tools_still_renders(self) -> None:

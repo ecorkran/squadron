@@ -61,6 +61,10 @@ _ROUND_KEY = "round"
 # ---------------------------------------------------------------------------
 
 
+class PromptOnlyUnsupportedError(ValueError):
+    """A step uses a feature that only ``sq run`` can carry out (slice 949 D9)."""
+
+
 @dataclass
 class ActionInstruction:
     """A single action's instructions for prompt-only output."""
@@ -184,7 +188,7 @@ def _render_dispatch(
     would silently drop them.
     """
     if unsupported := [key for key in DISPATCH_IO_KEYS if key in config]:
-        raise ValueError(
+        raise PromptOnlyUnsupportedError(
             f"dispatch step uses {', '.join(unsupported)}, which prompt-only mode cannot "
             "honor; run the pipeline with `sq run`"
         )

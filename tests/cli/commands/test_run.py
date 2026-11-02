@@ -838,6 +838,33 @@ class TestPromptOnly:
         assert [a["action_type"] for a in parsed["actions"]] == ["devlog", "commit"]
 
     @patch("squadron.cli.commands.run.load_pipeline")
+    @patch("squadron.cli.commands.run.validate_pipeline", return_value=[])
+    @patch("squadron.cli.commands.run.StateManager")
+    def test_prompt_only_refuses_dispatch_file_keys_without_a_traceback(
+        self, mock_cls: MagicMock, mock_validate: MagicMock, mock_load: MagicMock
+    ) -> None:
+        mock_load.return_value = PipelineDefinition(
+            name="answer",
+            description="Test",
+            params={},
+            steps=[
+                StepConfig(
+                    step_type="dispatch",
+                    name="extract",
+                    config={"prompt": "p", "prompt_files": ["question.md"]},
+                ),
+            ],
+        )
+        mock_cls.return_value.init_run.return_value = "run-test-123"
+
+        result = runner.invoke(app, ["run", "answer", "--prompt-only"])
+
+        assert result.exit_code == 1
+        assert "prompt_files" in result.output
+        assert "sq run" in result.output
+        assert "Traceback" not in result.output
+
+    @patch("squadron.cli.commands.run.load_pipeline")
     @patch("squadron.cli.commands.run.StateManager")
     def test_prompt_only_creates_state(self, mock_cls: MagicMock, mock_load: MagicMock) -> None:
         defn = PipelineDefinition(

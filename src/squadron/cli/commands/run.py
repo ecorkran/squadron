@@ -78,6 +78,7 @@ from squadron.pipeline.loader import (
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
 from squadron.pipeline.prompt_renderer import (
     CompletionResult,
+    PromptOnlyUnsupportedError,
     StepInstructions,
     render_step_instructions,
 )
@@ -787,6 +788,11 @@ def _render_prompt_only_step(
     except (ModelResolutionError, ModelPoolNotImplemented, PoolNotFoundError) as exc:
         _logger.exception("prompt-only: model resolution failed for step %r", step.name)
         rprint(f"[red]Error: model resolution failed — {escape(str(exc))}[/red]", file=sys.stderr)
+        raise typer.Exit(1) from None
+    except PromptOnlyUnsupportedError as exc:
+        # An expected, named refusal: the message says what to do, so no traceback.
+        _logger.warning("prompt-only: step %r: %s", step.name, exc)
+        rprint(f"[red]Error: step '{escape(step.name)}': {escape(str(exc))}[/red]", file=sys.stderr)
         raise typer.Exit(1) from None
 
 

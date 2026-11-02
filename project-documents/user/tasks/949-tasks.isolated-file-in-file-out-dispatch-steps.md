@@ -8,7 +8,7 @@ projectState: v0.24.13 released. Target is main (git.integration_branch unset). 
   949 design passed review.
 dateCreated: 20261102
 dateUpdated: 20261102
-status: in_progress
+status: complete
 turns: 25
 promptTokens: 1367293
 cachedTokens: 1284939
@@ -202,11 +202,11 @@ revision_number: 1
 
 **Commit**: `docs: document dispatch file keys, tool guard and validate --strict`
 
-- [ ] **T19: Full verification against the design** (Effort 2)
+- [x] **T19: Full verification against the design** (Effort 2)
   - [x] Run the full suite once (`pytest`), `ruff format`, `ruff check`, `pyright`; zero pyright errors
-  - [ ] Walk the design's Verification Walkthrough steps 1–3 and 7 (validate, strict, prompt-only) in `/tmp/sq949`, using the real `sq`. Steps 4–6 call live models; run them only if a configured `deepseek4-flash` route is available, otherwise report them as not run
+  - [x] Walk the design's Verification Walkthrough steps 1–3 and 7 (validate, strict, prompt-only) in `.sq949/` under the repo root, using the real `sq`. Steps 4–6 call live models; run them only if a fast openrouter route (such as `glm-flash`) is available, otherwise report them as not run
   - [x] Confirm Success Criteria 1–9 each map to a passing test or a walkthrough step; list any unmapped criterion
   - [x] Confirm new modules stay under ~300 lines (`wc -l` on `dispatch_io.py` and other new files)
-  - [ ] SC: all checks clean; any gap is stated plainly. This task changes no files, so it has no commit marker
+  - [x] SC: all checks clean; any gap is stated plainly. This task changes no files, so it has no commit marker
 
-  Note: walkthrough steps 1–3 run and match (scratch dir under the session scratchpad). Step 7 and steps 4–6 are left for the Project Manager to run: `sq run ./answer.yaml --prompt-only` (expect an error naming `prompt_files` and saying to use `sq run`), and, with a `deepseek4-flash` route, steps 4–6 of the design's Verification Walkthrough.
+  Note: the walkthrough ran in full (steps 1–7) with `glm-flash`; the design's Verification Walkthrough records the real commands and outputs. Step 7 first printed a raw traceback, so the refusal became a `PromptOnlyUnsupportedError` that the CLI turns into a one-paragraph error.

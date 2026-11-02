@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20261102
 dateUpdated: 20261102
-status: in_progress
+status: complete
 turns: 79
 promptTokens: 6620822
 cachedTokens: 6458405
@@ -269,39 +269,38 @@ Failure surface:
 
 ### Verification Walkthrough
 
-Run in a scratch directory. `deepseek4-flash` is an `openrouter` alias (`openai` provider, `can_read_files: false`). `haiku` is `sdk`.
+Run from the root of a project registered with Context Forge: `sq run` checks `cf` before it starts, and it refuses to run in an unregistered directory. Paths in the pipeline are relative to that root, so the files live in a scratch subdirectory, `.sq949/`, which you delete at the end. `glm-flash` is an `openrouter` alias (the `openai` provider, `can_read_files: false`). Any fast openrouter alias works. `haiku` is `sdk`; `luna` is `openai-oauth` (Codex).
 
 1. Create inputs:
    ```bash
-   mkdir -p /tmp/sq949 && cd /tmp/sq949
-   printf 'Question: what is 2+2? Literal braces: {slice}\n' > question.md
-   printf 'Answer in one sentence using the JSON you are given.\n' > answer-instructions.md
+   mkdir -p .sq949
+   printf 'Question: what is 2+2? Literal braces: {slice}\n' > .sq949/question.md
+   printf 'Answer in one sentence using the JSON you are given.\n' > .sq949/answer-instructions.md
    ```
-2. Save the API Contracts YAML as `answer.yaml`, removing `source.md` from `prompt_files`. A pipeline file needs a header the API Contracts block omits, so start the file with:
+2. Save the API Contracts YAML as `.sq949/answer.yaml`, with `source.md` removed from `prompt_files`, every path prefixed `.sq949/`, `model: glm-flash`, and a header the API Contracts block omits:
    ```yaml
    name: answer
    description: Two isolated steps that answer a question from a file
    ```
    Validate:
    ```bash
-   sq run ./answer.yaml --validate --strict
+   sq run ./.sq949/answer.yaml --validate --strict
    ```
    Expected: `Pipeline 'answer' is valid.`, exit 0. (Verified.)
-3. Add `colour: red` to the `extract` step (a line under `name: extract`) and repeat. Expected: exit 1, printing `steps[extract].colour: unknown key 'colour'; dispatch accepts [...]` followed by the accepted keys, which include the five new ones. Then run `sq run ./answer.yaml --validate`. Expected: `Pipeline 'answer' is valid.`, exit 0, unchanged behavior. Remove the key and confirm `--validate --strict` is valid again. (Verified.)
+3. Add `colour: red` to the `extract` step (a line under `name: extract`) and repeat. Expected: exit 1, printing `steps[extract].colour: unknown key 'colour'; dispatch accepts [...]` followed by the accepted keys, which include the five new ones. Then run `sq run ./.sq949/answer.yaml --validate`. Expected: `Pipeline 'answer' is valid.`, exit 0, unchanged behavior. Remove the key and confirm `--validate --strict` is valid again. (Verified.)
 4. Run it:
    ```bash
-   sq run ./answer.yaml
-   cat extract.prompt.md   # prompt text, then question.md verbatim, "{slice}" intact
-   cat claims.json         # one JSON object, nothing else
-   cat answer.prompt.md    # answer-instructions.md, then the claims.json bytes
-   cat answer.md
+   sq run ./.sq949/answer.yaml
+   cat .sq949/extract.prompt.md   # prompt text, a blank line, then question.md verbatim, "{slice}" intact
+   cat .sq949/claims.json         # one JSON object, nothing else
+   cat .sq949/answer.prompt.md    # answer-instructions.md, then the claims.json bytes
+   cat .sq949/answer.md
    ```
-   Expected: `cmp <(tail -c "$(wc -c < claims.json)" answer.prompt.md) claims.json` reports no difference.
-5. Isolation: change `extract`'s model to `haiku` and run it. Expected: the step fails before dispatch with an error naming `tool_isolation`, the model and the provider. `claims.json` is unchanged from step 4 (compare with `shasum` before and after). Repeat with `luna` (Codex). Same result.
-6. JSON failure: set `extract`'s prompt to "Reply with the word no." and run it. Expected: the step fails with "reply contains no JSON object". `claims.json` is unchanged.
-7. Prompt-only: run `sq run ./answer.yaml --prompt-only`. Expected: an error naming `prompt_files` and saying to use `sq run`.
-
-Status of the walkthrough at implementation close: steps 1 to 3 were run with the real `sq` and match. Steps 4 to 7 launch runs and were not run by the implementing agent; their behavior is covered by tests (`tests/pipeline/test_dispatch_file_io.py` for 4 and 6, `tests/pipeline/actions/test_tool_isolation.py` for 5, `tests/pipeline/test_prompt_renderer.py` for 7). Steps 4 and 5 need a configured `deepseek4-flash` route.
+   Expected: both steps `completed`, and `cmp <(tail -c "$(wc -c < .sq949/claims.json)" .sq949/answer.prompt.md) .sq949/claims.json` reports no difference. `answer.prompt.md` does not contain `extract`'s prompt. A prompt file's own trailing newline plus the blank-line separator shows as two blank lines before the reply. (Verified with `glm-flash`.)
+5. Isolation: change `extract`'s model to `haiku` and run it. Expected: the step fails before any model call, with an error naming the model (`claude-haiku-5-5`), the provider (`sdk`) and the route, and the run state records `"failure_kind": "tool_isolation"`. The printed text does not contain the word `tool_isolation`. `shasum .sq949/claims.json` is unchanged from step 4. Repeat with `luna` (Codex): same result, provider `openai-oauth`. (Verified.)
+6. JSON failure: set `extract`'s prompt to "Reply with the word no." and run it. Expected: the step fails with `reply contains no JSON object`, and `claims.json` is unchanged. (Verified.)
+7. Prompt-only: run `sq run ./.sq949/answer.yaml --prompt-only`. Expected: exit 1 and a one-paragraph error, with no traceback: `Error: step 'extract': dispatch step uses prompt_files, reply_format, reply_file, delivered_prompt_file, which prompt-only mode cannot honor; run the pipeline with `sq run``. (Verified.)
+8. Clean up: `rm -r .sq949`.
 
 ## Risk Assessment
 
