@@ -49,6 +49,7 @@ Every capability in this initiative plugs into extension points defined in 140:
   - Slice 199 makes those runs findable: `sq runs list` (built on `pipeline/run_listing.py`) lists runs `--resume` can act on, including finished batches with open items, and `sq pipelines list` replaces `sq run --list` for pipeline discovery. `sq runs wait <run-id>` blocks until a background run ends and exits with a code per outcome, so a caller that started a run learns its result without polling the runs directory. Listings follow one grammar, `sq <noun> list`, so `sq list` becomes `sq agents list`.
   - A per-checkout run lock allows one git- or cf-mutating run at a time.
   - The single-slice code pipelines (P6, `implement`, P56, P456) move onto the batch's implement → code-review loop → merge steps, so one slice and a whole plan are implemented the same way.
+- 202 also extends the engine directly: a planning loop collapses its own round commits, plus the phase commit before them, into one commit per document when it completes (see Git-Mutating Steps).
 
 ### Git-Mutating Steps
 
@@ -61,6 +62,7 @@ Steps that write to git (`commit`, `branch enter`, `branch merge`) follow the pr
   - This is the only merge from the target into a slice branch.
 - Commits stage only what the step produced, except code on its own slice branch.
 - These steps never force, reset, delete a branch, push, or merge beyond one level.
+  - One exception (slice 202): when a planning review loop completes on the target, it may replace its own recorded commits with one commit. The commits must be the unpublished tail of the target, the new commit must carry an identical tree, and the swap must be a compare-and-swap on `HEAD`. A backup ref keeps the replaced commits. This applies to the target only, never to a slice branch.
 - A failed merge is aborted back to a clean target.
 - If an item fails after `branch enter`, the checkout is left on that item's slice branch. The next `branch enter`, or the start of an item resume, commits any leftovers on that branch and returns to the target.
 - When the repository state can't be verified, the run stops rather than letting later work build on it.

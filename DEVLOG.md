@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261101
 
+### Slice 202: One Commit Per Planning Document — Design Complete
+
+- **Output:** `202-slice.one-commit-per-planning-document-loops-collapse-their-own-round-commits.md`; `cf validate design` passes. Fixes #257. Phase 5 not started.
+- **Decisions:** a cumulative `LoopCommitLedger` in `StepState` (carried across resume) records the phase commit and each round sha; collapse via `commit-tree` + compare-and-swap `update-ref` (index and working tree untouched); five proof checks, each with its own `CollapseOutcome` and WARNING line; message from `compose_message` over the collapsed range; backup ref `refs/squadron/pre-collapse/<sha>` keeps `reviewedSha` stamps resolvable; collapse only on COMPLETED and never changes loop status; code loops excluded; no opt-out key.
+- **Deferred:** prompt-only parity rides on #145 (loops are not rendered in prompt-only yet).
+
 ### Release 0.24.12
 
 - **Contents:** removed `sq squash` and the `squash` pipeline step (closes #258, #272, #274, #280; #257 stays open for collapsing each review loop's commits into one). A pipeline file that still has a `squash:` step fails to load with a message to delete it. Guide v0.22.15 and the refreshed CLAUDE.md/AGENTS.md (marker-based commit cadence).
