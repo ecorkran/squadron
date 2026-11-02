@@ -740,7 +740,7 @@ class StateManager:
                 record = step_state
         if record is None:
             return None
-        return record.loop_commits or LoopCommitLedger(base_sha="", unprovable=True)
+        return record.loop_commits or LoopCommitLedger(base_sha="", tip_sha="", unprovable=True)
 
     def scan_runs(self) -> RunScan:
         """Every run-state file: the readable states and the unreadable files (174 D9).

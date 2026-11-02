@@ -56,6 +56,7 @@ from squadron.pipeline.failure_kind import (
     pauses_run,
 )
 from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.head_stamp import execute_stamped
 from squadron.pipeline.loop_collapse import collapse_completed_loop
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -66,7 +67,7 @@ from squadron.pipeline.loop_config import (
     last_with_verdict,
     parse_loop_config,
 )
-from squadron.pipeline.loop_ledger import LoopCommitLedger, record_round_commit, start_ledger
+from squadron.pipeline.loop_ledger import LoopCommitLedger, claim_actions, start_ledger
 from squadron.pipeline.models import (
     ActionContext,
     ActionResult,
@@ -1103,7 +1104,7 @@ async def _execute_step_once(
         )
 
         action_impl = get_action_fn(action_type)
-        result: ActionResult = await action_impl.execute(ctx)
+        result: ActionResult = await execute_stamped(action_impl, ctx, action_type)
         action_results.append(result)
 
         _log_action_result(action_type, result)
@@ -1759,6 +1760,10 @@ async def _run_loop_rounds(
                     iteration=iteration,
                     loop_max=loop_config.max,
                 )
+                if ledger is not None:
+                    # This round is redone on resume, but its agent may have committed
+                    # before the pause: claim it now so the chain stays unbroken.
+                    await asyncio.to_thread(claim_actions, ledger, iteration_action_results, cwd)
                 return StepResult(
                     step_name=step.name,
                     step_type=step.step_type,
@@ -1835,10 +1840,13 @@ async def _run_loop_rounds(
                     step_outputs=visible_step_outputs,
                     iteration=iteration,
                 )
-                commit_result = await get_action_fn("commit").execute(commit_ctx)
+                commit_result = await execute_stamped(
+                    get_action_fn("commit"), commit_ctx, ActionType.COMMIT
+                )
             iteration_action_results.append(commit_result)
             if ledger is not None:
-                record_round_commit(ledger, commit_result)
+                # The round's dispatch agent may have committed too: claim all of it.
+                await asyncio.to_thread(claim_actions, ledger, iteration_action_results, cwd)
             # Same key scheme as the inner-step loop above; len(inner_steps)
             # is one past the last real inner_step_index, so it can't collide.
             commit_key = f"{len(inner_steps)}-{commit_result.action_type}-0"

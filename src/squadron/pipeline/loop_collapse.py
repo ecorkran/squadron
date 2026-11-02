@@ -88,7 +88,7 @@ def check_collapse(ledger: LoopCommitLedger, target_branch: str, cwd: str) -> Co
 def _first_failure(ledger: LoopCommitLedger, target_branch: str, cwd: str) -> CollapseResult | None:
     if ledger.unprovable:
         return _refused("the loop cannot prove which commits are its own")
-    if len(ledger.commits) < 2:
+    if ledger.commit_count < 2:
         return CollapseResult(CollapseOutcome.NOTHING_TO_COLLAPSE)
 
     branch = run_checked(["branch", "--show-current"], cwd).strip()
@@ -96,24 +96,42 @@ def _first_failure(ledger: LoopCommitLedger, target_branch: str, cwd: str) -> Co
         return _refused(f"on {branch or 'a detached HEAD'}, not the target {target_branch}")
 
     head = run_checked(["rev-parse", "HEAD"], cwd).strip()
-    last = ledger.commits[-1]
-    if head != last:
-        return _refused(f"HEAD {head} is not the loop's last commit {last}")
+    if head != ledger.tip_sha:
+        return _refused(f"HEAD {head} is not the loop's last commit {ledger.tip_sha}")
 
-    expected = list(reversed(ledger.commits))
-    chain = run_checked(["rev-list", "--first-parent", f"{ledger.base_sha}..HEAD"], cwd).split()
-    if chain != expected:
-        return _refused(
-            f"the commits from {ledger.base_sha} to HEAD are {chain}, not the loop's {expected}"
-        )
+    if (reason := _range_problem(ledger, cwd)) is not None:
+        return _refused(reason)
 
-    first = ledger.commits[0]
+    first = run_checked(["rev-list", "--reverse", f"{ledger.base_sha}..HEAD"], cwd).split()[0]
     remote_refs = run_checked(
         ["for-each-ref", "--contains", first, "--format=%(refname)", "refs/remotes"], cwd
     ).split()
     if remote_refs:
         return _refused(f"commit {first} is already on {remote_refs[0]}")
     return None
+
+
+def _range_problem(ledger: LoopCommitLedger, cwd: str) -> str | None:
+    """Why ``base_sha..HEAD`` is not the straight run of commits the loop claimed, or ``None``."""
+    base = ledger.base_sha
+    if not _is_ancestor(base, cwd):
+        return f"{base} is no longer an ancestor of HEAD"
+    merges = run_checked(["rev-list", "--merges", f"{base}..HEAD"], cwd).split()
+    if merges:
+        return f"the commits from {base} to HEAD include a merge, {merges[0]}"
+    actual = int(run_checked(["rev-list", "--count", f"{base}..HEAD"], cwd))
+    if actual != ledger.commit_count:
+        return f"{actual} commits lie between {base} and HEAD, not the {ledger.commit_count} claimed"
+    return None
+
+
+def _is_ancestor(commit: str, cwd: str) -> bool:
+    """Whether ``commit`` is an ancestor of HEAD; git exits 1 for no, and anything else is a failure."""
+    result = run_git(["merge-base", "--is-ancestor", commit, "HEAD"], cwd=cwd)
+    if result is None or result.returncode not in (0, 1):
+        detail = (result.stderr.strip() if result is not None else "") or "timed out or could not run"
+        raise CollapseGitError(f"git merge-base --is-ancestor {commit} HEAD: {detail}")
+    return result.returncode == 0
 
 
 def _refused(reason: str) -> CollapseResult:
@@ -181,7 +199,7 @@ def collapse_completed_loop(
         target_branch = read_integration_target(cf_client)
     except GitEnvironmentError as exc:  # already logged at ERROR by the reader
         result = _refused(f"cannot read the integration target: {exc}")
-        _log_outcome(result, len(ledger.commits), step_name)
+        _log_outcome(result, ledger.commit_count, step_name)
         return result
     return collapse_loop_commits(ledger, target_branch, commit_params, step_name, cwd, cf_client)
 
@@ -202,7 +220,7 @@ def collapse_loop_commits(
     failed git command; only ``GitStateUnknownError`` (a timed-out ref write) propagates.
     """
     result = _collapse(ledger, target_branch, commit_params, step_name, cwd, cf_client)
-    _log_outcome(result, len(ledger.commits), step_name)
+    _log_outcome(result, ledger.commit_count, step_name)
     return result
 
 
@@ -233,7 +251,7 @@ def _collapse(
         return _refused(f"cannot compose the collapse message: {exc}")
     return write_collapse(
         base_sha=ledger.base_sha,
-        old_head=ledger.commits[-1],
+        old_head=ledger.tip_sha,
         message=message,
         step_name=step_name,
         cwd=cwd,

@@ -52,8 +52,14 @@ def _commit(repo: Path, files: dict[str, str], message: str = "loop commit") -> 
 def _loop_of(repo: Path, count: int) -> LoopCommitLedger:
     """``count`` loop-style commits on top of HEAD, and the ledger that proves them."""
     base = _head(repo)
-    commits = [_commit(repo, {f"round{n}.md": f"round {n}\n"}) for n in range(1, count + 1)]
-    return LoopCommitLedger(base_sha=base, commits=commits)
+    for n in range(1, count + 1):
+        _commit(repo, {f"round{n}.md": f"round {n}\n"})
+    return LoopCommitLedger(base_sha=base, tip_sha=_head(repo), commit_count=count)
+
+
+def _range_shas(repo: Path, ledger: LoopCommitLedger) -> list[str]:
+    """The commits the ledger claims, oldest first."""
+    return _git(repo, "rev-list", "--reverse", f"{ledger.base_sha}..{ledger.tip_sha}").split()
 
 
 def _loop_params() -> dict[str, object]:
@@ -126,7 +132,7 @@ def test_an_unprovable_ledger_is_refused(temp_git_repo: Path) -> None:
 
 
 def test_an_unprovable_ledger_with_no_commits_is_still_refused(temp_git_repo: Path) -> None:
-    ledger = LoopCommitLedger(base_sha="", unprovable=True)
+    ledger = LoopCommitLedger(base_sha="", tip_sha="", unprovable=True)
 
     _assert_refused(temp_git_repo, ledger, "cannot prove")
 
@@ -154,33 +160,45 @@ def test_head_past_the_last_loop_commit_is_refused(temp_git_repo: Path) -> None:
 
 def test_an_operator_commit_between_loop_commits_is_refused(temp_git_repo: Path) -> None:
     base = _head(temp_git_repo)
-    first = _commit(temp_git_repo, {"round1.md": "1\n"})
+    _commit(temp_git_repo, {"round1.md": "1\n"})
     _commit(temp_git_repo, {"operator.md": "mine\n"})
     last = _commit(temp_git_repo, {"round2.md": "2\n"})
-    ledger = LoopCommitLedger(base_sha=base, commits=[first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=2)
 
-    _assert_refused(temp_git_repo, ledger, "not the loop's")
+    _assert_refused(temp_git_repo, ledger, "2 claimed")
 
 
 def test_a_merge_commit_in_the_range_is_refused(temp_git_repo: Path) -> None:
     base = _head(temp_git_repo)
-    first = _commit(temp_git_repo, {"round1.md": "1\n"})
+    _commit(temp_git_repo, {"round1.md": "1\n"})
     _git(temp_git_repo, "checkout", "-q", "-b", "side", base)
     _commit(temp_git_repo, {"side.md": "side\n"})
     _git(temp_git_repo, "checkout", "-q", TARGET)
     _git(temp_git_repo, "merge", "-q", "--no-ff", "-m", "merge side", "side")
     last = _commit(temp_git_repo, {"round2.md": "2\n"})
-    ledger = LoopCommitLedger(base_sha=base, commits=[first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=2)
 
-    _assert_refused(temp_git_repo, ledger, "not the loop's")
+    _assert_refused(temp_git_repo, ledger, "include a merge")
+
+
+def test_a_base_that_is_no_longer_an_ancestor_is_refused(temp_git_repo: Path) -> None:
+    _git(temp_git_repo, "checkout", "-q", "-b", "side")
+    stranger = _commit(temp_git_repo, {"side.md": "side\n"})
+    _git(temp_git_repo, "checkout", "-q", TARGET)
+    ledger = _loop_of(temp_git_repo, 2)
+    ledger.base_sha = stranger
+
+    _assert_refused(temp_git_repo, ledger, f"{stranger} is no longer an ancestor of HEAD")
 
 
 def test_a_remote_ref_containing_the_first_commit_is_refused(temp_git_repo: Path) -> None:
     ledger = _loop_of(temp_git_repo, 2)
-    _git(temp_git_repo, "update-ref", "refs/remotes/origin/x", ledger.commits[0])
+    _git(temp_git_repo, "update-ref", "refs/remotes/origin/x", _range_shas(temp_git_repo, ledger)[0])
 
     _assert_refused(
-        temp_git_repo, ledger, f"commit {ledger.commits[0]} is already on refs/remotes/origin/x"
+        temp_git_repo,
+        ledger,
+        f"commit {_range_shas(temp_git_repo, ledger)[0]} is already on refs/remotes/origin/x",
     )
 
 
@@ -194,7 +212,7 @@ def test_a_failing_git_command_is_git_failed_with_the_command_text(
 
     assert result is not None
     assert result.outcome is CollapseOutcome.GIT_FAILED
-    assert f"git rev-list --first-parent {'0' * 40}..HEAD" in result.reason
+    assert f"git merge-base --is-ancestor {'0' * 40} HEAD" in result.reason
 
 
 # ---------------------------------------------------------------------------
@@ -211,10 +229,10 @@ def _round(repo: Path, design_text: str, verdict: str) -> str:
 
 def test_a_collapse_that_includes_the_phase_commit_reads_as_an_add(temp_git_repo: Path) -> None:
     base = _head(temp_git_repo)
-    phase = _commit(temp_git_repo, {DESIGN_FILE: "v1\n"})
-    first = _round(temp_git_repo, "v2\n", "CONCERNS")
+    _commit(temp_git_repo, {DESIGN_FILE: "v1\n"})
+    _round(temp_git_repo, "v2\n", "CONCERNS")
     last = _round(temp_git_repo, "v3\n", "PASS")
-    ledger = LoopCommitLedger(base_sha=base, commits=[phase, first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=3)
 
     message = collapse_message(ledger, _loop_params(), str(temp_git_repo), _cf())
 
@@ -226,9 +244,9 @@ def test_a_collapse_of_rounds_over_an_existing_document_reads_as_a_revise(
 ) -> None:
     _commit(temp_git_repo, {DESIGN_FILE: "v1\n"})
     base = _head(temp_git_repo)
-    first = _round(temp_git_repo, "v2\n", "CONCERNS")
+    _round(temp_git_repo, "v2\n", "CONCERNS")
     last = _round(temp_git_repo, "v3\n", "PASS")
-    ledger = LoopCommitLedger(base_sha=base, commits=[first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=2)
 
     message = collapse_message(ledger, _loop_params(), str(temp_git_repo), _cf())
 
@@ -238,9 +256,9 @@ def test_a_collapse_of_rounds_over_an_existing_document_reads_as_a_revise(
 def test_the_verdict_is_the_final_reviews_not_the_first(temp_git_repo: Path) -> None:
     _commit(temp_git_repo, {DESIGN_FILE: "v1\n"})
     base = _head(temp_git_repo)
-    first = _round(temp_git_repo, "v2\n", "PASS")
+    _round(temp_git_repo, "v2\n", "PASS")
     last = _round(temp_git_repo, "v3\n", "CONCERNS")
-    ledger = LoopCommitLedger(base_sha=base, commits=[first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=2)
 
     message = collapse_message(ledger, _loop_params(), str(temp_git_repo), _cf())
 
@@ -252,9 +270,9 @@ def test_files_outside_the_documents_scope_do_not_change_the_message(
 ) -> None:
     _commit(temp_git_repo, {DESIGN_FILE: "v1\n"})
     base = _head(temp_git_repo)
-    first = _commit(temp_git_repo, {DESIGN_FILE: "v2\n", "unrelated.txt": "x\n"})
+    _commit(temp_git_repo, {DESIGN_FILE: "v2\n", "unrelated.txt": "x\n"})
     last = _round(temp_git_repo, "v3\n", "PASS")
-    ledger = LoopCommitLedger(base_sha=base, commits=[first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=2)
 
     message = collapse_message(ledger, _loop_params(), str(temp_git_repo), _cf())
 
@@ -264,9 +282,9 @@ def test_files_outside_the_documents_scope_do_not_change_the_message(
 def test_the_message_never_reads_the_replaced_commit_messages(temp_git_repo: Path) -> None:
     _commit(temp_git_repo, {DESIGN_FILE: "v1\n"})
     base = _head(temp_git_repo)
-    first = _commit(temp_git_repo, {DESIGN_FILE: "v2\n"}, "docs: revise slice 999 tasks, round 7")
+    _commit(temp_git_repo, {DESIGN_FILE: "v2\n"}, "docs: revise slice 999 tasks, round 7")
     last = _round(temp_git_repo, "v3\n", "PASS")
-    ledger = LoopCommitLedger(base_sha=base, commits=[first, last])
+    ledger = LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=2)
 
     message = collapse_message(ledger, _loop_params(), str(temp_git_repo), _cf())
 
@@ -284,10 +302,10 @@ STEP = "revise-design"
 def _design_loop(repo: Path) -> LoopCommitLedger:
     """A phase commit and two rounds of the design, and the ledger that proves them."""
     base = _head(repo)
-    phase = _commit(repo, {DESIGN_FILE: "v1\n"})
-    first = _round(repo, "v2\n", "CONCERNS")
+    _commit(repo, {DESIGN_FILE: "v1\n"})
+    _round(repo, "v2\n", "CONCERNS")
     last = _round(repo, "v3\n", "PASS")
-    return LoopCommitLedger(base_sha=base, commits=[phase, first, last])
+    return LoopCommitLedger(base_sha=base, tip_sha=last, commit_count=3)
 
 
 def _collapse(repo: Path, ledger: LoopCommitLedger) -> CollapseResult:
@@ -326,7 +344,7 @@ def test_every_original_commit_stays_reachable_from_the_backup_ref(temp_git_repo
     result = _collapse(temp_git_repo, ledger)
 
     backup = f"refs/squadron/pre-collapse/{result.new_sha}"
-    for sha in ledger.commits:
+    for sha in _range_shas(temp_git_repo, ledger):
         _git(temp_git_repo, "merge-base", "--is-ancestor", sha, backup)  # exits 1 if not
 
 
@@ -389,7 +407,7 @@ def test_a_message_that_cannot_be_composed_refuses_and_leaves_history(
 
 def test_a_stale_old_head_loses_the_race_and_loses_no_commit(temp_git_repo: Path) -> None:
     ledger = _loop_of(temp_git_repo, 2)
-    stale_old_head = ledger.commits[-1]
+    stale_old_head = ledger.tip_sha
     operator = _commit(temp_git_repo, {"operator.md": "landed after the checks\n"})
 
     result = write_collapse(
@@ -436,7 +454,7 @@ def test_an_update_ref_timeout_raises_state_unknown(temp_git_repo: Path) -> None
     with pytest.raises(GitStateUnknownError, match="update-ref"):
         write_collapse(
             base_sha=ledger.base_sha,
-            old_head=ledger.commits[-1],
+            old_head=ledger.tip_sha,
             message="docs: collapsed",
             step_name=STEP,
             cwd=str(temp_git_repo),

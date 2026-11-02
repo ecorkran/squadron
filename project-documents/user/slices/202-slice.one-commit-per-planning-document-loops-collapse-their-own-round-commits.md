@@ -8,7 +8,7 @@ dependencies:
 interfaces: []
 dateCreated: 20261101
 dateUpdated: 20261101
-status: not_started
+status: complete
 turns: 67
 promptTokens: 4415860
 cachedTokens: 4281548
@@ -37,7 +37,7 @@ This slice moves the job to the one place that knows which commits are its own: 
 ## Value
 
 - `git log --oneline` on the target reads one line per planning document (`docs: add slice 202 design (review: PASS)`) instead of add/revise/re-review sets. No more manual squashing after each pipeline run.
-- No inference. The rewrite covers only commits whose shas the loop recorded as it made them, so the 948 failure class (a guessed commit run that includes someone else's work) can't happen.
+- No inference. The rewrite covers only commits the loop's own actions made, proven by an unbroken chain of HEAD stamps, so the 948 failure class (a guessed commit run that includes someone else's work) can't happen.
 - Per-round history still exists while the loop runs, so the findings-addressed gate keeps its prior-round base. After collapse it stays reachable through a backup ref, so review files' `reviewedSha` stamps keep resolving.
 
 ## Technical Scope
@@ -52,7 +52,7 @@ Included:
 
 Excluded:
 - Code loops (`revise-code`, round subject `code`). They commit on the slice branch, whose history the merge keeps. Collapsing implementation history is a separate decision and is not part of #257.
-- Loops whose body commits by itself rather than through `commit_each_iteration`. Validation already makes the two mutually exclusive, and only `commit_each_iteration` commits are recorded.
+- Loops whose body commits by itself rather than through `commit_each_iteration`. Validation already makes the two mutually exclusive, and only `commit_each_iteration` loops keep a ledger.
 - `--prompt-only` loops. Loops are not rendered in prompt-only mode yet (#145).
 - Collapsing across loops or across documents. Each loop collapses only its own document's commits.
 - Pruning backup refs. They are listed and deleted with plain git (`git for-each-ref refs/squadron/pre-collapse`, `git update-ref -d`).
@@ -78,8 +78,9 @@ Excluded:
 executor._execute_loop_body           (existing; gains ledger recording at the round commit)
         │
         ▼
-pipeline/loop_ledger.py      LoopCommitLedger: base_sha, commits[], unprovable;
-                             open_ledger(), carried_ledger()  — pure data + state I/O
+pipeline/head_stamp.py       stamps dispatch and commit results with the HEAD before and after
+pipeline/loop_ledger.py      LoopCommitLedger: base_sha, tip_sha, commit_count, unprovable;
+                             open_ledger(), claim_actions(), start_ledger()  — data + state I/O
 pipeline/loop_collapse.py    collapse_loop_commits(ledger, target, cwd, cf_client)
                              -> CollapseOutcome; proof checks, message, git writes
         │
@@ -92,12 +93,12 @@ pipeline/loop_collapse.py    collapse_loop_commits(ledger, target, cwd, cf_clien
 
 ### Data Flow
 
-1. **Loop start (fresh).** If the loop has `commit_each_iteration: true` and its round subject is not `code`, read `HEAD` as `start_head`. Find the newest commit result in `prior_outputs` that has `committed: true`. If its `sha == start_head` and its `commit_subject` and scope equal the loop's `round_commit_params`, the phase commit is included: `commits = [start_head]`, `base_sha = start_head^`. Otherwise `commits = []` and `base_sha = start_head`, and a WARNING records why the phase commit was left out (only if a phase commit exists but doesn't match).
+1. **Loop start (fresh).** If the loop has `commit_each_iteration: true` and its round subject is not `code`, read `HEAD` as `start_head`. Find the newest commit result in `prior_outputs` that has `committed: true`. If its `sha == start_head` and its `commit_subject` and scope equal the loop's `round_commit_params`, the phase commit is included. `base_sha` is the HEAD the phase dispatch started from, when that dispatch's `head_after` equals the commit's `head_before` (the agent's own commits before the phase commit), else the commit's `head_before`. `tip_sha = start_head`, and `commit_count` is `git rev-list --count base..start_head`. Otherwise the ledger is empty (`base_sha = tip_sha = start_head`), and a WARNING records why the phase commit was left out (only if a phase commit exists but doesn't match).
 2. **Loop start (resumed).** When the executor resumes this loop step (`start_from`, or a `--decision accept` resume), the ledger comes from the step's latest record in the run state, using the same lookup as `resume_iteration_for`. If that record exists but has no ledger (a state file written before this slice), the ledger is marked `unprovable` and collapse refuses later.
    An item rerun (`sq run --resume <run-id> --item N --decision retry|accept`, slice 197) is not a carried resume. `resume_item` returns git to the target first, then runs the `each` body fresh, so the loop opens a new ledger. Commits from the flagged attempt stay as they are, and the rerun collapses only what it commits itself. With `--decision accept`, the loop runs no rounds and collapses nothing. If the checkout is somehow not on the target, collapse refuses (D3.2).
-3. **Each round.** After the round's commit action succeeds with `committed: true`, append its `sha`. A sha of `unknown` (HEAD unreadable after the commit) marks the ledger `unprovable`. `committed: false` rounds add nothing.
+3. **Each round.** After the round's commit action returns, the ledger claims every dispatch and commit result of the round, in order. A result is claimed only when its `head_before` equals the ledger's `tip_sha`; the tip then moves to its `head_after` and the count grows by the commits between. A dispatch agent that commits its own work is claimed this way. A gap (a commit no action of the loop made) or a missing stamp marks the ledger `unprovable`. A pause inside a round claims that round's results so far, because the round is redone on resume.
 4. **Every return.** The ledger is attached to the StepResult on every exit path (completed, paused, failed, skipped), so a pause persists it for the resume.
-5. **Loop completed** (`until` met, accepted on exhaustion, or accepted by decision): run `collapse_loop_commits`. With fewer than two commits in the ledger there is nothing to collapse, and the outcome is `nothing_to_collapse` (no log line). PAUSED, FAILED and SKIPPED loops never collapse: their per-round history is the diagnosis.
+5. **Loop completed** (`until` met, accepted on exhaustion, or accepted by decision): run `collapse_loop_commits`. With fewer than two commits claimed there is nothing to collapse, and the outcome is `nothing_to_collapse` (no log line). PAUSED, FAILED and SKIPPED loops never collapse: their per-round history is the diagnosis.
 6. **Collapse.** Proof checks (D3), then backup ref, new commit, compare-and-swap (D2). The outcome is logged.
 
 ### State Management
@@ -106,17 +107,21 @@ pipeline/loop_collapse.py    collapse_loop_commits(ledger, target, cwd, cf_clien
 
 | Field | Meaning |
 |---|---|
-| `base_sha` | parent of the oldest commit the loop may collapse |
-| `commits` | collapsible shas, oldest first (phase commit first when included) |
-| `unprovable` | `True` when the ledger cannot vouch for its own list (resumed state with no ledger, or an unreadable commit sha) |
+| `base_sha` | the HEAD before the first claimed commit |
+| `tip_sha` | the HEAD after the last claimed action |
+| `commit_count` | how many commits the ledger claims, base to tip |
+| `unprovable` | `True` when the ledger cannot vouch for its claim (resumed state with no ledger, a gap in the chain, or a missing stamp) |
 
-The ledger is cumulative: a resumed loop continues the list it carried, and each record of the step holds the whole list so far.
+The ledger is cumulative: a resumed loop continues the claim it carried, and each record of the step holds the whole claim so far.
 
 ## Technical Decisions
 
-### D1 — The loop records its own commits; nothing is inferred
-Status: decided
-- The ledger is filled only from commit action results the loop itself received, plus a phase commit proven by sha equality with `HEAD` at loop start and matching subject and scope. Subjects and messages are never parsed.
+### D1 — The loop claims its own actions' commits by HEAD stamps; nothing is inferred
+Status: decided (revised 20261101)
+- A dispatch agent commits its own work, so the commits in a loop are not all the commit action's. The first design listed the commit action's shas and a live run refused to collapse: the agents' commits sat between them.
+- Each dispatch and commit result is stamped with the HEAD it started from and the HEAD it left (`head_stamp`). The ledger claims a result only when its starting HEAD is the ledger's tip, so the claimed commits form one unbroken chain. A commit made between actions, such as an operator's during a pause, breaks the chain and the ledger becomes unprovable.
+- Subjects and messages are never parsed. Not claimed: a commit landing while an agent is mid-action looks like the agent's own. The run lock stops other squadron runs, so only a person committing in the same checkout during a run can do this.
+- Rejected: listing shas and having the prompt forbid agent commits. Not enforceable.
 - Rejected: reconstructing from `prior_round_results` action dicts on resume. Inside `each`, the same loop step name recurs per item, and the phase-commit decision made at first start would be lost. One explicit cumulative ledger is simpler to prove.
 
 ### D2 — Mechanism: `commit-tree` plus compare-and-swap `update-ref`
@@ -128,13 +133,14 @@ Status: decided
 - **Architecture exception.** Moving the target's HEAD to a new commit with a different parent is a reset in effect. 180-arch's Git-Mutating Steps section records this as the one exception to "never force, reset": the commits must be the loop's own recorded, unpublished tail on the target (D3), the tree must be identical, and the swap must be a compare-and-swap, with a backup ref kept. It applies to the target only.
 
 ### D3 — What "provably ours" means
-Status: decided
+Status: decided (revised 20261101)
 All of the following must hold, checked in this order. The first failure gives the `refused` outcome, and its reason goes in the WARNING line:
 1. The ledger is not `unprovable`.
-2. The current branch is the target (`read_integration_target`). A detached HEAD fails this check.
-3. `HEAD == commits[-1]`.
-4. `git rev-list --first-parent <base_sha>..HEAD` equals `reversed(commits)` exactly. Check 3 alone is not enough: an operator commit made during a pause becomes the parent of the next round commit, so HEAD still equals the loop's last commit while a foreign commit sits in the middle. A merge or an amend also fails this check, because the loop's own commits are never merges.
-5. `git for-each-ref --contains <commits[0]> refs/remotes` is empty. Checking the oldest commit is enough, since it is an ancestor of every other.
+2. At least two commits are claimed; fewer is `nothing_to_collapse`.
+3. The current branch is the target (`read_integration_target`). A detached HEAD fails this check.
+4. `HEAD == tip_sha`.
+5. `base_sha` is an ancestor of `HEAD`, `git rev-list --merges <base_sha>..HEAD` is empty, and `git rev-list --count <base_sha>..HEAD` equals `commit_count`. The claim was built from stamps, so the git history must agree with it: an amend, a reset or a merge after the claim fails here.
+6. `git for-each-ref --contains <oldest commit in the range> refs/remotes` is empty. Checking the oldest commit is enough, since it is an ancestor of every other.
 - Any git command failing during the checks produces `git_failed` with the command text.
 
 ### D4 — Surviving commit message
@@ -216,27 +222,31 @@ Status: decided
 
 ### Verification Walkthrough
 
-Run in a scratch clone of a cf project on its target branch, with a slice that has no design yet (`{n}` below).
+Run in a scratch clone of a cf project on its target branch, with slices that have no design yet (`{n}`, `{m}`, `{k}` below). The live runs for this slice used a clone of squadron registered with cf under another name, a copy of P4 without its summary step (the summary step copies to the clipboard), and `model=sonnet,review-model=sonnet`. The built-in review model needs `OPENROUTER_API_KEY`. Commit hashes below are examples.
 
-1. Collapse on a normal run:
+1. Collapse on a normal run, with dispatch agents that commit their own work:
    ```bash
-   sq run P4 --slice {n} -v
+   sq run P4 {n} -v
    git log --oneline -3
    ```
-   Expected: the run log has `loop revise-design: collapsed 3 commits into abc1234 "docs: add slice {n} design (review: PASS)"`, and `git log` shows that single commit at the top. If the first review passes, the loop is skipped, no collapse line appears, and there is one commit anyway.
+   Expected: the run log ends with `loop loop-1: collapsed 6 commits into fd8cfe4 "docs: add slice {n} design (review: CONCERNS)" (pre-collapse head: refs/squadron/pre-collapse/fd8cfe4…)`, and `git log` shows that one commit above the commit the run started from. The count is the phase agent's commit, the phase commit, then an agent commit and a round commit per round. The verdict in the message is the final review's. If the first review passes, the loop is skipped, no collapse line appears, and the phase commit stands alone.
 2. Backup ref and round history:
    ```bash
    git for-each-ref refs/squadron/pre-collapse
-   git log --oneline <base>..refs/squadron/pre-collapse/abc1234
-   git diff abc1234 refs/squadron/pre-collapse/abc1234   # empty: identical tree
+   git log --oneline <base>..refs/squadron/pre-collapse/<full sha of the collapsed commit>
+   git diff HEAD refs/squadron/pre-collapse/<full sha of the collapsed commit>   # empty: identical tree
    ```
-3. Resume after a checkpoint: run P4 with `--param max-revisions=1` and a review model strict enough to exhaust, so the run pauses. Then:
+   Expected: the log lists the six original commits (agent commits and pipeline commits), and the diff prints nothing. The collapsed commit's parent is `<base>`.
+3. Accept after a checkpoint. P4's checkpoint comes only when the loop exhausts without meeting `accept-threshold`:
    ```bash
-   sq run --resume <run-id> --decision accept
+   sq run P4 {m} -p max-revisions=1,accept-threshold=review.pass -v      # pauses at the loop
+   sq run --resume <run-id> --decision accept -v
    git log --oneline -3
    ```
-   Expected: one commit spanning the phase commit and the round from before the pause.
-4. Refusal: repeat step 3, but make an unrelated commit (`git commit --allow-empty -m "chore: unrelated"`) before resuming. Expected: `loop revise-design: left 2 commits uncollapsed: HEAD is <x>, the loop's last commit is <y>`, and history unchanged.
+   Expected: the resume logs `loop step loop-1: accepted by decision at round 1; 0 rounds run` then `loop loop-1: collapsed 2 commits into d14cc53 "docs: add slice {m} design (review: CONCERNS)"`, and `git log` shows one commit for the slice.
+4. Refusal: repeat step 3 on slice `{k}`, but run `git commit --allow-empty -m "chore: unrelated"` before resuming. Expected: `loop loop-1: left 2 commits uncollapsed: HEAD <x> is not the loop's last commit <y>`, the run still completes, and `git log` is unchanged, with the unrelated commit on top.
+
+Observed on 20261101: steps 1 and 2 on slice 185 (six commits into one, empty diff against the backup ref), step 3 on slice 187, step 4 on slice 188. A first attempt at step 3 exposed a bug, now fixed and covered by a test: a pause at the exhaustion checkpoint claimed the final round a second time and made the ledger unprovable.
 
 ## Risk Assessment
 
@@ -245,7 +255,7 @@ Run in a scratch clone of a cf project on its target branch, with a slice that h
 
 ### Mitigation Strategies
 - Squadron against squadron: the per-checkout run lock (197) already allows only one git-mutating run at a time.
-- Squadron against an operator's manual commit: the final write is a compare-and-swap on `HEAD` (D2), and the proof (D3) requires the exact recorded chain, so a concurrent commit gives `refused`, never a lost commit. The backup ref makes every collapse reversible with one `git update-ref`.
+- Squadron against an operator's manual commit: the final write is a compare-and-swap on `HEAD` (D2), and the proof (D3) requires the unbroken stamped chain, so a commit made between the loop's actions gives `refused`, never a lost commit. The backup ref makes every collapse reversible with one `git update-ref`.
 
 ## Implementation Notes
 

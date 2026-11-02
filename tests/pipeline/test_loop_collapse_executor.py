@@ -45,6 +45,8 @@ class Script:
 
     repo: Path
     reviews: list[Review]
+    # A dispatch agent that commits its own work, as the SDK agents do.
+    agent_commits: bool = False
     revisions: int = 0
     review_calls: int = 0
     log: list[str] = field(default_factory=lambda: [])
@@ -57,6 +59,9 @@ class Script:
     async def dispatch(self, _ctx: ActionContext) -> ActionResult:
         self.revisions += 1
         self._write(DESIGN, f"design v{self.revisions}\n")
+        if self.agent_commits:
+            run_test_git(self.repo, "add", "-A")
+            run_test_git(self.repo, "commit", "-q", "-m", f"agent: design v{self.revisions}")
         return ActionResult(success=True, action_type="dispatch", outputs={})
 
     async def review(self, _ctx: ActionContext) -> ActionResult:
@@ -86,14 +91,23 @@ def _commit_params() -> dict[str, object]:
 
 
 def _pipeline(
-    tag: str, *, max_rounds: int, phase: bool = True, leading_review: bool = False, **loop_extra: object
+    tag: str,
+    *,
+    max_rounds: int,
+    phase: bool = True,
+    phase_review: bool = False,
+    leading_review: bool = False,
+    **loop_extra: object,
 ) -> PipelineDefinition:
     review_actions: list[tuple[str, dict[str, object]]] = [
         ("review", {"template": "slice", "slice": str(SLICE)})
     ]
     register_step_type(f"_cx_dispatch_{tag}", _step_type([("dispatch", {})]))
     register_step_type(f"_cx_review_{tag}", _step_type(review_actions))
-    register_step_type(f"_cx_phase_{tag}", _step_type([("dispatch", {}), ("commit", _commit_params())]))
+    phase_actions: list[tuple[str, dict[str, object]]] = [("dispatch", {})]
+    if phase_review:
+        phase_actions += review_actions
+    register_step_type(f"_cx_phase_{tag}", _step_type([*phase_actions, ("commit", _commit_params())]))
     steps: list[StepConfig] = []
     if phase:
         steps.append(StepConfig(step_type=f"_cx_phase_{tag}", name="design", config={}))
@@ -126,10 +140,18 @@ class Run:
     state: StateManager
 
 
-def _start(pipeline: PipelineDefinition, repo: Path, reviews: list[Review], runs_dir: Path) -> Run:
+def _start(
+    pipeline: PipelineDefinition,
+    repo: Path,
+    reviews: list[Review],
+    runs_dir: Path,
+    *,
+    agent_commits: bool = False,
+) -> Run:
     state = StateManager(runs_dir=runs_dir)
     run_id = state.init_run(pipeline.name, {"slice": str(SLICE)})
-    return Run(pipeline, Script(repo, reviews), runs_dir, run_id, state)
+    script = Script(repo, reviews, agent_commits=agent_commits)
+    return Run(pipeline, script, runs_dir, run_id, state)
 
 
 async def _execute(
@@ -196,7 +218,7 @@ async def test_phase_commit_and_two_rounds_collapse_into_one_commit(
     assert result.status == ExecutionStatus.COMPLETED
     assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: PASS)"]
     ledger = result.step_results[-1].loop_commits
-    assert ledger is not None and len(ledger.commits) == 3
+    assert ledger is not None and ledger.commit_count == 3
     head = run_test_git(temp_git_repo, "rev-parse", "HEAD").strip()
     backup = f"refs/squadron/pre-collapse/{head}"
     tree = run_test_git(temp_git_repo, "rev-parse", "HEAD^{tree}")
@@ -416,3 +438,87 @@ async def test_a_code_loop_never_collapses(temp_git_repo: Path, runs_dir: Path) 
     assert result.status == ExecutionStatus.COMPLETED
     assert result.step_results[-1].loop_commits is None
     assert len(_subjects(temp_git_repo)) == 3  # init and one commit per round
+
+
+# ---------------------------------------------------------------------------
+# Agents that commit their own work (what a real dispatch does)
+# ---------------------------------------------------------------------------
+
+_AGENT_PAUSE = [
+    Review("FAIL"),  # the phase step's review
+    Review("CONCERNS"),  # round 1
+    Review("CONCERNS", pause=True),  # round 2, stopped at a checkpoint
+    Review("PASS"),  # round 2 again, after the resume
+]
+
+
+def _agent_run(repo: Path, runs_dir: Path, tag: str, reviews: list[Review]) -> Run:
+    pipeline = _pipeline(tag, max_rounds=4, phase_review=True)
+    return _start(pipeline, repo, reviews, runs_dir, agent_commits=True)
+
+
+@pytest.mark.asyncio
+async def test_commits_the_dispatch_agents_make_collapse_with_the_rest(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    run = _agent_run(
+        temp_git_repo, runs_dir, "agent", [Review("FAIL"), Review("CONCERNS"), Review("PASS")]
+    )
+
+    result = await _execute(run)
+
+    assert result.status == ExecutionStatus.COMPLETED
+    ledger = result.step_results[-1].loop_commits
+    # The phase's agent and commit, then an agent commit and a round commit per round.
+    assert ledger is not None and ledger.commit_count == 6
+    assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: PASS)"]
+
+
+@pytest.mark.asyncio
+async def test_an_agent_commit_in_the_round_a_checkpoint_stopped_keeps_the_chain(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    run = _agent_run(temp_git_repo, runs_dir, "agent-pause", list(_AGENT_PAUSE))
+    assert (await _execute(run)).status == ExecutionStatus.PAUSED
+
+    resumed = await _execute(run, resume=True)
+
+    assert resumed.status == ExecutionStatus.COMPLETED
+    assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: PASS)"]
+
+
+@pytest.mark.asyncio
+async def test_an_operator_commit_during_the_pause_is_not_swallowed_with_agent_commits(
+    temp_git_repo: Path, runs_dir: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    run = _agent_run(temp_git_repo, runs_dir, "agent-operator", list(_AGENT_PAUSE))
+    assert (await _execute(run)).status == ExecutionStatus.PAUSED
+    (temp_git_repo / "operator.md").write_text("mine\n")
+    run_test_git(temp_git_repo, "add", "operator.md")
+    run_test_git(temp_git_repo, "commit", "-q", "-m", "operator work")
+
+    with caplog.at_level(logging.WARNING, logger="squadron.pipeline"):
+        resumed = await _execute(run, resume=True)
+
+    assert resumed.status == ExecutionStatus.COMPLETED
+    assert "operator work" in _subjects(temp_git_repo)
+    assert any("will not collapse" in r.getMessage() for r in caplog.records)
+    assert any("uncollapsed" in r.getMessage() for r in _collapse_records(caplog))
+
+
+@pytest.mark.asyncio
+async def test_accepting_an_exhausted_loop_after_its_checkpoint_collapses_agent_commits_too(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    pipeline = _pipeline("agent-exhaust", max_rounds=1, phase_review=True, on_exhaust="checkpoint")
+    run = _start(
+        pipeline, temp_git_repo, [Review("FAIL"), Review("CONCERNS")], runs_dir, agent_commits=True
+    )
+    paused = await _execute(run)
+    assert paused.status == ExecutionStatus.PAUSED
+    assert len(_subjects(temp_git_repo)) == 5  # init, phase agent, phase, round agent, round
+
+    resumed = await _execute(run, resume=True, params={ACCEPT_DECISION: True})
+
+    assert resumed.step_results[-1].accepted is True
+    assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: CONCERNS)"]

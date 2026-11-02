@@ -5,14 +5,10 @@ project: squadron
 lld: user/slices/202-slice.one-commit-per-planning-document-loops-collapse-their-own-round-commits.md
 dependencies:
 - 196
-projectState: 'Slice design complete (20261101, revision 2). No code written. 196
-  is complete; the target is read with `cf config get git.integration_branch` (`main`
-  if empty).
-
-  '
+projectState: 'Implementation complete (20261101): loop collapse by HEAD stamps, live walkthrough passed. Code review not run.'
 dateCreated: 20261101
 dateUpdated: 20261101
-status: in_progress
+status: complete
 turns: 23
 promptTokens: 1337141
 cachedTokens: 1267221
@@ -45,6 +41,7 @@ revision_number: 2
 - Before each commit: `ruff format`, `ruff check`, `pyright` (zero errors), and the touched
   area's tests.
 - Next planned slice: none dependent (the design lists nothing provided to other slices).
+- Task 10 reworks the ledger after the live run showed dispatch agents commit their own work; the sha-list ledger of Tasks 2-7 is superseded by stamps (see the slice design D1, D3).
 
 ---
 
@@ -282,16 +279,27 @@ revision_number: 2
 
 ### 9. Live walkthrough (effort 2)
 
-- [ ] **9.1 Run the design's Verification Walkthrough steps 1–4** in a scratch clone of a cf
+- [x] **9.1 Run the design's Verification Walkthrough steps 1–4** in a scratch clone of a cf
       project on its target branch
-  - [ ] Step 1: P4 run, single resulting commit, INFO collapse line
-  - [ ] Step 2: backup ref exists, `git diff` against it is empty
-  - [ ] Step 3: pause and `--decision accept` resume gives one commit across the pause
-  - [ ] Step 4: unrelated commit before resuming gives the WARNING and unchanged history
-  - [ ] The live run is evidence, not a gate: the behavior is gated by the 7.5 tests. If the
+  - Run on 20261101 in a scratch clone of squadron registered with cf under another name (P4 copy without the summary step, sonnet for design and review): steps 1-2 on slice 185, step 3 on slice 187, step 4 on slice 188. The first attempt at step 1 refused to collapse (the dispatch agents commit their own work, so the pipeline's commits were not the whole range) and led to Task 10; the first attempt at step 3 exposed a double claim at the exhaustion checkpoint, also fixed under Task 10. The scratch cf project and run states were removed; the clone directory under the session scratchpad was left for the PM to delete.
+  - [x] Step 1: P4 run, single resulting commit, INFO collapse line
+  - [x] Step 2: backup ref exists, `git diff` against it is empty
+  - [x] Step 3: pause and `--decision accept` resume gives one commit across the pause
+  - [x] Step 4: unrelated commit before resuming gives the WARNING and unchanged history
+  - [x] The live run is evidence, not a gate: the behavior is gated by the 7.5 tests. If the
         review model passes first time or never exhausts, so steps 3–4 cannot be reached, record
         that in the DEVLOG and leave those sub-items unchecked
-- [ ] **9.2 Record the outcome in the DEVLOG** (Session State Summary); mark the slice design
+- [x] **9.2 Record the outcome in the DEVLOG** (Session State Summary); mark the slice design
       `status: complete` and update the slice plan only if every criterion above is met
 
 **Commit**: `docs: record slice 202 walkthrough results`
+
+### 10. Claim agent commits by HEAD stamps (live-run finding) (effort 4)
+
+- [x] **10.1 Stamp dispatch and commit results with the HEAD before and after** (`pipeline/head_stamp.py`, `execute_stamped`, used at the action loop and the round commit in `executor.py`); tests in `tests/pipeline/test_head_stamp.py`
+- [x] **10.2 Rework the ledger to `base_sha`, `tip_sha`, `commit_count`, `unprovable`**: `open_ledger` chains the phase dispatch's stamps to the phase commit's; `claim_actions` claims a result only when its start is the tip; a pause inside a round claims that round's results (at the inner-step pause site in `_run_loop_rounds`); tests in `tests/pipeline/test_loop_ledger.py`, `tests/pipeline/test_state_loop_rounds.py`
+- [x] **10.3 Rework the collapse proof (D3)**: branch, `HEAD == tip_sha`, base is an ancestor, no merges, count equals `commit_count`, no remote ref contains the oldest commit; tests in `tests/pipeline/test_loop_collapse.py`
+- [x] **10.4 Executor tests where the fake dispatch commits like a real agent**: phase and every round, a pause in a round after an agent commit, an operator commit during the pause, exhaustion checkpoint then `--decision accept` (`tests/pipeline/test_loop_collapse_executor.py`)
+- [x] **10.5 Slice design D1, D3, Data Flow and State Management amended; Verification Walkthrough rewritten with the commands and output observed live**
+
+**Commit**: `feat: loop collapse claims agent commits by HEAD stamps`

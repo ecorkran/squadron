@@ -107,7 +107,7 @@ def _paused(step_name: str, ledger: LoopCommitLedger | None) -> StepResult:
 def test_a_stored_ledger_is_carried_unchanged(tmp_path: Path) -> None:
     manager = StateManager(runs_dir=tmp_path)
     run_id = manager.init_run("p4", {"slice": "202"})
-    ledger = LoopCommitLedger(base_sha="a" * 40, commits=["b" * 40])
+    ledger = LoopCommitLedger(base_sha="a" * 40, tip_sha="b" * 40, commit_count=1)
 
     manager.record_step_completed(run_id, _paused("rounds", ledger))
 
@@ -127,14 +127,16 @@ def test_a_record_written_before_ledgers_existed_is_unprovable(tmp_path: Path) -
 
     manager.record_step_completed(run_id, _paused("rounds", None))
 
-    assert manager.loop_ledger_for(run_id, "rounds") == LoopCommitLedger(base_sha="", unprovable=True)
+    assert manager.loop_ledger_for(run_id, "rounds") == LoopCommitLedger(
+        base_sha="", tip_sha="", unprovable=True
+    )
 
 
 def test_the_later_record_of_a_step_wins(tmp_path: Path) -> None:
     manager = StateManager(runs_dir=tmp_path)
     run_id = manager.init_run("p4", {"slice": "202"})
-    earlier = LoopCommitLedger(base_sha="a" * 40, commits=["b" * 40])
-    later = LoopCommitLedger(base_sha="a" * 40, commits=["b" * 40, "c" * 40])
+    earlier = LoopCommitLedger(base_sha="a" * 40, tip_sha="b" * 40, commit_count=1)
+    later = LoopCommitLedger(base_sha="a" * 40, tip_sha="c" * 40, commit_count=2)
 
     manager.record_step_completed(run_id, _paused("rounds", earlier))
     manager.record_step_completed(run_id, _paused("rounds", later))
