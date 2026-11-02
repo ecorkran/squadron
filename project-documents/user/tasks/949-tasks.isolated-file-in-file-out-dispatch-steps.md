@@ -89,24 +89,24 @@ revision_number: 1
 
 ### Part B: no-tools guard
 
-- [ ] **T5: `FailureKind.TOOL_ISOLATION` and the guard helpers** (Effort 3)
-  - [ ] Add `TOOL_ISOLATION = "tool_isolation"` to `FailureKind` with a one-line comment; confirm it is not in `_PAUSING_KINDS` (the run fails, not pauses)
-  - [ ] In `tool_support.py`, add `declares_no_tools(context)` (`allowed_tools` present and equal to `[]`; absent key false) and `tool_isolation_error(...)` per D6: error when the route is the SDK session path, or the agent path whose provider has `capabilities.can_read_files`; returns `None` otherwise. The message names the step, the model and the provider and says to use a model whose provider runs no tools of its own (an `openrouter` alias)
-  - [ ] Extract `_agent_profile_name` in `actions/dispatch.py` from `_dispatch_via_agent` and call it from both the guard and `_dispatch_via_agent` (D6: they cannot disagree about the provider). No behavior change in `_dispatch_via_agent`
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean; existing `tests/pipeline/actions/test_dispatch*.py` still pass
+- [x] **T5: `FailureKind.TOOL_ISOLATION` and the guard helpers** (Effort 3)
+  - [x] Add `TOOL_ISOLATION = "tool_isolation"` to `FailureKind` with a one-line comment; confirm it is not in `_PAUSING_KINDS` (the run fails, not pauses)
+  - [x] In `tool_support.py`, add `declares_no_tools(context)` (`allowed_tools` present and equal to `[]`; absent key false) and `tool_isolation_error(...)` per D6: error when the route is the SDK session path, or the agent path whose provider has `capabilities.can_read_files`; returns `None` otherwise. The message names the step, the model and the provider and says to use a model whose provider runs no tools of its own (an `openrouter` alias)
+  - [x] Extract `_agent_profile_name` in `actions/dispatch.py` from `_dispatch_via_agent` and call it from both the guard and `_dispatch_via_agent` (D6: they cannot disagree about the provider). No behavior change in `_dispatch_via_agent`
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean; existing `tests/pipeline/actions/test_dispatch*.py` still pass
 
-- [ ] **T6: Test the guard helpers** (Effort 2)
-  - [ ] Create `tests/pipeline/actions/test_tool_isolation.py`:
+- [x] **T6: Test the guard helpers** (Effort 2)
+  - [x] Create `tests/pipeline/actions/test_tool_isolation.py`:
     1. `declares_no_tools`: `[]` true; `["read"]`, absent and `None` false
     2. `tool_isolation_error`: session route errors; agent route errors when `can_read_files` is true (SDK one-shot, Codex `openai-oauth`) and returns `None` when false (`openai`); the test varies the capability value, never provider identity
     3. error text contains the step name, model and provider
-  - [ ] SC: tests pass
+  - [x] SC: tests pass
 
-- [ ] **T7: Wire the guard into `_dispatch`** (Effort 2)
-  - [ ] In `_dispatch`, after routing and before any prompt work: if `declares_no_tools(context)` and `tool_isolation_error(...)` returns a message, return a failed `ActionResult` with `metadata[FAILURE_KIND_KEY] = FailureKind.TOOL_ISOLATION` and log at WARNING (D6). Keep the existing truthiness guard for non-empty lists
-  - [ ] Check `src/squadron/data/` for `allowed_tools: []` (design says none) and say so in the commit body if confirmed
-  - [ ] Tests in `tests/pipeline/actions/test_tool_isolation.py` using the stub-provider helpers: SDK session, SDK one-shot and Codex routes fail before any model call (assert the stub is never called) with `failure_kind == "tool_isolation"` and a WARNING in `caplog`; an `openai`-provider route with `allowed_tools: []` runs and offers no tools; `allowed_tools` absent is unchanged; a `review` step with `allowed_tools: []` is unchanged (Excluded in the design)
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean, tests pass
+- [x] **T7: Wire the guard into `_dispatch`** (Effort 2)
+  - [x] In `_dispatch`, after routing and before any prompt work: if `declares_no_tools(context)` and `tool_isolation_error(...)` returns a message, return a failed `ActionResult` with `metadata[FAILURE_KIND_KEY] = FailureKind.TOOL_ISOLATION` and log at WARNING (D6). Keep the existing truthiness guard for non-empty lists
+  - [x] Check `src/squadron/data/` for `allowed_tools: []` (design says none) and say so in the commit body if confirmed
+  - [x] Tests in `tests/pipeline/actions/test_tool_isolation.py` using the stub-provider helpers: SDK session, SDK one-shot and Codex routes fail before any model call (assert the stub is never called) with `failure_kind == "tool_isolation"` and a WARNING in `caplog`; an `openai`-provider route with `allowed_tools: []` runs and offers no tools; `allowed_tools` absent is unchanged; a `review` step with `allowed_tools: []` is unchanged (Excluded in the design)
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean, tests pass
 
 **Commit**: `feat: fail dispatch steps that declare allowed_tools [] on a tool-running provider`
 

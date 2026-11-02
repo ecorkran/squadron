@@ -39,7 +39,12 @@ from squadron.pipeline.actions.prompt_identity import (
     ResolvedPrompt,
 )
 from squadron.pipeline.actions.review_outputs import finding_input_file, review_input_files
-from squadron.pipeline.actions.tool_support import resolve_allowed_tools
+from squadron.pipeline.actions.tool_support import (
+    DispatchRoute,
+    declares_no_tools,
+    resolve_allowed_tools,
+    tool_isolation_error,
+)
 from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS, RESUMED_FROM_HANDOFF
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind, usage_limit_stamp
 from squadron.pipeline.git_ops import GitEnvironmentError
@@ -522,29 +527,75 @@ class DispatchAction:
         # cf and git run as subprocesses; keep them off the event loop.
         if (kept := await asyncio.to_thread(_kept_outputs, context)) is not None:
             return ActionResult(success=True, action_type=self.action_type, outputs=kept)
-        if context.sdk_session is None:
-            _, alias_profile = self._resolve_model(context)
-            # Guard: pool selected an explicitly SDK-profiled alias at runtime,
-            # but no persistent session is available.
-            if alias_profile == ProfileName.SDK:
-                step_name = context.step_name
-                return ActionResult(
-                    success=False,
-                    action_type=self.action_type,
-                    outputs={},
-                    error=(
-                        f"Step '{step_name}' resolved to an SDK profile at runtime but no persistent "
-                        "session is available. Re-run with --strict to connect at startup, or ensure "
-                        "this pool's runtime selection does not yield an SDK alias."
-                    ),
-                )
-            return await self._dispatch_via_agent(context)
+        model_id, alias_profile = self._resolve_model(context)
+        session = context.sdk_session
+        # Guard: pool selected an explicitly SDK-profiled alias at runtime,
+        # but no persistent session is available.
+        if session is None and alias_profile == ProfileName.SDK:
+            step_name = context.step_name
+            return ActionResult(
+                success=False,
+                action_type=self.action_type,
+                outputs={},
+                error=(
+                    f"Step '{step_name}' resolved to an SDK profile at runtime but no persistent "
+                    "session is available. Re-run with --strict to connect at startup, or ensure "
+                    "this pool's runtime selection does not yield an SDK alias."
+                ),
+            )
+        use_session = session is not None and is_sdk_profile(alias_profile)
+        route = DispatchRoute.SESSION if use_session else DispatchRoute.AGENT
+        if declares_no_tools(context):
+            isolation_failure = self._tool_isolation_failure(context, route, model_id, alias_profile)
+            if isolation_failure is not None:
+                return isolation_failure
+        if session is not None and use_session:
+            return await self._dispatch_via_session(context, session)
+        return await self._dispatch_via_agent(context)
 
-        _, alias_profile = self._resolve_model(context)
-        if not is_sdk_profile(alias_profile):
-            return await self._dispatch_via_agent(context)
+    def _tool_isolation_failure(
+        self,
+        context: ActionContext,
+        route: DispatchRoute,
+        model_id: str,
+        alias_profile: str | None,
+    ) -> ActionResult | None:
+        """The failed result for a no-tools step on a route that runs tools, else ``None`` (D6)."""
+        profile_name = (
+            ProfileName.SDK
+            if route is DispatchRoute.SESSION
+            else self._agent_profile_name(context, alias_profile)
+        )
+        provider_name = get_profile(profile_name).provider
+        ensure_provider_loaded(provider_name)
+        error = tool_isolation_error(
+            step_name=context.step_name,
+            model=model_id,
+            provider=provider_name,
+            route=route,
+            can_read_files=get_provider(provider_name).capabilities.can_read_files,
+        )
+        if error is None:
+            return None
+        _logger.warning("dispatch: step %s: %s", context.step_name, error)
+        return ActionResult(
+            success=False,
+            action_type=self.action_type,
+            outputs={},
+            error=error,
+            metadata={FAILURE_KIND_KEY: FailureKind.TOOL_ISOLATION.value},
+        )
 
-        return await self._dispatch_via_session(context, context.sdk_session)
+    @staticmethod
+    def _agent_profile_name(context: ActionContext, alias_profile: str | None) -> str:
+        """The profile the one-shot agent runs under: an explicit ``profile`` param, else the alias's.
+
+        Shared by the isolation guard and ``_dispatch_via_agent`` so they cannot disagree
+        about the provider.
+        """
+        if "profile" in context.params:
+            return str(context.params["profile"])
+        return alias_profile or ProfileName.SDK
 
     async def _dispatch_via_session(
         self,
@@ -877,13 +928,8 @@ class DispatchAction:
         action_model = str(context.params["model"]) if "model" in context.params else None
         step_model = str(context.params["step_model"]) if "step_model" in context.params else None
         resolved = context.resolver.resolve_full(action_model, step_model)
-        model_id, alias_profile = resolved.model_id, resolved.profile
-
-        profile_name = (
-            str(context.params["profile"])
-            if "profile" in context.params
-            else alias_profile or ProfileName.SDK
-        )
+        model_id = resolved.model_id
+        profile_name = self._agent_profile_name(context, resolved.profile)
 
         allowed_tools = resolve_allowed_tools(context, self.action_type)
         requires_writes = dispatch_requires_writes(context.params)

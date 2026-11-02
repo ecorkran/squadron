@@ -9,9 +9,50 @@ drift apart in how they read the same field.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import cast
 
+from squadron.pipeline.actions import ActionType
 from squadron.pipeline.models import ActionContext
+
+
+class DispatchRoute(StrEnum):
+    """Which path a dispatch step takes to its model."""
+
+    SESSION = "session"  # a persistent SDK session, whose tool set is fixed at connect time
+    AGENT = "agent"  # a one-shot agent from the provider registry
+
+
+def declares_no_tools(context: ActionContext) -> bool:
+    """Whether the step set ``allowed_tools`` to an empty list (slice 949 D6).
+
+    An absent key is not a declaration: it keeps each path's existing behavior.
+    """
+    return resolve_allowed_tools(context, ActionType.DISPATCH) == []
+
+
+def tool_isolation_error(
+    *,
+    step_name: str,
+    model: str,
+    provider: str,
+    route: DispatchRoute,
+    can_read_files: bool,
+) -> str | None:
+    """The error for a no-tools step whose route would still run tools, else ``None``.
+
+    A persistent session and a provider that reads files itself (the SDK, Codex) bring
+    their own tools, so ``allowed_tools: []`` cannot take them away. Reading the
+    capability, never the provider's name, covers a new provider without a change here.
+    """
+    if route is not DispatchRoute.SESSION and not can_read_files:
+        return None
+    return (
+        f"Step '{step_name}' declares 'allowed_tools: []' but model '{model}' runs on the "
+        f"'{provider}' provider ({route.value} route), which runs tools of its own. The step "
+        "would not be isolated. Use a model whose provider runs no tools of its own (for "
+        "example an openrouter alias), or remove 'allowed_tools'."
+    )
 
 
 def resolve_allowed_tools(context: ActionContext, action_type: str) -> list[str] | None:
