@@ -125,7 +125,7 @@ revision_number: 2
   - [x] Record: appended in order; `committed: false` adds nothing; `unknown` marks `unprovable`
   - [x] Carry: a stored ledger is returned unchanged; an old record without a ledger gives
         `unprovable`; a step with two records returns the later one's ledger
-  - [ ] The `each` rule (one item never inherits another item's ledger) is covered in 7.5
+  - [x] The `each` rule (one item never inherits another item's ledger) is covered in 7.5
 
 **Commit**: `feat: record round commits and carry the ledger across resume`
 
@@ -221,44 +221,47 @@ revision_number: 2
 
 ### 7. Executor call sites (effort 4)
 
-- [ ] **7.1 Open or carry the ledger at loop start** in `_execute_loop_body` (`executor.py`)
-  - [ ] Only when `loop_config.commit_each_iteration` is true
-  - [ ] Resumed invocation (`start_iteration > 1` or the `--decision accept` resume path): use
+- [x] **7.1 Open or carry the ledger at loop start** in `_execute_loop_body` (`executor.py`)
+  - [x] Only when `loop_config.commit_each_iteration` is true
+  - [x] Resumed invocation (`start_iteration > 1` or the `--decision accept` resume path): use
         `carried_ledger` from run state. Fresh invocation (including an `each` item rerun via
         `resume_item`): `open_ledger`
-  - [ ] Thread the needed state access (`StateManager`/`runs_dir`) into the function without
+  - [x] Thread the needed state access (`StateManager`/`runs_dir`) into the function without
         adding logic to `executor.py`
-- [ ] **7.2 Record after each round commit**
-  - [ ] Right after `commit_result` is produced, call `record_round_commit`
-- [ ] **7.3 Attach the ledger to every `StepResult` return** in `_execute_loop_body` (completed,
+- [x] **7.2 Record after each round commit**
+  - [x] Right after `commit_result` is produced, call `record_round_commit`
+- [x] **7.3 Attach the ledger to every `StepResult` return** in `_execute_loop_body` (completed,
       paused, failed, skipped, exhausted via `_loop_exhaust_result`), so a pause persists it
-- [ ] **7.4 Collapse on COMPLETED**
-  - [ ] On each COMPLETED return (until met, accepted on exhaustion, accepted by decision) call
+- [x] **7.4 Collapse on COMPLETED**
+  - [x] On each COMPLETED return (until met, accepted on exhaustion, accepted by decision) call
         `collapse_loop_commits` once, with the target from `read_integration_target` and the
         `round_commit_params` result already computed for the loop
-  - [ ] PAUSED, FAILED, SKIPPED never collapse
-  - [ ] Collapse outcome never changes the loop status (D6); only `GitStateUnknownError`
+  - [x] PAUSED, FAILED, SKIPPED never collapse
+  - [x] Collapse outcome never changes the loop status (D6); only `GitStateUnknownError`
         propagates
-  - [ ] The returned `StepResult.loop_commits` is the ledger as it stood at completion,
+  - [x] The returned `StepResult.loop_commits` is the ledger as it stood at completion,
         whatever the outcome (collapsed or not). Nothing resumes a COMPLETED loop, so it is
         not rewritten after collapse
-- [ ] **7.5 Executor-level tests** in `tests/pipeline/test_loop_collapse_executor.py` (temp git
+- [x] **7.5 Executor-level tests** in `tests/pipeline/test_loop_collapse_executor.py` (temp git
       repo, scripted stub dispatch and review actions, as in `test_executor_loop_body.py`)
-  - [ ] Phase commit plus two rounds, `until` met: exactly one commit remains, same tree as before
+  - [x] Phase commit plus two rounds, `until` met: exactly one commit remains, same tree as before
         collapse, message `docs: add slice {n} design (review: PASS)`
-  - [ ] Single commit (first review passes) or `skip_if_met`: history unchanged, no collapse log
-  - [ ] Exhaustion: `accept_if` met collapses; pause, fail, skip do not
-  - [ ] Pause at a checkpoint, then resume for more rounds, and separately resume with
+  - [x] Single commit (first review passes) or `skip_if_met`: history unchanged, no collapse log
+  - [x] Exhaustion: `accept_if` met collapses; pause, fail, skip do not
+  - [x] Pause at a checkpoint, then resume for more rounds, and separately resume with
         `--decision accept`: one commit spans the phase commit and rounds from both executions
-  - [ ] Unrelated operator commit during the pause: resume completes, history unchanged,
+  - [x] Unrelated operator commit during the pause: resume completes, history unchanged,
         `refused` WARNING logged
-  - [ ] Pre-slice state record (no ledger) resumed: history unchanged, `refused`
-  - [ ] `each` item rerun: `--decision retry` collapses only the rerun's commits and leaves the
+  - [x] Pre-slice state record (no ledger) resumed: history unchanged, `refused`
+  - [x] `each` item rerun: `--decision retry` collapses only the rerun's commits and leaves the
         flagged attempt's commits; `--decision accept` runs no rounds and collapses nothing;
         one item never inherits another item's ledger
-  - [ ] Code loop (`revise-code`): never collapses
-  - [ ] Findings-addressed gate's per-round base behaves as before during the loop (existing
+  - [x] Code loop (`revise-code`): never collapses
+  - [x] Findings-addressed gate's per-round base behaves as before during the loop (existing
         `test_findings_addressed*` still pass)
+- Note (a): `_execute_loop_body` is a thin wrapper around `_run_loop_rounds`. The wrapper attaches the ledger to every `StepResult` and calls the collapse once, so no return site is edited.
+- Note (b): `round_commit_params` is computed once per invocation in the wrapper, for fresh and resumed runs. It returns None on scope errors, and the first round's commit then fails the loop with that same error.
+- Note (c): 7.5 `each` coverage. `--decision retry` is a fresh loop invocation with a fresh ledger at HEAD, tested as a second run over a repo that holds a flagged attempt's commits. `--decision accept` for an item goes through `resume_item` and runs no loop body, so it has no executor-level test. An item never inherits another item's ledger, because only a resumed invocation (start_iteration > 1 or accept) reads the stored ledger.
 
 **Commit**: `feat: planning loops collapse their own commits on completion`
 

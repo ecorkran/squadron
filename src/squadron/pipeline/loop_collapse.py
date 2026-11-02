@@ -19,7 +19,12 @@ from squadron.integrations.context_forge import ContextForgeError
 from squadron.pipeline.actions.commit import commit_target_from_params
 from squadron.pipeline.commit_message import ArtifactChange, StagedFacts, compose_message
 from squadron.pipeline.commit_plan import CommitTargetError, staged_verdict, subject_paths
-from squadron.pipeline.git_ops import GitEnvironmentError, GitStateUnknownError, SliceNotInPlanError
+from squadron.pipeline.git_ops import (
+    GitEnvironmentError,
+    GitStateUnknownError,
+    SliceNotInPlanError,
+    read_integration_target,
+)
 from squadron.pipeline.loop_ledger import LoopCommitLedger
 from squadron.review.git_utils import run_git
 from squadron.review.persistence import CfClientProtocol
@@ -158,6 +163,27 @@ def _changed_paths(base_sha: str, cwd: str) -> dict[str, str]:
     tokens = output.split("\0")
     # Tokens alternate status, path; the trailing NUL leaves one empty token to drop.
     return dict(zip(tokens[1::2], tokens[0::2], strict=False))
+
+
+def collapse_completed_loop(
+    ledger: LoopCommitLedger,
+    commit_params: dict[str, object],
+    step_name: str,
+    cwd: str,
+    cf_client: CfClientProtocol,
+) -> CollapseResult:
+    """``collapse_loop_commits`` against the integration target read from cf.
+
+    cf failing to name the target leaves history alone like any other refusal: a
+    completed loop's status never depends on its collapse.
+    """
+    try:
+        target_branch = read_integration_target(cf_client)
+    except GitEnvironmentError as exc:  # already logged at ERROR by the reader
+        result = _refused(f"cannot read the integration target: {exc}")
+        _log_outcome(result, len(ledger.commits), step_name)
+        return result
+    return collapse_loop_commits(ledger, target_branch, commit_params, step_name, cwd, cf_client)
 
 
 def collapse_loop_commits(

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from pathlib import Path
 
 from pydantic import BaseModel, Field
 
@@ -37,6 +38,55 @@ class LoopCommitLedger(BaseModel):
     unprovable: bool = False
 
 
+def start_ledger(
+    *,
+    commit_params: dict[str, object],
+    prior_outputs: Mapping[str, ActionResult],
+    cwd: str,
+    resumed: bool,
+    run_id: str,
+    step_name: str,
+    runs_dir: Path | None,
+) -> LoopCommitLedger | None:
+    """The ledger a loop invocation starts with: carried from run state, or freshly opened.
+
+    A resumed invocation takes the ledger its paused run stored. One with no stored
+    record, and every fresh invocation (an ``each`` item included), opens a new one. A
+    code loop never has a ledger, so a resume cannot hand it an unprovable one.
+    """
+    if not _collapses(commit_params):
+        return None
+    if resumed:
+        carried = _stored_ledger(run_id, step_name, runs_dir)
+        if carried is not None:
+            return carried
+    return open_ledger(commit_params, prior_outputs, cwd)
+
+
+def _stored_ledger(run_id: str, step_name: str, runs_dir: Path | None) -> LoopCommitLedger | None:
+    # Imported here: state imports this module for the ledger type.
+    from squadron.pipeline.state import StateManager
+
+    try:
+        return StateManager(runs_dir=runs_dir).loop_ledger_for(run_id, step_name)
+    except FileNotFoundError:
+        # No run state to carry from; the fresh ledger only claims commits made from now.
+        _logger.warning("loop commits: no run state for %s; opening a fresh ledger", run_id)
+        return None
+
+
+def _loop_target(commit_params: dict[str, object]) -> CommitTarget:
+    target = commit_target_from_params(commit_params, 0)
+    if target is None:
+        raise ValueError("loop commit params name no commit subject")
+    return target
+
+
+def _collapses(commit_params: dict[str, object]) -> bool:
+    """Whether a loop with these round commit params ever collapses (code loops do not)."""
+    return _loop_target(commit_params).subject is not CommitSubject.CODE
+
+
 def open_ledger(
     commit_params: dict[str, object], prior_outputs: Mapping[str, ActionResult], cwd: str
 ) -> LoopCommitLedger | None:
@@ -46,9 +96,7 @@ def open_ledger(
     ledger. The phase commit just before the loop joins the ledger only when it is
     HEAD and covers the same document the loop's rounds commit.
     """
-    target = commit_target_from_params(commit_params, 0)
-    if target is None:
-        raise ValueError("loop commit params name no commit subject")
+    target = _loop_target(commit_params)
     if target.subject is CommitSubject.CODE:
         return None
 

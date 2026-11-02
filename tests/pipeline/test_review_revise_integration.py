@@ -105,7 +105,9 @@ async def test_two_rounds_concerns_then_pass(repo_with_design: Path) -> None:
         commit = next(r for r in round_results if r.action_type == "commit")
         assert commit.success and commit.outputs["committed"] is True
     subjects = run_test_git(repo_with_design, "log", "--format=%s", "--reverse").splitlines()
-    assert len(subjects) == 4  # init, the design, one commit per round
+    # init, the design, then the two round commits collapsed into one (slice 202)
+    assert subjects[2:] == ["docs: revise slice 105 design (review: PASS)"]
+    assert len(subjects) == 3
     assert (repo_with_design / "project-documents/user/reviews/archive" / Path(REVIEW).name).exists()
     assert "verdict: PASS" in (repo_with_design / REVIEW).read_text()
     assert (repo_with_design / DESIGN).read_text() == "design v3\n"

@@ -39,7 +39,11 @@ def _action(effect: object) -> MagicMock:
 
 
 async def _run_loop(repo: Path, *, revise_design: bool, verdicts: list[str], tag: str) -> list[str]:
-    """Run a P4-style loop and return the commit messages it made, oldest first."""
+    """Run a P4-style loop and return the messages its round commits were made with, oldest first.
+
+    Read from the commit action's results: a completed loop collapses its commits (slice 202),
+    so by then history no longer holds the per-round messages.
+    """
     register_step_type(f"_lc_dispatch_{tag}", _step_type([("dispatch", {})]))
     register_step_type(
         f"_lc_review_{tag}",
@@ -57,6 +61,15 @@ async def _run_loop(repo: Path, *, revise_design: bool, verdicts: list[str], tag
         verdict = next(verdict_iter)
         _write(repo, REVIEW, f"---\ndocType: review\nverdict: {verdict}\n---\n")
         return ActionResult(success=True, action_type="review", outputs={}, verdict=verdict)
+
+    round_messages: list[str] = []
+    real_commit = CommitAction()
+
+    async def commit(ctx: ActionContext) -> ActionResult:
+        committed = await real_commit.execute(ctx)
+        if committed.outputs.get("committed") is True:
+            round_messages.append(str(committed.outputs["message"]))
+        return committed
 
     cf_client = phase_artifact_cf_client(SLICE, DESIGN, "105-tasks.stub.md")
     cf_client.get_config.return_value = ""
@@ -86,12 +99,11 @@ async def _run_loop(repo: Path, *, revise_design: bool, verdicts: list[str], tag
         _action_registry={
             "dispatch": _action(revise),
             "review": _action(review),
-            "commit": CommitAction(),
+            "commit": _action(commit),
         },
     )
     assert result.status in {ExecutionStatus.COMPLETED, ExecutionStatus.FAILED}
-    log = run_test_git(repo, "log", "--format=%s", "--reverse")
-    return log.splitlines()[2:]  # skip "init" and the design committed before the loop
+    return round_messages
 
 
 @pytest.fixture

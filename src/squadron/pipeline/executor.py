@@ -56,6 +56,7 @@ from squadron.pipeline.failure_kind import (
     pauses_run,
 )
 from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.loop_collapse import collapse_completed_loop
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
     ExhaustBehavior,
@@ -65,7 +66,7 @@ from squadron.pipeline.loop_config import (
     last_with_verdict,
     parse_loop_config,
 )
-from squadron.pipeline.loop_ledger import LoopCommitLedger
+from squadron.pipeline.loop_ledger import LoopCommitLedger, record_round_commit, start_ledger
 from squadron.pipeline.models import (
     ActionContext,
     ActionResult,
@@ -1542,9 +1543,106 @@ async def _execute_loop_body(
 ) -> StepResult:
     """Execute a ``loop:`` step type with a multi-step body.
 
+    A planning loop that commits each round keeps a ledger of its commits (slice 202):
+    opened or carried here, attached to every result so a pause persists it, and
+    collapsed into one commit when the loop completes. The collapse never changes
+    the loop's status.
+    """
+    commit_params = _loop_commit_params(
+        parse_loop_config(resolved_config), resolved_config, merged_params, start_iteration
+    )
+    ledger: LoopCommitLedger | None = None
+    if commit_params is not None:
+        ledger = await asyncio.to_thread(
+            start_ledger,
+            commit_params=commit_params,
+            prior_outputs=prior_outputs,
+            cwd=cwd,
+            resumed=start_iteration > 1 or merged_params.get(ACCEPT_DECISION) is True,
+            run_id=run_id,
+            step_name=step.name,
+            runs_dir=runs_dir,
+        )
+    result = await _run_loop_rounds(
+        step=step,
+        resolved_config=resolved_config,
+        step_index=step_index,
+        merged_params=merged_params,
+        prior_outputs=prior_outputs,
+        step_outputs=step_outputs,
+        pipeline_name=pipeline_name,
+        run_id=run_id,
+        cwd=cwd,
+        resolver=resolver,
+        cf_client=cf_client,
+        sdk_session=sdk_session,
+        usage_capture=usage_capture,
+        spend=spend,
+        get_step_type_fn=get_step_type_fn,
+        get_action_fn=get_action_fn,
+        runs_dir=runs_dir,
+        start_iteration=start_iteration,
+        observer=observer,
+        ledger=ledger,
+    )
+    result.loop_commits = ledger
+    if ledger is not None and commit_params is not None and result.status == ExecutionStatus.COMPLETED:
+        await asyncio.to_thread(
+            collapse_completed_loop, ledger, commit_params, step.name, cwd, cf_client
+        )
+    return result
+
+
+def _loop_commit_params(
+    loop_config: LoopConfig,
+    resolved_config: dict[str, object],
+    merged_params: dict[str, object],
+    start_iteration: int,
+) -> dict[str, object] | None:
+    """The loop's round commit params, or ``None`` when it commits no rounds or cannot.
+
+    Computed once per invocation, for the ledger and for the collapse.
+    """
+    if not loop_config.commit_each_iteration:
+        return None
+    try:
+        return round_commit_params(_unpack_body(resolved_config), merged_params, start_iteration)
+    except (CommitScopeUnknownError, UnmappedTemplateError):
+        # The first round's commit fails the loop with this same error (see
+        # _run_loop_rounds), so there is nothing to collapse and nothing to hide.
+        return None
+
+
+async def _run_loop_rounds(
+    *,
+    step: Any,
+    resolved_config: dict[str, object],
+    step_index: int,
+    merged_params: dict[str, object],
+    prior_outputs: dict[str, ActionResult],
+    step_outputs: dict[str, ActionResult] | None = None,
+    pipeline_name: str,
+    run_id: str,
+    cwd: str,
+    resolver: Any,
+    cf_client: Any,
+    sdk_session: SDKExecutionSession | None = None,
+    usage_capture: UsageCapture | None = None,
+    spend: RunSpend | None = None,
+    get_step_type_fn: Any,
+    get_action_fn: Any,
+    runs_dir: Path | None = None,
+    start_iteration: int = 1,
+    observer: RunObserver | None = None,
+    ledger: LoopCommitLedger | None = None,
+) -> StepResult:
+    """Run the rounds of a ``loop:`` step type with a multi-step body.
+
     Mirrors ``_execute_loop_step`` semantics but iterates over a ``steps:``
     body rather than a single action.  ``parse_loop_config`` ignores the
-    ``steps`` key, so ``resolved_config`` is passed through unchanged.
+    ``steps`` key, so ``resolved_config`` is passed through unchanged. Each round
+    commit is recorded in ``ledger`` (slice 202); ``_execute_loop_body`` attaches it
+    to the result and collapses it.
     """
     loop_config = parse_loop_config(resolved_config)
 
@@ -1739,6 +1837,8 @@ async def _execute_loop_body(
                 )
                 commit_result = await get_action_fn("commit").execute(commit_ctx)
             iteration_action_results.append(commit_result)
+            if ledger is not None:
+                record_round_commit(ledger, commit_result)
             # Same key scheme as the inner-step loop above; len(inner_steps)
             # is one past the last real inner_step_index, so it can't collide.
             commit_key = f"{len(inner_steps)}-{commit_result.action_type}-0"
