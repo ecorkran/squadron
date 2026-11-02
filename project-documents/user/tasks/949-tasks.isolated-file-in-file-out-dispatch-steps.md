@@ -203,8 +203,10 @@ revision_number: 1
 **Commit**: `docs: document dispatch file keys, tool guard and validate --strict`
 
 - [ ] **T19: Full verification against the design** (Effort 2)
-  - [ ] Run the full suite once (`pytest`), `ruff format`, `ruff check`, `pyright`; zero pyright errors
+  - [x] Run the full suite once (`pytest`), `ruff format`, `ruff check`, `pyright`; zero pyright errors
   - [ ] Walk the design's Verification Walkthrough steps 1–3 and 7 (validate, strict, prompt-only) in `/tmp/sq949`, using the real `sq`. Steps 4–6 call live models; run them only if a configured `deepseek4-flash` route is available, otherwise report them as not run
-  - [ ] Confirm Success Criteria 1–9 each map to a passing test or a walkthrough step; list any unmapped criterion
-  - [ ] Confirm new modules stay under ~300 lines (`wc -l` on `dispatch_io.py` and other new files)
+  - [x] Confirm Success Criteria 1–9 each map to a passing test or a walkthrough step; list any unmapped criterion
+  - [x] Confirm new modules stay under ~300 lines (`wc -l` on `dispatch_io.py` and other new files)
   - [ ] SC: all checks clean; any gap is stated plainly. This task changes no files, so it has no commit marker
+
+  Note: walkthrough steps 1–3 run and match (scratch dir under the session scratchpad). Step 7 and steps 4–6 are left for the Project Manager to run: `sq run ./answer.yaml --prompt-only` (expect an error naming `prompt_files` and saying to use `sq run`), and, with a `deepseek4-flash` route, steps 4–6 of the design's Verification Walkthrough.

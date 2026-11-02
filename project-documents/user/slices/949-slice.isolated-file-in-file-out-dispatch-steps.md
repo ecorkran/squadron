@@ -7,7 +7,7 @@ dependencies: []
 interfaces: []
 dateCreated: 20261102
 dateUpdated: 20261102
-status: not_started
+status: in_progress
 turns: 79
 promptTokens: 6620822
 cachedTokens: 6458405
@@ -277,12 +277,17 @@ Run in a scratch directory. `deepseek4-flash` is an `openrouter` alias (`openai`
    printf 'Question: what is 2+2? Literal braces: {slice}\n' > question.md
    printf 'Answer in one sentence using the JSON you are given.\n' > answer-instructions.md
    ```
-2. Save the API Contracts YAML as `answer.yaml`, removing `source.md` from `prompt_files`. Validate:
+2. Save the API Contracts YAML as `answer.yaml`, removing `source.md` from `prompt_files`. A pipeline file needs a header the API Contracts block omits, so start the file with:
+   ```yaml
+   name: answer
+   description: Two isolated steps that answer a question from a file
+   ```
+   Validate:
    ```bash
    sq run ./answer.yaml --validate --strict
    ```
-   Expected: `Pipeline 'answer' is valid.`, exit 0.
-3. Add `colour: red` to the `extract` step and repeat. Expected: exit 1, with a line naming `steps[extract].colour`. Then run `sq run ./answer.yaml --validate`. Expected: exit 0, unchanged behavior. Remove the key.
+   Expected: `Pipeline 'answer' is valid.`, exit 0. (Verified.)
+3. Add `colour: red` to the `extract` step (a line under `name: extract`) and repeat. Expected: exit 1, printing `steps[extract].colour: unknown key 'colour'; dispatch accepts [...]` followed by the accepted keys, which include the five new ones. Then run `sq run ./answer.yaml --validate`. Expected: `Pipeline 'answer' is valid.`, exit 0, unchanged behavior. Remove the key and confirm `--validate --strict` is valid again. (Verified.)
 4. Run it:
    ```bash
    sq run ./answer.yaml
@@ -295,6 +300,8 @@ Run in a scratch directory. `deepseek4-flash` is an `openrouter` alias (`openai`
 5. Isolation: change `extract`'s model to `haiku` and run it. Expected: the step fails before dispatch with an error naming `tool_isolation`, the model and the provider. `claims.json` is unchanged from step 4 (compare with `shasum` before and after). Repeat with `luna` (Codex). Same result.
 6. JSON failure: set `extract`'s prompt to "Reply with the word no." and run it. Expected: the step fails with "reply contains no JSON object". `claims.json` is unchanged.
 7. Prompt-only: run `sq run ./answer.yaml --prompt-only`. Expected: an error naming `prompt_files` and saying to use `sq run`.
+
+Status of the walkthrough at implementation close: steps 1 to 3 were run with the real `sq` and match. Steps 4 to 7 launch runs and were not run by the implementing agent; their behavior is covered by tests (`tests/pipeline/test_dispatch_file_io.py` for 4 and 6, `tests/pipeline/actions/test_tool_isolation.py` for 5, `tests/pipeline/test_prompt_renderer.py` for 7). Steps 4 and 5 need a configured `deepseek4-flash` route.
 
 ## Risk Assessment
 
@@ -321,4 +328,6 @@ Effort: 3/5.
 
 ### Special Considerations
 
-- `_dispatch` currently resolves the prompt inside each path, after the session path's `set_model`. Resolving it once, earlier, means a session `set_model` failure now records the prompt identity. That is acceptable and should be noted in the task.
+- As built: each path still resolves the prompt itself, through `asyncio.to_thread(self._resolve_prompt, context)`, because the routing tests pin the paths' signatures. The session path now resolves it before `set_model`, so an unreadable prompt file fails the step before the model switch. A `set_model` failure still records no prompt identity.
+- As built: the key names, `ReplyFormat` and the shared path check live in `pipeline/dispatch_keys.py`, not `dispatch_io.py` (an import cycle otherwise). `LoopStepType`, `EachStepType` and `FanOutStepType` gained `body_steps`, because fan_out's `inner_steps` is a synthetic classification step; the nested-`reply_from` check and `unknown_key_errors` walk `body_steps`.
+- As built: the built-in `P6`, `P56`, `P456`, `implement` and `implement-plan` close-out steps carried an ignored `slice:` key. Strict validation found it, and it was removed.

@@ -39,6 +39,7 @@ class FailureClass(StrEnum):
     COST_CAP = "cost_cap"
     USAGE_LIMIT = "usage_limit"
     AGENT_QUESTION = "agent_question"
+    TOOL_ISOLATION = "tool_isolation"
     OTHER = "other"
     NO_RUN_STATE = "no_run_state"
 
@@ -50,6 +51,7 @@ _CLASS_OF_KIND: dict[FailureKind, FailureClass] = {
     FailureKind.COST_CAP: FailureClass.COST_CAP,
     FailureKind.USAGE_LIMIT: FailureClass.USAGE_LIMIT,
     FailureKind.AGENT_QUESTION: FailureClass.AGENT_QUESTION,
+    FailureKind.TOOL_ISOLATION: FailureClass.TOOL_ISOLATION,
 }
 
 
