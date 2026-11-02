@@ -12,7 +12,7 @@ projectState: 'Slice design complete (20261101, revision 2). No code written. 19
   '
 dateCreated: 20261101
 dateUpdated: 20261101
-status: not_started
+status: in_progress
 turns: 23
 promptTokens: 1337141
 cachedTokens: 1267221
@@ -52,17 +52,17 @@ revision_number: 2
 
 ### 1. Commit action outputs: subject and scope (effort 1)
 
-- [ ] **1.1 Add `commit_subject` and scope key to `CommitAction` outputs**
-  - [ ] In `src/squadron/pipeline/actions/commit.py` (`_stage_and_commit` success result), add
+- [x] **1.1 Add `commit_subject` and scope key to `CommitAction` outputs**
+  - [x] In `src/squadron/pipeline/actions/commit.py` (`_stage_and_commit` success result), add
         `commit_subject` and the scope key (`slice` or `plan`, whichever the commit target uses)
         to `outputs`, next to `committed`, `sha`, `message`
-  - [ ] Take both values from the commit plan/target already built in `execute`; do not parse the
+  - [x] Take both values from the commit plan/target already built in `execute`; do not parse the
         message. Thread them through `CommitPlan` or the target if they are not already available
-  - [ ] No existing key is removed or renamed
-- [ ] **1.2 Test the new outputs** in `tests/pipeline/actions/test_commit.py`
-  - [ ] Slice-scoped commit: outputs carry the subject and `slice` value
-  - [ ] Architecture (plan-scoped) commit: outputs carry the subject and `plan` value
-  - [ ] Existing commit tests still pass
+  - [x] No existing key is removed or renamed
+- [x] **1.2 Test the new outputs** in `tests/pipeline/actions/test_commit.py`
+  - [x] Slice-scoped commit: outputs carry the subject and `slice` value
+  - [x] Architecture (plan-scoped) commit: outputs carry the subject and `plan` value
+  - [x] Existing commit tests still pass
 
 **Commit**: `feat: commit action outputs its subject and scope`
 

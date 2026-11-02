@@ -158,6 +158,34 @@ async def test_loop_round_message_carries_the_round(action: CommitAction, temp_g
 
 
 @pytest.mark.asyncio
+async def test_slice_scoped_commit_outputs_its_subject_and_slice(
+    action: CommitAction, temp_git_repo: Path
+) -> None:
+    _write(temp_git_repo, DESIGN_FILE)
+
+    result = await action.execute(_context(temp_git_repo, params=_design_params()))
+
+    assert result.outputs["commit_subject"] == "design"
+    assert result.outputs["slice"] == SLICE
+    assert "plan" not in result.outputs
+
+
+@pytest.mark.asyncio
+async def test_plan_scoped_commit_outputs_its_subject_and_plan(
+    action: CommitAction, temp_git_repo: Path
+) -> None:
+    _write(temp_git_repo, ARCH_FILE)
+    params = {"commit_subject": "architecture", "plan": "100", "review_template": "arch"}
+
+    result = await action.execute(_context(temp_git_repo, params=params))
+
+    assert result.outputs["committed"] is True
+    assert result.outputs["commit_subject"] == "architecture"
+    assert result.outputs["plan"] == "100"
+    assert "slice" not in result.outputs
+
+
+@pytest.mark.asyncio
 async def test_content_already_in_the_index_is_not_swept_into_the_commit(
     action: CommitAction, temp_git_repo: Path
 ) -> None:

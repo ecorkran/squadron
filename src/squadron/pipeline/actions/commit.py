@@ -85,7 +85,7 @@ class CommitAction:
             return ActionResult(
                 success=True, action_type=self.action_type, outputs={"committed": False}
             )
-        return self._stage_and_commit(plan, cwd)
+        return self._stage_and_commit(plan, cwd, target)
 
     def _planned(self, target: CommitTarget, cwd: Path, context: ActionContext) -> CommitPlan | str:
         """The plan for a scoped commit, or the refusal text when its placement is wrong."""
@@ -105,7 +105,9 @@ class CommitAction:
             return CommitPlan(plan.paths, plan.stage_all, str(explicit_message), plan.left_out)
         return plan
 
-    def _stage_and_commit(self, plan: CommitPlan, cwd: Path) -> ActionResult:
+    def _stage_and_commit(
+        self, plan: CommitPlan, cwd: Path, target: CommitTarget | None
+    ) -> ActionResult:
         cwd_text = str(cwd)
         add_args = ["add", "-A"] if plan.stage_all else ["add", "--", *plan.paths]
         added = _run_or_unknown(add_args, cwd_text, "git add")
@@ -130,7 +132,12 @@ class CommitAction:
         return ActionResult(
             success=True,
             action_type=self.action_type,
-            outputs={"committed": True, "sha": sha, "message": plan.message},
+            outputs={
+                "committed": True,
+                "sha": sha,
+                "message": plan.message,
+                **_target_outputs(target),
+            },
         )
 
     def _warn_left_out(self, context: ActionContext, plan: CommitPlan) -> None:
@@ -162,6 +169,22 @@ def _target_from_params(context: ActionContext) -> CommitTarget | None:
         review_template=str(raw_template) if raw_template else None,
         round=context.iteration,
     )
+
+
+def _target_outputs(target: CommitTarget | None) -> dict[str, object]:
+    """The subject and scope a commit covered, taken from the target, never the message.
+
+    A loop's collapse (slice 202) matches these against its own round commit params.
+    An explicit-paths commit has no target and reports neither.
+    """
+    if target is None:
+        return {}
+    scope: dict[str, object] = (
+        {SLICE_PARAM: target.slice_index}
+        if target.slice_index is not None
+        else {PLAN_PARAM: target.plan}
+    )
+    return {SUBJECT_PARAM: target.subject.value, **scope}
 
 
 def _slice_index(raw: object) -> int | None:
