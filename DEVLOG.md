@@ -11,6 +11,12 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261102
 
+### Slice 949: Isolated File-In, File-Out Dispatch Steps — Design Complete
+
+- **Output:** `949-slice.isolated-file-in-file-out-dispatch-steps.md`; `cf validate design` passes. Fixes #284 (Amoeba's answering pipeline). Phase 5 not started.
+- **Decisions:** new dispatch keys `prompt_files`, `reply_from`, `reply_format` (`text`|`json`), `reply_file`, `delivered_prompt_file`. The prompt is `prompt`, then the files, then the earlier reply, joined by a blank line, with file contents never substituted. JSON rule: the first `{` where `raw_decode` succeeds, kept byte for byte. Output files are written atomically, on success only. Paths stay inside cwd. `allowed_tools: []` on a provider with `can_read_files` (SDK session or one-shot, Codex) fails before dispatch with `failure_kind: tool_isolation`. A required `known_keys` on every step type (dispatch's comes from `FORWARDED_KEYS`, which `expand` also uses) plus a `ContainsSteps` walker drive `--validate --strict`. Plain `--validate` only warns.
+- **Behavior change to note at release:** existing `allowed_tools: []` on SDK or Codex dispatch steps now fails. No built-in pipeline or template uses it.
+
 ### Release 0.24.13
 
 - **Contents:** slice 202, one commit per planning document (#257); fix #282 (summary steps read the slice's files; `/sq:summary --restore` prefers `interactive`).
