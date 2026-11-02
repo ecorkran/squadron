@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.13] - 20261102
+
 ### Changed
 - Planning loops now leave one commit per document. When a loop that commits each round finishes, its round commits, the phase commit before it, and any commits the dispatch agent made along the way become a single commit (`docs: add slice 202 design (review: PASS)`). History is rewritten only when the commits are provably the loop's own, unpublished, and still the tip of the target branch; otherwise it is left alone with a warning. The old round commits stay reachable under `refs/squadron/pre-collapse/` (#257).
 

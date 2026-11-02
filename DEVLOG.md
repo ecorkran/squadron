@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261101'
+dateUpdated: '20261102'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261102
+
+### Release 0.24.13
+
+- **Contents:** slice 202, one commit per planning document (#257); fix #282 (summary steps read the slice's files; `/sq:summary --restore` prefers `interactive`).
 
 ## 20261101
 
