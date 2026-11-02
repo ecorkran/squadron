@@ -229,6 +229,25 @@ class TestValidate:
         assert result.exit_code == 1
         assert "not found" in result.output
 
+    @staticmethod
+    def _definition_with_unknown_key() -> PipelineDefinition:
+        step = StepConfig(step_type="dispatch", name="ask", config={"prompt": "hi", "colour": "red"})
+        return PipelineDefinition(name="test", description="t", params={}, steps=[step])
+
+    def test_validate_strict_rejects_unknown_step_key(self) -> None:
+        defn = self._definition_with_unknown_key()
+        with patch("squadron.cli.commands.run.load_pipeline", return_value=defn):
+            result = runner.invoke(app, ["run", "--validate", "--strict", "test"])
+        assert result.exit_code == 1
+        assert "steps[ask].colour" in result.output
+
+    def test_validate_without_strict_accepts_unknown_step_key(self) -> None:
+        defn = self._definition_with_unknown_key()
+        with patch("squadron.cli.commands.run.load_pipeline", return_value=defn):
+            result = runner.invoke(app, ["run", "--validate", "test"])
+        assert result.exit_code == 0
+        assert "is valid" in result.output
+
 
 # ---------------------------------------------------------------------------
 # T7: --status

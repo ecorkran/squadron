@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -290,8 +291,44 @@ _REMOVED_STEP_TYPES: dict[str, str] = {
 }
 
 
+def unknown_key_errors(steps: Sequence[StepConfig]) -> list[ValidationError]:
+    """One error per config key a step's type does not read (slice 949 D7, D8).
+
+    Keys the executor reads on any step (``EXECUTOR_STEP_KEYS``) are accepted. Container
+    bodies are walked through ``inner_steps``; a step of an unregistered type is already
+    an error elsewhere and is not inspected.
+    """
+    from squadron.pipeline.steps import bootstrap_step_types, get_step_type, list_step_types
+    from squadron.pipeline.steps.protocol import EXECUTOR_STEP_KEYS
+
+    bootstrap_step_types()
+    registered = list_step_types()
+    errors: list[ValidationError] = []
+    for step in steps:
+        if step.step_type not in registered:
+            continue
+        step_impl = get_step_type(step.step_type)
+        for key in sorted(set(step.config) - step_impl.known_keys - EXECUTOR_STEP_KEYS):
+            errors.append(
+                ValidationError(
+                    field=f"steps[{step.name}].{key}",
+                    message=(
+                        f"unknown key '{key}'; {step.step_type} accepts {sorted(step_impl.known_keys)}"
+                    ),
+                    action_type=step.step_type,
+                )
+            )
+        # Same container test classification.py uses: only container types define it.
+        inner_steps_fn = getattr(step_impl, "inner_steps", None)
+        if inner_steps_fn is not None:
+            errors.extend(unknown_key_errors(inner_steps_fn(step)))
+    return errors
+
+
 def validate_pipeline(
     definition: PipelineDefinition,
+    *,
+    strict: bool = False,
 ) -> list[ValidationError]:
     """Semantic validation of a pipeline definition.
 
@@ -300,6 +337,7 @@ def validate_pipeline(
     - Model aliases resolve
     - Review template names exist
     - Param placeholders in step configs reference declared params
+    - With ``strict``, no step carries a key its step type does not read
     """
     from squadron.models.aliases import resolve_model_alias
     from squadron.pipeline.control_params import reserved_param_error
@@ -369,6 +407,8 @@ def validate_pipeline(
         prior_step_names.add(step.name)
 
     errors.extend(implement_branch_errors(definition.steps))
+    if strict:
+        errors.extend(unknown_key_errors(definition.steps))
     return errors
 
 

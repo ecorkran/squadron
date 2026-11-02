@@ -22,6 +22,10 @@ class _MinimalStepType:
     def step_type(self) -> str:
         return "design"
 
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return frozenset()
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         return []
 

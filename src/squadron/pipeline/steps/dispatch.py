@@ -12,6 +12,17 @@ from squadron.pipeline.steps.utils import validate_allowed_tools
 #: revise step). It gives the step an expected artifact kind, as a phase step has.
 ARTIFACT_KEY = "artifact"
 
+#: Dispatch-step keys ``expand`` forwards to the dispatch action.
+DISPATCH_FORWARDED_KEYS: tuple[str, ...] = (
+    "prompt",
+    "model",
+    "pre_emption_fragment",
+    "allowed_tools",
+    "feedback",
+)
+
+_KNOWN_KEYS = frozenset(DISPATCH_FORWARDED_KEYS) | {ARTIFACT_KEY}
+
 
 class DispatchStepType:
     """Step type that expands to a single dispatch action.
@@ -24,6 +35,10 @@ class DispatchStepType:
     @property
     def step_type(self) -> str:
         return StepTypeName.DISPATCH
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     def validate(self, config: StepConfig) -> list[ValidationError]:
         errors: list[ValidationError] = []
@@ -87,20 +102,11 @@ class DispatchStepType:
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
-        action_config: dict[str, object] = {}
-
         # Only pass keys that are explicitly set — absent keys let the dispatch
         # action use its own resolution logic (e.g. prompt from build_context).
-        if "prompt" in cfg:
-            action_config["prompt"] = cfg["prompt"]
-        if "model" in cfg:
-            action_config["model"] = cfg["model"]
-        if "pre_emption_fragment" in cfg:
-            action_config["pre_emption_fragment"] = cfg["pre_emption_fragment"]
-        if "allowed_tools" in cfg:
-            action_config["allowed_tools"] = cfg["allowed_tools"]
-        if "feedback" in cfg:
-            action_config["feedback"] = cfg["feedback"]
+        action_config: dict[str, object] = {
+            key: cfg[key] for key in DISPATCH_FORWARDED_KEYS if key in cfg
+        }
 
         return [("dispatch", action_config)]
 

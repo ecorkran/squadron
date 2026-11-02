@@ -8,7 +8,7 @@ projectState: v0.24.13 released. Target is main (git.integration_branch unset). 
   949 design passed review.
 dateCreated: 20261102
 dateUpdated: 20261102
-status: not_started
+status: in_progress
 turns: 25
 promptTokens: 1367293
 cachedTokens: 1284939
@@ -46,42 +46,44 @@ revision_number: 1
 
 ### Part A: known keys and `--validate --strict`
 
-- [ ] **T1: Create the slice branch; add `known_keys` to the protocol and every step type** (Effort 3)
-  - [ ] Run `cf config get git.integration_branch` (target is its value, or `main` when empty); create `949-slice.isolated-file-in-file-out-dispatch-steps` from the target, or switch to it if it exists
-  - [ ] Add required `known_keys: frozenset[str]` to `StepType` in `steps/protocol.py` (D7)
-  - [ ] In `steps/dispatch.py`, add `DISPATCH_FORWARDED_KEYS` (today's five forwarded keys: `prompt`, `model`, `pre_emption_fragment`, `allowed_tools`, `feedback`) as the single list: `expand` iterates it, and `known_keys = DISPATCH_FORWARDED_KEYS | {ARTIFACT_KEY}`. Do not add the new keys yet
-  - [ ] Define `EXECUTOR_STEP_KEYS = frozenset({"loop", "step_model"})` once (put it in `steps/utils.py` or `steps/protocol.py`; cite `executor.py` as the reader) and confirm in `executor.py` that these are the only keys it reads on any step
-  - [ ] For each remaining step type, one sub-item: define a module constant beside its validate/expand code and expose it as `known_keys`, deriving the set by reading that module's `validate` and `expand`, not from memory. Container types include their inner-step source keys. Grep `register_step_type` first to confirm this list is complete (design, tasks and implement may share `PhaseStepType`):
-    - [ ] `branch.py`
-    - [ ] `collection.py` (each)
-    - [ ] `compact.py`
-    - [ ] `devlog.py`
-    - [ ] `fan_out.py`
-    - [ ] `gate.py`
-    - [ ] `loop.py`
-    - [ ] `phase.py`
-    - [ ] `review.py`
-    - [ ] `summary.py`
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean (pyright proves no step type lacks `known_keys`)
+- [x] **T1: Create the slice branch; add `known_keys` to the protocol and every step type** (Effort 3)
+  - [x] Run `cf config get git.integration_branch` (target is its value, or `main` when empty); create `949-slice.isolated-file-in-file-out-dispatch-steps` from the target, or switch to it if it exists
+  - [x] Add required `known_keys: frozenset[str]` to `StepType` in `steps/protocol.py` (D7)
+  - [x] In `steps/dispatch.py`, add `DISPATCH_FORWARDED_KEYS` (today's five forwarded keys: `prompt`, `model`, `pre_emption_fragment`, `allowed_tools`, `feedback`) as the single list: `expand` iterates it, and `known_keys = DISPATCH_FORWARDED_KEYS | {ARTIFACT_KEY}`. Do not add the new keys yet
+  - [x] Define `EXECUTOR_STEP_KEYS = frozenset({"loop", "step_model"})` once (put it in `steps/utils.py` or `steps/protocol.py`; cite `executor.py` as the reader) and confirm in `executor.py` that these are the only keys it reads on any step
+  - [x] For each remaining step type, one sub-item: define a module constant beside its validate/expand code and expose it as `known_keys`, deriving the set by reading that module's `validate` and `expand`, not from memory. Container types include their inner-step source keys. Grep `register_step_type` first to confirm this list is complete (design, tasks and implement may share `PhaseStepType`):
+    - [x] `branch.py`
+    - [x] `collection.py` (each)
+    - [x] `compact.py`
+    - [x] `devlog.py`
+    - [x] `fan_out.py`
+    - [x] `gate.py`
+    - [x] `loop.py`
+    - [x] `phase.py`
+    - [x] `review.py`
+    - [x] `summary.py`
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean (pyright proves no step type lacks `known_keys`)
 
-- [ ] **T2: `unknown_key_errors` and `validate_pipeline(strict=)`** (Effort 3)
-  - [ ] In `loader.py`, add `unknown_key_errors(steps)`: for each step, report one `ValidationError` per key not in `known_keys | EXECUTOR_STEP_KEYS`, `field=steps[<name>].<key>`; recurse via `inner_steps(config)` using the same `getattr` test `classification.py` uses; an unknown step type is already an error and is not recursed into (D8)
-  - [ ] `validate_pipeline(definition, *, strict: bool = False)`: unchanged when false; when true, append `unknown_key_errors(definition.steps)`
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean
+- [x] **T2: `unknown_key_errors` and `validate_pipeline(strict=)`** (Effort 3)
+  - [x] In `loader.py`, add `unknown_key_errors(steps)`: for each step, report one `ValidationError` per key not in `known_keys | EXECUTOR_STEP_KEYS`, `field=steps[<name>].<key>`; recurse via `inner_steps(config)` using the same `getattr` test `classification.py` uses; an unknown step type is already an error and is not recursed into (D8)
+  - [x] `validate_pipeline(definition, *, strict: bool = False)`: unchanged when false; when true, append `unknown_key_errors(definition.steps)`
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean
 
-- [ ] **T3: Test strict validation and built-in pipelines** (Effort 2)
-  - [ ] Create `tests/pipeline/test_known_keys.py`:
+- [x] **T3: Test strict validation and built-in pipelines** (Effort 2)
+  - [x] Create `tests/pipeline/test_known_keys.py`:
     1. one parametrized case per step type: a valid minimal config for that type passes strict; the same config plus `colour: red` yields exactly one error with `field=steps[<name>].colour`
     2. nested unknown key inside a `loop` body and an `each` body is reported with the nested step's name
     3. non-strict `validate_pipeline` on the same bad config returns no unknown-key error
-  - [ ] In `tests/pipeline/test_builtin_pipelines.py` (or the file that already loads every built-in), assert every YAML in `src/squadron/data/pipelines/` returns no errors with `strict=True` (Success Criterion 8). If one fails, a `known_keys` set is incomplete: fix the set, not the test
-  - [ ] SC: tests pass
+  - [x] In `tests/pipeline/test_builtin_pipelines.py` (or the file that already loads every built-in), assert every YAML in `src/squadron/data/pipelines/` returns no errors with `strict=True` (Success Criterion 8). If one fails, a `known_keys` set is incomplete: fix the set, not the test
+  - [x] SC: tests pass
 
-- [ ] **T4: `--validate --strict` CLI** (Effort 2)
-  - [ ] In `cli/commands/run.py`, make the `validate_only` branch pass `strict=strict` to `validate_pipeline`; print errors and exit 1 as it does today
-  - [ ] Change the `--strict` help text to state both meanings (eager session construction; with `--validate`, also rejects unknown step keys)
-  - [ ] Tests (next to the existing `--validate` CLI tests; find with `grep -rn "\-\-validate" tests/`): a pipeline with an unknown key exits 1 under `--validate --strict` and prints `steps[<name>].<key>`; the same file exits 0 under plain `--validate`
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean, touched tests pass
+  Note: strict validation found a dead `slice:` key on the `close-out` dispatch step in P6, P56, P456, implement and implement-plan (nothing reads it; dispatch `expand` never forwarded it). Removed it from those YAMLs rather than add `slice` to dispatch known_keys.
+
+- [x] **T4: `--validate --strict` CLI** (Effort 2)
+  - [x] In `cli/commands/run.py`, make the `validate_only` branch pass `strict=strict` to `validate_pipeline`; print errors and exit 1 as it does today
+  - [x] Change the `--strict` help text to state both meanings (eager session construction; with `--validate`, also rejects unknown step keys)
+  - [x] Tests (next to the existing `--validate` CLI tests; find with `grep -rn "\-\-validate" tests/`): a pipeline with an unknown key exits 1 under `--validate --strict` and prints `steps[<name>].<key>`; the same file exits 0 under plain `--validate`
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean, touched tests pass
 
 **Commit**: `feat: add known_keys per step type and sq run --validate --strict`
 

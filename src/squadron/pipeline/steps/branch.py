@@ -37,6 +37,10 @@ class BranchStepType:
     def step_type(self) -> str:
         return StepTypeName.BRANCH
 
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _ALLOWED_KEYS
+
     def validate(self, config: StepConfig) -> list[ValidationError]:
         errors: list[ValidationError] = []
         cfg = config.config

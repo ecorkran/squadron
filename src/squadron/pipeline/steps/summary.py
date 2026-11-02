@@ -8,9 +8,15 @@ from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 from squadron.pipeline.steps.utils import validate_allowed_tools
 
+_KNOWN_KEYS = frozenset({"template", "model", "emit", "checkpoint", "allowed_tools", "restore"})
+
 
 class SummaryStepType:
     """Step type: expands to a summary action, optionally followed by a checkpoint."""
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     @property
     def step_type(self) -> str:

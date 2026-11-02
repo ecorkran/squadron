@@ -1117,7 +1117,10 @@ def run(
     strict: bool = typer.Option(
         False,
         "--strict",
-        help="Force eager session construction for pool-uncertain steps.",
+        help=(
+            "Force eager session construction for pool-uncertain steps. "
+            "With --validate, also reject step config keys the step type does not read."
+        ),
     ),
     explain: bool = typer.Option(
         False,
@@ -1273,7 +1276,7 @@ def run(
         except FileNotFoundError:
             rprint(f"[red]Error: Pipeline '{escape(str(pipeline))}' not found.[/red]")
             raise typer.Exit(1) from None
-        errors = validate_pipeline(definition)
+        errors = validate_pipeline(definition, strict=strict)
         if not errors:
             rprint(f"[bright_green]Pipeline '{escape(str(definition.name))}' is valid.[/bright_green]")
             raise typer.Exit(0)

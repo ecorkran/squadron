@@ -41,6 +41,20 @@ ARTIFACT_KIND_PARAM = "artifact_kind"
 #: The phase's StepTypeName, which picks the project rules its dispatch gets (slice 935).
 RULES_STEP_PARAM = "rules_step"
 
+_KNOWN_KEYS = frozenset(
+    {
+        "phase",
+        "review",
+        "checkpoint",
+        "model",
+        "plan",
+        "slice",
+        "pre_emption_fragment",
+        "allowed_tools",
+        EXISTING_PARAM,
+    }
+)
+
 _KEEP_CHECK: dict[str, KeepCheck] = {
     StepTypeName.DESIGN: KeepCheck.ARTIFACT,
     StepTypeName.TASKS: KeepCheck.ARTIFACT,
@@ -78,6 +92,10 @@ class PhaseStepType:
     @property
     def step_type(self) -> str:
         return self._phase_name
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     @property
     def expected_artifact_kind(self) -> ArtifactKind | None:

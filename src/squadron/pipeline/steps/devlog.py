@@ -7,6 +7,7 @@ from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
 _VALID_MODES = ("auto", "explicit")
+_KNOWN_KEYS = frozenset({"mode", "content", SLICE_PARAM})
 
 
 class DevlogStepType:
@@ -15,6 +16,10 @@ class DevlogStepType:
     @property
     def step_type(self) -> str:
         return StepTypeName.DEVLOG
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     def validate(self, config: StepConfig) -> list[ValidationError]:
         errors: list[ValidationError] = []

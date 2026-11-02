@@ -16,6 +16,18 @@ from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _VERDICT_BEARING_ACTION_TYPES = frozenset({"review", "gate"})
 _COMMIT_ACTION_TYPE = "commit"
+_KNOWN_KEYS = frozenset(
+    {
+        "max",
+        "until",
+        "accept_if",
+        "skip_if_met",
+        "on_exhaust",
+        "strategy",
+        "commit_each_iteration",
+        "steps",
+    }
+)
 
 
 def _is_placeholder(value: object) -> bool:
@@ -51,6 +63,10 @@ class LoopStepType:
     def step_type(self) -> str:
         """Return the registered step-type name (``"loop"``)."""
         return StepTypeName.LOOP
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     def validate(self, config: StepConfig) -> list[ValidationError]:  # noqa: C901
         """Validate the loop step config and return any errors found."""

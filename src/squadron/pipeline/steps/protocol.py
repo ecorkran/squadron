@@ -6,6 +6,11 @@ from typing import Protocol, runtime_checkable
 
 from squadron.pipeline.models import StepConfig, ValidationError
 
+#: Keys the executor reads on any step, whatever its type: ``loop`` (a per-step retry
+#: block, executor.py ``_execute_step``) and ``step_model`` (the model cascade level,
+#: executor.py ``_step_resolves_to_sdk``). Not part of any step type's own keys.
+EXECUTOR_STEP_KEYS = frozenset({"loop", "step_model"})
+
 
 @runtime_checkable
 class StepType(Protocol):
@@ -18,6 +23,14 @@ class StepType(Protocol):
     @property
     def step_type(self) -> str:
         """Canonical step type identifier (matches StepTypeName enum value)."""
+        ...
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        """Every config key this step type's validate or expand reads.
+
+        ``sq run --validate --strict`` reports any other key (slice 949 D7).
+        """
         ...
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:

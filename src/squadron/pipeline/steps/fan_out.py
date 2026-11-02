@@ -7,6 +7,7 @@ from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
 _POOL_PREFIX = "pool:"
+_KNOWN_KEYS = frozenset({"models", "inner", "n", "fan_in"})
 
 
 class FanOutStepType:
@@ -19,6 +20,10 @@ class FanOutStepType:
     @property
     def step_type(self) -> str:
         return StepTypeName.FAN_OUT
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     def validate(self, config: StepConfig) -> list[ValidationError]:
         errors: list[ValidationError] = []

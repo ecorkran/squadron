@@ -35,6 +35,12 @@ def test_builtin_pipeline_validates_and_classifies(name: str) -> None:
     classify_pipeline(definition, resolver, pool_backend)
 
 
+@pytest.mark.parametrize("name", _BUILTIN_PIPELINES)
+def test_builtin_pipeline_passes_strict_validation(name: str) -> None:
+    """Slice 949 Success Criterion 8: no built-in carries a key its step type ignores."""
+    assert validate_pipeline(load_pipeline(name), strict=True) == []
+
+
 def test_implement_plan_params_and_shape() -> None:
     """slice 197 D1."""
     definition = load_pipeline("implement-plan")

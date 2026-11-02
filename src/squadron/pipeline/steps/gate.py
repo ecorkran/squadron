@@ -7,6 +7,7 @@ from typing import cast
 from squadron.pipeline.actions.checkpoint import CheckpointTrigger
 from squadron.pipeline.actions.gate import (
     DEFAULT_GATE_POLICY,
+    GATE_POLICY_CONTRACTS,
     JUDGE_BLOCK_KEYS,
     VALID_GATE_POLICIES,
     GatePolicyContract,
@@ -16,6 +17,15 @@ from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
 _JUDGE_FIELD = "judge"
+# The reference fields of every policy (required or forbidden), plus the step's own keys.
+_KNOWN_KEYS = frozenset(
+    {"policy", "checkpoint", _JUDGE_FIELD}
+    | {
+        field
+        for contract in GATE_POLICY_CONTRACTS.values()
+        for field in (*contract.required, *contract.forbidden)
+    }
+)
 
 
 class GateStepType:
@@ -30,6 +40,10 @@ class GateStepType:
     @property
     def step_type(self) -> str:
         return StepTypeName.GATE
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     def validate(self, config: StepConfig) -> list[ValidationError]:
         errors: list[ValidationError] = []

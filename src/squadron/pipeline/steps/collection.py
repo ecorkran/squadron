@@ -11,6 +11,7 @@ from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_t
 from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _SOURCE_PATTERN = re.compile(r"(\w+)\.(\w+)\([^)]*\)")
+_KNOWN_KEYS = frozenset({"source", "as", "steps", "on_item_failure"})
 
 
 class ItemFailurePolicy(StrEnum):
@@ -30,6 +31,10 @@ class EachStepType:
     @property
     def step_type(self) -> str:
         return StepTypeName.EACH
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     def validate(self, config: StepConfig) -> list[ValidationError]:
         errors: list[ValidationError] = []

@@ -5,9 +5,15 @@ from __future__ import annotations
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
 
+_KNOWN_KEYS = frozenset({"model", "instructions"})
+
 
 class CompactStepType:
     """Step type that expands to a single compact action."""
+
+    @property
+    def known_keys(self) -> frozenset[str]:
+        return _KNOWN_KEYS
 
     @property
     def step_type(self) -> str:
