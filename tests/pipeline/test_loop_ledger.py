@@ -10,7 +10,7 @@ import pytest
 
 from squadron.pipeline.commit_plan import CommitSubject
 from squadron.pipeline.executor import ExecutionStatus, StepResult
-from squadron.pipeline.loop_ledger import LoopCommitLedger, open_ledger
+from squadron.pipeline.loop_ledger import LoopCommitLedger, open_ledger, record_round_commit
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager, StepState
 from tests.conftest import run_test_git
@@ -191,3 +191,51 @@ def test_unreadable_head_is_unprovable(tmp_path: Path, caplog: pytest.LogCapture
 
     assert ledger == LoopCommitLedger(base_sha="", unprovable=True)
     assert sum("cannot read HEAD" in r.message for r in caplog.records) == 1
+
+
+# ---------------------------------------------------------------------------
+# record_round_commit
+# ---------------------------------------------------------------------------
+
+
+def _round_commit(sha: str) -> ActionResult:
+    return ActionResult(success=True, action_type="commit", outputs={"committed": True, "sha": sha})
+
+
+def test_round_commits_are_appended_in_order() -> None:
+    ledger = LoopCommitLedger(base_sha=BASE_SHA)
+
+    for sha in COMMIT_SHAS:
+        record_round_commit(ledger, _round_commit(sha))
+
+    assert ledger.commits == COMMIT_SHAS
+    assert ledger.unprovable is False
+
+
+def test_a_round_that_committed_nothing_adds_nothing() -> None:
+    ledger = LoopCommitLedger(base_sha=BASE_SHA)
+    nothing = ActionResult(success=True, action_type="commit", outputs={"committed": False})
+
+    record_round_commit(ledger, nothing)
+
+    assert ledger == LoopCommitLedger(base_sha=BASE_SHA)
+
+
+def test_a_failed_round_commit_adds_nothing() -> None:
+    ledger = LoopCommitLedger(base_sha=BASE_SHA)
+    failed = ActionResult(success=False, action_type="commit", outputs={}, error="hook rejected")
+
+    record_round_commit(ledger, failed)
+
+    assert ledger == LoopCommitLedger(base_sha=BASE_SHA)
+
+
+def test_an_unknown_sha_makes_the_ledger_unprovable(caplog: pytest.LogCaptureFixture) -> None:
+    ledger = LoopCommitLedger(base_sha=BASE_SHA, commits=[COMMIT_SHAS[0]])
+
+    with caplog.at_level(logging.WARNING, logger=LEDGER_LOGGER):
+        record_round_commit(ledger, _round_commit("unknown"))
+
+    assert ledger.unprovable is True
+    assert ledger.commits == [COMMIT_SHAS[0]]
+    assert sum("sha is unknown" in r.message for r in caplog.records) == 1

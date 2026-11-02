@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from squadron.pipeline.executor import ExecutionStatus, StepResult
+from squadron.pipeline.loop_ledger import LoopCommitLedger
 from squadron.pipeline.models import ActionResult
 from squadron.pipeline.state import StateManager, StepState
 
@@ -90,3 +91,53 @@ def test_verdict_hoist_ignores_earlier_rounds(tmp_path: Path) -> None:
     manager.record_step_completed(run_id, step)
 
     assert manager.load(run_id).completed_steps[0].verdict == "PASS"
+
+
+def _paused(step_name: str, ledger: LoopCommitLedger | None) -> StepResult:
+    return StepResult(
+        step_name=step_name,
+        step_type="loop",
+        status=ExecutionStatus.PAUSED,
+        action_results=[],
+        iteration=2,
+        loop_commits=ledger,
+    )
+
+
+def test_a_stored_ledger_is_carried_unchanged(tmp_path: Path) -> None:
+    manager = StateManager(runs_dir=tmp_path)
+    run_id = manager.init_run("p4", {"slice": "202"})
+    ledger = LoopCommitLedger(base_sha="a" * 40, commits=["b" * 40])
+
+    manager.record_step_completed(run_id, _paused("rounds", ledger))
+
+    assert manager.loop_ledger_for(run_id, "rounds") == ledger
+
+
+def test_a_step_with_no_record_has_no_ledger(tmp_path: Path) -> None:
+    manager = StateManager(runs_dir=tmp_path)
+    run_id = manager.init_run("p4", {"slice": "202"})
+
+    assert manager.loop_ledger_for(run_id, "rounds") is None
+
+
+def test_a_record_written_before_ledgers_existed_is_unprovable(tmp_path: Path) -> None:
+    manager = StateManager(runs_dir=tmp_path)
+    run_id = manager.init_run("p4", {"slice": "202"})
+
+    manager.record_step_completed(run_id, _paused("rounds", None))
+
+    assert manager.loop_ledger_for(run_id, "rounds") == LoopCommitLedger(base_sha="", unprovable=True)
+
+
+def test_the_later_record_of_a_step_wins(tmp_path: Path) -> None:
+    manager = StateManager(runs_dir=tmp_path)
+    run_id = manager.init_run("p4", {"slice": "202"})
+    earlier = LoopCommitLedger(base_sha="a" * 40, commits=["b" * 40])
+    later = LoopCommitLedger(base_sha="a" * 40, commits=["b" * 40, "c" * 40])
+
+    manager.record_step_completed(run_id, _paused("rounds", earlier))
+    manager.record_step_completed(run_id, _paused("rounds", later))
+    manager.record_step_completed(run_id, _paused("other", earlier))
+
+    assert manager.loop_ledger_for(run_id, "rounds") == later

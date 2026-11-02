@@ -16,7 +16,11 @@ from collections.abc import Mapping
 from pydantic import BaseModel, Field
 
 from squadron.pipeline.actions import ActionType
-from squadron.pipeline.actions.commit import commit_target_from_params, commit_target_outputs
+from squadron.pipeline.actions.commit import (
+    UNKNOWN_SHA,
+    commit_target_from_params,
+    commit_target_outputs,
+)
 from squadron.pipeline.commit_plan import CommitSubject, CommitTarget
 from squadron.pipeline.models import ActionResult
 from squadron.review.git_utils import run_git
@@ -67,6 +71,22 @@ def open_ledger(
         _logger.warning("loop commits: the phase commit %s has no parent; no collapse", start_head)
         return LoopCommitLedger(base_sha=start_head, unprovable=True)
     return LoopCommitLedger(base_sha=parent, commits=[start_head])
+
+
+def record_round_commit(ledger: LoopCommitLedger, commit_result: ActionResult) -> None:
+    """Add a round's commit to ``ledger``; a commit whose sha is unknown makes it unprovable.
+
+    A round that committed nothing, or whose commit failed, changes nothing: the
+    failed round's loop status is the executor's business, not the ledger's.
+    """
+    if not commit_result.success or commit_result.outputs.get("committed") is not True:
+        return
+    sha = commit_result.outputs.get("sha")
+    if not isinstance(sha, str) or sha in ("", UNKNOWN_SHA):
+        _logger.warning("loop commits: a round commit's sha is unknown; the loop will not collapse")
+        ledger.unprovable = True
+        return
+    ledger.commits.append(sha)
 
 
 def _newest_commit_result(prior_outputs: Mapping[str, ActionResult]) -> ActionResult | None:

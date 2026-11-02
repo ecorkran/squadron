@@ -726,6 +726,22 @@ class StateManager:
                 iteration = step_state.iteration
         return iteration
 
+    def loop_ledger_for(self, run_id: str, step_name: str) -> LoopCommitLedger | None:
+        """The commit ledger a paused loop *step_name* left to resume with (slice 202).
+
+        Mirrors ``resume_iteration_for``: the last occurrence of the step name wins.
+        ``None`` means the step has no record, so the caller opens a fresh ledger. A
+        record written before ledgers existed carries an unprovable one, so collapse
+        refuses rather than guess which commits were the loop's.
+        """
+        record = None
+        for step_state in self.load(run_id).completed_steps:
+            if step_state.step_name == step_name:
+                record = step_state
+        if record is None:
+            return None
+        return record.loop_commits or LoopCommitLedger(base_sha="", unprovable=True)
+
     def scan_runs(self) -> RunScan:
         """Every run-state file: the readable states and the unreadable files (174 D9).
 

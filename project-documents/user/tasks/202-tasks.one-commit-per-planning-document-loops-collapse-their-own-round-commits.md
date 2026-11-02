@@ -109,20 +109,21 @@ revision_number: 2
 
 ### 4. Record rounds and carry the ledger on resume (effort 3)
 
-- [ ] **4.1 Implement `record_round_commit` in `loop_ledger.py`** (Data Flow step 3)
-  - [ ] Takes the ledger and the round's commit `ActionResult`. `committed: true` with a real sha
+- [x] **4.1 Implement `record_round_commit` in `loop_ledger.py`** (Data Flow step 3)
+  - [x] Takes the ledger and the round's commit `ActionResult`. `committed: true` with a real sha
         appends it; sha `unknown` sets `unprovable`; `committed: false` or a failed result changes
         nothing
-- [ ] **4.2 Implement `carried_ledger` in `loop_ledger.py`** (Data Flow step 2)
-  - [ ] Add `StateManager.loop_ledger_for(run_id, step_name)` in `state.py`, mirroring
+- [x] **4.2 Implement `carried_ledger` in `loop_ledger.py`** (Data Flow step 2)
+  - [x] Add `StateManager.loop_ledger_for(run_id, step_name)` in `state.py`, mirroring
         `resume_iteration_for` (last occurrence of the step name wins). It returns the stored
         ledger, or `None` when the step has no record
-  - [ ] When the step has a record whose `loop_commits` is `None` (pre-slice state file), the
+  - [x] When the step has a record whose `loop_commits` is `None` (pre-slice state file), the
         carried ledger is `unprovable` with empty `base_sha`/`commits`
-  - [ ] When the step has no record, the caller opens a fresh ledger (task 3)
-- [ ] **4.3 Tests** in `tests/pipeline/test_loop_ledger.py` and `tests/pipeline/test_state_loop_rounds.py`
-  - [ ] Record: appended in order; `committed: false` adds nothing; `unknown` marks `unprovable`
-  - [ ] Carry: a stored ledger is returned unchanged; an old record without a ledger gives
+  - [x] When the step has no record, the caller opens a fresh ledger (task 3)
+  - Deviation: there is no separate `carried_ledger` function. `StateManager.loop_ledger_for` carries the whole rule (including the pre-slice-record case), and the caller falls back to `open_ledger` when it returns `None`. `UNKNOWN_SHA` is a constant added in `actions/commit.py` and used by both `record_round_commit` and `loop_ledger_for`.
+- [x] **4.3 Tests** in `tests/pipeline/test_loop_ledger.py` and `tests/pipeline/test_state_loop_rounds.py`
+  - [x] Record: appended in order; `committed: false` adds nothing; `unknown` marks `unprovable`
+  - [x] Carry: a stored ledger is returned unchanged; an old record without a ledger gives
         `unprovable`; a step with two records returns the later one's ledger
   - [ ] The `each` rule (one item never inherits another item's ledger) is covered in 7.5
 

@@ -42,6 +42,9 @@ from squadron.review.git_utils import run_git
 
 _logger = logging.getLogger(__name__)
 
+# The ``sha`` output of a commit that landed but whose new HEAD could not be read.
+UNKNOWN_SHA = "unknown"
+
 
 class CommitAction:
     """Pipeline action that stages the planned files and creates a git commit."""
@@ -126,7 +129,7 @@ class CommitAction:
         sha_result = run_git(["rev-parse", "HEAD"], cwd=cwd_text)
         if sha_result is None or sha_result.returncode != 0:
             _logger.warning("commit: committed, but cannot read the new HEAD sha")
-            sha = "unknown"
+            sha = UNKNOWN_SHA
         else:
             sha = sha_result.stdout.strip()
         return ActionResult(
