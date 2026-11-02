@@ -7,6 +7,8 @@ from squadron.pipeline.models import (
     PipelineDefinition,
     StepConfig,
     ValidationError,
+    prior_output_key,
+    results_for_step,
 )
 
 
@@ -94,3 +96,27 @@ def test_action_result_asdict_includes_score_fields() -> None:
     result = ActionResult(success=True, action_type="review", outputs={})
     d = dataclasses.asdict(result)
     assert {"score", "criteria", "provenance"} <= d.keys()
+
+
+def _result(action_type: str, response: str) -> ActionResult:
+    return ActionResult(success=True, action_type=action_type, outputs={"response": response})
+
+
+def test_results_for_step_returns_the_steps_results_in_action_order() -> None:
+    prior_outputs = {
+        prior_output_key("ask", "dispatch", 1): _result("dispatch", "second"),
+        prior_output_key("other", "dispatch", 0): _result("dispatch", "other"),
+        prior_output_key("ask", "cf-op", 0): _result("cf-op", "first"),
+    }
+    found = results_for_step(prior_outputs, "ask")
+    assert [r.outputs["response"] for r in found] == ["first", "second"]
+
+
+def test_results_for_step_is_empty_for_an_unknown_step() -> None:
+    prior_outputs = {prior_output_key("ask", "dispatch", 0): _result("dispatch", "x")}
+    assert results_for_step(prior_outputs, "missing") == []
+
+
+def test_results_for_step_does_not_match_a_longer_step_name() -> None:
+    prior_outputs = {prior_output_key("ask-more", "dispatch", 0): _result("dispatch", "x")}
+    assert results_for_step(prior_outputs, "ask") == []

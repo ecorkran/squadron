@@ -113,26 +113,28 @@ revision_number: 1
 ### Part C: new keys, validation and reply lookup
 
 - [ ] **T8: New dispatch keys: constants and shape validation** (Effort 3)
-  - [ ] Create `pipeline/dispatch_keys.py`, a module with no imports from `steps/` or `actions/`, holding the five key-name constants, `ReplyFormat(StrEnum)` (`text`, `json`) and the shared path check (below). `steps/dispatch.py` and `actions/dispatch_io.py` both import from it. This departs from the design's component table, which puts `ReplyFormat` in `dispatch_io.py`: `steps/dispatch.py` already imports `actions/dispatch.py` at module level, so `steps/dispatch.py` → `dispatch_io.py` → `steps/dispatch.py` would be an import cycle (review F005)
+  - [x] Create `pipeline/dispatch_keys.py`, a module with no imports from `steps/` or `actions/`, holding the five key-name constants, `ReplyFormat(StrEnum)` (`text`, `json`) and the shared path check (below). `steps/dispatch.py` and `actions/dispatch_io.py` both import from it. This departs from the design's component table, which puts `ReplyFormat` in `dispatch_io.py`: `steps/dispatch.py` already imports `actions/dispatch.py` at module level, so `steps/dispatch.py` → `dispatch_io.py` → `steps/dispatch.py` would be an import cycle (review F005)
   - [ ] Create `pipeline/actions/dispatch_io.py` (module docstring citing slice 949 D2–D5); it imports the constants and `ReplyFormat` from `dispatch_keys.py`
-  - [ ] In `steps/dispatch.py`, add the five names to `DISPATCH_FORWARDED_KEYS` so `expand` forwards them and `known_keys` includes them. No literal key strings anywhere else (Patterns and Conventions)
-  - [ ] `validate` per D1: `prompt_files` is a non-empty list of strings (a bare string errors and says to use a list); `reply_format` is a `ReplyFormat` value; `reply_from` is a string; `reply_file` and `delivered_prompt_file` are strings and must differ; `feedback` with `prompt_files` or `reply_from` is an error
-  - [ ] Path check, one shared function in `dispatch_keys.py`: relative, no `..` part. Values containing a `{param}` placeholder skip it at load time (gate-reference convention) and the same function runs at run time (T14)
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean
+  - [x] In `steps/dispatch.py`, add the five names to `DISPATCH_FORWARDED_KEYS` so `expand` forwards them and `known_keys` includes them. No literal key strings anywhere else (Patterns and Conventions)
+  - [x] `validate` per D1: `prompt_files` is a non-empty list of strings (a bare string errors and says to use a list); `reply_format` is a `ReplyFormat` value; `reply_from` is a string; `reply_file` and `delivered_prompt_file` are strings and must differ; `feedback` with `prompt_files` or `reply_from` is an error
+  - [x] Path check, one shared function in `dispatch_keys.py`: relative, no `..` part. Values containing a `{param}` placeholder skip it at load time (gate-reference convention) and the same function runs at run time (T14)
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean
 
-- [ ] **T9: Test key validation** (Effort 2)
-  - [ ] Extend `tests/pipeline/steps/test_dispatch_step.py`: one case per rule in T8 (bare-string `prompt_files`, empty list, bad `reply_format`, absolute path, `..` path, placeholder path skipped, equal output paths, `feedback` combinations), plus `expand` forwards all five keys
-  - [ ] SC: tests pass
+- [x] **T9: Test key validation** (Effort 2)
+  - [x] Extend `tests/pipeline/steps/test_dispatch_step.py`: one case per rule in T8 (bare-string `prompt_files`, empty list, bad `reply_format`, absolute path, `..` path, placeholder path skipped, equal output paths, `feedback` combinations), plus `expand` forwards all five keys
+  - [x] SC: tests pass
 
-- [ ] **T10: `results_for_step` and `_validate_reply_references`** (Effort 3)
-  - [ ] In `models.py` beside `prior_output_key`, add `results_for_step(prior_outputs, step_name)` returning that step's results in order; the key format stays defined in this one module (D3)
-  - [ ] In `loader.py`, add `_validate_reply_references` (called from `validate_pipeline`, like `_validate_gate_references`): `reply_from` must name an earlier top-level `dispatch` step; recurse into container bodies through `inner_steps` and reject any nested `reply_from` with "reply_from is supported on top-level steps only"
-  - [ ] SC: `ruff format`, `ruff check`, `pyright` clean
+- [x] **T10: `results_for_step` and `_validate_reply_references`** (Effort 3)
+  - [x] In `models.py` beside `prior_output_key`, add `results_for_step(prior_outputs, step_name)` returning that step's results in order; the key format stays defined in this one module (D3)
+  - [x] In `loader.py`, add `_validate_reply_references` (called from `validate_pipeline`, like `_validate_gate_references`): `reply_from` must name an earlier top-level `dispatch` step; recurse into container bodies through `inner_steps` and reject any nested `reply_from` with "reply_from is supported on top-level steps only"
+  - [x] SC: `ruff format`, `ruff check`, `pyright` clean
 
-- [ ] **T11: Test reply lookup and reference validation** (Effort 2)
-  - [ ] `tests/pipeline/test_models.py`: `results_for_step` returns results in order and nothing for an unknown step
-  - [ ] `tests/pipeline/test_reply_references.py`: valid earlier dispatch passes; later step, non-dispatch step, missing step, and `reply_from` inside `loop`, `each` and `fan_out` bodies each fail with the expected message (Success Criterion 6, load-time half)
-  - [ ] SC: tests pass
+  Note: the design says to recurse through `inner_steps`, but fan_out's `inner_steps` returns a synthetic step, not its branch step. Added `body_steps` to loop, each and fan_out and used it for both the nested `reply_from` check and `unknown_key_errors`.
+
+- [x] **T11: Test reply lookup and reference validation** (Effort 2)
+  - [x] `tests/pipeline/test_models.py`: `results_for_step` returns results in order and nothing for an unknown step
+  - [x] `tests/pipeline/test_reply_references.py`: valid earlier dispatch passes; later step, non-dispatch step, missing step, and `reply_from` inside `loop`, `each` and `fan_out` bodies each fail with the expected message (Success Criterion 6, load-time half)
+  - [x] SC: tests pass
 
 **Commit**: `feat: add dispatch file and reply keys with load-time validation`
 

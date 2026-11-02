@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.steps.dispatch import DispatchStepType
 
@@ -96,3 +98,81 @@ def test_expand_forwards_allowed_tools() -> None:
 def test_expand_omits_allowed_tools_when_absent() -> None:
     actions = _make().expand(_step({"prompt": "Do something."}))
     assert "allowed_tools" not in actions[0][1]
+
+
+# --- file and reply keys (slice 949 D1) ---
+
+
+def _field_errors(config: dict[str, object]) -> list[str]:
+    return [e.field for e in _make().validate(_step(config))]
+
+
+def test_expand_forwards_all_file_and_reply_keys() -> None:
+    config: dict[str, object] = {
+        "prompt_files": ["a.md"],
+        "reply_from": "earlier",
+        "reply_format": "json",
+        "reply_file": "out/reply.json",
+        "delivered_prompt_file": "out/prompt.md",
+    }
+    assert _make().expand(_step(config)) == [("dispatch", config)]
+
+
+def test_valid_file_and_reply_keys_pass() -> None:
+    config: dict[str, object] = {
+        "prompt": "p",
+        "prompt_files": ["a.md", "dir/b.md"],
+        "reply_from": "earlier",
+        "reply_format": "text",
+        "reply_file": "out/reply.json",
+        "delivered_prompt_file": "out/prompt.md",
+    }
+    assert _make().validate(_step(config)) == []
+
+
+def test_prompt_files_bare_string_is_rejected_with_a_list_hint() -> None:
+    (error,) = _make().validate(_step({"prompt_files": "a.md"}))
+    assert error.field == "prompt_files"
+    assert "list" in error.message
+
+
+def test_prompt_files_empty_list_is_rejected() -> None:
+    assert _field_errors({"prompt_files": []}) == ["prompt_files"]
+
+
+def test_prompt_files_non_string_entry_is_rejected() -> None:
+    assert _field_errors({"prompt_files": ["a.md", 3]}) == ["prompt_files"]
+
+
+def test_reply_format_must_be_a_known_value() -> None:
+    assert _field_errors({"reply_format": "yaml"}) == ["reply_format"]
+
+
+@pytest.mark.parametrize("key", ["prompt_files", "reply_file", "delivered_prompt_file"])
+@pytest.mark.parametrize("path", ["/etc/passwd", "../outside.md", "a/../../b.md"])
+def test_unsafe_paths_are_rejected(key: str, path: str) -> None:
+    value: object = [path] if key == "prompt_files" else path
+    assert _field_errors({key: value}) == [key]
+
+
+@pytest.mark.parametrize("key", ["prompt_files", "reply_file", "delivered_prompt_file"])
+def test_placeholder_paths_skip_the_load_time_check(key: str) -> None:
+    value: object = ["{dir}/../x.md"] if key == "prompt_files" else "{dir}/../x.md"
+    assert _field_errors({key: value}) == []
+
+
+def test_reply_and_prompt_output_files_must_differ() -> None:
+    assert _field_errors({"reply_file": "same.md", "delivered_prompt_file": "same.md"}) == [
+        "reply_file"
+    ]
+
+
+def test_reply_from_must_be_a_non_empty_string() -> None:
+    assert _field_errors({"reply_from": ""}) == ["reply_from"]
+    assert _field_errors({"reply_from": 4}) == ["reply_from"]
+
+
+@pytest.mark.parametrize("key", ["prompt_files", "reply_from"])
+def test_feedback_cannot_combine_with_another_prompt_source(key: str) -> None:
+    value: object = ["a.md"] if key == "prompt_files" else "earlier"
+    assert _field_errors({"feedback": "review", key: value}) == ["feedback"]

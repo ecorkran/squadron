@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from squadron.pipeline.intelligence.fan_in.reducers import get_reducer
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
+from squadron.pipeline.steps.utils import unpack_inner_steps
 
 _POOL_PREFIX = "pool:"
 _KNOWN_KEYS = frozenset({"models", "inner", "n", "fan_in"})
@@ -101,6 +104,13 @@ class FanOutStepType:
                 )
 
         return errors
+
+    def body_steps(self, config: StepConfig) -> list[StepConfig]:
+        """The step each branch runs: ``inner`` unpacked like a loop or each body."""
+        inner_raw = config.config.get("inner")
+        if not isinstance(inner_raw, dict) or len(cast(dict[object, object], inner_raw)) != 1:
+            return []
+        return unpack_inner_steps([cast(dict[str, object], inner_raw)])
 
     def inner_steps(self, config: StepConfig) -> list[StepConfig]:
         return [

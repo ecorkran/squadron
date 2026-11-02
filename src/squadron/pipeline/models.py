@@ -6,6 +6,7 @@ Pydantic enters the pipeline in slice 148 for YAML loading.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,24 @@ def prior_output_key(step_name: str, action_type: str, index: int) -> str:
     place, which would put it out of execution order (#170).
     """
     return f"{step_name}:{action_type}-{index}"
+
+
+def results_for_step(prior_outputs: Mapping[str, ActionResult], step_name: str) -> list[ActionResult]:
+    """The results *step_name* left in *prior_outputs*, in action order.
+
+    The inverse of :func:`prior_output_key`, kept beside it so the key format is defined in
+    one module. A step name is a prefix of another step's keys only when that name itself
+    contains ``:``, which an action type never does, so the match is exact.
+    """
+    prefix = f"{step_name}:"
+    indexed: list[tuple[int, ActionResult]] = []
+    for key, result in prior_outputs.items():
+        if not key.startswith(prefix):
+            continue
+        action_type, _, index = key.removeprefix(prefix).rpartition("-")
+        if action_type and ":" not in action_type and index.isdecimal():
+            indexed.append((int(index), result))
+    return [result for _, result in sorted(indexed, key=lambda pair: pair[0])]
 
 
 @dataclass

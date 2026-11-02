@@ -20,6 +20,7 @@ from pydantic import ValidationError as PydanticValidationError
 from squadron.data import data_dir
 from squadron.pipeline.actions.gate import policy_contract
 from squadron.pipeline.branch_rules import implement_branch_errors
+from squadron.pipeline.dispatch_keys import REPLY_FROM_KEY
 from squadron.pipeline.models import PipelineDefinition, StepConfig, ValidationError
 from squadron.pipeline.schema import PipelineSchema
 
@@ -318,11 +319,19 @@ def unknown_key_errors(steps: Sequence[StepConfig]) -> list[ValidationError]:
                     action_type=step.step_type,
                 )
             )
-        # Same container test classification.py uses: only container types define it.
-        inner_steps_fn = getattr(step_impl, "inner_steps", None)
-        if inner_steps_fn is not None:
-            errors.extend(unknown_key_errors(inner_steps_fn(step)))
+        errors.extend(unknown_key_errors(_body_steps(step_impl, step)))
     return errors
+
+
+def _body_steps(step_impl: object, step: StepConfig) -> list[StepConfig]:
+    """The steps a container step runs as its body; empty for a leaf step.
+
+    Same shape of test classification.py uses for ``inner_steps``: only container types
+    define ``body_steps``. It is separate from ``inner_steps`` because fan_out's
+    ``inner_steps`` is a synthetic classification step, not the step its branches run.
+    """
+    body_steps_fn = getattr(step_impl, "body_steps", None)
+    return body_steps_fn(step) if body_steps_fn is not None else []
 
 
 def validate_pipeline(
@@ -367,6 +376,7 @@ def validate_pipeline(
                 ValidationError(field=f"params.{key}", message=reserved, action_type="pipeline")
             )
     prior_step_names: set[str] = set()
+    prior_step_types: dict[str, str] = {}
 
     # Validate pipeline-level model alias
     if definition.model is not None:
@@ -404,7 +414,11 @@ def validate_pipeline(
         # Validate gate judge_from/review_from name real prior steps (F005)
         _validate_gate_references(step, prior_step_names, errors)
 
+        # Validate reply_from names an earlier top-level dispatch step (slice 949 D3)
+        _validate_reply_references(step, prior_step_types, errors)
+
         prior_step_names.add(step.name)
+        prior_step_types[step.name] = step.step_type
 
     errors.extend(implement_branch_errors(definition.steps))
     if strict:
@@ -508,6 +522,61 @@ def _validate_gate_references(
                     action_type=step.step_type,
                 )
             )
+
+
+def _validate_reply_references(
+    step: StepConfig,
+    prior_step_types: dict[str, str],
+    errors: list[ValidationError],
+) -> None:
+    """Check ``reply_from`` names an earlier top-level dispatch step, and is not nested (D3).
+
+    Like the gate check, this is cross-step, so it lives here where every step is in scope.
+    A ``{param}`` value is skipped. Container bodies are walked only to reject a nested
+    ``reply_from``: three different key schemes apply inside loop, each and fan_out
+    bodies, so the hand-off is top-level only.
+    """
+    from squadron.pipeline.steps import StepTypeName
+
+    reply_from = step.config.get(REPLY_FROM_KEY)
+    if isinstance(reply_from, str) and "{" not in reply_from:
+        referenced_type = prior_step_types.get(reply_from)
+        if referenced_type is None:
+            message = f"'{REPLY_FROM_KEY}' names '{reply_from}', which is not an earlier step"
+        elif referenced_type != StepTypeName.DISPATCH:
+            message = (
+                f"'{REPLY_FROM_KEY}' names '{reply_from}', a {referenced_type} step; "
+                "it must be a dispatch step"
+            )
+        else:
+            message = ""
+        if message:
+            errors.append(
+                ValidationError(
+                    field=f"steps[{step.name}].{REPLY_FROM_KEY}",
+                    message=message,
+                    action_type=step.step_type,
+                )
+            )
+    _reject_nested_reply_from(step, errors)
+
+
+def _reject_nested_reply_from(step: StepConfig, errors: list[ValidationError]) -> None:
+    """Report every ``reply_from`` inside *step*'s container body, at any depth."""
+    from squadron.pipeline.steps import get_step_type, list_step_types
+
+    if step.step_type not in list_step_types():
+        return
+    for inner in _body_steps(get_step_type(step.step_type), step):
+        if REPLY_FROM_KEY in inner.config:
+            errors.append(
+                ValidationError(
+                    field=f"steps[{inner.name}].{REPLY_FROM_KEY}",
+                    message=f"'{REPLY_FROM_KEY}' is supported on top-level steps only",
+                    action_type=inner.step_type,
+                )
+            )
+        _reject_nested_reply_from(inner, errors)
 
 
 def _validate_param_placeholders(

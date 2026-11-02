@@ -127,6 +127,10 @@ class EachStepType:
             errors.extend(inner_impl.validate(inner))
         return errors
 
+    def body_steps(self, config: StepConfig) -> list[StepConfig]:
+        """The steps each item runs."""
+        return self.inner_steps(config)
+
     def inner_steps(self, config: StepConfig) -> list[StepConfig]:
         raw: object = config.config.get("steps", [])
         if not isinstance(raw, list):

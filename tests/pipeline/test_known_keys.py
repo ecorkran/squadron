@@ -81,3 +81,9 @@ def test_unknown_key_in_a_container_body_names_the_nested_step(container: str) -
 def test_plain_validation_ignores_unknown_keys(step_type: str) -> None:
     config = {**_VALID_CONFIGS[step_type], **_UNKNOWN}
     assert _unknown_key_fields(step_type, config, strict=False) == []
+
+
+def test_unknown_key_in_a_fan_out_branch_step_names_the_nested_step() -> None:
+    inner = {"dispatch": {"name": "branch-step", "prompt": "hello", **_UNKNOWN}}
+    config = {**_VALID_CONFIGS["fan_out"], "inner": inner}
+    assert _unknown_key_fields("fan_out", config, strict=True) == ["steps[branch-step].colour"]
