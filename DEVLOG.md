@@ -17,6 +17,11 @@ A lightweight, append-only record of development activity. Newest entries first.
 - **Decisions:** a cumulative `LoopCommitLedger` in `StepState` (carried across resume) records the phase commit and each round sha; collapse via `commit-tree` + compare-and-swap `update-ref` (index and working tree untouched); five proof checks, each with its own `CollapseOutcome` and WARNING line; message from `compose_message` over the collapsed range; backup ref `refs/squadron/pre-collapse/<sha>` keeps `reviewedSha` stamps resolvable; collapse only on COMPLETED and never changes loop status; code loops excluded; no opt-out key.
 - **Deferred:** prompt-only parity rides on #145 (loops are not rendered in prompt-only yet).
 
+### Slice 202: One Commit Per Planning Document — Task Breakdown Complete
+
+- **Output:** `202-tasks.one-commit-per-planning-document-loops-collapse-their-own-round-commits.md` (9 tasks, 250 lines, test-with, a `**Commit**:` marker per task). Order: commit action outputs, ledger model/state, open, record/carry, collapse proofs and message, collapse writes, executor call sites with the scripted-loop and item-rerun tests, resolve/CHANGELOG, live walkthrough.
+- **Open point recorded in task 8.1:** whether `sq review resolve` follows `refs/squadron/pre-collapse/<sha>` is untested; if not, it becomes an issue rather than silent scope.
+
 ### Release 0.24.12
 
 - **Contents:** removed `sq squash` and the `squash` pipeline step (closes #258, #272, #274, #280; #257 stays open for collapsing each review loop's commits into one). A pipeline file that still has a `squash:` step fails to load with a message to delete it. Guide v0.22.15 and the refreshed CLAUDE.md/AGENTS.md (marker-based commit cadence).
