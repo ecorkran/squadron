@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
+import click
 import pytest
 import typer
 from typer.testing import CliRunner
@@ -38,8 +39,14 @@ def test_param_resolves_the_same_model_as_the_flag() -> None:
 
 @pytest.mark.parametrize("command", ["slice", "arch", "tasks", "code"])
 def test_every_review_command_accepts_the_param(command: str) -> None:
-    result = _invoke(command, "--help")
-    assert "--param" in result.output
+    # Read the option off the command, not --help text: CI forces colour, which splits
+    # the option name with escape codes.
+    root = typer.main.get_command(app)
+    assert isinstance(root, click.Group)
+    review = root.commands["review"]
+    assert isinstance(review, click.Group)
+    options = [p for p in review.commands[command].params if isinstance(p, click.Option)]
+    assert any("--param" in option.opts and "-p" in option.opts for option in options)
 
 
 def test_unknown_key_fails_naming_review_model() -> None:
