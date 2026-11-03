@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.15] - 20261103
+
 ### Added
 - `sq review slice|arch|tasks|code` accept `-p review-model=<model>` as an alias for `--model`, so the `sq run` form works. Any other key is an error; giving both with different values is an error (#286).
 

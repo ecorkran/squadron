@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261102'
+dateUpdated: '20261103'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261103
+
+### Release 0.24.15
+
+- **Contents:** review tool-coverage line and read-before-PASS prompt (#279), per-file review diff cap with a per-file record of cut files (#278), `-p review-model=` on `sq review` (#286). All three as standing-fixes task groups on `main`.
 
 ## 20261102
 
