@@ -120,5 +120,5 @@ dateUpdated: 20261021
 - [x] A cited range that starts in the file and ends exactly one line past it is not marked `location_verified: false` (the issue's "Secondary" item)
 - [x] Tests: `3-11` and `10-11` verified on a 10-line file; `3-12`, `11-12` and single `11` still unverified; `location_span` extraction
 - [x] CHANGELOG bullet
-- [ ] Numbered `read_file` / injected bodies for review runs: not done; deferred pending measurement of how often citations are wrong on non-SDK reviewers (the issue stays open)
+- [x] Numbered `read_file` / injected bodies for review runs: dropped (PM decision). Measured 12 of 967 checkable citations (1.2%) unverified; issue closed
 - **Commit**: `fix: treat a citation range ending one past EOF as sloppy, not phantom (#196)`
