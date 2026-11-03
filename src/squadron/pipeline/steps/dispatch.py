@@ -166,6 +166,10 @@ class DispatchStepType:
 
         return errors
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """Only a dispatch that declares an ``artifact`` kind resolves it through Context Forge."""
+        return ARTIFACT_KEY in config.config
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
         # Only pass keys that are explicitly set — absent keys let the dispatch

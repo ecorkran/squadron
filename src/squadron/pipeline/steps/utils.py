@@ -2,9 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from squadron.pipeline.models import StepConfig, ValidationError
 
-__all__ = ["unpack_inner_steps", "validate_allowed_tools"]
+__all__ = ["any_step_needs_context_forge", "unpack_inner_steps", "validate_allowed_tools"]
+
+
+def any_step_needs_context_forge(steps: Sequence[StepConfig]) -> bool:
+    """True when any of *steps* calls Context Forge (#288); containers answer for their body."""
+    # Deferred: the step registry imports the step types, which import this module.
+    from squadron.pipeline.steps import bootstrap_step_types, get_step_type, list_step_types
+
+    bootstrap_step_types()
+    registered = list_step_types()
+    # A step type nobody registered declares nothing, so it keeps the pre-flight.
+    return any(
+        step.step_type not in registered or get_step_type(step.step_type).needs_context_forge(step)
+        for step in steps
+    )
 
 
 def unpack_inner_steps(raw_steps: list[dict[str, object]]) -> list[StepConfig]:

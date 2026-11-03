@@ -223,6 +223,10 @@ class PhaseStepType:
     def _existing_error(self, message: str) -> ValidationError:
         return ValidationError(field=EXISTING_PARAM, message=message, action_type=self._phase_name)
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """Treated as needing Context Forge: sq run checks it before the first step."""
+        return True
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
         phase = cfg["phase"]

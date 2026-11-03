@@ -7,7 +7,7 @@ from typing import cast
 from squadron.pipeline.intelligence.fan_in.reducers import get_reducer
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, register_step_type
-from squadron.pipeline.steps.utils import unpack_inner_steps
+from squadron.pipeline.steps.utils import any_step_needs_context_forge, unpack_inner_steps
 
 _POOL_PREFIX = "pool:"
 _KNOWN_KEYS = frozenset({"models", "inner", "n", "fan_in"})
@@ -120,6 +120,10 @@ class FanOutStepType:
                 config={"models": config.config.get("models")},
             )
         ]
+
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """A fan-out needs Context Forge when the step it fans out does."""
+        return any_step_needs_context_forge(self.body_steps(config))
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         # Fan-out is executed directly by the executor; no actions to expand.

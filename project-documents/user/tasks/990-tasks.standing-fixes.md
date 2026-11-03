@@ -88,3 +88,12 @@ dateUpdated: 20261021
 - [x] Tests: `-p review-model=sonnet` resolves the same model as `--model sonnet`; unknown key; both given different; both given equal
 - [x] CHANGELOG bullet
 - **Commit**: `feat: accept -p review-model=X on sq review as an alias for --model (#286)`
+
+## #288 sq run: skip the Context Forge pre-flight for pipelines whose steps don't use CF
+
+- [x] Every step type declares `needs_context_forge(step)` (protocol member): `dispatch` answers from its `artifact` key, `compact` is False, containers (`loop`, `fan_out`) answer for their body, every other step type is True
+- [x] `_run_pipeline_sdk` runs `_check_cf` only when some step needs Context Forge
+- [x] Verified by running a dispatch-only pipeline of Amoeba's shape (`prompt_files`, `reply_from`, `reply_file`) from a directory with no CF registration: both steps completed, nothing else on the path called cf
+- [x] Tests: dispatch-only pipeline runs with a failing pre-flight; `artifact` and `branch` pipelines still fail it; containers answer for their body; every registered step type declares an answer
+- [x] CHANGELOG bullet
+- **Commit**: `fix: skip the Context Forge pre-flight for pipelines whose steps do not use it (#288)`

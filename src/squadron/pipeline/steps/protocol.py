@@ -33,6 +33,14 @@ class StepType(Protocol):
         """
         ...
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """Whether running this step calls Context Forge (#288).
+
+        Every step type declares it. ``sq run`` checks that cf can see a project only
+        when some step in the pipeline answers True.
+        """
+        ...
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         """Expand this step into a list of (action_type, action_config) pairs."""
         ...

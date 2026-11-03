@@ -26,6 +26,9 @@ class _MinimalStepType:
     def known_keys(self) -> frozenset[str]:
         return frozenset()
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        return False
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         return []
 

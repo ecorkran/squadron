@@ -45,6 +45,10 @@ class CompactStepType:
 
         return errors
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """Compacts the SDK session; no Context Forge call."""
+        return False
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
         action_config: dict[str, object] = {}

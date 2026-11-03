@@ -138,6 +138,10 @@ class EachStepType:
         raw_list = cast(list[object], raw)
         return unpack_inner_steps([cast(dict[str, object], s) for s in raw_list if isinstance(s, dict)])
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """Treated as needing Context Forge: sq run checks it before the first step."""
+        return True
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         """Return empty list — executor handles each execution directly."""
         return []

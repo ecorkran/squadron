@@ -78,6 +78,10 @@ class SummaryStepType:
 
         return errors
 
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """Treated as needing Context Forge: sq run checks it before the first step."""
+        return True
+
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         cfg = config.config
         summary_config: dict[str, object] = {}

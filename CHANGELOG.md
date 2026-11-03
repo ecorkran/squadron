@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq run` no longer needs a registered Context Forge project for a pipeline whose steps don't use it, such as one made only of plain dispatch steps, so it can run from any directory (#288).
+
 ## [0.24.15] - 20261103
 
 ### Added

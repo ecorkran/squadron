@@ -12,7 +12,7 @@ from squadron.pipeline.actions.gate import GatePolicy, policy_contract
 from squadron.pipeline.loop_config import ExhaustBehavior, LoopCondition
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_type
-from squadron.pipeline.steps.utils import unpack_inner_steps
+from squadron.pipeline.steps.utils import any_step_needs_context_forge, unpack_inner_steps
 
 _VERDICT_BEARING_ACTION_TYPES = frozenset({"review", "gate"})
 _COMMIT_ACTION_TYPE = "commit"
@@ -493,6 +493,10 @@ class LoopStepType:
             return []
         raw_list = cast(list[object], raw)
         return unpack_inner_steps([cast(dict[str, object], s) for s in raw_list if isinstance(s, dict)])
+
+    def needs_context_forge(self, config: StepConfig) -> bool:
+        """A loop needs Context Forge when a step in its body does."""
+        return any_step_needs_context_forge(self.body_steps(config))
 
     def expand(self, config: StepConfig) -> list[tuple[str, dict[str, object]]]:
         """Return empty — executor handles iteration via _execute_loop_body."""

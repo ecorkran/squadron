@@ -98,6 +98,7 @@ from squadron.pipeline.state import (
 )
 from squadron.pipeline.steps import StepTypeName
 from squadron.pipeline.steps.dispatch import step_artifact_kind
+from squadron.pipeline.steps.utils import any_step_needs_context_forge
 
 _logger = logging.getLogger(__name__)
 
@@ -327,7 +328,10 @@ async def _run_pipeline(
         raise ValueError(f"Pipeline '{pipeline_name}' has validation errors: {msg}")
 
     cf_client = ContextForgeClient()
-    _check_cf(cf_client)
+    # #288: a pipeline whose steps never call cf (e.g. prompt-only dispatches) runs from any
+    # directory, not only inside a registered Context Forge project.
+    if any_step_needs_context_forge(definition.steps):
+        _check_cf(cf_client)
 
     state_mgr = StateManager(runs_dir=runs_dir)
     # SDK runs are owned and heartbeated (slice 174 D13); prompt-only runs stay unowned.
