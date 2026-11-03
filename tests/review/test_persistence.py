@@ -755,6 +755,31 @@ class TestVerdictSourceFrontmatterEmission:
         assert "verdictSource" not in frontmatter_block
 
 
+class TestToolCoverageRendering:
+    """#279: the **Coverage:** header line appears only when tools were offered and unused."""
+
+    def _render(self, **fields: object) -> str:
+        result = _make_result(verdict=Verdict.PASS)
+        for name, value in fields.items():
+            setattr(result, name, value)
+        return format_review_markdown(result, "code", _make_slice_info())
+
+    def test_offered_and_unused_renders_the_line(self) -> None:
+        markdown = self._render(tools_given=["read_file", "grep"], tool_calls_made=0)
+        assert "**Coverage:** no successful tool calls (read_file, grep offered)" in markdown
+
+    def test_only_failed_calls_renders_the_line(self) -> None:
+        markdown = self._render(tools_given=["read_file"], tool_calls_made=2, failed_tool_calls=2)
+        assert "**Coverage:**" in markdown
+
+    def test_a_successful_call_omits_the_line(self) -> None:
+        markdown = self._render(tools_given=["read_file"], tool_calls_made=3, failed_tool_calls=1)
+        assert "**Coverage:**" not in markdown
+
+    def test_no_tools_offered_omits_the_line(self) -> None:
+        assert "**Coverage:**" not in self._render()
+
+
 class TestDiffTruncationRendering:
     """Slice 927 Part A: diffTruncated frontmatter, the **Diff:** header line, and JSON."""
 

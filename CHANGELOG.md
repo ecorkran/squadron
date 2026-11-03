@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Code reviews are told to read the files behind a finding before reporting PASS. A review that was given tools and read nothing now says so: a **Coverage** line in the artifact, and a warning in the log when every tool call failed too (#279).
+
 ## [0.24.14] - 20261102
 
 ### Added

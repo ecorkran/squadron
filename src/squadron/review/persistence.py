@@ -676,6 +676,13 @@ def format_review_markdown(
             f"**Diff:** truncated: {result.diff_injection.injected_chars} of "
             f"{result.diff_injection.total_chars} characters reached the model"
         )
+    if result.tools_given and result.successful_tool_calls <= 0:
+        # #279. Only when tools were offered and nothing was read with them, so the
+        # verdict is visibly resting on the prompt alone; other artifacts are unchanged.
+        lines.append(
+            f"**Coverage:** no successful tool calls ({', '.join(result.tools_given)} "
+            f"offered); the verdict rests on the prompt text alone"
+        )
     if result.recovery_turn_used:
         # #92. Only when used, so every other artifact is byte-for-byte unchanged.
         lines.append(

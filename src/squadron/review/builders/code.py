@@ -110,6 +110,11 @@ def code_review_prompt(inputs: dict[str, str]) -> str:
             "or core source files."
         )
 
+    sections.append(
+        "Before you report PASS, use your tools to read the files behind every "
+        "finding, and the surrounding code for any claim about behavior outside "
+        "the shown hunk. A PASS that rests on the diff text alone is not a verified review."
+    )
     sections.append("</scope>")
     sections.append("")
     sections.append("<output_format>")

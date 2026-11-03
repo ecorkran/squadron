@@ -702,14 +702,30 @@ class TestReviewResultToolTelemetry:
             await self._run({"tools_given": ["read_file"], "tool_calls_made": 0})
 
         warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
-        assert any("no tool calls" in r.getMessage() for r in warnings)
+        assert any("no successful tool calls" in r.getMessage() for r in warnings)
+
+    @pytest.mark.asyncio
+    async def test_only_failed_calls_logs_a_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
+            await self._run(
+                {"tools_given": ["read_file"], "tool_calls_made": 2, "failed_tool_calls": 2}
+            )
+
+        assert any("no successful tool calls" in r.getMessage() for r in caplog.records)
 
     @pytest.mark.asyncio
     async def test_calls_made_logs_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
         with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
             await self._run({"tools_given": ["read_file"], "tool_calls_made": 4})
 
-        assert not [r for r in caplog.records if "no tool calls" in r.getMessage()]
+        assert not [r for r in caplog.records if "no successful tool calls" in r.getMessage()]
+
+    @pytest.mark.asyncio
+    async def test_no_tools_offered_logs_no_warning(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING, logger="squadron.review.review_client"):
+            await self._run(None)
+
+        assert not [r for r in caplog.records if "no successful tool calls" in r.getMessage()]
 
 
 class TestStopReasonEvidenceReadBack:

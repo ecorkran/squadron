@@ -61,3 +61,30 @@ dateUpdated: 20261021
 
 - [x] The build-graph step adds the cf-installed tooling directories to `.understand-anything/.understandignore` before `/understand` scans
 - [x] Test, CHANGELOG bullet
+
+## #279 Code review can PASS with zero tool calls
+
+- [x] Code review prompt requires reading the files behind any finding, and the surrounding code for any claim about behavior outside the hunk, before a PASS
+- [x] A code review that was offered tools, made no successful call, and returned PASS logs a WARNING naming the review and the condition; no verdict cap, no hard gate
+- [x] The review artifact carries a `**Coverage:**` line stating tool calls made (failed-only calls count as zero successful); a run with no tools offered is unchanged
+- [x] Tests: tools offered + PASS + zero successful calls warns and records coverage; at least one successful call does not warn; no tools offered unchanged; failed-only calls count as zero
+- [x] CHANGELOG bullet
+- **Commit**: `fix: require file reads and report tool coverage in code reviews (#279)`
+
+## #278 Code review diff cap applies to the whole diff
+
+- [ ] `review.max_file_size_bytes` is applied per file: the diff is split by file and each file's section capped, not the concatenation; order and total-cap handling stay as they are
+- [ ] Per-file `total_chars` / `injected_chars` recorded; the review artifact (frontmatter and body) lists cut and omitted files beside the `**Diff:**` line
+- [ ] When any file is cut or omitted the prompt names them and says they can be read with `read_file`; the truncation marker no longer says "file too large for API review" to a tool-enabled run
+- [ ] `impose_diff_coverage` uses the per-file record, so a PASS is capped when an omitted file was never read
+- [ ] Tests: many small files over the cap in total, none truncated; one oversized file among small ones, only it cut; artifact lists cut and omitted files and the prompt names them; PASS with an omitted unread file capped to CONCERNS naming it
+- [ ] CHANGELOG bullet
+- **Commit**: `fix: apply the review diff cap per file and report dropped files (#278)`
+
+## #286 sq review: accept -p/--param review-model=X as an alias for --model
+
+- [ ] The review commands accept `-p`/`--param`, parsed by the same key=value (comma-separated) parser `sq run` uses
+- [ ] `review-model` is the only accepted key and resolves as `--model` does; any other key errors naming `review-model`; `--model` and `-p review-model=` with different values error, equal values are accepted
+- [ ] Tests: `-p review-model=sonnet` resolves the same model as `--model sonnet`; unknown key; both given different; both given equal
+- [ ] CHANGELOG bullet
+- **Commit**: `feat: accept -p review-model=X on sq review as an alias for --model (#286)`

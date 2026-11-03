@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from squadron.review.builders.code import code_review_prompt
 from squadron.review.templates import load_template
 
@@ -51,6 +53,14 @@ class TestCodeReviewPrompt:
         assert "." in prompt
         assert "Treat the diff as partial evidence" in prompt
         assert "code outside the shown hunk" in prompt
+
+    @pytest.mark.parametrize(
+        "inputs",
+        [{"diff": "main"}, {"files": "src/**/*.py"}, {}],
+    )
+    def test_requires_reads_before_pass(self, inputs: dict[str, str]) -> None:
+        prompt = code_review_prompt({**inputs, "cwd": "."})
+        assert "Before you report PASS, use your tools to read the files" in prompt
 
     def test_files_only(self) -> None:
         prompt = code_review_prompt({"files": "src/**/*.py", "cwd": "/proj"})

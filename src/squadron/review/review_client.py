@@ -404,13 +404,13 @@ async def run_review_with_profile(
             ", ".join(result.answering_models),
         )
 
-    # A review that was handed tools and called none produces a verdict from a model
-    # that read nothing beyond the prompt — indistinguishable from a healthy review in
-    # every other signal, so it gets its own observable one.
-    if capture.tools_given and not capture.tool_calls_made:
+    # A review that was handed tools and read nothing with them (no call, or every call
+    # failed) produces a verdict from a model that saw only the prompt — indistinguishable
+    # from a healthy review in every other signal, so it gets its own observable one.
+    if capture.tools_given and result.successful_tool_calls <= 0:
         _logger.warning(
-            "%s review (model=%s) was given tools %s but made no tool calls; its verdict "
-            "rests on the prompt alone.",
+            "%s review (model=%s) was given tools %s but made no successful tool calls; "
+            "its verdict rests on the prompt alone.",
             template.name,
             resolved_model or "(default)",
             ", ".join(capture.tools_given),
