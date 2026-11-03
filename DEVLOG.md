@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261102
 
+### Release 0.24.14
+
+- **Contents:** slice 949, isolated file-in, file-out dispatch steps, `--validate --strict` and the no-tools guard (#284). Code review verdict CONCERNS; F002 and F003 deliberately not fixed.
+
 ### Slice 949: Isolated File-In, File-Out Dispatch Steps — Implementation Complete, Review Pending
 
 - **Branch:** `949-slice.isolated-file-in-file-out-dispatch-steps`, seven task commits (A known keys and `--validate --strict`, B no-tools guard, C new keys, D `dispatch_io` and the dispatch call sites, E prompt-only refusal and docs); not merged, nothing pushed.

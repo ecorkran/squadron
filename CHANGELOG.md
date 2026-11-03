@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.14] - 20261102
+
 ### Added
 - Dispatch steps can read files and earlier replies and write their own: `prompt_files`, `reply_from`, `reply_format: json`, `reply_file` and `delivered_prompt_file`. A step sees only what you give it, and a failed step never leaves a half-written file. See the Pipeline Guide (#284).
 - `sq run <pipeline> --validate --strict` also fails on step keys the step type does not read, so a typo is caught instead of ignored. Plain `--validate` is unchanged (#284).
