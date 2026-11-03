@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- An implement step now checks the slice design for `pending-pm` decisions before it starts. If any are pending, the run pauses naming each one and spends no model call; answer them in the design and `sq run --resume <id>` (#240).
+
 ### Fixed
 - `sq stats producers` no longer pools `sq replay` runs with observed runs; new replay runs are marked and left out, and the footer counts them. Replay runs from before this change are not marked and still count (#229).
 

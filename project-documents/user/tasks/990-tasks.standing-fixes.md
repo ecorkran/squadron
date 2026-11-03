@@ -105,3 +105,12 @@ dateUpdated: 20261021
 - [x] Tests: flag recorded on the run state and hidden; replay runner passes `--replay`; replay run excluded from units and counted in the footer
 - [x] CHANGELOG bullet
 - **Commit**: `fix: leave replay runs out of sq stats producers (#229)`
+
+## #240 Refuse to start an implement step while the slice design has pending-pm decisions
+
+- [x] New `cf-op` operation `check_decisions` runs `cf validate design --json <design file>` and reads only the `pending` list (squadron does not parse decision status; missing sections are ignored)
+- [x] The implement phase expands with `check_decisions` right after `set_slice`; design and tasks phases and initiative-scoped steps do not
+- [x] Pending decisions pause the run (`awaits_human`) naming each decision and the `sq run --resume` command, before any dispatch; a slice with no design file, or a cf report with no `pending` list, fails explicitly
+- [x] Tests: action passes/pauses/ignores missing/no design file/old cf/error envelope; expand puts the check after `set_slice` for implement only
+- [x] CHANGELOG bullet
+- **Commit**: `feat: pause an implement step while the slice design has pending PM decisions (#240)`

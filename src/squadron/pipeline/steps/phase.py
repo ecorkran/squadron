@@ -272,6 +272,9 @@ class PhaseStepType:
             ("dispatch", dispatch_config),
         ]
         if not initiative_scoped:
+            # An implement step must not start on a design with pending PM decisions (#240).
+            if self._phase_name == StepTypeName.IMPLEMENT:
+                actions.insert(0, ("cf-op", {"operation": "check_decisions", "slice": slice_ref}))
             actions.insert(0, ("cf-op", {"operation": "set_slice", "slice": slice_ref}))
         if "plan" in cfg:
             actions.insert(0, ("cf-op", {"operation": "set_arch", "plan": cfg["plan"]}))

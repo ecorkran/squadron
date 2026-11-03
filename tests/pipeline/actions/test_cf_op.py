@@ -373,3 +373,96 @@ async def test_set_slice_fails_with_list_slices_error(
     assert not result.success
     assert result.error == "cf list slices: boom"
     client.set_slice.assert_not_called()
+
+
+# --- CHECK_DECISIONS (#240) ---
+
+_DESIGN = "project-documents/user/slices/110-slice.x.md"
+
+
+def _check_context(
+    mock_context: ActionContext, report: dict[str, object], *, design_file: str | None = _DESIGN
+) -> MagicMock:
+    mock_context.params = {"operation": CfOperation.CHECK_DECISIONS, "slice": "110"}
+    client = MagicMock()
+    client.list_slices.return_value = [
+        SliceEntry(index=110, name="x", design_file=design_file, status="", retroactive=False)
+    ]
+    client.run_report.return_value = report
+    mock_context.cf_client = client
+    return client
+
+
+def _report(pending: list[dict[str, object]]) -> dict[str, object]:
+    return {"files": [{"path": _DESIGN, "pass": not pending, "missing": [], "pending": pending}]}
+
+
+def test_validate_check_decisions_needs_a_slice(action: CfOpAction) -> None:
+    errors = action.validate({"operation": CfOperation.CHECK_DECISIONS})
+    assert [e.field for e in errors] == ["slice"]
+
+
+@pytest.mark.asyncio
+async def test_check_decisions_passes_a_design_with_nothing_pending(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    client = _check_context(mock_context, _report([]))
+    result = await action.execute(mock_context)
+    assert result.success
+    client.run_report.assert_called_once_with(
+        ["validate", "design", "--json", str(Path("/tmp/test") / _DESIGN)]
+    )
+
+
+@pytest.mark.asyncio
+async def test_check_decisions_pauses_for_the_pm_naming_each_pending_decision(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    pending = [{"heading": "D1 — Key names", "line": 12}, {"heading": "D7 — Scope", "line": 40}]
+    _check_context(mock_context, _report(pending))
+    result = await action.execute(mock_context)
+    assert not result.success
+    assert result.awaits_human
+    assert result.error is not None
+    assert "D1 — Key names" in result.error and "D7 — Scope" in result.error
+    assert "sq run --resume run-001" in result.error
+
+
+@pytest.mark.asyncio
+async def test_check_decisions_ignores_missing_sections(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    report = {"files": [{"path": _DESIGN, "pass": False, "missing": ["Overview"], "pending": []}]}
+    _check_context(mock_context, report)
+    assert (await action.execute(mock_context)).success
+
+
+@pytest.mark.asyncio
+async def test_check_decisions_fails_when_the_slice_has_no_design_file(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    client = _check_context(mock_context, _report([]), design_file=None)
+    result = await action.execute(mock_context)
+    assert not result.success and not result.awaits_human
+    assert result.error is not None and "no design file" in result.error
+    client.run_report.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_check_decisions_fails_when_cf_does_not_report_pending(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    _check_context(mock_context, {"files": [{"path": _DESIGN, "pass": True, "missing": []}]})
+    result = await action.execute(mock_context)
+    assert not result.success and not result.awaits_human
+    assert result.error is not None and "pending" in result.error
+
+
+@pytest.mark.asyncio
+async def test_check_decisions_fails_on_a_cf_error_envelope(
+    action: CfOpAction, mock_context: ActionContext
+) -> None:
+    _check_context(mock_context, {"error": True, "code": "UNKNOWN", "message": "no such file"})
+    result = await action.execute(mock_context)
+    assert not result.success and not result.awaits_human
+    assert result.error is not None and "no such file" in result.error

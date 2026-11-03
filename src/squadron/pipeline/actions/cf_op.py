@@ -13,6 +13,7 @@ from squadron.integrations.context_forge import (
     ContextForgeError,
 )
 from squadron.pipeline.actions import ActionType, register_action
+from squadron.pipeline.actions.cf_decisions import pending_decisions
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
@@ -35,6 +36,7 @@ class CfOperation(StrEnum):
     SET_SLICE = "set_slice"
     BUILD_CONTEXT = "build_context"
     SUMMARIZE = "summarize"
+    CHECK_DECISIONS = "check_decisions"
 
 
 class CfOpAction:
@@ -77,11 +79,11 @@ class CfOpAction:
                 )
             )
 
-        if operation == CfOperation.SET_SLICE and "slice" not in config:
+        if operation in (CfOperation.SET_SLICE, CfOperation.CHECK_DECISIONS) and "slice" not in config:
             errors.append(
                 ValidationError(
                     field="slice",
-                    message="'slice' is required for SET_SLICE operation",
+                    message=f"'slice' is required for {str(operation).upper()} operation",
                     action_type=self.action_type,
                 )
             )
@@ -156,6 +158,11 @@ class CfOpAction:
                     }
                 case CfOperation.SUMMARIZE:
                     stdout = cf_client.run(["summarize"])
+                case CfOperation.CHECK_DECISIONS:
+                    pending = pending_decisions(cf_client, str(context.params["slice"]), context.cwd)
+                    if pending:
+                        return _decisions_pending(context, pending)
+                    stdout = ""
         except ContextForgeError as exc:
             return ActionResult(
                 success=False,
@@ -169,6 +176,18 @@ class CfOpAction:
             action_type=self.action_type,
             outputs={"stdout": stdout, "operation": operation.value, **extra_outputs},
         )
+
+
+def _decisions_pending(context: ActionContext, pending: list[str]) -> ActionResult:
+    """Hand the run to the Project Manager: an implement step must not start on these."""
+    error = (
+        f"slice design has {len(pending)} pending PM decision(s): {'; '.join(pending)}. "
+        f"Decide them in the design (Status: decided), then resume: sq run --resume {context.run_id}"
+    )
+    _logger.warning("cf_op check_decisions: %s", error)
+    return ActionResult(
+        success=False, action_type=ActionType.CF_OP, outputs={}, error=error, awaits_human=True
+    )
 
 
 def _refuse_retroactive(cf_client: ContextForgeClient, slice_id: str) -> None:

@@ -263,6 +263,28 @@ def test_commit_subject_follows_the_phase(phase_name: str, subject: CommitSubjec
     assert actions[-1][1]["commit_subject"] == subject
 
 
+def test_implement_checks_pending_decisions_right_after_set_slice() -> None:
+    actions = PhaseStepType("implement").expand(_make_config({"phase": 6}))
+    assert [(a[0], a[1].get("operation")) for a in actions[:4]] == [
+        ("cf-op", "set_slice"),
+        ("cf-op", "check_decisions"),
+        ("cf-op", "set_phase"),
+        ("cf-op", "build_context"),
+    ]
+    assert actions[1][1] == {"operation": "check_decisions", "slice": "{slice}"}
+
+
+@pytest.mark.parametrize("phase_name", ["design", "tasks"])
+def test_only_implement_checks_pending_decisions(phase_name: str) -> None:
+    actions = PhaseStepType(phase_name).expand(_make_config({"phase": 4}))
+    assert all(a[1].get("operation") != "check_decisions" for a in actions)
+
+
+def test_initiative_scoped_implement_has_no_decision_check() -> None:
+    actions = PhaseStepType("implement").expand(_make_config({"phase": 6, "plan": "{plan}"}))
+    assert all(a[1].get("operation") != "check_decisions" for a in actions)
+
+
 def test_initiative_scoped_step_commits_the_architecture() -> None:
     actions = PhaseStepType("design").expand(_make_config({"phase": 2, "plan": "{plan}"}))
     assert actions[-1] == (
