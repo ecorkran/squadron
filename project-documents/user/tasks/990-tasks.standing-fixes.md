@@ -114,3 +114,11 @@ dateUpdated: 20261021
 - [x] Tests: action passes/pauses/ignores missing/no design file/old cf/error envelope; expand puts the check after `set_slice` for implement only
 - [x] CHANGELOG bullet
 - **Commit**: `feat: pause an implement step while the slice design has pending PM decisions (#240)`
+
+## #196 Review line citations are model-counted
+
+- [x] A cited range that starts in the file and ends exactly one line past it is not marked `location_verified: false` (the issue's "Secondary" item)
+- [x] Tests: `3-11` and `10-11` verified on a 10-line file; `3-12`, `11-12` and single `11` still unverified; `location_span` extraction
+- [x] CHANGELOG bullet
+- [ ] Numbered `read_file` / injected bodies for review runs: not done; deferred pending measurement of how often citations are wrong on non-SDK reviewers (the issue stays open)
+- **Commit**: `fix: treat a citation range ending one past EOF as sloppy, not phantom (#196)`

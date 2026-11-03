@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An implement step now checks the slice design for `pending-pm` decisions before it starts. If any are pending, the run pauses naming each one and spends no model call; answer them in the design and `sq run --resume <id>` (#240).
 
 ### Fixed
+- A review finding citing a range that ends one line past the end of the file (`path:24-356` on a 355-line file) is no longer marked `location_verified: false`; it is a sloppy span, not a phantom citation (#196).
 - `sq stats producers` no longer pools `sq replay` runs with observed runs; new replay runs are marked and left out, and the footer counts them. Replay runs from before this change are not marked and still count (#229).
 
 ## [0.24.16] - 20261103

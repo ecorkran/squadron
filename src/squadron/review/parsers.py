@@ -284,23 +284,33 @@ def location_path(location: str) -> str | None:
 _LOCATION_LINE_RE = re.compile(r"^[^:#<>\s][^:#\s]*:(\d+)(?:-(\d+))?(?:\s|$)")
 
 
-def location_line(location: str) -> int | None:
-    """The last line number a location cites, or None when it cites none.
+def location_span(location: str) -> tuple[int, int] | None:
+    """The first and last line a location cites, or None when it cites none.
 
-    ``path:42`` yields 42 and ``path:42-50`` yields 50 — the last cited line
-    is the one that must exist for the range to be real. A ``path#symbol``
-    anchor, a bare ``path``, and the UNVERIFIED_LOCATION sentinel are
-    whole-file citations and yield None.
-
-    A sibling of :func:`location_path`, which is unchanged: the
-    findings-addressed gate depends on its exact contract.
+    ``path:42`` yields ``(42, 42)`` and ``path:42-50`` yields ``(42, 50)``. A
+    ``path#symbol`` anchor, a bare ``path``, and the UNVERIFIED_LOCATION sentinel
+    are whole-file citations and yield None.
     """
     if location == UNVERIFIED_LOCATION:
         return None
     match = _LOCATION_LINE_RE.match(location)
     if match is None:
         return None
-    return int(match.group(2) or match.group(1))
+    first = int(match.group(1))
+    return first, int(match.group(2) or first)
+
+
+def location_line(location: str) -> int | None:
+    """The last line number a location cites, or None when it cites none.
+
+    ``path:42`` yields 42 and ``path:42-50`` yields 50 — the last cited line
+    is the one that must exist for the range to be real.
+
+    A sibling of :func:`location_path`, which is unchanged: the
+    findings-addressed gate depends on its exact contract.
+    """
+    span = location_span(location)
+    return None if span is None else span[1]
 
 
 def _check_diff_membership(
@@ -457,9 +467,10 @@ def _check_cited_paths(
                 finding.location_verified = False
             continue
 
-        line = location_line(finding.location)
-        if line is None:
+        span = location_span(finding.location)
+        if span is None:
             continue  # whole-file citation: nothing to bounds-check
+        first, line = span
 
         count, reason = _count_lines(cwd, resolved)
         if count is None:
@@ -474,7 +485,9 @@ def _check_cited_paths(
             )
             continue
 
-        if line > count:
+        # A range that starts in the file and ends one line past it is a "to end of file"
+        # span counted as newlines + 1: sloppy, not a phantom citation (#196).
+        if line > count and not (first <= count and line == count + 1):
             logger.warning(
                 "Finding F%03d (%r) in %s review cites line %d of %r, which has only %d line(s).",
                 index,

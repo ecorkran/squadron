@@ -15,6 +15,7 @@ from squadron.review.parsers import (
     UNVERIFIED_LOCATION,
     location_line,
     location_path,
+    location_span,
     parse_review_output,
 )
 
@@ -1391,6 +1392,19 @@ class TestLocationLineExtraction:
     def test_line_extraction(self, location: str, expected: int | None) -> None:
         assert location_line(location) == expected
 
+    @pytest.mark.parametrize(
+        ("location", "expected"),
+        [
+            ("src/foo.py:42", (42, 42)),
+            ("src/foo.py:42-50", (42, 50)),
+            ("src/foo.py#symbol", None),
+            ("src/foo.py", None),
+            (UNVERIFIED_LOCATION, None),
+        ],
+    )
+    def test_span_extraction(self, location: str, expected: tuple[int, int] | None) -> None:
+        assert location_span(location) == expected
+
     def test_location_path_is_unchanged_by_line_extraction(self) -> None:
         """location_path keeps its contract — the findings gate depends on it."""
         assert location_path("src/foo.py:42-50") == "src/foo.py"
@@ -1419,7 +1433,12 @@ class TestLineBoundsVerification:
             ("file.py:3-10", True),
             ("file.py:999999", False),
             ("file.py:11", False),
-            ("file.py:3-11", False),
+            # A range one line past the end is "to end of file" counted as newlines + 1:
+            # sloppy, not a phantom (#196). Any further past, or starting past, still is.
+            ("file.py:3-11", True),
+            ("file.py:10-11", True),
+            ("file.py:3-12", False),
+            ("file.py:11-12", False),
             # Whole-file citations name no line to check.
             ("file.py", None),
             ("file.py#symbol", None),
