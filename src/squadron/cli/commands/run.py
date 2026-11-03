@@ -301,6 +301,7 @@ async def _run_pipeline(
     pool_policy: PoolClassificationPolicy = PoolClassificationPolicy.LAZY,
     item_rerun: ItemRerun | None = None,
     new_run_id: str | None = None,
+    replay: bool = False,
 ) -> PipelineResult:
     """Load, validate, and execute a pipeline end-to-end.
 
@@ -348,6 +349,7 @@ async def _run_pipeline(
             execution_mode=execution_mode,
             owner=owner,
             pipeline_path=run_path,
+            replay=replay,
         )
         _announce_run_id(run_id)
 
@@ -411,6 +413,7 @@ async def _run_pipeline_sdk(
     strict: bool = False,
     item_rerun: ItemRerun | None = None,
     new_run_id: str | None = None,
+    replay: bool = False,
 ) -> PipelineResult:
     """Create an SDK session if needed, run the pipeline, and disconnect on exit.
 
@@ -483,6 +486,7 @@ async def _run_pipeline_sdk(
                 pool_policy=classification.policy,
                 item_rerun=item_rerun,
                 new_run_id=new_run_id,
+                replay=replay,
             )
         except LazySessionConnectError as exc:
             # State is already saved by _run_pipeline's BaseException handler.
@@ -1145,6 +1149,12 @@ def run(
         help="Create the run under this id (letters, digits, '.', '_', '-'; max 128). "
         "Fails if it exists. Not with --resume.",
     ),
+    replay: bool = typer.Option(
+        False,
+        "--replay",
+        hidden=True,
+        help="Mark the run as a `sq replay` experiment so observed-run stats leave it out.",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
     # ---- mutual exclusivity validation ----
@@ -1467,6 +1477,7 @@ def run(
                 from_step=from_step,
                 strict=strict,
                 new_run_id=new_run_id,
+                replay=replay,
             ),
         )
     except FileNotFoundError:

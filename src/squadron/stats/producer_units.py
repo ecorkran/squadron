@@ -61,6 +61,7 @@ class ExcludedCounts:
     partial_loop_runs: int = 0  # runs stopped or resumed inside a loop (D3)
     without_dispatch: int = 0  # phase steps that ran no dispatch (artifact kept, skipped)
     paused: int = 0  # phase steps paused at a checkpoint: the outcome is not decided yet
+    replay_runs: int = 0  # `sq replay` experiments: reported by `sq replay`, not as observed (#229)
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,9 @@ def extract_units(states: list[RunState]) -> UnitExtraction:
         steps = state.completed_steps
         if not any(step.step_type in PHASE_TYPES for step in steps):
             continue  # not a producer run: its loops and each steps are someone else's
+        if state.replay:
+            excluded.replay_runs += 1
+            continue
         excluded.each_steps += sum(step.step_type == StepTypeName.EACH for step in steps)
         excluded.orphan_loops += _orphan_loops(steps)
         if is_partial_loop(state):

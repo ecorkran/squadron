@@ -95,6 +95,7 @@ def _count_footers(report: ProducerReport) -> list[str]:
         (excluded.partial_loop_runs, f"run(s): {PARTIAL_LOOP_NOTE}"),
         (excluded.without_dispatch, "phase step(s) without a dispatch"),
         (excluded.paused, "phase step(s) paused"),
+        (excluded.replay_runs, "replay run(s) left out"),
         (report.unreadable_runs, UNREADABLE_RUNS_TEXT),
         (report.rounds_unrecorded, "run(s) with loop rounds that were not recorded"),
         (report.unpriced_runs, "run(s) with no recorded cost"),

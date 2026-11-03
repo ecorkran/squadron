@@ -251,6 +251,7 @@ def _replay_config(
         f"review-model={request.reviewer.alias}",
         "-p",
         f"max-revisions={request.max_revisions}",
+        "--replay",
         "--run-id",
         replay_id,
     ]

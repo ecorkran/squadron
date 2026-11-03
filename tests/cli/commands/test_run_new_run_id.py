@@ -98,6 +98,19 @@ def test_run_pipeline_with_new_run_id_creates_that_run_file(tmp_path: Path) -> N
     assert (tmp_path / "replay-9.json").is_file()
 
 
+@pytest.mark.parametrize("replay", [True, False])
+def test_the_replay_flag_is_recorded_on_the_run_state(tmp_path: Path, replay: bool) -> None:
+    _run(tmp_path, new_run_id="replay-9", replay=replay)
+
+    assert StateManager(runs_dir=tmp_path).load("replay-9").replay is replay
+
+
+def test_a_run_started_without_the_replay_flag_is_not_a_replay(tmp_path: Path) -> None:
+    _run(tmp_path, new_run_id="replay-9")
+
+    assert StateManager(runs_dir=tmp_path).load("replay-9").replay is False
+
+
 def test_a_fresh_run_announces_its_id_on_stderr(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -150,6 +163,18 @@ def test_run_id_is_a_public_option() -> None:
     assert run_command is not None
     option = next(p for p in run_command.params if "--run-id" in p.opts)
     assert isinstance(option, click.Option) and not option.hidden
+
+
+def test_replay_is_a_hidden_option() -> None:
+    import click
+    import typer.main
+
+    group = typer.main.get_command(app)
+    assert isinstance(group, click.Group)
+    run_command = group.get_command(click.Context(group), "run")
+    assert run_command is not None
+    option = next(p for p in run_command.params if "--replay" in p.opts)
+    assert isinstance(option, click.Option) and option.hidden
 
 
 def test_an_invalid_run_id_exits_1_before_running() -> None:

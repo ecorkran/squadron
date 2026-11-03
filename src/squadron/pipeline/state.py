@@ -246,6 +246,10 @@ class RunState(BaseModel):
     # named runs and for states written before slice 940 (D4).
     pipeline_path: str | None = None
 
+    # True for a run `sq replay` started: a controlled experiment, not an observed run
+    # (#229). Absent in older files, which read as False.
+    replay: bool = False
+
     @property
     def load_target(self) -> str:
         """What ``load_pipeline`` is given to reload this run's pipeline (D4).
@@ -379,8 +383,12 @@ class StateManager:
         *,
         owner: RunOwner | None = None,
         pipeline_path: str | None = None,
+        replay: bool = False,
     ) -> str:
         """Create an initial state file and return the run_id.
+
+        With *replay*, the run is marked as a replay experiment so observed-run
+        reports leave it out (#229).
 
         With *owner*, the write that creates the ``running`` file also records
         the owner, so no v5 ``running`` file is ever ownerless (slice 174 D13).
@@ -415,6 +423,7 @@ class StateManager:
             heartbeat_at=now if owner is not None else None,
             progress_at=now if owner is not None else None,
             pipeline_path=pipeline_path,
+            replay=replay,
         )
         self._save(state)
         self.prune(pipeline_name)

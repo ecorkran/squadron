@@ -101,6 +101,7 @@ def run(
     current_step: str | None = None,
     slice_index: int | None = 176,
     started_at: datetime = _NOW,
+    replay: bool = False,
 ) -> RunState:
     return RunState(
         run_id=run_id,
@@ -111,6 +112,7 @@ def run(
         status=status,
         current_step=current_step,
         completed_steps=list(steps),
+        replay=replay,
     )
 
 

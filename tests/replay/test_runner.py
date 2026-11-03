@@ -191,7 +191,7 @@ def test_two_configs_give_two_records_in_order_with_the_specified_argv(fakes: _F
     first, second = fakes.invocations
     assert first[0] == (
         "/usr/bin/sq", "run", "P4", "176", "-m", "sonnet",
-        "-p", "review-model=opus", "-p", "max-revisions=1", "--run-id", "r1",
+        "-p", "review-model=opus", "-p", "max-revisions=1", "--replay", "--run-id", "r1",
     )  # fmt: skip
     assert second[0][5] == "haiku" and second[0][-1] == "r2"
     assert (first[1], second[1]) == (fakes.sandboxes["r1"].path, fakes.sandboxes["r2"].path)

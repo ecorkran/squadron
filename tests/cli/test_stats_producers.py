@@ -129,6 +129,7 @@ def test_footers_count_exclusions_and_unreadable_run_files(project: Path) -> Non
             status="failed",
             current_step="loop-1",
         ),
+        run("replayed", [step("design-0", "design", producer_actions())], replay=True),
     ]
     for state in extra:
         (project / f"{state.run_id}.json").write_text(state.model_dump_json())
@@ -140,6 +141,7 @@ def test_footers_count_exclusions_and_unreadable_run_files(project: Path) -> Non
     assert result.exit_code == 0, result.output
     assert "1 phase step(s) without a dispatch" in lines
     assert "1 phase step(s) paused" in lines
+    assert "1 replay run(s) left out" in lines
     assert "1 run(s): partial loop not recorded" in lines
     assert "1 run file(s) unreadable" in lines
 

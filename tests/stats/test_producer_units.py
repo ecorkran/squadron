@@ -26,6 +26,18 @@ def test_design_and_tasks_pairs_are_one_unit_each_with_the_loop_attached() -> No
     assert result.excluded == ExcludedCounts()
 
 
+def test_replay_runs_are_left_out_and_counted() -> None:
+    states = [
+        run("observed", [step("design-0", "design", producer_actions())]),
+        run("replayed", [step("design-0", "design", producer_actions())], replay=True),
+    ]
+
+    result = extract_units(states)
+
+    assert [unit.run_id for unit in result.units] == ["observed"]
+    assert result.excluded == ExcludedCounts(replay_runs=1)
+
+
 def test_a_phase_step_without_a_following_loop_has_no_loop() -> None:
     state = run("r1", [step("design-0", "design", producer_actions()), step("c", "compact")])
 

@@ -97,3 +97,11 @@ dateUpdated: 20261021
 - [x] Tests: dispatch-only pipeline runs with a failing pre-flight; `artifact` and `branch` pipelines still fail it; containers answer for their body; every registered step type declares an answer
 - [x] CHANGELOG bullet
 - **Commit**: `fix: skip the Context Forge pre-flight for pipelines whose steps do not use it (#288)`
+
+## #229 sq stats producers counts replay runs as observed runs
+
+- [x] `RunState.replay` (default False) marks a replay run; `sq replay` starts its runs with a hidden `--replay` flag that sets it (a structured marker, not the run id)
+- [x] `extract_units` leaves replay runs out and counts them (`ExcludedCounts.replay_runs`); the `sq stats producers` footer reports the count
+- [x] Tests: flag recorded on the run state and hidden; replay runner passes `--replay`; replay run excluded from units and counted in the footer
+- [x] CHANGELOG bullet
+- **Commit**: `fix: leave replay runs out of sq stats producers (#229)`

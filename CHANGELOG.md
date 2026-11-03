@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq stats producers` no longer pools `sq replay` runs with observed runs; new replay runs are marked and left out, and the footer counts them. Replay runs from before this change are not marked and still count (#229).
+
 ## [0.24.16] - 20261103
 
 ### Added
