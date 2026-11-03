@@ -44,7 +44,7 @@ from squadron.review.templates import BuiltinReviewTemplate
 # The only options `--max` honors (D6), by Python parameter name. Any other option given
 # on the command line is refused: the loop's review steps cannot honor it, and silently
 # ignoring it would be a fallback. Options added to `sq review` later are refused by default.
-MAX_SUPPORTED_OPTIONS = frozenset({"max_rounds", "model", "revise_model", "cwd", "verbose"})
+MAX_SUPPORTED_OPTIONS = frozenset({"max_rounds", "model", "param", "revise_model", "cwd", "verbose"})
 
 _logger = logging.getLogger(__name__)
 

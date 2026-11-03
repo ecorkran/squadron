@@ -20,6 +20,7 @@ from rich.table import Table
 from rich.text import Text
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
+from squadron.cli.commands.review_model_param import PARAM_OPTION_HELP, resolve_review_model
 from squadron.cli.commands.review_revise import (
     refuse_revise_model_without_max,
     run_review_revise,
@@ -886,6 +887,7 @@ def review_slice(
     ),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
     model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
+    param: list[str] | None = typer.Option(None, "--param", "-p", help=PARAM_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -910,6 +912,7 @@ def review_slice(
     rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
 ) -> None:
     """Run a slice design review."""
+    model = resolve_review_model(model, param)
     _run_revise_loop_if_requested(
         ctx,
         BuiltinReviewTemplate.SLICE,
@@ -1007,6 +1010,7 @@ def review_arch(
     input_file: str = typer.Argument(help="Architecture document to review (path or initiative index)"),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
     model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
+    param: list[str] | None = typer.Option(None, "--param", "-p", help=PARAM_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -1025,6 +1029,7 @@ def review_arch(
     rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
 ) -> None:
     """Review an architecture document on its own merits."""
+    model = resolve_review_model(model, param)
     arch_index: int | None = None
     if input_file.isdigit():
         arch_index = int(input_file)
@@ -1095,6 +1100,7 @@ def review_tasks(
     against: str | None = typer.Option(None, "--against", help="Parent slice design to review against"),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
     model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
+    param: list[str] | None = typer.Option(None, "--param", "-p", help=PARAM_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -1126,6 +1132,7 @@ def review_tasks(
     persisted under its own ``part-N`` suffix. The command's exit
     code reflects the worst verdict across all parts.
     """
+    model = resolve_review_model(model, param)
     _run_revise_loop_if_requested(
         ctx,
         BuiltinReviewTemplate.TASKS,
@@ -1246,6 +1253,7 @@ def review_code(
     rules_dir_flag: str | None = typer.Option(None, "--rules-dir", help="Rules directory override"),
     no_rules: bool = typer.Option(False, "--no-rules", help="Suppress all rule injection"),
     model: str | None = typer.Option(None, "--model", help=_MODEL_OPTION_HELP),
+    param: list[str] | None = typer.Option(None, "--param", "-p", help=PARAM_OPTION_HELP),
     no_tools: bool = typer.Option(
         False,
         "--no-tools",
@@ -1274,6 +1282,7 @@ def review_code(
     ),
 ) -> None:
     """Run a code review."""
+    model = resolve_review_model(model, param)
     _run_revise_loop_if_requested(
         ctx,
         BuiltinReviewTemplate.CODE,

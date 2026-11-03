@@ -83,8 +83,8 @@ dateUpdated: 20261021
 
 ## #286 sq review: accept -p/--param review-model=X as an alias for --model
 
-- [ ] The review commands accept `-p`/`--param`, parsed by the same key=value (comma-separated) parser `sq run` uses
-- [ ] `review-model` is the only accepted key and resolves as `--model` does; any other key errors naming `review-model`; `--model` and `-p review-model=` with different values error, equal values are accepted
-- [ ] Tests: `-p review-model=sonnet` resolves the same model as `--model sonnet`; unknown key; both given different; both given equal
-- [ ] CHANGELOG bullet
+- [x] The review commands accept `-p`/`--param`, parsed by the same key=value (comma-separated) parser `sq run` uses
+- [x] `review-model` is the only accepted key and resolves as `--model` does; any other key errors naming `review-model`; `--model` and `-p review-model=` with different values error, equal values are accepted
+- [x] Tests: `-p review-model=sonnet` resolves the same model as `--model sonnet`; unknown key; both given different; both given equal
+- [x] CHANGELOG bullet
 - **Commit**: `feat: accept -p review-model=X on sq review as an alias for --model (#286)`

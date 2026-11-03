@@ -23,6 +23,7 @@ from rich.table import Table
 if TYPE_CHECKING:
     from squadron.pipeline.intelligence.pools.backend import PoolBackend
 
+from squadron.cli.commands.param_parsing import param_pairs
 from squadron.cli.commands.run_dry_run import render_steps
 from squadron.cli.commands.run_item import (
     USAGE_EXIT,
@@ -123,27 +124,9 @@ def _resolve_target(
     return None
 
 
-def _param_pairs(param_list: list[str] | None) -> list[tuple[str, str]]:
-    """Split ``--param`` entries into (key, value) pairs.
-
-    One entry may hold several comma-separated pairs (``-p a=1,b=2``, #207). A pair
-    with no key or no ``=`` is an error, never a silently empty value.
-    """
-    pairs: list[tuple[str, str]] = []
-    for entry in param_list or []:
-        for pair in entry.split(","):
-            key, sep, value = pair.partition("=")
-            if not key.strip() or not sep:
-                raise typer.BadParameter(
-                    f"Invalid --param '{pair.strip()}' in '{entry}': expected key=value"
-                )
-            pairs.append((key.strip(), value.strip()))
-    return pairs
-
-
 def _apply_param_overrides(params: dict[str, object], param_list: list[str] | None) -> None:
     """Apply ``--param key=value`` entries to *params* in place (they override defaults)."""
-    for key, value in _param_pairs(param_list):
+    for key, value in param_pairs(param_list):
         if (reserved := reserved_param_error(key)) is not None:
             raise typer.BadParameter(reserved)
         params[key] = value
@@ -597,7 +580,7 @@ def _extract_model_override(model: str | None, param: list[str] | None) -> str |
     """
     if model is not None:
         return model
-    for key, value in _param_pairs(param):
+    for key, value in param_pairs(param):
         if key == "model" and value:
             return value
     return None
