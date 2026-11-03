@@ -92,8 +92,13 @@ class PipelineInfo:
     path: Path
     # Declared params in declaration order: name -> default, or "required" (174).
     params: dict[str, str] = dataclasses.field(default_factory=dict[str, str])
-    # The source of the same-named pipeline this one hides, if any (slice 940 D1).
-    shadows: PipelineSource | None = None
+    # Every same-named pipeline this one hides, nearest first (slice 940 D1, #283).
+    hidden: tuple[PipelineInfo, ...] = ()
+
+    @property
+    def shadows(self) -> PipelineSource | None:
+        """The source of the pipeline this one directly hides, if any."""
+        return self.hidden[0].source if self.hidden else None
 
 
 @dataclass(frozen=True)
@@ -267,14 +272,14 @@ def discover_pipelines(
                     raw = yaml.safe_load(f)
                 schema = PipelineSchema.model_validate(raw)
                 pipeline_name = pipeline_identity(yaml_path)
-                hidden = found.get(pipeline_name)
+                previous = found.get(pipeline_name)
                 found[pipeline_name] = PipelineInfo(
                     name=pipeline_name,
                     description=schema.description,
                     source=source,
                     path=yaml_path,
                     params=dict(schema.params),
-                    shadows=hidden.source if hidden is not None else None,
+                    hidden=(previous, *previous.hidden) if previous is not None else (),
                 )
             except (OSError, yaml.YAMLError, PydanticValidationError):
                 # Narrowed to: unreadable file, malformed YAML, or a document

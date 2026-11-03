@@ -102,6 +102,10 @@ _DESCRIPTION_STYLE = "dim"
 _SHADOW_STYLE = "yellow"
 
 
+def _shadow_marker(info: PipelineInfo) -> str:
+    return f"shadows {info.shadows}" if info.shadows is not None else ""
+
+
 def render_pipeline_listing(
     pipelines: list[PipelineInfo], *, verbose: bool = False, console: Console | None = None
 ) -> None:
@@ -114,13 +118,16 @@ def render_pipeline_listing(
     if not pipelines:
         target.print("No pipelines found.")
         return
+    # A pipeline another one hides is still listed in its own group, marked as shadowed.
+    entries = [(info, _shadow_marker(info)) for info in pipelines]
+    entries += [(hidden, f"shadowed by {info.source}") for info in pipelines for hidden in info.hidden]
     groups = [
-        (source, sorted((p for p in pipelines if p.source is source), key=lambda p: p.name))
+        (source, sorted((e for e in entries if e[0].source is source), key=lambda e: e[0].name))
         for source in LISTING_ORDER
     ]
     groups = [(source, group) for source, group in groups if group]
     # The shadow column exists only when some row shadows, so a plain listing is unchanged.
-    has_shadow = any(info.shadows is not None for _, group in groups for info in group)
+    has_shadow = any(marker for _, group in groups for _, marker in group)
     columns = [Column(None, shrinkable=False)]
     if has_shadow:
         columns.append(Column(None, shrinkable=False))
@@ -129,10 +136,9 @@ def render_pipeline_listing(
         columns.append(Column(None, shrinkable=True))
     rows: list[list[Text]] = []
     for _, group in groups:
-        for info in group:
+        for info, marker in group:
             row = [Text(info.name, style=_NAME_STYLE)]
             if has_shadow:
-                marker = f"shadows {info.shadows}" if info.shadows is not None else ""
                 row.append(Text(marker, style=_SHADOW_STYLE))
             row.append(Text(info.description, style=_DESCRIPTION_STYLE))
             if verbose:

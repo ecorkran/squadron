@@ -122,3 +122,15 @@ dateUpdated: 20261021
 - [x] CHANGELOG bullet
 - [x] Numbered `read_file` / injected bodies for review runs: dropped (PM decision). Measured 12 of 967 checkable citations (1.2%) unverified; issue closed
 - **Commit**: `fix: treat a citation range ending one past EOF as sloppy, not phantom (#196)`
+
+## #180 Three metrology audit CLI tests sleep through the real run cooldown
+
+- [x] `tests/metrology/test_audit_cli.py` sets `metrology.audit_run_cooldown_s` to 0 for every test (autouse user-config fixture); the cooldown between runs is already tested with a fake sleep in `test_audit_series.py`
+- [x] The three variance tests drop from ~120 s each to under a second; the file runs in about 2 s
+
+## #283 sq pipelines list hides a shadowed built-in
+
+- [x] `PipelineInfo.hidden` keeps every pipeline a winner hides, nearest first; `shadows` is derived from it
+- [x] The listing shows each hidden pipeline in its own group, marked `shadowed by <winner source>`, counted in the group; the winner keeps `shadows <source>`
+- [x] Tests: loader keeps both hidden levels; listing keeps the built-in in the Built-in group and count; a user pipeline hidden by a project one is listed under User
+- [x] CHANGELOG bullet

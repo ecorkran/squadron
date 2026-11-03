@@ -470,6 +470,29 @@ class TestShadowing:
         assert by_name["dual"].source is PipelineSource.PROJECT
         assert by_name["dual"].shadows is PipelineSource.USER
 
+    def test_every_hidden_level_is_kept_nearest_first(self, tmp_path: Path) -> None:
+        user, proj = tmp_path / "user", tmp_path / "proj"
+        _write_pipeline_yaml(user, "p4")
+        _write_pipeline_yaml(proj, "p4")
+
+        by_name = {p.name: p for p in discover_pipelines(project_dir=proj, user_dir=user)}
+
+        assert [h.source for h in by_name["p4"].hidden] == [
+            PipelineSource.USER,
+            PipelineSource.BUILT_IN,
+        ]
+        assert by_name["p4"].shadows is PipelineSource.USER
+
+    def test_a_pipeline_that_hides_nothing_has_no_hidden_levels(self, tmp_path: Path) -> None:
+        user = tmp_path / "user"
+        _write_pipeline_yaml(user, "only-mine")
+
+        by_name = {
+            p.name: p for p in discover_pipelines(project_dir=Path("/nonexistent"), user_dir=user)
+        }
+
+        assert by_name["only-mine"].hidden == ()
+
 
 # ---------------------------------------------------------------------------
 # #276: an override that lacks a step type the built-in has warns when it loads

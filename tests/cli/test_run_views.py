@@ -52,15 +52,33 @@ class TestPipelineListing:
         render_pipeline_listing(discover_pipelines(project_dir=project, user_dir=user))
         out = capsys.readouterr().out
 
-        built_in_count = len(list((data_dir() / "pipelines").glob("*.yaml"))) - 1  # p4 shadowed
+        # The shadowed built-in p4 is still a built-in: it stays in the group and its count (#283).
+        built_in_count = len(list((data_dir() / "pipelines").glob("*.yaml")))
         built_in = out.index(f"Built-in ({built_in_count})")
         project_at = out.index("Project (3)")
         user_at = out.index("User (1)")
         assert built_in < project_at < user_at
         assert out.index("alpha") < out.index("zeta")
-        # p4 appears only under Project, as its project copy.
         assert "project copy of p4" in out[project_at:user_at]
-        assert " p4 " not in out[built_in:project_at]
+        assert "shadows built-in" in out[project_at:user_at]
+        built_in_rows = out[built_in:project_at].splitlines()
+        (shadowed_row,) = [line for line in built_in_rows if line.lstrip().startswith("p4 ")]
+        assert "shadowed by project" in shadowed_row
+
+    def test_a_pipeline_hidden_at_two_levels_is_listed_at_both(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        project, user = tmp_path / "project", tmp_path / "user"
+        write_pipeline(project, "p4", "project copy of p4")
+        write_pipeline(user, "p4", "user copy of p4")
+
+        render_pipeline_listing(discover_pipelines(project_dir=project, user_dir=user))
+        out = capsys.readouterr().out
+
+        project_at, user_at = out.index("Project (1)"), out.index("User (1)")
+        assert "shadows user" in out[project_at:user_at]
+        assert "shadowed by project" in out[user_at:]
+        assert "user copy of p4" in out[user_at:]
 
     def test_empty_group_is_omitted(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
         render_pipeline_listing(

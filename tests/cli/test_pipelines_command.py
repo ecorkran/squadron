@@ -222,16 +222,35 @@ class TestResolvePipeline:
 class TestListingShadowMarker:
     def test_shadowing_row_carries_the_marker_and_others_do_not(self) -> None:
         shadowing = PipelineInfo(
-            "p4", "p4 description", PipelineSource.USER, Path("/u/p4.yaml"), {}, PipelineSource.BUILT_IN
+            "p4",
+            "p4 description",
+            PipelineSource.USER,
+            Path("/u/p4.yaml"),
+            {},
+            (_info("p4", PipelineSource.BUILT_IN),),
         )
         plain = _info("other", PipelineSource.BUILT_IN)
 
         lines = _render([shadowing, plain])
 
-        assert [line for line in lines if "shadows built-in" in line] == [
-            next(line for line in lines if line.lstrip().startswith("p4"))
-        ]
-        assert not any("shadows" in line for line in lines if "other" in line)
+        (marked,) = [line for line in lines if "shadows built-in" in line]
+        assert marked.lstrip().startswith("p4")
+        assert not any("shadow" in line for line in lines if "other" in line)
+
+    def test_the_hidden_built_in_stays_in_its_group_marked_shadowed(self) -> None:
+        shadowing = PipelineInfo(
+            "p4",
+            "user copy",
+            PipelineSource.USER,
+            Path("/u/p4.yaml"),
+            {},
+            (_info("p4", PipelineSource.BUILT_IN),),
+        )
+
+        lines = _render([shadowing])
+
+        built_in_at = next(i for i, line in enumerate(lines) if "Built-in (1)" in line)
+        assert "shadowed by user" in lines[built_in_at + 1]
 
     def test_listing_without_shadows_has_no_extra_column(self) -> None:
         lines = _render([_info("alpha", PipelineSource.BUILT_IN)])
@@ -403,7 +422,12 @@ class TestListingColors:
 
     def test_shadowing_row_has_bold_name_dim_description_and_yellow_marker(self) -> None:
         row = PipelineInfo(
-            "p4", "the [p4] flow", PipelineSource.USER, Path("/u/p4.yaml"), {}, PipelineSource.BUILT_IN
+            "p4",
+            "the [p4] flow",
+            PipelineSource.USER,
+            Path("/u/p4.yaml"),
+            {},
+            (_info("p4", PipelineSource.BUILT_IN),),
         )
 
         line = next(ln for ln in self._styled([row]).splitlines() if "shadows" in ln)
