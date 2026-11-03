@@ -9,7 +9,7 @@ visible in the summary *and* in the exit code.
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,6 +28,14 @@ runner = CliRunner()
 def _normalized(output: str) -> str:
     """Collapse Rich line-wrapping so substring assertions survive width."""
     return " ".join(output.split())
+
+
+@pytest.fixture(autouse=True)
+def no_run_cooldown(write_user_config: Callable[[dict[str, object]], Path]) -> None:
+    """A variance series pauses `metrology.audit_run_cooldown_s` (60 s) between runs; these
+    tests drive fake audits, so they must not wait it out. The cooldown itself is tested
+    with a fake sleep in test_audit_series.py."""
+    write_user_config({"metrology.audit_run_cooldown_s": 0})
 
 
 @pytest.fixture
