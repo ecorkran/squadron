@@ -15,10 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- `sq run` no longer needs a registered Context Forge project for a pipeline whose steps don't use it, such as one made only of plain dispatch steps, so it can run from any directory (#288).
-
-## [0.24.15] - 20261103
+## [0.24.16] - 20261103
 
 ### Added
 - `sq review slice|arch|tasks|code` accept `-p review-model=<model>` as an alias for `--model`, so the `sq run` form works. Any other key is an error; giving both with different values is an error (#286).
@@ -26,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `review.max_file_size_bytes` now caps each file's part of a code review's diff instead of the whole diff, so a big diff of small files is no longer cut. When a file is still cut or left out, the reviewer is told which, the review artifact lists them, and a PASS that never read them is capped to CONCERNS naming them (#278).
 - Code reviews are told to read the files behind a finding before reporting PASS. A review that was given tools and read nothing now says so: a **Coverage** line in the artifact, and a warning in the log when every tool call failed too (#279).
+
+### Fixed
+- `sq run` no longer needs a registered Context Forge project for a pipeline whose steps don't use it, such as one made only of plain dispatch steps, so it can run from any directory (#288).
 
 ## [0.24.14] - 20261102
 

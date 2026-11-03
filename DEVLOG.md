@@ -11,9 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261103
 
-### Release 0.24.15
+### Release 0.24.16
 
-- **Contents:** review tool-coverage line and read-before-PASS prompt (#279), per-file review diff cap with a per-file record of cut files (#278), `-p review-model=` on `sq review` (#286). All three as standing-fixes task groups on `main`.
+- **Contents:** everything 0.24.15 was to carry, plus `sq run` skipping the Context Forge pre-flight for pipelines whose steps don't use it (#288). 0.24.15 was tagged but its CI run failed (a `--help` text assertion in the #286 tests broke under CI's forced colour), so nothing published; its changelog entries moved here and its tag stays dead.
+- **Carried from 0.24.15:** review tool-coverage line and read-before-PASS prompt (#279), per-file review diff cap with a per-file record of cut files (#278), `-p review-model=` on `sq review` (#286). All three as standing-fixes task groups on `main`.
 
 ## 20261102
 
