@@ -404,6 +404,7 @@ def _review_frontmatter_lines(
     tool_calls_made: int | None,
     tools_suppressed_reason: str | None,
     diff_truncated: bool | None = None,
+    diff_cut_files: list[str] | None = None,
     conventions_source: ConventionsSource | None = None,
     project_rules: list[str] | None = None,
     requested_model: str | None = None,
@@ -499,6 +500,10 @@ def _review_frontmatter_lines(
     # Slice 927 D2: present exactly when the review had a diff input, true or false.
     if diff_truncated is not None:
         lines.append(f"diffTruncated: {'true' if diff_truncated else 'false'}")
+    # #278: the paths behind a true diffTruncated, only when there are any.
+    if diff_cut_files:
+        lines.append("diffCutFiles:")
+        lines.extend(f'  - "{yaml_escape(path)}"' for path in diff_cut_files)
     # Slice 931 D10: the effort actually sent, and what the run cost, each only when known.
     if effort is not None:
         lines.append(f"effort: {effort.value}")
@@ -620,6 +625,9 @@ def format_review_markdown(
         tool_calls_made=result.tool_calls_made,
         tools_suppressed_reason=result.tools_suppressed_reason,
         diff_truncated=result.diff_injection.truncated if result.diff_injection else None,
+        diff_cut_files=(
+            [f.path for f in result.diff_injection.cut_files] if result.diff_injection else None
+        ),
         conventions_source=result.conventions_source,
         project_rules=result.project_rules,
         requested_model=result.requested_model if result.model_substituted else None,
@@ -676,6 +684,13 @@ def format_review_markdown(
             f"**Diff:** truncated: {result.diff_injection.injected_chars} of "
             f"{result.diff_injection.total_chars} characters reached the model"
         )
+        # #278: the per-file record, so the reader knows which files were not seen whole.
+        for cut_file in result.diff_injection.cut_files:
+            state = "omitted" if cut_file.omitted else "cut"
+            lines.append(
+                f"  - {cut_file.path}: {state} "
+                f"({cut_file.injected_chars} of {cut_file.total_chars} characters)"
+            )
     if result.tools_given and result.successful_tool_calls <= 0:
         # #279. Only when tools were offered and nothing was read with them, so the
         # verdict is visibly resting on the prompt alone; other artifacts are unchanged.

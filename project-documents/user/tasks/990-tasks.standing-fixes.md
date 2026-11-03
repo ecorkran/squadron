@@ -73,12 +73,12 @@ dateUpdated: 20261021
 
 ## #278 Code review diff cap applies to the whole diff
 
-- [ ] `review.max_file_size_bytes` is applied per file: the diff is split by file and each file's section capped, not the concatenation; order and total-cap handling stay as they are
-- [ ] Per-file `total_chars` / `injected_chars` recorded; the review artifact (frontmatter and body) lists cut and omitted files beside the `**Diff:**` line
-- [ ] When any file is cut or omitted the prompt names them and says they can be read with `read_file`; the truncation marker no longer says "file too large for API review" to a tool-enabled run
-- [ ] `impose_diff_coverage` uses the per-file record, so a PASS is capped when an omitted file was never read
-- [ ] Tests: many small files over the cap in total, none truncated; one oversized file among small ones, only it cut; artifact lists cut and omitted files and the prompt names them; PASS with an omitted unread file capped to CONCERNS naming it
-- [ ] CHANGELOG bullet
+- [x] `review.max_file_size_bytes` is applied per file: the diff is split by file and each file's section capped, not the concatenation; order and total-cap handling stay as they are
+- [x] Per-file `total_chars` / `injected_chars` recorded; the review artifact (frontmatter and body) lists cut and omitted files beside the `**Diff:**` line
+- [x] When any file is cut or omitted the prompt names them and says they can be read with `read_file`; the truncation marker no longer says "file too large for API review" to a tool-enabled run
+- [x] `impose_diff_coverage` uses the per-file record, so a PASS is capped when an omitted file was never read
+- [x] Tests: many small files over the cap in total, none truncated; one oversized file among small ones, only it cut; artifact lists cut and omitted files and the prompt names them; PASS with an omitted unread file capped to CONCERNS naming it
+- [x] CHANGELOG bullet
 - **Commit**: `fix: apply the review diff cap per file and report dropped files (#278)`
 
 ## #286 sq review: accept -p/--param review-model=X as an alias for --model

@@ -104,22 +104,57 @@ class ReviewFinding:
 
 
 @dataclass(frozen=True)
+class DiffFileInjection:
+    """How much of one file's section of the diff reached the model (#278).
+
+    ``injected_chars == 0`` with ``total_chars > 0`` means the file was omitted
+    entirely (the total-injection limit dropped the diff).
+    """
+
+    path: str
+    total_chars: int
+    injected_chars: int
+
+    @property
+    def omitted(self) -> bool:
+        return self.total_chars > 0 and self.injected_chars == 0
+
+    @property
+    def cut(self) -> bool:
+        return self.injected_chars < self.total_chars
+
+
+@dataclass(frozen=True)
 class DiffInjection:
     """How much of the diff produced by git reached the model (slice 927 D1).
 
     Measured in characters, not bytes, despite the ``*_bytes`` config key
-    names: this counts what ``_truncate`` actually compares, ``len(content)``
-    on a ``str``. ``injected_chars`` never counts the ``[truncated at …]``
-    marker ``_truncate`` appends.
+    names: this counts what the injection code actually compares, ``len(content)``
+    on a ``str``. ``injected_chars`` never counts the truncation markers appended.
+    ``files`` is the per-file record (#278); the totals are its sums when it is set.
     """
 
     total_chars: int
     injected_chars: int
+    files: tuple[DiffFileInjection, ...] = ()
+
+    @classmethod
+    def from_files(cls, files: tuple[DiffFileInjection, ...]) -> DiffInjection:
+        return cls(
+            total_chars=sum(f.total_chars for f in files),
+            injected_chars=sum(f.injected_chars for f in files),
+            files=files,
+        )
 
     @property
     def truncated(self) -> bool:
         """True when the model saw less than the full diff."""
         return self.injected_chars < self.total_chars
+
+    @property
+    def cut_files(self) -> tuple[DiffFileInjection, ...]:
+        """Files whose section was cut or omitted."""
+        return tuple(f for f in self.files if f.cut)
 
 
 @dataclass(frozen=True)
@@ -380,6 +415,19 @@ class ReviewResult:
                 self.diff_injection.injected_chars if self.diff_injection else None
             ),
             "diff_truncated": self.diff_injection.truncated if self.diff_injection else None,
+            # #278: null with no diff input; otherwise the files cut or omitted (maybe none).
+            "diff_cut_files": (
+                [
+                    {
+                        "path": f.path,
+                        "total_chars": f.total_chars,
+                        "injected_chars": f.injected_chars,
+                    }
+                    for f in self.diff_injection.cut_files
+                ]
+                if self.diff_injection
+                else None
+            ),
             "requested_model": self.requested_model,
             "answering_models": self.answering_models,
             "model_substituted": self.model_substituted,

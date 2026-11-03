@@ -36,6 +36,7 @@ from squadron.providers.profiles import get_profile, profile_credentials
 from squadron.providers.registry import get_provider
 from squadron.review.categories import normalize_result_categories
 from squadron.review.coverage import impose_diff_coverage, impose_output_coverage
+from squadron.review.diff_files import cap_sections, describe_cut_files, omit_all, split_diff_by_file
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import DiffInjection, ReviewResult
 from squadron.review.parsers import parse_review_output
@@ -564,10 +565,14 @@ def _inject_file_contents(
     injections: list[str] = []
     total_size = 0
 
-    def _add_injection(label: str, content: str) -> bool:
-        """Add content to injections, respecting total limit. Returns False if full."""
+    def _add_injection(label: str, content: str, *, cap: bool = True) -> bool:
+        """Add content to injections, respecting total limit. Returns False if full.
+
+        ``cap=False`` is for content already capped per file (the diff, #278).
+        """
         nonlocal total_size
-        content = _truncate(content, label, max_file_size)
+        if cap:
+            content = _truncate(content, label, max_file_size)
         file_size = len(content)
         if total_size + file_size > max_total_injection:
             _logger.warning(
@@ -619,15 +624,21 @@ def _inject_file_contents(
             # D2: the review had a diff input but nothing changed. The model saw all
             # zero characters, which is not a truncation.
             diff_injection = DiffInjection(total_chars=0, injected_chars=0)
-        elif _add_injection("Git Diff", diff_content):
-            diff_injection = DiffInjection(
-                total_chars=len(diff_content),
-                injected_chars=min(len(diff_content), max_file_size),
-            )
         else:
-            # D3: dropped entirely by the total-injection limit. The model saw none of
-            # it, the worst case of the same fact _add_injection already detected.
-            diff_injection = DiffInjection(total_chars=len(diff_content), injected_chars=0)
+            # #278: review.max_file_size_bytes caps each file's section, not the whole diff.
+            sections = split_diff_by_file(diff_content)
+            capped_diff, file_record = cap_sections(sections, max_file_size)
+            if any(f.cut for f in file_record):
+                _logger.warning(
+                    "Truncated diff for %s",
+                    ", ".join(f.path for f in file_record if f.cut),
+                )
+            if _add_injection("Git Diff", capped_diff, cap=False):
+                diff_injection = DiffInjection.from_files(file_record)
+            else:
+                # D3: dropped entirely by the total-injection limit. The model saw none of
+                # it, the worst case of the same fact _add_injection already detected.
+                diff_injection = DiffInjection.from_files(omit_all(sections))
 
     # Handle files glob input — resolve and inject matching files
     files_glob = inputs.get("files") if include_bodies else None
@@ -650,6 +661,11 @@ def _inject_file_contents(
             f"{chosen.source.value} (project conventions)",
             demote_headings(chosen.content, levels=2),
         )
+
+    # #278: tell the reviewer which files of the diff it did not receive in full.
+    cut_notice = describe_cut_files(diff_injection.files) if diff_injection else None
+    if cut_notice:
+        injections.insert(0, cut_notice)
 
     if not injections:
         return InjectedPrompt(prompt, diff_injection, conventions)

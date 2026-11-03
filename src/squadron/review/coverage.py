@@ -34,14 +34,17 @@ def impose_diff_coverage(result: ReviewResult) -> None:
     total = result.diff_injection.total_chars
     injected = result.diff_injection.injected_chars
     omitted = total - injected
+    cut_paths = ", ".join(f.path for f in result.diff_injection.cut_files)
     finding = ReviewFinding(
         severity=Severity.CONCERN,
         title=COVERAGE_TITLE,
         description=(
-            f"The diff was {total} characters; the first {injected} reached the model "
-            f"(review.max_file_size_bytes). The model made no successful tool calls, "
-            f"so the remaining {omitted} characters were not reviewed. The model's own "
-            f"verdict was PASS. Raise review.max_file_size_bytes, narrow the diff, or "
+            f"The diff was {total} characters; {injected} reached the model "
+            f"(review.max_file_size_bytes caps each file, review.max_total_injection_bytes "
+            f"the whole). The model made no successful tool calls, "
+            f"so the remaining {omitted} characters were not reviewed"
+            f"{f' (cut or omitted: {cut_paths})' if cut_paths else ''}. The model's own "
+            f"verdict was PASS. Raise the limits, narrow the diff, or "
             f"use a tool-enabled model."
         ),
         category=COVERAGE_CATEGORY,
