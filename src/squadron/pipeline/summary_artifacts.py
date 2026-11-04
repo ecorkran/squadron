@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from squadron.events.builtin.artifact_paths import expected_artifact_paths
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
@@ -80,6 +81,14 @@ def _run_files(context: ActionContext) -> list[str]:
     return [path for path in candidates if (Path(context.cwd) / path).is_file()]
 
 
+def _slice_ref(raw_slice: object) -> object:
+    """The slice index; inside an ``each`` loop ``slice`` is the whole cf record."""
+    if not isinstance(raw_slice, dict):
+        return raw_slice
+    record = cast("dict[str, object]", raw_slice)
+    return record.get("index", record)
+
+
 def _slice_files(context: ActionContext) -> list[str]:
     """The slice's design and task paths; empty when the run has no slice.
 
@@ -90,7 +99,7 @@ def _slice_files(context: ActionContext) -> list[str]:
     if raw_slice is None:
         return []
     try:
-        slice_index = parse_slice_index(raw_slice)
+        slice_index = parse_slice_index(_slice_ref(raw_slice))
         return [
             path
             for kind in ArtifactKind

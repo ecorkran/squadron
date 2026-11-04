@@ -64,6 +64,15 @@ def test_paths_are_the_existing_design_and_task_files(tmp_path: Path) -> None:
         assert _sdk_paths(ctx) == ["design.md", "tasks.md"]
 
 
+def test_each_loop_slice_record_resolves_by_its_index(tmp_path: Path) -> None:
+    (tmp_path / "design.md").write_text("design")
+    record = {"index": "180", "name": "Slice-Writing Pipeline", "dependencies": [100]}
+    ctx = _context(tmp_path, {"slice": record})
+    with patch(_EXPECTED, side_effect=[["design.md"], []]) as expected:
+        assert _sdk_paths(ctx) == ["design.md"]
+    assert expected.call_args_list[0].args[1] == 180
+
+
 def test_no_slice_param_and_no_reviews_means_no_paths(tmp_path: Path) -> None:
     assert _sdk_paths(_context(tmp_path, {})) == []
 
