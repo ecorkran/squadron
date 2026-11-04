@@ -2,12 +2,18 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261103'
+dateUpdated: '20261104'
 ---
 
 # Development Log
 
 A lightweight, append-only record of development activity. Newest entries first.
+
+## 20261104
+
+### Release 0.24.19
+
+- **Contents:** an alias's `effort` now applies to steps in the shared SDK session; the session opens at its first step's effort and a later mismatch warns once per alias (#216). Also filed #290 (two slow tests).
 
 ## 20261103
 
