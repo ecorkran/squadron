@@ -293,7 +293,7 @@ async def _execute_summary(
         if is_sdk_profile(profile):
             assert context.sdk_session is not None  # narrowed above
             restore_model = context.sdk_session.current_model
-            session_effort = capture.effort_for_session(resolved)
+            session_effort = capture.effort_for_session(resolved, context.sdk_session.effort)
             sources = _log_sources(context, is_sdk=True, declared=None, allows_tools=True)
             reply = await context.sdk_session.capture_summary(
                 instructions=with_artifact_section(instructions, sources.paths),

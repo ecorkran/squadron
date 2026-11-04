@@ -846,6 +846,30 @@ async def test_open_pipeline_session_seeds_client_options_and_connects() -> None
     client.query.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_open_pipeline_session_applies_effort_to_every_client() -> None:
+    from squadron.core.models import Effort
+    from squadron.pipeline.sdk_session import open_pipeline_session
+
+    with patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as client_ctor:
+        session = await open_pipeline_session(effort=Effort.high)
+
+    assert client_ctor.call_args.kwargs["options"].effort == "high"
+    assert session.base_options.effort == "high"
+    assert session.effort is Effort.high
+
+
+@pytest.mark.asyncio
+async def test_open_pipeline_session_without_effort_sends_none() -> None:
+    from squadron.pipeline.sdk_session import open_pipeline_session
+
+    with patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as client_ctor:
+        session = await open_pipeline_session()
+
+    assert client_ctor.call_args.kwargs["options"].effort is None
+    assert session.effort is None
+
+
 # ---------------------------------------------------------------------------
 # unusable_reason after a failed reconnect (D13)
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.pipeline.classification import (
     ClassificationError,
     PipelineClassification,
@@ -194,6 +195,24 @@ def test_needs_persistent_session_true_for_sdk_dispatch() -> None:
         steps=(_make_step_cls("dispatch", StepClass.SDK_REQUIRED),),
     )
     assert pc.needs_persistent_session is True
+
+
+def test_session_effort_is_the_first_session_step_alias_effort() -> None:
+    steps = (
+        _make_step_cls("review", StepClass.SDK_REQUIRED, 0),
+        _make_step_cls("dispatch", StepClass.SDK_REQUIRED, 1),
+    )
+    pc = PipelineClassification(pipeline_name="p", steps=steps)
+    with patch("squadron.pipeline.classification.model_effort", return_value=Effort.high) as reader:
+        assert pc.session_effort is Effort.high
+    reader.assert_called_once_with("sonnet")
+
+
+def test_session_effort_none_without_a_session_step() -> None:
+    pc = PipelineClassification(
+        pipeline_name="p", steps=(_make_step_cls("review", StepClass.SDK_REQUIRED),)
+    )
+    assert pc.session_effort is None
 
 
 def test_needs_persistent_session_false_for_sdk_review_only() -> None:

@@ -24,9 +24,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, cast
 
+from squadron.core.models import Effort
 from squadron.models.aliases import (
     UnknownModelAliasError,
     UnknownReviewTemplateError,
+    model_effort,
     require_known_model,
     resolve_model_alias,
 )
@@ -239,6 +241,21 @@ class PipelineClassification:
             for s in self.steps
             if s.action_type in PERSISTENT_SESSION_STEP_TYPES
         )
+
+    @property
+    def session_effort(self) -> Effort | None:
+        """Effort the persistent session opens with: that of its first SDK step (#216).
+
+        The live client cannot change effort, so the first step that needs the
+        session sets it for the whole run.
+        """
+        for step in self.steps:
+            if (
+                step.classification == StepClass.SDK_REQUIRED
+                and step.action_type in PERSISTENT_SESSION_STEP_TYPES
+            ):
+                return model_effort(step.resolved_alias)
+        return None
 
     @property
     def needs_one_shot_claude(self) -> bool:

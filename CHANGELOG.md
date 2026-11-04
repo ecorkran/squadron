@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A model alias's `effort` now applies to pipeline steps that run in the shared SDK session (dispatch, summary, compact). The session opens at the effort of its first step; a later step asking for a different effort runs at the session's and logs a warning. Usage records show the effort actually used (#216).
+
 ## [0.24.18] - 20261103
 
 ### Added

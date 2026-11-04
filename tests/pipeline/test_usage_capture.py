@@ -219,15 +219,40 @@ def test_stamp_writes_persisted_shape() -> None:
     assert metadata[USAGE_KEY] == record.to_dict()
 
 
-def test_effort_gap_logged_once_per_capture(caplog: pytest.LogCaptureFixture) -> None:
+def test_session_effort_is_sent_and_a_match_is_silent(caplog: pytest.LogCaptureFixture) -> None:
     capture = UsageCapture(set())
-    resolved = _resolved("priced", "sdk", effort=Effort.high)
+    resolved = _resolved("sonnet-high", "sdk", effort=Effort.high)
 
-    with caplog.at_level(logging.DEBUG, logger=_MOD):
-        assert capture.effort_for_session(resolved) is None
-        assert capture.effort_for_session(resolved) is None
+    with caplog.at_level(logging.WARNING, logger=_MOD):
+        assert capture.effort_for_session(resolved, Effort.high) is Effort.high
 
-    assert len([r for r in caplog.records if "#216" in r.getMessage()]) == 1
+    assert not caplog.records
+
+
+def test_session_effort_mismatch_warns_once_and_sends_the_session_effort(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    capture = UsageCapture(set())
+    resolved = _resolved("sonnet-xhigh", "sdk", effort=Effort.xhigh)
+
+    with caplog.at_level(logging.WARNING, logger=_MOD):
+        assert capture.effort_for_session(resolved, Effort.high) is Effort.high
+        assert capture.effort_for_session(resolved, Effort.high) is Effort.high
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert len(warnings) == 1
+    assert "sonnet-xhigh" in warnings[0]
+    assert "xhigh" in warnings[0]
+    assert "high" in warnings[0]
+
+
+def test_session_effort_mismatch_against_default_warns(caplog: pytest.LogCaptureFixture) -> None:
+    capture = UsageCapture(set())
+
+    with caplog.at_level(logging.WARNING, logger=_MOD):
+        assert capture.effort_for_session(_resolved("plain", "sdk"), Effort.high) is Effort.high
+
+    assert len(caplog.records) == 1
 
 
 def test_review_record_reuses_review_duration_and_cost() -> None:

@@ -670,7 +670,7 @@ class DispatchAction:
             named = ProviderError(f"model {alias}: {exc}")
             return self._provider_failure(context, named, None, None)
 
-        effort_sent = capture.effort_for_session(resolved)
+        effort_sent = capture.effort_for_session(resolved, session.effort)
         started = time.monotonic()
         try:
             reply = await session.dispatch(resolved_prompt.text)

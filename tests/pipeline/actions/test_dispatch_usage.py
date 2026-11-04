@@ -124,6 +124,7 @@ def _session(reply: SessionReply | None = None) -> AsyncMock:
     session.background_tasks_stopped = 0
     session.background_shells_running = 0
     session.seeded = False
+    session.effort = None
     session.setting_sources = None
     session.auto_memory = False
     if reply is not None:
@@ -173,22 +174,39 @@ async def test_stall_with_failed_drain_records_partial(caplog: pytest.LogCapture
 
 
 @pytest.mark.asyncio
-async def test_session_alias_effort_recorded_as_unsent_and_logged_once(
+async def test_session_effort_mismatch_records_session_effort_and_warns_once(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     capture = UsageCapture(set())
     reply = SessionReply(text="ok", telemetry=RunTelemetry(turns=1, usage=TokenUsage(prompt=1)))
 
-    with caplog.at_level(logging.DEBUG, logger=_USAGE_MOD):
-        results = [
-            await DispatchAction().execute(
-                _session_context(_session(reply), effort=Effort.high, capture=capture)
-            )
-            for _ in range(2)
-        ]
+    with caplog.at_level(logging.WARNING, logger=_USAGE_MOD):
+        results = []
+        for _ in range(2):
+            session = _session(reply)
+            session.effort = Effort.medium
+            context = _session_context(session, effort=Effort.high, capture=capture)
+            results.append(await DispatchAction().execute(context))
 
-    assert all(_usage(r).effort is None for r in results)
+    assert all(_usage(r).effort == Effort.medium.value for r in results)
     assert len([r for r in caplog.records if "#216" in r.getMessage()]) == 1
+
+
+@pytest.mark.asyncio
+async def test_session_effort_match_is_recorded_without_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    reply = SessionReply(text="ok", telemetry=RunTelemetry(turns=1, usage=TokenUsage(prompt=1)))
+    session = _session(reply)
+    session.effort = Effort.high
+
+    with caplog.at_level(logging.WARNING, logger=_USAGE_MOD):
+        result = await DispatchAction().execute(
+            _session_context(session, effort=Effort.high, capture=UsageCapture(set()))
+        )
+
+    assert _usage(result).effort == Effort.high.value
+    assert not caplog.records
 
 
 @pytest.mark.asyncio

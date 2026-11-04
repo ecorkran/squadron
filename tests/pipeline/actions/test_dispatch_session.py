@@ -31,6 +31,7 @@ def _make_session(response: str = "session response") -> AsyncMock:
     session.background_tasks_waited = 0
     session.background_tasks_stopped = 0
     session.background_shells_running = 0
+    session.effort = None
     return session
 
 

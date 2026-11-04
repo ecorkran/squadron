@@ -71,7 +71,11 @@ async def pipeline_session(
     The session is disconnected on exit, whether the body succeeds, fails,
     pauses or is interrupted. A failed connect propagates before the body runs.
     """
-    session = await open_pipeline_session() if classification.needs_persistent_session else None
+    session = (
+        await open_pipeline_session(effort=classification.session_effort)
+        if classification.needs_persistent_session
+        else None
+    )
     try:
         yield session
     finally:

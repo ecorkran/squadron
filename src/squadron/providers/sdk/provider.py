@@ -21,7 +21,7 @@ _log = get_logger("squadron.providers.sdk.provider")
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
 
 
-def _effort_options(effort: Effort | None) -> dict[str, object]:
+def sdk_effort_options(effort: Effort | None) -> dict[str, object]:
     """``ClaudeAgentOptions`` entries for ``effort`` (slice 931 D1).
 
     ``none`` has no SDK effort level; it disables thinking instead. Every other level is
@@ -111,7 +111,7 @@ class ClaudeSDKProvider:
         if hooks is not None:
             kwargs["hooks"] = hooks
 
-        kwargs.update(_effort_options(config.effort))
+        kwargs.update(sdk_effort_options(config.effort))
 
         options = ClaudeAgentOptions(**kwargs)  # type: ignore[arg-type]
         mode = config.credentials.get("mode", "query")

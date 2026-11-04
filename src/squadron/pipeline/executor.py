@@ -22,10 +22,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from squadron.core.models import Effort
 from squadron.events import EventType
 from squadron.events.contexts import PostActionContext
 from squadron.events.dispatcher import OutcomeErrorKind, run_event
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
+from squadron.models.aliases import model_effort
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.protocol import RunPreflight
 from squadron.pipeline.batch_report import (
@@ -657,7 +659,11 @@ async def execute_pipeline(
         if sdk_session is None and pool_policy == PoolClassificationPolicy.LAZY:
             if _step_needs_sdk(step, resolver, merged_params):
                 try:
-                    sdk_session = await _connect_lazy_session(run_id=effective_run_id, seed=resume_seed)
+                    sdk_session = await _connect_lazy_session(
+                        run_id=effective_run_id,
+                        seed=resume_seed,
+                        effort=model_effort(_step_sdk_candidate(step, resolver, merged_params)),
+                    )
                     resume_seed = None  # a later connect must never re-seed
                 except Exception as exc:
                     _logger.error(
@@ -760,12 +766,21 @@ def _step_needs_sdk(
     resolver: Any,
     params: dict[str, object],
 ) -> bool:
-    """Return True iff *step* statically resolves to an SDK profile.
+    """Return True iff *step* statically resolves to an SDK profile."""
+    return _step_sdk_candidate(step, resolver, params) is not None
+
+
+def _step_sdk_candidate(
+    step: Any,
+    resolver: Any,
+    params: dict[str, object],
+) -> str | None:
+    """The model name *step* statically resolves to when that is an SDK profile, else None.
 
     Used by the mid-run lazy session hook to decide whether to connect a
-    persistent session before a given step.
+    persistent session before a given step, and with what effort.
 
-    Returns False for:
+    Returns None for:
     - Step types that do not use a persistent session (e.g. review, checkpoint).
     - Steps whose resolved candidate is a pool reference (cannot confirm statically).
     - Any cascade level that resolves to a non-SDK profile.
@@ -776,7 +791,7 @@ def _step_needs_sdk(
     from squadron.providers.profiles import is_sdk_profile
 
     if step.step_type not in PERSISTENT_SESSION_STEP_TYPES:
-        return False
+        return None
 
     action_model = str(params["model"]) if "model" in params else None
     step_model = str(params.get("step_model", "")) or None
@@ -789,10 +804,10 @@ def _step_needs_sdk(
     )
     candidate = next((c for c in candidates if c is not None), None)
     if candidate is None or candidate.startswith("pool:"):
-        return False
+        return None
 
     _, profile = resolve_model_alias(candidate)
-    return is_sdk_profile(profile)
+    return candidate if is_sdk_profile(profile) else None
 
 
 def _load_resume_seed(
@@ -894,12 +909,15 @@ def _action_metadata(action: dict[str, object]) -> dict[str, object]:
     return metadata if isinstance(metadata, dict) else {}  # type: ignore[return-value]
 
 
-async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKExecutionSession:
+async def _connect_lazy_session(
+    *, run_id: str, seed: str | None = None, effort: Effort | None = None
+) -> SDKExecutionSession:
     """Construct and connect a new SDKExecutionSession for mid-run lazy auth.
 
     Called by execute_pipeline the first time a statically-confirmed SDK step
     is about to run and no session has been connected yet. ``seed`` is a
-    resume summary that no connected session was there to receive.
+    resume summary that no connected session was there to receive. ``effort`` is
+    that first step's alias effort, fixed for the session (#216).
 
     On connection failure, logs at ERROR and re-raises — the caller handles
     state persistence and user-facing error messaging.
@@ -907,7 +925,7 @@ async def _connect_lazy_session(*, run_id: str, seed: str | None = None) -> SDKE
     from squadron.pipeline.sdk_session import open_pipeline_session
 
     try:
-        return await open_pipeline_session(seed=seed)
+        return await open_pipeline_session(seed=seed, effort=effort)
     except Exception:
         _logger.exception(
             "executor: lazy session connect failed for run %s",

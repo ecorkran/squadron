@@ -33,6 +33,7 @@ from claude_agent_sdk.types import SystemPromptPreset
 
 from squadron.config.keys import FOREGROUND_IDLE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config, get_typed_config
+from squadron.core.models import Effort
 from squadron.core.teardown import close_best_effort
 from squadron.core.usage import RunTelemetry
 from squadron.pipeline.background_shell_guard import pipeline_hooks
@@ -49,6 +50,7 @@ from squadron.providers.errors import (
     ProviderAuthError,
     ProviderError,
 )
+from squadron.providers.sdk.provider import sdk_effort_options
 from squadron.providers.sdk.rate_limit import (
     MAX_RATE_LIMIT_RETRIES,
     RateLimitRejected,
@@ -170,6 +172,9 @@ class SDKExecutionSession:
 
     client: ClaudeSDKClient
     base_options: ClaudeAgentOptions
+    # The effort every client of this session is built with; the live client cannot
+    # change it, so a step asking for another one runs at this (#216).
+    effort: Effort | None = None
     current_model: str | None = None
     session_id: str | None = None
     # Set when a rotation's reconnect fails; every later call then raises.
@@ -652,7 +657,9 @@ class SDKExecutionSession:
         )
 
 
-async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSession:
+async def open_pipeline_session(
+    *, seed: str | None = None, effort: Effort | None = None
+) -> SDKExecutionSession:
     """Build and connect the pipeline's persistent SDK session.
 
     The only way to build a pipeline session. Permission mode must be set at
@@ -661,6 +668,7 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
     full Claude Code persona rather than the Agent SDK's minimal prompt. A
     ``seed`` is appended to that preset (see ``_seeded_options``), never sent
     as a turn. Settings follow the pipeline policy (slice 932 D10/D11).
+    ``effort`` is fixed for the session's life: the SDK has no runtime setter (#216).
     """
     cwd = str(Path.cwd())
     settings = sdk_settings_options(
@@ -677,8 +685,11 @@ async def open_pipeline_session(*, seed: str | None = None) -> SDKExecutionSessi
         # Dispatch ends on the CLI's own idle report (slice 947 D12).
         env={**settings["env"], SESSION_STATE_ENV: "1"},
         hooks=pipeline_hooks(),  # pyright: ignore[reportArgumentType]
+        **sdk_effort_options(effort),  # pyright: ignore[reportArgumentType]
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))
-    session = SDKExecutionSession(client=client, base_options=base, seeded=seed is not None)
+    session = SDKExecutionSession(
+        client=client, base_options=base, effort=effort, seeded=seed is not None
+    )
     await session.connect()
     return session

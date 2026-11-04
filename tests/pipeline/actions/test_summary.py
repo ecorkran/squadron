@@ -1151,13 +1151,14 @@ async def test_one_shot_summary_records_usage_and_passes_budget() -> None:
 
 
 @pytest.mark.asyncio
-async def test_session_summary_records_unsent_effort() -> None:
+async def test_session_summary_records_the_session_effort() -> None:
     from squadron.core.usage import RunTelemetry
     from squadron.pipeline.actions.summary import _execute_summary
     from squadron.pipeline.sdk_turns import SessionReply
 
     session = MagicMock()
     session.current_model = "m"
+    session.effort = Effort.medium
     session.capture_summary = AsyncMock(
         return_value=SessionReply("S", RunTelemetry(turns=2, usage=TokenUsage(prompt=9), cost_usd=0.01))
     )
@@ -1173,7 +1174,7 @@ async def test_session_summary_records_unsent_effort() -> None:
         )
 
     record = _summary_record(result)
-    assert record.effort is None
+    assert record.effort == Effort.medium.value
     assert (record.turns, record.cost_usd) == (2, 0.01)
 
 

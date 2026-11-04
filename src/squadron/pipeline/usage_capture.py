@@ -74,7 +74,7 @@ class UsageCapture:
 
     def __init__(self, warned: set[str]) -> None:
         self._warned = warned
-        self._effort_gap_logged = False
+        self._effort_mismatches: set[tuple[Effort | None, Effort | None]] = set()
 
     @property
     def warned(self) -> set[str]:
@@ -178,14 +178,27 @@ class UsageCapture:
             provider_cost=telemetry.cost_usd,
         )
 
-    def effort_for_session(self, resolved: ResolvedModel | None) -> None:
-        """The effort the SDK session path sends: none (D7, #216); log the gap once."""
-        if resolved is not None and resolved.effort is not None and not self._effort_gap_logged:
-            self._effort_gap_logged = True
-            _logger.debug(
-                "SDK session path does not apply alias effort %s; records show effort not sent (#216)",
-                resolved.effort.value,
-            )
+    def effort_for_session(
+        self, resolved: ResolvedModel | None, session_effort: Effort | None
+    ) -> Effort | None:
+        """The effort the SDK session path sends: the session's own (#216).
+
+        The live client cannot change effort, so a step whose alias asks for a
+        different one still runs at ``session_effort``. Each distinct mismatch is
+        logged once at WARNING.
+        """
+        if resolved is not None and resolved.effort != session_effort:
+            pair = (resolved.effort, session_effort)
+            if pair not in self._effort_mismatches:
+                self._effort_mismatches.add(pair)
+                _logger.warning(
+                    "alias %s asks for effort %s but the SDK session runs at %s; "
+                    "effort is fixed when the session opens (#216)",
+                    resolved.alias,
+                    resolved.effort.value if resolved.effort else "default",
+                    session_effort.value if session_effort else "default",
+                )
+        return session_effort
 
     def _build(
         self,
