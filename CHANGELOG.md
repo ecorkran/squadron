@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.17] - 20261103
+
 ### Added
 - An implement step now checks the slice design for `pending-pm` decisions before it starts. If any are pending, the run pauses naming each one and spends no model call; answer them in the design and `sq run --resume <id>` (#240).
 

@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261103
 
+### Release 0.24.17
+
+- **Contents:** an implement step pauses while the slice design has pending PM decisions (#240); `sq stats producers` leaves replay runs out (#229); a citation range ending one line past EOF is no longer marked unverified (#196, numbering dropped); `sq pipelines list` keeps a shadowed built-in in its group (#283). Also the metrology audit CLI tests no longer wait out the run cooldown, about 6 minutes off the full suite (#180). #224 closed as already fixed. All as standing-fixes task groups on `main`.
+
 ### Release 0.24.16
 
 - **Contents:** everything 0.24.15 was to carry, plus `sq run` skipping the Context Forge pre-flight for pipelines whose steps don't use it (#288). 0.24.15 was tagged but its CI run failed (a `--help` text assertion in the #286 tests broke under CI's forced colour), so nothing published; its changelog entries moved here and its tag stays dead.
