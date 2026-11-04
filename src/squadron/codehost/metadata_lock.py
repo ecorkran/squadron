@@ -4,11 +4,12 @@ Git does not serialize writes to a repository's shared worktree metadata
 (``.git/worktrees/<name>/``). Two concurrent ``git worktree add``/``remove``/``prune``
 calls against one checkout can read a sibling's admin directory mid-write and fail with
 ``fatal: failed to read .git/worktrees/<sibling>/commondir``. ``git_metadata_lock``
-takes an exclusive ``flock`` around each such call so only one runs at a time.
+takes an exclusive file lock (``core/file_lock.py``: ``flock`` on POSIX,
+``msvcrt.locking`` on Windows) around each such call so only one runs at a time.
 
-POSIX only (design D5): ``fcntl`` is imported inside the lock functions, never at module
-level, so importing this module (and ``worktree``, which ``review_pr`` imports eagerly)
-still works on Windows. Taking the lock there raises ``MetadataLockError``.
+The lock module is imported only when the lock is taken (design D5), so importing this
+module (and ``worktree``, which ``review_pr`` imports eagerly) works on any platform.
+Taking the lock where the module is missing raises ``MetadataLockError``.
 
 One lock file serves every repository: ``.git-metadata.flock`` in the scratch-worktree
 root (``~/.config/squadron/worktrees/`` by default), design D2.
@@ -26,6 +27,7 @@ from typing import TextIO
 
 from squadron.codehost.errors import CodeHostError
 from squadron.codehost.git_refs import GIT_QUERY_TIMEOUT_SECONDS
+from squadron.core import file_lock
 
 _logger = logging.getLogger(__name__)
 
@@ -41,10 +43,10 @@ METADATA_LOCK_TIMEOUT_SECONDS = 2 * GIT_QUERY_TIMEOUT_SECONDS
 
 
 class MetadataLockError(CodeHostError):
-    """The git metadata lock could not be taken: timeout, filesystem error, or no ``fcntl``.
+    """The git metadata lock could not be taken: timeout, filesystem error, or no lock module.
 
     ``timed_out`` separates "held elsewhere, waiting may help" from the failures where
-    waiting never helps (missing ``fcntl``, unwritable root, persistent flock error).
+    waiting never helps (missing lock module, unwritable root, persistent flock error).
     """
 
     def __init__(self, lock_path: Path, detail: str, *, timed_out: bool = False) -> None:
@@ -59,16 +61,16 @@ def git_metadata_lock(root: Path) -> Iterator[None]:
     """Hold the exclusive git-metadata lock under *root* for the ``with`` body.
 
     Every failure to acquire raises ``MetadataLockError`` (design D7). A fresh file is
-    opened per acquisition and never shared (D1): ``flock`` belongs to the open file
-    description, so this serializes threads in one process as well as processes.
+    opened per acquisition and never shared (D1): the lock belongs to the open file, so
+    this serializes threads in one process as well as processes.
     """
     lock_path = root / _LOCK_FILENAME
     try:
-        # Availability probe only (D5); the helpers below re-import it for use.
-        import fcntl  # noqa: F401  # pyright: ignore[reportUnusedImport]
+        # Availability probe only (D5): fail before creating the lock file.
+        file_lock.check_lock_support()
     except ImportError as exc:
         raise MetadataLockError(
-            lock_path, f"fcntl is unavailable on platform {sys.platform!r}: {exc}"
+            lock_path, f"{file_lock.LOCK_MODULE} is unavailable on platform {sys.platform!r}: {exc}"
         ) from exc
 
     try:
@@ -89,14 +91,12 @@ def git_metadata_lock(root: Path) -> Iterator[None]:
 
 
 def _acquire(lock_file: TextIO, lock_path: Path) -> None:
-    """Poll a non-blocking exclusive flock until held or the deadline passes (D3)."""
-    import fcntl
-
+    """Poll a non-blocking exclusive lock until held or the deadline passes (D3)."""
     timeout = METADATA_LOCK_TIMEOUT_SECONDS
     deadline = time.monotonic() + timeout
     while True:
         try:
-            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            file_lock.lock_exclusive_nowait(lock_file)
             return
         except BlockingIOError:
             pass  # held elsewhere — the only error that is retried (D7)
@@ -113,10 +113,8 @@ def _acquire(lock_file: TextIO, lock_path: Path) -> None:
 
 def _release(lock_file: TextIO, lock_path: Path) -> None:
     """Unlock and close. Never raises (D7): a raise here would mask the body's exception."""
-    import fcntl
-
     try:
-        fcntl.flock(lock_file, fcntl.LOCK_UN)
+        file_lock.unlock(lock_file)
     except OSError as exc:
         # Swallowed on purpose: closing the descriptor below releases the lock anyway.
         _logger.warning("Failed to unlock git metadata lock %s: %s", lock_path, exc)

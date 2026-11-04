@@ -30,6 +30,7 @@ from squadron.codehost.worktree import (
     _worktree_root,
     sweep_orphans,
 )
+from squadron.core import file_lock
 from squadron.core.process_lock import ProcessLock
 from squadron.core.process_runner import ProcessResult, ProcessTimedOutError
 from tests.codehost.fake_runner import FakeProcessRunner, UnscriptedCallError
@@ -820,18 +821,14 @@ _PATCHED_LOCK_TIMEOUT_SECONDS = 0.2
 @contextmanager
 def _metadata_lock_held_elsewhere(root: Path) -> Iterator[Path]:
     """Hold the real metadata lock under *root* from this process, as a rival would."""
-    # Imported here, not at module level, so the rest of this file still collects where
-    # fcntl does not exist (929 D5).
-    import fcntl
-
     root.mkdir(parents=True, exist_ok=True)
     lock_path = root / ".git-metadata.flock"
     with lock_path.open("a") as holder:
-        fcntl.flock(holder, fcntl.LOCK_EX)
+        file_lock.lock_exclusive_nowait(holder)
         try:
             yield lock_path
         finally:
-            fcntl.flock(holder, fcntl.LOCK_UN)
+            file_lock.unlock(holder)
 
 
 @pytest.fixture

@@ -2,14 +2,15 @@
 
 Batches and item resumes check out branches and move cf's slice. Two of them in one
 checkout would interleave, and race on ``report.json``. ``project_run_lock`` takes an
-exclusive, non-blocking ``flock`` on ``{git dir}/squadron-run.flock``. The git dir is
-per worktree, so separate registered worktrees still run in parallel.
+exclusive, non-blocking lock on ``{git dir}/squadron-run.flock``: ``flock`` on POSIX,
+``msvcrt.locking`` on Windows (``core/file_lock.py``). The git dir is per worktree, so
+separate registered worktrees still run in parallel.
 
 It never waits: a held lock fails at once, so the caller decides when to retry. A
 killed holder releases the lock when the OS closes its file, so nothing goes stale.
 
-POSIX only, as ``codehost/metadata_lock.py``: ``fcntl`` is imported inside the
-function, so this module imports on Windows, and taking the lock there raises.
+The lock module is imported only when the lock is taken, so this module imports on any
+platform, and taking the lock where the module is missing raises ``RunLockError``.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TextIO, cast
 
+from squadron.core import file_lock
 from squadron.pipeline.git_ops import GitEnvironmentError
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.steps import StepTypeName
@@ -78,7 +80,7 @@ def project_run_lock(cwd: str) -> Iterator[Path]:
     Raises:
         GitEnvironmentError: ``git rev-parse --git-dir`` failed or timed out.
         RunLockHeldError: another run holds the lock.
-        RunLockError: no ``fcntl``, or the lock file could not be opened or locked.
+        RunLockError: no lock module, or the lock file could not be opened or locked.
     """
     lock_path = _git_dir(cwd) / _LOCK_FILENAME
     lock_file = _open(lock_path)
@@ -90,7 +92,7 @@ def project_run_lock(cwd: str) -> Iterator[Path]:
     try:
         yield lock_path
     finally:
-        # Closing the descriptor drops the flock.
+        # Closing the descriptor drops the lock.
         lock_file.close()
 
 
@@ -106,9 +108,11 @@ def _git_dir(cwd: str) -> Path:
 
 def _open(lock_path: Path) -> TextIO:
     try:
-        import fcntl  # noqa: F401  # pyright: ignore[reportUnusedImport]
+        file_lock.check_lock_support()
     except ImportError as exc:
-        message = f"project run lock {lock_path}: fcntl is unavailable on {sys.platform!r}"
+        message = (
+            f"project run lock {lock_path}: {file_lock.LOCK_MODULE} is unavailable on {sys.platform!r}"
+        )
         _logger.error(message)
         raise RunLockError(message) from exc
     try:
@@ -120,10 +124,8 @@ def _open(lock_path: Path) -> TextIO:
 
 
 def _acquire(lock_file: TextIO, lock_path: Path) -> None:
-    import fcntl
-
     try:
-        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        file_lock.lock_exclusive_nowait(lock_file)
     except BlockingIOError:
         message = (
             f"another squadron run holds the project lock ({lock_path}); "
