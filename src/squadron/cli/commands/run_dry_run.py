@@ -16,6 +16,7 @@ from rich.markup import escape
 
 from squadron.integrations.context_forge import ContextForgeClient, ContextForgeError
 from squadron.pipeline.executor import evaluate_each_source, resolve_placeholders
+from squadron.pipeline.loop_resolve import RESOLVE_KEY
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.steps.utils import unpack_inner_steps
 
@@ -61,6 +62,8 @@ def _loop_line(config: dict[str, object]) -> str:
     line = f"max: {config.get('max')}, until: {until}, on_exhaust: {config.get('on_exhaust')}"
     if config.get("commit_each_iteration"):
         line += DRY_RUN_COMMIT_EACH_ITERATION_SUFFIX
+    if isinstance(resolve := config.get(RESOLVE_KEY), dict):
+        line += f", resolve notes with: {cast(dict[str, object], resolve).get('model')}"
     return line
 
 

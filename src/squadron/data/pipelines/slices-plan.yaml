@@ -33,6 +33,7 @@ steps:
             accept_if: "{accept-threshold}"
             skip_if_met: true
             commit_each_iteration: true
+            resolve: { model: "{model}" }
             steps:
               - dispatch: { name: revise, model: "{model}", feedback: review }
               - review: { template: slice, model: "{review-model}", slice: "{slice.index}" }

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import cast
 
 from squadron.pipeline.models import ActionResult
 from squadron.review.models import Verdict
@@ -94,6 +95,8 @@ class LoopConfig:
     accept_if: LoopCondition | None = None
     # Skip every round when the verdict already in scope meets `until`.
     skip_if_met: bool = False
+    # Dispatch config of the step that resolves the final review's notes (#287).
+    resolve: dict[str, object] | None = None
 
 
 def parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
@@ -125,7 +128,16 @@ def parse_loop_config(loop_dict: dict[str, object]) -> LoopConfig:
         commit_each_iteration=loop_dict.get("commit_each_iteration") is True,
         accept_if=_parse_loop_condition(loop_dict, "accept_if"),
         skip_if_met=loop_dict.get("skip_if_met") is True,
+        resolve=_parse_resolve(loop_dict.get("resolve")),
     )
+
+
+def _parse_resolve(raw: object) -> dict[str, object] | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError(f"loop.resolve must be a mapping of dispatch keys, got: {raw!r}")
+    return {str(key): value for key, value in cast(dict[object, object], raw).items()}
 
 
 def _parse_loop_condition(loop_dict: dict[str, object], field: str) -> LoopCondition | None:

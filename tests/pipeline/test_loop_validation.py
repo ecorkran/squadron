@@ -346,3 +346,50 @@ def test_placeholder_values_pass_load_time_validation() -> None:
         _loop_errors(max="{max-revisions}", until="{pass}", accept_if="{accept}", skip_if_met=True)
         == []
     )
+
+
+# ---------------------------------------------------------------------------
+# #287 — resolve: the final review's notes are resolved inside the loop
+# ---------------------------------------------------------------------------
+
+
+def _resolve_messages(resolve: object, **loop_cfg: object) -> list[str]:
+    cfg: dict[str, object] = {
+        "max": 2,
+        "until": "review.pass",
+        "commit_each_iteration": True,
+        "steps": [{"review": {"template": "slice"}}],
+        "resolve": resolve,
+        **loop_cfg,
+    }
+    return [e.message for e in validate_pipeline(_pipeline_with_loop(cfg)) if e.field == "resolve"]
+
+
+def test_resolve_with_a_dispatch_config_validates_clean() -> None:
+    assert _resolve_messages({"model": "{model}"}) == []
+
+
+def test_resolve_without_commit_each_iteration_rejects() -> None:
+    [message] = _resolve_messages({"model": "sonnet"}, commit_each_iteration=False)
+    assert "commit_each_iteration" in message
+
+
+def test_resolve_that_is_not_a_mapping_rejects() -> None:
+    [message] = _resolve_messages("sonnet")
+    assert "mapping" in message
+
+
+def test_resolve_may_not_set_the_keys_the_loop_owns() -> None:
+    messages = _resolve_messages({"prompt": "x", "feedback": "review"})
+    assert any("'prompt'" in m for m in messages)
+    assert any("'feedback'" in m for m in messages)
+
+
+def test_resolve_reports_bad_dispatch_keys() -> None:
+    [message] = _resolve_messages({"artifact": "poem"})
+    assert "resolve.artifact" in message
+
+
+def test_resolve_rejects_an_unknown_key() -> None:
+    [message] = _resolve_messages({"modle": "sonnet"})
+    assert "'modle'" in message

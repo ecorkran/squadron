@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+import squadron.pipeline.steps.dispatch  # noqa: F401  # pyright: ignore[reportUnusedImport] — registers the step type
 import squadron.pipeline.steps.loop  # noqa: F401  # pyright: ignore[reportUnusedImport] — registers the step type
 from squadron.pipeline.actions.commit import CommitAction
 from squadron.pipeline.control_params import ACCEPT_DECISION
@@ -38,6 +39,8 @@ class Review:
 
     verdict: str
     pause: bool = False
+    # Findings the review leaves; a passing review with findings has notes to resolve.
+    notes: list[str] = field(default_factory=lambda: [])
 
 
 @dataclass
@@ -51,13 +54,17 @@ class Script:
     revisions: int = 0
     review_calls: int = 0
     log: list[str] = field(default_factory=lambda: [])
+    resolve_prompts: list[str] = field(default_factory=lambda: [])
+    resolve_fails: bool = False
 
     def _write(self, relative: str, text: str) -> None:
         path = self.repo / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
 
-    async def dispatch(self, _ctx: ActionContext) -> ActionResult:
+    async def dispatch(self, ctx: ActionContext) -> ActionResult:
+        if ctx.params.get("feedback") == "review":
+            return self._resolve(ctx)
         self.revisions += 1
         self._write(DESIGN, f"design v{self.revisions}\n")
         if self.agent_commits:
@@ -65,13 +72,30 @@ class Script:
             run_test_git(self.repo, "commit", "-q", "-m", f"agent: design v{self.revisions}")
         return ActionResult(success=True, action_type="dispatch", outputs={})
 
+    def _resolve(self, ctx: ActionContext) -> ActionResult:
+        """The resolve dispatch: applies the notes and appends the Resolution section."""
+        self.resolve_prompts.append(str(ctx.params["prompt"]))
+        if self.resolve_fails:
+            return ActionResult(success=False, action_type="dispatch", outputs={}, error="boom")
+        self._write(DESIGN, (self.repo / DESIGN).read_text() + "notes applied\n")
+        review = self.repo / REVIEW
+        review.write_text(review.read_text() + "\n## Resolution\n- applied\n")
+        return ActionResult(success=True, action_type="dispatch", outputs={})
+
     async def review(self, _ctx: ActionContext) -> ActionResult:
         scripted = self.reviews[self.review_calls]
         self.review_calls += 1
         self._write(REVIEW, f"---\ndocType: review\nverdict: {scripted.verdict}\n---\n")
-        outputs: dict[str, object] = {"checkpoint": "paused"} if scripted.pause else {}
+        outputs: dict[str, object] = {"review_file": REVIEW}
+        if scripted.pause:
+            outputs["checkpoint"] = "paused"
+        findings: list[object] = [{"severity": "NOTE", "summary": n} for n in scripted.notes]
         return ActionResult(
-            success=True, action_type="review", outputs=outputs, verdict=scripted.verdict
+            success=True,
+            action_type="review",
+            outputs=outputs,
+            verdict=scripted.verdict,
+            findings=findings,
         )
 
 
@@ -537,3 +561,130 @@ async def test_a_state_unknown_ref_write_stops_the_run_instead_of_continuing(
 
     with pytest.raises(GitStateUnknownError, match="update-ref"):
         await _execute(run)
+
+
+# ---------------------------------------------------------------------------
+# resolve (#287): the final review's notes are resolved inside the loop
+# ---------------------------------------------------------------------------
+
+_RESOLVE: dict[str, object] = {"model": "sonnet"}
+
+
+def _review_text(repo: Path) -> str:
+    return (repo / REVIEW).read_text()
+
+
+@pytest.mark.asyncio
+async def test_notes_on_the_final_review_are_resolved_and_collapsed_into_one_commit(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    run = _start(
+        _pipeline("resolve", max_rounds=3, resolve=_RESOLVE),
+        temp_git_repo,
+        [Review("CONCERNS"), Review("PASS", notes=["tighten the summary"])],
+        runs_dir,
+    )
+
+    result = await _execute(run)
+
+    assert result.status == ExecutionStatus.COMPLETED
+    ledger = result.step_results[-1].loop_commits
+    # The phase commit, two round commits, and the resolution's commit.
+    assert ledger is not None and ledger.commit_count == 4
+    assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: PASS)"]
+    assert "## Resolution" in _review_text(temp_git_repo)
+    assert "notes applied" in (temp_git_repo / DESIGN).read_text()
+    assert run_test_git(temp_git_repo, "status", "--porcelain") == ""
+    [prompt] = run.script.resolve_prompts
+    assert REVIEW in prompt and "## Resolution" in prompt
+
+
+@pytest.mark.asyncio
+async def test_a_skipped_loop_resolves_the_phase_reviews_notes_and_collapses(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    run = _start(
+        _pipeline("resolve-skip", max_rounds=2, phase_review=True, skip_if_met=True, resolve=_RESOLVE),
+        temp_git_repo,
+        [Review("PASS", notes=["name the owner"])],
+        runs_dir,
+    )
+
+    result = await _execute(run)
+
+    assert result.step_results[-1].iteration == 0
+    assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: PASS)"]
+    assert "## Resolution" in _review_text(temp_git_repo)
+
+
+@pytest.mark.asyncio
+async def test_an_accept_if_completion_resolves_its_notes(temp_git_repo: Path, runs_dir: Path) -> None:
+    run = _start(
+        _pipeline(
+            "resolve-accept", max_rounds=1, accept_if="review.concerns_or_better", resolve=_RESOLVE
+        ),
+        temp_git_repo,
+        [Review("CONCERNS", notes=["split step 3"])],
+        runs_dir,
+    )
+
+    result = await _execute(run)
+
+    assert result.step_results[-1].accepted is True
+    assert len(run.script.resolve_prompts) == 1
+    assert _subjects(temp_git_repo) == ["init", "docs: add slice 105 design (review: CONCERNS)"]
+
+
+@pytest.mark.asyncio
+async def test_a_final_review_without_notes_runs_no_resolve(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    run = _start(
+        _pipeline("resolve-clean", max_rounds=3, resolve=_RESOLVE),
+        temp_git_repo,
+        [Review("CONCERNS", notes=["earlier round note"]), Review("PASS")],
+        runs_dir,
+    )
+
+    result = await _execute(run)
+
+    assert result.status == ExecutionStatus.COMPLETED
+    assert run.script.resolve_prompts == []
+    ledger = result.step_results[-1].loop_commits
+    assert ledger is not None and ledger.commit_count == 3
+    assert "## Resolution" not in _review_text(temp_git_repo)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_resolve_fails_the_loop_and_leaves_history(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    run = _start(
+        _pipeline("resolve-fail", max_rounds=2, resolve=_RESOLVE),
+        temp_git_repo,
+        [Review("PASS", notes=["a note"])],
+        runs_dir,
+    )
+    run.script.resolve_fails = True
+
+    result = await _execute(run)
+
+    assert result.status == ExecutionStatus.FAILED
+    assert "resolve dispatch failed: boom" in (result.step_results[-1].error or "")
+    assert len(_subjects(temp_git_repo)) == 3  # init, the phase commit, round 1
+
+
+@pytest.mark.asyncio
+async def test_a_loop_accepted_by_decision_leaves_notes_unresolved(
+    temp_git_repo: Path, runs_dir: Path
+) -> None:
+    reviews = [Review("CONCERNS", notes=["n"]), Review("CONCERNS", pause=True, notes=["n"])]
+    run = _start(
+        _pipeline("resolve-decision", max_rounds=4, resolve=_RESOLVE), temp_git_repo, reviews, runs_dir
+    )
+    assert (await _execute(run)).status == ExecutionStatus.PAUSED
+
+    resumed = await _execute(run, resume=True, params={ACCEPT_DECISION: True})
+
+    assert resumed.step_results[-1].accepted is True
+    assert run.script.resolve_prompts == []

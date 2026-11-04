@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Planning loops resolve the notes their final review leaves before they finish, so the document, its review and the resolution land as one commit instead of needing a hand-made follow-up commit.
+
 ## [0.24.17] - 20261103
 
 ### Added

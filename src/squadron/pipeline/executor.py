@@ -68,6 +68,7 @@ from squadron.pipeline.loop_config import (
     parse_loop_config,
 )
 from squadron.pipeline.loop_ledger import LoopCommitLedger, claim_actions, start_ledger
+from squadron.pipeline.loop_resolve import ResolveError, final_review, has_notes, resolve_step
 from squadron.pipeline.models import (
     ActionContext,
     ActionResult,
@@ -1549,9 +1550,8 @@ async def _execute_loop_body(
     collapsed into one commit when the loop completes. The collapse never changes
     the loop's status.
     """
-    commit_params = _loop_commit_params(
-        parse_loop_config(resolved_config), resolved_config, merged_params, start_iteration
-    )
+    loop_config = parse_loop_config(resolved_config)
+    commit_params = _loop_commit_params(loop_config, resolved_config, merged_params, start_iteration)
     ledger: LoopCommitLedger | None = None
     if commit_params is not None:
         ledger = await asyncio.to_thread(
@@ -1586,6 +1586,33 @@ async def _execute_loop_body(
         observer=observer,
         ledger=ledger,
     )
+    if (
+        loop_config.resolve is not None
+        and commit_params is not None
+        and result.status == ExecutionStatus.COMPLETED
+    ):
+        result = await _resolve_final_notes(
+            result=result,
+            resolve_config=loop_config.resolve,
+            commit_params=commit_params,
+            ledger=ledger,
+            step=step,
+            step_index=step_index,
+            merged_params=merged_params,
+            prior_outputs=prior_outputs,
+            pipeline_name=pipeline_name,
+            run_id=run_id,
+            cwd=cwd,
+            resolver=resolver,
+            cf_client=cf_client,
+            sdk_session=sdk_session,
+            usage_capture=usage_capture,
+            spend=spend,
+            get_step_type_fn=get_step_type_fn,
+            get_action_fn=get_action_fn,
+            runs_dir=runs_dir,
+            failure_status=_loop_failure_status(loop_config),
+        )
     result.loop_commits = ledger
     if ledger is not None and commit_params is not None and result.status == ExecutionStatus.COMPLETED:
         # Refusals only log. GitStateUnknownError (a timed-out ref write) is left to
@@ -1594,6 +1621,102 @@ async def _execute_loop_body(
             collapse_completed_loop, ledger, commit_params, step.name, cwd, cf_client
         )
     return result
+
+
+async def _resolve_final_notes(
+    *,
+    result: StepResult,
+    resolve_config: dict[str, object],
+    commit_params: dict[str, object],
+    ledger: LoopCommitLedger | None,
+    step: Any,
+    step_index: int,
+    merged_params: dict[str, object],
+    prior_outputs: dict[str, ActionResult],
+    pipeline_name: str,
+    run_id: str,
+    cwd: str,
+    resolver: Any,
+    cf_client: Any,
+    sdk_session: SDKExecutionSession | None,
+    usage_capture: UsageCapture | None,
+    spend: RunSpend | None,
+    get_step_type_fn: Any,
+    get_action_fn: Any,
+    runs_dir: Path | None,
+    failure_status: ExecutionStatus,
+) -> StepResult:
+    """Run the loop's resolve dispatch and commit it, when its final review left notes (#287).
+
+    The commit is claimed by the ledger, so the collapse folds the resolution into the
+    loop's one commit. A loop accepted by ``--decision accept`` skips it: the operator
+    accepted the work as it stands. A failed resolve fails the loop, which then does not
+    collapse, so half-resolved work is never folded in.
+    """
+    if result.accepted and result.iteration == 0:
+        _logger.info("loop step %s: accepted by decision; review notes left unresolved", step.name)
+        return result
+    review = final_review(result.action_results, prior_outputs, rounds_run=result.iteration > 0)
+    if review is None or not has_notes(review):
+        return result
+
+    def failed(error: str, actions: list[ActionResult]) -> StepResult:
+        _logger.error("loop %s: %s", step.name, error)
+        return replace(
+            result,
+            status=failure_status,
+            action_results=[*result.action_results, *actions],
+            error=f"loop {step.name}: {error}",
+        )
+
+    try:
+        resolve = resolve_step(resolve_config, review)
+    except ResolveError as exc:
+        return failed(str(exc), [])
+    resolve_prior = {**prior_outputs, "resolve-review": review}
+    resolved = resolve_placeholders(resolve.config, merged_params)
+    dispatch_result = await _execute_step(
+        step=resolve,
+        resolved_config=resolved,
+        step_index=step_index,
+        merged_params=merged_params,
+        prior_outputs=resolve_prior,
+        step_outputs=None,
+        pipeline_name=pipeline_name,
+        run_id=run_id,
+        cwd=cwd,
+        resolver=resolver,
+        cf_client=cf_client,
+        sdk_session=sdk_session,
+        usage_capture=usage_capture,
+        spend=spend,
+        get_step_type_fn=get_step_type_fn,
+        get_action_fn=get_action_fn,
+        runs_dir=runs_dir,
+    )
+    actions = list(dispatch_result.action_results)
+    if (dispatch_error := _failed_dispatch_error(dispatch_result)) is not None:
+        return failed(f"resolve dispatch failed: {dispatch_error}", actions)
+    commit_ctx = ActionContext(
+        pipeline_name=pipeline_name,
+        run_id=run_id,
+        params=commit_params,
+        step_name=step.name,
+        step_index=step_index,
+        prior_outputs=resolve_prior,
+        resolver=resolver,
+        cf_client=cf_client,
+        cwd=cwd,
+        sdk_session=sdk_session,
+        usage_capture=usage_capture,
+    )
+    commit_result = await execute_stamped(get_action_fn("commit"), commit_ctx, ActionType.COMMIT)
+    actions.append(commit_result)
+    if ledger is not None:
+        await asyncio.to_thread(claim_actions, ledger, actions, cwd)
+    if not commit_result.success:
+        return failed(f"resolve commit failed: {commit_result.error}", actions)
+    return replace(result, action_results=[*result.action_results, *actions])
 
 
 def _loop_commit_params(

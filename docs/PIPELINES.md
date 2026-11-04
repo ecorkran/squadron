@@ -348,6 +348,7 @@ Named steps must appear **earlier** than the `gate` step. At the top level the l
 | `skip_if_met` | bool | no | Before round 1, check `until` against the most recent verdict already in scope (e.g. the review a preceding phase step ran). If it passes, the loop runs zero rounds. Requires `until`. Default `false` |
 | `on_exhaust` | string | no | What happens if `max` is reached without `until` (or `accept_if`) passing: `fail` (mark the step FAILED, default), `checkpoint` (pause for a human), `skip` |
 | `commit_each_iteration` | bool | no | Commit after each iteration's body completes, before `until:` is evaluated. Default `false`. Rejected at validation time if the body already commits — see [`commit_each_iteration` and per-round history](#commit_each_iteration-and-per-round-history) |
+| `resolve` | mapping | no | Dispatch keys (e.g. `{ model: "{model}" }`) for one resolve step that runs when the loop completes and its final review still has findings: it applies them and appends a `## Resolution` section to the review file, then commits. Requires `commit_each_iteration: true`; `prompt` and `feedback` are set by the loop. See [Resolving review notes](#resolving-review-notes) |
 | `steps` | list | yes | Body — an ordered list of step definitions, using any registered step type except `loop` and `each` |
 
 `max`, `until` and `accept_if` may all come from pipeline params (`"{max-revisions}"`, `"{pass-threshold}"`); load-time validation skips placeholder values and checks them once they resolve.
@@ -573,6 +574,10 @@ The recommended body is **fix-first** — `[dispatch, review]`, no pre-loop judg
 Each loop-appended commit follows the [Commits](#commits) rules, so consecutive rounds read differently in `git log` (`docs: revise slice 105 design, round 2 (review: PASS)`). What a round commits is decided by the last `review` in the loop body: its template picks the subject (`slice` → design, `tasks` → tasks, `code` → implement, `arch` → architecture) and its `slice` or `plan` picks the target. A loop with `commit_each_iteration` and no `review` in its body fails that round's commit with `commit scope unknown: no review in round N`. A round that changes nothing still no-ops at the git level (nothing to commit), with a WARNING naming the step. `--dry-run` shows `commit_each_iteration` on the loop's summary line when set.
 
 Staging is scoped: only the files the round produced are committed. Unrelated changes in the working tree stay where they are.
+
+### Resolving review notes
+
+A loop with `resolve` set handles the notes its last review leaves (a PASS with findings, or a CONCERNS accepted by `accept_if`) itself. When the loop completes, one dispatch applies each finding or records why not in a `## Resolution` section of the review file, and its changes are committed like a round. That commit is collapsed with the rest, so the document still lands as one commit. It also runs when `skip_if_met` settled the loop on the phase step's review. A final review with no findings runs nothing. A loop accepted with `--decision accept` leaves the notes alone. A resolve dispatch or commit that fails fails the loop, which then does not collapse.
 
 ### `revision_number:` — per-round artifact provenance
 

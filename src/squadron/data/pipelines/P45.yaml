@@ -24,6 +24,7 @@ steps:
       accept_if: "{accept-threshold}"
       skip_if_met: true
       commit_each_iteration: true
+      resolve: { model: "{design-model}" }
       on_exhaust: checkpoint
       steps:
         - dispatch: { name: revise, model: "{design-model}", feedback: review, artifact: design }
@@ -41,6 +42,7 @@ steps:
       accept_if: "{accept-threshold}"
       skip_if_met: true
       commit_each_iteration: true
+      resolve: { model: "{model}" }
       on_exhaust: checkpoint
       steps:
         - dispatch: { name: revise, model: "{model}", feedback: review, artifact: tasks }

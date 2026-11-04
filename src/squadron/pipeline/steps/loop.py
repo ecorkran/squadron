@@ -10,6 +10,7 @@ from typing import cast
 
 from squadron.pipeline.actions.gate import GatePolicy, policy_contract
 from squadron.pipeline.loop_config import ExhaustBehavior, LoopCondition
+from squadron.pipeline.loop_resolve import RESOLVE_KEY, RESOLVE_STEP_NAME
 from squadron.pipeline.models import StepConfig, ValidationError
 from squadron.pipeline.steps import StepTypeName, get_step_type, register_step_type
 from squadron.pipeline.steps.utils import any_step_needs_context_forge, unpack_inner_steps
@@ -25,9 +26,12 @@ _KNOWN_KEYS = frozenset(
         "on_exhaust",
         "strategy",
         "commit_each_iteration",
+        RESOLVE_KEY,
         "steps",
     }
 )
+# Resolve-step keys the loop sets itself (#287).
+_RESOLVE_OWNED_KEYS = ("prompt", "feedback")
 
 
 def _is_placeholder(value: object) -> bool:
@@ -151,6 +155,8 @@ class LoopStepType:
                 )
             )
 
+        errors.extend(self._validate_resolve(cfg, step_type))
+
         # steps: required, non-empty list
         steps_val = cfg.get("steps")
         if steps_val is None:
@@ -190,6 +196,39 @@ class LoopStepType:
                     self._validate_commit_each_iteration(cast(list[object], steps_val), step_type)
                 )
 
+        return errors
+
+    def _validate_resolve(self, cfg: dict[str, object], step_type: str) -> list[ValidationError]:
+        """``resolve`` (#287): a dispatch config whose commit joins the loop's collapse."""
+        raw = cfg.get(RESOLVE_KEY)
+        if raw is None:
+            return []
+
+        def error(message: str) -> ValidationError:
+            return ValidationError(field=RESOLVE_KEY, message=message, action_type=step_type)
+
+        if not isinstance(raw, dict):
+            return [error(f"'{RESOLVE_KEY}' must be a mapping of dispatch keys")]
+        resolve_cfg = cast(dict[str, object], raw)
+        errors: list[ValidationError] = []
+        if cfg.get("commit_each_iteration") is not True:
+            errors.append(
+                error(
+                    f"'{RESOLVE_KEY}' requires 'commit_each_iteration: true': the "
+                    f"resolution is committed and collapsed with the loop's rounds"
+                )
+            )
+        dispatch_type = get_step_type(StepTypeName.DISPATCH)
+        for key in resolve_cfg:
+            if key in _RESOLVE_OWNED_KEYS:
+                errors.append(error(f"'{RESOLVE_KEY}' may not set '{key}'; the loop sets it"))
+            elif key not in dispatch_type.known_keys:
+                errors.append(error(f"'{RESOLVE_KEY}' has unknown dispatch key '{key}'"))
+        dispatch = StepConfig(
+            step_type=StepTypeName.DISPATCH, name=RESOLVE_STEP_NAME, config=resolve_cfg
+        )
+        for inner in dispatch_type.validate(dispatch):
+            errors.append(error(f"'{RESOLVE_KEY}.{inner.field}': {inner.message}"))
         return errors
 
     def _validate_inner_steps(
