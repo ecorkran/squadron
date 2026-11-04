@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.20] - 20261104
+
+### Fixed
+- `-p a=1, b=2` (a space after the comma) now works on `sq run` and the `sq review` commands instead of failing with `expected key=value` (#291).
+- `tasks-plan` and other per-slice loops no longer log a "cannot resolve slice" traceback from the item-reset summary step.
+
 ## [0.24.19] - 20261104
 
 ### Fixed

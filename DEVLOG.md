@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261104
 
+### Release 0.24.20
+
+- **Contents:** a space after the comma in `-p a=1, b=2` is accepted on `sq run` and `sq review` (#291); the summary step resolves a slice from an `each` loop record instead of warning.
+
 ### Release 0.24.19
 
 - **Contents:** an alias's `effort` now applies to steps in the shared SDK session; the session opens at its first step's effort and a later mismatch warns once per alias (#216). Also filed #290 (two slow tests).
