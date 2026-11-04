@@ -246,6 +246,16 @@ def test_session_effort_mismatch_warns_once_and_sends_the_session_effort(
     assert "high" in warnings[0]
 
 
+def test_session_effort_mismatch_warns_once_per_alias(caplog: pytest.LogCaptureFixture) -> None:
+    capture = UsageCapture(set())
+
+    with caplog.at_level(logging.WARNING, logger=_MOD):
+        for alias in ("alias-a", "alias-b", "alias-a"):
+            capture.effort_for_session(_resolved(alias, "sdk", effort=Effort.xhigh), Effort.high)
+
+    assert len(caplog.records) == 2
+
+
 def test_session_effort_mismatch_against_default_warns(caplog: pytest.LogCaptureFixture) -> None:
     capture = UsageCapture(set())
 

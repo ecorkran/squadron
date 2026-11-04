@@ -657,12 +657,13 @@ async def execute_pipeline(
         # Mid-run lazy session hook: connect just before the first step that
         # statically requires an SDK session, when none has been connected yet.
         if sdk_session is None and pool_policy == PoolClassificationPolicy.LAZY:
-            if _step_needs_sdk(step, resolver, merged_params):
+            sdk_candidate = _step_sdk_candidate(step, resolver, merged_params)
+            if sdk_candidate is not None:
                 try:
                     sdk_session = await _connect_lazy_session(
                         run_id=effective_run_id,
                         seed=resume_seed,
-                        effort=model_effort(_step_sdk_candidate(step, resolver, merged_params)),
+                        effort=model_effort(sdk_candidate),
                     )
                     resume_seed = None  # a later connect must never re-seed
                 except Exception as exc:
@@ -759,15 +760,6 @@ async def execute_pipeline(
         step_results=step_results,
         run_id=effective_run_id,
     )
-
-
-def _step_needs_sdk(
-    step: Any,
-    resolver: Any,
-    params: dict[str, object],
-) -> bool:
-    """Return True iff *step* statically resolves to an SDK profile."""
-    return _step_sdk_candidate(step, resolver, params) is not None
 
 
 def _step_sdk_candidate(

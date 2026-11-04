@@ -268,7 +268,7 @@ async def _resume_lazily(tmp_path: Path, run_id: str) -> AsyncMock:
     noop = _make_noop_action()
     connect = AsyncMock(return_value=_make_session_mock())
     with (
-        patch("squadron.pipeline.executor._step_needs_sdk", return_value=True),
+        patch("squadron.pipeline.executor._step_sdk_candidate", return_value="sonnet"),
         patch("squadron.pipeline.executor._connect_lazy_session", connect),
     ):
         await execute_pipeline(

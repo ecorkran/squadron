@@ -58,3 +58,18 @@ async def test_a_failed_connect_propagates_before_the_body_runs() -> None:
             async with pipeline_session(_classification(needs_session=True)):
                 ran = True
     assert not ran
+
+
+@pytest.mark.asyncio
+async def test_session_opens_at_the_classifications_effort() -> None:
+    from squadron.core.models import Effort
+
+    session = MagicMock(disconnect=AsyncMock())
+    classification = _classification(needs_session=True)
+    classification.session_effort = Effort.high
+    with patch(
+        "squadron.pipeline.run_session.open_pipeline_session", new=AsyncMock(return_value=session)
+    ) as opener:
+        async with pipeline_session(classification):
+            pass
+    opener.assert_awaited_once_with(effort=Effort.high)

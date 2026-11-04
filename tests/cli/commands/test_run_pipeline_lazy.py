@@ -28,7 +28,7 @@ from squadron.pipeline.executor import (
     ExecutionStatus,
     LazySessionConnectError,
     PipelineResult,
-    _step_needs_sdk,
+    _step_sdk_candidate,
     execute_pipeline,
 )
 from squadron.pipeline.models import ActionContext, ActionResult, PipelineDefinition, StepConfig
@@ -106,41 +106,41 @@ def _sdk_base_patches(
 
 
 # ---------------------------------------------------------------------------
-# T10 — _step_needs_sdk unit tests
+# T10 — _step_sdk_candidate unit tests
 # ---------------------------------------------------------------------------
 
 
-class TestStepNeedsSdk:
-    """Unit tests for the _step_needs_sdk helper."""
+class TestStepSdkCandidate:
+    """Unit tests for the _step_sdk_candidate helper."""
 
     def _make_resolver(self, config_default: str | None = None) -> ModelResolver:
         return ModelResolver(config_default=config_default)
 
-    def test_returns_true_for_sdk_alias(self) -> None:
+    def test_returns_the_alias_for_sdk_alias(self) -> None:
         step = StepConfig(step_type="dispatch", name="s", config={"model": "sonnet"})
         resolver = self._make_resolver()
-        assert _step_needs_sdk(step, resolver, {}) is True
+        assert _step_sdk_candidate(step, resolver, {}) == "sonnet"
 
-    def test_returns_false_for_non_sdk_alias(self) -> None:
+    def test_returns_none_for_non_sdk_alias(self) -> None:
         step = StepConfig(step_type="dispatch", name="s", config={"model": "minimax"})
         resolver = self._make_resolver()
-        assert _step_needs_sdk(step, resolver, {}) is False
+        assert _step_sdk_candidate(step, resolver, {}) is None
 
-    def test_returns_false_for_pool_candidate(self) -> None:
+    def test_returns_none_for_pool_candidate(self) -> None:
         step = StepConfig(step_type="dispatch", name="s", config={"model": "pool:review"})
         resolver = self._make_resolver()
-        assert _step_needs_sdk(step, resolver, {}) is False
+        assert _step_sdk_candidate(step, resolver, {}) is None
 
-    def test_returns_false_for_non_persistent_step_type(self) -> None:
+    def test_returns_none_for_non_persistent_step_type(self) -> None:
         # review steps use one-shot path, not persistent session
         step = StepConfig(step_type="review", name="s", config={"model": "sonnet"})
         resolver = self._make_resolver()
-        assert _step_needs_sdk(step, resolver, {}) is False
+        assert _step_sdk_candidate(step, resolver, {}) is None
 
-    def test_returns_false_for_checkpoint_step(self) -> None:
+    def test_returns_none_for_checkpoint_step(self) -> None:
         step = StepConfig(step_type="checkpoint", name="s", config={})
         resolver = self._make_resolver()
-        assert _step_needs_sdk(step, resolver, {}) is False
+        assert _step_sdk_candidate(step, resolver, {}) is None
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +225,34 @@ class TestMidRunSessionHook:
             )
 
         mock_connect.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_lazy_session_opens_at_the_first_steps_alias_effort(self) -> None:
+        """The first SDK step's alias effort is what the lazy connect is given (#216)."""
+        from squadron.core.models import Effort
+
+        definition = _make_definition(
+            steps=[StepConfig(step_type="dispatch", name="s1", config={"model": "sonnet"})]
+        )
+        with (
+            patch("squadron.pipeline.executor.model_effort", return_value=Effort.high) as reader,
+            patch(
+                "squadron.pipeline.executor._connect_lazy_session",
+                new_callable=AsyncMock,
+                return_value=MagicMock(),
+            ) as mock_connect,
+        ):
+            await execute_pipeline(
+                definition,
+                {},
+                resolver=ModelResolver(),
+                cf_client=self._make_cf_client(),
+                pool_policy=PoolClassificationPolicy.LAZY,
+                _action_registry=self._make_action_registry(),
+            )
+
+        reader.assert_called_once_with("sonnet")
+        assert mock_connect.await_args.kwargs["effort"] is Effort.high
 
     @pytest.mark.asyncio
     async def test_multiple_sdk_steps_reuse_same_session(self) -> None:
