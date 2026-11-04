@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Squadron Quick Reference</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172b2b;
+      --muted: #526565;
+      --line: #cbd8d5;
+      --paper: #fff;
+      --wash: #edf5f2;
+      --teal: #006b62;
+      --orange: #b64b25;
+      --blue: #315ea8;
+      --yellow: #e3b132;
+      --pale-blue: #edf2fb;
+      --pale-orange: #fff1e9;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #e8efed;
+      color: var(--ink);
+      font: 12px/1.34 "Avenir Next", Avenir, "Segoe UI", sans-serif;
+    }
+
+    .sheet {
+      position: relative;
+      width: min(100%, 8.5in);
+      min-height: 11in;
+      margin: 24px auto;
+      padding: 0.48in 0.52in 0.42in;
+      background: var(--paper);
+      box-shadow: 0 8px 32px #183c3820;
+    }
+
+
+    header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 10px 0 11px;
+      border-bottom: 3px solid var(--orange);
+    }
+
+    .eyebrow { margin: 0 0 4px; color: var(--orange); font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 28px; line-height: 1; font-weight: 760; }
+    .subtitle { max-width: 245px; margin: 0; color: var(--muted); text-align: right; font-size: 11px; }
+
+    .thesis {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 13px 0 14px;
+    }
+
+    .thesis > div { padding: 9px 11px; border-left: 4px solid var(--orange); background: var(--pale-orange); }
+    .thesis > div:last-child { border-color: var(--teal); background: var(--wash); }
+    .thesis strong { display: block; margin-bottom: 2px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    section { margin: 0 0 12px; }
+
+    h2 {
+      margin: 0 0 5px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid var(--line);
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    h3 { margin: 8px 0 3px; color: var(--orange); font-size: 10px; text-transform: uppercase; }
+    p { margin: 3px 0 6px; }
+    ul, ol { margin: 3px 0 6px; padding-left: 17px; }
+    li { margin: 2px 0; }
+
+    pre {
+      margin: 5px 0 7px;
+      padding: 7px 8px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      background: #f2f6f5;
+      border-left: 3px solid var(--orange);
+      font: 10px/1.3 "SFMono-Regular", Consolas, monospace;
+    }
+
+    code { font: 0.96em "SFMono-Regular", Consolas, monospace; }
+    .muted { color: var(--muted); }
+
+    .flow { margin: 8px 0 10px; padding: 10px 12px 11px; background: #f7f8f4; border: 1px solid var(--line); }
+    .flow-title { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; font-size: 10px; font-weight: 800; text-transform: uppercase; }
+    .flow-title span:last-child { color: var(--muted); font-weight: 500; text-transform: none; }
+    .flow-track { display: grid; grid-template-columns: 1fr 20px 1fr 20px 1fr 20px 1fr; align-items: stretch; gap: 3px; }
+    .node { min-height: 70px; padding: 7px 7px 6px; background: white; border-top: 4px solid var(--blue); }
+    .node.teal { border-color: var(--teal); }
+    .node.orange { border-color: var(--orange); }
+    .node.yellow { border-color: var(--yellow); }
+    .node b { display: block; margin-bottom: 3px; font-size: 10px; }
+    .node small { color: var(--muted); font-size: 9px; line-height: 1.2; }
+    .arrow { align-self: center; color: var(--muted); text-align: center; font-size: 18px; font-weight: 700; }
+
+    .quick-commands { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin: 9px 0 11px; }
+    .quick-commands > div { padding: 7px 9px; background: var(--wash); border-left: 3px solid var(--teal); }
+    .quick-commands > div:last-child { background: var(--pale-orange); border-color: var(--orange); }
+    .quick-commands b { display: block; margin-bottom: 3px; font-size: 10px; text-transform: uppercase; }
+    .quick-commands p { margin: 1px 0; font: 9px/1.35 "SFMono-Regular", Consolas, monospace; }
+
+    .command-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 10px; margin: 4px 0 7px; padding: 0; list-style: none; }
+    .command-notes li { margin: 0; font-size: 10px; line-height: 1.25; }
+    .command-notes code { color: var(--teal); font-size: 9px; font-weight: 700; }
+    .sq-notes code { color: var(--orange); }
+
+    .callout { margin-top: 7px; padding: 8px 9px; background: #fff4eb; border-left: 4px solid var(--orange); font-size: 10px; }
+    .band { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 10px; margin: 6px 0; padding: 7px 9px; background: var(--pale-orange); border-left: 4px solid var(--orange); }
+    .band strong { font-size: 14px; }
+    .band:nth-of-type(2) { background: var(--pale-blue); border-color: var(--blue); }
+    .band:nth-of-type(3) { background: var(--wash); border-color: var(--teal); }
+    .band p { margin: 0; }
+
+    footer {
+      position: absolute;
+      right: 0.52in;
+      bottom: 0.25in;
+      left: 0.52in;
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      padding-top: 6px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 8px;
+    }
+
+    footer a { color: var(--teal); }
+    .print { position: fixed; z-index: 2; top: 14px; right: 14px; padding: 9px 13px; border: 0; border-radius: 4px; background: var(--teal); color: white; font: inherit; font-weight: 700; cursor: pointer; }
+
+    @media (max-width: 700px) {
+      .sheet { margin: 0; padding: 32px 24px 48px; }
+      main { grid-template-columns: 1fr; gap: 4px; }
+      .thesis, .quick-commands { grid-template-columns: 1fr; }
+      .subtitle { max-width: 155px; }
+      .flow-track { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); height: 16px; }
+      .node { min-height: 0; }
+      footer { right: 24px; bottom: 12px; left: 24px; }
+      .print { position: absolute; }
+    }
+
+    @page { size: letter portrait; margin: 0; }
+
+    @media print {
+      body { background: white; font-size: 10px; line-height: 1.25; }
+      .sheet { width: 8.5in; height: 11in; min-height: 0; margin: 0; padding: 0.3in 0.48in 0.48in; box-shadow: none; }
+      .print { display: none; }
+      header { padding-top: 2px; }
+      h1 { font-size: 26px; }
+      h2 { font-size: 13px; margin-bottom: 3px; }
+      h3 { margin-top: 5px; }
+      section { margin-bottom: 6px; }
+      pre { font-size: 9px; line-height: 1.22; padding: 5px 7px; margin: 4px 0 5px; }
+      p { margin-bottom: 4px; }
+      li { margin: 1px 0; }
+      .thesis { margin: 10px 0; }
+      .thesis > div { padding: 7px 9px; }
+      .flow { margin: 6px 0 8px; padding: 8px 10px; }
+      .node { min-height: 62px; padding: 5px 6px; }
+      .quick-commands { margin: 5px 0 7px; gap: 7px; }
+      .quick-commands > div { padding: 5px 7px; }
+      .thesis { margin: 6px 0 7px; }
+      .flow { margin: 4px 0 5px; padding: 6px 8px; }
+      .node { min-height: 56px; }
+      .quick-commands { margin: 3px 0 4px; }
+      section { margin-bottom: 3px; }
+      .command-notes { gap: 2px 7px; margin: 3px 0 5px; }
+      .command-notes li { font-size: 9px; }
+      .command-notes code { font-size: 8px; }
+      .band { padding: 5px 7px; margin: 4px 0; }
+      .callout { padding: 6px 7px; }
+      footer { bottom: 0.2in; }
+    }
+  </style>
+</head>
+<body>
+  <button class="print" type="button" onclick="window.print()">Print</button>
+
+  <article class="sheet">
+    <header>
+      <div>
+        <p class="eyebrow">Orchestration · reviews · repeatable workflows</p>
+        <h1>Squadron / sq</h1>
+      </div>
+      <p class="subtitle">Start here when you want a review or a repeatable, multi-step AI workflow.</p>
+    </header>
+
+    <div class="thesis">
+      <div><strong>SQ is the high-level driver.</strong> It runs a review by itself or coordinates a recipe of drafting, reviewing, revising, and handoff steps.</div>
+      <div><strong>CF is the project memory underneath.</strong> Squadron uses Context Forge to find the project, artifacts, workflow state, and session context.</div>
+    </div>
+
+    <div class="flow" aria-label="Workflow diagram: orient with Context Forge, choose a Squadron workflow, draft and review, then checkpoint or continue">
+      <div class="flow-title"><span>The shape of a workflow</span><span>Orient first, automate second</span></div>
+      <div class="flow-track">
+        <div class="node"><b>1 · Orient</b><small><code>cf status</code><br><code>cf next</code></small></div>
+        <div class="arrow" aria-hidden="true">›</div>
+        <div class="node teal"><b>2 · Choose</b><small>Pick a review or pipeline and confirm the slice.</small></div>
+        <div class="arrow" aria-hidden="true">›</div>
+        <div class="node orange"><b>3 · Work + review</b><small>Draft or edit; compare the result with its review.</small></div>
+        <div class="arrow" aria-hidden="true">›</div>
+        <div class="node yellow"><b>4 · Checkpoint</b><small>Inspect changes, resolve findings, choose next step.</small></div>
+      </div>
+    </div>
+
+    <div class="quick-commands" aria-label="Most useful commands for both tools">
+      <div><b>CF · orient and prepare</b><p>cf status · cf next · cf build</p></div>
+      <div><b>SQ · check and orchestrate</b><p>sq doctor -v · sq review code 175 -v --model &lt;alias&gt;</p><p>sq run P4 175 --dry-run</p></div>
+    </div>
+
+    <main>
+      <div>
+        <section>
+          <h2>Install and verify</h2>
+          <pre>uv tool install squadron-ai
+sq setup
+sq doctor -v
+sq auth status
+sq models list</pre>
+          <ul class="command-notes sq-notes">
+            <li><code>uv tool install</code> installs Squadron.</li>
+            <li><code>sq setup</code> configures integrations and providers.</li>
+            <li><code>sq doctor -v</code> checks setup and prints fix hints.</li>
+            <li><code>sq auth status</code> shows provider sign-in state.</li>
+            <li><code>sq models list</code> lists model aliases you can use.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2>Run one focused review</h2>
+          <pre>sq review arch path/to/architecture.md -v --model &lt;alias&gt;
+sq review slice 175 -v --model &lt;alias&gt;
+sq review tasks 175 -v --model &lt;alias&gt;
+sq review code 175 -v --model &lt;alias&gt;</pre>
+          <ul class="command-notes sq-notes">
+            <li><code>review arch</code> checks an architecture document.</li>
+            <li><code>review slice</code> checks a slice design.</li>
+            <li><code>review tasks</code> checks a slice task breakdown.</li>
+            <li><code>review code</code> checks implementation changes.</li>
+            <li><code>-v</code> shows full findings; <code>--model</code> selects an alias.</li>
+          </ul>
+          <p>A slice number lets SQ resolve registered artifacts through CF; explicit paths also work.</p>
+          <pre>sq review resolve 175 -v --model &lt;alias&gt;</pre>
+          <p>After fixing findings, <code>resolve</code> records whether they were addressed without rewriting the original review.</p>
+        </section>
+      </div>
+
+      <div>
+        <section>
+          <h2>Pipelines are recipes, not magic</h2>
+          <p>A pipeline is a named sequence of steps. Depending on its recipe, it can ask models to create or edit files, run reviews, revise from feedback, commit, summarize, or stop for a person at a checkpoint.</p>
+          <div class="band"><strong>P4</strong><p>Design one slice, review the design, then revise against feedback until accepted or a checkpoint is needed.</p></div>
+          <div class="band"><strong>P456</strong><p>Chain slice design, task breakdown, implementation, and devlog. This larger workflow can make many file changes.</p></div>
+          <pre>sq pipelines list
+sq pipelines show P4
+sq run P4 175 --dry-run
+sq run P4 175
+sq runs list</pre>
+          <ul class="command-notes sq-notes">
+            <li><code>pipelines list</code> shows available recipes.</li>
+            <li><code>pipelines show P4</code> displays a recipe’s steps.</li>
+            <li><code>run P4 175 --dry-run</code> previews the planned run.</li>
+            <li><code>run P4 175</code> executes it; steps may write files.</li>
+            <li><code>runs list</code> finds active, paused, or failed runs.</li>
+          </ul>
+          <div class="callout"><strong>Before running:</strong> confirm project and slice; inspect file writes, shell commands, and commits. <code>--dry-run</code> previews the plan but does not make execution read-only.</div>
+        </section>
+
+        <section>
+          <h2>Create your own pipeline</h2>
+          <p>Create <code>project-documents/user/pipelines/my-design.yaml</code> in the project. Start from the annotated reference: <code>sq pipelines show example</code> (add <code>--path</code> to locate its YAML). A pipeline is ordered YAML: <code>description</code> and <code>steps</code> are required; <code>params</code> and a default <code>model</code> are optional.</p>
+          <pre>description: Design and review one slice
+params:
+  slice: required
+  model: sonnet
+steps:
+  - design:
+      phase: 4
+      model: "{model}"
+      review: { template: slice }
+      checkpoint: on-concerns</pre>
+          <p><code>slice: required</code> becomes the target argument; <code>model: sonnet</code> is a default. Steps run in order. Quote placeholders when they are the entire YAML value: <code>model: "{model}"</code>.</p>
+          <pre>sq run my-design --validate
+sq run my-design 175 --dry-run
+sq run my-design 175</pre>
+          <p>Validation checks the YAML and step configuration; dry-run previews the resolved plan; the last command executes it. Project pipelines are searched first, then <code>~/.config/squadron/pipelines/</code>, then built-ins. Reuse a name to override; choose a new name to keep both.</p>
+        </section>
+
+      </div>
+    </main>
+
+    <footer>
+      <span><a href="PIPELINES.md">Pipeline guide</a> · <a href="QUICKSTART.md">Quickstart</a> · <a href="COMMANDS.md">Commands</a> · <a href="https://github.com/ecorkran/context-forge">Context Forge</a></span>
+      <span>Letter portrait · print at 97%</span>
+    </footer>
+  </article>
+</body>
+</html>
