@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261103
 
+### Release 0.24.18
+
+- **Contents:** planning loops resolve their final review's notes inside the loop and collapse the resolution into the document's one commit (#287). Also closed #257 (shipped in slice 202) and filed #289 (split executor.py).
+
 ### Release 0.24.17
 
 - **Contents:** an implement step pauses while the slice design has pending PM decisions (#240); `sq stats producers` leaves replay runs out (#229); a citation range ending one line past EOF is no longer marked unverified (#196, numbering dropped); `sq pipelines list` keeps a shadowed built-in in its group (#283). Also the metrology audit CLI tests no longer wait out the run cooldown, about 6 minutes off the full suite (#180). #224 closed as already fixed. All as standing-fixes task groups on `main`.
