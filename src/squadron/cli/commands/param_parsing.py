@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import click
 import typer
 from typer.core import TyperCommand
+
+PARAM_OPTION_NAME = "param"
 
 
 def param_pairs(param_list: list[str] | None) -> list[tuple[str, str]]:
@@ -30,21 +34,35 @@ def with_stray_pairs(param_list: list[str] | None, extra_args: list[str]) -> lis
     """Fold stray ``key=value`` arguments into *param_list*.
 
     ``-p a=1, b=2`` reaches the CLI as ``-p "a=1,"`` plus a bare ``b=2``; the bare
-    one is the second param. Any extra argument that is not ``key=value`` is an error.
+    one is the next param. That only holds when a ``-p`` entry ended with a comma;
+    any other extra argument, or one that is not ``key=value``, is an error.
     """
-    for extra in extra_args:
-        if "=" not in extra:
-            raise typer.BadParameter(f"Unexpected extra argument '{extra}'")
     if not extra_args:
         return param_list
+    continues = any(entry.rstrip().endswith(",") for entry in param_list or [])
+    for extra in extra_args:
+        if not continues or "=" not in extra:
+            raise typer.BadParameter(f"Unexpected extra argument '{extra}'")
     return [*(param_list or []), *extra_args]
 
 
 class StrayParamCommand(TyperCommand):
-    """A command whose stray ``key=value`` arguments count as ``-p`` params (#291)."""
+    """A command whose stray ``key=value`` arguments continue a ``-p`` list (#291).
+
+    The command must declare its param option as ``param``.
+    """
 
     def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
         remaining = super().parse_args(ctx, args)
-        ctx.params["param"] = with_stray_pairs(ctx.params.get("param"), ctx.args)
+        if PARAM_OPTION_NAME not in ctx.params:
+            raise RuntimeError(f"{ctx.command.name}: no '{PARAM_OPTION_NAME}' option to extend")
+        ctx.params[PARAM_OPTION_NAME] = with_stray_pairs(ctx.params[PARAM_OPTION_NAME], ctx.args)
         ctx.args = []
         return remaining
+
+
+# Keyword arguments for ``@app.command(...)`` on commands taking ``-p``.
+STRAY_PARAM_COMMAND: dict[str, Any] = {
+    "cls": StrayParamCommand,
+    "context_settings": {"allow_extra_args": True},
+}

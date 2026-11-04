@@ -10,7 +10,7 @@ REVIEW_MODEL_PARAM_KEY = "review-model"
 
 PARAM_OPTION_HELP = (
     f"Param as key=value, as on `sq run`. The only key here is {REVIEW_MODEL_PARAM_KEY} "
-    "(an alias for --model)."
+    "(an alias for --model). A space after a comma is fine."
 )
 
 

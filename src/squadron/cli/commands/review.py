@@ -20,6 +20,7 @@ from rich.table import Table
 from rich.text import Text
 
 from squadron.cli.commands.cwd_resolution import resolve_repo_cwd
+from squadron.cli.commands.param_parsing import STRAY_PARAM_COMMAND
 from squadron.cli.commands.review_model_param import PARAM_OPTION_HELP, resolve_review_model
 from squadron.cli.commands.review_revise import (
     refuse_revise_model_without_max,
@@ -878,7 +879,7 @@ async def _execute_review(
 # ---------------------------------------------------------------------------
 
 
-@review_app.command("slice")
+@review_app.command("slice", **STRAY_PARAM_COMMAND)
 def review_slice(
     ctx: typer.Context,
     input_file: str = typer.Argument(help="Document to review (or slice number)"),
@@ -1005,7 +1006,7 @@ def _arch_slice_info(index: int, input_file: str) -> SliceInfo:
     )
 
 
-@review_app.command("arch")
+@review_app.command("arch", **STRAY_PARAM_COMMAND)
 def review_arch(
     input_file: str = typer.Argument(help="Architecture document to review (path or initiative index)"),
     cwd: str | None = typer.Option(None, "--cwd", help="Working directory (default: config or .)"),
@@ -1093,7 +1094,7 @@ def review_arch(
     _exit_on(result.verdict, outcome)
 
 
-@review_app.command("tasks")
+@review_app.command("tasks", **STRAY_PARAM_COMMAND)
 def review_tasks(
     ctx: typer.Context,
     input_file: str = typer.Argument(help="Task breakdown file to review (or slice number)"),
@@ -1237,7 +1238,7 @@ def review_tasks(
     _exit_on(Verdict(worst_verdict(str(r.verdict) for _, r in results)), outcome)
 
 
-@review_app.command("code")
+@review_app.command("code", **STRAY_PARAM_COMMAND)
 def review_code(
     ctx: typer.Context,
     slice_number: str | None = typer.Argument(

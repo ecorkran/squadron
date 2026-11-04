@@ -1075,7 +1075,10 @@ def run(
     ),
     model: str | None = typer.Option(None, "--model", "-m", help="Model override."),
     param: list[str] | None = typer.Option(
-        None, "--param", "-p", help="Param as key=value; several may be comma-separated (a=1,b=2)."
+        None,
+        "--param",
+        "-p",
+        help="Param as key=value; several may be comma-separated (a=1,b=2 or a=1, b=2).",
     ),
     from_step: str | None = typer.Option(None, "--from", help="Start execution from this step."),
     resume: str | None = typer.Option(None, "--resume", "-r", help="Resume a paused run by run-id."),
