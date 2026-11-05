@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.21] - 20261104
+
 ### Added
 - `sq run --max-cost <usd>` and a pipeline file's `max_cost_usd` set a dollar cap for one run or one pipeline, overriding `pipeline.max_cost_usd` (#241).
 - `sq run --io-dir <dir>` reads dispatch steps' `prompt_files` from, and writes their `reply_file` and `delivered_prompt_file` to, that directory instead of the working directory (#292).

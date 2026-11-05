@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: '20261104'
+dateUpdated: 20261104
 ---
 
 # Development Log
@@ -10,6 +10,10 @@ dateUpdated: '20261104'
 A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261104
+
+### Release 0.24.21
+
+- **Contents:** per-run cost cap, `sq run --max-cost` and pipeline `max_cost_usd` (#241); `sq run --io-dir` and the guarded `commit` step (#292). Unblocks amoeba slices 180 and 184–186.
 
 ### Initiative 420: Model Benchmark — Architecture Complete
 
