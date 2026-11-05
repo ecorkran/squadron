@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from squadron.core.models import Effort
 from squadron.review.addressed.models import FindingOutcome, FindingRecord
 from squadron.review.addressed.parsing import (
     is_parse_failure,
@@ -76,8 +77,11 @@ async def judge_residue_core(
     model_id: str | None,
     profile: str,
     cwd: str,
+    effort: Effort | None = None,
 ) -> JudgeLegResult:
     """Ask the judge for one status per residue finding.
+
+    ``effort`` is the judge alias's reasoning effort; ``None`` sends none (slice 420 D3).
 
     Invoked only when the residue is non-empty — round 1 and byte-identical
     rounds never reach here, which is what keeps the token cost proportional
@@ -109,6 +113,7 @@ async def judge_residue_core(
             inputs,
             profile=profile,
             model=model_id,
+            effort=effort,
         )
     except Exception:
         # Any transport failure is fail-closed: the gate reports UNKNOWN and a

@@ -71,11 +71,16 @@ class ProducerConfigRef(BaseModel):
 
 
 class JudgeRef(BaseModel):
-    """Judge identity: alias, model, and the hash of the packaged judge prompt."""
+    """Judge identity: alias, model, the packaged judge prompt's hash, and the effort sent.
+
+    ``effort_sent`` is ``None`` when none was sent, and for judgments recorded before
+    effort was tracked, so those are never pooled with judgments at a known effort.
+    """
 
     alias: str
     model: str
     prompt_hash: str
+    effort_sent: str | None = None
 
 
 class PromptIdentity(BaseModel):

@@ -1460,16 +1460,23 @@ def review_list() -> None:
         rprint(f"  {escape(t.name.ljust(max_name_len))}  {escape(str(t.description))}")
 
 
-def _resolve_judge_model(model_flag: str | None, profile_flag: str | None) -> tuple[str | None, str]:
-    """Resolve the resolve-path judge's model and profile from the CLI flags.
+def _resolve_judge_model(
+    model_flag: str | None, profile_flag: str | None
+) -> tuple[str | None, str, Effort | None]:
+    """Resolve the resolve-path judge's model, profile and effort from the CLI flags.
 
     Same cascade every other review command uses — flag → per-template config →
     global config → template default, with alias expansion — so the judge is
-    selected the same way here as anywhere else.
+    selected the same way here as anywhere else. The effort is read from the alias
+    name before expansion collapses it (as ``review`` does for its own alias).
     """
     load_all_templates()
     template = get_template(JUDGE_TEMPLATE_NAME)
-    return _resolve_model_and_profile(model_flag, profile_flag, template, JUDGE_TEMPLATE_NAME)
+    alias_name = _resolve_model(model_flag, template, JUDGE_TEMPLATE_NAME)
+    model_id, profile = _resolve_model_and_profile(
+        model_flag, profile_flag, template, JUDGE_TEMPLATE_NAME
+    )
+    return model_id, profile, model_effort(alias_name)
 
 
 def _display_resolution(result: ResolutionResult, verbosity: int) -> None:
@@ -1535,7 +1542,7 @@ def review_resolve(
     verbosity = _resolve_verbosity(verbose)
     review_cwd, _, _ = _resolve_review_cwd(cwd, None)
 
-    model_id, resolved_profile = _resolve_judge_model(model, profile)
+    model_id, resolved_profile, judge_effort = _resolve_judge_model(model, profile)
 
     try:
         result = asyncio.run(
@@ -1547,6 +1554,7 @@ def review_resolve(
                 no_judge=no_judge,
                 since=since,
                 cwd=review_cwd,
+                effort=judge_effort,
             )
         )
     except (ResolutionError, OSError) as exc:

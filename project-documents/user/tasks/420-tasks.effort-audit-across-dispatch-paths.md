@@ -107,18 +107,18 @@ revision_number: 2
 **Commit**: `fix: record session effort on compaction`
 
 ## Task 7: Replay judge sends and records effort (D3) — Effort 3
-- [ ] In `metrology/replay_models.py` add optional `effort_sent: str | None = None` to `JudgeRef`
-- [ ] In `replay/judge_dispatch.py`: pass `effort=resolved.effort` to `one_shot_dispatch_with_telemetry`; record `read_effort_sent(usage_metadata)` as `effort_sent` in the usage record (replacing `None`)
-- [ ] Wherever `JudgeRef` is built for a judgment (grep `JudgeRef(`), fill `effort_sent` from the same value
-- [ ] Tests: create `tests/replay/test_judge_dispatch.py`: captured `AgentConfig.effort` equals the judge alias's effort (`capture_config`); usage record `effort` equals it, `None` when the alias sets none; a `JudgeRef` JSON without `effort_sent` loads with `None`. In `tests/replay/test_report.py`: judgments with different `JudgeRef.effort_sent` produce separate tables
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `metrology/replay_models.py` add optional `effort_sent: str | None = None` to `JudgeRef`
+- [x] In `replay/judge_dispatch.py`: pass `effort=resolved.effort` to `one_shot_dispatch_with_telemetry`; record `read_effort_sent(usage_metadata)` as `effort_sent` in the usage record (replacing `None`)
+- [x] Wherever `JudgeRef` is built for a judgment (grep `JudgeRef(`), fill `effort_sent` from the same value
+- [x] Tests: create `tests/replay/test_judge_dispatch.py`: captured `AgentConfig.effort` equals the judge alias's effort (`capture_config`); usage record `effort` equals it, `None` when the alias sets none; a `JudgeRef` JSON without `effort_sent` loads with `None`. In `tests/replay/test_report.py`: judgments with different `JudgeRef.effort_sent` produce separate tables
+- [x] Success: tests pass; ruff and pyright clean
 
 ## Task 8: Findings-addressed judge sends effort (D3) — Effort 3
-- [ ] In `pipeline/actions/findings_addressed/judge.py` switch `_resolve_model` to `resolver.resolve_full`, returning the `ResolvedModel`; keep the `template_model` fallback and the profile override
-- [ ] `judge_residue_core` (`review/addressed/judge.py`) accepts `effort: Effort | None` and passes it to `run_review_with_profile`. Update every caller of both functions
-- [ ] In `review/resolution.py` (`sq review resolve`) resolve with `resolve_full` and pass the effort the same way
-- [ ] Tests: pipeline gate (nearest existing findings-addressed judge test; grep `_resolve_model` under `tests`): `run_review_with_profile` receives the judge alias's effort, none when the alias sets none; the `judge:` block alias and the `template_model` fallback each send their own alias's effort. `tests/review/test_cli_review_resolve.py` or `test_resolution.py`: `sq review resolve` sends it. Update existing `_resolve_model` tests for the new return type
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `pipeline/actions/findings_addressed/judge.py` switch `_resolve_model` to `resolver.resolve_full`, returning the `ResolvedModel`; keep the `template_model` fallback and the profile override
+- [x] `judge_residue_core` (`review/addressed/judge.py`) accepts `effort: Effort | None` and passes it to `run_review_with_profile`. Update every caller of both functions
+- [x] In `review/resolution.py` (`sq review resolve`) resolve with `resolve_full` and pass the effort the same way
+- [x] Tests: pipeline gate (nearest existing findings-addressed judge test; grep `_resolve_model` under `tests`): `run_review_with_profile` receives the judge alias's effort, none when the alias sets none; the `judge:` block alias and the `template_model` fallback each send their own alias's effort. `tests/review/test_cli_review_resolve.py` or `test_resolution.py`: `sq review resolve` sends it. Update existing `_resolve_model` tests for the new return type
+- [x] Success: tests pass; ruff and pyright clean
 
 **Commit**: `fix: send alias effort from the replay and findings-addressed judges`
 

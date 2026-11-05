@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from squadron.core.models import Effort
 from squadron.review.addressed.judge import JudgeLegResult, judge_residue_core
 from squadron.review.addressed.models import (
     FindingOutcome,
@@ -122,6 +123,7 @@ async def _run_judge_leg(
     profile: str,
     cwd: str,
     no_judge: bool,
+    effort: Effort | None,
 ) -> JudgeLegResult:
     """Consult the judge over the residue, or record why it was not consulted.
 
@@ -166,6 +168,7 @@ async def _run_judge_leg(
         model_id=model_id,
         profile=profile,
         cwd=cwd,
+        effort=effort,
     )
 
 
@@ -221,6 +224,7 @@ async def settle_findings(
     cwd: str,
     since: str | None = None,
     no_judge: bool = False,
+    effort: Effort | None = None,
 ) -> SettledFindings:
     """Decide each CONCERN+ finding's fate, cheapest evidence first.
 
@@ -264,6 +268,7 @@ async def settle_findings(
         profile=profile,
         cwd=cwd,
         no_judge=no_judge,
+        effort=effort,
     )
     verified = _with_unsettled_recorded(
         verify_outcomes(
@@ -313,6 +318,7 @@ async def resolve_review(
     no_judge: bool = False,
     since: str | None = None,
     cwd: str,
+    effort: Effort | None = None,
 ) -> ResolutionResult:
     """Answer "were this review's findings addressed?" and record the answer.
 
@@ -321,7 +327,7 @@ async def resolve_review(
     judge leg → verify → derive → render → save. The review file is read and
     never written.
 
-    ``model_id`` and ``profile`` arrive already resolved. The flag → config →
+    ``model_id``, ``profile`` and ``effort`` arrive already resolved. The flag → config →
     template cascade lives at the CLI boundary that owns those flags, so it is
     not restated here in a second, drifting copy.
 
@@ -344,6 +350,7 @@ async def resolve_review(
         cwd=cwd,
         since=since,
         no_judge=no_judge,
+        effort=effort,
     )
 
     record = ResolutionRecord(

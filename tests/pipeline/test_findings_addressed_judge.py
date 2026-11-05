@@ -13,8 +13,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.pipeline.actions.findings_addressed import judge_residue
 from squadron.pipeline.models import ActionContext
+from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
 from squadron.pipeline.usage_capture import UsageCapture
 from squadron.review.addressed import (
     derive_addressed_verdict,
@@ -51,9 +53,9 @@ def _finding(
     )
 
 
-def _context(**params: object) -> ActionContext:
+def _context(effort: Effort | None = None, **params: object) -> ActionContext:
     resolver = MagicMock()
-    resolver.resolve.return_value = ("claude-sonnet-5", "sdk")
+    resolver.resolve_full.return_value = ResolvedModel("claude-sonnet-5", "sdk", effort=effort)
     return ActionContext(
         pipeline_name="p",
         run_id="run-1",
@@ -219,7 +221,55 @@ async def test_judge_block_model_overrides_the_cascade() -> None:
             diff=_diff("src/x.py"),
         )
 
-    context.resolver.resolve.assert_called_once_with("haiku", None)  # pyright: ignore[reportFunctionMemberAccess]
+    context.resolver.resolve_full.assert_called_once_with("haiku", None)  # pyright: ignore[reportFunctionMemberAccess]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("effort", [Effort.high, None])
+async def test_judge_sends_its_alias_effort(effort: Effort | None) -> None:
+    transport = AsyncMock(return_value=_review_result("F001: addressed"))
+
+    with patch(_JUDGE_TRANSPORT, transport):
+        await judge_residue(
+            _context(effort),
+            residue=[_finding("F001")],
+            fresh_findings=[],
+            diff=_diff("src/x.py"),
+        )
+
+    assert transport.await_args.kwargs["effort"] is effort
+
+
+@pytest.mark.asyncio
+async def test_judge_block_and_template_fallback_each_send_their_own_effort() -> None:
+    transport = AsyncMock(return_value=_review_result("F001: addressed"))
+    efforts = {"block-alias": Effort.low, "template-alias": Effort.xhigh}
+
+    def _resolve_full(model: str, _step_model: str | None) -> ResolvedModel:
+        if model not in efforts:
+            raise ModelResolutionError("no model")
+        return ResolvedModel(model, "sdk", effort=efforts[model])
+
+    template = MagicMock()
+    template.model = "template-alias"
+    judge_module = "squadron.pipeline.actions.findings_addressed.judge"
+
+    async def _sent_effort(**params: object) -> Effort | None:
+        context = _context(**params)
+        context.resolver.resolve_full.side_effect = _resolve_full  # pyright: ignore[reportFunctionMemberAccess]
+        transport.reset_mock()
+        with patch(_JUDGE_TRANSPORT, transport), patch(f"{judge_module}.get_template") as get:
+            get.return_value = template
+            await judge_residue(
+                context,
+                residue=[_finding("F001")],
+                fresh_findings=[],
+                diff=_diff("src/x.py"),
+            )
+        return transport.await_args.kwargs["effort"]
+
+    assert await _sent_effort(judge={"model": "block-alias"}) is Effort.low
+    assert await _sent_effort() is Effort.xhigh  # block names none: the cascade fails over
 
 
 @pytest.mark.asyncio

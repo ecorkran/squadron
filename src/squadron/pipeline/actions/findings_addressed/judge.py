@@ -12,7 +12,7 @@ import logging
 
 from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 from squadron.pipeline.models import ActionContext
-from squadron.pipeline.resolver import ModelResolutionError
+from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
 from squadron.providers.base import ProfileName
 from squadron.review.addressed.judge import (
     JUDGE_TEMPLATE_NAME,
@@ -28,8 +28,8 @@ _logger = logging.getLogger(__name__)
 JUDGE_BLOCK_PARAM = "judge"
 
 
-def _resolve_model(context: ActionContext, template_model: str | None) -> tuple[str | None, str]:
-    """Resolve the judge's model and profile.
+def _resolve_model(context: ActionContext, template_model: str | None) -> tuple[ResolvedModel, str]:
+    """Resolve the judge's model (with its alias's effort) and profile.
 
     The ``judge:`` block's ``model:`` wins when supplied; otherwise the
     standard resolver cascade, which lands on the pipeline's review tier — the
@@ -44,18 +44,18 @@ def _resolve_model(context: ActionContext, template_model: str | None) -> tuple[
 
     step_model = str(context.params["step_model"]) if "step_model" in context.params else None
     try:
-        model_id, alias_profile = context.resolver.resolve(block_model, step_model)
+        resolved = context.resolver.resolve_full(block_model, step_model)
     except ModelResolutionError:
         if template_model is None:
             raise
-        model_id, alias_profile = context.resolver.resolve(template_model, step_model)
+        resolved = context.resolver.resolve_full(template_model, step_model)
 
     profile_name = (
         str(context.params["profile"])
         if "profile" in context.params
-        else alias_profile or ProfileName.SDK
+        else resolved.profile or ProfileName.SDK
     )
-    return model_id, profile_name
+    return resolved, profile_name
 
 
 async def judge_residue(
@@ -79,7 +79,7 @@ async def judge_residue(
     template = get_template(JUDGE_TEMPLATE_NAME)
 
     try:
-        model_id, profile_name = _resolve_model(
+        resolved, profile_name = _resolve_model(
             context, template.model if template is not None else None
         )
     except ModelResolutionError:
@@ -90,7 +90,8 @@ async def judge_residue(
         residue=residue,
         fresh_findings=fresh_findings,
         diff=diff,
-        model_id=model_id,
+        model_id=resolved.model_id,
         profile=profile_name,
         cwd=context.cwd,
+        effort=resolved.effort,
     )

@@ -209,6 +209,21 @@ def test_a_judgment_from_another_prompt_hash_is_its_own_table_and_not_mixed() ->
     assert sum(r.pairs for r in other.rows) == 2
 
 
+def test_judgments_at_different_efforts_are_separate_tables_and_not_mixed() -> None:
+    replays, judgments = _fixture()
+    at_high = make_judgment(
+        judge=_JUDGE.model_copy(update={"effort_sent": "high"}),
+        replay_set="s176",
+        a="r1",
+        b="r4",
+        outcome=PairOutcome.B,
+    )
+
+    report = _build(replays=replays, judgments=[*judgments, at_high])
+
+    assert sorted(t.judge.effort_sent or "" for t in report.tables if t.judge) == ["", "high"]
+
+
 def test_filtering_by_judge_alias_drops_other_judges() -> None:
     replays, judgments = _fixture()
     stranger = make_judgment(

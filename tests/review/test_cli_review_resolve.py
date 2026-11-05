@@ -10,6 +10,7 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.core.models import Effort
 from squadron.documents.frontmatter import read_frontmatter
 from squadron.review.models import ReviewResult, Verdict
 from squadron.review.persistence import REVIEWS_DIR
@@ -253,6 +254,38 @@ class TestReviewResolveFlagPassthrough:
         assert transport.call_args.kwargs["model"] == "claude-sonnet-5"
         assert transport.call_args.kwargs["profile"] == "sdk"
         assert _artifact_frontmatter(git_repo, 1)["judgeModel"] == "claude-sonnet-5"
+        assert transport.call_args.kwargs["effort"] is None
+
+    def test_the_judge_alias_effort_reaches_the_judge(
+        self, cli_runner: CliRunner, git_repo: Path
+    ) -> None:
+        """Slice 420 D3: ``sq review resolve`` sends its alias's effort, as the gate does."""
+        _repo_with_review(git_repo)
+        (git_repo / "src" / "foo.py").write_text("changed\n")
+        _commit(git_repo, "change")
+
+        transport = AsyncMock(return_value=_judge_output("F001: addressed"))
+        with (
+            patch(_JUDGE_TRANSPORT, transport),
+            patch("squadron.cli.commands.review.model_effort", return_value=Effort.high),
+        ):
+            result = cli_runner.invoke(
+                app,
+                [
+                    "review",
+                    "resolve",
+                    "305",
+                    "--cwd",
+                    str(git_repo),
+                    "--model",
+                    "claude-sonnet-5",
+                    "--profile",
+                    "sdk",
+                ],
+            )
+
+        assert result.exit_code == 0, result.output
+        assert transport.call_args.kwargs["effort"] is Effort.high
 
     def test_unknown_model_alias_is_rejected_on_the_judge_path(
         self, cli_runner: CliRunner, git_repo: Path

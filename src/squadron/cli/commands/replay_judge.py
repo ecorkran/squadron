@@ -14,7 +14,7 @@ from squadron.metrology.replay_models import JudgeRef, ReplayPhase
 from squadron.metrology.store import MetrologyStore, resolve_store_dir
 from squadron.pipeline.resolver import ModelResolutionError
 from squadron.replay.judge import judge_prompt_hash
-from squadron.replay.judge_dispatch import one_shot_judge_dispatcher
+from squadron.replay.judge_dispatch import judge_effort_sent, one_shot_judge_dispatcher
 from squadron.replay.judge_jobs import build_jobs, judge_jobs, total_calls
 from squadron.replay.judging import JudgeCallError, JudgeInputError
 
@@ -38,8 +38,15 @@ def replay_judge(
     timeout_s = common.int_config(JUDGE_TIMEOUT_KEY, repo_root)
     project_id = common.resolve_project_id(repo_root)
     store = MetrologyStore(store_dir=resolve_store_dir(cwd=str(repo_root)))
+    try:
+        effort_sent = judge_effort_sent(judge_model.alias)
+    except (JudgeCallError, ModelResolutionError) as exc:
+        raise common.fail(str(exc)) from exc
     judge_ref = JudgeRef(
-        alias=judge_model.alias, model=judge_model.model, prompt_hash=judge_prompt_hash()
+        alias=judge_model.alias,
+        model=judge_model.model,
+        prompt_hash=judge_prompt_hash(),
+        effort_sent=None if effort_sent is None else effort_sent.value,
     )
     jobs = build_jobs(
         store,
