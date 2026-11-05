@@ -139,26 +139,26 @@ revision_number: 2
 **Commit**: `fix: attribute failed producer runs to the effort sent`
 
 ## Task 11: Config identity fields on `ProducerConfigRef` (D6) — Effort 2
-- [ ] In `metrology/replay_models.py` add `tool_use: bool | None = None` and `max_output_tokens: int | None = None` to `ProducerConfigRef`. `None` means only "record predates this slice" for `tool_use`; for `max_output_tokens` it also means "no budget sent"
-- [ ] In `cli/commands/replay_common.py` `config_ref` fill them through the alias readers, never by testing the raw field: `model_allows_tools(alias)` (absence means allow, so an alias with no `tool_use` records `True`, not `None`) and `model_max_output_tokens(alias)` (`None` = no budget)
-- [ ] Tests in `tests/cli/test_replay_run.py` (or a new `test_replay_config_ref.py`): alias with `tool_use = false` gives `False`; alias with no `tool_use` gives `True`; `max_output_tokens` set and unset; old `ProducerConfigRef` JSON without the fields loads with `None`
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `metrology/replay_models.py` add `tool_use: bool | None = None` and `max_output_tokens: int | None = None` to `ProducerConfigRef`. `None` means only "record predates this slice" for `tool_use`; for `max_output_tokens` it also means "no budget sent"
+- [x] In `cli/commands/replay_common.py` `config_ref` fill them through the alias readers, never by testing the raw field: `model_allows_tools(alias)` (absence means allow, so an alias with no `tool_use` records `True`, not `None`) and `model_max_output_tokens(alias)` (`None` = no budget)
+- [x] Tests in `tests/cli/test_replay_run.py` (or a new `test_replay_config_ref.py`): alias with `tool_use = false` gives `False`; alias with no `tool_use` gives `True`; `max_output_tokens` set and unset; old `ProducerConfigRef` JSON without the fields loads with `None`
+- [x] Success: tests pass; ruff and pyright clean
 
 ## Task 12: Replay report groups by identity (D6) — Effort 3
-- [ ] `replay/report.py` is 311 lines already. First move `config_label` (and any further cohesive block needed) to a new sibling module, `replay/config_label.py` (listed in the slice design's Components changed), so the file has room. Update importers
-- [ ] Add private `config_identity(config)` in `replay/report.py`, as D6 specifies, returning `(model, profile, effort_sent, tool_use, max_output_tokens)`. The moved label function takes the identity and the sorted alias names of the group
-- [ ] Comment on `config_identity`: records written before this slice have `tool_use=None` and so group apart from new ones, by design; re-running the replay merges them
-- [ ] Use the identity as the grouping key for report rows and Bradley-Terry contestants
-- [ ] Update the `report.py` module docstring (line 4) from "alias, model, profile, effort" to the D6 rule
-- [ ] Success: `report.py` ends at about 300 lines or fewer, measured with `wc -l`, with `config_identity` still in it; the new module is about 300 or fewer
-- [ ] Tests in `tests/replay/test_report.py`:
-  - [ ] two aliases agreeing on all five identity fields: one row listing both alias names, sorted
-  - [ ] same aliases with different `effort_sent`: two rows
-  - [ ] differing `tool_use` or `max_output_tokens`: two rows
-  - [ ] records with `tool_use`/`max_output_tokens` absent load and group together, and group apart from a record with `tool_use` set
-  - [ ] Bradley-Terry contestants follow the same grouping
-  - [ ] update existing tests that assume alias-keyed rows
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] `replay/report.py` is 311 lines already. First move `config_label` (and any further cohesive block needed) to a new sibling module, `replay/config_label.py` (listed in the slice design's Components changed), so the file has room. Update importers
+- [x] Add private `config_identity(config)` in `replay/report.py`, as D6 specifies, returning `(model, profile, effort_sent, tool_use, max_output_tokens)`. The moved label function takes the identity and the sorted alias names of the group
+- [x] Comment on `config_identity`: records written before this slice have `tool_use=None` and so group apart from new ones, by design; re-running the replay merges them
+- [x] Use the identity as the grouping key for report rows and Bradley-Terry contestants
+- [x] Update the `report.py` module docstring (line 4) from "alias, model, profile, effort" to the D6 rule
+- [x] Success: `report.py` ends at about 300 lines or fewer, measured with `wc -l`, with `config_identity` still in it; the new module is about 300 or fewer
+- [x] Tests in `tests/replay/test_report.py`:
+  - [x] two aliases agreeing on all five identity fields: one row listing both alias names, sorted
+  - [x] same aliases with different `effort_sent`: two rows
+  - [x] differing `tool_use` or `max_output_tokens`: two rows
+  - [x] records with `tool_use`/`max_output_tokens` absent load and group together, and group apart from a record with `tool_use` set
+  - [x] Bradley-Terry contestants follow the same grouping
+  - [x] update existing tests that assume alias-keyed rows
+- [x] Success: tests pass; ruff and pyright clean
 
 **Commit**: `fix: record config tool_use and token budget, group replay rows by identity`
 

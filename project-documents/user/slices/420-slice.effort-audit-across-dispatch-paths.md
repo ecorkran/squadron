@@ -88,7 +88,7 @@ The audit was done while writing this design. Its result is the inventory below.
 - `pipeline/actions/dispatch.py`, `summary.py`, `review.py`, `compact.py`: call `stamp_effort_sent` on success and failure paths.
 - `replay/outcome.py`, `stats/producer_units.py`: read the effort with `action_effort_sent`.
 - `replay/report.py`: config identity without the alias (D6).
-- `replay/config_label.py`: the label code moved out of `report.py`, which is over its line budget.
+- `replay/config_label.py`: the config identity and label code moved out of `report.py`, which is over its line budget. `replay/pair_tally.py` takes the judgment-to-comparison tally block for the same reason.
 - `metrology/replay_models.py`, `cli/commands/replay_common.py`: optional `JudgeRef.effort_sent` (D3); optional `ProducerConfigRef.tool_use` and `max_output_tokens`, filled by `config_ref` (D6).
 
 ### Data Flow

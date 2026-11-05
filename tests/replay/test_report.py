@@ -303,3 +303,73 @@ def test_a_row_whose_opponents_all_lack_a_strength_says_why() -> None:
     assert "never lost" in (rows["original"].strength_reason or "")
     assert rows["opus"].strength is None
     assert "no finite strength" in (rows["opus"].strength_reason or "")
+
+
+# --- config identity (slice 420 D6) ---
+
+
+def _config_replay(minutes: int, alias: str, **config: object) -> tuple[str, ProducerReplay]:
+    """A replay of ``alias`` whose config fields are overridden by ``config``."""
+    replay = _replay(minutes, alias=alias, model=f"model-{alias.split('-')[0]}")
+    return f"r{minutes}", replay.model_copy(update={"config": replay.config.model_copy(update=config)})
+
+
+def _config_rows(replays: list[tuple[str, ProducerReplay]]) -> list[ConfigRow]:
+    (table,) = _build(replays=replays, judgments=[]).tables
+    return [r for r in table.rows if r.config is not None]
+
+
+def test_aliases_that_sent_the_same_config_are_one_row_naming_both() -> None:
+    replays = [_config_replay(2, "opus-b"), _config_replay(1, "opus-a")]
+
+    (row,) = _config_rows(replays)
+
+    assert row.n == 2
+    assert row.label.startswith("opus-a, opus-b (")
+
+
+def test_different_effort_sent_is_two_rows() -> None:
+    replays = [_config_replay(1, "opus-a"), _config_replay(2, "opus-b", effort_sent="low")]
+
+    assert len(_config_rows(replays)) == 2
+
+
+@pytest.mark.parametrize("field, value", [("tool_use", False), ("max_output_tokens", 4096)])
+def test_different_tool_use_or_output_budget_is_two_rows(field: str, value: object) -> None:
+    base: dict[str, object] = {"tool_use": True, "max_output_tokens": None}
+    replays = [
+        _config_replay(1, "opus-a", **base),
+        _config_replay(2, "opus-b", **{**base, field: value}),
+    ]
+
+    rows = _config_rows(replays)
+
+    assert len(rows) == 2
+    assert any("tools off" in r.label or "4096" in r.label for r in rows)
+
+
+def test_records_from_before_the_identity_fields_group_together_and_apart_from_new_ones() -> None:
+    old = [_config_replay(1, "opus-a"), _config_replay(2, "opus-b")]
+    new = _config_replay(3, "opus-c", tool_use=True)
+
+    assert len(_config_rows(old)) == 1
+    assert len(_config_rows([*old, new])) == 2
+
+
+def test_contestants_follow_the_same_grouping() -> None:
+    replays = [
+        _config_replay(1, "opus-a"),
+        _config_replay(2, "opus-b"),
+        _config_replay(3, "haiku", effort_sent="low"),
+    ]
+    judgments = [
+        make_judgment(judge=_JUDGE, replay_set="set-1", a="r1", b="r2", outcome=PairOutcome.A),
+        make_judgment(judge=_JUDGE, replay_set="set-1", a="r1", b="r3", outcome=PairOutcome.A),
+        make_judgment(judge=_JUDGE, replay_set="set-1", a="r2", b="r3", outcome=PairOutcome.A),
+    ]
+
+    (table,) = _build(replays=replays, judgments=judgments).tables
+
+    merged = next(r for r in table.rows if r.config is not None and "opus-a" in r.label)
+    assert merged.pairs == 2  # r1 vs r2 is one contestant against itself, so it is left out
+    assert merged.wins == 2

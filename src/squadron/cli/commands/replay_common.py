@@ -14,7 +14,7 @@ from squadron.metrology.errors import MetrologyIdentityError
 from squadron.metrology.identity import derive_project_id
 from squadron.metrology.project_id import ProjectId
 from squadron.metrology.replay_models import ModelRef, ProducerConfigRef, ReplayPhase
-from squadron.models.aliases import get_all_aliases
+from squadron.models.aliases import get_all_aliases, model_allows_tools, model_max_output_tokens
 from squadron.replay.start_point import StartPoint, StartPointError, resolve_start_point
 from squadron.review.git_utils import run_git
 from squadron.stats.git_history import GitHistory, GitHistoryError
@@ -46,8 +46,14 @@ def config_ref(alias: str) -> ProducerConfigRef:
     if alias not in known:
         raise fail(f"unknown model alias '{alias}'")
     entry = known[alias]
+    # Through the alias readers, never the raw field: absence of ``tool_use`` means allow.
     return ProducerConfigRef(
-        alias=alias, model=entry["model"], profile=entry["profile"], effort_sent=None
+        alias=alias,
+        model=entry["model"],
+        profile=entry["profile"],
+        effort_sent=None,
+        tool_use=model_allows_tools(alias),
+        max_output_tokens=model_max_output_tokens(alias),
     )
 
 

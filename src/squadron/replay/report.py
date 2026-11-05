@@ -1,9 +1,11 @@
 """Build the ``sq replay report`` data: replays and judgments to one table per
 (phase, reviewer, judge) (slice 177 D7).
 
-Pairs are pooled across slices and contestants are configs (D1: alias, model, profile,
-effort sent), not individual replays. A pair between two replays of the same config says
-nothing about the config and is left out. Nothing here formats text.
+Pairs are pooled across slices and contestants are configs, not individual replays. A
+config is what went on the wire (slice 420 D6: model, profile, effort sent, tool use, output
+budget), so two aliases that sent the same thing are one contestant. A pair between two
+replays of the same config says nothing about the config and is left out. Nothing here
+formats text.
 """
 
 from __future__ import annotations
@@ -12,11 +14,10 @@ import logging
 import statistics
 from collections import defaultdict
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from typing import NamedTuple, Protocol
 
 from squadron.metrology.replay_models import (
-    ORIGINAL_CONTESTANT_PREFIX,
     JudgeRef,
     ModelRef,
     PairOutcome,
@@ -26,7 +27,9 @@ from squadron.metrology.replay_models import (
     ReplayOutcome,
     ReplayPhase,
 )
-from squadron.replay.bradley_terry import BTFit, Comparison, Strength, fit
+from squadron.replay.bradley_terry import BTFit, Strength, fit
+from squadron.replay.config_label import ConfigIdentity, config_label
+from squadron.replay.pair_tally import Tally, tally_pairs
 from squadron.replay.report_models import ORIGINAL_LABEL, ConfigRow, ReplayReport, ReplayTable
 
 _logger = logging.getLogger(__name__)
@@ -48,12 +51,30 @@ class ReportStore(Protocol):
     ) -> list[PairwiseJudgment]: ...
 
 
-def config_label(config: ProducerConfigRef) -> str:
-    """The row key of D1, as text."""
-    return (
-        f"{config.alias} ({config.model}, {config.profile or 'no profile'}, "
-        f"effort {config.effort_sent or 'none'})"
+def _config_identity(config: ProducerConfigRef) -> ConfigIdentity:
+    """What went on the wire, and so the grouping key for rows and contestants (D6).
+
+    Records written before ``tool_use`` was recorded carry ``None`` and so group apart from
+    new ones, by design; re-running the replay merges them.
+    """
+    return ConfigIdentity(
+        model=config.model,
+        profile=config.profile,
+        effort_sent=config.effort_sent,
+        tool_use=config.tool_use,
+        max_output_tokens=config.max_output_tokens,
     )
+
+
+def _labels(members: _Replays) -> dict[str, str]:
+    """Each replay's row label; a row names every alias that sent the same config."""
+    aliases: dict[ConfigIdentity, set[str]] = defaultdict(set)
+    for _, replay in members:
+        aliases[_config_identity(replay.config)].add(replay.config.alias)
+    return {
+        record_id: config_label(identity := _config_identity(replay.config), sorted(aliases[identity]))
+        for record_id, replay in members
+    }
 
 
 class _Judged(NamedTuple):
@@ -68,16 +89,6 @@ class _Judged(NamedTuple):
     invalid: int
     inconsistent: int
     below_floor: bool
-
-
-@dataclass
-class _Tally:
-    wins: int = 0
-    losses: int = 0
-    ties: int = 0
-    pairs: int = 0
-    invalid: int = 0
-    inconsistent: int = 0
 
 
 def replay_report(
@@ -101,7 +112,6 @@ def replay_report(
         by_group[key].append((record_id, replay))
         reviewers[key] = replay.reviewer
         reviewer_of_set[replay.replay_set] = replay.reviewer
-    labels = {record_id: config_label(replay.config) for record_id, replay in replays}
     tables: list[ReplayTable] = []
     for key, members in sorted(by_group.items(), key=lambda group: group[0]):
         group_phase, reviewer = key[0], reviewers[key]
@@ -113,7 +123,7 @@ def replay_report(
         judges = {j.judge.model_dump_json(): j.judge for j in mine}
         for judge in sorted(judges.values(), key=lambda ref: (ref.alias, ref.prompt_hash)) or [None]:
             subset = [j for j in mine if judge is None or j.judge == judge]
-            tables.append(_table(group_phase, reviewer, judge, members, subset, labels, min_n))
+            tables.append(_table(group_phase, reviewer, judge, members, subset, min_n))
     return ReplayReport(min_n=min_n, tables=tuple(tables))
 
 
@@ -123,12 +133,12 @@ def _table(
     judge: JudgeRef | None,
     members: _Replays,
     judgments: Sequence[PairwiseJudgment],
-    labels: dict[str, str],
     min_n: int,
 ) -> ReplayTable:
-    comparisons, tallies = _pairs(judgments, labels)
+    labels = _labels(members)
+    comparisons, tallies = tally_pairs(judgments, labels)
     result = fit(comparisons)
-    rows = _rows(members, tallies, result, min_n)
+    rows = _rows(members, labels, tallies, result, min_n)
     verdicts = [j for j in judgments if j.outcome is not PairOutcome.INVALID]
     return ReplayTable(
         phase=phase,
@@ -145,56 +155,12 @@ def _table(
     )
 
 
-def _label_of(ref: str, labels: dict[str, str]) -> str | None:
-    if ref.startswith(ORIGINAL_CONTESTANT_PREFIX):
-        return ORIGINAL_LABEL
-    label = labels.get(ref)
-    if label is None:
-        _logger.warning("a judgment names replay %s, which is not in the store; it is skipped", ref)
-    return label
-
-
-def _pairs(
-    judgments: Sequence[PairwiseJudgment], labels: dict[str, str]
-) -> tuple[list[Comparison], dict[str, _Tally]]:
-    comparisons: list[Comparison] = []
-    tallies: dict[str, _Tally] = defaultdict(_Tally)
-    for judgment in judgments:
-        a, b = _label_of(judgment.a, labels), _label_of(judgment.b, labels)
-        if a is None or b is None or a == b:
-            continue  # unknown replay, or a config compared with itself
-        comparisons.append(Comparison(a, b, judgment.outcome))
-        for name in (a, b):
-            tallies[name].pairs += 1
-        _tally(judgment.outcome, tallies[a], tallies[b])
-    return comparisons, tallies
-
-
-def _tally(outcome: PairOutcome, first: _Tally, second: _Tally) -> None:
-    match outcome:
-        case PairOutcome.A:
-            first.wins += 1
-            second.losses += 1
-        case PairOutcome.B:
-            second.wins += 1
-            first.losses += 1
-        case PairOutcome.TIE | PairOutcome.INCONSISTENT:
-            first.ties += 1
-            second.ties += 1
-            if outcome is PairOutcome.INCONSISTENT:
-                first.inconsistent += 1
-                second.inconsistent += 1
-        case PairOutcome.INVALID:
-            first.invalid += 1
-            second.invalid += 1
-
-
 def _rows(
-    members: _Replays, tallies: dict[str, _Tally], result: BTFit, min_n: int
+    members: _Replays, labels: dict[str, str], tallies: dict[str, Tally], result: BTFit, min_n: int
 ) -> tuple[ConfigRow, ...]:
     by_label: dict[str, list[ProducerReplay]] = defaultdict(list)
-    for _, replay in members:
-        by_label[config_label(replay.config)].append(replay)
+    for record_id, replay in members:
+        by_label[labels[record_id]].append(replay)
     rows = [
         _config_row(label, group, tallies[label], result, min_n) for label, group in by_label.items()
     ]
@@ -210,7 +176,7 @@ def _rows(
 
 
 def _config_row(
-    label: str, group: list[ProducerReplay], tally: _Tally, result: BTFit, min_n: int
+    label: str, group: list[ProducerReplay], tally: Tally, result: BTFit, min_n: int
 ) -> ConfigRow:
     failed = sum(r.outcome is ReplayOutcome.FAILED for r in group)
     accepted = [r for r in group if r.outcome is ReplayOutcome.ACCEPTED]
@@ -242,7 +208,7 @@ def _config_row(
     )
 
 
-def _original_row(tally: _Tally, result: BTFit) -> ConfigRow:
+def _original_row(tally: Tally, result: BTFit) -> ConfigRow:
     judged = _judged(ORIGINAL_LABEL, tally, result, 0)
     return ConfigRow(
         label=ORIGINAL_LABEL,
@@ -269,7 +235,7 @@ def _original_row(tally: _Tally, result: BTFit) -> ConfigRow:
     )
 
 
-def _judged(label: str, tally: _Tally, result: BTFit, min_n: int) -> _Judged:
+def _judged(label: str, tally: Tally, result: BTFit, min_n: int) -> _Judged:
     strength = result.strengths.get(label)
     return _Judged(
         strength=None if strength is None else strength.value,
@@ -284,7 +250,7 @@ def _judged(label: str, tally: _Tally, result: BTFit, min_n: int) -> _Judged:
     )
 
 
-def _strength_reason(strength: Strength | None, tally: _Tally) -> str | None:
+def _strength_reason(strength: Strength | None, tally: Tally) -> str | None:
     """Why a row has no strength: the fit's own reason, or that every opponent had none."""
     if strength is not None:
         return strength.reason

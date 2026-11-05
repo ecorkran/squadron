@@ -62,12 +62,19 @@ class ModelRef(BaseModel):
 
 
 class ProducerConfigRef(BaseModel):
-    """A producer config (D1): an alias, its model and profile, and the effort sent."""
+    """A producer config (D1): an alias, its model and profile, and the effort sent.
+
+    ``tool_use`` and ``max_output_tokens`` are the alias's other wire settings, part of the
+    config's identity (slice 420 D6). ``None`` means the record predates them; for
+    ``max_output_tokens`` it also means no budget was sent.
+    """
 
     alias: str
     model: str
     profile: str | None
     effort_sent: str | None
+    tool_use: bool | None = None
+    max_output_tokens: int | None = None
 
 
 class JudgeRef(BaseModel):
