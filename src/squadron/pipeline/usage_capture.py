@@ -63,10 +63,41 @@ def effort_sent_by_profile(profile_name: str, effort: Effort | None) -> Effort |
     return effort if get_provider(provider).capabilities.applies_effort else None
 
 
+def _parse_effort(value: object) -> Effort | None:
+    """A stored effort as ``Effort | None``; raises on anything unrecognized.
+
+    Run state is persisted as JSON, so a stored value is a string; case and padding are
+    ignored. Reading an unknown value as ``None`` would file the run under "not sent".
+    """
+    if value is None or isinstance(value, Effort):
+        return value
+    if isinstance(value, str) and value.strip().lower() in set(Effort):
+        return Effort(value.strip().lower())
+    raise ValueError(f"unrecognized effort_sent value: {value!r}")
+
+
 def read_effort_sent(usage_metadata: Mapping[str, object]) -> Effort | None:
     """The effort ``note_effort_sent`` recorded; ``None`` when none was sent."""
-    value = usage_metadata.get(EFFORT_SENT_KEY)
-    return value if isinstance(value, Effort) else None
+    return _parse_effort(usage_metadata.get(EFFORT_SENT_KEY))
+
+
+def stamp_effort_sent(metadata: dict[str, object], effort: Effort | None) -> None:
+    """Record the effort an action sent on its result metadata (slice 420 D5).
+
+    Stored as the value string so it survives the run state's JSON round trip.
+    """
+    metadata[EFFORT_SENT_KEY] = None if effort is None else effort.value
+
+
+def action_effort_sent(metadata: Mapping[str, object], usage: UsageRecord | None) -> Effort | None:
+    """The effort an action sent, read from stored action state (slice 420 D5).
+
+    The stamp wins. Without one (a record from before this slice) ``usage.effort`` is the
+    value: under slice 175 D7 it already meant "sent", never an alias value.
+    """
+    if EFFORT_SENT_KEY in metadata:
+        return _parse_effort(metadata[EFFORT_SENT_KEY])
+    return None if usage is None else _parse_effort(usage.effort)
 
 
 class UsageCapture:

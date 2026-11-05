@@ -11,7 +11,7 @@ projectState: slice 420 design complete; initiative 420 (model benchmark) planni
   no implementation started
 dateCreated: 20261105
 dateUpdated: 20261105
-status: not_started
+status: in_progress
 turns: 27
 promptTokens: 1786060
 cachedTokens: 1685486
@@ -42,25 +42,25 @@ revision_number: 2
 - Next slices: 421, 422, 424–427 read effort via `action_effort_sent` and group by the D6 identity rule.
 
 ## Task 1: Branch — Effort 1
-- [ ] Planning documents (this task file, the slice design, `DEVLOG.md`) commit to the target, not the slice branch. Before branching, commit any of them still uncommitted on the target
-- [ ] Run `git status --short -- . ':!project-documents' ':!DEVLOG.md'`. If it prints anything, write a line starting `BLOCKED:` naming those paths under this task and stop
-- [ ] Read the target: `cf config get git.integration_branch`, or `main` if empty. Create the slice branch from it
-- [ ] Success: `git branch --show-current` prints the slice branch name; the status command above printed nothing
+- [x] Planning documents (this task file, the slice design, `DEVLOG.md`) commit to the target, not the slice branch. Before branching, commit any of them still uncommitted on the target
+- [x] Run `git status --short -- . ':!project-documents' ':!DEVLOG.md'`. If it prints anything, write a line starting `BLOCKED:` naming those paths under this task and stop
+- [x] Read the target: `cf config get git.integration_branch`, or `main` if empty. Create the slice branch from it
+- [x] Success: `git branch --show-current` prints the slice branch name; the status command above printed nothing
 
 ## Task 2: `stamp_effort_sent`, `action_effort_sent`, strict `read_effort_sent` (D5) — Effort 2
-- [ ] In `pipeline/usage_capture.py` add `stamp_effort_sent(metadata, effort)`: writes `metadata[EFFORT_SENT_KEY]` as the `Effort` value string, or `None` when `effort` is `None`. Uses the existing constant
-- [ ] Add one private parser from a stored value to `Effort | None`: an `Effort` or `None` passes; a string is parsed ignoring case and whitespace; anything else, or an unrecognized string, raises a clear error
-- [ ] Add `action_effort_sent(metadata, usage)`, the reader for stored action state:
-  - [ ] key present: the parsed value (`None` stays `None`)
-  - [ ] key absent: `usage.effort` parsed the same way when `usage` is present, else `None`
-- [ ] Make the existing `read_effort_sent` (in-process `usage_metadata`) use the same parser, so a present value that is neither `Effort` nor `None` raises instead of reading as `None`. Key absent still returns `None`
-- [ ] Tests in `tests/pipeline/test_effort_plumbing.py` (or a new `test_effort_stamp.py` beside it if that file would pass ~300 lines):
-  - [ ] stamp then read returns the same `Effort`; stamping `None` reads `None`
-  - [ ] JSON round trip of the metadata reads back as `Effort`; uppercase and padded input accepted
-  - [ ] key absent falls back to `usage.effort`; absent with no usage is `None`; present wins over a differing `usage.effort`
-  - [ ] unrecognized string raises from both readers; `read_effort_sent` raises on a non-`Effort`, non-`None` value
-  - [ ] gate tests: with a fake provider with `applies_effort=False`, `note_effort_sent` writes `None` and `effort_sent_by_profile` returns `None`
-- [ ] Success: tests pass; ruff and pyright clean; existing callers unaffected
+- [x] In `pipeline/usage_capture.py` add `stamp_effort_sent(metadata, effort)`: writes `metadata[EFFORT_SENT_KEY]` as the `Effort` value string, or `None` when `effort` is `None`. Uses the existing constant
+- [x] Add one private parser from a stored value to `Effort | None`: an `Effort` or `None` passes; a string is parsed ignoring case and whitespace; anything else, or an unrecognized string, raises a clear error
+- [x] Add `action_effort_sent(metadata, usage)`, the reader for stored action state:
+  - [x] key present: the parsed value (`None` stays `None`)
+  - [x] key absent: `usage.effort` parsed the same way when `usage` is present, else `None`
+- [x] Make the existing `read_effort_sent` (in-process `usage_metadata`) use the same parser, so a present value that is neither `Effort` nor `None` raises instead of reading as `None`. Key absent still returns `None`
+- [x] Tests in `tests/pipeline/test_effort_plumbing.py` (or a new `test_effort_stamp.py` beside it if that file would pass ~300 lines):
+  - [x] stamp then read returns the same `Effort`; stamping `None` reads `None`
+  - [x] JSON round trip of the metadata reads back as `Effort`; uppercase and padded input accepted
+  - [x] key absent falls back to `usage.effort`; absent with no usage is `None`; present wins over a differing `usage.effort`
+  - [x] unrecognized string raises from both readers; `read_effort_sent` raises on a non-`Effort`, non-`None` value
+  - [x] gate tests: with a fake provider with `applies_effort=False`, `note_effort_sent` writes `None` and `effort_sent_by_profile` returns `None`
+- [x] Success: tests pass; ruff and pyright clean; existing callers unaffected
 
 **Commit**: `feat: add effort_sent action stamp and strict readers`
 
