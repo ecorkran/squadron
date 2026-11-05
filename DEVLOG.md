@@ -11,6 +11,15 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261104
 
+### Initiative 420: Model Benchmark — Architecture Complete
+
+- **Delivered:** `420-arch.model-benchmark.md`, registered as the active arch. Benchmarks implementation and code review per config (model, effort) on the project's own history: fix cases first (parent + frozen issue text + hidden fix test), slice cases second (400 slice ranges), graded in 177's history-free sandbox by a step separate from the producer, with repeated samples compared on paired per-case differences. Reviewer recall via planted defects.
+- **Dependencies:** 140, 320 and 400 complete; 300 in progress (307 open, not needed). #216 fixed in 0.24.19.
+- **Decided:** hidden fix tests qualify mechanically (test-first failure at the parent, reach code only through packaging-declared entry points and exports, no patching of project code); no per-case human review, no per-project boundary file. Replays run the producer step of production pipelines (`implement` from P6; a new `sq run fix <issue>` pipeline) with no review loop, close-out, DEVLOG or merge; review happens once in grading.
+- **Arch review (CONCERNS, 13 findings, 12 fixed, F011 partly):** grader pins the start commit's suite and tool config; cases carry hidden and superseded test sets; crash fixes qualify; the implement step's embedded review is stripped in replays; scrubbed producer env plus transcript leak scan; diff normalization and pairwise judging for slice cases only; paired bootstrap statistic; run-level dollar cap; environment-keyed qualification; diff sidecar files. Reviewer recall and `sq run fix` kept.
+- **Open for slice design:** fix-case yield (the fix-cases slice ends at a yield report; pooling across projects if low); how a replay selects only the producer step without copying prompts; environment resolution in the sandbox; defect planting and finding-to-defect matching; diff size limits for the judge.
+- **Next:** PM decides whether the architecture is ready for slice planning.
+
 ### Release 0.24.20
 
 - **Contents:** a space after the comma in `-p a=1, b=2` is accepted on `sq run` and `sq review` (#291); the summary step resolves a slice from an `each` loop record instead of warning.
