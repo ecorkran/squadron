@@ -41,8 +41,12 @@ def action(
     error: str | None = None,
     outputs: dict[str, object] | None = None,
     failure_kind: str | None = None,
+    effort_stamp: str | None = None,
 ) -> dict[str, object]:
+    """``effort_stamp`` is the action's ``metadata["effort_sent"]``; absent when ``None``."""
     metadata: dict[str, object] = {}
+    if effort_stamp is not None:
+        metadata["effort_sent"] = effort_stamp
     if prompt_identity is not None:
         metadata["prompt"] = prompt_identity
     if failure_kind is not None:

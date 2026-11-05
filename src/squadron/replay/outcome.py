@@ -23,6 +23,7 @@ from squadron.pipeline.state import RunState, StepState
 from squadron.pipeline.steps import StepTypeName
 from squadron.stats.producer_units import (
     PHASE_TYPES,
+    effort_sent_value,
     loop_rounds,
     phase_accepted,
     unit_usage,
@@ -189,7 +190,7 @@ def _reading(
         priced=(0, 0) if spent is None or totals is None else (totals.priced, spent.llm_actions),
         prompt=_prompt_identity(metadata),
         task_prompt=_build_context_text(phase),
-        effort_sent=None if usage is None else usage.effort,
+        effort_sent=effort_sent_value(metadata, usage),
         producer_model=_text(metadata.get("model")) or _text(metadata.get("requested_model")),
         producer_profile=_text(metadata.get("profile")),
     )

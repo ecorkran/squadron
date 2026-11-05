@@ -131,10 +131,10 @@ revision_number: 2
 **Commit**: `fix: carry alias effort through _dispatch-run and prompt-only render`
 
 ## Task 10: Replay outcome and stats read `action_effort_sent` (D5) — Effort 2
-- [ ] `replay/outcome.py` (around line 192): compute `effort_sent` with `action_effort_sent(metadata, usage)` from the dispatch step's action metadata, replacing `None if usage is None else usage.effort`
-- [ ] `stats/producer_units.py` (around line 121): same replacement for `ProducerKey.effort`
-- [ ] Tests: in `tests/replay/test_outcome.py` and `tests/stats/test_producer_units.py`, a failed dispatch with no `UsageRecord` but `effort_sent: "high"` metadata reads `"high"` (and lands in the matching `ProducerKey.effort` row); an old record with usage only still reads `usage.effort`
-- [ ] Success: no remaining read of `usage.effort` for producer identity in either module; tests pass; ruff and pyright clean
+- [x] `replay/outcome.py` (around line 192): compute `effort_sent` with `action_effort_sent(metadata, usage)` from the dispatch step's action metadata, replacing `None if usage is None else usage.effort`
+- [x] `stats/producer_units.py` (around line 121): same replacement for `ProducerKey.effort`
+- [x] Tests: in `tests/replay/test_outcome.py` and `tests/stats/test_producer_units.py`, a failed dispatch with no `UsageRecord` but `effort_sent: "high"` metadata reads `"high"` (and lands in the matching `ProducerKey.effort` row); an old record with usage only still reads `usage.effort`
+- [x] Success: no remaining read of `usage.effort` for producer identity in either module; tests pass; ruff and pyright clean
 
 **Commit**: `fix: attribute failed producer runs to the effort sent`
 

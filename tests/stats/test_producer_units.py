@@ -183,3 +183,21 @@ def test_runs_without_a_phase_step_contribute_nothing() -> None:
     result = extract_units([state])
 
     assert result.units == () and result.excluded == ExcludedCounts()
+
+
+def test_a_failed_dispatch_without_telemetry_keys_on_the_stamped_effort() -> None:
+    stamped = action("dispatch", model="m1", profile="sdk", success=False, effort_stamp="high")
+    review = action("review", model="r", requested="rev", verdict="PASS")
+    state = run("r20", [step("design-0", "design", [stamped, review])])
+
+    (unit,) = extract_units([state]).units
+
+    assert unit.key == ProducerKey(model="m1", profile="sdk", effort="high", reviewer="rev")
+
+
+def test_a_record_without_a_stamp_keys_on_its_usage_effort() -> None:
+    state = run("r21", [step("design-0", "design", producer_actions(effort="medium"))])
+
+    (unit,) = extract_units([state]).units
+
+    assert unit.key.effort == "medium"

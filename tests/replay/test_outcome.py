@@ -276,3 +276,34 @@ def test_a_state_from_before_prompt_identity_has_none() -> None:
     reading = read_outcome(run("r14", [_phase("PASS"), step("loop-1", "loop")]))
 
     assert reading.prompt is None and reading.task_prompt is None
+
+
+def test_a_failed_dispatch_with_no_usage_record_reads_the_stamped_effort() -> None:
+    failed = action(
+        "dispatch", model="m", profile="sdk", success=False, error="boom", effort_stamp="high"
+    )
+    state = run("r15", [step("design-0", "design", [failed], status="failed")], status="failed")
+
+    reading = read_outcome(state)
+
+    assert reading.effort_sent == "high"
+
+
+def test_the_stamp_wins_over_the_usage_records_effort() -> None:
+    dispatch = action(
+        "dispatch",
+        model="m",
+        profile="sdk",
+        usage_record=usage(effort="low"),
+        effort_stamp="high",
+    )
+    state = run("r16", [step("design-0", "design", [dispatch]), step("loop-1", "loop")])
+
+    assert read_outcome(state).effort_sent == "high"
+
+
+def test_a_record_with_no_stamp_still_reads_the_usage_effort() -> None:
+    dispatch = action("dispatch", model="m", profile="sdk", usage_record=usage(effort="medium"))
+    state = run("r17", [step("design-0", "design", [dispatch]), step("loop-1", "loop")])
+
+    assert read_outcome(state).effort_sent == "medium"

@@ -16,6 +16,7 @@ from squadron.pipeline.executor import ExecutionStatus
 from squadron.pipeline.loop_config import LoopCondition
 from squadron.pipeline.state import RunState, StepState
 from squadron.pipeline.steps import StepTypeName
+from squadron.pipeline.usage_capture import action_effort_sent
 from squadron.stats.usage_report import (
     LLM_ACTION_TYPES,
     action_usage_row,
@@ -118,7 +119,7 @@ def _unit(state: RunState, steps: list[StepState], position: int) -> ProducerUni
     key = ProducerKey(
         model=_text(metadata.get("model")) or _text(metadata.get("requested_model")),
         profile=_text(metadata.get("profile")),
-        effort=None if usage is None else usage.effort,
+        effort=effort_sent_value(metadata, usage),
         reviewer=None if review is None else _reviewer(review),
     )
     return ProducerUnit(
@@ -155,6 +156,16 @@ def _first_action(step: StepState, action_type: ActionType) -> Mapping[str, obje
 def _metadata(action: Mapping[str, object]) -> Mapping[str, object]:
     raw = action.get("metadata")
     return cast("Mapping[str, object]", raw) if isinstance(raw, Mapping) else {}
+
+
+def effort_sent_value(metadata: Mapping[str, object], usage: UsageRecord | None) -> str | None:
+    """The effort a dispatch sent, as stored text: its stamp, else its usage record (420 D5).
+
+    Reading the stamp first keeps a run that failed before telemetry in the config row
+    that sent it, instead of the "not sent" row.
+    """
+    effort = action_effort_sent(metadata, usage)
+    return None if effort is None else effort.value
 
 
 def _text(value: object) -> str | None:
