@@ -13,6 +13,13 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261105
 
+### Slice 420: Task Breakdown Complete
+
+- **Delivered:** `420-tasks.effort-audit-across-dispatch-paths.md`: 27 tasks, 212 lines, test-with ordering, commit markers after each fix group.
+- **Order:** `stamp_effort_sent`/`action_effort_sent`, then stamping in dispatch, summary and review, compaction, replay judge, findings-addressed judge, `_dispatch-run --effort` with the renderer, reader wiring, D6 identity in the replay report, enumeration test, CHANGELOG.
+- **Noted:** the findings-addressed judge's missing `UsageRecord` becomes a GitHub issue in Task 26, per the design.
+- **Next:** Project Manager approval, then Phase 6 implementation.
+
 ### Initiative 420: Slice Designs 420–427 Reviewed
 
 - **Run:** `slices-plan` for plan 420 wrote all eight designs and DEVLOG entries, but every item failed at design-1: DEVLOG.md is over 1 MiB, and the Edit tool result carrying it went past the SDK's 1 MiB message buffer. Fixed in ef6d51a9. The review loop never ran.
