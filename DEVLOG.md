@@ -11,6 +11,13 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261104
 
+### Initiative 420: Model Benchmark — Slice Plan Complete
+
+- **Delivered:** `420-slices.model-benchmark.md`, eight slices: 420 effort audit, 421 benchmark sandbox and case record, 422 fix-case qualification and yield report (keystone), 423 `sq run fix` pipeline, 424 producer-only replay runner, 425 grading and paired report, 426 slice cases, 427 reviewer recall.
+- **Decided:** the arch's fix-cases slice and its replay-and-grading slice are each split in two (each had more than six concerns). The agent-auth check sits in 421. 423 has no dependencies in the initiative. 427 needs only 421.
+- **Ordering by measurement:** 422's yield report decides whether fix cases are pooled across projects or slice-case building moves ahead of 424.
+- **Next:** Phase 4 slice design for 420 (effort audit).
+
 ### Release 0.24.22
 
 - **Contents:** the 0.24.21 changes. 0.24.21's tag CI failed on `test_max_cost_cannot_be_set_through_a_param`: CI's forced colour and width split `--max-cost` inside Rich's error box, so the substring check missed it. The test now checks the exit code and `reserved_param_error`. Nothing was published for 0.24.21.
