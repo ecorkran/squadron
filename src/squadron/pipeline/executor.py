@@ -50,6 +50,7 @@ from squadron.pipeline.control_params import (
     OVERRIDE_INSTRUCTIONS,
     RESUMED_FROM_HANDOFF,
     RUN_MAX_COST,
+    RUN_START_HEAD,
 )
 from squadron.pipeline.failure_kind import (
     AGENT_QUESTION_KEY,
@@ -59,7 +60,7 @@ from squadron.pipeline.failure_kind import (
     pauses_run,
 )
 from squadron.pipeline.git_ops import GitEnvironmentError
-from squadron.pipeline.head_stamp import execute_stamped
+from squadron.pipeline.head_stamp import execute_stamped, read_head
 from squadron.pipeline.loop_collapse import collapse_completed_loop
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
 from squadron.pipeline.loop_config import (
@@ -588,6 +589,10 @@ async def execute_pipeline(
                 f"start_from step '{start_from}' not found in pipeline "
                 f"'{definition.name}'. Steps: {step_names}"
             )
+
+    # A guarded commit step refuses to commit if HEAD moved during this invocation (#292).
+    if (start_head := read_head(effective_cwd)) is not None:
+        merged_params[RUN_START_HEAD] = start_head
 
     # A mistyped cap fails the run here, before any step spends (slice 947 D3).
     cost_cap = read_cost_cap(

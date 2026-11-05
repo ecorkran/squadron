@@ -34,6 +34,7 @@ from squadron.pipeline.executor import (
     CHECKPOINT_KEY_OVERRIDE,
     resolve_placeholders,
 )
+from squadron.pipeline.guarded_commit import GUARDED_PARAM
 from squadron.pipeline.intelligence.pools.models import PoolNotFoundError
 from squadron.pipeline.loop_commit import round_commit_params
 from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolutionError
@@ -334,8 +335,14 @@ def _render_commit(
     ``plan`` param as the fallback, exactly as ``CommitAction`` reads its merged
     params. ``round`` is set only for a loop-round commit. A commit with no subject
     renders its explicit paths and message; ``sq _commit`` accepts or refuses it
-    exactly as the action does.
+    exactly as the action does. A guarded ``commit`` step (#292) needs ``sq run``: its
+    HEAD check needs the commit the run started on, which the harness does not record.
     """
+    if config.get(GUARDED_PARAM):
+        raise PromptOnlyUnsupportedError(
+            "a commit step's guards need the commit the run started on, which prompt-only "
+            "mode does not record; run the pipeline with `sq run`"
+        )
     args = ["sq", "_commit"]
     subject = config.get(SUBJECT_PARAM)
     if subject is not None:

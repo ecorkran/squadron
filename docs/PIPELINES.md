@@ -412,6 +412,33 @@ Prefer scalar shorthand:
 
 ---
 
+### `commit`
+
+**Purpose:** Commit only the files a run was meant to write, for a run in a checkout that is not the pipeline's to dirty (such as Amoeba writing a slice entry into a provider project).
+
+**Fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `paths` | list of strings | Repo-relative globs. Run params work inside them (`{requests-index}`). `*` also matches `/` |
+| `message` | string | Commit message, used as written |
+
+```yaml
+- commit:
+    paths: ["project-documents/user/architecture/{requests-index}-slices.*.md"]
+    message: "docs: add slice entry"
+```
+
+It stages and commits every changed or untracked file matching `paths`. The step fails, staging nothing, when:
+
+- any changed or untracked file matches no glob (the error lists them);
+- HEAD is not the commit this `sq run` invocation started on (an agent committed or switched branches);
+- the branch is not the integration target (`git.integration_branch`, or `main`).
+
+With no changes it succeeds without a commit. `--prompt-only` refuses this step.
+
+---
+
 ### `branch`
 
 **Purpose:** Move the checkout onto a slice's branch, or merge that branch back. Code pipelines wrap `implement` in the pair.

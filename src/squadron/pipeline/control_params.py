@@ -21,6 +21,9 @@ RUN_MAX_COST = "run_max_cost_usd"
 # Set by ``sq run --io-dir`` (#292): the absolute directory dispatch steps read
 # ``prompt_files`` from and write ``reply_file``/``delivered_prompt_file`` to.
 RUN_IO_DIR = "run_io_dir"
+# Set by the executor at the start of each invocation (fresh run or resume): the HEAD a
+# guarded ``commit`` step requires to be unchanged (#292).
+RUN_START_HEAD = "run_start_head"
 
 # Each reserved key and the CLI flag that sets it, for the rejection message.
 RESERVED_PARAMS: dict[str, str] = {
@@ -29,6 +32,7 @@ RESERVED_PARAMS: dict[str, str] = {
     RESUMED_FROM_HANDOFF: "sq run --resume (it is set automatically for a hand-off pause)",
     RUN_MAX_COST: "--max-cost",
     RUN_IO_DIR: "--io-dir",
+    RUN_START_HEAD: "nothing (sq run records it when the run starts)",
 }
 
 

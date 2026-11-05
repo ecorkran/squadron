@@ -27,6 +27,7 @@ from squadron.pipeline.commit_plan import (
     CommitTargetError,
     build_commit_plan,
 )
+from squadron.pipeline.control_params import RUN_START_HEAD
 from squadron.pipeline.git_ops import (
     ConfigReader,
     GitEnvironmentError,
@@ -36,6 +37,7 @@ from squadron.pipeline.git_ops import (
     parse_slice_index,
     read_integration_target,
 )
+from squadron.pipeline.guarded_commit import GUARDED_PARAM, guarded_plan
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pr.branch import parse_slice_branch
 from squadron.review.git_utils import run_git
@@ -69,7 +71,15 @@ class CommitAction:
             return self._failure(str(exc))
         explicit_paths = _explicit_paths(context.params)
 
-        if target is None:
+        if context.params.get(GUARDED_PARAM):
+            plan_or_error = guarded_plan(
+                cwd=context.cwd,
+                globs=explicit_paths,
+                message=str(context.params.get(MESSAGE_PARAM) or ""),
+                start_head=context.params.get(RUN_START_HEAD),
+                cf_client=context.cf_client,
+            )
+        elif target is None:
             if not explicit_paths:
                 return self._failure(
                     "commit needs a 'commit_subject' (a scoped commit) or explicit 'paths'; "
