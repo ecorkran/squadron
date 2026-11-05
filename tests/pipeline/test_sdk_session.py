@@ -1512,3 +1512,15 @@ async def test_an_error_result_after_a_rejection_is_a_usage_limit() -> None:
 
     with patch(f"{_MOD}.asyncio.sleep", new=AsyncMock()), pytest.raises(UsageLimitReached):
         await session.dispatch("test")
+
+
+@pytest.mark.asyncio
+async def test_open_pipeline_session_raises_sdk_buffer_limit() -> None:
+    """An Edit of a >1 MiB file returns the whole file in one message (DEVLOG)."""
+    from squadron.pipeline.sdk_session import open_pipeline_session
+    from squadron.providers.sdk.settings import SDK_MAX_BUFFER_BYTES
+
+    with patch(f"{_MOD}.ClaudeSDKClient", return_value=_make_client()) as client_ctor:
+        await open_pipeline_session()
+
+    assert client_ctor.call_args.kwargs["options"].max_buffer_size == SDK_MAX_BUFFER_BYTES

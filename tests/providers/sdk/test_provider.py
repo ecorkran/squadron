@@ -431,3 +431,12 @@ async def test_unset_effort_sends_neither(provider: ClaudeSDKProvider) -> None:
 
 def test_sdk_applies_effort(provider: ClaudeSDKProvider) -> None:
     assert provider.capabilities.applies_effort is True
+
+
+@pytest.mark.asyncio
+async def test_agent_options_raise_sdk_buffer_limit(provider: ClaudeSDKProvider) -> None:
+    from squadron.providers.sdk.settings import SDK_MAX_BUFFER_BYTES
+
+    options = await _options_for(provider, None)
+
+    assert options.max_buffer_size == SDK_MAX_BUFFER_BYTES

@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- SDK dispatches no longer fail with "JSON message exceeded maximum buffer size" when the agent edits a file larger than 1 MiB.
+
 ## [0.24.22] - 20261104
 
 - First published release of the 0.24.21 changes below; 0.24.21 was tagged but never reached PyPI.

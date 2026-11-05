@@ -9,7 +9,7 @@ from claude_agent_sdk import ClaudeAgentOptions
 from squadron.core.models import AgentConfig, Effort
 from squadron.logging import get_logger
 from squadron.providers.base import ProviderCapabilities, ProviderType
-from squadron.providers.sdk.settings import sdk_settings_options
+from squadron.providers.sdk.settings import SDK_MAX_BUFFER_BYTES, sdk_settings_options
 from squadron.providers.sdk.tool_names import translate_tool_names
 
 if TYPE_CHECKING:
@@ -112,6 +112,7 @@ class ClaudeSDKProvider:
             kwargs["hooks"] = hooks
 
         kwargs.update(sdk_effort_options(config.effort))
+        kwargs["max_buffer_size"] = SDK_MAX_BUFFER_BYTES
 
         options = ClaudeAgentOptions(**kwargs)  # type: ignore[arg-type]
         mode = config.credentials.get("mode", "query")

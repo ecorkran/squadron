@@ -62,6 +62,7 @@ from squadron.providers.sdk.rate_limit import (
 )
 from squadron.providers.sdk.settings import (
     AUTO_MEMORY_DISABLE_ENV,
+    SDK_MAX_BUFFER_BYTES,
     pipeline_setting_sources,
     sdk_settings_options,
 )
@@ -685,6 +686,7 @@ async def open_pipeline_session(
         # Dispatch ends on the CLI's own idle report (slice 947 D12).
         env={**settings["env"], SESSION_STATE_ENV: "1"},
         hooks=pipeline_hooks(),  # pyright: ignore[reportArgumentType]
+        max_buffer_size=SDK_MAX_BUFFER_BYTES,
         **sdk_effort_options(effort),  # pyright: ignore[reportArgumentType]
     )
     client = ClaudeSDKClient(options=_seeded_options(base, seed))

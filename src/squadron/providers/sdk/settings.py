@@ -15,6 +15,7 @@ __all__ = [
     "AUTO_MEMORY_DISABLE_ENV",
     "PIPELINE_SETTING_SOURCES",
     "REVIEW_SETTING_SOURCES",
+    "SDK_MAX_BUFFER_BYTES",
     "USER_SETTING_SOURCE",
     "pipeline_setting_sources",
     "SdkSettings",
@@ -29,6 +30,11 @@ PIPELINE_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 REVIEW_SETTING_SOURCES: Final[tuple[str, ...]] = ("project",)
 
 AUTO_MEMORY_DISABLE_ENV: Final = "CLAUDE_CODE_DISABLE_AUTO_MEMORY"
+
+# Largest single stdout message the SDK accepts from the CLI. The SDK default
+# (1 MiB) fails a dispatch whenever the agent edits a file over that size, since
+# the Edit tool result carries the whole original file.
+SDK_MAX_BUFFER_BYTES: Final = 64 * 1024 * 1024
 
 # The operator's user CLAUDE.md and user settings (output style included).
 USER_SETTING_SOURCE: Final = "user"
