@@ -49,6 +49,7 @@ from squadron.pipeline.control_params import (
     ACCEPT_DECISION,
     OVERRIDE_INSTRUCTIONS,
     RESUMED_FROM_HANDOFF,
+    RUN_MAX_COST,
 )
 from squadron.pipeline.failure_kind import (
     AGENT_QUESTION_KEY,
@@ -589,7 +590,11 @@ async def execute_pipeline(
             )
 
     # A mistyped cap fails the run here, before any step spends (slice 947 D3).
-    cost_cap = read_cost_cap(effective_cwd)
+    cost_cap = read_cost_cap(
+        effective_cwd,
+        run_override=merged_params.get(RUN_MAX_COST),
+        pipeline_cap=definition.max_cost_usd,
+    )
     get_action_fn = _action_registry.__getitem__ if _action_registry else get_action
     # Actions refuse a fresh run here, not mid-run (#256). A resume skips this: the
     # run's own uncommitted work may be what a check would refuse.

@@ -126,3 +126,5 @@ class PipelineDefinition:
     steps: list[StepConfig]
     model: str | None = None
     auth_policy: str | None = None
+    # Per-pipeline dollar cap (#241); ``sq run --max-cost`` overrides it.
+    max_cost_usd: float | None = None

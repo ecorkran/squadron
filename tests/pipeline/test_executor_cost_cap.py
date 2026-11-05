@@ -12,6 +12,7 @@ import pytest
 from squadron.config.keys import COST_CAP_KEY
 from squadron.config.manager import set_config
 from squadron.integrations.context_forge import SliceEntry
+from squadron.pipeline.control_params import RUN_MAX_COST
 from squadron.pipeline.executor import ExecutionStatus, PipelineResult, execute_pipeline
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
@@ -223,3 +224,42 @@ async def test_a_loop_stops_and_fails_at_the_cap_even_with_on_exhaust_skip(
 
     assert result.status is ExecutionStatus.FAILED
     assert action.execute.await_count == 2  # rounds 3-5 never ran
+
+
+@pytest.mark.asyncio
+async def test_run_param_cap_overrides_the_pipeline_and_config_caps(
+    patch_config_paths: dict[str, Path], tmp_path: Path
+) -> None:
+    """#241: ``--max-cost`` (stored as a run param) beats YAML, which beats config."""
+    _set_cap(tmp_path, "100")
+    definition = _flat_pipeline(3)
+    definition.max_cost_usd = 50.0
+    action = _priced_action(0.6)
+
+    result = await execute_pipeline(
+        definition,
+        {RUN_MAX_COST: 1.0},
+        resolver=MagicMock(),  # type: ignore[arg-type]
+        cf_client=MagicMock(),  # type: ignore[arg-type]
+        cwd=str(tmp_path),
+        _action_registry={"dispatch": action},
+    )
+
+    assert result.status is ExecutionStatus.FAILED
+    assert action.execute.await_count == 2
+    assert "over --max-cost $1.00" in (result.step_results[-1].action_results[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_pipeline_cap_overrides_config(
+    patch_config_paths: dict[str, Path], tmp_path: Path
+) -> None:
+    _set_cap(tmp_path, "100")
+    definition = _flat_pipeline(3)
+    definition.max_cost_usd = 1.0
+    action = _priced_action(0.6)
+
+    result = await _run(definition, action, tmp_path)
+
+    assert result.status is ExecutionStatus.FAILED
+    assert "over pipeline max_cost_usd $1.00" in (result.step_results[-1].action_results[0].error or "")

@@ -11,39 +11,65 @@ from __future__ import annotations
 import logging
 import math
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import cast
 
 from squadron.config.keys import COST_CAP_KEY
 from squadron.config.manager import get_config
 from squadron.core.usage import UsageRecord
 
-__all__ = ["RunSpend", "read_cost_cap"]
+__all__ = ["CostCap", "RunSpend", "read_cost_cap"]
 
 _logger = logging.getLogger(__name__)
 
 
-def read_cost_cap(cwd: str) -> float | None:
-    """The configured dollar cap, or ``None`` when unset (no cap).
+# Where a cap came from, named in its errors (#241: flag, then pipeline YAML, then config).
+RUN_FLAG_SOURCE = "--max-cost"
+PIPELINE_SOURCE = "pipeline max_cost_usd"
 
-    Raises ``ValueError`` naming the key when it is set to anything but a
-    positive, finite number, so a mistyped cap fails the run at start.
+
+@dataclass(frozen=True)
+class CostCap:
+    """A dollar cap and the setting it came from."""
+
+    usd: float
+    source: str
+
+
+def read_cost_cap(
+    cwd: str, *, run_override: object = None, pipeline_cap: float | None = None
+) -> CostCap | None:
+    """The run's dollar cap, or ``None`` when nothing sets one (no cap).
+
+    Precedence (#241): *run_override* (``sq run --max-cost``), then *pipeline_cap*
+    (the YAML's ``max_cost_usd``), then the config key. Raises ``ValueError`` naming
+    the source when the winning value is anything but a positive, finite number,
+    so a mistyped cap fails the run at start.
     """
+    if run_override is not None:
+        return CostCap(_positive_usd(run_override, RUN_FLAG_SOURCE), RUN_FLAG_SOURCE)
+    if pipeline_cap is not None:
+        return CostCap(_positive_usd(pipeline_cap, PIPELINE_SOURCE), PIPELINE_SOURCE)
     value = get_config(COST_CAP_KEY, cwd=cwd)
     if value is None:
         return None
+    return CostCap(_positive_usd(value, COST_CAP_KEY), COST_CAP_KEY)
+
+
+def _positive_usd(value: object, source: str) -> float:
     # bool is an int subclass; True is not a dollar amount.
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"{COST_CAP_KEY} must be a positive number, got {value!r}")
+        raise ValueError(f"{source} must be a positive number, got {value!r}")
     if not math.isfinite(value) or value <= 0:
-        raise ValueError(f"{COST_CAP_KEY} must be a positive number, got {value!r}")
+        raise ValueError(f"{source} must be a positive number, got {value!r}")
     return float(value)
 
 
 class RunSpend:
     """Known LLM spend of one ``sq run`` invocation."""
 
-    def __init__(self, cap_usd: float | None) -> None:
-        self._cap_usd = cap_usd
+    def __init__(self, cap: CostCap | None) -> None:
+        self._cap = cap
         self._known_usd = 0.0
         self._unreadable_steps: list[str] = []
         self._unpriced_aliases_warned: set[str | None] = set()
@@ -55,19 +81,19 @@ class RunSpend:
 
     def cap_error(self) -> str | None:
         """The failure text once known spend exceeds the cap; ``None`` while under it or uncapped."""
-        if self._cap_usd is None:
+        if self._cap is None:
             return None
         if self._unreadable_steps:
             # A capped run must not run on a tally it cannot trust: fail closed.
             return (
-                f"cannot enforce {COST_CAP_KEY}: unreadable usage record from step(s) "
+                f"cannot enforce {self._cap.source}: unreadable usage record from step(s) "
                 f"{', '.join(self._unreadable_steps)}"
             )
-        if self._known_usd <= self._cap_usd:
+        if self._known_usd <= self._cap.usd:
             return None
         return (
-            f"run spent ${self._known_usd:.2f} this invocation, over {COST_CAP_KEY} "
-            f"${self._cap_usd:.2f}; raise the cap and resume to continue"
+            f"run spent ${self._known_usd:.2f} this invocation, over {self._cap.source} "
+            f"${self._cap.usd:.2f}; raise the cap and resume to continue"
         )
 
     def add(self, raw_usage: object, *, step_name: str) -> None:

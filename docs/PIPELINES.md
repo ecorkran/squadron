@@ -1138,6 +1138,8 @@ sq config set pipeline.max_cost_usd 20          # user-wide
 sq config set pipeline.max_cost_usd 5 --project # this project only
 ```
 
+A pipeline file can set its own cap with a top-level `max_cost_usd: 3`, and one run can set its own with `sq run <pipeline> --max-cost 2`. The flag wins over the pipeline file, which wins over the config key, and the error names whichever one applied. A run keeps its `--max-cost` through `--resume`; `sq run --resume <run-id> --max-cost <usd>` replaces it.
+
 After every action the run adds up the cost of the LLM calls so far. The action that takes the total over the cap fails with failure kind `cost_cap`, and the run fails:
 
 ```
@@ -1147,10 +1149,10 @@ run spent $20.31 this invocation, over pipeline.max_cost_usd $20.00; raise the c
 Know the limits:
 
 - **Best-effort.** The check runs after an action finishes, so a run can overshoot by the cost of the actions that were in flight: one action, or one per branch of a `fan_out` step (its branches run at the same time). The error reports the real total.
-- **Per invocation.** `sq run` and each `sq run --resume` start counting at $0, so a run and its resumes can together spend up to the cap once per invocation. Raise the cap (or unset it) and resume to continue.
+- **Per invocation.** `sq run` and each `sq run --resume` start counting at $0, so a run and its resumes can together spend up to the cap once per invocation. Raise the cap (or pass `--max-cost` on the resume) to continue.
 - **Known costs only.** An action whose provider reports no cost is not counted, and logs one WARNING per model alias per run saying the total is a lower bound.
 - **`each` batches stop too.** A cap failure ends the `each` step even with `on_item_failure: continue`.
-- `--prompt-only` runs are not capped.
+- `--prompt-only` runs are not capped, and refuse `--max-cost`.
 
 A cap that is set but is not a positive number fails the run before any step runs.
 

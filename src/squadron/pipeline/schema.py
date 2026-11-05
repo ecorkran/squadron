@@ -6,6 +6,7 @@ PipelineDefinition / StepConfig dataclasses that the executor consumes.
 
 from __future__ import annotations
 
+import math
 from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -52,6 +53,7 @@ class PipelineSchema(BaseModel):
     params: dict[str, str] = {}
     model: str | None = None
     auth_policy: str | None = None
+    max_cost_usd: float | None = None
     steps: list[StepSchema]
 
     @field_validator("auth_policy")
@@ -59,6 +61,13 @@ class PipelineSchema(BaseModel):
     def _validate_auth_policy(cls, value: str | None) -> str | None:
         if value is not None and value not in ("lazy", "strict"):
             raise ValueError(f"auth_policy must be 'lazy', 'strict', or absent; got {value!r}")
+        return value
+
+    @field_validator("max_cost_usd")
+    @classmethod
+    def _validate_max_cost(cls, value: float | None) -> float | None:
+        if value is not None and (not math.isfinite(value) or value <= 0):
+            raise ValueError(f"max_cost_usd must be a positive number, got {value!r}")
         return value
 
     @model_validator(mode="before")
@@ -147,4 +156,5 @@ class PipelineSchema(BaseModel):
             steps=steps,
             model=self.model,
             auth_policy=self.auth_policy,
+            max_cost_usd=self.max_cost_usd,
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import os
 import socket
 import sys
@@ -56,6 +57,7 @@ from squadron.pipeline.classification import (
 from squadron.pipeline.control_params import (
     ACCEPT_DECISION,
     OVERRIDE_INSTRUCTIONS,
+    RUN_MAX_COST,
     reserved_param_error,
 )
 from squadron.pipeline.executor import (
@@ -123,6 +125,19 @@ def _resolve_target(
                 raise typer.BadParameter(f"Pipeline '{definition.name}' requires a '{name}' argument.")
             return (name, target)
     return None
+
+
+def _check_max_cost(value: float | None) -> float | None:
+    """Reject a non-positive or non-finite ``--max-cost`` before anything runs (#241)."""
+    if value is not None and (not math.isfinite(value) or value <= 0):
+        raise typer.BadParameter(f"must be a positive number of dollars, got {value}")
+    return value
+
+
+def _set_run_cap(params: dict[str, object], max_cost: float | None) -> None:
+    """Record ``--max-cost`` in the run's params, where the executor and a resume read it."""
+    if max_cost is not None:
+        params[RUN_MAX_COST] = max_cost
 
 
 def _apply_param_overrides(params: dict[str, object], param_list: list[str] | None) -> None:
@@ -1158,8 +1173,19 @@ def run(
         hidden=True,
         help="Mark the run as a `sq replay` experiment so observed-run stats leave it out.",
     ),
+    max_cost: float | None = typer.Option(
+        None,
+        "--max-cost",
+        callback=_check_max_cost,
+        help="Dollar cap for this run; overrides the pipeline's max_cost_usd and "
+        "pipeline.max_cost_usd. On --resume it replaces the run's cap.",
+    ),
 ) -> None:
     """Execute, inspect, and manage pipeline runs."""
+    if max_cost is not None and prompt_only:
+        # The cap is enforced by the SDK executor; a prompt-only run cannot honor it.
+        rprint("[red]Error: --max-cost cannot be combined with --prompt-only.[/red]")
+        raise typer.Exit(1)
     # ---- mutual exclusivity validation ----
     check_item_flags(resume, item, decision, instructions, flagged)
     if resume is not None and new_run_id is not None:
@@ -1340,6 +1366,7 @@ def run(
     if resume is not None and flagged:
         flagged_overrides: dict[str, object] = {}
         _apply_param_overrides(flagged_overrides, param)  # rejects reserved keys
+        _set_run_cap(flagged_overrides, max_cost)
         handle_flagged_resume(resume, instructions, model, flagged_overrides, strict, _run_pipeline_sdk)
 
     # ---- --resume --item (slice 197 D8) ----
@@ -1347,6 +1374,7 @@ def run(
         assert decision is not None  # check_item_flags
         overrides: dict[str, object] = {}
         _apply_param_overrides(overrides, param)  # rejects reserved keys
+        _set_run_cap(overrides, max_cost)
         handle_item_resume(
             resume, item, decision, instructions, model, overrides, strict, _run_pipeline_sdk
         )
@@ -1372,6 +1400,7 @@ def run(
             raise typer.Exit(0)
         resume_iteration = _resolve_resume_iteration(state_mgr, resume, resume_from)
         resume_params = _resume_params(state, definition, resume_from, decision, instructions)
+        _set_run_cap(resume_params, max_cost)
 
         resume_model = model or str(state.params.get("model")) if state.params.get("model") else model
 
@@ -1422,6 +1451,7 @@ def run(
         raise typer.Exit(1) from None
 
     params = _assemble_params(definition, target, model, param)
+    _set_run_cap(params, max_cost)
 
     # Implicit resume detection
     state_mgr = StateManager()
@@ -1430,6 +1460,8 @@ def run(
         if match is not None:
             if typer.confirm(f"Found a paused run ({match.run_id}). Resume?", default=True):
                 implicit_from = state_mgr.first_unfinished_step(match.run_id, definition)
+                implicit_params = dict(match.params)
+                _set_run_cap(implicit_params, max_cost)
                 if implicit_from is not None:
                     implicit_iteration = _resolve_resume_iteration(
                         state_mgr, match.run_id, implicit_from
@@ -1441,7 +1473,7 @@ def run(
                                     definition,
                                     _run_pipeline_sdk(
                                         match.load_target,
-                                        dict(match.params),
+                                        implicit_params,
                                         model_override=model,
                                         run_id=match.run_id,
                                         from_step=implicit_from,
@@ -1454,7 +1486,7 @@ def run(
                                     definition,
                                     _run_pipeline(
                                         match.load_target,
-                                        dict(match.params),
+                                        implicit_params,
                                         model_override=model,
                                         run_id=match.run_id,
                                         from_step=implicit_from,

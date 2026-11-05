@@ -64,6 +64,7 @@ def build_review_revise_definition(kind: BuiltinReviewTemplate) -> PipelineDefin
         ],
         model=base.model,
         auth_policy=base.auth_policy,
+        max_cost_usd=base.max_cost_usd,
     )
 
 

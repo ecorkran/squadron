@@ -10,7 +10,13 @@ import pytest
 
 from squadron.config.keys import COST_CAP_KEY
 from squadron.config.manager import set_config
-from squadron.pipeline.run_spend import RunSpend, read_cost_cap
+from squadron.pipeline.run_spend import (
+    PIPELINE_SOURCE,
+    RUN_FLAG_SOURCE,
+    CostCap,
+    RunSpend,
+    read_cost_cap,
+)
 from tests.pipeline.conftest import usage_dict
 
 _MOD = "squadron.pipeline.run_spend"
@@ -27,15 +33,15 @@ class TestReadCostCap:
 
         cap = read_cost_cap(str(tmp_path))
 
-        assert cap == 12.5
-        assert isinstance(cap, float)
+        assert cap == CostCap(12.5, COST_CAP_KEY)
+        assert isinstance(cap.usd, float)
 
     def test_whole_number_cap_is_a_float(
         self, patch_config_paths: dict[str, Path], tmp_path: Path
     ) -> None:
         set_config(COST_CAP_KEY, "20", project=True, cwd=str(tmp_path))
 
-        assert read_cost_cap(str(tmp_path)) == 20.0
+        assert read_cost_cap(str(tmp_path)) == CostCap(20.0, COST_CAP_KEY)
 
     @pytest.mark.parametrize("raw", ["0", "-1", "-0.5", "inf", "nan"])
     def test_non_positive_or_non_finite_cap_raises_naming_the_key(
@@ -59,6 +65,39 @@ class TestReadCostCap:
     ) -> None:
         with pytest.raises(ValueError):
             set_config(COST_CAP_KEY, "lots", project=True, cwd=str(tmp_path))
+
+
+class TestCostCapPrecedence:
+    """#241: ``--max-cost`` beats the pipeline's ``max_cost_usd``, which beats config."""
+
+    def test_run_flag_beats_pipeline_and_config(
+        self, patch_config_paths: dict[str, Path], tmp_path: Path
+    ) -> None:
+        set_config(COST_CAP_KEY, "50", project=True, cwd=str(tmp_path))
+
+        cap = read_cost_cap(str(tmp_path), run_override=1, pipeline_cap=5.0)
+
+        assert cap == CostCap(1.0, RUN_FLAG_SOURCE)
+
+    def test_pipeline_cap_beats_config(
+        self, patch_config_paths: dict[str, Path], tmp_path: Path
+    ) -> None:
+        set_config(COST_CAP_KEY, "50", project=True, cwd=str(tmp_path))
+
+        assert read_cost_cap(str(tmp_path), pipeline_cap=5.0) == CostCap(5.0, PIPELINE_SOURCE)
+
+    @pytest.mark.parametrize("raw", [0, -2.0, float("inf"), True, "3"])
+    def test_bad_run_flag_value_raises_naming_the_flag(
+        self, patch_config_paths: dict[str, Path], tmp_path: Path, raw: object
+    ) -> None:
+        with pytest.raises(ValueError, match=RUN_FLAG_SOURCE):
+            read_cost_cap(str(tmp_path), run_override=raw)
+
+    def test_over_cap_error_names_the_winning_source(self) -> None:
+        spend = RunSpend(CostCap(1.0, RUN_FLAG_SOURCE))
+        spend.add(usage_dict(2.0), step_name="a")
+
+        assert f"over {RUN_FLAG_SOURCE} $1.00" in (spend.cap_error() or "")
 
 
 class TestRunSpend:
@@ -113,7 +152,7 @@ class TestCapError:
         assert spend.cap_error() is None
 
     def test_unreadable_usage_under_a_cap_fails_closed(self) -> None:
-        spend = RunSpend(10.0)
+        spend = RunSpend(CostCap(10.0, COST_CAP_KEY))
         spend.add(usage_dict(0.1), step_name="good")
         spend.add("not a usage record", step_name="bad")
 
@@ -133,13 +172,13 @@ class TestCapError:
         assert not inspect.iscoroutinefunction(RunSpend.add)
 
     def test_at_the_cap_is_not_over_it(self) -> None:
-        spend = RunSpend(1.0)
+        spend = RunSpend(CostCap(1.0, COST_CAP_KEY))
         spend.add(usage_dict(1.0), step_name="a")
 
         assert spend.cap_error() is None
 
     def test_over_the_cap_states_spend_and_cap(self) -> None:
-        spend = RunSpend(1.0)
+        spend = RunSpend(CostCap(1.0, COST_CAP_KEY))
         spend.add(usage_dict(0.6), step_name="a")
         spend.add(usage_dict(0.7), step_name="b")
 

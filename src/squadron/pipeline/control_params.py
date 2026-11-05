@@ -15,12 +15,16 @@ ACCEPT_DECISION = "accept_decision"
 # returned ``awaits_human``). That step did not finish, so an ``existing: keep``
 # implement step must dispatch again even though its branch already has commits.
 RESUMED_FROM_HANDOFF = "resumed_from_handoff"
+# Set by ``sq run --max-cost`` (#241). Kept in the run's params so a resume keeps the
+# cap; a resume's own ``--max-cost`` replaces it.
+RUN_MAX_COST = "run_max_cost_usd"
 
 # Each reserved key and the CLI flag that sets it, for the rejection message.
 RESERVED_PARAMS: dict[str, str] = {
     OVERRIDE_INSTRUCTIONS: "--instructions",
     ACCEPT_DECISION: "--decision accept",
     RESUMED_FROM_HANDOFF: "sq run --resume (it is set automatically for a hand-off pause)",
+    RUN_MAX_COST: "--max-cost",
 }
 
 

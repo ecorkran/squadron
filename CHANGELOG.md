@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq run --max-cost <usd>` and a pipeline file's `max_cost_usd` set a dollar cap for one run or one pipeline, overriding `pipeline.max_cost_usd` (#241).
+
 ## [0.24.20] - 20261104
 
 ### Fixed
