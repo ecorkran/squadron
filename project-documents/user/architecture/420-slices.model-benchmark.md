@@ -24,7 +24,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
 
 ## Foundation Work
 
-1. [ ] **(420) Effort Audit Across Dispatch Paths** — Every dispatch path (SDK pipeline session, one-shot runners, OpenAI-compatible, review) sends the alias's effort when the alias has one, or records that it could not. Every usage record carries the effort actually sent, or a recorded "not sent". It never carries the alias's configured value as a stand-in.
+1. [x] **(420) Effort Audit Across Dispatch Paths** — Every dispatch path (SDK pipeline session, one-shot runners, OpenAI-compatible, review) sends the alias's effort when the alias has one, or records that it could not. Every usage record carries the effort actually sent, or a recorded "not sent". It never carries the alias's configured value as a stand-in.
    - **Value:** Without this, effort rows in any benchmark report mean nothing. It also fixes whatever the audit turns up.
    - **Success Criteria:**
      - There is an inventory of every dispatch path, showing whether each sends effort and records it.

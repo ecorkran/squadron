@@ -13,11 +13,20 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261105
 
+### Slice 420: Effort Audit Across Dispatch Paths: Implemented
+
+- **Done:** every dispatch path now sends the alias's effort or records that none was sent. `stamp_effort_sent` writes the effort on dispatch, summary, review and compaction results (also on failures that have no usage record); `action_effort_sent` is the one reader. Compaction records the session's effort. The replay judge and the findings-addressed judge (pipeline gate and `sq review resolve`) send their alias's effort. `_dispatch-run` takes `--effort` and prompt-only rendering passes it. Replay outcomes and `sq stats producers` read the stamp first.
+- **Replay identity (D6):** report rows and contestants are keyed by model, profile, effort sent, `tool_use` and `max_output_tokens`; the alias is display. `ProducerConfigRef` and `JudgeRef` gained optional fields, so old records load. `report.py` was over budget, so `replay/config_label.py` and `replay/pair_tally.py` were split out.
+- **Guard:** `tests/providers/test_effort_inventory.py` walks the AST for `AgentConfig(...)` and `open_pipeline_session(...)`, requires each site classified, and maps inventory paths 1–12 to named tests (an executable map, not a comment).
+- **Verified:** full suite 8839 passed, ruff and pyright clean. Walkthrough run live: compaction record reads `high` (was `null`); a `set_model` failure keeps `effort_sent: "xhigh"` with no usage record; `glm-flash` vs `glm-flash-low` replays are two report rows; judge at `low` records `low`.
+- **Noted:** the installed Claude Code (2.1.311) does not know `claude-haiku-5-5`, so `haiku` and `haiku-xhigh` SDK aliases fail at `set_model` locally. Findings-addressed judge spend is still unrecorded: #294. `sq replay run` skips start commits with submodules (slice 167).
+- **Next:** slice 421.
+
 ### Slice 420: Task Breakdown Complete
 
-- **Delivered:** `420-tasks.effort-audit-across-dispatch-paths.md`: 27 tasks, 212 lines, test-with ordering, commit markers after each fix group.
+- **Delivered:** `420-tasks.effort-audit-across-dispatch-paths.md`: 15 tasks, 186 lines, test-with ordering, commit markers after each fix group.
 - **Order:** `stamp_effort_sent`/`action_effort_sent`, then stamping in dispatch, summary and review, compaction, replay judge, findings-addressed judge, `_dispatch-run --effort` with the renderer, reader wiring, D6 identity in the replay report, enumeration test, CHANGELOG.
-- **Noted:** the findings-addressed judge's missing `UsageRecord` becomes a GitHub issue in Task 26, per the design.
+- **Noted:** the findings-addressed judge's missing `UsageRecord` becomes a GitHub issue in Task 15, per the design.
 - **Next:** Project Manager approval, then Phase 6 implementation.
 
 ### Initiative 420: Slice Designs 420–427 Reviewed

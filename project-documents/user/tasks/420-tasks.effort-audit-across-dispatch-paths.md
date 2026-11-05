@@ -11,7 +11,7 @@ projectState: slice 420 design complete; initiative 420 (model benchmark) planni
   no implementation started
 dateCreated: 20261105
 dateUpdated: 20261105
-status: in_progress
+status: complete
 turns: 27
 promptTokens: 1786060
 cachedTokens: 1685486
@@ -173,13 +173,14 @@ revision_number: 2
 **Commit**: `test: enforce the effort dispatch-path inventory`
 
 ## Task 14: Full validation — Effort 2
-- [ ] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite
-- [ ] Run the tests of every file touched in Tasks 2–13 (the design's walkthrough step 2 lists only some of them), plus `tests/providers/test_effort_inventory.py`; run walkthrough steps 3–6 where a live run is possible (pre-authorized) and record the result under the task
-- [ ] Success: all pass; any remaining failure is named with its cause
+- [x] `ruff format`, `ruff check`, `pyright` (zero errors), full test suite
+- [x] Run the tests of every file touched in Tasks 2–13 (the design's walkthrough step 2 lists only some of them), plus `tests/providers/test_effort_inventory.py`; run walkthrough steps 3–6 where a live run is possible (pre-authorized) and record the result under the task
+- [x] Success: all pass; any remaining failure is named with its cause
+  - Result (2026-11-05): `ruff format --check`, `ruff check` and `pyright` clean (0 errors); full suite with `FORCE_COLOR=1`: 8839 passed, 5 skipped. Walkthrough steps 1–6 ran live and are recorded in the slice design. Steps 5 and 6 used cheap `glm-flash` replays of slice 176's task breakdown; slice 167 was skipped by replay (submodules), which is unrelated.
 
 ## Task 15: CHANGELOG and issue — Effort 1
-- [ ] Add one CHANGELOG bullet covering judge and compaction effort, `_dispatch-run --effort`, and replay row merging. State that the findings-addressed gate and `sq review resolve` now run at the judge alias's effort, so cost and latency can change, and that replays recorded before this release report as separate rows until re-run. Keep it short and user-facing
-- [ ] File a GitHub issue for the findings-addressed judge's missing `UsageRecord` (design, Special Considerations). Add the number GitHub returns beside that note in the slice design. If the issue cannot be created, write `issue not filed` there instead
-- [ ] Success: bullet present; issue number (or `issue not filed`) recorded in the slice design
+- [x] Add one CHANGELOG bullet covering judge and compaction effort, `_dispatch-run --effort`, and replay row merging. State that the findings-addressed gate and `sq review resolve` now run at the judge alias's effort, so cost and latency can change, and that replays recorded before this release report as separate rows until re-run. Keep it short and user-facing
+- [x] File a GitHub issue for the findings-addressed judge's missing `UsageRecord` (design, Special Considerations). Add the number GitHub returns beside that note in the slice design. If the issue cannot be created, write `issue not filed` there instead
+- [x] Success: bullet present; issue number (or `issue not filed`) recorded in the slice design
 
 **Commit**: `docs: add effort audit changelog entry`

@@ -7,7 +7,7 @@ dependencies: []
 interfaces: [421, 422, 424, 425, 426, 427]
 dateCreated: 20261104
 dateUpdated: 20261105
-status: not_started
+status: complete
 ---
 
 # Slice Design: Effort Audit Across Dispatch Paths
@@ -189,34 +189,48 @@ Status: decided
 
 ### Verification Walkthrough
 
-Commands below exist today unless marked. Exact output wording is settled in Phase 6.
+Run on 2026-11-05 against the slice branch. Commands and results below are what actually happened.
 
 1. **Inventory guard.**
    ```bash
-   uv run pytest tests/providers/test_effort_inventory.py -q   # new in this slice
+   uv run pytest tests/providers/test_effort_inventory.py -q
    ```
-   It passes. Add a throwaway `AgentConfig(...)` in any module and rerun: it fails, naming the file and line as unclassified. Remove it.
+   `8 passed`. Adding a throwaway `AgentConfig(...)` to `src/squadron/pr/body.py` and rerunning failed with `src/squadron/pr/body.py:277 calls AgentConfig(...) but is not in _SITES in test_effort_inventory.py.` The throwaway was removed.
 
 2. **Per-path effort tests.**
    ```bash
    uv run pytest tests/pipeline/test_effort_plumbing.py tests/pipeline/actions/test_compact.py \
-     tests/replay/test_judge_dispatch.py tests/pipeline/test_prompt_renderer.py -q  # test_judge_dispatch.py is new
+     tests/replay/test_judge_dispatch.py tests/pipeline/test_prompt_renderer.py -q
    ```
-   All pass, covering paths 1–12.
+   `106 passed`. The full suite (`FORCE_COLOR=1 uv run pytest tests -q`) gave `8839 passed, 5 skipped`. `PATH_TESTS` in the inventory test maps paths 1–12 to named tests and checks each exists.
 
-3. **Prompt-only dispatch carries effort.** With an alias on a non-SDK profile that sets `effort = "low"`, render a pipeline whose dispatch step uses it in prompt-only mode (`sq run <pipeline> <slice> --prompt-only`). The emitted command contains `sq _dispatch-run ... --effort low`. With an alias that sets no effort, no `--effort` appears.
-
-4. **Compaction record.** Run a pipeline with a compact step on an SDK alias that sets `effort = "high"`, then inspect run state:
+3. **Prompt-only dispatch carries effort.** A one-step pipeline (`dispatch: {model: glm-flash-low, ...}`, an openrouter alias with `effort = "low"`):
    ```bash
-   sq run <pipeline> <slice> --model <alias-with-high>
-   jq '.completed_steps[] | select(.step_name=="compact") | .action_results[].metadata | {effort_sent, usage: .usage.effort}' \
+   sq run effort-walkthrough.yaml demo --prompt-only
+   ```
+   The emitted command was `sq _dispatch-run --prompt-file {tmp_path} --model z-ai/glm-5.3-flash --profile openrouter --effort low --param topic=demo ...`. The same pipeline with `gpt54-mini` (no effort) emitted the command with no `--effort`.
+
+4. **Compaction record.** A pipeline of one dispatch then `compact: {}`, with the dispatch on `sonnet-high` (SDK, `effort = "high"`):
+   ```bash
+   sq run effort-compact.yaml demo
+   jq -c '[.. | objects | select(has("effort_sent")) | {effort_sent, usage_effort: .usage.effort}]' \
      ~/.config/squadron/runs/<run-id>.json
    ```
-   Both fields read `"high"`. Before this slice, `usage.effort` was `null`.
+   Result: `[{"effort_sent":"high","usage_effort":"high"},{"effort_sent":"high","usage_effort":"high"}]`, the dispatch and the compaction. Before this slice the compaction's `usage.effort` was `null`. Caveat: the first attempt used `haiku-xhigh`, which failed because the installed Claude Code (2.1.311) does not know `claude-haiku-5-5`. That failure still showed D5: `[{"effort_sent":"xhigh","usage":null}]`, the effort stamped on a result with no usage record.
 
-5. **Replay rows merge on sent effort.** Define two aliases with the same model and profile but different alias names and the same `effort`. Run `sq replay run` with both, then `sq replay report`. One row lists both alias names. Change one alias's effort, rerun, and the report shows two rows.
+5. **Replay rows follow what was sent.** Replays of slice 176's task breakdown under `glm-flash` and `glm-flash-low` (same model and profile; the first sends no effort, the second `low`):
+   ```bash
+   sq replay run --phase tasks --slice 176 --config glm-flash --config glm-flash-low \
+     --reviewer glm-flash --max-revisions 1 --yes
+   sq replay report
+   ```
+   The report shows two rows: `glm-flash (z-ai/glm-5.3-flash, openrouter, effort none, max 128000 output tokens)` and `glm-flash-low (z-ai/glm-5.3-flash, openrouter, effort low)`. The `glm-flash` alias also sets `max_output_tokens`, which the identity now includes. Merging two aliases with identical identity into one row is not run live (it needs a second alias defined in the user's alias file); `test_aliases_that_sent_the_same_config_are_one_row_naming_both` covers it. A replay of slice 167 was skipped by `sq replay run` because its start commit declares submodules, which replay does not support.
 
-6. **Judge effort.** Set the judge alias's `effort = "low"`, run `sq replay judge`, and read the judgment's usage record: `effort` is `"low"`.
+6. **Judge effort.**
+   ```bash
+   sq replay judge --phase tasks --slice 176 --judge glm-flash-low --yes
+   ```
+   `3 pair(s) judged`. The judgment record's judge reads `{"alias":"glm-flash-low",...,"effort_sent":"low"}` and its usage records read `effort: "low"` (previously `null`).
 
 ## Implementation Notes
 
@@ -231,5 +245,5 @@ Commands below exist today unless marked. Exact output wording is settled in Pha
 Effort: 2/5.
 
 ### Special Considerations
-- **Findings-addressed judge spend is unrecorded.** Path 7 writes no `UsageRecord`, so its spend is missing from run totals and from `pipeline.max_cost_usd`. That is a defect in 175's coverage, outside this slice's effort scope. To file as an issue rather than fix here.
+- **Findings-addressed judge spend is unrecorded.** Path 7 writes no `UsageRecord`, so its spend is missing from run totals and from `pipeline.max_cost_usd`. That is a defect in 175's coverage, outside this slice's effort scope. Filed as #294 rather than fixed here.
 - **Session effort mismatch stays a warning.** A step whose alias asks for a different effort than the open session still runs at the session's effort (#216). This slice records that truthfully. It does not reopen the session, because that would drop the conversation.

@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Effort sent is now recorded on every dispatch path: compaction, the replay judge, and the findings-addressed gate and `sq review resolve` (which now run at their alias's `effort`, so cost and latency can change). `sq _dispatch-run` takes `--effort`. `sq replay report` merges aliases that sent the same thing into one row; replays recorded before this release report as separate rows until re-run.
 - SDK dispatches no longer fail with "JSON message exceeded maximum buffer size" when the agent edits a file larger than 1 MiB.
 
 ## [0.24.22] - 20261104
