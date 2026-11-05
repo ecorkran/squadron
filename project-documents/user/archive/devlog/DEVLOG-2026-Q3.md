@@ -1,0 +1,8178 @@
+---
+docType: devlog
+project: squadron
+dateCreated: 20261105
+dateUpdated: 20261105
+---
+
+# Development Log Archive: 2026 Q3
+
+Archived from DEVLOG.md (see context-forge#141). Newest entries first.
+
+## 20260930
+
+### Release 0.17.0
+
+- **Contents:** slice 930 (pipeline tasks review covers every split task file, #153); slice 931 (alias effort #154, batched `read_file` #157, per-turn usage and duration in review artifacts #158, mid-stream provider errors #166); built-in pipeline grooming (renames to `P0`/`P456`/`P56`, revise-until-pass loops, test pipelines no longer shipped); claude-agent-sdk 0.2.162; `luna` alias.
+
+### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Implementation Complete
+
+- Branch `931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage`; fixes #154 (effort), #157 (batched reads), #158 (per-turn usage). Order C → B → A, one or more commits per task.
+- **C (usage):** `core/usage.py` (`TokenUsage`, `RunTelemetry`, `add_optional`, a stdlib-only leaf). `providers/openai/usage.py` reads usage off every chunk before the choices guard. The agent sends `stream_options` unless the profile sets `sends_stream_usage = false` (gemini built-in), sums turns/usage/reasoning chars per `handle_message`, stamps them on the final Message, attaches a snapshot to every `ProviderError`, converts mid-stream `httpx` timeouts/transport errors, and logs the D12 exit and no-usage WARNINGs. `review_client` times every review and stamps `duration_seconds` on errors. `review/run_cost.py` renders frontmatter keys, digest lines, and JSON keys once for both success and provider-failure artifacts. `profile_credentials()` replaced six hand-copied credential dicts.
+- **B (batched reads):** `read_file` takes `path` or `paths` (exactly one), `==> path <==` headers, per-file errors inline, `MAX_READ_BATCH_BYTES` budget with a not-read marker and WARNING. Guarded's expected-failure conversion moved to a shared `expected_failure` so a batch reports each file's failure with the same wording. D7 guidance paragraph added.
+- **A (effort):** `Effort` StrEnum on `AgentConfig`; alias field + `model_effort()`; `ResolvedModel.effort`; CLI, pipeline review, dispatch, and summary carry it. OpenAI sends `reasoning_effort`, SDK maps to `effort` (`none` → `thinking` disabled), Codex warns. `applies_effort` capability; the artifact records only a level actually sent.
+- Deviations: Tasks 5–7 and 9–10B each landed as one commit (shared files). The digest's unreported sentinel is the existing `not computed`, not `not reported`. The `Effort:` digest line always renders per D10, so pinned digest fixtures changed (the task said unchanged). The failure artifact has no JSON surface; it gained a Run Digest section instead. The no-usage WARNING is skipped for a profile that opted out of `stream_options`. `sq _summary-run` gained a hidden `--effort` so prompt-only summaries keep the alias's effort.
+- Verification: full suite, ruff, pyright clean; both import greps clean; `cf validate frontmatter` accepts the new keys; walkthrough steps 1, 10, and the step 6 dry run run. Live `local` (Ollama `llama3.2`) review: 2 turns, prompt 8142 / cached 1025 / completion 426 / reasoning not reported, 13.4 s. The same with `effort = "low"` fails 400 ("does not support thinking"), which is D12's rejection row working as designed.
+- Live OpenRouter runs on slice 931's design: glm-flash baseline PASS, 20 turns, 50 tool calls, prompt 2,343,136 / cached 1,537,024 (OpenRouter caches: 66%) / completion 83,523 / reasoning 79,466, 1273 s. glm-flash-low PASS, 2 turns, 2 tool calls, prompt 21,029 / completion 892 / reasoning 158, 28.8 s — same verdict at a fraction of the cost. JSON (`--output json`) carries the same keys. No `paths` call in practice: glm-flash-low issued two single-path reads as parallel calls in one turn.
+- #166 fixed here: the first baseline attempt died on OpenRouter's mid-stream error event (bare `openai.APIError`, no artifact). The agent now converts it to `ProviderError`, so it records a failure artifact with telemetry.
+- **Not run:** walkthrough step 6's live pipeline run (`sq run` refuses inside Claude Code), 7 for `openai`/`gemini`, 8 (would mean stopping Ollama mid-review), and 9 (no Codex).
+- Code review (deepseek-v4.1-flash): CONCERNS. Fixed: batched `paths` capped at 50 entries of ≤1024 chars so the result-floor invariant is a real bound; effort parsed by value; one duration span for success and failure; spawn None-filter test. Kept: `max`/`minimal` excluded by D1 (reviewer could not verify OpenAI's list), double WARNING on empty turn, load-test bounds. Response recorded in the review file.
+- Pipeline parity (`sq run review 931 --model glm-flash-low`): artifact carries `effort: low` and all usage keys. Its two concerns (spurious exit WARNING on generator abandonment; error text crowding the batch budget) do not hold: `completed` is set before the first yield, and error results are ≤ ~1 KB against a 256 KB budget. That run overwrites the gate review's file; the gate review was restored from git.
+- A mistyped alias (`glm-flash-low.`) was accepted by the pipeline and ran a fabricated SDK review instead of failing (#175).
+- `glm-flash-low` added to `~/.config/squadron/models.toml` (inline `[aliases]` form) for the walkthrough.
+- Issues filed: #171 Codex effort, #172 SDK usage from `ResultMessage.usage`, #173 enable gemini `sends_stream_usage` after a probe, #174 `grep` empty pattern logged as an unexpected failure (pre-existing). D2 rationale commented on #154.
+- Test-suite note: `tests/metrology/test_audit_cli.py`'s two variance-series tests each sleep 120 s on the default `metrology.audit_run_cooldown_s`, which is most of the full suite's wall-clock.
+
+## 20260929
+
+### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Task Breakdown Complete
+
+- Phase 5 done: `project-documents/user/tasks/931-tasks.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage-{1,2}.md` (30 tasks including 4B, 5B, 6B, 10B, 19B; split at Part A because the total ran 112 lines over target; -1 holds Parts C and B, -2 holds Part A and wrap-up). No code yet.
+- Order is C → B → A per the design: usage (Tasks 2–11), batched reads (12–15), effort (16–22), then verification, follow-up issues, close-out (23–25). Each part ends at a green, separately revertible commit.
+- Live runs (Tasks 11, 15, 23) need an OpenRouter key; Ollama/OpenAI/Gemini/Codex walkthrough steps 7–9 run only where the environment has them, and the rest are listed in the DEVLOG as not run.
+- Task 21 checks the installed SDK's `effort` levels before mapping; Task 4 leaves `providers/auth.py` alone (not one of the six credential sites).
+
+### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Implementation Complete
+
+- Branch `930-slice.pipeline-tasks-review-covers-every-split-task-file`, fixes #153. Code review PASS (sonnet, 6 notes, none blocking). Suite: 5007 passed, 4 skipped; ruff and pyright clean.
+- The pipeline `review:` step now reviews every split task file, one call per part, saved as `part-N` like `sq review tasks`. The step's verdict is the worst part's (PASS < CONCERNS < FAIL < UNKNOWN). Single-file slices are unchanged.
+- Shared: `review/parts.py` (`review_parts`, `worst_verdict`). CLI `review_tasks` uses it, and the UNKNOWN `KeyError` in the old `_aggregate_verdicts` is gone (UNKNOWN exits 0, like a single-file UNKNOWN review).
+- Registry: `TemplateInputSpec.fans_out`; `resolve_template_input_parts` replaces `resolve_template_inputs`.
+- Pipeline: `ReviewAction` runs parts sequentially; `review_fold.py` (not in the task plan; `review.py` was too long) folds results; `review_outputs.py` holds the typed output keys. Dispatch feedback lists every part file. The batch report shows `unsaved: <paths>`.
+- Walkthrough on slice 914 (pipeline, kimi27): `part-1..3` written, no unsuffixed file, worst verdict reported. Single-file check on 932 saved unsuffixed. CLI parity was partial in the live run (kimi27 hit a context-limit 400 on part 2); `tests/review/test_split_review_parity.py` covers all three names.
+- Deferred: a stream drop (`openai.APIError`, glm-flash) writes no failure artifact, in either the CLI or the pipeline (#166). `review.py` is 637 lines, over the ~300 guideline; split further when next touched. context-forge#106 (tasks gate reads only the last `part-N`) is out of scope.
+
+### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Design Complete
+
+- Phase 5 done: `project-documents/user/tasks/930-tasks.pipeline-tasks-review-covers-every-split-task-file.md` (13 tasks, 363 lines). Committed to main; no code written, no slice branch yet.
+- Order: `review/parts.py` → CLI `review_tasks` on it → registry fan-out → `review_outputs.py` → extract `_run_part` (pure refactor) → multi-part `ReviewAction` with fold → dispatch feedback → batch report → parity test → validation → 914 walkthrough → close-out.
+- Decision in the breakdown: Task 4 removes `resolve_template_inputs` and leaves a one-line interim shim in `ReviewAction._resolve_slice_inputs` (first part only) so the build stays green; Task 7 replaces it.
+- The single-file snapshot in Task 7 must be generated from pre-change code (main), not from the branch.
+- `src/squadron/pr/tasks.py` has a docstring naming `_tasks_input`; Task 4 updates it.
+- Task 12 spends real `glm-flash` calls on slice 914 and `git rm`s its stale unsuffixed tasks review.
+
+## 20260928
+
+### Release 0.16.0
+
+- **Contents:** slice 932, Pipeline SDK Session Control. Rotation, resume, and restore seed without a turn (#162). Dispatch waits for background agents and flags carry the agent's last words (#163). Dispatch `system_prompt` appends to the Claude Code preset (#155). Explicit settings sources per path and recorded prompt mode/settings (#156). New config keys `pipeline.auto_memory`, `pipeline.user_settings`, `pipeline.background_idle_timeout_s`; bool config values.
+
+### Slice 932: Pipeline SDK Session Control — Implementation Complete
+
+- Branch `932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings`, merged to main after code review PASS (F002/F004 fixed). Suite on main: 4936 passed.
+- **A (#162):**
+  - `open_pipeline_session(seed=)` is the only session builder. `SDKExecutionSession.base_options` stays unseeded.
+  - `_reconnect(seed, SeedSource)` serves `compact()` and `seed_context()`. The seed rides as preset `append`, and no `query()` is sent.
+  - Resume seeds the lazy session through `_connect_lazy_session(seed=)`.
+  - Restore frames once.
+  - A failed reconnect sets `unusable_reason`, and `_require_usable()` then fails every later call.
+- **B (#163):**
+  - `dispatch()` reads turns until its own result (`origin`) arrives with no `local_agent`/`local_workflow` task tracked.
+  - A leftover injected turn is dropped with a WARNING.
+  - The wait is bounded by `pipeline.background_idle_timeout_s`: `stop_task` each agent, then a WARNING.
+  - A stream that ends with an agent tracked raises `ProviderError`.
+  - The post-condition flag gets `tail_text(response)`.
+- **D (#156):**
+  - Config gains bool values, with lenient spellings.
+  - `providers/sdk/settings.py` holds the policy constants and `sdk_settings_options`.
+  - `AgentConfig.auto_memory` drives the provider, so code reviews now also run with memory off.
+  - Templates are `[project]`. The loader keeps an explicit `[]` and resolves absent/`null` to the review policy.
+  - The per-path policy test covers 7 paths × both config values.
+- **C (#155):**
+  - SDK dispatch always uses the preset, with the step prompt appended. The session path rejects a step `system_prompt`.
+  - `SystemPromptMode` and the describers are in `core/models.py`.
+  - The Run Digest, JSON, dispatch metadata (both paths), and summary one-shot metadata record the mode and settings.
+- **Deviations from the design** (API Contracts updated to match):
+  - The ledger, own-result check, and response accumulator moved to `pipeline/sdk_turns.py` (pure). `sdk_session.py` is 470 lines instead of ~600.
+  - "Stream ended" raises only when an agent is still tracked. A pass with no result and nothing tracked returns text as before, which keeps the "no tasks: identical to today" requirement and the existing retry tests.
+  - An unreported digest value renders `not computed` (the shared `_render_optional` sentinel), not `not reported`.
+  - `session.setting_sources`/`auto_memory` are properties derived from `base_options`, not stored fields.
+  - Fixture regeneration: the seven byte-identity fixtures gained the two digest lines, recorded in `tests/review/fixtures/README.md`.
+- **Live verification** (design walkthrough, all steps pass):
+  - Rotation leaves no turn in the second session's transcript.
+  - A background Explore agent is waited for (`background_tasks_waited: 1`, and `bg-check.txt` was written).
+  - A saved review's digest shows `preset+append` / `project`.
+  - Progress messages and subagent messages do arrive between turns, so the idle timer bounds idle periods.
+- **Found live and fixed:** a background subagent's own `AssistantMessage`s (`parent_tool_use_id` set) stream between turns, and their text was joined into the dispatch response. They are now excluded. This also affects foreground subagents, which had the same leak before.
+- **Added after implementation (PM request):** `pipeline.user_settings` (default off). It adds `user` to the settings sources for pipeline sessions and SDK dispatch only. Reviews stay project-only.
+- **Found, not fixed:** the `sonnet` alias (`claude-sonnet-5-5`) fails `set_model` on the bundled CLI ("isn't described by this version's model catalog"). Walkthrough step 3 used `opus`.
+- Checkpoints: baseline 4799 passed. A: 4812. D: 4912. C: 4925. All with 0 failures.
+
+### Slice 932: Pipeline SDK Session Control — Task Breakdown Complete
+
+- Tasks: `user/tasks/932-tasks.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md` (427 lines, single file).
+- Order: setup → A (seeding) → B (background wait and flag tail) → D (settings) → C (prompt and recording) → close-out. Tests follow each task, and each part has its own commit.
+- Found: config has no bool type (`_coerce_value` supports only int and str). Task D1 adds lenient bool parsing before `pipeline.auto_memory`.
+- Found: the template loader turns an explicit `setting_sources: []` into `None` (`if setting_src else None`). Fixed in D6.
+- Added names:
+  - `SeedSource` enum, for the seeding log.
+  - `pipeline/text_tail.py::tail_text`, one tail definition shared by the leftover-turn warning and the flag.
+  - `session.seeded`, for the prompt-mode metadata.
+
+### Slice 932: Pipeline SDK Session Control — Design Complete
+
+- Design: `user/slices/932-slice.pipeline-sdk-session-control-seeding-without-a-turn-dispatch-that-waits-for-background-work-and-explicit-prompt-and-settings.md` (#162, #163, #155, #156).
+- **Seeding (#162):** rotation, resume, and `summary restore` connect a fresh client with the framed seed as preset `append`. No turn, so there is nothing to act on. A single `open_pipeline_session` builder replaces the duplicated literals in run.py/executor.py.
+- **Background wait (#163):** `dispatch()` tracks `local_agent`/`local_workflow` tasks through the lifecycle messages and returns only on its own result (`origin`) with none still running. Shells are not waited on. The wait is bounded by `pipeline.background_idle_timeout_s` (default 1800): with no activity for that long, dispatch stops the tracked agents and returns. Leftover follow-up text from the previous step is dropped from the response and logged. The post-condition flag gets the last 400 chars of the agent's final text.
+- **Prompt (#155):** SDK dispatch always uses the preset, with the step prompt appended. The session path rejects a step `system_prompt`.
+- **Settings (#156):** probed on CLI 2.1.284. With no flag, it loads the user and project CLAUDE.md. Auto-memory loads even under `project`. Policy: `[project]` for reviews, judges, pipeline sessions, and dispatch. Auto-memory for pipeline sessions and dispatch is controlled by the new config key `pipeline.auto_memory` (default on). It is always off for reviews, judges, PR, summary, and audit. Run Digest, JSON, and step metadata record the prompt mode and settings.
+- Found:
+  - Resume seeding skips the lazy session.
+  - `summary restore` frames the summary twice.
+  - A step `system_prompt` on the session path was silently ignored.
+
+### Slice 931: Tool-Heavy Reviews on OpenAI-Compatible Models — Design Complete
+
+- Design: `user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md` (#154, #157, #158).
+- **Effort:**
+  - An alias field from the closed vocabulary `Effort` (`none|low|medium|high|xhigh`), carried `ResolvedModel` → `AgentConfig`.
+  - Sent as `reasoning_effort` on OpenAI-compatible providers, and as SDK `effort`, or `thinking` disabled for `none`.
+  - Gated by `ProviderCapabilities.applies_effort`. Codex warns.
+  - No `--effort` flag or step key: a second alias is the override (D2).
+- **Batched reads:** `read_file` takes `path` or `paths`, capped by `MAX_READ_BATCH_BYTES`. The cap keeps the agent's per-result floor from cutting files mid-body. The guidance paragraph stays tool-agnostic.
+- **Usage:**
+  - `stream_options.include_usage` is sent on every turn. `chunk.usage` is read before the choices guard, because OpenRouter's usage chunk carries one empty choice.
+  - Turns, tokens, and reasoning characters are summed across the loop and across `EmptyFinalTurnError`.
+  - `durationSeconds` is measured in `review_client` for all providers.
+  - New frontmatter keys are emitted only when reported.
+- Found: the digest's `Reasoning characters` counted only the final turn. It becomes the loop total.
+- **Deferred to issues at implementation:** Codex effort (the SDK parameter cannot be verified locally), SDK token usage.
+- **Next:** Phase 5 task breakdown for 931.
+
+### Slice 930: Pipeline Tasks Review Covers Every Split Task File — Design Complete
+
+- Design: `user/slices/930-slice.pipeline-tasks-review-covers-every-split-task-file.md` (#153). The shared module is `review/parts.py` (`review_parts`, `worst_verdict`). The loop body is not shared: the CLI runs sync and drives display, the pipeline runs async. The registry's `fans_out` flag makes `tasks`/`judge.tasks-vs-slice` resolve one inputs dict per file. `ReviewAction` reviews each part, saves it as `part-N`, and folds the parts to the worst verdict, with UNKNOWN ranked worst. Feedback dispatch lists every file and tags each finding with its file.
+- Found: the CLI's `_aggregate_verdicts` raises `KeyError` on UNKNOWN; this slice fixes it. Context-forge's tasks gate takes the lexicographically last `{index}-review.tasks.*.md`, so it reads only `part-N`, not the worst part (context-forge#106). `cf.untasked_slices` reads only the design review and is unaffected.
+- **Next:** Phase 5 task breakdown for 930.
+
+### Release 0.15.1
+
+- **Contents:** slice 929 (the metadata lock serializing `git worktree` add/remove/prune, closes #133; the claim-before-lock sweep fix; a `WorktreeError` renders as a panel) plus its code review fixes, and the `sonnet` alias moved to `claude-sonnet-5-5`.
+
+### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Implementation Complete
+
+- Closes #133. New `codehost/metadata_lock.py` (`git_metadata_lock`, `MetadataLockError`): an exclusive `fcntl.flock` on `.git-metadata.flock` under the worktree root, polled against `2 × GIT_QUERY_TIMEOUT_SECONDS`. It wraps `worktree add`, both `remove` sites, and `prune`. `sq review pr` now shows a `WorktreeError` from setup as an error panel instead of a traceback.
+- **Second bug found by the baseline (D8, Task A.2):** `sweep_orphans` read `lock.json` before the `.claim`, so the creator's handoff could land between the two reads and a live worktree got swept. That was 3/50 failures at concurrency 32. Reading the claim first fixed it.
+- **Baseline:** #133's `commondir` race never reproduced on macOS (0 failures in 130 runs at concurrency 8/32/64); it has only been seen in Linux CI. The load test runs 4 rounds × 32 (~12s), sized on the D8 rate; 50/50 pass after the fix. The deterministic no-overlap test (max in-flight 6 → 1) is the proof.
+- **Accepted finding:** against a wedged holder, `sq review pr` fails after ~120s, not ~60s, because the internal sweep's `prune` waits its own timeout. Recorded in D4.
+- Live walkthrough run against throwaway PRs #160/#161 (closed, branches deleted).
+- **Unrelated, not touched:** an uncommitted `src/squadron/data/models.toml` edit (`sonnet` → `claude-sonnet-5-5`) fails 3 alias tests.
+- **Next:** merge `929-slice...` into `main`.
+
+### Slice 929: Task File Split
+
+- Task breakdown (709 lines, review round 3 PASS) split to meet the 450-line limit: `-1.md` covers Parts A–C (baseline, failing no-overlap test, `metadata_lock.py`), `-2.md` covers Parts D–G plus Completion. No task content changed; the split needs a fresh per-part tasks review.
+- **Next:** Phase 6, starting with Task A.1.
+
+### Release 0.15.0
+
+- **Contents:** plan batch pipelines `slices-plan` / `tasks-plan` (slice 195) and review recovery with per-alias output budgets (slice 924). Also alias renames (`glm-flash`, `gemini-flash`), new `mimo-flash` / `muse`, and `qwen36-free` removed.
+- **Live check:** `sq run tasks-plan 900` passed 914, 928 and 929 with none flagged. 929's first review survived an upstream `finish_reason='error'` empty turn through the new recovery turn (`recoveryTurn: true`).
+- **Known gaps, filed:** #153 (pipeline tasks review covers only the first file of a split breakdown; 914's per-part CLI reviews are CONCERNS and need a revision pass), #152 (a budget-truncated review can save as a clean PASS), #154 (effort/thinking level), #155 and #156 (system prompt and settings sources).
+
+## 20260927
+
+### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Tasks Complete
+
+- **Task file:** `user/tasks/929-tasks.serialize-concurrent-git-worktree-add-on-one-checkout.md`, 7 parts (A–G), 570 lines.
+- **Fixes:** [#133](https://github.com/ecorkran/squadron/issues/133) — two concurrent `sq review pr`
+  runs on one checkout can hit `fatal: failed to read .git/worktrees/<sibling>/commondir`. Task
+  order follows the design's own Development Approach: measure the pre-fix failure rate (A) → write
+  the deterministic no-overlap test and confirm it fails on today's code (B) → build
+  `metadata_lock.py` and its unit + holder-death tests (C) → wrap the four call sites, fix
+  `review_pr.py`'s `WorktreeError` traceback leak, per-site timeout tests (D) → turn the load test
+  into `ROUNDS` repeats sized off the measured baseline (E) → docstring (F) → full verification (G).
+- **One design-doc inconsistency resolved explicitly, not silently:** the poll-interval constant is
+  named `_POLL_SECONDS` in the design's component table but `_METADATA_LOCK_POLL_SECONDS` in D3's
+  prose. Task file picks the latter (D3 is the more specific source) and says so, rather than
+  leaving it for whoever implements to guess.
+- **Next:** Phase 6 implementation, starting with Task A.1 (baseline measurement).
+
+### Slice 928: Codex Parity for Skill Packs and Provider Access — Tasks Complete
+
+- **Task file:** `user/tasks/928-tasks.codex-parity-for-skill-packs-and-provider-access.md`, 13 tasks, 415 lines.
+- **Review findings folded into the tasks rather than reopening the design (verdict CONCERNS, 928-review):**
+  F001 (D7's two incompatible removal claims) resolves as: `remove_receipt_files` never removes
+  `receipt.destination` itself; the Claude-prefix-directory removal already in `skills.py` stays a
+  separate step layered after it, not merged into it. F002 (D8's "ships no Codex content" needing source
+  resolution inside a check that must stay pure) resolves as: the classification only runs for sources
+  `resolve_source` can read without a subprocess (`bundled`, relative, absolute paths); `github:` sources
+  skip it and get the plain pre-D8 "not installed" row. F003 (walkthrough expects WARN rows on bare
+  `sq doctor`) is corrected to `sq doctor -v` in the live-verification task. F004 (missing 340-arch
+  amendment) is now Task 11. F005 (`sq model list` undercount) is corrected to six sites, not two. F006
+  (hint placement vs. the #126 waiting-rule equality test) is resolved as: insert after the closing `---`
+  of "## Waiting on the command," never inside it; `sq-task` stays out of scope per the design's own
+  success criteria.
+- **Ordering follows the design's own Development Approach:** receipt/removal refactor → analysis-skill
+  move → `PACK_LAYOUTS` (Claude, then agents + D3 validation) → CLI flags → doctor rows → live sandbox
+  probe → docs (rule + hint) → typo fix → architecture amendment → validation → live Codex verification.
+- **Next:** Phase 6 implementation, starting with Task 1.
+
+### Slice 914: Strict Type Checking Over the Test Suite — Tasks Complete
+
+- **Commit:** `96a7340e` — task breakdown, 3 files, 920 lines.
+- **Tasks:** `user/tasks/914-tasks.strict-type-checking-over-the-test-suite-{1,2,3}.md`, split by design Part (A: infra/D3/D5 globally; B: 10 heaviest files; C: `tests/pipeline` remainder; D: `tests/cli` remainder; E: everything else; then final verification and the slice's required Completion Summary).
+- **Baseline re-measured a third time (`caedf4e5`):** 1270 errors / 143 files, up again from the design's 905 (`03cdd73`) and 1208 (`bb65ac9`) — 915–927 all merged while 914 waited. `reportPrivateUsage` is now 95 distinct symbols (design measured 67). Hidden `# type: ignore` errors are now 648 (design measured 442). Pytest floor: 4781 passed, 4 skipped.
+- **Surprise:** D5's Helper 1 (`CliRunner.invoke` wrapper annotated `-> object`) was already fixed everywhere except one file — `tests/cli/commands/test_summary_run.py`, 9 sites — by intervening slices. The design's "42 errors, 12 modules" figure no longer holds; Helper 2 (120 `reportUnknownLambdaType` sites, 21 files) is still the larger of the two.
+- **Design decision made during breakdown (not in the slice design):** D3's private-symbol renames are done globally in Part A rather than deferred per-part, since ~95 symbols each have call sites scattered across multiple later parts — doing it per-part risked the same symbol being renamed piecemeal or re-touched.
+- **Next:** Phase 6 implementation, starting with Part A.
+
+### Slice 924: Recover a Review the Model Reasoned Out but Never Emitted — Implementation Complete
+
+- **Shipped:** Part A adds `recoveryTurn: true` in frontmatter and skips recovery when the stop reason is `length`/`max_tokens`, logging a WARNING plus a digest skip line. Part C adds `EmptyFinalTurnError` with its telemetry. An empty first turn gets the single recovery turn, the budget skip re-raises, and the agent no longer appends an empty assistant entry to history. Part B adds per-alias `max_output_tokens`, sent as `max_completion_tokens`, with an always-on `Output budget` digest line and seven fixtures regenerated by exactly that one line. The pipeline review action now uses `resolve_full()`, so `tool_use = false` finally applies there. Built-in OpenRouter budgets come from the listing dated 20260927.
+- **Deviations:** the SDK budget warning lives in `ClaudeSDKProvider.create_agent`, because the SDK agent never sees `AgentConfig`. The digest skip line also requires `ended_mid_task`, so a parsed review that stopped on `length` doesn't claim a skip. The turn logic is extracted to `review_client._collect_review`.
+- **Also:** `qwen36-free` was removed because it is gone from OpenRouter. The `cheap` pool (strategy `cheapest`) was always selecting it.
+- **Tests:** baseline 4726 passed / 4 skipped; final 4780 passed / 4 skipped.
+- **Walkthrough:** steps 1–4 and 6 ran live. With a 64-token budget, the skip-and-re-raise path was confirmed. The 928 rerun under glmflash answered on its first turn (CONCERNS), so it doesn't exercise Part C live. Step 5 (`sq run`) is left for the PM (#144).
+- **Issues:** context-forge#105 (gate reads `recoveryTurn`), #151 (budget from dispatch/summary), and #152 (a review truncated by its budget can still save as a clean stated PASS, found in walkthrough step 3).
+- **Next:** address 928's CONCERNS design review, then slices 196/197.
+
+### Slice 924: Recover a Review the Model Reasoned Out but Never Emitted — Part C Added, Tasks Complete
+
+- **Design amended (`f3856b7e`):** Part C / D7 covers an empty final turn. `_require_final_content` raises `ProviderError` before the shipped recovery check runs, and that is what flagged 928 in the `slices-plan 900` run (glmflash, `finish_reason='stop', reasoning_chars=1022`, twice). The fix is a typed `EmptyFinalTurnError` whose telemetry rides the error. The agent drops the empty assistant history entry, and the same single recovery turn runs unless the budget was spent.
+- **Tasks:** `user/tasks/924-tasks.recover-a-review-the-model-reasoned-out-but-never-emitted.md`, 224 lines, ordered A → C → B. Part C reuses A's `budget_exhausted` and `recoveryTurn`.
+- **Found:** the always-on `Output budget` digest line changes seven snapshot fixtures (`clean_pass_artifact.md` plus six `383-*`). Task B.14 makes this a single sanctioned regeneration, and each file's diff must be exactly that one line.
+- **Next:** Phase 6 on 924, then rerun 928's design review.
+
+### Slice 929: Serialize Concurrent `git worktree add` on One Checkout — Design Complete
+
+The design is at `user/slices/929-slice.serialize-concurrent-git-worktree-add-on-one-checkout.md`, and the validator passes. The slice plan entry now points to it.
+
+- **Lock:**
+  - `fcntl.flock` on `<worktree root>/.git-metadata.flock`, opening a fresh file per acquisition so threads serialize too. `lockf` would not serialize threads (D1).
+  - One lock per root, not per repo: linked worktrees share `.git/worktrees` (D2).
+  - Polled against a deadline of `2 × GIT_QUERY_TIMEOUT_SECONDS` (D3).
+- **Scope:** the lock wraps `add`, both `remove` paths, and `prune`, each on its own. The submodule fetch stays concurrent. A timeout raises `WorktreeCreationError` on entry and logs a WARNING in the sweep and exit paths (D4). `fcntl` is imported lazily because `sq` installs on Windows (D5).
+- **Found:** `review_pr.py` lets any `WorktreeError` from `ScratchWorktree` entry escape as a traceback. It gets fixed in this slice.
+- **Proof:**
+  - a deterministic no-overlap test;
+  - the load test repeated in rounds, with the round count set from a measured pre-fix failure rate that goes in the DEVLOG at implementation (D6).
+
+### Slice 928: Codex Parity for Skill Packs and Provider Access — Design Complete
+
+The design is at `user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md`, and the validator passes. The slice plan entry now points to it.
+
+- **Part A (#125):** a pack supports Codex by shipping an `agents/` directory of skill dirs. Squadron never converts a pack, and an agents install of a pack without that directory exits 1 (D2). Skill names and frontmatter are validated before anything is written (D3). The bundled `analysis` pack's skills move to `commands/analysis/agents/`, so the rule has no bundled special case (D4). Receipt names generalize to base + target + scope, and every existing receipt name stays the same (D5).
+- **Part B (#127):** the rule goes in its own `~/.codex/rules/squadron.rules`, because Codex appends its own approvals to `default.rules` (D9). The docs must say that `allow` runs matching commands outside the sandbox entirely. No doctor check (D11). Instead, the `sq-review`, `sq-run`, and `sq-pr` skills name the sandbox when Codex blocks a command (D12).
+- **Probe evidence:** under `codex sandbox`, `sq pr show` fails with `HostUnreachableError`, while `sq models list` and `sq auth status` run fine. The daemon-client commands still need a probe with `sq serve` running (D10).
+- **Found:** both `review` command files tell the model to run `sq model list`, which doesn't exist. It gets fixed in this slice.
+- Effort revised from 2/5 to 3/5.
+
+### Slice 924: Recover a Review the Model Reasoned Out but Never Emitted — Design Complete
+
+The design is at `user/slices/924-slice.recover-a-review-the-model-reasoned-out-but-never-emitted.md`, and the validator passes. The slice plan entry now points to it.
+
+- **Surprise:** Part A's core, the one bounded recovery turn, already shipped in `7dbd1e18` and closed #92. The design covers only what remains:
+  - D1: a `recoveryTurn: true` frontmatter key; `verdictSource` stays orthogonal per 919 D7;
+  - D2: skip recovery when the stop reason is `length` or `max_tokens`, defined once in `OUTPUT_BUDGET_STOP_REASONS`;
+  - D3: tools stay on for the recovery turn, because the captures show the model had not finished reading.
+- **Part B:** per-alias `max_output_tokens` in `models.toml`, sent as `max_completion_tokens` only when set (D4, D5). The digest always shows the budget, and the snapshot fixtures change.
+- **Found:** the pipeline review action uses `resolve()`, not `resolve_full()`, so `tool_use = false` aliases are never gated in pipeline reviews. D6 fixes it along with the budget.
+- **Pending at implementation:**
+  - B5 budget values come from OpenRouter's `/api/v1/models` listing;
+  - file a context-forge issue for `recoveryTurn`;
+  - file an issue for dispatch/summary budget threading.
+
+## 20260926
+
+### Slice 195 implementation — plan batch pipelines (Phase 6 complete)
+
+Closes #136 and #139. 27 commits on
+`195-slice.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan`, 861f8083 (router
+extraction) through f0cc31a5 (loop grammar extraction), one per task, merged to main.
+
+Shipped: `design-plan` and `tasks-plan` (replacing `design-batch`), the `cf.undesigned_slices` /
+`cf.untasked_slices` sources and the `unfinished_slices` plan fix, `set_arch` plus the phase
+step's `plan:` key and arch → slice → phase order, one `_execute_step` router, per-item isolation,
+`on_item_failure`, pre-flagged items, `accept_if` / `skip_if_met`, `feedback: review`, the batch
+report plus the `sq run` summary, and the #139 review keys (`runId`, `squadronVersion`,
+`providerFailure`, pure JSON stdout, and `to_dict` gaps).
+
+Beyond the task list:
+
+- `executor.py` grew 61 lines with the features, so the loop grammar (`LoopCondition`,
+  `LoopConfig`, the parsers) moved to `pipeline/loop_config.py`. The executor is 1636 lines (was
+  1704), and `sources.py` now imports `LoopCondition` without a lazy import.
+- Slice review filenames come from shared `slice_name_for` / `slice_review_stem` helpers, which the
+  save path and `cf.untasked_slices` both use.
+- The `--prompt-only` renderer renders `set_arch` (it would otherwise print `cf set_arch`).
+- An autouse `isolate_default_runs_dir` fixture keeps test batch reports out of
+  `~/.config/squadron/runs`.
+- `squadronVersion` is unconditional, so the six 383 migration fixtures and
+  `clean_pass_artifact.md` each gained that one line, with the version pinned in tests.
+- `review.py` got an `OutputMode` StrEnum in place of the `--output` string literals.
+
+Validation: ruff clean, pyright 0 errors, full suite 4669 passed / 4 skipped. The walkthrough's
+steps 1, 2 and 8 ran here with recorded output: live selection returns 923/924/928/929 undesigned
+and 914 untasked-flagged while plan 180 is active, and `sq review slice 195 --output json` is pure
+JSON. Steps 3–7 and 9 need `sq run` from a terminal (#144) and are PM-run.
+
+`tests/cli/test_review_pr_worktree.py::test_tools_enabled_worktree_cwd_and_checkout_conventions`
+failed once in isolation and then passed on four reruns: intermittent, and not in this slice's code.
+
+Logged: #146 (run batch items concurrently; blocked on cf's global active-slice state).
+
+Next: PM runs walkthrough steps 3–7 from a terminal. Next planned slice: 928.
+
+### Slice 195 tasks — plan batch pipelines (Phase 5 complete)
+
+Task breakdown: `project-documents/user/tasks/195-tasks.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan.md`
+(31 tasks in 10 parts, following the design's commit order, with each test task right after its
+implementation). The design review came back CONCERNS (F001–F005, all dispositioned in the review
+file). The 180 architecture's scope now names the 194/195 engine exception. The `max-tries` param
+was renamed to `max-revisions`.
+
+Found while breaking it down:
+
+- `design-batch` has five references, not the three the design lists. The extra two are
+  `test_executor_integration.py:189,242` and `example.yaml:172`, and Task 22 covers all five.
+- `cf list slices {plan} --json` carries a top-level `slicePlan`, which `list_slices()` discards.
+  `set_arch` needs a client method that returns it (Task 10).
+- The walkthrough needs `sq run`, which refuses inside Claude Code (#144). Steps 3–7 are PM-run
+  from a terminal (Task 30).
+
+Next: Phase 6 on branch `195-slice.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan`.
+
+### Slice 195 design — plan batch pipelines (Phase 4 complete)
+
+Design written for 195 (issue #136 plus its Phase 5 addendum, with #139 folded in):
+`project-documents/user/slices/195-slice.plan-batch-pipelines-design-and-tasks-over-a-whole-slice-plan.md`.
+It adds two pipelines, `design-plan` and `tasks-plan`, which replace `design-batch`. They run on
+general engine pieces:
+
+- plan-aware `cf.*` sources
+- a `set_arch` cf-op, carried by the phase step's `plan:` key, and a phase step order fix (arch → slice → phase)
+- one `_execute_step` router
+- per-item isolation and `on_item_failure: continue` in `each`
+- `accept_if` and `skip_if_met` on `loop`
+- `feedback: review` on dispatch
+- a Markdown batch report next to the run state file
+
+What turned up while reading the code and testing cf:
+
+- A `loop:` inside `each` is a silent no-op today. `each` sends inner steps through
+  `_execute_step_once`, and `LoopStepType.expand()` returns `[]`, so the step completes with zero
+  actions.
+- `each` passes the same pre-step outputs to every item and never isolates them.
+- A revise dispatch after a `design:` step would reuse its "create a design" build prompt instead of
+  the review findings.
+- Review input resolution reads the active plan and arch, so the batch switches with `cf set arch`
+  (which sets the plan), then `cf set slice`, then `cf set phase`. The phase step set phase before
+  slice. That's fixed too.
+
+Next: Phase 5 task breakdown. `--prompt-only` not rendering `each` or `loop:` steps is out of
+scope and logged as #145.
+
+### Slice 927 implementation — review artifacts state what happened (Phase 6 complete)
+
+Closes #135 and #134. Four commits on
+`927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered`:
+73adc7c5 (Part M — `DiffInjection`, `VerdictSource.IMPOSED`, `models/snapshot.py`,
+`ReviewResult.requested_model`/`answering_models`/`model_substituted`), b33b736b (Parts A+B —
+diff-truncation accounting in `_inject_file_contents`, `impose_diff_coverage`, the
+`review-coverage` synthetic finding), e560c6e3 (Part C — OpenAI `chunk.model` and SDK
+top-level `AssistantMessage.model` capture, `TurnCapture.answering_models`, rendering, terminal,
+pipeline metadata), and ff39680b (a DRY fix the slice's own `sq review code` walkthrough run
+caught: `(tool_calls_made or 0) - (failed_tool_calls or 0)` was duplicated in `coverage.py` and
+`persistence.py`; extracted to `ReviewResult.successful_tool_calls`). Baseline suite: 4461
+passed, 4 skipped. Final suite: 4558 passed, 4 skipped, ruff and pyright clean throughout.
+
+Walkthrough steps 1, 2, 3, and 5 ran live against this repo's own diff and matched the design
+exactly: a 20000-byte cap on an 83KB diff produced `diffTruncated: true` and the `**Diff:**`
+header line in both markdown and JSON; with `--no-tools` the model's own CONCERNS verdict (real
+findings, not the imposed cap — the cap only ever moves a stated PASS) rendered correctly; with
+tools on, 28 successful tool calls kept the model's own verdict with no synthetic finding;
+unsetting the config produced `diffTruncated: false` with no header line and a clean PASS on the
+untruncated diff. Step 4 (pipeline parity) could not run live — `sq run review` refuses SDK
+execution inside a Claude Code session — but the pipeline action calls the same
+`run_review_with_profile` → `save_review_result` → `format_review_markdown` chain the CLI does
+(verified by reading `pipeline/actions/review.py`), so there is no second render path to drift,
+and `test_review_action.py`'s Part C tests already cover the metadata half end to end.
+
+Step 6 (D9 profile capture) ran two of the four configured profiles for real: `sdk` with
+`--model sonnet` answered as `claude-sonnet-5` (requested `claude-sonnet-5`, no substitution);
+`openrouter` on its default alias answered as `minimax/minimax-m3` (requested
+`minimax/minimax-m3`, no substitution). `openai` was skipped — the configured key exists but
+returned `insufficient_quota`. `local` was skipped — the configured model id 404'd against
+whatever the local endpoint is actually serving. No D9 false positive on either working profile,
+so `answers_as_requested` needed no widening; `snapshot.py` is unchanged from Phase 6's Part M
+commit. Note: running `--profile sdk` with no explicit `--model` resolved through this
+environment's `default_model = "minimax"` config and actually executed via the openrouter
+alias's declared profile rather than the true SDK/Claude Code path (visible from
+`stop_reason: "stop_sequence"`, an OpenAI-compatible value, not an SDK one) — a config-resolution
+quirk in this environment, not a squadron defect, and not something this slice's scope covers;
+worth a look if it recurs.
+
+### Slice 927 tasks (Phase 5 complete)
+
+`user/tasks/927-tasks.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`
+has 201 lines. Setup is S; M covers the shared model changes (`DiffInjection`, `ReviewResult` fields,
+`VerdictSource.IMPOSED`, `models/snapshot.py`); A records truncation; B adds the coverage cap, the
+exemption digest line, and the D6 fallback-notice fix; C records the answering model (OpenAI
+`chunk.model`, SDK top-level `AssistantMessage.model`, `collect_turn` folding, rendering, terminal,
+and pipeline metadata); W runs the walkthrough and captures real ids per profile. Every test task
+comes right after its implementation task. There are three commits: M, A+B, and C. The
+clean-pass snapshot must not be regenerated. Next: Phase 6 on branch
+`927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered`.
+
+### Slice 927 design — review artifacts state what happened (Phase 4 complete)
+
+Design for #135 and #134: `user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md`.
+It also covers a path nobody had filed: `max_total_injection_bytes` can skip the diff
+entirely, and D3 records that as truncation to zero. Frontmatter gets `diffTruncated`, present
+exactly when a diff was reviewed. Counts are in characters, which is what `_truncate` actually
+measures. A truncated diff with no successful tool call caps PASS to CONCERNS, with a synthetic
+`review-coverage` finding and a new `VerdictSource.IMPOSED`. `aiModel` becomes the answering
+model: SDK `AssistantMessage.model` (top-level, not `<synthetic>`), OpenAI `chunk.model`.
+`requestedModel` appears only on a substitution, where a dated snapshot of the requested id does
+not count as one. Codex reports no model and keeps the requested id, with a Run Digest line
+saying so. OpenAI-direct judges will change metrology identity once, to the dated snapshot id.
+Deferred: diff ordering and `--stat` (#137), and truncation of file bodies and `CLAUDE.md` (#138).
+Validator PASS. Next: Phase 5 task breakdown.
+
+### Slice 923 implementation — Test Suite Machine-State Isolation (Phase 6)
+
+Branch `923-slice.test-suite-machine-state-isolation`, forked from `squadron-9143`.
+
+**Results**
+
+| Run | Result |
+|---|---|
+| Hostile run, pre-slice | 139 failed, 184 errors |
+| Hostile run, slice tip | 4461 passed, 8 skipped, 0 failed, 6 deselected (`host_cf`) |
+| Local suite | 4481 passed, 4 skipped (baseline 4461/4, plus 20 new tests) |
+| Real-home hostility (`sq config set review.max_file_size_bytes 1`) | Identical counts |
+
+`ruff format`, `ruff check` and `pyright` report zero errors.
+
+**`src/` changes**
+
+- The 19 home paths that were bound at import are now functions.
+- `.env` now loads in the root CLI callback instead of at import.
+- `tests/test_import_purity.py` guards both. Run against the pre-slice source it flags exactly those 20 sites (the 19 paths plus `load_dotenv`).
+
+**Tests**
+
+- Pins and the scrub list live in `tests/_hermetic.py`. The root `hermetic_environment` autouse fixture applies them to every test.
+- 6 tests are marked `host_cf`. Each runs the real `cf`, and under an empty home `cf` reports `PROJECT_NOT_FOUND`.
+- Removed as redundant with the per-test home:
+  - the per-directory config, model and template fixtures in the review and cli conftests
+  - the root `isolate_review_debug_log`
+  - 4 patches that only redirected home paths
+
+**Tests fixed at their cause**
+
+- Isolated run (10 failures):
+  - 6 were real-`cf` dependents, now marked `host_cf`.
+  - 2 list-files tests found the per-test home inside `tmp_path`. The home now lives beside `tmp_path` instead; this departs from the design, and FR3 is updated to match.
+  - 2 worktree sweep tests parsed their `lstart` epoch at import under the host timezone.
+- Hostile run (6 failures):
+  - The doctor `gh` test inherited `cf` from the host `PATH`.
+  - 4 `--diff main` review tests needed the checkout's local `main`. They now use a fixture repo.
+  - 1 assertion broke where Rich wrapped a long temp path mid-filename.
+
+**Findings**
+
+- The walkthrough's `>>` append to the real config creates a duplicate TOML key. Pytest then aborts at collection, because `test_cf_contract_live.py` probes the live server at import. The walkthrough now uses `sq config set`.
+- The `hermetic` CI job gives the PR merge commit a branch before cloning. Without one, a `--no-local` clone would not contain that commit.
+
+### Slice 923 implementation — negative control measured (#47)
+
+`scripts/test-hostile-env` runs a fresh clone under a hostile machine: a squadron config
+setting `review.max_file_size_bytes = 1`, a colliding `llama-3-70b` alias, a user
+template with a `profile:` override, gitconfig with `init.defaultBranch = trunk` and gpg
+signing through `/nonexistent`, sentinel keys, `CLAUDECODE=1`, `FORCE_COLOR=1`,
+`COLUMNS=20`, `TZ=Pacific/Chatham`, and no `cf` on `PATH`. Both preconditions passed.
+
+Result at the pre-slice commit `2f2c5d60`: **139 failed, 184 errors**, 4124 passed,
+8 skipped. The biggest groups:
+- 32 in `test_run.py` (`CLAUDECODE`)
+- 14 in `test_model_list.py` (user aliases)
+- about 150 errors in fixtures that build git repos: `review_pr*`, `pr_create*`,
+  `test_resolution`, `test_audit_harness`, `test_commit`, `pr/test_inputs` and others.
+  Their bare commits hit the host gitconfig (signing, default branch).
+
+The rest are spread across the CLI suites for config, metrology, auth and skills.
+
+### Slice 923 design — Test Suite Machine-State Isolation (Phase 4 complete)
+
+Written first because 914 now depends on it for sequencing. While measuring for the design,
+three live leaks turned up that #47 did not list:
+
+- An AST scan found 19 `src/` constants that call `Path.home()` at import time, so a
+  per-test `HOME` cannot reach them. They become functions that look the path up when
+  called, and `tests/test_import_purity.py` fails the suite if a module-level call comes back.
+- `cli/app.py` runs `load_dotenv(cwd/.env)` at import, which puts the real provider keys
+  into every test process. The call moves into the root CLI callback, and tests stub it out.
+- `CLAUDECODE=1` is set in agent-run suites. The product check is correct, so only the
+  tests change: the variable is removed per test.
+
+Fixing the first two in `src/` also removes the need to redirect `HOME` before import.
+All isolation now happens per test through `monkeypatch`. Effort goes from 3/5 to 4/5.
+
+What the design settles:
+
+- Git config is pinned with `GIT_CONFIG_GLOBAL` and `NOSYSTEM`. The pinned default branch
+  is deliberately not `main`.
+- `TZ=Asia/Kolkata` and `COLUMNS=80` are pinned. With `43416df7` there are now two
+  terminal-width instances, which is enough to justify a global pin.
+- The credential scrub list is built from the provider profiles.
+- A `host_cf` marker is the only way back to the real home, and only for tests that need
+  cf's registry in `~/.config/context-forge`.
+
+Part B shrank. All `shutil.which` callers are already stubbed, so the hostile run's reduced
+`PATH` proves this by running the tests instead of re-auditing them. Part C adds
+`scripts/test-hostile-env` and a `hermetic` CI job. Its negative control runs against the
+pre-slice commit, which finishes the measurement #47 never completed. Next step: Phase 5
+task breakdown for 923.
+
+### Release 0.14.0
+
+Minor bump because `sq review pr` artifact names changed (slice 926, #124). Also ships the
+`fable`/`opus` alias moves to `claude-fable-5-1`/`claude-opus-5-5`. Guides updated to
+ai-project-guide 0.19.1: `CLAUDE.md` moved to the BEGIN/END managed-block marker, and
+`AGENTS.md` was added for Codex. `.gitignore` now names `.context-forge/` (setup-ide install
+manifests) and `*.pre-context-forge` (conversion backups) directly, rather than relying on
+the PyInstaller `*.manifest` rule.
+
+## 20260925
+
+### Slice 926 implementation — PR review artifact naming (Phase 6 complete)
+
+Closes #124. PR review artifacts are now `pr-{n}-review.{type}.md`, with `.{owner}-{repo}`
+appended only when the reviews directory came from CONFIG or FLAG. The one mapping lives in
+`ReviewsDirRule.repository_scoped` (match + `assert_never`). `review_pr` now resolves the
+directory before building `PrTarget`. `path_key` is the worktree's name only, and its docstring
+says so. The metrology refusal message names the path form. Deviations: the four-rule CLI
+wiring test lives in `test_review_pr.py` (where the host fakes are), and it is mutation-checked
+against FLAG-only wiring. The D5 glob pin drives the real `find_latest_in_range_review` rather
+than a copied pattern. Upstream guide commit `f3a9001` in `ai-project-guide`; squadron's
+installed copy lags until the next guide update (D7). Suite: 4461 passed, pyright clean.
+Walkthrough ran on PR 111, because PR 116's base branch `squadron-pr` is gone. Its step-1
+verdict was UNKNOWN, a parse issue unrelated to this slice. Branch
+`926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix`, not merged.
+
+### Slice 926 tasks — PR review artifact naming (Phase 5 complete)
+
+`user/tasks/926-tasks.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md`, 7 parts
+(A–G) sequenced per the design's Development Approach: `ReviewsDirRule.repository_scoped` +
+exhaustiveness test, `PrTarget(qualify=...)` + stem tests, reorder `review_pr` to resolve the
+directory before building the target, preserve the three D6 fixture files untouched (widen one
+docstring only), `path_key` docstring + metrology message, D5 glob-pinning regression test,
+docs (COMMANDS.md here, conventions upstream in `ai-project-guide`), full verification walkthrough.
+Not started; ready for Phase 7 implementation.
+
+### Slice 926 design — PR review artifact naming (Phase 4 complete)
+
+`user/slices/926-slice.pr-review-artifact-naming-drop-the-host-owner-repo-prefix.md`. The
+plan's open question (how to decide "same repo") is dropped: qualification follows the
+existing `ReviewsDirRule` — PROJECT and DEFAULT directories are already single-repo
+(`select_remote` refuses foreign PRs; the default path carries host/owner/repo), so they get
+`pr-{n}-review.{type}.md`; CONFIG and `--reviews-dir` get `.{owner}-{repo}` appended. Origin
+comparison rejected (keys logic on a remote name, backwards for forks). `path_key` stays the
+worktree's name only. Correction to the plan: `pr/inputs.py`'s `*-review.*.md` glob *does*
+match the new form (verified); it gets a pinning test, not a change. Conventions edit goes to
+the upstream `ai-project-guide` repo. Next: Phase 5 task breakdown.
+
+### Release 0.13.3 — pool/alias drift guard, uninstall containment, Windows receipt paths
+
+**#130 — `load_builtin_pools()` validated against the wrong alias set.** It resolved model
+aliases through `get_all_aliases()` (packaged + user `~/.config` merged), so a shipped pool
+referencing a dropped alias could still resolve on a machine whose local `models.toml`
+happened to cover the gap, and only fail on a clean install — exactly backwards for a
+packaged-file check. Switched to `load_builtin_aliases()` (packaged only); `load_user_pools()`
+correctly keeps the merged set, since user pools may reference user-defined aliases. Added a
+regression test asserting every shipped pool's `models` and `weights` keys resolve against the
+packaged alias file alone.
+
+**#129 — uninstall's unlink loop had no containment check, unlike its sibling rmdir loop.**
+`uninstall_commands` joined `destination / relative` for every `files_written` entry and
+unlinked it with no check that the result stayed under `destination` — a `../`-traversal or
+absolute entry in a hand-edited or corrupted receipt could delete files elsewhere. Defense in
+depth, not an exploitable boundary (the receipt lives at the same trust level as the files it
+names). Now resolves each path and skips-and-warns on any entry that lands outside the
+resolved destination, matching the containment check the rmdir loop already had. Tests cover
+both `..` traversal and an absolute entry.
+
+**Windows receipt paths — found live by a slice 925 code review (kimi-k2.7, CONCERNS).**
+`write_skill_dirs` joined receipt segments with `str(Path(...))`, which serializes with
+OS-native separators; a receipt written on Windows would record `sq-review\SKILL.md`,
+unreadable as a relative path on Unix. `write_flat_markdown`'s sibling entries already used a
+forward-slash literal — `write_skill_dirs` now matches via `.as_posix()`. Notable aside: the
+reviewing model made zero tool calls despite having `read_file`/`list_files`/`grep` available,
+which looked suspicious until checking `review_client.py` confirmed the diff is always
+injected into the prompt directly regardless of the tools path — the tools exist for fetching
+file bodies beyond the diff, and the model correctly judged it didn't need any. The finding
+itself checked out exactly against the code.
+
+Also removed two stale ai-project-guide `setup-ide` leftovers that squadron never referenced:
+`.claude/agents/code-review-agent.md` (deleted upstream at guide v0.17.1, "superseded by
+squadron and Claude Code's built-in review commands," but the installed copy here predated
+that and was never re-synced) and `.claude/skills/analyze` (superseded by squadron's own
+`sq:analysis` → `tech-debt-audit`/`understand`; confirmed with the guide's own PM and now
+removed upstream too, so `setup-ide` won't reinstall it).
+
+## 20260924
+
+### Release 0.13.2 — audit tool names, review recovery turn, Codex waiting rule
+
+**#107 — `sq metrology audit run` never started.** `_AUDIT_ALLOWED_TOOLS` spelled Claude's names,
+which the SDK edge rejects since canonical translation landed. Three of them (Edit, Task,
+TodoWrite) had no canonical name. Added `edit_file`, `task`, `todo_write` to
+`CANONICAL_TO_CLAUDE` as Claude-only capabilities; the OpenAI-compatible agent already rejects
+unknown names, so a non-Claude audit fails loudly (#35) instead of losing tools. Not run live:
+the audit is long and paid, and it spawns the Claude Code CLI, which can't nest in a session.
+
+**#92 — evidence finally selected a mechanism.** Two post-918 UNKNOWN artifacts, both
+minimax-m3, both `Stop reason: stop`: the 925 code review ended with the model's own
+tool-call markup written as text (`<tool_call><invoke name="read_file">`), and PR 116's
+entire reply was a `git diff` it wanted to run. Same shape as the original kimi case ("Let me
+write positive PASS findings…"): the model believed it had another turn. A reply with no
+verdict and no findings now gets one follow-up on the same conversation, bounded to one; the
+result carries `recovery_turn_used`, rendered as a header line only when used so every other
+artifact stays byte-identical. Turn collection moved to `review/turn_capture.py` so telemetry
+sums across turns — which exposed that the SDK agent counted tool calls per agent lifetime
+while the OpenAI agent counted per message. Both are per message now.
+
+**#126 — mechanism read from Codex source, not guessed.** In `codex-rs/core/src/unified_exec/`
+(rust-v0.146.1): `exec_command` returns a session ID after at most 30 s, and the model
+finishes by polling `write_stdin` with empty input, clamped 5–300 s. Each poll is a billed
+turn; at the 5 s floor a 10-minute review is ~120 of them. The four long-command skills now
+carry one identical "Waiting on the command" section (run once, wait with
+`yield_time_ms: 300000`, nothing between waits), pinned by a test. Only the `agents` tree
+changed; Claude commands are untouched. Left open for a live Codex check and the `sq-run`
+loop decision.
+
+### Release 0.13.1 — Codex install target, PR base lag, guide-tarball gate
+
+Patch release carrying slice 925 (commands install for Codex) plus three fixes found in use.
+
+**#131 — `sq review pr` refused a base that only moved forward.** The post-fetch check compared
+the fetched base against GitHub's GraphQL `baseRefOid` exactly. After a merge into the base
+branch, `baseRefOid` trails while `git fetch` already serves the new tip, so the check failed
+deterministically until GitHub caught up. A fetched base that descends from the reported sha
+(`merge-base --is-ancestor`) is now accepted at WARNING and used for the range; a rewound base,
+any head movement, and an ancestry probe that errors still fail. A real-git test reproduces the
+reported sequence: resolve at A, merge another PR to B, review against B, then rewind and refuse.
+
+**#132 — the review-verdict gate blocked the guide tarball switch.** A submodule reaches the
+commit gates as one gitlink; the tarball install stages every guide file. The verdict gate fails
+closed on unparseable frontmatter anywhere, and two of ai-project-guide's Claude agent
+definitions have `description:` values with a bare `: ` — fine for Claude Code, invalid YAML.
+Fail-closed now applies only under `project-documents/user/`; a readable `docType: review` is
+still checked anywhere. The document-root predicate moved to a shared `document_scope.py` and
+resolves against the repo root, which also closed #122 (absolute and `./` spellings classified
+as out of scope). The fixture is a verbatim copy of the real `task-checker.md`.
+
+**Pool loader tests went stale on the `grok-code` repoint.** `TestSelectFromPool` ran the shipped
+`pools.toml` against a hand-copied alias fixture. It now uses `load_builtin_aliases()`, so only a
+real pool/alias mismatch fails. The strategy tests keep the fixture; they need its fixed pricing.
+
+Housekeeping: merged the last `squadron-pr` commit (slice 926 plan entry), removed that worktree
+and its cf worktree context, and deleted every merged branch, local and remote.
+
+## 20260922
+
+### Slice 925 implemented — commands install for Codex
+
+Nine tasks, ten commits, 4379 tests green. `sq install-commands --ide codex` writes twelve
+authored skills to `~/.agents/skills`; `--local` scopes to a project; `sq setup --ide codex`
+and a `codex skills` doctor row follow the same target. Everything that varies per target —
+roots, bundle subdirectories, on-disk layout, receipt name, check name, fix hint — lives in
+one `DELIVERIES` table, so `install.py` no longer names `.claude` anywhere.
+
+**The authoring was the work, not the Python.** Twelve `SKILL.md` files, each rewritten against
+its Claude twin because Codex substitutes no arguments (D3). `analysis-understand` is 1,300 lines
+of precision spec — a `jq` selection table that is a contract against an upstream plugin's output —
+so it was copied and edited in four places rather than re-emitted, which is how you avoid silent
+paraphrase drift in a filter nobody would notice was wrong. A bijection drift test now fails if
+either tree gains a command the other lacks.
+
+**Two bugs found by running things rather than reading them.** Adding `--ide` as a Typer option
+broke `sq setup`'s install action: it called `install_commands()` directly from Python, where an
+unsupplied parameter arrives as an `OptionInfo` rather than its default. Every CLI-driven test
+passed, because they go through the command line. Extracted `install_for_target()` as a plain
+callable. That fix then exposed the older hazard — the two tests covering that path patched
+`install_commands` *by name*, so when it stopped being what setup calls, the mock silently stopped
+intercepting and the test installed into the real `~/.claude/commands`. `patch` raises on a missing
+attribute; it does not raise on a stale-but-present one. Repointed, and guarded.
+
+**The live Codex session cost real money and was worth it.** `$sq-review code 925` worked — Codex
+offered the skill and parsed `code 925` from prose, which is the premise the whole slice rested on
+and had only ever been read from source. Then it burned an entire 5-hour session allowance in
+10–15 minutes by polling for completion while the review ran ([#126](https://github.com/ecorkran/squadron/issues/126)).
+D3 rewrote arguments for a runtime with no substitution; nobody asked whether the *control flow*
+ported, and it does not — a blocking command is one free turn under Claude and a billed loop under
+Codex. `sq-run`, which carries an explicit `loop back to the Main Loop`, is structurally worse and
+was never reached. Someone hit the same wall on Astra in Copilot with no squadron involved, so the
+behavior is the harness, not us; our skills just invite it. Also filed
+[#127](https://github.com/ecorkran/squadron/issues/127): Codex's sandbox refuses the provider call
+without a `prefix_rule`, and the error text blames the provider.
+
+Follow-ups filed for the deferred work: [#125](https://github.com/ecorkran/squadron/issues/125)
+(`sq skills install --ide`, which needs a decision about packs authored only for Claude) and
+[context-forge#99](https://github.com/ecorkran/context-forge/issues/99) (`cf` installs to
+`~/.codex/skills`, which Codex's own source marks deprecated).
+
+Three of the design's verification steps predicted output the implementation does not produce —
+the rejection message wording, and that a bare `sq doctor` or `sq setup --non-interactive` would
+surface a WARN-level row. Behavior was right in all three; WARN rows hide without `-v`, which
+predates this slice. Walkthrough corrected in place with actual output.
+
+### Slice 925 — design review answered, tasks broken out
+
+Review came back CONCERNS with two concerns, both real. **F001 was the one that mattered:**
+the design had moved `commands/{sq,analysis}/` under `commands/claude/`, and the review found
+two resolvers of `commands/analysis/` by pack name that the Migration Plan never listed —
+`skills/resolver.py::_resolve_bundled` (behind `sq skills install analysis`, via the shipped
+`skills.toml`) and `metrology/audit.py::resolve_audit_skill` (behind `sq metrology audit
+run`). The move would have broken two production commands and CI. Resolved by deleting the
+move entirely (new D8): `commands/agents/` becomes a sibling tree and each `TargetDelivery`
+names its bundle subdirectories explicitly, so the only behavioral change left in `install.py`
+is that the Claude install stops walking every directory under `commands/`.
+
+F002 was under-specification of where `--ide` lands in setup; answered with D9 — the commands
+check stays single-result (`setup_steps.py` types recheck as `Callable[[], CheckResult]`) and
+the target threads through `run_all_checks(ide=...)`. Writing the task breakdown turned up an
+error in D9's own text: it named all five name-keyed tables as living in `setup_steps.py`, but
+`_INSTALLERS` is in `setup_install.py`. Corrected in the design rather than annotated in the
+tasks. F003 (D6's failed-check disposition: exit 1, both paths, remove nothing) and F004
+(amendment lines in 340-arch and 360-arch) were both straightforward.
+
+The task breakdown drew its own review, CONCERNS with eight concerns, all verified and all
+accepted. Two were breakage: Task 6 renamed `check_slash_commands` but left its three
+importers for Task 7, so the `sq` CLI would not import in between; and `DELIVERIES` in
+`skills/targets.py` referenced layout writers living in `cli/commands/install.py`, an import
+cycle that also inverts layering, since nothing under `src/squadron/skills/` imports from
+`cli/`. Writers moved into `targets.py`. The rest were gaps — no commit checkpoints anywhere
+in the file, no task covering the 340/360 arch amendments, no task extending the
+receipts-directory isolation test to `~/.agents/skills`, and a proposed guard in Task 7 that
+could not have passed because `DOCS_ANCHOR` carries a pre-existing `anthropic` key absent
+from `BUILT_IN_PROFILES`. One design error surfaced too: the enumerated receipt name
+`squadron-commands-claude-local` matched no suffix rule, corrected to `squadron-commands-local`.
+
+Ten task sections after the split, test-with throughout. Task 3 (authoring twelve `SKILL.md`
+files) is the effort center, not the Python, and it split into 3a/3b — `commands/analysis/understand.md`
+alone runs ~1,260 lines and is a context session of its own. Task 9 exists because every Codex
+runtime premise in this design was read from source and docs rather than exercised — the live
+session is where they get proven.
+
+## 20260921
+
+### Slice 925 designed — command install target parity (Codex)
+
+Found while testing squadron under Codex: `cf`'s commands appear, no `sq` command does.
+`install-commands` has no target kind — a raw `--target` defaulting to `~/.claude/commands`
+([#123](https://github.com/ecorkran/squadron/issues/123)). Plan entry and design written
+the same day; `validate-slice-design` PASS.
+
+**Two facts settled by reading Codex's source rather than `cf`'s design.** First, Codex
+skills receive no argument substitution — the user's text goes to the model verbatim and
+`SKILL.md` is appended as a `<skill>` block — so every `commands/sq/*.md` that parses
+`$ARGUMENTS` needs an authored twin under `commands/agents/<name>/SKILL.md`, not a
+generated one. Second, `~/.codex/skills`, where `cf` slice 924 installs, is marked
+deprecated in Codex's `host_roots.rs`; the documented root is `~/.agents/skills`. Squadron
+uses the documented one and the design calls for a `cf` issue so the two converge.
+
+Vocabulary is `cf`'s verbatim (`claude`, `agents`; `codex`/`openai` aliases) so the flag
+reads identically across both tools. Receipts stay schema-free: target and scope fold into
+the receipt name, and the Claude machine receipt keeps its existing name so nothing
+written since #65 stops reading. The #123 scope note overstated the work — squadron's
+commands use no output injection, so the per-file delta is frontmatter, one argument
+sentence, and the invocation name; corrected on the issue.
+
+### Release 0.13.0 — initiative 380 merged to main
+
+`squadron-pr` and `main` had diverged 104/78. Merged main into `squadron-pr` first
+(the initiative's own worktree), then `squadron-pr` into `main`; both branches and
+both worktrees now sit at the same commit. Minor bump rather than patch: the base
+install lost two dependencies (`anthropic`, `google-adk`, #65), which is a packaging
+change users can observe.
+
+**The merge conflicted only in CHANGELOG and DEVLOG**, both append-only and both
+resolved as the union of the two sides. DEVLOG needed more than concatenation — the
+two streams (920–922 on main, the 380 slices on `squadron-pr`) ran on overlapping
+dates, so seven day headings appeared twice and the newest-first ordering broke
+across the seam. Day sections were merged by date and re-sorted; section count went
+342 + 350 → 358, the exact union, with nothing dropped.
+
+**Two breakages the merge produced silently, neither of which git flagged.** Both
+sides edited files that auto-merged cleanly into something that did not work:
+
+1. `conftest` patched `squadron.review.templates._USER_TEMPLATES_DIR`, renamed public
+   on main's side when `templates` became a package — 1473 collection errors.
+2. `tests/pr/test_tasks.py` asserted its real task-file fixture contains unchecked
+   items. That only held while slice 380 was unfinished; closing the slice checked
+   everything off and the assertion expired. The test's real contract is that the
+   parser sees every checkbox line regardless of indent or bullet, which is kept.
+
+**The CI failure was the interesting one.** 24 tests across `test_review_pr.py`,
+`test_review_pr_post*.py`, and `test_worktree.py` failed on CI while passing locally.
+They resolve a PR range through *real* git — the host runner is faked, so the scripted
+`git fetch` never writes `refs/squadron/pr/origin/83/{base,head}`, but the review step
+downstream still shells out for the range. They passed on this machine because a real
+`sq review pr` against PR #83 had left those refs in the checkout months earlier; they
+would have failed in any clean clone. CI's detached-HEAD checkout was simply the first
+environment to say so — the merge did not break these tests, it moved them onto a
+branch CI runs.
+
+Fixed with `pr_review_repo`, which builds a real repo carrying those refs and anchors
+the command's cwd to it via the documented `review.get_config` seam, so the tests stop
+reading ambient state. **Verified by reproducing CI's condition rather than trusting
+the fix**: a detached-HEAD clone with zero `refs/squadron/**` — 71 passed there.
+
+**A second CI run cut 24 down to 2, and those two were a different bug wearing the
+same clothes.** `test_worktree.py`'s sweep tests wrote a lock claiming a live owner,
+then watched the sweep remove the worktree anyway. The lock's `started_at` was the
+literal `1789388838.0` while `ps` returned `"Mon Sep 14 06:27:18 2026"` — and
+`_process_start_time` parses that as **local** time. The literal is that instant in
+Mountain Time, this machine's zone; in CI's UTC it is off by six hours, the owner
+reads as dead, and the worktree gets swept. `_LSTART_EPOCH` now derives from the
+same string the fake `ps` returns, so the two agree in any zone. Checked under
+`TZ=UTC` and `TZ=Asia/Tokyo` as well as locally.
+
+The other, in `test_review_pr_worktree.py`: a fixture ran bare `git init` and then
+`git checkout main`, so the branch name came from the runner's `init.defaultBranch`.
+Set explicitly with `-b main`. Both were the same class of defect as the refs above —
+a test reading the developer's environment and calling it a fixture.
+
+A full suite in that same sandbox clone showed 11 further failures
+(`test_schema_drift`, `test_pr_review_frontmatter`, `test_cf_contract_live`,
+`test_cli_review`). Checked against CI's own log rather than assumed: all 11 are dots
+there. They need cf project registration and full history, which the shallow sandbox
+lacks and CI has. CI's failure list was exactly the 24, all now fixed.
+
+Main worktree at close: 4307 passed, 4 skipped; `ruff format`, `ruff check`, `pyright`
+clean. The three `test_schema_drift` failures seen in the `squadron-pr` worktree are
+cf issue #88 (cf validates 0 files from a worktree) and do not occur in the default
+checkout.
+
+### Slice 922 — Implementation complete: Small Fixes Batch 2
+
+Phase 6 complete on branch `922-slice.small-fixes-batch-2` (no integration
+branch configured; forked from and merging to `main`). All six fixes
+implemented, tested, and committed one at a time in the design's order
+(Fix 2 first — unblocks hook-clean commits for the rest — then 3, 4, 6, 5,
+Fix 1 last):
+
+- **#117 (D2, `c1fbbcd3`).** Frontmatter gate now consults a scope predicate
+  — is a staged path under `project-documents/user/` — only inside the
+  zero-of-N branch, so a release-shaped commit (`CHANGELOG.md` +
+  `pyproject.toml` + `uv.lock`) passes instead of failing closed. Filed
+  `ecorkran/context-forge#96` asking cf to report skipped-as-out-of-scope
+  paths, which would remove the predicate.
+- **#112 (D3, `29740334`).** Added `ProcessCwdNotFoundError`, classified
+  inside the existing `FileNotFoundError` handler in `SubprocessRunner.run`
+  — a bad `cwd` is now named as such rather than reported as a missing
+  executable. `github_cli.py` lets it propagate instead of converting it to
+  "gh is not on PATH".
+- **#108 (D4, `2e5c1c13`).** `TOOL_USE_TYPE` / `TOOL_RESULT_TYPE` centralized
+  in `core/models.py`, replacing five scattered literal sites. Pure
+  substitution, no behavior change.
+- **#100 (D6, `f456ee70`).** Policy-exclusion refusals in the tool jail now
+  log at DEBUG instead of WARNING; jail escapes stay WARNING. Amends slice
+  **918 D3** (not 917, as the issue's text claimed) for the exclusion case
+  only.
+- **#57 (D5, `0fd46b40`).** `sq setup`'s `StepKind.INSTALL` now renders a
+  neutral cyan arrow instead of the same red X as `CONFIGURE` — a routine
+  first-run state no longer reads as an error.
+- **#65 findings 2–3 (D1, `bf2dd705`).** Removed `anthropic` and
+  `google-adk` (zero importers; `google-adk` alone pulled 67 transitive
+  packages), declared `rich` (21 importers, previously only transitive).
+  Deleted the three docstring-only stub packages. `mcp` kept — the issue's
+  claim that it is unimported is stale; it is used by `tools/mcp_bridge.py`
+  and `tools/cf_tools.py`.
+
+One thing worth recording for whoever reads this next: attempting Fix 6's
+live verification repro (`sq review tasks 919 -v --model deepseek4-flash`)
+from this interactive session silently ignored `--model` and ran the review
+against the wrong target, overwriting the two real 919 review artifacts in
+place. They were restored from `git checkout HEAD --` before anything was
+committed — no data was lost — but the live repro for #100 was never
+actually run this session; only the unit tests (which directly assert
+DEBUG-vs-WARNING level and count at both refusal sites) verify it. Run the
+live repro from a plain CLI session before treating that criterion as fully
+closed.
+
+All 11 functional success criteria plus the pre-commit-hook integration
+criterion re-verified against running code (G2). Full gate clean: `ruff
+format --check`, `ruff check`, `pyright` (0 errors), `pytest` (4003 passed,
+4 skipped). Issues #65, #117, #112, #108, #57, #100 closed, each citing its
+fixing commit; #65's closing comment notes `mcp` was kept; #100's notes the
+918 attribution correction. #118 (`[serve]` extra) left open — Non-goal.
+
+**Commits this phase:** `c1fbbcd3` (#117), `16ad02ee` (docs), `29740334`
+(#112), `d739115c` (docs), `2e5c1c13` (#108), `f456ee70` (#100), `02fde5b4`
+(docs), `0fd46b40` (#57), `ee83c554` (docs), `bf2dd705` (#65).
+
+**Next:** merge `922-slice.small-fixes-batch-2` into `main`.
+
+## 20260920
+
+### Slice 922 — Task breakdown: Small Fixes Batch 2
+
+Phase 5 complete. Split across two files at the ~450-line convention:
+`user/tasks/922-tasks.small-fixes-batch-2-1.md` (Parts A–E, 437 lines) and
+`-2.md` (Parts F–G, 175 lines). 118 checklist items.
+
+Task order follows the design's Development Approach rather than issue
+number: **Fix 2 (#117) first**, because the gate fix is what lets the rest of
+the slice commit without `--no-verify`, then 3, 4, 6, 5, and **Fix 1 (#65)
+last** since it regenerates `uv.lock`. One commit per fix. The file split
+falls on that seam — the five code fixes in part 1, the packaging change and
+closeout in part 2.
+
+Every site named in the design was re-verified against the code while writing
+the tasks; all confirmed. Two things the tasks pin down that the design left
+implicit:
+
+- `models/aliases.py` (lines 67, 69, 207) also contains `"tool_use"`, but as a
+  TOML config key, not an sdk_type — explicitly out of Fix 4's scope, recorded
+  so it is not swept up.
+- Fix 6's test update is three specific tests in
+  `tests/tools/test_jail_exclusions.py` (lines 90, 112, 140) pinned to
+  WARNING. The design predicted they existed; the tasks name them.
+
+Fix 3's task carries a trap worth noting: `ProcessCwdNotFoundError` must not
+subclass `ProcessNotFoundError`, or `github_cli.py:490`'s existing handler
+swallows it and the fix silently does nothing.
+
+Stale slice-plan text corrected: entry 20 still posed the stub packages as an
+open question ("decide the fate of"), which D1 had already decided.
+
+**Next:** Phase 6 implementation, branch `922-slice.small-fixes-batch-2`.
+
+### Slice 386 task breakdown (Phase 5)
+
+- Tasks at `386-tasks.slash-command-parity-documentation-and-live-evidence.md` — 11 tasks,
+  412 lines, following the LLD's implementation order.
+- Tasks 1–8 need no host access and no PM action: the two command files, the D2 drift test
+  (with a test that proves the drift test can fail), the install count 9 → 10, the D4
+  observation, the four documents, and the D5 example-parse test in a new `tests/docs/`.
+- **Task 9 (live run) carries the precondition** — `squadron-pr` pushed to `origin` — as a
+  precondition, not a step, per the standing rule that a task never depends on a resource the
+  work cannot produce. If it has not happened, the task stops and reports.
+- The three PR option surfaces were read from `--help` and recorded in the Context Summary as
+  orientation, with an explicit instruction not to copy them into the test — the test
+  introspects the live command objects.
+- Task 5 (D4) records the fallback rule: if the default `sdk` profile fails inside a session,
+  that is a CLI defect logged as an issue, never patched over by injecting a profile in the
+  command file.
+- Task 11 closes initiative 380 and logs the drift-test retrofit for the pre-existing
+  subcommands as a GitHub issue.
+- Next: Phase 6 implementation on branch `386-slice.slash-command-parity-documentation-and-live-evidence`.
+
+### Slice 386 implementation and live run (Phase 6) — closes initiative 380
+
+**Tasks 1–8** (`commands/sq/pr.md`, the `pr` section of `review.md`, the D2 drift test, the
+install-count update, the D4 observation, README/COMMANDS/QUICKSTART, the D5 example-parse
+test) — implemented and committed as planned, ten commits on the slice branch.
+
+**Task 3's first run found a real gap**: `review.md`'s `pr` section documented `-v`/`-vv` but not
+the long form `--verbose` that `sq review pr` actually registers. Fixed in the command file, not
+the test, per the task's own rule.
+
+**Task 5 (D4 observation) — two different results, not one.** `sq review pr 116` with no
+`--profile` (default `sdk`) ran successfully inside this Claude Code session — a full review,
+verdict PASS, real model call, exit 0 (it hit a 20-iteration agentic-loop cap on a large diff and
+had to finalize; unrelated to the profile — normal provider-agent behavior on a big diff, not a
+session-vs-terminal difference). But `sq pr create --dry-run` with the default profile **failed**
+inside the session: `sq pr create`'s one-shot composer launches a nested Claude Code CLI
+subprocess, which the CLI refuses — "Claude Code cannot be launched inside another Claude Code
+session." `sq review pr` uses the SDK's client mode within the existing session; `sq pr create`'s
+composer spawns a new CLI process, which the nested-session guard blocks. The working invocation,
+matching 385's walkthrough, is `--profile openrouter --model openai/gpt-4o-mini`. README states
+this: the default profile works for `sq review pr` inside a session; `sq pr create` needs a
+non-`sdk` profile there. Not logged as a CLI defect — the nested-session guard is correct
+behavior, and the composer using a subprocess rather than client mode is a design fact for a
+future slice to address if it matters, not a defect this slice's Excluded scope covers.
+
+**Task 9 (live run), after `squadron-pr` was pushed to `origin` (PM-authorized, 84 commits,
+`fdb46f40..a0466b92`):**
+
+1. Pushed `386-slice.slash-command-parity-documentation-and-live-evidence`; `sq pr create
+   --dry-run --profile openrouter --model openai/gpt-4o-mini` previewed the title and body, then
+   `sq pr create --profile openrouter --model openai/gpt-4o-mini` opened
+   **[PR #119](https://github.com/ecorkran/squadron/pull/119)**. stderr confirmed `base:
+   squadron-pr (source: integration-branch)`; `gh pr view 119 --json baseRefName` confirmed
+   `squadron-pr`.
+2. `sq pr show 119 --json` from the CLI and `/sq:pr show 119 --json` from a session: `diff`
+   printed nothing — byte-identical (D2 tier one).
+3. CLI: `sq review pr 119 --profile openrouter --model openai/gpt-4o-mini --reviews-dir
+   /tmp/parity-cli --post --dry-run` printed the comment and wrote nothing; the same command
+   without `--dry-run` posted [issuecomment-5751705564](https://github.com/ecorkran/squadron/pull/119#issuecomment-5751705564).
+   Artifact: `/tmp/parity-cli/github.com-ecorkran-squadron-119-review.code.md`.
+4. Slash command: `/sq:review pr 119 --profile openrouter --model openai/gpt-4o-mini
+   --reviews-dir /tmp/parity-slash --post` ran that exact `sq review pr` command once and posted
+   to the **same comment** (`#issuecomment-5751705564`) — 384's idempotency held across
+   transports. `gh pr view 119 --json comments` confirmed exactly one squadron comment.
+   Artifact: `/tmp/parity-slash/github.com-ecorkran-squadron-119-review.code.md`.
+5. The two artifacts share filename and every deterministic frontmatter field (`pr` record,
+   `reviewedSha` `1708d359831c6a30b941fa2baf943ccdd722b40f`, `sourceDocument`, `reviewType`,
+   `aiModel: openai/gpt-4o-mini`, `rulesSource: project`). `toolCallsMade` and `findings` differ,
+   as expected — two calls to a non-deterministic model, recorded rather than compared (D2 tier
+   two).
+6. `sq pr show` resolved PR #119 through all four target forms: `119`, the full URL,
+   `ecorkran/squadron#119`, and the branch name — all four returned the identical record.
+7. On a throwaway scratch branch with an unpushed commit, `/sq:pr create --dry-run` (session)
+   showed the refusal and the printed remediation (`git push -u origin
+   scratch-386-refusal-test`) and ran nothing further; `git ls-remote origin
+   scratch-386-refusal-test` confirmed the branch never reached the host. Scratch branch deleted
+   afterward.
+8. `gh pr view 119 --json body,comments`: all five body sections present (`## What changed`,
+   `## Why`, `## How it was verified`, `## Known gaps`, `## Review provenance`); exactly one
+   squadron comment.
+
+**Gate**: `ruff format`/`ruff check` clean (one formatting fix and one unused-loop-variable
+rename applied to `test_command_surface.py` along the way); `pyright` clean — no file under
+`src/squadron/` changed. Full test suite run for regressions.
+
+No file under `src/squadron/` changed in this slice. This closes initiative 380 (Pull Request
+Workflow): 381–385 built and proved the three capabilities individually; 386 made them
+discoverable and proved them together on one real PR.
+
+**Deferred work logged**: retrofitting the D2 drift test to the pre-existing `review`
+subcommands (`code`, `slice`, `tasks`, `arch`, `resolve`) is
+[issue #120](https://github.com/ecorkran/squadron/issues/120) — their command-file sections
+predate the test and were not authored against it.
+
+**Full suite gate**: 4204 passed, 6 skipped, 4 failed (472s, `tests/load` excluded per its own
+tier). Three failures are the known `tests/documents/test_schema_drift.py` ones (context-forge
+issue #88). The fourth, `tests/pr/test_tasks.py::test_real_task_file_fixture`, is also
+pre-existing and unrelated to this slice: its fixture selector picks
+`385-tasks.create-a-pr-with-a-good-message.md`, which slice 385 finished checking off on
+2026-09-19 (`e534525d`), a day before this slice's work began — the test requires the fixture to
+have unchecked items, which stopped being true once that slice closed. Logged as
+[issue #121](https://github.com/ecorkran/squadron/issues/121); no file under `src/squadron/` or
+`tests/pr/` changed by 386.
+
+---
+
+## 20260919
+
+### Slice 922 — Design: Small Fixes Batch 2 (#65, #117, #112, #108, #57, #100)
+
+Phase 4 complete. `user/slices/922-slice.small-fixes-batch-2.md`; validator PASS.
+
+Slice 907 was split: its #65 dependency-cleanup half became 922, widened to a
+six-item batch; its `[serve]` half stays deferred as #118, expected to close
+unimplemented once Amoeba's resident process makes the daemon redundant. #30
+closed — delivered by slice 920, close missed at closeout.
+
+Decisions worth carrying forward:
+- **D2 (#117).** The gate keeps passing every staged path to cf; a
+  squadron-side "under `project-documents/user/`" predicate is consulted only
+  to interpret `filesChecked: 0`. Filtering *before* calling cf was rejected —
+  it would make squadron's predicate the authority and fail open on any drift
+  from cf's real scope. cf scope was probed empirically, not assumed.
+- **D1 (#65).** `mcp` stays — it is now imported, contrary to the issue text.
+  The three docstring-only stub packages (`providers/anthropic/`, `adk/`,
+  `mcp/`) are deleted; nothing references them.
+- **D6 (#100).** Only policy exclusions drop to DEBUG; jail escapes stay WARNING.
+- #108's `dispatch.py:174` site is stale; `translation.py` (the producer) was
+  missing from the issue's list.
+
+**Next:** Phase 5 task breakdown.
+
+### Slice 386 design (Phase 4)
+
+- Design at `386-slice.slash-command-parity-documentation-and-live-evidence.md`. Integration
+  slice: no file under `src/squadron/` changes.
+- **D1:** PR transports pass the remainder verbatim, no injected `-v` — parity by construction.
+- **D2:** parity tested as surface agreement (Click options vs `--flag` tokens in the command
+  file's section, real bundled file as fixture) plus a two-tier live comparison:
+  `sq pr show --json` byte-identical; review artifacts equal on deterministic fields only.
+- **D3:** agent transport in front of a host write — no unrequested `--post`, writes run
+  once, printed remediation (`git push`) is shown and never executed by the session.
+- **D4:** default `sdk` profile inside a session is observed and documented, not decided.
+- **D6:** live run on the 386 slice branch. **Precondition:** `squadron-pr` pushed to
+  `origin` (80 commits ahead today) — awaiting PM direction. Lands by local `--no-ff` merge
+  like 381–385.
+- MCP transport excluded: `src/squadron/mcp/` is empty, nothing to bring to parity.
+- Next: Phase 5 task breakdown for 386.
+
+### Slice 385 code re-review response
+
+- Re-review (z-ai/glm-5.3, `35d2cde8`) returned CONCERNS: 3 concerns, 4 notes, no fails. All fixed.
+- **Split `pr/body.py`** into `pr/composer.py` (one-shot composer), `pr/title.py` (D4a), and
+  `pr/body.py` (section contract + presence check); tests split to match. The tool-gate's
+  sanctioned-site list now names `pr/composer.py`.
+- **Design document read once, relative to `--cwd`.** The three prior reads resolved the
+  path against the process working directory, so `--cwd` from another directory would have
+  dropped the design silently. `inputs._read_design_text` reads it; `PrFacts` carries it.
+- Title bound built from `_TITLE_MAX_CHARS`; composer tests restore `_REGISTRY` via
+  `monkeypatch.setitem`; `select_base` lost its unused `cwd`; `_local_head_sha` checks git's
+  return code; `create` shed `_gather_facts`.
+- Gate: ruff/pyright clean; suite 3 failed (cf #88 schema drift, pre-existing) / 4206 passed.
+
+### Slice 385 code review response
+
+`sq review code 385` (z-ai/glm-5.3) returned FAIL: one fail, six concerns, four notes. All
+eleven accepted and fixed; responses are in the review file. The fail (F001) was real:
+`compose_one_shot` kept the SDK's duplicate ResultMessage and tool narration, which both sibling
+one-shot consumers filter. On `--profile sdk` — the default — that doubles every section's prose
+and makes a model-composed title multi-line, so it always fell back to the first commit subject.
+Invisible to the suite (single-message fakes) and to live verification (the sdk profile cannot
+run inside a Claude Code session). Also: a base absent from the local clone and an empty commit
+range are now rendered refusals before any model call; `_shas_in_range` raises instead of
+returning `[]`; `_strip_model_headings` drops only ATX headings outside code fences; the unused
+`git_utils.current_branch` is gone; the two CLI test files share fixtures through
+`tests/cli/conftest.py` and `pr_create_support.py`, and the dry-run/real-run equality test now
+compares the POST payload. Gate: ruff and pyright clean; 4205 passed, 6 skipped, 3 failed
+(cf #88 schema-drift, unchanged).
+
+## 20260918
+
+### Slice 385 implementation (Phase 6) — `sq pr create`
+
+All 17 tasks complete. New package `src/squadron/pr/` (branch.py, tasks.py, base.py,
+preconditions.py, inputs.py, assembly.py, body.py), plus `create` wired into
+`cli/commands/pr.py` beside `show`. The command orchestrates, in order: identity → the
+pushed-branch precondition → base selection (D8's ordering — every refusal decidable without
+a model call happens first) → input gathering → deterministic assembly → title and body
+composition through one shared composer → the presence-and-filled check → dry-run or the
+single write.
+
+Two parsers landed first and alone: `parse_slice_branch` (the `{index}-slice.{name}` forward
+lookup the tree lacked) and `parse_task_items` (the first checkbox reader in the codebase,
+lenient per the project's parsing rules — any indent, any bullet, sub-items attributed to
+their own state). `select_base` implements D1's three-outcome table exactly: a configured
+integration branch absent from the host is a refusal, never a silent fall-through to the
+host default. `find_latest_in_range_review` implements D7's range-membership scan — the case
+that would fail under ancestry-of-head or file-mtime instead is a dedicated test building a
+review whose sha is an ancestor of head but outside `base..head`.
+
+The composer (`compose_one_shot`) performs the same one-shot sequence
+`run_review_with_profile` uses, built directly rather than through either existing one-shot
+function (D3) — the design's own scope correction against the plan entry, worked out during
+Phase 4. `resolve_title` implements D4a's three-term chain; the common case (a resolved slice
+branch) makes zero model calls, reading the human name straight from the design's own H1.
+`compose_body` assembles the five-section contract (D4) with squadron's headings and
+deterministic facts written directly beneath the model's prose; `check_body_complete`
+implements D5's structural presence check with no retry.
+
+Three real bugs were caught and fixed along the way, two of them only by running the full
+test suite or the live verification rather than the new/targeted tests alone:
+
+- **The composer's design-document prompts named a path, not its content.** Found live in
+  Task 16.2: a composer given no tools (the traceability rule) cannot open a path itself, so
+  the "why" and "what changed" sections reliably drew a refusal ("I don't have access to your
+  files") from the model instead of prose about the change. Fixed by reading the design
+  document's own text into both prompts directly, bounded to 6000 characters.
+- **`pr/body.py` bypassed the project's tool-passing gate.** `AgentConfig(allowed_tools=...)`
+  was constructed with a raw hardcoded empty list rather than routed through
+  `resolve_effective_tools` first, which every other such call site in the codebase must do
+  (`tests/tools/test_effective_tools.py`'s SC1a enumeration guard, caught only on a full-suite
+  run). Semantically a no-op since the declared list is always empty, but the mechanical
+  enforcement doesn't know that without the call.
+- **The import-boundary guard's own membership check was a false-positive risk.** Adding
+  `"squadron.pr"` to the forbidden-imports set for `review/` exposed that the existing check
+  used a bare `str.startswith()`, which treats `"squadron.pr"` as a prefix match for
+  `"squadron.providers"` too — a real false positive against three files that legitimately
+  import `squadron.providers.*`. Fixed with a package-boundary-aware comparison.
+
+A fourth issue surfaced only during the live walkthrough and was not fixed, since it is
+outside this slice's scope: the composer (like `run_review_with_profile` and
+`summary_oneshot`, which it deliberately does not call) has no client-side network timeout
+around the one-shot provider call. A slow reasoning model (`z-ai/glm-5.2`) hung indefinitely
+on one of the six sequential composer calls during live verification and had to be killed
+manually; switching to a faster model completed normally. Worth a future slice if it recurs.
+
+Live verification (Task 16.2) ran all six of the design's walkthrough steps against
+`ecorkran/squadron`, `gh` authenticated: the dry run on this slice's own branch, the base
+refusal against a nonexistent integration branch, both push-precondition refusals (missing
+and behind), the unplanned-repository path (a throwaway worktree with `project-documents/`
+removed), a live creation, and a check — via `-vvv` debug output rather than an assertion —
+that the PR's own five-section body reaches `sq review pr`'s injected prompt verbatim. The
+live creation opened **`https://github.com/ecorkran/squadron/pull/116`**, title `Create a PR
+with a Good Message` resolved from the design's own H1 with zero model calls, base
+`squadron-pr`.
+
+The `sdk` profile's one-shot dispatch could not be exercised live in this session — it cannot
+nest inside the Claude Code session running the walkthrough itself — and is instead checked
+directly by a unit test that resolves the real `sdk` profile type and asserts it dispatches
+without a session.
+
+Full gate: `ruff format`/`ruff check`/`pyright` clean; full suite 4198 passed with only the 3
+pre-existing schema-drift failures (context-forge issue #88), unchanged by this slice.
+
+---
+
+## 20260917
+
+### Slice 921 — Implementation: Small Fixes Batch (#67, #103)
+
+Phase 6 complete. Two commits, one per fix, each gated independently.
+
+**Part A (#67) — `57a3d771`.** New `_reject_unknown_alias` helper in
+`cli/commands/review.py`, mirroring `_resolve_profile`'s three-channel cascade
+(flag → `template.profile` → `default_review_profile`) *without* its `"sdk"`
+fallback — that fallback was what silently rescued typos. Wired into both
+`_run_review_command` and `_resolve_judge_model`, sharing the one helper per
+design review F004.
+
+Guard placement was the trap the task review (F001) caught in advance:
+`alias_model`/`alias_profile` are `None`-initialized and assigned only inside
+`if raw_model is not None:`, so a guard placed after that block evaluates
+`None == None and None is None` and would reject *every* model-less
+invocation with "unknown model alias 'None'". Guard sits inside the block at
+both call sites, with a comment saying why, and
+`test_no_model_supplied_does_not_reject` guards it directly rather than
+relying on `test_run_review_command_defaults_to_sdk` to catch it by accident.
+
+The error message names `--profile` as the remedy, which is not cosmetic: per
+design review F003, no shipped template declares `profile:`, so a *valid*
+literal model ID with no `--profile` and no config default now fails too.
+That shape is indistinguishable from a typo at the dispatch point, and the
+message is the only place that tells the two apart.
+
+Tests: `test_unknown_model_passes_through` renamed and inverted (it asserted
+the exact behavior this fix removes), plus new `TestUnknownAliasGuard`
+covering both surviving passthrough channels, the message content, and the
+no-model regression; judge path covered in
+`tests/review/test_cli_review_resolve.py`.
+
+**Part B (#103) — `dae9cd97`.** `_sibling_projects` derives sibling checkout
+names from `Path(cwd).resolve().parent.iterdir()`, `_partition_by_sibling`
+splits glob matches into clean/excluded, and the no-key default now selects
+from `clean` only. `_summary_key` is unchanged for every stem, so an excluded
+file keeps its key and stays restorable via `--key` — the disambiguation
+policy the first design review (F001) forced, after the original draft
+required two things that cannot compose. The picker still lists every match,
+marking excluded ones with the owning sibling and the key to use. All-excluded
+with no key raises the same "no summary files found" error rather than falling
+through. `OSError` from `iterdir()` logs at WARNING and degrades to an empty
+sibling set (today's unfiltered behavior), per design review F002 and the
+916 precedent.
+
+The prefix-continuation qualifier in the partition predicate is load-bearing
+in the direction the task review (F005) judged outcome-neutral. From the
+`squadron-pr` worktree, sibling `squadron` is the *shorter* name and prefixes
+every one of `squadron-pr`'s own stems, so the unqualified predicate excludes
+all of them, leaves `clean` empty, and fails in a checkout holding eight
+summaries of its own — the inverse of #103 and worse than the unfixed
+behavior. Verified by direct computation before implementing, and guarded by
+`test_shorter_sibling_does_not_exclude_own_summaries`.
+
+Also updated the existing `TestRestoreFlag`/`TestRestoreKey` invocations to
+pass `--cwd` (task review F002). They omitted it, so under this fix they read
+the real parent of wherever pytest runs — passing on a machine that happens
+to have a same-prefix checkout, failing on CI. Confirmed CWD-independent by
+running the file from a directory whose parent held a `myproject-pr` sibling.
+A first draft of the `_sibling_projects` tests hit the same class of problem
+from the other side: pytest's `tmp_path` is itself nested among sibling temp
+dirs, so the layout needs its own root.
+
+**Verification.** Both fixes smoke-tested live and recorded in the slice
+design's new Verification Walkthrough. Fix 1 needs a scope argument to reach
+the guard at all (task review F003) — `sq review code --model <typo>` alone
+exits 1 at the scope check, and both failures exit 1, so the message is the
+verification. Fix 2 was tested against #103's actual motivating case in this
+repo: `squadron-pr-interactive.md` was still the newest match, still listed,
+now marked excluded, and the default correctly selected
+`squadron-interactive.md`; `--key pr-interactive` still reached it; and the
+`squadron-pr` worktree restored its own summary (exit 0), confirming the
+reversed direction live.
+
+Gate: ruff format/check clean, pyright 0 errors, 3987 passed / 4 skipped
+(baseline 3973; +14 accounted for in the walkthrough). The real command is
+`sq _summary-instructions` — there is no `sq summary` (task review F006).
+
+
+### Slice 921 — Task Breakdown: Small Fixes Batch (#67, #103)
+
+Phase 5 complete: [921-tasks.small-fixes-batch.md](project-documents/user/tasks/921-tasks.small-fixes-batch.md)
+(355 lines), converted from the design that landed two review rounds earlier
+today (FAIL → CONCERNS, both addressed). Two independent fixes, each its own
+part ending in a gate/commit task:
+
+- **Part A (#67)** — a shared `_reject_unknown_alias` helper wired into both
+  `_run_review_command` and `_resolve_judge_model`, firing only when alias
+  resolution is a no-op *and* none of the three profile channels (flag,
+  template, config) supplies a value — matching the design's corrected
+  rationale, not the flag-only guard an earlier draft proposed. Task 1.4
+  flags that this fix invalidates an existing test
+  (`test_unknown_model_passes_through` in `test_review_profile.py`) that
+  currently asserts the opposite of the new intended behavior — updating it
+  is a task, not an afterthought.
+- **Part B (#103)** — a new `_sibling_projects` helper (filesystem-derived,
+  `OSError`-guarded per review F002) partitions `--restore` matches into
+  clean/excluded; only the no-`--key` default is scoped to `clean`, while
+  `--key` and the picker listing still see everything, per the
+  non-composable-requirement fix from review F001/F001-followup.
+
+Also fixed en route: entry 19 in `900-slices.maintenance-and-refactoring.md`
+already existed and needed no changes; task file references it directly
+rather than duplicating its content.
+
+Not yet done: Phase 6 implementation. No branch created — per project git
+rules, Phase 5 stays on `main` (`git.integration_branch` unset, verified via
+`cf config get`).
+
+### Slice 385 task breakdown (Phase 5)
+
+`385-tasks.create-a-pr-with-a-good-message.md` written — 16 tasks, 350 lines, no split needed.
+
+Order follows the design's implementation order, which is itself the command's execution order:
+the two new parsers first and alone (branch name, task checkboxes), then git helpers, then the
+`resolve_locator` extraction, then each stage of the command in the sequence it runs — base
+selection, preconditions, input gathering, assembly, composition, the section contract, the
+presence check — and the command wiring last, thin by construction. Test tasks sit immediately
+after their implementation task; no test in the slice calls a model, which is exercised once,
+live, in Task 16.
+
+Three tasks carry criteria that would pass a plausible-but-wrong implementation, so each names
+the failure it is there to catch. Task 5.2's base-selection refusal asserts `default_branch` was
+*never called*, which is what distinguishes a refusal from a fall-through. Task 8.2's review scan
+builds a review whose sha is an ancestor of head but outside `base..head` and asserts it is not
+selected — the case that fails if the implementation uses ancestry or file mtime instead of range
+membership. Task 13.2 asserts a precondition failure means the composer was never called, which
+is the token-cost ordering the design specifies.
+
+Task 2.2 follows the project's parsing rule that a fixture must include the format the parser
+consumes in production: the checkbox parser gets a test reading a real task file, not only
+synthetic cases, because a parser that silently requires one indent level would otherwise pass.
+
+Task 16.4 leaves the code-review command choice to the PM rather than picking one, per the
+standing preference.
+
+### Slice 385 design review response
+
+Slice-design review run against the committed design (`z-ai/glm-5.2`, reviewed sha `2c138d42`):
+CONCERNS, six PASS and three concerns, all three correct and all three addressed. `responseStatus:
+addressed` on the review; the response section is in the LLD.
+
+F007 caught a wrong constant: D8 described all five calls as "host calls bounded by
+`HOST_COMMAND_TIMEOUT_SECONDS`", but `git ls-remote` is a git query, and `codehost/refs.py` and
+`codehost/remotes.py` bound those with `GIT_QUERY_TIMEOUT_SECONDS`. Both are 30 seconds, so nothing
+was practically wrong — what was wrong is which constant a future change would move. The
+conflation had propagated into a success criterion as well.
+
+F008 found the model call unenumerated. The project's own design principles require failure-mode
+enumeration for each new I/O path, and the composer is one; its failures are not `CodeHostError`
+and needed their own handling statement. Now a process-boundary handler logging at ERROR and
+exiting non-zero, with the note that composition's position (after every read, before the only
+write) means the failure leaves no state to unwind.
+
+F009 found a genuine gap. `--title` appeared in the flag list, the data-flow diagram, and the
+`open_pull_request` call, and the design never said where a title comes from when the flag is
+absent — the implementer would have had to invent one. Now **D4a**: the flag, else the slice's
+human name from the design's H1 (the frontmatter `slice` field is the kebab-case slug, not a
+title), else a model-composed line under 72 characters falling back to the first commit's subject.
+The middle term is the common case here and is deterministic —
+asking a model to invent a title for a slice literally named "Create a PR with a Good Message"
+spends tokens to lose information. D4a is also the slice's one degradation rather than refusal, and
+states the proportionality argument against D5's hard failure: a mediocre title over a correct body
+is not worth failing a creation, where a missing body section is.
+
+Task file updated in the same pass — Tasks 6 and 14 for the constant, Task 10 for the failure mode,
+and a new Task 10a for the title.
+
+### Slice 385 design (Phase 4)
+
+`385-slice.create-a-pr-with-a-good-message.md` written. `sq pr create` is the initiative's
+authoring side and its second and final host write.
+
+Eight decisions. D1 fixes base selection as a chain that *refuses* rather than falls through: a
+configured `git.integration_branch` absent from the host fails creation naming the branch, because
+"this repository says work merges to `dev/erik` and the host has never heard of it" is not the
+same situation as "no integration branch configured." An explicit `--base` is deliberately not
+pre-confirmed — `open_pull_request` rejects a bad base with a 422 that names it, and the
+fall-through a pre-check would prevent is only silent in the integration-branch case.
+
+D2 splits the pushed-branch precondition into two checks with different fixes: missing on the host
+(`branch_exists` false → `git push -u`) and behind (host sha ≠ local sha → `git push`). The sha
+read is `git ls-remote` through the adapter's existing process-runner seam rather than a new
+protocol operation — the architecture fixes the operation list, and this question is answerable
+with git against a remote the locator already names.
+
+D3 resolved the plan entry's named risk. The claim was that `pipeline/summary_oneshot`'s docstring
+scopes it to non-SDK profiles while the review default is `sdk`, and that the slice must correct
+"the docstring or the routing." Tracing it: `summary_oneshot` contains no `is_sdk_profile` check
+and no rejection path — it resolves any registered profile through `get_profile` →
+`get_provider` → `create_agent`. The gate is in its caller, `pipeline/actions/summary.py`, which
+routes the SDK arm to `context.sdk_session.capture_summary` and refuses when no session exists.
+That is a pipeline concern: a pipeline summary step must reuse its live SDK session rather than
+open a second one. A CLI command has no session, and the CLI already runs `sdk` through a one-shot
+daily — `review_client.run_review_with_profile`, the same provider sequence with no session, is
+what `sq review code --profile sdk` uses. So `sdk` through a one-shot was never the risk it was
+flagged as. The composer performs that sequence directly rather than calling either existing
+function (both are ~200-line and shaped for their own callers — one pipeline-shaped, one
+review-shaped), and the correction owed is to `summary_oneshot`'s docstring, which describes its
+caller's policy as if it were the module's behavior. The routing is correct and unchanged. The
+plan entry was amended to record this.
+
+D4 and D5 are the section contract: five squadron-written headings, deterministic facts written by
+squadron directly beneath the prose they support, and a presence-and-filled check that fails
+creation rather than degrading it. "Filled" is defined structurally — non-empty after stripping
+the deterministic block, and not a bare restatement of the heading — because that catches the
+failure that actually occurs (a dropped or empty section) without pretending to judge prose
+quality. No retry on failure: a retry loop makes the command's token cost unbounded, and the
+operator can rerun having seen the reason.
+
+D7 scopes "the latest review" to shas *in* the base-to-head range rather than ancestors of head,
+which is what keeps a long-lived integration branch from attaching a neighboring slice's review to
+this PR. Two gaps surfaced during reconnaissance and are now owned by this slice: there is no
+`{index}-slice.{name}` branch-name parser in the tree (only the reverse lookup in `git_utils`),
+and nothing anywhere reads task-file checkbox state — `_tasks_input` passes task files to the
+review template as paths for injection. Both parsers are new here.
+
+D6 puts the logic in a new `src/squadron/pr/` package in the CLI's dependency tier. The work needs
+`codehost` types and `review` helpers together, which the import-boundary test forbids inside
+`review/`; 384 set the precedent that the combination lives in the CLI layer. Keeping it in
+`cli/commands/pr.py` would push that file well past the size guideline and make it testable only
+through Typer's runner.
+
+Dependencies are 381 alone. 383 is not a prerequisite — without it the provenance section carries
+its no-input line, the architecture's stated degraded path — though 383 is merged, so the degraded
+path will be exercised by unplanned repositories rather than by this one.
+
+### Slice 384 implementation (Phase 6)
+
+Seven code tasks complete on branch `384-slice.post-findings-to-the-pr`, merged into
+`squadron-pr` (the initiative's integration branch — never `main`). `sq review pr --post` writes
+the saved review to the pull request as one comment.
+
+Task 1 replaced 381's `find_own_comment` with `find_marked_comments(record, *, marker) ->
+list[HostComment]` (D1): every marked comment, any author, ordered oldest-first, with
+`author_login` populated from the payload. The old operation filtered to the operator and
+returned only the earliest by `min()`, which discarded both things the architecture asks squadron
+to *report* — another operator's marked comment, and the operator's own duplicates — before any
+caller could see them. Zero production callers existed, so the change replaced the operation
+outright rather than adding a second one beside it; `grep -r find_own_comment src tests` returns
+nothing.
+
+Task 2 added `src/squadron/review/pr_comment.py`: pure functions composing a PR comment body from
+a `ReviewResult` and a `PullRequestRecord`, never from the saved artifact file (D2) — the artifact
+carries frontmatter, a run digest, and at `-vv` a prompt-and-response appendix that must never
+reach a public PR. Findings come from `structured_findings` (the same projection the artifact's
+frontmatter uses), grouped `fail`/`concern`/`note`/`pass` with within-group order preserved, a
+size bound under GitHub's 65536-character limit whose truncation line names only the omitted
+count — never a path, since D6 permits posting after a failed save, when there may be no artifact
+to name. Task 3 extended the existing import-boundary guard (`tests/codehost/test_import_boundaries.py`)
+to permit exactly this module importing exactly `PullRequestRecord`, checked by name so the
+exception cannot silently widen.
+
+Tasks 4–6 added `--post`/`--dry-run` and `_post_review` to `sq review pr`: identity resolved
+first as a clean early exit, discovery via `find_marked_comments`, partition into mine/theirs,
+update the earliest of mine and report the rest (own duplicates and other operators' comments
+alike) by author and URL, create when none are mine. The comment body is bound once
+(`compose_comment`) and shared by `--dry-run` and a real post, so the two cannot drift by
+construction rather than by discipline (D3). The post step runs after the save step and does not
+gate on its outcome (D6). D7's staleness statement compares the reviewed sha against a fresh
+`resolve_pull_request` read taken at post time, not the resolution-time record — comparing a
+value to itself would mean the line could never fire, the mistake the slice design's own first
+draft made and its review caught (F001).
+
+Task 7 added `tests/cli/test_review_pr_post_failures.py`, asserting D8's failure matrix
+per-site rather than once: a classified transport failure and a scripted `ProcessTimedOutError`
+at each of the four post-path host calls (identity, discovery, the head re-read, the write) both
+exit 1 with no effective write, every post-path call carries `HOST_COMMAND_TIMEOUT_SECONDS`, and
+a save that succeeded followed by a failed post leaves the saved artifact untouched. The
+`write_calls()` helper 381 built counts any recorded `-X POST`/`-X PATCH` argv, attempted or not
+— so at the write site itself, whose failing call *is* the one write attempt, the assertion reads
+"exactly one attempt, never a retry or a duplicate" rather than "none," which is what the other
+three sites assert.
+
+Full gate: `ruff format --check`, `ruff check`, `pyright` (0 errors) all clean. Full suite: 4079
+passed, 6 skipped, 3 failed — the pre-existing `test_schema_drift.py` failures (context-forge
+#88), unchanged by this slice.
+
+**Live verification (walkthrough steps 1–4, 6; step 5 not independently exercised live — see
+below):**
+
+No open PR existed on `ecorkran/squadron` at verification time (all five prior PRs are merged),
+so a throwaway PR (#115) was opened from `main` with one non-excluded file under a scratch
+directory, used for the walkthrough, and closed — not merged — once evidence was gathered; its
+branch was deleted both locally and on the remote afterward.
+
+Step 3 — `sq review pr 115 --no-tools --no-save --post` printed
+`https://github.com/ecorkran/squadron/pull/115#issuecomment-5719292536`. Reading the comment back
+confirmed `<!-- squadron-review: github.com/ecorkran/squadron#115 -->` as the literal first line —
+an HTML comment, invisible on the rendered PR, visible only via "View source."
+
+Step 4 — running the same command again printed the **same** comment URL, and
+`gh pr view 115 --json comments --jq '.comments | length'` still read `1`: one comment, updated in
+place, not a second one.
+
+Step 6 — `sq review pr 115 --no-tools --no-save --dry-run` printed `--dry-run requires --post` and
+exited 1, before any host call.
+
+Step 5 (staleness line) was not exercised live — the throwaway PR's head did not move between
+posts, and forcing it to would have meant a second push cycle for a PR that existed only to be
+closed. Covered deterministically instead at both the composer level
+(`tests/review/test_pr_comment.py::TestStaleness`) and the CLI level
+(`test_moved_head_includes_the_staleness_line`, which drives a real post-time re-resolution over
+the fake runner with a scripted head differing from the reviewed sha).
+
+## 20260916
+
+### Slice 383 implementation (Phase 6)
+
+Nine tasks complete, verified live against [PR #111](https://github.com/ecorkran/squadron/pull/111)
+(`ecorkran/squadron`), commits `1e6548b8`..`b4129c53` plus closeout. `RulesSource` on
+`resolve_rules_dir` (task 1), byte-identity fixtures ahead of the migration (task 2), the
+`SaveTarget` protocol and its three implementations (task 3), the pipeline step path migrated
+onto it (task 4), `PullRequestRecord.path_key` (task 5), the reviews-directory precedence chain
+(task 6), `PrTarget` replacing the 382 stub (task 7), and `targetKind`/`rulesSource` frontmatter
+on every target (task 8).
+
+Task 3's byte-identity harness had a blind spot invisible until task 8: it called
+`format_review_markdown` with a raw `SliceInfo` and no `target=`, so it rendered through the
+fallback branch and never exercised `frontmatter_fields()` — the path production actually uses.
+It went on passing through tasks 3 and 4 for the wrong reason, and would have stayed green after
+task 8 added two new keys to every artifact, because it wasn't checking the code that changed.
+Caught only because task 8's keys had to move the bytes and the harness didn't move. Rewritten to
+construct real targets; two fixture sets are kept side by side (`383-premigration-*.md`,
+`383-postkeys-*.md`) with a test asserting the diff is exactly `targetKind` and `rulesSource`. A
+check whose job is to detect change is not evidence until it's been shown to fire on a known one.
+
+**Live verification (walkthrough steps 2, 4, 6; step 3 covered instead by
+`test_review_consumers_ignore_pr.py`):**
+
+Step 2 — `reviewedSha` is the PR's head, not the operator's: reviewed from
+`/Users/manta/source/repos/manta/squadron-pr` at `HEAD=b4129c53`, the saved artifact recorded
+`reviewedSha: 86a0044b...`, matching `gh pr view 111`'s head exactly.
+
+Step 4 — reviewed from a scratch repo with no `project-documents/`: saved to
+`~/.config/squadron/reviews/github.com/ecorkran/squadron/`, source reported as "built-in default",
+`git status` clean.
+
+Step 6 — same run's frontmatter carried `targetKind: pr` and `rulesSource: project` (rules read
+from the reviewing checkout's own conventions, not the PR's).
+
+Found and worked around in the process, not a defect in this slice: this machine's
+`~/.config/squadron/config.toml` carries a stray global `cwd: ./project-documents/user` left over
+from another project. Against a repo lacking that path, `ProcessRunner` mireports the resulting
+`FileNotFoundError` on `cwd` as "executable not found: git" — misleading, but the underlying
+config value is the actual fault, not `process_runner.py`. Worked around here with an explicit
+`--cwd .`; not filed as an issue against this slice.
+
+Full suite after closeout: 3 failed / 4053 passed / 6 skipped (context-forge#88, pre-existing,
+unrelated to this slice). `ruff format`, `ruff check`, `pyright` all clean.
+
+## 20260915
+
+### Slice 920 — Implementation: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
+
+Phase 6 complete on branch `920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement`.
+13 of 14 tasks done; Task 13 blocked by a pre-existing, unrelated bug.
+
+Throttle detection was re-keyed onto typed `RateLimitEvent` across all three dispatch paths —
+`agent.py`'s shared `_skip_unparseable` and `sdk_session.dispatch`'s inline loop, which has no
+such wrapper and needed its own inspection (the asymmetry the design flagged as the likeliest
+half-landing point). `translation.py` now makes an informational event observable instead of
+silently dropping it. The shim (`install_rate_limit_parser_shim`, `is_rate_limit_event`) and its
+now-dead dict-based sibling `rate_limit_event_blocks` are deleted.
+
+Task 8's grep for other `sdk_type` exclusion lists found three more consumers of
+`agent.handle_message()` with the same issue-#23-class gap — `summary_oneshot.py`,
+`review_client.py`, `pipeline/actions/dispatch.py` — fixed the same way. Moved
+`RATE_LIMIT_EVENT_TYPE` to `core/models.py` (alongside `SDK_RESULT_TYPE`) so
+`review_client.py`'s "no provider-specific imports" boundary held. Also fixed:
+`test_translation.py`'s bare-`dict` fixture (42 pre-existing pyright errors, `TypedDict` now),
+and renamed `_is_throttle` → `is_throttle` since it's a genuine cross-module contract, not
+module-private.
+
+Every test fabricating `MessageParseError`/`ClaudeSDKError("rate_limit_event: ...")` now
+constructs a real `RateLimitEvent`, landed in the same commit as the production change it
+covers (Success Criterion 9). Success Criterion 10 (informational ≠ throttle) is covered in
+every consumer. `test_provider.py` and `test_audit_cli.py` needed no changes — confirmed both
+pass unmodified (Task 10), since neither fabricates an SDK parser exception. `test_agent.py`
+under `providers/openai/` was correctly left untouched — its only rate-limit test is on an
+independent, non-SDK path.
+
+**Task 12 (live review), passed.** `sq review code --diff main...HEAD -v` completed cleanly
+against the real SDK/CLI: verdict produced, no `Unknown message type` warning, no leaked
+`rate_limit_event` text, no live throttle observed. Returned CONCERNS with two real findings
+against this slice's own diff — both fixed in a follow-up commit.
+
+**Task 13 (live metrology audit), blocked.** `sq metrology audit run` fails before reaching any
+SDK code: a pre-existing, unrelated bug in `_AUDIT_ALLOWED_TOOLS` (Claude-native tool names
+never updated for a separate canonical-name translation commit). Confirmed unchanged on `main`.
+Filed as [issue #107](https://github.com/ecorkran/squadron/issues/107) with Task 13's
+verification intent recorded there. Task 12's live review stands as this slice's live-path
+evidence in its place.
+
+Full suite green: 3965 passed, 4 skipped (pre-existing). `ruff format`, `ruff check`, `pyright`
+(src-only per project config, tests tracked separately as issue #50) all clean.
+
+### Slice 920 — Slice Design: Claude Agent SDK Upgrade and Rate-Limit Shim Retirement (#30)
+
+Phase 4 (Slice Design) complete. Design at
+`project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md`.
+No code changed; slice is not started.
+
+**The upgrade is not the slice.** The compatibility probe was rebuilt against
+`claude-agent-sdk==0.2.152` and confirmed the prior session's finding: all 14 public names,
+all 9 `ClaudeAgentOptions` fields, and all three private modules squadron touches survive the
+bump. What the probe added this round is the shape of the thing that actually changes —
+`RateLimitEvent(rate_limit_info: RateLimitInfo, uuid, session_id)`, with
+`RateLimitStatus = Literal['allowed', 'allowed_warning', 'rejected']` and a `raw` field
+preserving the original payload. Both a `rejected` and an `allowed_warning` payload now parse
+cleanly; **neither raises**.
+
+That last fact is the whole design. Throttle detection is currently keyed off a *parse
+failure* — `MessageParseError` → dead generator → `ClaudeSDKError` → `"rate_limit" in
+str(exc)` → backoff. After the upgrade that chain's first link never fires, the event parses
+into a type `translate_sdk_message` returns `[]` for, and the throttle disappears with no
+error, no log, and no backoff. Squadron would keep hammering a limiter that is rejecting it —
+the exact defect the backoff was added to fix, now silent.
+
+**Decisions.** D1 deletes the shim outright rather than keeping a version-guarded no-op: the
+floor pin makes it unreachable by construction, and the stale-lockfile hedge is not real. D2
+keeps `>=` rather than a ceiling — the CLI ships *inside* the package, so pinning the SDK back
+pins the CLI back and recreates the original bug. D4 raises a `RateLimitRejected(ClaudeSDKError)`
+at dispatch so all three existing `except ClaudeSDKError` loops need no restructuring, and
+retains the substring path as a second signal for genuine 429s surfaced as plain errors.
+
+**Two findings the plan entry did not have.** `set_model` is already in use at
+`sdk_session.py:125`, so the entry's note about the pipeline working around its absence is
+stale. And `sdk_session.dispatch` iterates `receive_response()` **directly**, with no
+`_skip_unparseable` wrapper — unlike both agent paths — so it needs its own inline inspection.
+That asymmetry is the most likely place for this slice to half-land.
+
+**The test suite cannot close this slice.** Every existing throttle test fabricates the
+`MessageParseError`/`ClaudeSDKError` the SDK will no longer raise, so the suite stays green
+against a completely broken implementation. Rewriting those onto real `RateLimitEvent` objects
+is a non-negotiable success criterion, and the walkthrough requires a live review, a live
+metrology audit, and a forced-throttle observation — the original failure appeared only ~30
+tool calls into an audit, and the dangerous mode produces nothing to assert on.
+
+
+---
+
+### Slice 383 task breakdown (Phase 5)
+
+`383-tasks.pr-keyed-review-persistence.md` written and committed (`7c0d5825`). Nine tasks, 328
+lines, following the design's own implementation order. No code.
+
+The ordering is the design's, not a fresh one, and two sequencing constraints carry real weight.
+`resolve_rules_dir` (D6) lands first and alone because every review path calls it, so its
+signature change stays out of the migration's diff. Byte-identity fixtures are captured in task 2
+— **before** anything touches `persistence.py` — and the harness is asserted green against
+unmodified code first, since a fixture captured after the change proves nothing. Task 8.1 flags
+the one place that could quietly invalidate them: adding `targetKind` to every target's
+frontmatter may shift the existing three artifacts, and if it does, that is a Project Manager
+question rather than a fixture to update.
+
+Two items are called out as behavior changes rather than refactoring. The pipeline step path
+(task 4) gains `archive_existing_review`'s refuse-on-failed-archive guard, which it has never
+run — so it gets its own test for the refusal, and the action's existing non-fatal `try/except`
+boundary is explicitly preserved. And the D5 precedence chain is written as select-once with no
+fall-through on failure: task 6.4 asserts the next-rule location is empty after a failure, because
+a fall-through would be exactly the silent fallback the project rules forbid.
+
+The frontmatter gate caught the file on first commit. `projectState` described the 382 stub
+literally, and the `: ` inside `save=lambda _target: False` made YAML read a mapping separator
+mid-scalar. Reworded rather than escaped. Worth noting for future task files: prose frontmatter
+values that quote code are a parse hazard, and the gate is what catches them.
+
+No tool guides applied — the slice is stdlib Python plus `cf` as a validation target, and none of
+the eleven `tool-guides/` directories covers either. `cf status` now reads `pending-review` at
+`0/217 tasks`. Phase 6 implementation remains, so the slice is not marked complete.
+
+### Slice 383 design (Phase 4)
+
+`383-slice.pr-keyed-review-persistence.md` written and committed (`cba46123`). Phase 4 only —
+no code, no task breakdown.
+
+**The slice is a migration, not an addition.** The plan frames it as "add PR persistence", but
+persistence is generic at the top (`_resolve_save_outcome` takes a `SaveTargetT`) and hardwired
+to `SliceInfo` beneath, so the two non-slice callers already work around it: the arch review
+fabricates a `SliceInfo` from an initiative index, and the pipeline action bypasses
+`save_review_result` entirely for a lower-level call keyed by step name and index. The design's
+D1 is a three-method `SaveTarget` protocol that all four targets satisfy; the PR target is then
+an ordinary implementation rather than a fourth shape. Migration acceptance is byte-identity
+against fixtures captured *before* the change on all three existing paths.
+
+**The plan's named context-forge dependency does not exist, and the probe method is the
+finding.** cf's `review` schema requires only `docType`, `project`, `status`, `dateCreated`,
+`dateUpdated` — `slice` is required for `slice-design` and `tasks`, not for `review` — and
+unknown keys (`pr`, `rulesSource`) pass through. A PR-shaped fixture validated clean: file count
+529 → 530, zero findings. Getting there took three attempts, because `cf validate frontmatter`
+resolves by *registered project*, not cwd (`-p` is the only override). The active `squadron`
+project is registered at `~/source/repos/manta/squadron`, so every invocation from this worktree
+— explicit-path *and* walk — was silently reading the main checkout or skipping entirely,
+returning `filesChecked: 0`. That is the "a skipped fixture proves nothing" trap
+`tests/documents/test_schema_drift.py` warns about in its own docstring, and it is the same
+registered-root mismatch behind the three pre-existing drift failures here (context-forge #88,
+not squadron's to fix). Recorded as D7 so implementation does not re-derive it: the slice's own
+validation test must assert `filesChecked` *increased*, never merely that findings were zero.
+
+**Two plan items were larger than their wording.** The rules-source provenance field is
+described as "one additive optional frontmatter key", but the value does not exist to record —
+`resolve_rules_dir` returns a bare `Path | None` and discards which of five branches produced
+it, so a project `rules/` and `~/.config/squadron/rules/` are indistinguishable to the caller.
+D6 makes it a signature change returning path *and* source, sequenced first since every review
+path calls it. And `PullRequestRecord.key` is `host/owner/repo#number` — containing `/` and `#`
+— while its docstring calls it "filesystem-safe" and points at this slice; 382 already flattens
+it in `worktree.py::_flatten_key`, so D3 promotes that to a `path_key` property rather than
+writing the second copy.
+
+`reviewedSha` is flagged as the easiest thing to get wrong: the current code resolves it from
+the process working directory, which on the PR path is the operator's tree, not the reviewed
+one, and still yields a plausible sha. The target supplies it, and the test deliberately makes
+the two differ.
+
+Status is `pending-review`; the design has not been reviewed or approved. Slice plan entry
+already carried its materialized `(383)` index, so no plan edit was owed.
+
+## 20260914
+
+### Slice 382 closed — `sq review pr` (Phase 6)
+
+`sq review pr <target>` lands in `cli/commands/review_pr.py` (commit `e6c8b55f`), split
+out of `review.py` rather than growing a module already well past the ~300-line
+guideline. It ties 381's code-host boundary to the scratch-worktree lifecycle and the
+PR-metadata block.
+
+**The two-root split is the substance of this slice.** The review runs with
+`inputs["cwd"]` at the scratch worktree while conventions resolve from the checkout, so
+a PR that edits `CLAUDE.md` or the rules directory is reviewed *against the checkout's*
+versions rather than its own. `_resolve_pr_rules_content` calls `resolve_rules_dir`
+against the checkout directly and never routes through `_resolve_review_cwd`, which
+resolves both roots from one argument — correct for `sq review code`'s single root,
+silently wrong here. That was part 3's F001 finding at task review; the implementation
+follows it. D8's `setting_sources_override=[]` is passed regardless of `--no-tools`,
+since the SDK's project-settings resolution is not gated by the tool flag.
+
+**`--files` was dropped from the slice.** Part E implemented it (`3a01c46f`:
+`review/scope.py`, its tests, and a `GLOB_MATCHED_NOTHING_IN_RANGE` enum case), and the
+implementation was then reverted in the working tree while `review_pr.py` was written
+without the flag. The revert is committed as part of `e6c8b55f` and the drop is recorded
+in task files 2 and 3 so it is not re-litigated from stale task text. `sq review pr`
+reviews the PR's full merge-base range; no operator-supplied glob narrows it.
+
+**H.1's live verification walkthrough was not run, and was dropped rather than left
+open.** It requires an open PR on `ecorkran/squadron`; there are none (checked 20260914
+— #83, #66, #64, all MERGED). The behaviors it would have demonstrated have automated
+coverage: worktree/checkout root split, `--no-tools` bypass, concurrent runs producing
+distinct worktree paths, and the checkout left unchanged after a forced mid-review
+failure (`tests/cli/test_review_pr_worktree.py`). Orphan sweep and D8 settings isolation
+have unit coverage from file 1 but no live-run evidence. **Before relying on
+`sq review pr` against real PRs, run the design's six-step walkthrough.**
+
+At close: 3962 passed, 4 skipped; `ruff format`/`ruff check`/`pyright` clean. The 3
+failures in `tests/documents/test_schema_drift.py` are cf issue #88, pre-existing and
+unrelated.
+
+### Slice 919 — Verification That Verified Nothing (#96, #97, #98)
+
+Committed as `ee5e01eb` (Part 1), `e183ef70` (Part 2), `afe341af` (Part 3). Slice 919 is
+complete.
+
+One theme across three layers: a check that verified nothing must not report success.
+Sequenced 1 → 2 → 3 per the design (inverting the plan entry's C → A → B) — Part 1 is the
+highest-severity defect and the trigger for Part 2's derived-verdict shape, so settling its
+leniency story first told Part 2 how many distinct degradation shapes the provenance flag
+needed to describe.
+
+**Part 1 — newline-free responses parse (#96).** A provider response with zero newlines
+broke seven line-structure-dependent constructs in `review/parsers.py`, collapsing four
+findings into one and losing the verdict. Fixed with a normalization pass
+(`_normalize_line_structure`) that restores line structure before the existing parser runs
+unchanged, applied only when a response is detected as newline-free (D5) — every other
+response takes the same byte-identical path it always has.
+
+Three named traps, each independently guarded and tested: mid-run hash insertion (`###`
+must never split at its second `#`), fused heading text (`## SummaryPASSThe rest...` needs
+a break after the recognized heading word, not an unconditional one), and a `#` inside a
+`location:` markdown anchor being mistaken for a heading (would truncate the findings
+section at the first anchor). A fourth trap surfaced during implementation, beyond the
+three named in the design: once the anchor `#` is correctly *not* treated as a heading, its
+kebab-case slug still runs directly into the following prose with no terminator, which
+would make `_LOCATION_RE`'s `$`-bounded capture swallow the rest of the finding body as the
+location value — fixed with a companion break inserted after the anchor's slug ends.
+
+The subtlest part of the fix: `_extract_verdict` used an unbounded `.*?` scan between the
+`## Summary` heading and the verdict keyword. With only a newline inserted after "Summary"
+(no other change), a fused `PASSThe` has no word boundary after `PASS`, so the scan ran
+forward and matched a `CONCERN` belonging to a later finding — a confidently wrong verdict,
+worse than the UNKNOWN it replaced. Fixed by replacing the scanning search with a
+fixed-position match (`re.match`, not `.search`) immediately after the heading — genuinely
+bounded, not merely newline-patched, so the same fix also closes the bug for other
+malformed-but-line-broken text.
+
+A second, unplanned fix was needed for design success criterion 5 (fence masking, #91,
+does not reopen): a genuinely newline-free response cannot contain a real fence before
+normalization runs (`_FENCE_OPEN_RE` requires a trailing `\n` the raw text never has), so
+without special handling a quoted `### [FAIL] Title` inside backtick markers would leak
+through as a fabricated finding. Fixed by isolating fence markers onto their own line as
+the first normalization pass, before anything else can insert a break inside what should
+become a masked fence body.
+
+**Discovered, filed, not fixed:** `_locate_section`'s self-closing guard (written for a
+`### Findings` heading that sits at its own findings' level) also misfires for `"summary"`
+whenever the document holds findings elsewhere — `summary_section_located` is `False` for
+essentially every well-formed review with both a stated verdict and findings, predating
+this slice (confirmed via `git stash` against pre-919 `main`). Out of Part 1's scope; filed
+as [squadron#101](https://github.com/ecorkran/squadron/issues/101).
+
+**Part 2 — verdict provenance in frontmatter (#97).** A verdict derived from findings after
+a failed summary parse (the #96 shape, recovery mechanism from #28) was indistinguishable
+in frontmatter from one the model actually stated — `fallback_used` already reached the
+artifact body and JSON, but `_review_frontmatter_lines` had no degradation parameter, so
+Context Forge's review gate (which reads frontmatter) could not tell a recovered PASS from
+a real one.
+
+Added `VerdictSource(StrEnum)` — `STATED | DERIVED`, a closed two-value vocabulary per D7
+— threaded through `parse_review_output` independently at each branch (never computed from
+`fallback_used`, since one branch — verdict genuinely stated but findings unparseable —
+sets `fallback_used=True` for a verdict that is nonetheless `STATED`, the one place the two
+fields diverge). Emitted as `verdictSource: stated|derived` in frontmatter adjacent to
+`verdict:`, at both call sites (the normal review path and the provider-failure path, which
+correctly omits the key — no `ReviewResult` exists there to attribute provenance to). Also
+added to `to_dict()` so the JSON and frontmatter surfaces can be compared for agreement
+(design SC6), verified directly by test.
+
+Filed the cross-repo coordination issue this slice's design called for:
+[context-forge#89](https://github.com/ecorkran/context-forge/issues/89), asking cf's review
+gate to read the key and decline to auto-clear on `derived`. Not a blocking precondition —
+verified `cf validate frontmatter` tolerates the unknown key today — but #97 stays only
+half-closed until a consumer acts on the value.
+
+**Part 3 — frontmatter gate fails closed (#98).** `frontmatter_gate.py` handed `cf` the
+staged paths and read only the exit code. In a sibling git worktree, `cf` silently resolves
+in-root against the registered default checkout, checks none of the paths handed to it, and
+exits 0 — the gate reported `ok` having verified nothing. Reproduced directly (throwaway
+invalid-frontmatter file in the `squadron-pr` worktree, never actually committed): `cf
+validate frontmatter --json` there reports `filesChecked: 0`, exit 0.
+
+Fixed by passing `--json` and reading `filesChecked`: zero-checked against a non-empty
+staged-path list now fails with a message naming the worktree cause (D10); an absent or
+unparseable count fails closed with its own distinct message, never a silent fallback to
+exit-code-only behavior (D11); zero-checked against an *empty* staged list still passes,
+since that's a legitimate "nothing to check" (D12). Also bounded the subprocess with a
+timeout (`FRONTMATTER_GATE_TIMEOUT_S = 20.0`, new constant in `tools/limits.py`) mirroring
+`bash_tool.py`'s `_kill_process_group` / `asyncio.wait_for` pattern exactly — added after
+the design's own slice review flagged the missing hang-handling as a Failure-Mode
+Enumeration gap. All three fail-closed messages (worktree, unreadable-count, timeout) are
+pairwise distinguishable by content, not just by `success is False`, since the operator's
+next action differs for each.
+
+This is a deliberate behavior change (D13): a worktree commit that passed vacuously before
+now fails, and will look like a new bug to whoever hits it first. CHANGELOG entry added
+naming the workaround (commit markdown from the default checkout, or register the worktree
+with `cf`).
+
+**Two review rounds, both CONCERNS, all findings addressed before implementation began**
+(prior session, `5b66a10e` / `29f35fd5`) — F001 on the Part 1 task breakdown caught a task
+telling the implementer to duplicate an already-committed fixture; F001/F002 on Part 2/3
+caught an untested design success criterion and a test gap that would have let
+`VerdictSource` silently be computed from `fallback_used` instead of set independently,
+exactly the divergent branch above.
+
+**Verification walkthrough refined from what was actually run**, per this phase's own
+instruction — corrections stated rather than the draft quietly amended: Part 1's baseline
+command (calling `_extract_verdict`/`_extract_findings` directly) still reproduces pre-fix
+numbers even after the fix landed, because normalization only ever runs inside
+`parse_review_output`, never inside those two functions themselves — expected, not a
+regression, and the walkthrough now uses the real entry point for the "after" measurement.
+Part 3's reproduction used the existing `squadron-pr` worktree (holding real, unrelated
+in-progress work for initiative 380) — a throwaway file was added and removed there without
+ever staging or committing it, confirmed via `git status --short` before and after.
+
+Full suite: 3941 passed, 4 skipped (design baseline was 3698 passed, 4 skipped; the +243 is
+this slice's own new tests, skip count unchanged). `ruff format`, `ruff check`, `pyright`
+all clean. Four pre-existing `RuntimeWarning`s in unrelated CLI test mocks, confirmed via
+`git log` to predate this slice's commits.
+
+---
+
+## 20260913
+
+### Slice 382 task-review findings addressed (Phase 5)
+
+Three task reviews landed CONCERNS against `78ccf3bb`
+(`382-review.tasks.review-a-pr.part-{1,2,3}.md`, claude-sonnet-5). Six concerns and
+five notes actioned across the three task files; each file now carries its own Task
+Review Disposition section.
+
+**The sharpest finding (part 3, F001):** the design's D1 prose and Functional criteria
+name both "the rules directory **and** `CLAUDE.md`" as convention inputs the two-root
+split must source from the checkout, but every task touching the split covered only
+`CLAUDE.md`. Verified directly against `_resolve_review_cwd`
+([review.py:237](src/squadron/cli/commands/review.py#L237)): it resolves both the
+reviewing cwd and the rules directory from one argument, correct for `sq review
+code`'s single root, silently wrong if called with the worktree path on the PR path —
+the same class of risk D8 closes for SDK settings, left open for rules content instead.
+File 3's Task G.5 now states rules resolve from the checkout explicitly; new Task G.6
+adds the isolation test.
+
+**A missing mechanism (part 2, F001):** Task D.3 told the implementer to truncate the
+PR block "through the existing size discipline" without saying how — `builders/code.py`
+is a pure, config-free module and has no path to `review.max_file_size_bytes`. Verified
+the fix has no cost: `review_client.py` never imports `builders/code.py` (the builder
+loads by dotted path from `code.yaml`, not a Python import), so importing `_truncate`
+directly creates a new one-directional edge, not the cycle the original task hedged
+about. `code_review_prompt` now threads a pre-resolved `inputs["pr_max_bytes"]`,
+matching the existing `diff_exclude_patterns` precedent exactly.
+
+**Test-with violations, both restructured:** file 1's Part C (worktree lifecycle) and
+file 3's Part G (`sq review pr` command) each batched several implementation tasks
+before their first test, unlike every other Part. Both split at the same principle —
+test immediately after the piece with the most security/correctness weight, not after
+whatever happens to land last. Part C: create → test → submodule/removal → test → load
+test → commit. Part G: resolve/fetch → test → worktree branch (D5, D8's override calls)
+→ test → scope/rules/files → test → registration → test → commit.
+
+**Two coverage gaps, both closed:** the design's happy-path submodule criterion ("a
+repository with submodules yields a worktree in which submodule paths exist") had no
+test anywhere — both part-1 and part-3 reviews caught this independently as F001/F003.
+And the worktree lifecycle's concurrency and network paths had no `tests/load/` case,
+required by `python.md`'s load-test tier rule and precedented by
+`tests/load/test_grep_timeout.py`. New Task C.8 adds real concurrent worktree creation
+and a real (not scripted) submodule-timeout case.
+
+Five smaller findings also fixed: two broken cross-file references ("file 2's Part C"
+→ Part D; a `pr.py` anchor one line short of the sequence it describes), and the
+closeout task gaining an explicit commit step before merge (flagged identically by both
+part-1 and part-3 reviews). Two notes about implementer-facing placement decisions
+(where `ReviewResult` reports both roots; which module hosts the `--files` intersection
+helper) were left as-is — genuinely low-risk, with a stated decision procedure, and
+better decided at implementation time than guessed at breakdown time.
+
+All three task files remain `status: not_started`; no source file under `src/squadron/`
+has been touched. Committed as a single follow-up to the original breakdown commit.
+
+### Slice 382 task breakdown (Phase 5)
+
+Design converted to `user/tasks/382-tasks.review-a-pr-{1,2,3}.md`. Split into three
+files rather than two: the design carries eight named decisions (D1–D8) with two of
+them — D1 (the two-root split) and D8 (the settings-isolation fix) — security- and
+correctness-critical enough to warrant sequencing and testing in complete isolation
+before anything else in the slice exists. File 1 (398 lines) covers exactly that plus
+the `_SKIP_KEYS` addition and the scratch-worktree lifecycle (D3); file 2 (162 lines)
+covers the PR-metadata block (D4) and the `--files` intersection helper (D7); file 3
+(280 lines) assembles the `sq review pr` subcommand (D2, D5, D6) and closes the slice.
+All three are within the 450-line target with room under the ~100-line tolerance.
+
+**One gap the design's data-flow diagram did not resolve, found during breakdown.**
+The design shows `AgentConfig(cwd=review_root, convention_root=checkout)` as if the CLI
+constructs the config directly, but `run_review_with_profile` takes an `inputs` dict and
+builds `AgentConfig` internally — there was no parameter for a caller to hand it a
+convention root or a settings override. Verified against `review_client.py` at
+`a43d6ec8` before writing tasks. Task 1.1/1.2/1.4 add two new keyword-only parameters,
+`convention_root` and `setting_sources_override`, both defaulting to `None` so every
+existing caller (including `sq review code`) is unaffected; this is recorded as a
+Corrections-table entry rather than a design amendment, since it narrows an
+implementation mechanism rather than changing a decision.
+
+**Confirmed against the installed SDK rather than assumed:** `ClaudeAgentOptions` has a
+direct `env: dict[str, str]` field, so D8's `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` needs no
+indirection through `os.environ` — Task 1.4 names the field directly.
+
+**Sequencing note carried into Task 1.5's isolation test:** it must be written (or
+temporarily run against a reverted fix) to fail first, so the test file itself is
+evidence it would have caught the un-overridden path — the same discipline the design's
+Implementation Notes require of the isolation test generally.
+
+Two verified-but-uncertain points left as implementer choices rather than resolved here,
+each with a real anchor rather than a guess: where `ReviewResult` should report "both
+roots" (task 3, G.2 — `ReviewResult`'s current fields have no slot for it and 383 will
+define persistence-facing shape), and whether `review.py` (already 1263 lines) needs a
+sibling module for the new subcommand (task 3, G.1 — decided yes, a new `review_pr.py`,
+rather than growing the existing file further).
+
+### Slice 918 Part 3 — receipt-based command install (#65 finding 1)
+
+Committed as `9c0d7a37`. Slice 918 is complete.
+
+`install-commands` unlinked every `*.md` it did not recognize from any subdirectory it
+touched, so a user's own `~/.claude/commands/analysis/mine.md` was deleted on install.
+`uninstall-commands` had the mirror bug: it `rmtree`'d `sq/` alone, orphaning `analysis/`
+and anything else squadron had written.
+
+Both follow from one missing fact. Nothing recorded which files squadron wrote, so
+ownership was inferred from presence in a directory squadron *shares* with the user —
+which proves nothing about who put a file there. The receipt supplies the fact, and both
+bugs close together.
+
+Reused the `sq skills` receipt mechanism per D13 rather than inventing a second one.
+`InstallReceipt.surface` became optional: it describes how a skill *pack* exposes its
+commands (a prefix directory or a dispatch file) and has no meaning for the bundled set,
+whose layout is fixed. `None` says the field does not apply, which is the alternative to
+overloading an enum member to mean something it does not; `write_receipt` omits the key
+entirely, since TOML has no null. The uninstall paths compare `surface` with `==`, so a
+`None` surface simply matches no branch.
+
+A file is now removed only when the previous receipt names it *and* the current bundle no
+longer does. Anything else is left alone (D15), and a receipt entry for a file the user
+already deleted is tolerated silently — the desired end state is "absent" and it already
+holds. Legitimate stale removals are still reported: the fix narrows what may be deleted,
+not what is shown.
+
+The old suite never exercised a non-`sq` subdirectory, which is why this shipped green —
+and the bundle has shipped `analysis/` alongside `sq/` throughout, so the bug was live, not
+hypothetical. Tests now cover that path, and pass an isolated `--receipts-dir`; a guard
+test asserts mechanically that the helpers never resolve to the real receipts directory,
+because these tests install and uninstall for real and a receipt written to the user's own
+directory would make their next real uninstall act on files a test invented.
+
+Verified against the real `~/.claude/commands`: a scratch file in `analysis/` survived
+install and re-install (no deletions reported on the second), then `uninstall-commands`
+removed squadron's 11 files from both subdirectories, dropped the emptied `sq/`, kept
+`analysis/` holding only the user's file, and left the unrelated `cf/` directory untouched
+at 9 files. Environment restored afterwards.
+
+Worth noting for anyone repeating it: the `analysis` skill pack's own receipt names the
+same two files the bundled command set ships. Separate receipt keys, so they do not
+corrupt each other, but both consider those files theirs. Pre-existing overlap in the
+bundle, not introduced here.
+
+Full suite: 3698 passed, 4 skipped. `ruff format`, `ruff check`, `pyright` clean.
+
+### Slice 918 Part 2 — stop-reason evidence on every review (#92)
+
+Instrumentation committed as `45e7b002`. The mechanism fix was **not** implemented; the
+evidence did not select a branch. Filed as #99.
+
+Issue #92's failure mode is a review that returns a substantial, well-reasoned response
+which parses to zero findings. The stop reason and reasoning volume were already captured
+in `TurnResult`, but only `_require_final_content` read them — and that path returns early
+unless the turn is *empty*, so the one case where the stop reason is the whole diagnosis
+recorded nothing. The fix is to stamp unconditionally rather than on degradation.
+
+Three facts now ride the final `Message.metadata`, the same channel tool telemetry uses:
+the stop reason, the reasoning character count, and a failed-tool-call count. They land on
+`ReviewResult`, serialize into `to_dict()`, and render in the Run Digest. `TurnResult`'s
+caller-facing role is unchanged — `_stamp_tool_telemetry` reads the values off the turn it
+is handed rather than returning them upward.
+
+`_execute_tool_call` now returns `(content, failed)` instead of a bare string. The
+alternative was matching an `"Error: "` prefix downstream, which is string-dispatch on a
+human-readable message and forbidden by project rules. The count means "tool calls that
+failed", so the pre-executor rejections — unknown tool name, malformed arguments — count
+too; neither reaches an executor at all.
+
+Per D10 the three stay out of frontmatter (the consumed contract the verdict gate reads)
+and go into JSON (what programmatic consumers read). The two surfaces already differ:
+`fallback_used` is JSON-only. Per D12 the SDK path stamps none of them — `finish_reason`
+is an OpenAI/OpenRouter streaming concept, so an absent key reads as `None` and renders as
+not-computed rather than as a fabricated value.
+
+Also replaced the `x or 0` idiom in the digest and frontmatter renderers with explicit
+`is None` checks, via a shared `_render_optional`. It collapsed a real zero into the
+not-reported sentinel. That matters beyond tidiness: the Amoeba orchestrator routes on
+`tool_calls_made == failed_tool_calls > 0` as a retry predicate, and a zero rendering as
+not-computed would make a healthy instrumented run indistinguishable from an
+uninstrumented one — the exact distinction this part exists to provide.
+
+The digest also carries a newline-free indicator, computed at render time from
+`raw_output` (the text is already in hand; a field would buy nothing). It does not fix
+\#96 — it makes the artifact say *which* of three shapes occurred: never-emitted output
+(#92), all-tools-failed (kimi27), or emitted-but-unparseable (#96). The fixture is the
+real 3076-character `918-review.slice` body, which had zero line breaks and collapsed
+`## Summary` and `PASS` into one token.
+
+#### T2.8 reproduction — did not reproduce
+
+`uv run sq review slice 916 -v --model kimi3`, twice, at sha `45e7b002`. The artifact's
+`aiModel` confirms `moonshotai/kimi-k3` resolved (the `--model` flag wins here, unlike the
+Part 1 profile-resolution caveat).
+
+| Run | Response length | Tool calls made | failed | Stop reason | Reasoning chars | Verdict |
+|---|---|---|---|---|---|---|
+| 1 | 4517 | 5 | 0 | `stop` | 11188 | CONCERNS, 5 findings parsed |
+| 2 | 5860 | 19 | 1 | `stop` | 0 | CONCERNS, findings parsed |
+
+Both emitted well-formed output that parsed cleanly. #92 reproduced at sha `1515cff` with
+17 tool calls; run 2 here made 19 and was fine. **The underlying cause is not fixed** —
+nothing in this part touched the mechanism, and these two runs are not evidence that it
+went away.
+
+The runs do confirm the instrumentation end-to-end, including both zero cases that the
+`or 0` idiom would have destroyed: run 1's `failed: 0` and run 2's `reasoning_chars: 0`
+each rendered as a real zero rather than "not computed".
+
+On T2.9's three candidates: `finish_reason == "length"` was not observed, though
+`max_tokens` is confirmed set on no request anywhere under `providers/openai/`, so it stays
+the most plausible mechanism and overlaps #84's open follow-up. A clean `stop` on a turn
+that parsed to nothing was not observed either — both clean stops parsed fine. Prompt
+adherence is not distinguishable without a reproduction. Choosing among three mechanisms on
+no evidence is what D7 and the project's one-speculative-fix rule forbid, so #99 records
+what to read out of the digest when it recurs, and the branch selects itself then.
+
+Both runs also showed `` `## Summary` located: no `` while findings parsed — adjacent to
+\#28 and #96, untouched here.
+
+### Slice 918 Part 1 — jail exclusions for document reviews (#94)
+
+Implemented and committed as `50d2f8de` on `918-slice.review-grounding`.
+
+Tool binding now carries a `JailSpec` (resolved root + resolved exclusions) where it
+carried a bare `cwd`. `materialize` resolves both exactly once and builds the spec per
+call, so two reviews with different exclusions cannot interfere; a pattern resolving
+outside the jail is discarded at bind time with a WARNING. Both predicates consult the
+exclusions via `is_relative_to` — a test pins that a sibling named `reviews-archive` is
+not swept up by an exclusion of `reviews`, and it fails against a `str.startswith`
+implementation (verified by temporarily introducing one).
+
+Five document templates declare the exclusion; `code.yaml` and
+`judge-findings-addressed.yaml` deliberately do not, with the reason written at each
+omission and a test asserting both the absence and the comment. `REVIEWS_DIR` stays the
+single seam D4 requires: a test asserts every declared pattern equals it, so moving the
+constant fails until the templates follow.
+
+**One design correction found by its own test.** Routing an exclusion through the
+existing `None` return meant it rendered as `jail_violation`'s "resolves outside the
+working directory" — false for a path plainly inside the jail, and distinguishable from
+a genuine miss, which defeats D6. It also double-logged: the predicate called it an
+exclusion while `jail_violation` called it a jail escape. Refusals are now worded and
+logged in exactly one place. An operator sees "refusing excluded path"; the model sees
+the same `file not found` a nonexistent path produces, down to reporting the resolved
+path because `error()` carries `exc.filename`. Any divergence there is a distinguisher.
+
+**Sixth factory.** The breakdown counted five `(cwd: Path)` factories; `cf_tools`
+`_make_factory` is a sixth. Its inner closure could not take the parameter name `spec` —
+the enclosing `spec` is the `CfToolSpec` it closes over, so shadowing would have
+redirected every `spec.name` and `spec.arg_map` to the jail. Named `jail` there, with
+the reason at the site.
+
+### T1.12 — reported reproduction verified
+
+Three consecutive `sq review arch` passes against `380-arch.pull-request-workflow.md` in
+the `squadron-pr` worktree, which holds the document plus its five archived predecessors
+and one live review — the material #94 is about. Coordinated with the `sq-pr` session
+first: slice 381 was already merged (`cdee5518`) and its tree clean, so the runs
+disrupted nothing. Baseline `23769077` noted so its same-day edit was not miscounted as
+one of mine.
+
+Ran from the main checkout (`uv run sq`) with `--cwd` at the worktree. Note
+`_resolve_arch_file` ([review.py:465](src/squadron/cli/commands/review.py#L465))
+resolves an initiative index against the *process* cwd, not `--cwd`, so `sq review arch
+380 --cwd <elsewhere>` fails to find the document; an explicit path works. Pre-existing,
+unrelated to this slice, not filed.
+
+| Run | Revision before it | Reviews-dir attempts | Refusals | Verdict |
+|---|---|---|---|---|
+| 1 | none (baseline) | 552 | 552 | CONCERNS |
+| 2 | frontmatter `status` | 0 | 0 | CONCERNS |
+| 3 | 385 independence | 1 | 1 | PASS |
+
+Run 1 is the evidence the exclusion fires: 41 tool calls, 552 refusals, 12 naming the
+380 predecessors and 65 the archive, and **zero** reference to any review artifact in
+the output. No denial wording reached the model.
+
+Run 2 attempted the directory zero times — the model did not look, so there was nothing
+to refuse. That is the ambiguity T1.12 names, and why run 1's count matters: same binding,
+19 tool calls, different reading choices. Model variance, not a regression.
+
+Findings tracked the current text across revisions. Run 1's frontmatter finding does not
+reappear in run 3 after being fixed. The one run-3 finding quoting a phrase absent from
+the document (`sq pr show`) traces to `pr.py:32` in the source tree, which the review may
+legitimately read — not an archived review. Verdicts moved CONCERNS → CONCERNS → PASS,
+the opposite of #94's escalation-to-FAIL on unchanged text.
+
+The runs used the default `openrouter` profile (`minimax/minimax-m3`), not `arch.yaml`'s
+`model: opus` — profile model resolution wins over the template. Pre-existing behavior;
+it does not weaken the result, since a path deny-list is model-independent and the tool
+calls confirm the model genuinely reached for the directory.
+
+Both test revisions were reverted; the worktree is back at `cdee5518` (doc md5
+`6e89c0f1`), archive still five files, and no artifact from these runs was left behind.
+
+`sq-pr` also reported that the `squadron.frontmatter-gate` is vacuous in that worktree —
+`cf validate frontmatter` with staged paths silently skips out-of-root paths and exits 0
+with `filesChecked: 0` (context-forge#88; squadron#98 covers failing closed). Nothing was
+committed there, so no gate was relied on.
+
+Part 1 is complete except that T1.13's commit landed before this verification; Parts 2
+and 3 remain.
+
+### Slice 918 task breakdown (Phase 5)
+
+Design converted to `user/tasks/918-tasks.review-grounding-{1,2}.md`, split at the
+Part 1 / Part 2 boundary (565 lines against a 450-line target, past the ~100-line
+tolerance). File 1 carries the context summary, the verified code-anchor table, and
+Part 1's twelve tasks; file 2 carries Parts 2 and 3 plus closeout.
+
+**Two questions the design left to implementation were answered during breakdown, on
+`42bd0e05`.**
+
+The design flags that a path deny-list cannot constrain `bash` and instructs the
+implementer to determine whether document-review templates grant it, explicitly refusing
+to leave the point implicit. Checked all seven templates: every one declares
+`allowed_tools: [read_file, list_files, grep]`. **No template grants `bash`**, so the
+exclusion is complete for every review that exists today and no withholding logic is
+needed. The gap is real in principle and absent in fact — T1.9 pins it with a test that
+fails if anyone adds `bash` to a template carrying tool exclusions, which is what keeps
+the fact true rather than merely currently-true.
+
+`review.external_reviews_dir` (slice 383, `squadron-pr`) has not landed on `main`. D4
+anticipated this and prescribed resolving against the current default behind a single
+named seam; `REVIEWS_DIR` (`persistence.py:24`) already is that seam, so the templates
+declare the pattern and the default resolves through the constant the writer uses. One
+constant changes when 383 lands.
+
+**Three traps were written into tasks rather than left for review to find.** The digest's
+existing `str(result.tool_calls_made or 0)` idiom would render a failed-call count of `0`
+as not-computed, collapsing "no tools failed" into "we did not measure" — T2.6 says not to
+copy the `or 0`. `_execute_tool_call` returns `str`, so the obvious way to recover
+error-ness downstream is matching an `"Error: "` prefix, which is the string-dispatch this
+project forbids; T2.1 names the prohibition at the point of temptation. And T1.11 asserts
+that `list_files` must not *enumerate* an excluded directory — a refusal that still lists
+names leaks exactly the filenames at issue, since archived reviews carry the reviewed
+document's own name prefix.
+
+**One template omission is deliberate and now documented.**
+`judge-findings-addressed.yaml` does not get the exclusion: it is 305's prior-findings
+*injection* path, which the design names as a non-goal, and it receives findings as an
+input rather than by discovery. T1.8 requires the reason be written next to the omission
+so a later reader does not "fix" it.
+
+Part 2's T2.9 is deliberately unspecified pending T2.8's evidence, per D7. The task lists
+the three candidate branches and their fixes but does not choose one — the evidence does.
+
+### Slice 918 design (Phase 4)
+
+Design written to `user/slices/918-slice.review-grounding.md`. Groups #94 and #92 as one
+family — a review whose output does not correspond to the file in front of it — with #65's
+destructive install as an independent third part.
+
+**Three plan-entry premises were corrected against `main` at `19bc4f80`.** The Phase 3 entry
+placed the #94 deny-list in `resolve_in_jail` / `contained_in_jail`. Those are the enforcement
+point, but both take `(cwd, path)` and every tool factory is `Callable[[Path], ToolExecutor]`
+— there is no channel for a second argument. Adding one is a change to the tool-binding
+contract, not a two-line predicate edit, and Part 1's effort reflects that. The entry also
+directed the exclusion to resolve from the `review.external_reviews_dir` config key; that is
+right about where the reviews directory lives but wrong about what declares the exclusion.
+`ReviewTemplate.diff_exclude_patterns` is an existing per-template list-of-strings field that
+already expresses "this review type excludes these paths," so the design adds a sibling field
+for the tool jail instead of a config key — per-review-type scoping comes free and the
+declaration sits next to the review type it describes. Third, #92's evidence needs no new
+return type: tool telemetry already solved the same problem via final-`Message.metadata`
+(design D4), and Part 2 follows that path rather than widening `TurnResult`'s documented role
+as internal plumbing.
+
+**Two facts verified that shaped the design.** No builder and no template injects prior-review
+context anywhere, so #94's stale quotes came exclusively from the model reading
+`reviews/archive/` with tools — which rules out the issue's third suggested check and confirms
+D1's discovered-vs-injected framing. And `max_tokens` is set on no request anywhere under
+`providers/openai/`, making #92's output-budget candidate live and cheaply testable rather
+than speculative; it is the same candidate #84 raised and left open.
+
+**Part 2 is deliberately two steps with the second unspecified.** Three candidate mechanisms
+remain and they call for three different fixes, so the design lands instrumentation first and
+selects the fix from what the reproduction reports. Recorded as a decision (D7) rather than
+left as a gap.
+
+**Called out rather than left implicit:** a path deny-list does not constrain `bash`, which
+runs a subprocess with the jail as its working directory and does not route through either
+predicate. Implementation must either withhold `bash` from document-review templates or state
+that the exclusion is best-effort against it.
+
+`sq install-commands`' destructive delete, the three unimported runtime deps, and the
+undeclared `rich` were all verified still present. The two dependency findings were routed to
+the existing 907 Optional Dependency Split entry rather than split across two slices.
+
+### Slice 381 implementation (Phase 6)
+
+All nine parts implemented and committed on `381-slice.code-host-adapter-and-pr-target-resolution`,
+forked from and merging into `squadron-pr`. Full suite 3817 passed; ruff clean across 522 files;
+pyright zero over everything the slice touched. The three `tests/documents/test_schema_drift.py`
+failures are external — see the cf note below.
+
+**Four corrections where the design and the code disagreed.** Each was put to the PM rather than
+resolved silently. (1) `fetch_pull_request_refs` was fixed as taking a `PullRequestRecord`, but the
+post-fetch check needs `base_sha`, which the design deliberately places on `ResolvedPullRequest` as
+"the base tip the host reported at resolution". The method now takes the resolved pull request and
+reads the record from it; nothing is duplicated. (2) H.4 names `build_github_host` the single patch
+point, but `pr.py` first built one `SubprocessRunner` and used it for both the host and
+`list_remotes` — so patching the factory redirected only the `gh` calls while git enumeration
+shelled out for real, which is precisely how the enterprise test read the developer's own checkout
+and asserted against a host it never exercised. `CodeHost` gained a read-only `runner` property and
+`pr.py` takes its git work through it. (3) The cwd extraction from `review.py`, carried over from
+Phase 5. (4) `ForeignRepositoryError` read "no remote points at ecorkran/squadron; remotes are:
+origin -> ecorkran/squadron" when the only mismatch was the host; both sides now name theirs.
+
+**A gate that could not fail.** `squadron.frontmatter-gate` shells out to `cf validate frontmatter`
+with the staged paths. In a registered worktree cf silently skips out-of-root paths, reports
+`filesChecked: 0`, and exits 0 — so the gate reported success having validated nothing, and every
+`frontmatter-gate: ok` in this worktree was vacuous. Filed as context-forge#88 with the mechanism
+and a reproduction; `sq-base` filed squadron#98 for the squadron-side defense (fail closed when
+`filesChecked` is 0 and staged paths were non-empty) and confirmed `review-verdict-gate` is
+unaffected, since it parses frontmatter in-process. The same worktree-root inconsistency is
+context-forge#87's root cause. Bare `cf validate frontmatter` from the worktree checks all 507
+documents with zero findings, so 381's own documents are clean; the walkthrough records running it
+bare before merging rather than trusting the gate.
+
+**Live evidence, and what it could not show.** `ecorkran/squadron` has three pull requests (64, 66,
+83), all merged, all cross-repository from contributor forks — jakez-gh's two Windows fixes and
+mikemikimike's diff-only review hardening. None is open. On a merged pull request the four
+equivalent target forms cannot print a record: its base has necessarily advanced past the
+`baseRefOid` recorded at resolution, so the post-fetch check correctly raises
+`RefMovedSinceResolutionError` naming both shas (`4edf5f17…` expected, `796b23ac…` found — the
+latter being `main` after slice 917's DEVLOG commit). That the four forms fail *identically*, on the
+exactness check rather than on resolution, is itself evidence they resolve to one record, and a live
+demonstration that `baseRefOid` makes the check exact rather than heuristic. Both namespaced refs
+were written (`refs/squadron/pr/origin/83/{base,head}`, head at `b67cf55…` matching the fixture),
+and `git for-each-ref refs/heads` and `git status --porcelain` were byte-identical before and after
+— the no-mutation guarantee holding live, not only under test. The success path stays covered by
+`tests/cli/test_pr_show.py` over both hosts; 386's run against this initiative's own pull request
+closes the live gap.
+
+**No live GitHub Enterprise host was available.** The GHE evidence is the parametrized suite: every
+host-dependent case runs over `github.com` and `ghe.corp.example`, with a two-host `hosts.yml`
+fixture so the CLI's own `read_gh_hosts()` is what the enterprise leg exercises. A recorded GHE run
+closes that gap when a host exists.
+
+**Fixtures came off the wire**, not from memory: PR resolution, repository record, operator
+identity, REST 404 and 422, GraphQL `NOT_FOUND`, and `reviewThreads` both empty and populated, with
+the `gh` version recorded beside them. The populated threads case could not come from this
+repository — no pull request here has a single review thread — so it was captured from a public
+repository and its provenance noted, since the shape being pinned is GitHub's schema rather than
+squadron's data.
+
+**Carried forward.** `github_cli.py` is 578 lines against the ~300 guideline. Queries and response
+parsing were already split out; what remains is the class and its transport, and splitting the
+write operations or the classifier from the class they belong to would trade a line count for a
+worse boundary. Recorded as a judgment rather than forced. Issue #95 (two-token `repo number` form)
+remains open, deliberately unaddressed. Slice 918 will change `materialize()` and the `ToolFactory`
+contract; 381 does no tool binding, so they do not interact today — but 385's tool-enabled review
+paths would inherit that contract.
+
+### Slice 381 task breakdown (Phase 5)
+
+Wrote `user/tasks/381-tasks.code-host-adapter-and-pr-target-resolution-{1,2}.md` (`cc253771`).
+Nine parts, A-I, sequenced as the design's Implementation Notes give them, each part ending in
+its own verify-and-commit task so the branch stays landable throughout: the process-runner seam
+and the fake runner (A), models/errors/protocol (B), target grammar (C), remote enumeration and
+selection (D), `gh` config plus the two doctor checks (E), GitHub reads with argv pinning and
+structural failure classification (F), fetch and range with the no-mutation assertion (G), write
+operations and `sq pr show` (H), live evidence and closeout (I). Test tasks sit immediately after
+the implementation they cover rather than batched at the end. Split at 815 lines, on the Part F
+seam between pure-local work and host I/O: 452 and 395 lines, part 1 carrying the shared context
+and constraints and part 2 pointing back to it.
+
+Two design statements did not survive verification against the code, and both are corrected in
+the task file rather than passed through. The design's success criteria named an "existing test"
+asserting `run_all_checks` makes no subprocess call; no such test exists, and the invariant is
+also narrower than stated, since `run_all_checks` calls `shutil.which` freely and resolves
+`git_hooks_path` in the caller precisely to keep a subprocess out of the module. The breakdown
+now writes that test, with the invariant stated as it actually holds. Second, the design said
+`sq pr show --cwd` "resolves as `sq review code` does" without saying how: that logic is
+`_resolve_review_cwd`, private to `review.py`, and it also resolves a rules directory `pr show`
+has no use for. Put to the PM with three options; the call was to extract the cwd half into a
+shared CLI helper and leave `_resolve_review_cwd` a thin wrapper with an unchanged signature.
+That extraction is sequenced early, in the process-runner part, and committed on its own.
+
+Consequence for coordination: this slice now makes two edits `sq-base` asked to be warned about,
+not one -- registering `pr_app` in `app.py`, and the cwd helper extraction in `review.py`. Both
+are announced before they are made, and the extraction is behavior-preserving with the existing
+review suite as the check. Next: Phase 5 review of the task breakdown, then Phase 6
+implementation on branch `381-slice.code-host-adapter-and-pr-target-resolution` forked from
+`squadron-pr`.
+
+---
+
+## 20260912
+
+### Slice 917 implementation (Phase 6)
+
+All six parts implemented, tested, and committed on `917-slice.review-artifact-integrity`.
+Full suite green throughout; `ruff format`, `ruff check`, and `pyright` clean on every
+commit.
+
+**Task-review disposition first.** Both task reviews (glm-5.3, CONCERNS) were dispositioned
+in the task files before any code. Three concerns were real and two would have forced
+unguided decisions mid-implementation: `_count_lines`' specified signature could not produce
+the finding-naming WARNING the standing constraint requires (resolved by returning the reason
+and letting `_check_line_bounds` log it), and Task 4.6's `slice_info`-absent pipeline branch
+did not compose with Task 4.2's writer signature (resolved by making `slice_info` optional
+throughout, matching `format_review_markdown`, which already accepted `None`).
+
+**Part 1 — debug-log field renamed.** `fallback_used` → `degraded` in `_write_debug_log`
+only. `ReviewResult.fallback_used` is a serialized public field and is untouched.
+
+**Part 2 — verdict gate, and two corpus repairs.** `squadron.review-verdict-gate` rejects a
+staged review whose `verdict:` is missing or not a `Verdict` member, keyed on `docType` and
+deriving its allowed set from the enum at runtime.
+
+Two findings the task file did not anticipate:
+
+1. **Registration is not binding.** Importing the module registers the action, but
+   `DEFAULT_BINDINGS` in `manifest.py` is what makes it fire. The gate was registered and
+   completely inert, and nothing failed — the manual probe committed clean. A test now pins
+   the binding. Task 2.2 covered only the import.
+2. **The corpus dry run found four violations, not the two the review predicted.** The third
+   was the one the part-1 review caught (305's `verdict: CONCERN`, singular, against a body
+   reading FAIL — corrected to FAIL). The fourth was new: `916-review.tasks.review-scope-
+   correctness.md` carried mojibake — UTF-8 arrows decoded as Latin-1 and re-encoded, putting
+   C1 control characters (U+0086, U+0092) inside its YAML frontmatter, which no reader would
+   parse. Repaired by rewriting only the runs that both fit in Latin-1 and decode as UTF-8,
+   so correct em dashes elsewhere in the file survived. The two historical `RESOLVED`
+   artifacts were left as found: `RESOLVED` was a real disposition the enum does not model.
+
+**Part 3 — the live bug (#91).** Fence masking, section bounding, and fenced specimens in all
+six templates, plus #25's XML delimiters.
+
+Two things worth recording:
+
+- **The literal specimen never matched the finding regex.** `### [PASS|CONCERN|FAIL] Finding
+  title` does not parse as a finding — a pipe alternation is not a severity. Only a
+  *substituted* severity with the placeholder title kept can produce the phantom. The fence
+  test asserts on that substituted shape; asserting on the literal form would have passed
+  even with no fence at all.
+- **A `### Findings` heading bounds to nothing.** It sits at the same level as the `### [SEV]`
+  findings it introduces, so the section closes before its first finding. Discovered by a
+  test written against the design's heading-variants list. `_locate_section` now returns
+  `None` when the located span holds no finding-shaped text while the document does, falling
+  back to the unbounded scan — the same posture as a headingless response, for the same
+  reason: never drop a real finding to exclude a phantom.
+
+The missing-heading notice logs at **INFO, not WARNING**. Eight existing tests asserting "no
+warnings" failed on it, all from one cause. Real reviews legitimately omit the heading, so
+warning there fires on good input. The design already says a missing heading is not a
+degradation; the fact rides `ReviewResult` to the Part 6 digest instead.
+
+The two slice-267 headingless responses are now fixtures, reconstructed from the archived
+artifacts by stripping the `## Findings` heading squadron itself wrote. Both still parse to
+six findings.
+
+**Part 4 — failure artifacts (#84).** Both the CLI and pipeline paths write an artifact on
+`ProviderError`, into the live slot, with the prior content archived. `review arch` now builds
+its `SliceInfo` before the run rather than inside the save closure a failure never reaches.
+`ProviderError` carries `tool_calls_made` so slice 265's D5 distinction survives a failure.
+
+**Part 5 — line bounds (#26).** `location_verified` tri-state on `ReviewFinding`, written and
+never read. Containment is checked before any `open`, and a test asserts the file is never
+opened for a `../` citation. One existing fixture cited line 42 of a one-line file and now
+warns correctly — given a longer file rather than suppressed.
+
+**Part 6 — run digest (#93).** Always-on body section reporting response length, tool calls,
+both section locations, and the four finding-shaped counts. The formatter reads
+`ReviewResult.finding_scan` and never re-parses; the end-to-end test uses a `raw_output` with
+no findings in it, so a re-parsing formatter would report zeros and fail.
+
+**Code review disposition.** `sq review code 917` (glm-5.3) returned three concerns and
+four notes. All three concerns were real and fixed:
+
+- **Blocking I/O on the event loop.** The new pipeline failure handler ran a 30-second git
+  subprocess plus file writes synchronously inside `async def _review`. Moved off-loop with
+  `asyncio.to_thread`, as one synchronous unit so sha resolution does not straddle the
+  boundary. The reviewer correctly noted the success path has the same pre-existing problem;
+  that is untouched here rather than fixed opportunistically.
+- **Duplicate path resolution.** `_check_line_bounds` re-resolved every citation
+  `_check_path_existence` had just resolved — and for a bare filename that is an `rglob` over
+  the whole review root, walked to exhaustion when the name is invented. Merged into one pass.
+  Measured on 30 bare-filename phantoms: **4.14s → 2.05s**, identical results, no test changes
+  required. `_path_exists_under` had no callers left and was removed.
+- **Verdict gate on a staged deletion.** The gate reported an absent path as unreadable
+  frontmatter and failed closed, and my comment credited the wrong mechanism for why that
+  supposedly could not happen. Verified empirically: `--diff-filter=ACMR` in the hook is what
+  excludes deletions, and `git diff --cached --name-only` without it does list them. The gate
+  is reachable directly through `sq events fire`, so it now handles an absent path itself.
+  A present-but-unreadable file still fails closed.
+
+Two notes were also fixed. The fence regex used a backreference requiring an exactly-equal
+closing fence; CommonMark allows longer, so a ``` block closed with ```` read as unclosed,
+masked to end of document, and **silently dropped every finding after it** — dropping real
+findings on valid input, the precise failure Part 3 exists to prevent. And
+`save_provider_failure` gained `name_suffix`, so a failure in part N of a split tasks review
+lands in that part's own slot rather than one no success path writes, where consecutive part
+failures overwrote each other.
+
+The two remaining notes (transient errors overwriting the live slot; failure and success
+artifacts resolving against different roots) are recorded in the review artifact and not acted
+on: the first is the deliberate fail-closed decision the design argues for, and the second is
+a pre-existing property of how `cwd` is threaded, not something this slice introduced.
+
+**Live verification.** `sq review slice 916` run three times across two models (kimi27 ×2,
+glm53). Zero `Finding title` / `src/module.py` phantoms, zero path-existence warnings, zero
+line-bounds warnings on every run. The glm53 run produced 9 real findings and a CONCERNS
+verdict. One kimi27 run returned prose-only output with no formatted block — the #92 shape,
+which this slice makes legible rather than recovers.
+
+### Slice 381 design (Phase 4)
+
+Wrote `user/slices/381-slice.code-host-adapter-and-pr-target-resolution.md`. Layout: a
+`core/process_runner.py` seam (protocol, real runner, fake runner with `write_calls()`, distinct
+not-found and timeout errors) and a new `codehost/` package (models, errors, protocol, targets,
+remotes, refs, `github_cli.py`, `github_config.py`) with `cli → codehost → core` as the only
+import direction and a test walking both graphs. Two facts checked live shaped it: `gh api`
+failures are classifiable structurally (REST `status`, GraphQL `errors[].type`, exit 4 for auth
+per `gh help exit-codes`), so classification never matches message text; and
+`refs/pull/<n>/head` fetches for merged and cross-repository PRs on `ecorkran/squadron`, so a
+fork head needs no second remote. Pinned: the protocol gains one local read-only operation,
+`serves_host(hostname)`, because bare-form resolution must know which remotes belong to the host
+an implementation serves (fork-with-`upstream` refuses; GitHub plus a GitLab mirror resolves);
+`baseRefOid` makes "base moved since resolution" an exact post-fetch check, one error with a
+base/head role; branch-exists returns `False`, never raises; local refs are
+`refs/squadron/pr/<remote>/<n>/{base,head}`, force-updated and never cleaned; comment and PR
+bodies go over stdin; write operations are implemented and argv-pinned here but no 381 command
+calls them. PM edits after review: a sixth target form `repo#n` (owner taken from the remotes),
+`repo n` deferred as issue #95, and an explicit GitHub Enterprise section (hosts come from
+`hosts.yml` keys and remote URLs, `--hostname` on every call, tests parametrized over
+`github.com` and an enterprise host, no live GHE available). `sq pr show [TARGET] [--cwd]
+[--json]` is the proving consumer; two doctor rows
+(`gh` on PATH, hosts file readable) are WARN-level presence checks. Live evidence target is PR
+83 (merged, cross-repository). Design review: glm-5.3 was too slow to finish; kimi and glm-5.2
+returned quickly, glm-5.2 PASS with one concern and two notes, all dispositioned (`stdin` on the
+runner protocol signature, `MAX_DISCUSSION_PAGES = 10`, and the `repo#n` form plus the
+`serves_host` operation recorded in the architecture document). Next: Phase 5 task breakdown
+for 381; announce the `app.py`
+registration edit to `sq-base` before making it.
+
+### Initiative 380 slice plan (Phase 3)
+
+PM accepted the architecture at CONCERNS and advanced to Phase 3. Wrote
+`user/architecture/380-slices.pull-request-workflow.md`: six slices, 381-386. Foundation is
+the code-host adapter (381) with `sq pr show <target>` as its read-only proving consumer, so
+the boundary is verifiable before any model runs. 382 (`sq review pr`) ships before persistence
+and uses the existing not-persistable warning as the stated bridge; 383 (PR-keyed persistence,
+save-target contract absorbing arch and pipeline step-keyed saves) waits for 916 and 917 on
+`main` and for any context-forge schema change `cf validate frontmatter` demands; 384 (post)
+depends on 383; 385 (`sq pr create`) depends only on 381 and is placed after 384 for coherence;
+386 is parity, docs, and a recorded live run on this initiative's own PR. Future work holds the
+direct-API implementation, pipeline PR input, inline comments, other hosts, and cross-repo
+targets. Next: Phase 3 review of the slice plan, then Phase 4 design of 381.
+
+### Initiative 380 architecture review, glm-5.3 rounds
+
+PM ran `--model glm53`: 20 tool calls, read slices 905 and 916 and the persistence and review
+client code, and every finding was grounded. Round five (13 findings) and round six (14, all
+new) dispositioned into the doc. Pinned: the protocol list is exhaustive and now includes
+default branch, branch-exists-on-host, and find-and-update own comment; doctor stays within
+905's pure-check contract (presence only; auth and reachability checked at invocation); the
+artifact sha comes from the PR record, not HEAD; every convention input (rules, project
+instructions) loads from the operator's checkout and only reviewed code from the worktree;
+"latest saved review" is scoped to the base-to-head range; sections without an input carry an
+explicit no-input line; the outer fence is longer than any inner fence run and the label is
+neutralized; traceability is guaranteed for the deterministic parts only; the process-runner
+seam has a timeout and hang is an enumerated mode; foreign-repo targets are refused while
+explicit forms resolve against any matching remote; the unplanned-repo location is
+`review.external_reviews_dir` with a new `--reviews-dir` override (`--output-path` keeps its
+JSON-dump meaning); PR filenames use a non-numeric prefix so `{index}-review.*` consumers never
+match; `cf validate frontmatter` and the schema-drift test gate the PR frontmatter shape;
+comment idempotency is per authenticated login; `sq pr create` never pushes; worktrees
+initialize submodules; the save-target contract is structural and also absorbs the pipeline
+action's step-keyed shape. Current State corrected (rules fallback is real; three filename
+shapes exist today). Not re-run after round six; gate decision to the PM.
+
+### Initiative 380 architecture review, rounds three and four
+
+Round three (minimax-m3) returned FAIL, but quoted phrases removed from the document two
+revisions earlier and re-raised findings the current file states explicitly; the run also cited
+`942-analysis.tech-debt-audit.md`, so it was reading around the tree, and the archived prior
+reviews beside the live artifact are the plausible source. Filed as issue #94. Two genuinely
+new items were pinned: "alive" for the orphan sweep means the worktree's lock file names a
+process that still exists, and every host write first requires the adapter's identify-operator
+call to return a login. `--model sonnet` cannot run here (SDK profile refuses to launch inside a
+Claude Code session); `gpt54` returned 429 quota exhausted. Round four (kimi27) was grounded,
+no stale quotes, CONCERNS: every finding asks for a config key name, default path, or interface
+signature that the Phase 2 prompt tells the architect to leave to slice design. Stopping at four
+rounds. Gate stands at CONCERNS pending PM decision on whether to accept the doc as
+architecture-level and proceed to the 380 slice plan.
+
+### Initiative 380 architecture review, second round
+
+Re-review after the first disposition returned CONCERNS again: 10 concerns, 1 note, all new.
+Pinned: base and head are both fetched into namespaced refs before merge-base; comment
+idempotency is a hidden marker carrying the PR key, discovered through the host, with the
+lookup-then-post race acknowledged (next post updates the earliest marked comment and reports
+extras); each invocation sweeps orphaned squadron worktrees whose run is dead; the direct-API
+GitHub implementation is designed for, not scheduled, token from the environment when built;
+the integration branch is a PR base only if the adapter confirms it exists on the host, else
+creation fails rather than falling to `main`; `sq pr create` writes the section headings itself
+and validates them after the model fills prose; the save-target contract is filename stem,
+target frontmatter fields, and reviews directory; rules-source provenance is one additive
+optional frontmatter field. Protocol operations renamed by intent ("list unresolved review
+discussions"). The note's claim that initiative 360 owns review frontmatter is unsupported;
+917 is the live owner of persistence and the field is sequenced after it.
+
+### Initiative 380 architecture review disposition
+
+`sq review arch 380` (minimax-m3) returned CONCERNS: 11 concerns, 1 note. All addressed in the
+doc except one factual miss. Pinned as architecture: a save-target contract on the persistence
+side with the arch review migrated off its minimal-`SliceInfo` fabrication in the same slice;
+PR metadata enters through one optional input on the existing code template, rendered by the
+code prompt builder as a single labeled fenced block with a shared truncation limit; PR review
+frontmatter keeps `docType: review` with `sourceDocument` as the PR URL and a `pr` record, no
+slice fields, PR-keyed filename; scratch-worktree invariants (one per invocation, per-run id,
+registered, removed on success/failure/timeout, git-timeout bounded); PR base order is
+`--base`, then integration branch, then host default; tasks feed "how it was verified" and
+"known gaps"; composition uses the existing non-review one-shot path in
+`pipeline/summary_oneshot`; `gh` failure tests are unit-level through an injected
+process-runner seam. The "one implementation" over-engineering concern is answered by naming
+the concrete second: GitHub over its API for CI runs without `gh`. Rules degradation is now
+"reported, not suppressed" since `resolve_rules_dir` silently falls back to
+`~/.config/squadron/rules/`. The finding's claim that metrology keys on `slice:` in
+`capture.py`/`discovery.py` is unsupported by the code and was not acted on.
+
+### Initiative 380 architecture (Phase 2)
+
+Wrote `user/architecture/380-arch.pull-request-workflow.md` for **Pull Request Workflow**,
+initiative plan entry 13, added the same day. Three capabilities on one new boundary: a
+code-host adapter protocol (GitHub over the operator's `gh` first), `sq review pr <target>` as
+the existing code review with adapter-resolved inputs, and `sq pr create` composing a title and
+body from commits, slice artifacts, and the latest saved review. Existing flows are untouched
+and no PR is ever required.
+
+Grounding from the tree: nothing under `src/squadron` calls `gh` or a hosting API; persistence
+is `SliceInfo`-keyed, and arch reviews already fabricate a minimal `SliceInfo` to save, a
+pattern the design refuses to extend to PRs. Slice 916's own motivation names PR-centric
+enterprise use, and its merge-base `--diff` semantics are the range rule a PR review adopts.
+Decisions recorded as principles: the adapter resolves and the engine reviews; PR identity is
+a typed record produced once; tool-enabled reviews read a squadron-owned scratch worktree,
+never the operator's checkout; host writes are separate explicit operations with dry-run and
+identity refusal; PR-keyed persistence is sequenced after 916 and 917.
+
+Worktree setup: `git.integration_branch=squadron-pr` set in the per-checkout personal config
+(now gitignored), branch pushed; 380 work merges into `squadron-pr`, not `main`. PM ruled the
+cf worktree index range (960-999) does not constrain 380's numbering. Next: Phase 2 review,
+then the 380 slice plan.
+
+### Slice 917 design (Phase 4)
+
+Wrote `user/slices/917-slice.review-artifact-integrity.md` for **Review Artifact Integrity —
+Verdict Validity and Legible Degradation**, slice plan entry 15.
+
+The plan entry was unusually detailed — written across 20260910–11 as issues accumulated — and
+carried most design decisions already. The design work was therefore mostly verification, and
+**two of its seven parts did not survive contact with `main` at `ca40196`**:
+
+**Part B (#28) was already fixed.** `_verdict_from_findings` (`parsers.py:122`) derives a lost
+verdict most-severe-wins and both UNKNOWN branches log at WARNING — shipped in `6d296aa`, issue
+closed 20260730 as COMPLETED. Worth recording: what shipped is the *opposite* of what the plan
+entry prescribes. The entry says the fix "does **not** upgrade or downgrade verdicts from
+finding severities; it makes the disagreement explicit," citing the #5 precedent. Main derives
+the verdict. That divergence is documented in the design rather than silently reconciled — if
+the #5 precedent is to be honored here, re-opening it is a decision on its own evidence, not a
+task smuggled into this slice. Part B dropped.
+
+**Part C (#84) was half-done.** The entry directs the implementer to "recover and verify" an
+uncommitted fix on the `266-slice.tool-use-configuration-and-limits` branch. That branch is
+fully merged with zero commits ahead; `TurnResult.finish_reason`/`reasoning_chars`,
+`_require_final_content` raising `ProviderError` on both loop exits, and `TestEmptyFinalTurn`
+are all on main. Separately, the prior-artifact overwrite the entry worries about is already
+prevented by `archive_existing_review` (#73).
+
+What that leaves is the half nobody had looked at: `run_review`'s catch-all
+(`review.py:627`) converts *any* exception into one red line and `typer.Exit(1)`. So the
+`finish_reason` and `reasoning_chars` the provider fix went to the trouble of collecting are
+discarded one layer up — no artifact, no telemetry, no durable record. For a review running
+inside a pipeline that is the entire record. Part C narrowed to that.
+
+Also corrected in the entry: `_location_path` is actually the public `location_path`,
+`_parse_findings` is `_extract_findings`, and the cited line numbers have shifted.
+
+**#92 does not fold into C.** The entry leaves this open ("fold into Part C if the cause proves
+shared"). It is not shared: #92 is a full turn with correct telemetry and 3302 characters of
+substantive review, so it never reaches `_require_final_content` and never raises. It is a
+parse-side outcome, and Part F's "no `## Findings` section found" path is what makes it present
+legibly. Verifying that is a success criterion under C; #92 stays open otherwise.
+
+Sequence **E → A → F → C → D → G**; effort **5/5 → 4/5**. Part F (#91) is the center of
+gravity — the unbounded `_FINDING_RE.finditer` over the whole response is a live correctness
+bug with a reproduction.
+
+**Design revised the same day on evidence.** The first draft had a response with no
+`## Findings` heading parse *nothing*. On the PM's challenge ("how often does that happen?"),
+checked every real captured response on disk: 2 of ~13 — both slice 267 reviews from
+20260908 — are good reviews with 6 well-formed findings each and no heading at all. That
+decision would have discarded real reviews and was reversed: bound to the section when the
+heading exists, scan the whole response as today when it does not, and flag the parse
+degraded. The debug log (8,665 entries) turned out to be almost entirely test fixtures —
+`model=None`, six distinct strings — and contributed no real evidence; worth knowing before
+anyone mines it again. Where #91's phantoms sit relative to the heading is not recorded
+anywhere (the 35-finding artifact was never archived) and a live rerun of `sq review slice
+916 -vv --model kimi27` came back clean, so the fix is built to be right regardless of
+position: skip fenced code blocks (a restated format is almost always fenced), bound to the
+heading when present, and fence the specimen in the templates (#25). Part D's
+`location_verified` is the backstop.
+
+Also on PM decision: the shipped #28 derivation (verdict from finding severities) is accepted
+as-is; the plan entry's "flag, don't derive" instruction is superseded, not a pending question.
+
+Part A's insertion point is clean: `squadron.review-verdict-gate` as a COMMIT event action
+beside `FrontmatterGateAction`, reading `Verdict` directly so there is no parallel literal list
+and no cross-repo coupling (issue #77's own recommendation). It keys on `docType: review`
+rather than on the reviews path — a path is a convention, the docType is the document's own
+declaration.
+
+Slice plan entry 15 updated with the corrections, the design link, and the revised
+sequence/effort.
+
+---
+
+### Slice 917 design review disposition
+
+Slice review (glm-5.3) returned CONCERNS with four concerns and two notes; all accepted, design
+updated in place. Part 4 now states the failure artifact's frontmatter (`verdict: UNKNOWN` through
+the same writer, marker in the body, must pass Part 2's gate). Part 5 enumerates the read's
+failure modes: `False` means only "resolved and out of bounds"; everything else is `None` plus a
+WARNING, with containment, a byte cap, and binary newline counting. Part 3's "mark degraded" is
+retracted — headingless good reviews would have embedded their raw response for ~15% of clean runs;
+the fact is now `ReviewResult.findings_section_located`, rendered by Part 6 only. Part 2 gains
+its 173 deliverables (`EVENTS.md` row, 140 listing, CHANGELOG). Citation corrected to 265 D5 in
+the design and plan entry 15. #25 folded at its filed scope: six templates plus `builders/code.py`.
+
+### Slice 917 task breakdown (Phase 5)
+
+Wrote `user/tasks/917-tasks.review-artifact-integrity-1.md` (Parts 1–3, with the anchor
+table and standing constraints) and `-2.md` (Parts 4–6); the single file ran 559 lines, over
+the split threshold. Anchors traced on `e6e7a86`. Two corrections surfaced while tracing:
+the CLI catch-all lives in `_run_review_command` (there is no separate `run_review`), so
+Part 4's persistence context is threaded into that one function; and Part 5's "path does
+not resolve" case is `False`, not `None` — a nonexistent file is verifiably absent, which is
+the hallucination signature the check exists for, so the design bullet added on F006 was
+wrong and is corrected. Corpus dry run for Part 2 is pre-answered: two hand-edited
+`verdict: RESOLVED` artifacts (live 343, archived 266) are the only violations and stay as
+history. Next: Phase 6 on branch `917-slice.review-artifact-integrity` from `main`.
+
+## 20260911
+
+### Slice 916 implementation (Phase 6)
+
+Implemented all five parts of `916-slice.review-scope-correctness` on branch
+`916-slice.review-scope-correctness`, sequenced **D → A → C → B → E** as designed. Each part
+committed at its own boundary and left the CLI working.
+
+**D (#86)** — `_resolve_review_cwd` now resolves the reviewing agent's cwd (its tool jail root)
+at the git root for all five subcommands. `slice`/`arch`/`tasks` previously used the raw
+configured cwd, so a `cwd` pointing at a subdirectory made every repo-relative path in the
+prompt unopenable. `find_git_root` now appears exactly twice in the module: the import and the
+helper.
+
+**A (#89)** — `normalize_diff_spec` rewrites a bare `--diff main` to `main...HEAD`; explicit
+`a..b` / `a...b` pass through. Three-dot is tested before two-dot, since every three-dot spec
+contains a two-dot substring. Unresolvable bare refs exit non-zero before any model call, with
+`NotAGitRepositoryError` and `RefNotFoundError` distinguishable by type. `run_git` gained a
+bounded timeout that logs at WARNING, hardening all its callers.
+
+**C (#70)** — `SaveOutcome` replaces the `saved = True` optimism that reported success for a
+write never attempted. A not-persistable review warns (naming the remedy) and exits on verdict;
+only an attempted-and-failed write exits 1. All ten documented `--diff` invocations still work,
+which is what C3's reversal was for. **Found a real bug doing this**: the warning first printed
+to stdout, corrupting `--output json` — `COMMANDS.md:96` redirects stdout to a file. It now goes
+to stderr, and the json test asserts on `result.stdout` rather than combined output.
+
+**B (#62)** — `assert_reviewable_scope` refuses an empty filtered scope pre-flight at both the
+CLI and the pipeline, distinguishing all-excluded from no-changes by structured field and
+logging at WARNING before raising. It computes its own path lists rather than hanging off
+either `extract_diff_paths` call site: both are nested under a rules-directory check, so a guard
+hung there would silently not run for the review most in need of it. The rules-absent test is
+the one that pins this, and it fails if the guard is moved inside that branch.
+
+**E (#69)** — the SDK provider now sets `tools` alongside `allowed_tools` from the same
+translated declared list, so a review declaring three read-only tools can no longer reach
+`Bash`. E.1's producer survey resolved in favor of the provider edge: the only non-review
+producer declaring a broad list (the metrology audit) uses Claude-vocabulary names that
+`translate_tool_names` already raises on today, so nothing depends on the old behavior here.
+
+**The live E.4 review earned its keep.** Run against this slice's own diff on a real Claude
+model, it returned a grounded CONCERNS verdict — confirming a three-tool reviewer is not
+degraded — and found four genuine defects in the work above, all since fixed:
+
+1. `--diff` was normalized only via an `elif`, so `sq review code 118 --diff main` (slice number
+   *and* explicit ref) kept the exact two-dot bug #89 fixed everywhere else.
+2. The pipeline never normalized `--diff` at all — an interface-parity gap on the less-watched
+   entry point.
+3. `extract_diff_paths` called `subprocess.run` directly, bypassing `run_git` and its new
+   timeout, so the hang A.1 set out to remove stayed reachable through the one path that always
+   runs.
+4. A rejected exclusion pathspec reused `EmptyScopeCase.ALL_EXCLUDED`, defeating the enum's
+   stated purpose; it now has its own `INVALID_EXCLUDE_PATTERN`.
+
+**B.8 / #71 — stays open, with new evidence.** Ran the issue's own diagnostic against the
+reporting repo. Resolution is correct (`bd0b169^1..bd0b169^2`, the same range the reporter got a
+real review from), and **candidate 3 is ruled out**: 45 files survive the code template's
+exclusion patterns, so the scope was never empty and B's guard does not fire. Part B's message
+does not explain #71; the cause lies elsewhere.
+
+**Verification note.** The per-tool-call DEBUG records E.4 asks for are not obtainable on the
+SDK path — that logging lives only on the OpenAI agentic-loop path, and the SDK delegates tool
+execution to the Claude Code CLI, which does not report individual calls back through squadron's
+loggers. A pre-existing observability gap, not one Part E introduced. Tool restriction was
+verified instead at the options boundary the SDK enforces.
+
+**Code review (glm-5.3, CONCERNS, sha `0aae0c8`) — all eight actionable findings fixed** in
+`bc7dcad`. The one that matters most: **four strict-pyright errors, every one introduced by this
+slice against a clean baseline.** The save closures captured `SliceInfo | None` and passed it
+un-narrowed into a non-optional parameter — `persistable=... is not None` gives a checker nothing
+it can carry across a closure boundary — and `review_arch` passed `int | None` as an index, which
+the review itself did not catch. `_resolve_save_outcome` is now generic over the save target and
+passes the narrowed value into the closure. **Process note: zero pyright errors is a merge
+blocker in this project and I did not run it before reporting the slice complete.** Running
+`uv run pyright` belongs in the per-part verification step alongside ruff and pytest, not at the
+end.
+
+Two other findings were real defects rather than polish. A parametrized failed-save test passed
+for the *wrong reason* on `slice` and `tasks`: the fixture's `design_file: None` tripped an
+earlier guard, so no save was attempted — but every path exits 1, so the assertion held anyway.
+It now asserts the review actually ran. And `EmptyScopeCase.NO_CHANGES` covered both "the range
+is genuinely empty" and "git could not compute the range", which defeats the enum's own stated
+contract: a consumer acting on "already merged → skip the review" would silently skip on a broken
+git invocation. Split out as `UNCOMPUTABLE`.
+
+Also accepted: a pre-existing parity gap where the pipeline overwrote a step-supplied `diff` with
+the slice-derived range (the CLI gives the explicit value precedence) — pre-existing, but it
+discarded a value Part A had just normalized, in the very function whose comment claims parity.
+
+**Carried forward.** `git_utils.py` grew from 320 to ~570 lines and `review.py` sits at ~1200
+(already 1058 before this slice) — both past the ~300 guideline. Splitting either would touch
+every part landed here, so it is left for a follow-up rather than absorbed into this slice.
+
+---
+
+### Slice 916 task breakdown (Phase 5)
+
+Converted the 916 design into `916-tasks.review-scope-correctness.md` — 545 lines, 31 tasks
+across the five parts plus a completion sweep, sequenced **D → A → C → B → E** per the design's
+load-bearing order. Each part ends in its own verify-and-commit task, since the design requires
+each to be independently committable and leave the CLI working.
+
+Re-traced every code anchor against `08df0c5` before writing rather than trusting the design's
+line numbers: the four `saved = True` initializers, the three subcommands missing `find_git_root`,
+both `extract_diff_paths` call sites under their `if rules_dir is not None:` guards, and
+`run_git`'s absent timeout all confirm as described. The anchor table at the top of the task file
+records the traced sha so implementation can tell a stale reference from a moved one.
+
+Three places where the breakdown adds constraints the design implied but did not state:
+
+- **A.3** pins the check order in `normalize_diff_spec` — `...` must be tested before `..`, since
+  a three-dot spec contains a two-dot substring and testing `..` first misclassifies every
+  explicit merge-base range the design means to pass through untouched.
+- **A.1** makes the `run_git` timeout log at WARNING. The design added the timeout for the
+  hang case (F002); returning `None` silently on timeout would have swapped one silent failure
+  for another, against the Failure-Mode Enumeration rule the slice's own Technical criteria cite.
+- **E.1** is written as a gate on E.2 rather than a note: the `allowed_tools` producer survey
+  decides whether E lands at the provider edge or narrows to the review client, so implementing
+  first and surveying after would mean choosing the blast radius by accident.
+
+**B.4's rules-absent test is flagged as the most important test in the slice.** It is the exact
+regression the pre-review B1 would have shipped — a scope guard that silently does not run
+whenever no rules directory resolves.
+
+Left deliberately out of the tasks: any artifact naming scheme for slice-less reviews (#90), any
+documentation rewrite (the C3 reversal is what removes that work — C.6 verifies the ten
+documented examples still hold rather than editing them), and any code written *for* #71, which
+stays a post-B verification step.
+
+---
+
+## 20260910
+
+### Review-issue triage; slices 916 and 917; 916 design
+
+Swept the 39 open issues for review-system defects ahead of PR-centric review work, and grouped
+nine of them into two maintenance slices. The organizing question separates them cleanly: 916
+asks whether the review examined the change set the operator meant, 917 asks whether the
+persisted artifact can be trusted.
+
+**916 — Review Scope Correctness** (#89, #62, #70, #86, #69; likely closes #71). Three of the
+five fail *silently*, which is what makes them worth bundling: each produces a confident artifact
+with no signal anything went wrong. Verified three claims against the code rather than taking the
+issues at face value — #89 is exactly as filed (`resolve_slice_diff_range` runs only when `--diff`
+is absent, `review.py:849-852`); #70 is worse than filed, since all four subcommands carry the
+`saved = True` initializer, not just `code`; and #86's fix already exists twice in the same file,
+so it is three call sites rather than new logic.
+
+**917 — Review Artifact Integrity** (#77, #28, #84, #26, #87). Sequenced after 916 so the two do
+not contend for the same review-path files. #25 and #27 were deliberately left out — #25 is
+unsymptomatic prompt hardening, and #27 has no reproduction, so 917 Part C's telemetry is what
+would catch a recurrence.
+
+Two decisions settled before design, both recorded in the plan entries.
+
+**#62 — refuse to persist an empty-scope review; no new `Verdict` member.** The deciding evidence
+was that squadron's three verdict gates are *allowlists of named verdicts*, not exhaustive
+switches: a new member would fail to trip `ON_CONCERNS`, never satisfy
+`REVIEW_CONCERNS_OR_BETTER`, and raise `KeyError` in `_aggregate_verdicts`' bare dict subscript —
+three silent mishandlings in three different directions. `workflow.review_threshold` also turns
+out to have no squadron-side consumer at all (gating lives in Context Forge), making a new member
+a cross-repo contract change on top. Refusing to persist fixes the reported harm directly: the
+slice 362 artifact that cleared a gate carried `verdict: PASS`, and no artifact clears no gate.
+
+**#26 — `location_verified: bool | None`, not `bool`.** A plain boolean collapses "checked and
+bad" together with "never checked," and the second is the common case: both existing location
+checks are conditional on inputs most templates do not supply. A gate reading `False` as
+"hallucinated" would reject most legitimate findings on non-code templates. Field is written but
+not read this slice, following the `ReviewResult.provenance` precedent from slice 300.
+
+**916 design** (Phase 4, `916-slice.review-scope-correctness.md`). Sequence D → A → C → B → E,
+ordered so each part lands on code the previous one already consolidated. Notable decisions: A2
+normalizes `--diff` by *shape* — a bare ref becomes `<ref>...HEAD`, explicit `..`/`...` pass
+through — so only the buggy case changes and no new flag is needed; A4 makes an unresolvable ref
+fail before any model call, so it cannot masquerade as Part B's empty scope; E1/E3 set the SDK
+`tools` field from the declared list while keeping `bypassPermissions`, because the tool set was
+the real exposure and removing the mode alone would trade silent over-permission for a silent
+hang.
+
+Two facts checked during design rather than assumed. The Part B escape hatch exists: omitting a
+phase's `review:` key suppresses both review and checkpoint (`phase.py:76`), so nothing needs
+building. And `ClaudeAgentOptions.tools` is present on the pinned SDK 0.1.38 and emits `--tools`,
+so Part E does not depend on the #30 upgrade.
+
+Also unchecked the 900 initiative-plan entry, which was marked complete while carrying
+`status: not_started` and two incomplete slices.
+
+---
+
+## 20260909
+
+### UTF-8 subprocess decoding, 0.12.2
+
+Closed #63 (jakez-gh): `subprocess.run(text=True)` decoded child output with the locale codec,
+so on Windows (cp1252) an em dash in a diff raised `UnicodeDecodeError` before the model ran.
+Git, `cf` and npm emit UTF-8 everywhere, so the decoding is now defined once in
+`squadron.core.subprocess_text.TEXT_DECODING` (`encoding="utf-8", errors="replace"`) and passed
+at all 15 text-mode call sites. The six inline git calls in `review/git_utils.py` now go through
+the existing `run_git` helper. `tests/test_subprocess_text_decoding.py` walks the package AST and
+fails on any `text=True` call without the pin. Confirmed with the context-forge session that no
+related change exists or is needed on the `cf` side: Node's `execFile` decodes UTF-8 on every
+platform. Release also carries the ai-project-guide v0.17.3 bump.
+
+### Contributor PRs merged, 0.12.1
+
+Three external PRs, all squash-merged to `main` with no review round-trips; gaps closed by
+follow-up commits rather than change requests.
+
+- **#83** (mikemikimike): partial-evidence sentence in the code-review builder's diff branch,
+  plus UTF-8 template loading. The sentence complements slice 267's guidance block rather than
+  duplicating it: 267 composes only in `OpenAICompatibleAgent`, so SDK reviews had no such
+  language. The encoding fix covered one of five text-mode YAML opens; `3c3dad7` extends it to
+  the pipeline loader, compaction templates, and events manifest.
+- **#66** (jakez-gh): `Path.rename` to `Path.replace` in `StateManager` and `MetrologyStore`.
+- **#64** (jakez-gh): `_render_prompt_only_step` boundary in `run.py`, closing the last
+  traceback path slice 913 left open. Merged after rebasing onto current `main` and running the
+  CLI and pipeline suites.
+
+Open from the same contributor: #63 (subprocess encoding, 15 sites) and #65 (audit findings).
+
+## 20260908
+
+### Slice 267: Phase 6 Complete — initiative 260 closes
+
+Four code parts plus live verification. Parts A-D landed as separate commits on the slice
+branch; Parts A and C stayed uncommitted-to-`main` until Part E confirmed them live, per the
+standing rule for prompt-affecting changes.
+
+**Part A** — `squadron/tools/guidance.py` owns one block, composed in
+`OpenAICompatibleAgent.__init__` after tool resolution so it names the *effective* tools and no
+tool-passing caller can skip it (D1). The existing system-message append moved below the tool
+block to make that ordering possible.
+
+**Part B** — the SDK `allowed_tools` guard came out of the one-shot dispatch path; slice 265's
+`translate_tool_names` inside `ClaudeSDKProvider.create_agent` already handles the vocabulary
+mismatch it protected against, and an unmapped name still raises there. SDK one-shot with no
+`system_prompt` sets `use_default_system_prompt`; non-SDK sends `instructions=None` rather than
+`""`. **Design correction:** the design cites `executor.py` and `run.py` as the precedent for
+that flag, but neither constructs an `AgentConfig` — `dispatch.py:131` is the only one in the
+pipeline, and `metrology/audit.py:634` is the real precedent under an identical condition.
+
+**Part C** — `use_default_system_prompt` stops meaning "preset, discard instructions"; the
+installed SDK's `SystemPromptPreset.append` carries the template alongside the CLI's prompt
+(#85). The four-row truth table went into `AgentConfig`'s docstring and each row got a test.
+
+**Part D** — the parser's UNKNOWN branch now writes the debug log like its two siblings; the
+result's own `fallback_used` stays `False`, because nothing was derived. `format_review_markdown`
+embeds the raw response whenever the *resolved* verdict is UNKNOWN or `fallback_used` — resolved,
+so a judge's score-derived verdict does not embed every response — and renders it once when the
+`-vv` appendix also applies. A clean PASS is byte-identical, asserted against a snapshot
+generated from the pre-change module via `git show`.
+
+**What the live runs found.** The sonnet review (§2a) caught a real defect the unit tests missed:
+`_display_terminal` branched only on `fallback_used`, so a genuinely-UNKNOWN review still printed
+"No specific findings." — the same false claim of cleanliness this slice fixed in the artifact,
+left standing on the terminal. Fixed with two tests, plus a `_findings_not_parsed_section` helper
+removing the near-duplicate prose the same review flagged. That review is the best evidence Part C
+works: the reviewer had the CLI's discipline and checked a surface the diff did not advertise.
+
+**SC8 branch (b):** the #84 empty turn did not recur, so `agent.max_output_tokens` was **not**
+added — sizing it without an observation is the guesswork D4 exists to prevent. Recorded on #84,
+which stays open.
+
+**SC10 passes:** 14 tool calls, no fabricated absence claims, no D5 follow-up needed. The sharper
+signal is the contrast with the §6 run twenty minutes earlier — same model, same three tools, zero
+calls, and two CONCERNs about function length read straight off the diff. Slice 267 is what made
+that state visible. Recorded honestly in the walkthrough: the 267 run's PASS verdict restates the
+commit-message rationale rather than probing, so calls-made is treated as the evidence, not the
+verdict.
+
+**Two walkthrough corrections**, both from live runs. §2 needs `-v` (verbosity 0 prints no
+`Tools:` line by design). §5's `--model sonnet` form is unreachable: under the LAZY pool policy
+the executor connects a session for any SDK step, and the session path keeps rejecting per D6, so
+an SDK model never reaches the one-shot path the section tests. Re-run with `kimi27`, which gave
+`tools=2/7 calls`.
+
+Issues closed: #40, #61, #68, #75, #82, #85. #84 stays open (non-recurrence is not a fix); #87
+filed for the debug-log `fallback_used` field name colliding with `ReviewResult.fallback_used` at
+opposite values for the same event — an on-disk format change, out of scope here.
+
+Initiative 260 closes at 7/7.
+
+---
+
+## 20260907
+
+### Slice 267: Phase 5 Task Breakdown Complete
+
+30 tasks in one file (`267-tasks.tool-use-discipline-and-diagnosability-for-non-sdk-agents.md`,
+470 lines — inside the split tolerance). Sequencing: branch (T0); the guidance block and its
+composition at the agent (Part A, T1-T4); dispatch parity and both #40 angles (Part B, T5-T8);
+SDK preset + `append` for #85 (Part C, T9-T12); diagnosability — UNKNOWN debug log, degraded
+artifacts embedding the raw response, the `Tools:` line (Part D, T14-T19); then the live
+walkthrough steps including the #84 evidence loop and the SC10 A/B (Part E, T21-T28); gates and
+close-out (Part F).
+
+Commit cadence departs from per-task in one respect: Parts A and C change prompts, and the PM's
+standing rule is that prompt-affecting changes are confirmed live before their commits are
+final. They stay on the slice branch until Part E's live steps are transcribed.
+
+Two existing tests are rewritten rather than deleted, and the task file names them so the
+implementer does not treat their failure as a regression: `test_sdk_profile_one_shot_rejects_allowed_tools`
+(asserts the guard #75 removes) and `test_default_system_prompt_wins_over_instructions` (asserts
+the preset-discards-instructions behavior #85 replaces). T27 (`agent.max_output_tokens`) is
+conditional on T26 observing `finish_reason=length`; if not, it is marked `[x]` with a note per
+the dropped-item checkbox rule. The `-k` selectors in the walkthrough are echoed into the task
+names so each selector collects tests (266's lesson).
+
+---
+
+### Slice 267: Tool-Use Discipline and Diagnosability for Non-SDK Agents — Design Complete
+
+Phase 4 on `main` (no integration branch configured). Design at
+`project-documents/user/slices/267-slice.tool-use-discipline-and-diagnosability-for-non-sdk-agents.md`;
+slice plan entry 7 carries the pointer and a design note. Slice branch not yet created.
+
+**What the slice is.** Initiative 260's close-out. The mechanics landed in 261–266; 266's live
+verification showed a tool-enabled `kimi27` review making zero tool calls and returning a
+confident, wrong FAIL about symbols outside the hunk (#82). The design owns one shared tool-use
+guidance block in `squadron/tools/guidance.py`, plus raw-response retention for degraded reviews
+(#61), a `Tools:` line at `-v`, dispatch accepting `allowed_tools` on SDK profiles (#75), the
+#40 default-system-prompt fix on both sides, and an evidence-gated `max_tokens` follow-up to #84.
+Closes #40, #61, #68, #75, #82, #84 when implemented.
+
+**Decisions that depart from the plan entry.**
+- The block is composed in `OpenAICompatibleAgent.__init__`, not at the four
+  `resolve_effective_tools` sites. 266 lacked a chokepoint because the agent cannot see the
+  alias; the guidance depends only on the effective tool list, which it can. One call, no
+  second enumeration test.
+- Non-SDK only, per the architecture's "no SDK-path regression" goal.
+- Degraded reviews (resolved verdict UNKNOWN, or `fallback_used`) embed the raw response at
+  every verbosity, keyed on the *resolved* verdict so judge templates (raw parse always
+  UNKNOWN) are not affected.
+- `agent.max_output_tokens` is added only if the live re-run of the #84 review shows
+  `finish_reason=length`.
+- The SDK session dispatch path keeps rejecting `allowed_tools` (tool set fixed at connect);
+  only the one-shot path translates.
+
+**Acceptance is live.** SC10: the `--no-tools` A/B on the same model and diff must show tool
+calls on the tools run and no absence claim about a symbol the repository defines. Suite-green
+does not satisfy it. Live runs happen from a plain terminal.
+
+**Correction to the plan text.** The entry says an SDK reviewer "inherits Claude Code's system
+prompt." It does not: `review_client.py` passes the template prompt as `instructions` and never
+sets `use_default_system_prompt`; only the metrology audit uses the preset. The SDK reviewer's
+discipline comes from the model, not the prompt. Filed as #85 and added to 267's scope
+(D2a): SDK reviews send the `claude_code` preset with the template in `append`, which the
+installed SDK (0.1.38) supports. The audit's preset-only row is unchanged.
+
+---
+
+## 20260905
+
+### Slice 266: Tool-Use Configuration and Limits — Implemented (initiative 260 complete)
+
+Phase 6 on branch `266-slice.tool-use-configuration-and-limits`. Nine commits, 3363
+tests passing, pyright down to the two pre-existing `mcp_bridge.py` errors (issue #74).
+This was the last slice of initiative 260, which is now 6/6.
+
+**The capability gate.** `resolve_effective_tools` (`squadron/tools/effective.py`) is the
+sole gate: `declared ∩ (capability allows)`, emptied entirely by run-level suppression,
+returning the effective names plus a reason. All four `AgentConfig` sites that pass tools
+route through it — review client, dispatch, summary one-shot, metrology audit — and an AST
+enumeration test (SC1a) fails when a fifth appears, naming the file and telling the author
+what to do. Verified by temporarily adding one.
+
+**The design gap this hit, and the decision taken.** The design said the gate reads the
+alias's `tool_use`. That works only where the alias name survives. `resolve_model_alias`
+collapses an alias to a model id, and `ModelResolver.resolve` returned only
+`(model_id, profile)` — so at dispatch and summary the alias was already gone. Passing the
+model id would have compiled, always returned `True`, and silently never gated: a
+false-negative gate, and an easy one to write a passing test against.
+
+A reverse id→alias lookup is not sound — `gpt-5.3-codex` is reachable from both `codex`
+(profile `openai`) and `codex-agent` (`openai-oauth`), which could disagree on `tool_use`.
+Per PM direction, the resolver was widened instead: **`ModelResolver.resolve_full` returns
+`ResolvedModel(model_id, profile, allows_tools)`**, reading the capability while the alias
+name is still known. `resolve()` keeps its `(model_id, profile)` shape — a first attempt
+returned a 3-field `NamedTuple` from `resolve()` on the theory it was tuple-compatible,
+which is false for 2-target unpacking and broke 56 tests across 42 call sites.
+
+The same trap existed on the review CLI, which resolves the alias at
+`review.py:442` before calling the client. Pyright caught it: the client had no parameter
+to receive the CLI's computed capability and was re-deriving it from a resolved id. A
+regression test now pins the ordering and fails if the read moves after resolution.
+
+**The third telemetry state.** Slice 265 distinguished offered-but-unused from
+never-offered. Suppression is a third state that collapsed into the second, because
+`_stamp_tool_telemetry` returned early on an empty `_tools_given`. `tools_suppressed_reason`
+now threads `AgentConfig` → agent metadata → `ReviewResult` → **both** persistence forms
+(markdown frontmatter and `to_dict()`), stamped independently of that early return. It is
+absent when nothing was suppressed, so an un-gated run's artifact is byte-for-byte
+unchanged. A JSON-only field would have repeated issue #72's shape.
+
+**The bounds.** Five input-validation fixes. The jail re-check is the security one and
+landed first, in its own commit: `grep` and `list_files` discover entries by walking, and
+`is_file()` follows symlinks, so a link inside the jail pointing outside it read as an
+ordinary file. Both walks now re-resolve each candidate, skipping silently to the model
+(D6) and logging at WARNING.
+
+That fix has a version-dependent subtlety worth recording. On Python 3.13+ `rglob` yields a
+symlinked *directory* without descending into it, and `is_file()` is `False` for that entry —
+so checking `is_file()` before containment skipped the escape *without logging it*. The
+containment check runs first for that reason. The test caught this: it asserts the guard was
+reached via its WARNING rather than only that no content leaked, which on 3.13+ passes with
+no guard at all.
+
+The rest: `grep` rejects an over-long pattern before `regex.compile` (asserted by a spy on
+`compile`, since checking after compilation is the bug the bound exists to prevent); `grep`
+names any file it searched only to the read cap, closing a silent no-match; a single tool
+result is truncated before entering history so it cannot exhaust `max_history_chars`
+(asserted by leaving that budget generous and checking the guard never fired); and
+`list_files` stops *consuming* at a cap rather than materializing a whole tree — asserted by
+wrapping `Path.glob`/`rglob` and counting entries actually pulled, since the pre-existing
+byte cap already bounded the output.
+
+**The split.** `builtin.py` (690 lines) became a package: `_shared` 200, `file_tools` 234,
+`search_tools` 221, `bash_tool` 103, `__init__` 61. Pure move, its own commit, full suite
+green with **zero test edits** — which is the actual proof. `bash` got its own module
+(the design left that open) because `file_tools` was already the largest. Package-internal
+helpers lost their leading underscores, since `reportPrivateUsage` flags every
+cross-module use and the `_shared` module name already carries the privacy;
+`builtin._resolve_in_jail` remains as an alias because existing tests import it.
+
+**`limits.py` config decision (D4), taken not deferred.** Constants stay module attributes
+with no config keys. The docstring now records the decision and points at
+[issue #76](https://github.com/ecorkran/squadron/issues/76) for the constraints any future
+config surface must preserve.
+
+**Issues filed.** [#77](https://github.com/ecorkran/squadron/issues/77): nothing validates a
+review artifact's `verdict:` frontmatter against the `Verdict` enum —
+`verdict: BANANA` passes `cf validate frontmatter`, then degrades to `UNKNOWN`, which
+silently trips `CheckpointTrigger.ON_CONCERNS`. Surfaced by hand-writing `RESOLVED` into two
+review artifacts; RESOLVED is not a verdict.
+[#78](https://github.com/ecorkran/squadron/issues/78): the review CLI's verbosity wiring
+calls `setLevel` on named loggers and never restores them, so a CLI test leaks that state
+and a later DEBUG assertion fails depending on file order. Pre-existing; reproduces with
+this branch stashed.
+
+**Live verification (T27), run by the PM 20260906.** Three runs against `kimi27` via
+openrouter. All three states are distinguishable from the recorded field alone:
+`toolsSuppressedReason: run-suppressed` for `--no-tools`, `toolsGiven` with
+`toolCallsMade: 45` for the tools run, and `toolsSuppressedReason: model-capability` for a
+`tool_use = false` alias. SC3 and SC4 hold in production, not just against mocks. The tools
+run also produced materially better findings than either suppressed run.
+
+It found two pre-existing defects that only a live run could surface, neither caused by this
+slice. The jail refusals fired correctly on `.venv/bin/python*` symlinks — the security fix
+working for real — but `grep` then burned its 5s budget on the literal pattern `CLAUDE.md`
+and told the model to *"use a simpler or more anchored pattern"*. The pattern was never the
+problem: `.venv` is 21,402 of this repo's 29,373 entries, and grep reads ~351 MB of
+virtualenv before reaching any project file, so the advice is unfollowable and the model
+retried twice ([#79](https://github.com/ecorkran/squadron/issues/79)). Separately the run hit
+the history budget after 45 calls, because `MAX_TOOL_RESULT_CHARS` (100,000) is 25% of the
+400,000 default — the two constants were never sized against each other
+([#80](https://github.com/ecorkran/squadron/issues/80)).
+
+Both bounds did what they were built to do; the failures are in scope and values chosen
+elsewhere. Worth noting as a lesson: every bound in this slice was verified against mocks and
+all of them behaved correctly, yet the first live run still found two problems — in what the
+tool *chooses to read* and in how two independently-correct limits compose.
+
+---
+
+### Slice 266: Design Review Resolved, Phase 5 Task Breakdown Complete
+
+Two pieces of work, both on slice 266.
+
+**Design review (CONCERNS → RESOLVED).** All three actionable findings addressed;
+none deferred. F001 was a genuine contradiction rather than a documentation gap:
+the design claimed a single enforcement site at `OpenAICompatibleAgent.__init__`,
+while D3 forbade the agent from reading models.toml. Both cannot hold — the agent
+receives an already-resolved model id, materializes whatever `allowed_tools` it is
+handed, and has no way to tell a gated list from an un-gated one.
+
+The claim is withdrawn. **The gate is `resolve_effective_tools`, living in the
+caller.** Correcting the 20260903 entry above: enforcement is *not* at the agent
+construction edge, and coverage does *not* come free of per-caller changes.
+
+Reading the code to resolve F001 corrected two of the design's factual premises:
+
+- **Dispatch already populates `allowed_tools`** (`dispatch.py:117`). The
+  architecture's Current State said it did not and that a new code path was
+  needed. It is an edit to an existing assignment.
+- **Four `AgentConfig` sites pass tools**, not two: `review_client.py:138`,
+  `dispatch.py:109`, `pipeline/summary_oneshot.py:68`, `metrology/audit.py:608`.
+  All four are now in scope. Three further sites (`providers/auth.py`, two in
+  `server/routes/agents.py`) pass no tools and are explicitly out of scope.
+
+Since the layering denies a structural chokepoint, the "a caller can forget" risk
+is closed by a test instead: new **SC1a** requires enumerating every `AgentConfig`
+construction that sets `allowed_tools` and failing if one is not sanctioned. That
+substitutes an executable guarantee for the one the architecture could not give.
+F002 declared the helper in frontmatter `interfaces`; F003 recorded that bounds
+(b)-(d) trip baseline DEBUG tool logging alongside their model-visible markers.
+
+**Phase 5 task breakdown.** 28 tasks in eight parts, written to
+`project-documents/user/tasks/266-tasks.tool-use-configuration-and-limits.md`.
+Ordering follows the design's constraints rather than convenience: the capability
+gate first (its helper is the slice's central contract), then the three remaining
+call sites one task each, then the jail re-check as the first bounds item (D5 —
+the only security item), and the `builtin.py` split last so every preceding diff
+stays legible against the 613-line original.
+
+Three tasks carry a *test-must-fail-first* requirement, because each is a case
+where a plausible test passes without exercising the fix: the `list_files` walk
+bound (assert bounded work, not bounded output — the byte cap already passes),
+the symlinked-directory jail case (`rglob` recursion is Python-version dependent,
+so the test can pass vacuously), and the SC1a enumeration guard. The grounding
+notes at the top of the task file carry the corrected premises forward, so an
+implementer who reads only the tasks does not inherit the architecture's stale
+description of dispatch.
+
+---
+
+## 20260903
+
+### Slice 266: Phase 4 Slice Design Complete
+
+Design written to `project-documents/user/slices/266-slice.tool-use-configuration-and-limits.md`;
+slice plan entry 6 updated with the materialized index. Effort 3/5, confirming the slice plan's
+20260903 raise from 1/5.
+
+The slice carries two halves that share a boundary rather than a mechanism. The **configuration**
+half adds a `tool_use` bool to models.toml aliases and a `--no-tools` flag to `sq review`. The
+**bounds** half closes five instances of one shape found by reviewing and running slice 265:
+a model-supplied value reaching a tool with nothing checking it.
+
+Three decisions settled with the PM during design:
+
+- **The capability gate applies everywhere tools are offered, not review-only** (D1). `tool_use`
+  describes the model, not the review — a model that mishandles tool-call protocol mishandles it
+  on dispatch too. Enforcement sits at `OpenAICompatibleAgent.__init__`, the single point where
+  `allowed_tools` becomes materialized executors, so review, pipeline review/summary, and
+  `sq run` dispatch are all covered without per-caller changes.
+- **`--no-tools` stays review-scoped and stays a flag** (D2). Persistence records the resolved
+  model, so two aliases of one model would be indistinguishable in an A/B pair; the flag is what
+  makes baseline-vs-tools runs readable afterward. Pipelines already control tools by declaring
+  or omitting `allowed_tools` per step.
+- **New limits are fixed constants in `limits.py`, not config keys** (D4). `limits.py`'s
+  docstring flagged configurability as this slice's call; the call is *not yet*. Eight config
+  keys nobody has asked to tune is complexity to resist. The docstring gets updated to record
+  that this was decided rather than overlooked.
+
+The security item is (a): `grep` resolves only its initial `path` against the jail, then opens
+every candidate `_grep_candidates` yields with no further check. A symlinked file inside the jail
+pointing outside it satisfies `is_file()` and returns contents `read_file` would refuse for the
+same target; on Python ≤3.12 `rglob` also recurses into symlinked directories, letting the walk
+leave entirely. Fix goes inside `_grep_candidates` so both cases are covered at the one point
+candidates are produced, and `list_files` shares the guard. It lands first within the slice; the
+`builtin.py` package split lands last so earlier diffs stay legible against the current file.
+
+Item (b') is a self-inflicted one worth naming: slice 265 bounded `grep`'s per-file read at
+`MAX_READ_BYTES` to close an unbounded read, and in doing so traded it for a *silent* one — a
+match past 256KB is dropped with no marker, which the no-silent-fallback rule forbids. The fix is
+a visible per-file truncation marker rather than line-wise scanning, which would disturb the
+per-line timeout accounting.
+
+Two walkthrough commands were corrected against the real code before the design was committed:
+`load_aliases` does not exist (the function is `get_all_aliases`), and the step-1 command was
+verified to run. The descriptor export names used in step 8 were confirmed present.
+
+---
+
+## 20260901
+
+### Slice 265: Phase 6 Implementation Complete
+
+All 30 tasks landed, one commit each, on branch
+`265-slice.review-coverage-standalone-client-and-pipeline-actions` (forked from `main`;
+`git.integration_branch` empty). Gates clean: ruff format/check, pyright 0 errors,
+`uv run pytest -q` → 3292 passed, 2 skipped.
+
+**Issue #68 is closed.** The chain was: templates declared Claude vocabulary
+(`[Read, Glob, Grep, Bash]`) → the non-SDK agent looked those names up in the squadron
+registry, found nothing, logged a WARNING and dropped them → the review ran tool-less and still
+reported a verdict. Fixed at both ends: templates migrated to canonical names, and the
+warn-and-drop loop in `providers/openai/agent.py` replaced with an accumulating `ProviderError`
+naming every unknown tool (D3). The SDK side keeps its old behavior via a single mapping table
+at the config-build edge (`providers/sdk/tool_names.py`), the only place canonical → Claude
+translation happens.
+
+**Two new tools.** `list_files` and `grep` in `tools/builtin.py`, both jailed and truncated
+like the existing three. `grep` compiles with the `regex` package (new runtime dependency) and
+bounds catastrophic backtracking with an engine-level `timeout=` scoped to the *remaining*
+whole-walk budget, not per-file — D9's rejection of `asyncio.wait_for`, which measured 72.8s
+against a 1.0s timeout during Phase 4 because a thread running the regex engine cannot be
+cancelled from outside. `tests/load/test_grep_timeout.py` is the repo's first `tests/load/`
+file; it asserts the bound at the real `GREP_TIMEOUT_S` and that concurrent pathological calls
+leave the event loop responsive. No CI wiring was needed — `testpaths = ["tests"]` and CI's
+unfiltered `uv run pytest` pick it up.
+
+**Injection decision is now run-scoped** (D1). `review/tool_support.py` computes the effective
+tool set per call — SDK names pass through untouched, non-SDK names filter against the registry
+— and file bodies are injected only when neither the provider natively nor a `read_file` tool
+in the effective set can fetch them. `ProviderCapabilities` gained no field. The
+byte-identical no-tools regression case is asserted directly, including the case that matters
+during migration: an unmigrated template's Claude names filter to empty against a non-SDK
+provider, so injection is unchanged.
+
+**Telemetry threads end to end.** The agent stamps `tools_given`/`tool_calls_made` on the
+final `Message.metadata` only (262's intermediate-turns contract unchanged), from both the
+tool-less fast path and the agentic loop — a test asserts the two cannot drift. `ReviewResult`
+gained both fields in the always-included `to_dict()` group. Because `one_shot_dispatch` and
+`capture_summary_via_profile` return bare strings and have other callers, both grew
+telemetry-carrying siblings rather than changing signature; `capture_summary_via_profile` now
+delegates to its sibling so there is still one code path. The `-v` line renders
+`tools=N/M calls` via the same walrus-guard/`extras` idiom already used for `verdict=`/`model=`.
+
+**Ordering and scope notes.** Two deliberate non-changes, both flagged at close-out rather
+than passed over silently: `pipeline/schema.py` does not appear in the diff even though the
+design's Integration Points table lists it — there is no per-step-type Pydantic schema to
+extend (`StepSchema.config` is a flat `dict[str, object]`), so validation goes through the
+shared `validate_allowed_tools` helper instead. And `tools/builtin.py` grew to 597 lines, past
+the ~300-line guideline; accepted rather than split, since the file has one clear
+responsibility and the codebase has larger precedent (`pipeline/executor.py` ~1700 lines).
+
+Three pre-existing tests needed updating because they asserted the old behavior: the SDK
+config test expected untranslated names, the agentic-loop test expected warn-and-drop, and
+`test_reverting_cwd_threading_fails_loudly` patched `one_shot_dispatch` — which the action no
+longer calls, so it was repointed at the telemetry-carrying entry point rather than left
+guarding nothing.
+
+**Not executed here:** Task 29's two manual steps. `sq run` refuses to execute inside a Claude
+Code session (unconditional `CLAUDECODE` guard, `cli/commands/run.py:148`), and the live
+non-SDK review needs a real model. Both have automated equivalents driving the same code paths
+(walkthrough steps 8 and 9); the walkthrough marks them as requiring a plain terminal and
+records the placeholders they still need.
+
+---
+
+### Slice 265: Phase 5 Task Breakdown Complete
+
+25 tasks written across two files (`265-tasks...-1.md`, tasks 1-12; `265-tasks...-2.md`, tasks
+13-25) — one file overran the ~450-line guideline by more than the ~100-line tolerance, so it
+split at the natural seam between provider-level work and pipeline-action wiring, following the
+project's numbered-suffix convention.
+
+Sequencing follows the dependency order the design implies rather than the Integration Points
+table's listing order: new tools and their timeout dependency first (1-2), the tools themselves
+with tests (3-6), the two provider-side vocabulary changes that make everything else meaningful
+— SDK-edge translation and the non-SDK unknown-name raise (7-10) — then the injection decision
+(11-12), pipeline-action wiring for review and summary (13-15), tool-use observability threaded
+from the agent through `ActionResult.metadata`, `ReviewResult`, and the `-v` log line (16-20),
+template migration deliberately last since it depends on the vocabulary fix actually working
+(21-22), and the live SC6/SC8/SC10 evidence tasks plus close-out (23-25).
+
+Reading the current source rather than trusting the design doc's line numbers surfaced one
+correction: the design's Integration Points table cites `dispatch.py:205` for the
+metadata-discarding response join. The actual location, confirmed against the file as it
+stands after slice 263 landed, is `dispatch.py:96-100` — `one_shot_dispatch`'s
+`"".join(response_parts)` loop, which reads only `response.metadata.get("sdk_type")` and drops
+everything else. Task 18 cites the corrected location. Also confirmed against source: `review.py`
+and `summary.py` have no `allowed_tools` plumbing at all today — slice 263 built it only for
+`dispatch.py` (`_resolve_allowed_tools`, `dispatch.py:405-420`) — so tasks 13-15 build it from
+scratch for the other two actions via an extracted shared helper, rather than assuming a
+schema-level pattern to mirror (`pipeline/schema.py` has no per-step-type schema; step config is
+a flat `dict[str, object]` in all three actions).
+
+Two tasks are marked with an open implementation choice rather than a prescribed one, because
+the design is silent and the current code doesn't settle it either: task 14 asks whether a
+step-level `allowed_tools` on a pipeline `review` step should override the template's own
+`allowed_tools` or the reverse, defaulting to step-overrides-template as the more useful reading
+but flagging it for confirmation during implementation; task 16 leaves open whether
+`translation.build_messages` grows a parameter or the final `Message` is constructed directly in
+`agent.py`, deferring to whichever produces the smaller diff.
+
+All ten success criteria (SC1, SC1a, SC2-SC10) map onto specific tasks with no gaps: SC1/SC1a →
+tasks 3-6, SC2 → task 21, SC3 → tasks 7-8 and 22, SC4 → tasks 7 and 9-10, SC5 → tasks 11-12,
+SC6 → task 23, SC7 → tasks 14-15, SC8 → tasks 20 and 24.1, SC9 → task 19, SC10 → task 24.2.
+
+**Next:** Phase 6 implementation on branch
+`265-slice.review-coverage-standalone-client-and-pipeline-actions`, forked from `main`
+(`git.integration_branch` reads empty).
+
+---
+
+### Slice 265: Phase 4 Review — F001 Was Right, Its Suggested Fix Was Not
+
+Slice review came back CONCERNS: one concern (F001), one note (F002), four passes. Both
+addressed; the concern turned into a measured design decision (D9).
+
+**F001 — `grep` has no bound on regex execution time.** Correct and accepted. The pattern is
+model-supplied and runs against arbitrary file content, so a valid-but-pathological regex is a
+realistic hang, and the design covered only invalid patterns and output size.
+
+The suggested fix — a per-call `asyncio.wait_for` around the `to_thread` call — does not work,
+which I found by measuring rather than reasoning. A thread running C-level `re` code cannot be
+cancelled, so `wait_for` never observes its deadline until the regex returns on its own. With a
+**1.0s** timeout on `(a+)+$` against `"a"*30 + "b"`, `wait_for` returned after **72.8s**. It
+reports the hang after it ends; the worker thread is burnt either way. Worth noting because it
+looks like a bound and is not one.
+
+A line-length cap fails for the same underlying reason: backtracking is exponential in input
+length, and that pattern needs only 30 characters to reach 73s (n=20: 0.08s, n=24: 1.4s,
+n=26: 4.9s, n=28: 20.7s). No cap that leaves `grep` useful is low enough.
+
+So the match has to run somewhere it can actually be stopped. Chose the `regex` package, whose
+`timeout=` raises from inside the matching engine — verified bounding `(a|a)*$` at 1.02s, the
+case its optimizer cannot fold away. (Its optimizer *does* fold `(a+)+$` to instant, which is
+why the verification used a pattern it cannot.) Subprocess isolation, mirroring `bash`'s
+killable process group, would also work but costs a spawn per call on the review hot path for
+no added safety. Cost is one new runtime dependency; accepted over shipping an unbounded hang
+on model-supplied input. `GREP_TIMEOUT_S` joins `BASH_TIMEOUT_S` in `tools/limits.py`, and the
+expiry path mirrors bash's: WARNING log plus `is_error=True` back to the model.
+
+**F002 — invalid-regex handling not wired into a success criterion.** Fair. Added SC1a covering
+both failure modes, with the timeout test monkeypatching the limit down so the suite stays fast.
+
+The four PASS findings confirmed D1's capability signal against the arch's provider-identity
+constraint, the canonical vocabulary table, scope discipline, and — checked against source —
+that D3's construction-time raise does not collide with 262's runtime unknown-tool-call path.
+
+---
+
+### Slice 265: Phase 4 Slice Design — Review Coverage
+
+Design written for `265-slice.review-coverage-standalone-client-and-pipeline-actions`. Reading
+the code first turned what the slice plan framed as three loosely related work items into three
+concrete, currently-live defects, which is how the design is now organized.
+
+**Front 1 is worse than "issue #68 is open."** The plan said non-SDK providers silently ignore
+`template.allowed_tools`, and that slice 262 fixes it. 262 did fix the plumbing — but all seven
+shipped review templates declare Claude vocabulary (`[Read, Glob, Grep, Bash]`), and
+`agent.py:126-133` looks those names up in the squadron registry, finds nothing, logs a
+warning, and continues tool-less. So #68 is still open in practice *after* 262, for a different
+reason than the one recorded. The vocabulary migration is not cleanup; it is the actual fix.
+
+**The capability signal question the arch deferred has a third answer.** The arch offered
+`supports_tool_use` on `ProviderCapabilities` or a config-dependent `can_read_files`. Both are
+wrong: the OpenAI-compatible provider *always* supports tool use, so that flag would be a
+constant `True` that does not answer the injection branch's real question — does *this run*
+have a file reader? That is a run property, not a provider property. Computing it in the review
+client from the effective tool set adds no field, encodes no provider identity, and leaves
+`can_read_files` with its correct existing meaning.
+
+**Observability needed a decided route out of the agent.** The agent's only caller-facing
+surface is the `Message` stream, and every caller concatenates `.content`. Decided (D4):
+stamp `tools_given` / `tool_calls_made` on the final message's existing `metadata` field.
+Rejected an agent-level accessor property (pushes state onto the `Agent` protocol all three
+providers implement, and forces callers to hold the concrete type) and mid-stream system
+Messages (reverses 262's "intermediate turns are not surfaced" contract, and tool chatter would
+contaminate concatenated response bodies). `_log_action_result` already renders `verdict=` and
+`model=` from `ActionResult.metadata`, so the `-v` line is a one-extra change, and
+`RunState.action_results` is untyped `list[dict[str, object]]` — no `schema_version` bump.
+
+**Two decisions worth flagging at review.** `tools_given` is emitted even when
+`tool_calls_made` is 0 (D5) — that zero is the whole point, distinguishing "offered tools, used
+none" from "never offered." And `code.yaml` drops `Bash` (D6).
+
+D6 needed correcting after checking the SDK rather than reasoning from the template. My first
+framing called it "a deliberate narrowing of a working SDK path's permissions." It is not: it
+narrows nothing there. `AgentConfig.allowed_tools` becomes `--allowedTools`, a *permission*
+allowlist; tool availability is governed by the separate `tools`/`--tools` field, which
+squadron never sets — so the SDK reviewer gets the CLI default tool set either way. `code.yaml`
+also runs `permission_mode: bypassPermissions`, which approves everything regardless. So that
+`Bash` entry is already inert, and dropping it changes the emitted flag string and nothing else.
+
+The real finding underneath is more useful than the decision it corrects: **`allowed_tools`
+means two different things on the two paths** — a capability gate on non-SDK (the name is what
+materializes an executor, so omitting `bash` genuinely keeps reviews read-only) and a
+largely-inert permission hint on SDK. One canonical vocabulary across both is still right, but
+identical declarations do not produce identical restrictions, and the design now says so
+outright. Closing that gap for real (via `tools`/`--tools` or `disallowed_tools`) would change
+SDK reviewer behavior, so it is explicitly out of scope. SC3 is tightened to assert emitted CLI
+flags rather than only the built options object.
+
+Effort 3/5 — the pieces are small but span tools, both providers, the review client, and the
+pipeline actions, and the template migration modifies a working SDK path whose behavior must be
+preserved exactly (SC3 asserts the built `ClaudeAgentOptions` directly rather than inferring).
+
+---
+
+### Slice 264: Walkthrough Step 4 Verified — SC6 Closed
+
+The one open success-criteria item is closed. `sq run cf-tools-demo 264 -v` was run from a
+plain terminal (the CLAUDECODE guard blocks it inside a Claude Code session), driving
+`kimi27` against `allowed_tools: [cf_workflow_status, cf_build_context]`.
+
+Two `[context-forge-mcp] Server started` lines appeared — one real spawn per tool call, which
+is the per-call session design (D3) behaving as specified. Every specific value the model
+reported matched live CF state: project squadron, Phase 6, slice 264 status complete, task
+progress 130/130, slice plan 4/6, and the verbatim first line of built context. The only soft
+number was its "approximately 4,500 characters" estimate against an actual 5,743 — hedged, and
+the one figure it estimated rather than read. The matching values are not guessable: 130/130
+and 4/6 changed that same day as a result of this slice's own close-out.
+
+The scratch pipeline is committed at `project-documents/user/pipelines/cf-tools-demo.yaml`.
+Its prompt tells the model to quote any tool error rather than substitute a plausible answer,
+so a silent failure would surface as a wrong-shaped report instead of convincing prose.
+
+**Two things this run surfaced.**
+
+- The design named `kimi25`, which is not a registered alias. Real options are `kimi27` and
+  `kimi3`. Corrected in the walkthrough.
+- Confirming the run required cross-checking reported values against live CF state by hand —
+  nothing in the run JSON records that tools were offered or called. This is exactly the gap
+  slice 265 exists to close, and independently re-justifies 265 promoting tool-use
+  observability to primary acceptance. Separately, the run JSON records `execution_mode: sdk`
+  while `metadata.model` is `moonshotai/kimi-k2.7-code` on the `openrouter` profile: that
+  field labels the pipeline executor rather than the agent path. Cosmetic, possibly
+  mislabeled, outside this slice.
+
+---
+
+### Slice 264: Code Review — F001 Was a Real Bug, Not Just a Coverage Gap
+
+sonnet-5 code review at the merge commit `d06a446`: CONCERNS, one concern and two notes.
+Writing the test F001 asked for immediately failed, and the failure was in the implementation
+rather than the test.
+
+**F001 (concern) — accepted, and it found a defect.** The review noted that `except McpError`
+and the final `except Exception` in `mcp_bridge.call_mcp_tool` had no tests despite the module
+docstring claiming every failure path was covered. Adding those tests showed the `McpError`
+branch was **unreachable**: the SDK runs its transport inside anyio task groups, so an in-band
+protocol error arrives wrapped in a `BaseExceptionGroup`. The bare `except McpError` never
+matched; the error fell to the catch-all and was reported as "unexpected failure ... unhandled
+errors in a TaskGroup (1 sub-exception)" — logged at ERROR instead of WARNING, with a message
+naming nothing actionable. The failure-mode table's protocol-error row was documented, coded,
+and non-functional.
+
+The spawn-failure path passed its test throughout because `FileNotFoundError` escapes the
+group ungrouped. One reachable branch masking an unreachable sibling is exactly the shape a
+"we have a test for that row" claim hides.
+
+Fix: `call_mcp_tool` now has a single classifying handler that flattens the exception to its
+leaves (`_leaves`, recursive for nested groups) and classifies on those, spawn failure before
+protocol error — a server that never started also produces a closed-stream protocol error
+downstream, and the launch problem is the one an operator must fix. The unclassified branch
+reports the leaf rather than the group. Two tests were added that inject failures at the
+`ClientSession.call_tool` boundary so the real `except` path runs; the generic-branch test also
+asserts `exc_info` is attached, since `logger.exception` inside a handler that no longer sees
+the live exception context needed an explicit `exc_info=exc`.
+
+Fixing that surfaced a second latent trap in the same handler: `TimeoutError` is an `OSError`
+subclass, so a timeout arriving *inside* the group would have matched the spawn-failure check
+and been reported as an unlaunchable server — wrong cause, wrong remediation. Classification
+now splits timeouts off first, and a test pins that ordering so it cannot silently regress.
+
+**F002 (note) — rejected, with evidence.** The review called
+`field(default_factory=lambda: {})` an unnecessary lambda, suggesting bare `dict`. Tried it:
+bare `dict` produces two `reportUnknownVariableType` errors under this project's strict pyright
+config, and pyright-zero is a merge blocker here. The lambda is load-bearing, not cosmetic.
+Reverted and left as-is.
+
+**F003 (note) — acknowledged, no change.** Sync TOML config reads inside the async executor.
+The review is right about the letter of the <1ms rule, and equally right that this mirrors
+`providers/openai/provider.py` and is not a regression. A single small TOML read precedes
+spawning a node process that takes ~1.3s; changing it only here would diverge from the
+established pattern for no measurable gain. Worth addressing codebase-wide if it ever matters.
+
+**Process note.** The slice was merged to `main` before the code review ran. The PM has flagged
+that the review gate should block the merge, and will update the guidelines; `workflow_check`
+had in fact reported the missing review artifact at close-out. Had the gate been enforced, this
+defect would have been caught before it reached `main` rather than after.
+
+---
+
+### Slice 264: Context-Forge MCP Tool Bridge Implemented
+
+Phase 6 complete on branch `264-slice.context-forge-mcp-tool-bridge` (forked from `main`;
+`git.integration_branch` read as empty at execution time). Five curated context-forge tools
+now let a tool-capable non-SDK model drive the workflow itself.
+
+**What landed.** `src/squadron/tools/mcp_bridge.py` is a generic single-call MCP stdio
+transport: spawn, initialize, call one tool, map the result, tear down — with the whole span
+inside `asyncio.timeout` and no context-forge vocabulary anywhere in it (verified by grep).
+`src/squadron/tools/cf_tools.py` holds the five descriptors (`cf_set_phase`, `cf_set_slice`,
+`cf_build_context`, `cf_prompt_get`, `cf_workflow_status`), built from one `CF_TOOL_SPECS`
+mapping table via a single shared factory builder rather than five near-identical closures.
+That table is the only place the CF argument names `developmentPhase`, `fileSlice`,
+`instruction`, and `templateName` appear. Two config keys were added (`cf.mcp_command`,
+`cf.mcp_timeout_s`), and `tools/__init__.py` gained the registration side-effect import. No
+agent, executor, dispatch, or pipeline-schema change was needed — 263's `validate_allowed_tools`
+is registry-driven, so `cf_*` names became valid step YAML the moment they registered.
+
+**Verified against the real server, not just mocks.** The live contract test spawns the actual
+`@context-forge/mcp` server and confirms all four curated MCP tool names still exist and every
+argument squadron sends still appears in their schemas — reading those names from the
+`cf_tools` constants so the test cannot drift from the code it defends. The bridge's own tests
+run real subprocess round-trips against a fake stdio MCP server (`tests/tools/fake_mcp_server.py`,
+built on the low-level `Server` API so it can return hand-made `CallToolResult` values that
+FastMCP hides): echo, server `isError`, zero content blocks, a non-text `ImageContent` block,
+an unknown tool name, spawn failure, and a timeout that asserts the server PID is gone
+afterwards. Each failure-mode row asserts its WARNING via `caplog`.
+
+The design's ephemeral-override claim for `cf_build_context` was checked against the real
+server rather than taken on faith: building context with a `phase` override returned 5741
+characters of assembled context and left the stored phase untouched.
+
+**Things worth remembering.**
+
+- The mcp SDK converts a server-side handler exception into a `CallToolResult` with `isError`
+  set, so an unknown tool name arrives through the isError mapping path rather than as an
+  `McpError`. The failure-mode table's protocol-error row still gets its observable WARNING;
+  the test documents which path delivers it.
+- Timeout teardown costs real wall-clock beyond the deadline: a 2s timeout returned in ~4s,
+  the extra time being the SDK's SIGTERM-then-SIGKILL escalation on the process group. The
+  test bounds elapsed at `timeout + 10` rather than assuming it returns at the deadline.
+- `caplog` assertions need `record.getMessage()`, not `record.message % record.args` —
+  `record.message` is not populated until a formatter runs, and the naive form raises
+  `TypeError`.
+- `ruff format` does not sort imports; only `ruff check --fix` does. Two lint findings
+  (`I001`, `ASYNC240` on `Path.resolve()` inside an `async def`) survived a format-only pass
+  and had to be caught by `ruff check` before the close-out commit.
+- Two slice-261 tests hard-coded the registry as exactly three tools
+  (`test_exactly_the_three_builtin_tools_are_registered`, and a `len(executors) == 3`
+  assertion). Both were assertions about registry *size* rather than about the builtins, so
+  they were widened to a subset check and a "binds every registered tool" check — which is
+  what the second test's name already claimed.
+
+**Open item.** Walkthrough step 4 — the end-to-end demo with a real non-SDK model (SC6's
+dispatch half) — was not run. `sq run` refuses to execute inside a Claude Code session
+(CLAUDECODE guard), so it needs a standard terminal. It is annotated as open and unchecked in
+the slice design's walkthrough §4. SC6's executor half is evidenced by walkthrough step 2 and
+the live contract test's round-trip. Every other success criterion is met.
+
+**Gates at close-out.** Full `uv run pytest -q` green; `uv run pyright` zero errors; `uv run
+ruff check .` clean. Walkthrough steps 1–3 were run and their actual output — including the
+CF server's `[context-forge-mcp] Server started` stderr line and the ~1.3s warm round-trip —
+is recorded in the slice design.
+
+---
+
+### Slice 264: Task-Breakdown Review Findings Addressed
+
+kimi-k3 review of the 264 task file at `af1f3c9`: CONCERNS — one concern, three notes, all
+addressed in the task file:
+
+- **F001 (concern):** non-text-block mapping rule had implementation (4.2) but no test.
+  Added a `nontext` tool to the fake-server fixture (3.1) and
+  `test_nontext_block_noted_by_type` (5.1).
+- **F002 (note):** protocol-error WARNING assertion was implicit. `test_unknown_tool_name`
+  now names the caplog assertion explicitly; 5.4's enumeration includes the row.
+- **F003 (note):** timeout test's PID capture relied on unspecified fixture behavior. The
+  fixture now specifies a `--pid-file` argument (3.1) and 5.2 uses it (fallback removed).
+- **F004 (note):** SC6's live-model demo deferral is now explicitly tracked — 9.3 requires
+  annotating walkthrough §4 as open in the slice design and naming it in the close-out
+  DEVLOG entry, rather than a silent `status: complete`.
+
+### Slice 263: Code Review and Live Verification
+
+**The tool wiring is confirmed working against a real non-SDK model.** `sq run test-p4 264 -v`
+from a standard terminal dispatched to `kimi27` and the model's response enumerated specific
+filesystem paths it had probed and found missing — evidence only a model actually calling
+`read_file` can produce. A tool-less model cannot know a path is absent; it would have invented
+a design. The step nonetheless reported failure, for two reasons unrelated to this slice:
+
+1. **The 909 post-condition cannot pass for an undesigned slice.** `expected_artifact_paths`
+   resolves the target via the slice plan's `design_file`, which is `None` until a design exists
+   (verified: 262/263 have paths, 264/265 are `None`), so the check fails closed before touching
+   the disk. P4 exists to *create* that file — a chicken-and-egg in the post-condition.
+2. **CF prompt-template guide paths do not match the tree** (`guide.ai-project.process` without
+   `.md`; `file-naming-conventions.md` under `project-guides/` rather than one level up). The
+   model correctly refused to invent a design it could not ground.
+
+Both are pre-existing and worth filing separately.
+
+**Code review found four issues; all four fixed.** Two were consequential and both were in code
+this slice wrote:
+
+- **The SDK session path silently dropped `allowed_tools`.** `_dispatch_via_session` never reads
+  the field, so a step declaring tools that routed there ran tool-less and returned
+  `success=True` — precisely the no-op-with-prose failure this slice exists to prevent, and
+  invisible to load-time validation because the routing decision happens at runtime. Now both
+  SDK paths fail loudly: the session path returns a failed `ActionResult`, and `one_shot_dispatch`
+  raises when the resolved profile's provider is the SDK, since registry names
+  (`read_file`) are not SDK vocabulary (`Read`). Slice 265 owns the mapping.
+- **Unconditional `cwd` changed SDK one-shot behavior.** `providers/sdk/provider.py` forwards a
+  non-None `cwd` into `ClaudeAgentOptions`, which previously never received the key. D2's
+  "inert" justification only ever covered the non-SDK agent. Now gated on the resolved provider
+  inside `one_shot_dispatch`, where the provider is actually known.
+
+Two false starts worth recording, both caught by existing tests rather than by inspection: the
+guard was first written against `profile_name == ProfileName.SDK`, which wrongly catches the
+`None`-alias fallback (that case names the SDK profile but still routes through the one-shot
+agent), and the `cwd` suppression was first put at the call site, where the provider is not yet
+resolved. Both belong on `profile.provider`, not the profile name.
+
+The remaining two findings were small: `validate_allowed_tools` returned on the first non-string
+element instead of accumulating, contradicting its own batch-reporting docstring; and
+`test-p4.yaml`'s tools could route to SDK under a `--model` override, which the new guard now
+turns into a loud failure.
+
+Four regression tests added for the guards.
+
+### Slice 263: Implementation (Phase 6)
+
+Tasks 1-10 and 12 complete on branch
+`263-slice.dispatch-action-wiring-and-pipeline-yaml-surface`, one commit per task. Task 11's
+manual end-to-end verification is partially done and the rest is deferred — see below.
+
+**Diff shape matches the design exactly.** Five source files:
+`pipeline/steps/utils.py` (the `validate_allowed_tools` helper), `pipeline/steps/dispatch.py`
+and `pipeline/steps/phase.py` (validate + conditional expand pass-through),
+`pipeline/actions/dispatch.py` (threading into `AgentConfig`), and
+`data/pipelines/test-p4.yaml`. `schema.py`, `loader.py`, `executor.py`, `core/models.py`, the
+agent, and the provider are untouched — the absence of a `loader.py` change is the signal that
+D1's existing extension point carried the validation rather than a new one being added.
+
+**Three corrections to the task file, found by running the commands rather than trusting
+them.** First, `sq run` takes the slice index as a positional argument; the task file and the
+design's walkthrough both used `--slice <n>`, which exits with `No such option: --slice`. The
+walkthrough is corrected. Second, task 8's malformed-value case surfaces as
+`ActionResult(success=False)` with `allowed_tools` named in the error, not as a propagating
+exception — `execute` is a process boundary that wraps exceptions. The raise still happens in
+`_resolve_allowed_tools` and no agent is spawned, so the fail-loudly requirement holds; only
+the observable shape differs. Third, task 9's D2 guard has to model a reverted `cwd` as `None`,
+not `""`: the agent's check is `cwd is None`, so an empty string slips past it and
+`Path("").resolve()` silently writes to the process working directory instead — a subtly wrong
+test that would have passed for the wrong reason.
+
+**The conditional-expand guard was verified as live, not assumed.** Temporarily rewriting the
+pass-through as unconditional fails five tests including
+`test_expand_omits_allowed_tools_when_absent`, which is what the task text predicted.
+
+**Task 11.2/11.3 deferred — environment, not defect.** `uv run sq run test-p4 264 -v` exits
+immediately with "SDK pipeline execution cannot run inside a Claude Code session". The guard at
+`cli/commands/run.py:148` triggers on the `CLAUDECODE` environment variable unconditionally,
+before any pipeline-shape classification, so it blocks even a pipeline `--explain` reports as
+Claude-free and needing no persistent session. Bypassing it would defeat a deliberate project
+guard, so the live positive and contrast runs must be done from a standard terminal. Recorded
+as an explicit NOT VERIFIED section in the slice design's walkthrough with the exact commands
+to run.
+
+The negative case (11.1) *was* verified through the shipped CLI: a pipeline with `read_fil`
+exits 1 naming the bad tool and listing `['read_file', 'write_file', 'bash']` from
+`tools.list_tools()`, before any model call. Both `--validate` and `--dry-run` reach that gate.
+
+**Gates:** `ruff format` clean, `ruff check` all passed, `pyright` 0 errors, full suite
+3144 passed / 2 skipped in 7m12s.
+
+### Slice 263: Task Breakdown (Phase 5)
+
+Twelve tasks written to
+`project-documents/user/tasks/263-tasks.dispatch-action-wiring-and-pipeline-yaml-surface.md`
+(297 lines, no split needed); slice plan entry 3 updated with the tasks reference. Phase 4
+review came back PASS with all five findings at severity `pass`, so the breakdown follows the
+design unchanged.
+
+**Ordering.** Tasks are sequenced so each leaves the suite green: 1-4 add the validation helper
+and wire it into the four step types while nothing yet produces the field; 5-6 add the
+conditional `expand()` pass-through; 7-8 thread `allowed_tools` and `cwd` into `AgentConfig`;
+9-11 prove the end-to-end path. Test tasks sit immediately after their implementation task
+rather than batched at the end.
+
+**Two guards written directly into the task text**, because both are places a junior
+implementer would plausibly do the reasonable-looking wrong thing. First, the `expand()` change
+must be conditional — an absent key has to leave the expanded dict byte-identical, and the
+existing exact-equality tests will fail on an added `"allowed_tools": None`. The task says
+explicitly that this failure is the guard working, not a test to update. Second, task 3 says
+that if the implementer finds themselves editing `loader.py`, stop: `validate_pipeline` already
+calls every step type's `validate()`, and needing a loader change means the design's D1 was
+departed from.
+
+**Assertion quality is specified, not left to taste.** Task 8 requires assertions on the
+resulting `AgentConfig` field values rather than on mock call counts, and task 9 requires
+asserting the file exists on disk. That is deliberate: the failure mode this slice exists to
+prevent — a step running tool-less and the model describing a file it never wrote — is
+invisible to a test that only checks a mock was called. Task 2 likewise requires the
+unknown-name test to assert the bad name appears in the message, since a count-only assertion
+would pass against a message naming the wrong tool.
+
+Task 12 pins the expected diff shape: exactly five source files, with `schema.py`, `loader.py`,
+`executor.py`, `core/models.py`, the agent, and the provider unmodified. Any change there means
+the design was departed from and is a stop-and-reconcile condition rather than a judgment call
+at commit time.
+
+**Review pass (CONCERNS → addressed).** Both non-pass findings were real and are fixed. F001:
+commits were batched into close-out, contradicting the project's commit-once-per-task rule and
+wasting the fact that every task already leaves the suite green — a mid-sequence interruption
+would have lost everything uncommitted. A commit protocol now sits in the Context Summary and
+each of tasks 1-11 carries a commit checkbox with its own semantic message, so the history will
+read as the task sequence. F002: task 12 asserted "integration branch is unset" as a fact frozen
+at authoring time. Merge is now its own subtask (12.4) that re-reads
+`cf config get git.integration_branch` at merge time and takes the target from that, not from
+what the branch was forked from. The two PASS findings (success-criteria coverage, no circular
+dependencies) needed no action.
+
+---
+
+### Slice 263: Dispatch Action Wiring and Pipeline YAML Surface Designed (Phase 4)
+
+Design written to
+`project-documents/user/slices/263-slice.dispatch-action-wiring-and-pipeline-yaml-surface.md`;
+slice plan entry 3 updated with its design reference. No code changed.
+
+**Two shipped-code facts revised the slice plan's assumptions.** The plan predated slice 262's
+implementation and got two things wrong that reading the merged code corrected.
+
+First, `cwd` must be threaded alongside `allowed_tools`, not treated as a separate concern.
+`OpenAICompatibleAgent.__init__` raises `ProviderError` when `allowed_tools` is non-empty and
+`cwd is None` (the D8 check added in 262), while `one_shot_dispatch` hardcodes `cwd=None`.
+Wiring tools without `cwd` would fail 100% of the time on any step declaring a tool.
+`ActionContext.cwd` already carries the executor's `effective_cwd` and is the source; the design
+threads it unconditionally (D2) so the tool path cannot be reached with `cwd` unset.
+
+Second, the plan's "matching the slice 245 `auth_policy` pattern" does not apply. `auth_policy`
+is a **pipeline-level** typed field on `PipelineSchema`; step configs are a deliberately untyped
+`dict[str, object]` so step types own their own contracts. A typed per-step field would need
+either a schema model per step type (a refactor outside this slice) or a `StepSchema` field most
+step types ignore (ISP violation). Validation goes in the step types' existing
+`validate() -> list[ValidationError]` hook, which `validate_pipeline` already calls and all six
+CLI entry points already surface — and which yields squadron's own `ValidationError` rather than
+the `pydantic.ValidationError` the plan anticipated (D1).
+
+**Load-time validation is the substance, not decoration.** The agent drops unknown tool names
+with a WARNING and continues (262's D1, kept deliberately so shipped review templates carrying
+Claude-vocabulary names keep working until 265). That tolerance is right for templates and wrong
+for YAML: `allowed_tools: [read_fil]` would run the step with no tools and the model would
+describe a file it never wrote — the same silent-no-op class as issue #15. The design keeps the
+agent's WARNING (D5) and protects YAML with a registry check at load time instead, so each
+surface gets the strictness it needs. Registry bootstrap follows `validate_pipeline`'s existing
+lazy-import convention (`bootstrap_step_types()`, `load_all_templates()`); `squadron.tools`
+registers built-ins as an import side effect and is otherwise only reachable through the lazily
+loaded openai provider.
+
+**Scope.** Five files: a shared `validate_allowed_tools` helper in `pipeline/steps/utils.py`
+(one home, not four copies across `DispatchStepType` and three `PhaseStepType` instances),
+validate/expand changes in `steps/dispatch.py` and `steps/phase.py`, threading in
+`actions/dispatch.py`, and `allowed_tools: [read_file, write_file]` on `test-p4.yaml`'s design
+step. `bash` is excluded from the shipped pipeline (D4) — the demo proves file writing and
+`bash` is unrestricted beyond CWD scoping. Nothing changes in `schema.py`, `loader.py`,
+`executor.py`, `AgentConfig`, the agent, or the provider; the absence of loader changes is the
+signal that the design uses the existing extension point rather than adding one.
+
+One risk carried forward: `allowed_tools` is the first list-valued step-config field to travel
+the param-placeholder resolution path. The action narrows the type at the boundary and raises on
+a malformed value rather than silently dropping tools (D3), and a test asserts the list arrives
+intact at `AgentConfig`.
+
+---
+
+## 20260831
+
+### Slice 264: Task Breakdown (Phase 5)
+
+Converted the 264 design into `user/tasks/264-tasks.context-forge-mcp-tool-bridge.md` — nine
+sequential tasks, test-with ordering (fake MCP server fixture lands before the bridge it
+tests; each implementation task is immediately followed by its test task). Structure follows
+the design's dependency order: config keys → fake-server fixture → `mcp_bridge.py` → bridge
+tests (real stdio round-trips incl. timeout asserting the child process is reaped) →
+`cf_tools.py` descriptors → mocked-transport arg-mapping tests → availability-gated live
+contract test → walkthrough/close-out. Context summary pins the seven design facts an
+implementer must not lose (one-way layering, errors-as-values, WARNING floor, single
+mapping-table home for CF argument names, no project identity in schemas, SDK-owned process
+teardown, unconditional registration). Next: PM approval, then Phase 6 on branch
+`264-slice.context-forge-mcp-tool-bridge`.
+
+### Slice 264: Slice-Design Review Findings Addressed
+
+Two reviews of the 264 design at `054cb78`: claude-sonnet-5 (CONCERNS, 2 concerns + 1 note)
+and a comparative kimi-k3 run (PASS, 2 notes). All actionable findings addressed:
+
+- **F001 (isError below WARNING+ floor):** bumped the CF-reported `isError` row from DEBUG
+  to WARNING — uniform compliance beats a prose exception.
+- **F002 (npx grandchild survival on timeout):** verified against installed mcp 1.26.0
+  rather than assumed — the SDK spawns with `start_new_session=True` and tears down via
+  `os.killpg` with SIGKILL escalation (Windows tree-kill), so npx's forked node is reaped.
+  Documented in the design; timeout test now asserts the child is gone.
+- **Fifth-tool scope note (both reviews):** slice plan entry 4 now names all five tools with
+  the `cf_workflow_status` rationale.
+- **kimi F005 (metadata):** design frontmatter now `dependencies: [261, 262, 263]`,
+  `interfaces: [265]`.
+
+### Slice 264: Context-Forge MCP Tool Bridge — Design Complete
+
+**Phase 4 design created:** `264-slice.context-forge-mcp-tool-bridge.md`; slice plan entry 4
+updated with the design reference.
+
+Delivered:
+- Five curated CF tools via the 261 descriptor protocol: `cf_set_phase`, `cf_set_slice`,
+  `cf_build_context`, `cf_prompt_get`, `cf_workflow_status` (status added beyond the plan's
+  four — mutating tools without a read tool force the model to mutate blind).
+- Real MCP stdio transport (D1), not a `cf` CLI wrapper: generic `tools/mcp_bridge.py`
+  single-call helper + `tools/cf_tools.py` descriptors. Purely additive — no agent,
+  executor, dispatch, or schema changes (263's validation is registry-driven).
+- Narrow squadron-semantic schemas mapped to CF MCP calls in one table (D2); per-call
+  spawn→call→teardown sessions since the descriptor protocol has no teardown hook (D3);
+  unconditional registration for deterministic pipeline validation (D4).
+- Config keys `cf.mcp_command` (default `npx -y @context-forge/mcp`) and `cf.mcp_timeout_s`.
+
+Verified while designing: `@context-forge/mcp` is published (0.13.0); installed python `mcp`
+1.26.0 supports `StdioServerParameters.cwd`; CF MCP schemas for `project_update`,
+`context_build`, `prompt_get`, `workflow_status` confirmed against the live server. Schema
+drift is covered by an availability-gated live contract test in the design.
+
+Context for sequencing: with 261–263 landed plus this slice, a tool-capable non-SDK model
+can run any phase's work end to end (files, bash, CF state/context). Review-path file access
+remains slice 265.
+
+---
+
+## 20260829
+
+### Slice 262: OpenAICompatibleAgent Agentic Loop Implemented (Phase 6)
+
+Implementation complete on branch `262-slice.openaicompatibleagent-agentic-loop`, forked from
+`main`. Eight per-group commits (config keys; translation helpers; constructor threading;
+`_call_api`/`_stream_turn` split; tool-call execution; the loop itself; a slice-review fix; this
+close-out), each leaving `pytest tests/providers/openai/ -q` green.
+
+**Constructor threading (D8, D1).** `OpenAICompatibleAgent.__init__` gained keyword-only
+`allowed_tools`/`cwd` params. The D8 check (raise `ProviderError` when a non-empty *requested*
+tool set has `cwd=None`) runs before any registry call, against the requested set rather than
+the post-D1-filter one — a caller asking only for unknown names with no `cwd` is still refused,
+per the design's Constraint 3. `OpenAICompatibleProvider.create_agent` now passes
+`config.allowed_tools`/`config.cwd` through; a dedicated test asserts on the *returned agent
+object* (not just the constructor call) that materialization actually happened, closing the
+slice-design review's F002 gap.
+
+**`_stream_turn` split.** `_call_api` is gone. Its request/aggregate logic (delta accumulation,
+multi-chunk tool-call assembly — moved verbatim, not rewritten) now lives in
+`_stream_turn(messages, tool_schemas) -> TurnResult`, a pure primitive that touches neither
+`self._history` nor `translation`. `handle_message`'s no-tools branch inlines the old
+translate-and-append logic directly (review F006: no forwarding wrapper). The original 15-test
+`test_agent.py` suite, including `test_handle_message_yields_system_for_tool_call`, passes with
+**zero source modifications** — the slice's primary regression gate.
+
+**The loop.** `_run_agentic_loop` reads both loop-limit config keys once, before iterating;
+loops until a turn has no `tool_calls` (the *only* point that translates a turn into
+caller-facing Messages — intermediate turns are executed against but never yielded);  executes
+every tool call in a turn via `_execute_tool_call`, appending one `role: "tool"` result per
+call in order; and enforces two of the design's three termination conditions as guards rather
+than hard stops for max-iterations (D3: raises `ProviderError`, no partial-text return) and a
+one-shot history-budget notice (D4: warns and asks the model to finalize, `max_iterations`
+remains the hard backstop). `_execute_tool_call` implements the full five-branch error table
+(malformed JSON, unknown tool, executor error-result, executor-raises, success) with D9's
+WARNING-not-DEBUG logging for the two model-protocol-violation branches.
+
+**Slice review caught a real bug before merge.** A multi-agent code review of the branch diff
+(`/code-review high`) converged independently across several angles on one high-severity,
+CONFIRMED finding: the history-budget notice was appended as a `role: "tool"` message with
+`tool_call_id=""` — not a real pending call id — which a strict OpenAI-compatible backend would
+reject with 400, and even where accepted, `tool_schemas` stayed attached on every following
+turn so the model could simply ignore the notice and keep calling tools, defeating the guard's
+purpose entirely. Fixed (commit `dbb7549`): the notice is now a plain `user`-role message (no
+fake tool result, no invented id), and once the guard fires, `tool_schemas` is withdrawn from
+every subsequent `_stream_turn` call so the model structurally cannot keep calling tools. The
+budget-guard test was strengthened to assert both the new message shape and the absent `tools`
+kwarg on the following API call.
+
+The same review surfaced several lower-severity, real findings that were triaged with the
+Project Manager and deliberately deferred rather than folded into this slice (see the design
+document's Verification Walkthrough → "Known follow-ups" for the full list and reasoning):
+`get_typed_config`'s uncaught `ValueError` on a misconfigured loop-limit value, sequential
+rather than concurrent tool-call execution within a turn, `_execute_tool_call`'s ad hoc error
+strings versus the `ToolResult`/`_error` convention already established in `tools/builtin.py`,
+a silent empty-`tool_call_id` fallback for a genuinely malformed model response (distinct from
+the fixed budget-guard case), and the `max_tool_iterations=0` edge case's misleading error
+message. None of these are new information about D1's vocabulary-mismatch window — that
+remains accepted, documented, and closed by slice 265, not by this list.
+
+**Known, pre-existing pyright baseline issue — not introduced by this slice.** Scoped
+`pyright src/squadron/providers/openai/` and `pyright src/squadron/config/` both report errors
+whose root cause is the `openai` and `pydantic_settings`/`tomli_w` packages' type stubs not
+resolving under this project's pyright/venv configuration — every symbol imported from them
+type-checks as `Unknown`, cascading through every file that touches them. Verified via
+`git stash` before any slice-262 change: `main` already reported 72 errors on
+`providers/openai/` and a comparable count in `config/`. `config/keys.py` — the only file this
+slice changed in `config/` — is independently clean. Raised to and explicitly accepted by the
+Project Manager as out of scope for this slice; the fix (if one exists) is a project-wide
+tooling/dependency task, not a slice-262 concern.
+
+Full suite: `pytest -q` → **3115 passed, 2 skipped, 3 warnings in 430.59s** (design baseline was
+~3078 passed, 2 skipped; the delta is this slice's additions). The ~7-minute runtime is a
+pre-existing property of `tests/metrology/test_audit_cli.py`'s variance-series tests, which
+sleep for real against `metrology.audit_run_cooldown_s` — unrelated to this slice, noted here
+only because it was mistaken for a hang mid-session before the real cause (a genuine `time.sleep`
+in already-merged code) was confirmed. `ruff check .` clean repo-wide.
+
+Slice 262 is marked complete in both the design document and
+`260-slices.non-sdk-agent-tool-use-openai-compatible-agentic-loop.md` (entry 2). The initiative
+itself stays `not_started` — 263 (pipeline YAML wiring), 264 (MCP bridge), 265 (review
+coverage, which closes D1's WARNING window), and 266 (tool-use configuration) are unstarted, in
+that dependency order after 262.
+
+### Slice 262: Task Review Findings Addressed (Phase 5)
+
+Review `262-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `e9bc278`):
+2 pass, 2 concerns, 1 note. All three actionable findings verified against the task file's
+actual text and fixed.
+
+**F001 — Task 2 called a helper Task 3 hadn't built yet.** The original constructor-threading
+task (then Task 2) built `self._tool_schemas` via `translation.build_tool_schemas`, which
+wasn't implemented until Task 3.1 — sequenced after Task 2's own commit checkpoint. Executed in
+order, Task 2's commit would have referenced a function that didn't exist. Fixed by swapping
+the two groups: translation helpers are now Task 2 (no dependency on constructor work),
+constructor threading is Task 3. All internal cross-references (six of them, found by a full
+grep sweep) updated to match, including two pre-existing stale references the swap did not
+cause (config-limit reads pointed at "Task 4" when they actually happen in the loop, Task 6).
+
+**F002 — no dedicated test for the `create_agent`-level wiring path.** Task 3.3 (threading
+`allowed_tools`/`cwd` through `create_agent`) had only "existing test passes unmodified" (which
+exercises just the no-tools case) plus a manual diff read as its success bar — nothing would
+catch a future edit silently dropping the wiring. Added Task 3.4: a test that calls
+`create_agent` with a populated `AgentConfig.allowed_tools`/`cwd` and asserts on the *returned
+agent object* that materialization actually happened, not just on the constructor called
+directly.
+
+**F006 (note) — Task 4.3 left `_call_api` vs. inline as an open choice.** Resolved: `_call_api`
+is removed once `_stream_turn` exists, since a same-file one-line-forwarding wrapper adds
+indirection the split already replaced. Title and body updated to state this directly rather
+than leave it as a judgment call for whoever implements it.
+
+The three remaining PASS findings (success-criteria traceability; distributed commit cadence;
+no NFR restated so no load-test task needed) required no action.
+
+---
+
+## 20260828
+
+### Slice 262: Task Breakdown (Phase 5)
+
+Task file written: `262-tasks.openaicompatibleagent-agentic-loop.md`, 8 task groups (branch;
+config keys; constructor threading; translation helpers; `_call_api`/`_stream_turn` split;
+tool-call execution; the loop itself; full-suite verification; close-out), each ending in a
+commit, mirroring slice 261's per-group cadence.
+
+Structured around the design's two structural gaps and two review-driven fixes:
+
+- Task 2 threads `allowed_tools`/`cwd` through the constructor and applies D8 (raise
+  `ProviderError` when a non-empty tool set has no `cwd`) and D1 (drop unknown declared names
+  with a WARNING) at construction time — before any registry call, per the design's ordering
+  requirement (Constraint 3: the D8 check must use the *requested* set, not the post-D1-filter
+  one, or a caller requesting only unknown names with no `cwd` would silently skip the check).
+- Task 4 extracts `_stream_turn` from `_call_api` and pins the no-tools path as a hard
+  regression gate: the existing 15-test suite, including
+  `test_handle_message_yields_system_for_tool_call`, must pass with **zero source
+  modifications** before Task 5 proceeds.
+- Task 5 implements D9 (WARNING, not DEBUG, for malformed tool-call JSON and unknown tool
+  names) with a five-branch test matrix (malformed JSON, unknown name, executor error-result,
+  executor raises, success) asserting the log level of each.
+- Task 6 tests all three termination conditions (normal, max-iterations, history-budget)
+  against real temp-dir config files rather than monkeypatched module attributes — the loop
+  limits are config keys (Task 1), not source constants, so the test needs to prove the keys
+  are actually wired, not just that a patched variable is read.
+- Task 8 explicitly notes the D1 WARNING window continues on every non-SDK review until slice
+  265 migrates template vocabulary — not a defect to chase down in this slice's close-out.
+
+### Slice 262: Slice Review Findings Addressed (Phase 5)
+
+Review `262-review.slice...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `f576aaf`):
+2 pass, 2 concerns. Both concerns verified valid against the shipped code and fixed in the
+design.
+
+**F002 — `cwd` fallback for a security-relevant jail root.** The original design fell back to
+`Path.cwd()` with an INFO log when tools were configured but `cwd` was None, defended as
+"explicit and observable." That defense was wrong: logging a fallback does not stop it being
+one, and `cwd` is the trust boundary for `write_file` and `bash`. Revised (D8) to raise
+`ProviderError` at construction — no default jail root. Checked every caller rather than
+assuming: `dispatch.py:63` sets `cwd=None` but never sets `allowed_tools` (materializes no
+tools, never reaches the check); `review_client.py:116` and `metrology/audit.py:621` both set
+`cwd`. So nothing trips the raise today; it exists so a future caller cannot silently write
+into whatever tree the process happens to be running from.
+
+**F001 — loop protocol failures were DEBUG-only.** Malformed tool-call JSON and unknown tool
+names in model responses originate in loop code this slice writes, and the Failure-Mode
+Enumeration rule requires WARNING+ observability. The asymmetry the review claimed is real and
+verified: slice 261's tool layer already logs path-escape (`builtin.py:76`) and bash timeout
+(`builtin.py:308`) at WARNING, so the loop would have been quieter than the tools it calls.
+Revised (D9) to WARNING; both stay non-fatal and still return an error tool result. Success
+criteria updated to assert the log signal via `caplog`, not just the returned result — the
+review correctly noted a regression swallowing a protocol violation would have passed the
+original criteria.
+
+Incidental finding while verifying F002: `metrology/audit.py` is a fourth caller passing Claude
+vocabulary (`[Read, Glob, Grep, Bash]`), alongside the six review templates. Strengthens D1 —
+the unknown-name filter is not review-template-specific.
+
+Both PASS findings (scope/dependency alignment; bash-hang handling delegated to the tool layer)
+needed no action.
+
+## 20260827
+
+### Slice 262: Agentic Loop Design (Phase 4)
+
+Slice design written for `262-slice.openaicompatibleagent-agentic-loop.md`. Read the
+initiative-260 architecture and slice plan, then the actual code the slice touches
+(`providers/openai/{agent,translation,provider}.py`, `core/models.py`, the slice-261 tool
+API, and the existing openai test harness) before designing.
+
+Three findings from reading the code shaped the design beyond what the slice-plan entry
+specified:
+
+**The agent never receives `allowed_tools` or `cwd`.** `OpenAICompatibleAgent.__init__` takes
+only `name`, `client`, `model`, `system_prompt` — the config fields stop at
+`OpenAICompatibleProvider.create_agent`. Threading them through the constructor is part of
+this slice, not an assumed precondition. Both new params are keyword-only with defaults so
+existing construction sites are unaffected.
+
+**Shipped review templates would crash the loop (D1).** All seven templates in
+`data/templates/` declare Claude vocabulary (`[Read, Glob, Grep, Bash]`); `review_client.py`
+already passes `template.allowed_tools` and `cwd` into `AgentConfig`. Activating the non-SDK
+consumer of that field would make `registry.materialize` raise `ToolNotRegisteredError` on
+every non-SDK review — turning a working tool-less review into a hard failure until slice 265
+migrates the vocabulary. Design decision: the agent pre-filters names through
+`registry.lookup`, dropping unknown ones with a WARNING that names each dropped name and the
+registered vocabulary. Loud and observable, not a silent fallback; surviving behavior equals
+today's. `materialize`'s fail-fast contract is unchanged — it is right for a caller that
+controls its own name list. Load-time validation belongs where names are declared (263 for
+pipeline YAML, 265 for templates).
+
+**`_call_api` cannot be reused as-is.** It interleaves the request, delta aggregation, and
+`translation.build_messages`. A loop needs turns 1..n-1 aggregated but not translated. Design
+splits out `_stream_turn` as a single-turn primitive returning raw `TurnResult`; the
+no-tools path and every loop iteration share it, and exactly one code path translates a turn
+into caller Messages — which makes "intermediate turns are never yielded" structural rather
+than conventional.
+
+Also decided: materialize once at construction rather than per message (`cwd` is fixed for an
+agent's lifetime); max-iterations raises `ProviderError` rather than returning partial
+intermediate text (a plausible-looking non-answer); the history-budget guard warns and
+continues once rather than terminating, leaving `max_iterations` as the hard stop; loop limits
+live in a new `providers/openai/limits.py` following the slice-261 module-attribute pattern so
+monkeypatched tests see patched values at call time. `dispatch.py` hardcodes `cwd=None`, so
+the design specifies an explicit INFO-logged `Path.cwd()` fallback rather than leaving the
+jail root undefined.
+
+**Revised after review (D7):** the two loop limits moved from source constants to
+registered config keys (`agent.max_tool_iterations`, `agent.max_history_chars`),
+following the existing `review.max_file_size_bytes` precedent in `config/keys.py`. PM runs
+non-SDK (OpenRouter) reviews frequently across models with very different context windows,
+so a source-baked cap would need a code edit to tune. Read once at loop start so a mid-run
+config change cannot alter termination behavior halfway through. PM accepted the D1 warning
+window; sequencing stays 262 then 265.
+
+Slice-plan entry 2 updated with the design pointer. No code changes.
+
+### Slice 261: Code Review Findings Addressed (Phase 6)
+
+Review `261-review.code...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `a64b741`):
+2 pass, 2 concerns, 1 note. All three actionable findings verified valid and fixed.
+
+**F001 — blocking syscalls on the event loop.** `_resolve_in_jail` calls
+`Path.resolve(strict=False)`, which stats every existing path component; `write_file` also
+called `is_dir()` and `exists()` synchronously. The reads and writes were correctly pushed
+into `asyncio.to_thread`, but the syscalls *gating* them were not, violating
+`rules/python.md` ("synchronous code inside an async def must run in <1ms worst case"). Both
+executors now do all blocking work — resolve, stat, and the read/write — inside a single
+`to_thread` call, which also drops a thread hop.
+
+**F002 — no hang protection on the file tools.** The serious one, and worse than the review
+stated. A FIFO inside the jail is legal input (the jail admits any path under the working
+directory), and `read_bytes()` on it blocks forever. The reproducer did not merely stall the
+loop: wrapping it in `asyncio.wait_for(timeout=3)` did **not** rescue the process, because
+`asyncio.to_thread` workers cannot be cancelled — `wait_for` abandoned the coroutine and the
+interpreter then hung joining the stuck thread at shutdown. A caller-side timeout is therefore
+not a defense; refusing before `open()` is. Added `_reject_special_file`, which returns an
+INFO-logged error result for anything that exists and is neither a regular file nor a
+directory (directories keep their own specific message). The reproducer now returns in 0.002s.
+Three new tests cover it, including the log-level assertion.
+
+**F003 — redundant parent jail check in `write_file`.** Verified empirically across accepted
+and rejected paths: the second `_resolve_in_jail(cwd, str(target.parent))` never rejects
+anything the first check accepted, because `resolve()` de-symlinks every existing component,
+so a target inside the jail always has a parent inside it. The check was dead code whose
+comment claimed TOCTOU protection it did not provide. Removed, with a comment recording why a
+second check cannot add coverage — `test_path_whose_parent_resolves_outside_the_jail_is_rejected`
+is satisfied by the first check and still passes.
+
+Walkthrough output is byte-identical to the pre-fix run, so the changes are behavior-preserving
+on the documented paths. 57 tools tests (up from 54); full suite 3078 passed, 2 skipped.
+
+### Slice 261: Tool Registry and Core Tools Implemented (Phase 6)
+
+New package `src/squadron/tools/` — the tool abstraction boundary for the rest of initiative
+260. Six modules: `limits.py` (the single home for every tool limit), `errors.py`, `models.py`
+(pure data types), `registry.py`, `builtin.py` (the three tools), `__init__.py` (public API).
+
+**Types.** `ToolResult(content, is_error=False)` and `ToolDescriptor(name, description,
+parameters, factory)`, both frozen dataclasses, plus the `ToolExecutor` / `ToolFactory`
+aliases. No `Protocol` — design decision D2: one shape, one implementer, no polymorphism to
+justify the indirection. Errors are values, never exceptions: an executor returns
+`is_error=True` rather than raising to its caller.
+
+**Registry.** Module-level dict and free functions, mirroring `providers/registry.py`, with
+one deliberate divergence — a duplicate `register` raises `ValueError` instead of silently
+overwriting. A tool name is a security-relevant surface, so two definitions of it must fail
+fast rather than resolve by import order. `materialize(names, cwd)` resolves `cwd` exactly
+once and hands the same resolved path to every factory; an unknown name raises
+`ToolNotRegisteredError` naming the offender and listing what is registered.
+
+**Jail rule.** `(cwd / path).resolve(strict=False).is_relative_to(cwd)`. One expression covers
+relative input, absolute input, and `..` traversal, because `Path.__truediv__` with an
+absolute right-hand operand yields that absolute path; `resolve()` follows symlinks first, so
+a link pointing out of the jail is rejected too. String prefix comparison is explicitly not
+used — `/tmp/jail_evil` starts with `/tmp/jail` but is not inside it, and `tests/tools/
+test_jail.py` pins exactly that case as a regression test. `write_file` jail-checks the parent
+directory *before* creating anything, so a rejected write never leaves a directory behind
+outside the jail; the tests assert the rejection is effective, not merely reported.
+
+**Logging contract** (not a suggestion — asserted by `caplog` tests on all three tools):
+WARNING for jail violations and bash timeouts, INFO for every other `is_error=True` result
+(missing file, permission denied, non-zero exit, truncation), ERROR only for the
+unexpected-exception catch-all via `logger.exception`. The INFO cases are routine
+model-probing outcomes the model itself reacts to; elevating them would train operators to
+ignore warnings.
+
+**Tools.** `read_file` (byte-truncated at `MAX_READ_BYTES` with a visible trailing marker —
+truncation is never silent), `write_file` (creates parent dirs, reports created-vs-overwritten
+plus byte count), `bash` (spawned with `start_new_session=True` so the timeout path can
+`os.killpg` the whole group, labeled stdout/stderr each truncated at `MAX_OUTPUT_BYTES`,
+non-zero exit carries the captured output back because the model needs it to react).
+Blocking filesystem work goes through `asyncio.to_thread`.
+
+Limits are read as module attributes at call time, never captured at import — that is what
+makes the monkeypatched-constant tests work, and it kept the bash timeout test at 0.5s instead
+of hanging for the real 120s. Verified separately that the process-group kill leaves no
+orphan: a command backgrounding a child dies whole.
+
+**Nothing consumes tools yet** — that is 262. `git diff --stat main..HEAD` touches only
+`src/squadron/tools/` and `tests/tools/`, 1088 insertions, 0 deletions, so behavior-neutrality
+holds by construction rather than by inspection. 54 new tests; full suite 3075 passed, 2
+skipped, no regression. Whole-repo pyright reports 1752 errors both before and after this
+branch, none of them in `squadron/tools/`, which is strict-clean on its own.
+
+Committed per task group (8 commits) rather than once at the end, per review finding F003.
+
+### Slice 261: Task Review Findings Addressed (Phase 5)
+
+Review `261-review.tasks...md` (verdict CONCERNS, claude-sonnet-5, reviewedSha `94348c8`):
+2 pass, 1 concern, 2 notes. Both actionable findings addressed.
+
+**F003 (concern) — all commits batched at the end.** Correct call, and it violated the project's
+own rule ("git add and commit from project root at least once per task"). The original breakdown
+had exactly one commit checkpoint, at Task 8.6, after all eight groups were implemented; an
+interruption after Task 5 would have left nothing to resume from or bisect against. Fixed by
+distributing commits: new **Task 0** creates the slice branch (previously conflated into 8.6,
+which no longer makes sense once commits are spread out), groups 1–7 each end with a commit step
+naming its own semantic message, and 8.6 commits only the close-out documentation. A "Commit
+cadence" note under Task 0 states the invariant every commit must hold — `pytest tests/tools/ -q`
+passes — which the group ordering already makes achievable.
+
+**F005 (note) — jail helper had no task-local test.** Its stated success criterion was
+annotation/pyright-clean only, with behavioral coverage borrowed entirely from the `read_file` and
+`write_file` test tasks. Added **Task 3.1a**, testing the helper in isolation. Beyond mirroring the
+tool-level cases it adds two the tool tests do not cover: a path whose *parent* resolves outside
+the jail (the case `write_file` depends on before creating directories), and a sibling directory
+sharing a string prefix with the jail root (`…/jail` vs `…/jail_evil`) — the direct regression test
+for 3.1's "do not use `startswith`" instruction, since that is exactly the case prefix comparison
+gets wrong and `is_relative_to` gets right. A jail regression now names the jail instead of
+surfacing as two confusing tool-test failures.
+
+**F004 (note) — no load-test/CI-gating criterion.** Confirmed out of scope, no change: the byte
+limits and `BASH_TIMEOUT_S` are correctness/safety bounds verified by unit tests with monkeypatched
+constants, not a performance SLA.
+
+Also corrected while in the file: Task 3.2's success criterion claimed the wrapper "is used by all
+three tools", which is unverifiable at that point in the sequence — no tool exists yet. It now
+points at Task 8.3's full gate as the place that confirmation actually happens.
+
+Task file grew 426 → 498 lines. Over the 450 target but within the ~100-line overrun allowance, so
+it stays one file.
+
+---
+
+### Slice 261: Task Breakdown Complete (Phase 5)
+
+**Tasks written** to `261-tasks.tool-registry-descriptor-protocol-and-core-tool-implementations.md`
+(426 lines, 8 task groups, 20 subtasks, test-with pattern throughout — each implementation task
+immediately followed by its test task).
+
+**Sequencing:** package skeleton + pure types (1) → registry (2) → shared jail/wrapper plumbing (3)
+→ `read_file` (4) → `write_file` (5) → `bash` (6) → package wiring (7) → verification and close-out
+(8). This follows the design's suggested order, with the path-jail helper and shared executor
+wrapper pulled forward into their own group so both file tools consume one implementation rather
+than duplicating the check.
+
+**Anchors traced on `b05fadc`** and recorded in the task file's Context Summary, so the
+implementing agent does not have to rediscover them:
+
+- `src/squadron/tools/` does not exist; `src/squadron/mcp/` is an empty package.
+- `asyncio_mode = "auto"` in pytest config — `async def` tests need no decorator.
+- Ruff selects `BLE`, so the design's justified catch-all needs `# noqa: BLE001`; the established
+  idiom is at `pipeline/emit.py:157` and `pipeline/sdk_session.py:108`.
+- Pyright runs `strict` over `src`, so the new package must be fully annotated and must narrow
+  `dict[str, object]` values before use.
+- Async subprocess idiom mirrors `events/builtin/frontmatter_gate.py:46`.
+
+**Three constraints added that the design implies but does not state:** the `noqa` requirement
+above; pyright-strict narrowing; and `caplog.set_level(logging.INFO)` being necessary for the
+INFO-level logging assertions the design's F003 fix requires (caplog propagates at WARNING by
+default, so those assertions would silently pass-by-absence without it).
+
+**Two implementation hazards called out in the tasks:**
+
+- The registry is module-level and the built-ins register at import, so registry tests need a
+  snapshot/restore fixture or test doubles leak across modules.
+- The bash timeout test monkeypatches `BASH_TIMEOUT_S`; if the executor captures the constant at
+  import rather than reading the module attribute at call time, the monkeypatch is inert and the
+  test hangs for the full 120 s. The task instructs changing the code, not the test.
+
+**Verification group (8)** enforces the slice's behavior-neutrality guarantee explicitly: a grep
+proving no limit literal escapes `limits.py`, a grep proving nothing outside the package imports
+`squadron.tools`, and a `git status` check that no file outside `src/squadron/tools/` and
+`tests/tools/` was modified.
+
+**Next:** Phase 6 — implementation on branch
+`261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations`, forked from `main`.
+
+---
+
+## 20260825
+
+### Slice 261: Tool Registry, Descriptor Protocol, and Core Tools — Design Complete (Phase 4)
+
+**Design written** to `261-slice.tool-registry-descriptor-protocol-and-core-tool-implementations.md`.
+Foundation slice for initiative 260 (non-SDK agent tool use): `ToolDescriptor` (frozen dataclass —
+one shape, no Protocol), `ToolResult`, a process-level registry mirroring `providers/registry.py`,
+and three core tools (`read_file`, `write_file`, `bash`) in a new `src/squadron/tools/` package —
+sibling to `providers/`, diverging from the arch doc's tentative `core/tools/` to keep `core/` from
+accreting. No agent, executor, or pipeline change; after landing, tools exist fully tested with no
+behavior change anywhere.
+
+Decisions of note: registry `register()` rejects duplicate names (unlike the provider registry's
+silent overwrite — a tool collision is a security-relevant surface); `materialize()` raises
+`ToolNotRegisteredError` for unknown names (caller config error; model-requested-unknown is 262's
+concern); `cwd` is closure-bound by factories and never appears in a tool's JSON schema; all limits
+(`MAX_READ_BYTES`, `MAX_OUTPUT_BYTES`, `BASH_TIMEOUT_S`) live in one `limits.py`; bash gets a
+process-group kill on timeout so a hung command cannot hang 262's future loop. Names registered
+here start the canonical tool vocabulary (templates migrate to it in 265).
+
+Effort 2/5, `status: not_started`, slice-plan entry updated with design pointer.
+
+---
+
+## 20260824
+
+### Slice 365: Overview Command — Design Complete (Phase 4)
+
+**Design written** to `365-slice.overview-command.md`. Capability (b) of the Document Intelligence
+initiative: `/sq:overview` as a first-party command reading the initiative plan (required) and
+concept (optional), writing `{index}-analysis.overview.md` for a non-engineering reader. One file
+added — `commands/sq/overview.md`. No Python, no installer change; `install.py:48-55` copies
+`commands/sq/*.md` wholesale, so the file's presence is its registration.
+
+**Central decision: the command file is self-contained and does not reference the analysis pack.**
+`commands/analysis/understand.md:344` already anticipated 365 reusing its provenance-block shape, but
+"reuse" here means restating the conventions in this file, not cross-referencing. The reason is an
+install-path fact: `install-commands` puts `overview.md` in `~/.claude/commands/sq/` unconditionally,
+while `understand.md` arrives only via the opt-in `sq skills install analysis`. A user with squadron
+installed and no analysis pack would have a reference resolving to nothing — and the failure would be
+a silently degraded document, not a loud error. Accepted consequence: the convention statement
+(gap markers, provenance lines, frontmatter, index selection) exists in two files. Four intended
+divergences are enumerated in the design; a parity check is carried into the walkthrough. A shared
+fragment was rejected because it needs the installer change this initiative has committed not to make.
+
+**Degradation is per field, across a range of incompleteness — not per document.** The governing rule
+is: produce as much useful output as the inputs actually support, and state plainly what could not be
+produced and why. Incompleteness is the normal condition of a real project, not an error state. Seven
+input conditions are enumerated (concept absent; headings unmatched; section present but empty; plan
+without dependencies, without non-goals, of one-line stubs, without statuses), each degrading only the
+fields it feeds. A section that exists but is empty behaves exactly as an absent one — the failure to
+guard against is a field rendering blank or getting filled with plausible prose because *something*
+was technically read.
+
+**Two hard stops, both about the required input:** a missing or unreadable initiative plan, and a plan
+present but yielding no parseable initiatives. The second is new — five of nine fields source from the
+plan, and a document that is mostly markers is a report that the project has not been planned, so
+saying that directly beats emitting a hollow document. Everything short of those produces a document.
+
+**Purpose is the one field with a real fallback rather than a marker.** With no concept it derives
+from the initiative plan and states that fallback in place. Problem, Audience, and Approach get no
+such fallback — the initiative plan describes what is being built, not whose problem it solves, and
+inferring the latter from the former is exactly the invention the sourced-or-gapped rule forbids.
+
+**No confirmation gate**, unlike 364. An overview renders artifacts that already exist and asserts no
+new commitment; inputs are read-only and the index rule never overwrites, so an unwanted run costs one
+deletable file. 364's gate exists because adopting a candidate *is* a commitment.
+
+**Squadron is a sample, not the baseline.** An earlier draft fitted the design to squadron's
+particular shape of incompleteness (concept absent, plan complete), which is one point in the range
+above. Verification instead runs constructed fixtures spanning all seven conditions, with squadron
+included as one real-world instance — valuable there for scale, since thirteen initiatives of real
+prose exercise the translation rules in a way a synthetic fixture cannot. This also relocates the
+usefulness question: accurate and complete degradation is now verifiable *here*, rather than deferred
+to a hypothetical repo, while stakeholder usefulness of a heavily gap-marked document stays a
+non-criterion.
+
+**Graph-derived artifacts are not read, even when present** — not the knowledge graph, the
+comprehension analyses, or the candidates document. The graph describes code structure, not intent;
+the candidates document is explicitly advisory, and rendering unadopted machine proposals as a
+roadmap is the overstates-progress failure the translation rules exist to prevent. But this does
+*not* cut inherited projects off from a good overview: the chain runs understand → generate concept
+and candidates → **human reviews and adopts** → overview reads the resulting planning documents
+normally. The overview never touches the graph; the generated artifacts arrive as reviewed planning
+documents. The human adoption step is load-bearing and deliberate. Whether those generated documents
+are good enough to adopt is genuinely open — 364 deferred that judgment itself — so the path is
+architecturally sound with unproven output quality, recorded as such rather than assumed.
+
+**Topic argument dropped.** The naming convention still permits `overview.{topic}`, but nothing asks
+for it and an unused argument is an untested path. The command takes no arguments.
+
+**Shared conventions fragment: deferred, not rejected.** An earlier draft asserted a shared fragment
+would need installer work; that is unverified, and both install paths already copy directories of
+markdown, so it might need no code change at all. Recorded as an open structural option to be
+answered with evidence when someone next touches either file. Until then, drift control is a manual
+parity diff — process, not machinery, and named as the honest weakness.
+
+Fourteen success criteria, a thirteen-step draft walkthrough, and two non-blocking Phase 6 questions
+(concept heading-match leniency, now testable via fixtures rather than blocked on a real concept; and
+Benefits granularity). Relative effort 3/5, matching the slice plan. Next: Phase 5 task breakdown.
+
+---
+
+## 20260823
+
+### Slice 364: Initiative Candidates — Implementation Complete
+
+**Phase 6 complete.** All ten task groups executed; all ten success criteria verified per the
+Verification Walkthrough. Everything is markdown — `commands/analysis/understand.md` gained a third
+sibling flow section (Flow: Initiative Candidates), plus the two cross-reference sentence fixes the
+task file anticipated. No Python, no test added.
+
+**Invocation-syntax correction found during the walkthrough.** The design's draft walkthrough used
+`/sq:analysis understand candidates`, but `/sq:analysis` only recognizes `tech-debt-audit` today —
+dispatcher routing for `understand` is slice 366, not yet built. The skill's actual present-day
+invocation is `/understand <argument>` per its own frontmatter. All walkthrough steps were executed
+by tracing the skill's protocol text directly. Doesn't affect any success criterion; corrected in the
+reconciled walkthrough so a future reader isn't sent looking for a command that doesn't exist yet.
+
+**Full run against squadron's real graph derived 8 candidates**, one per layer carrying at least one
+`complex` file-level node — matching the count the design's own Rationale section predicted. No
+concept document exists at the concept path, so ordering was signal-strength-only, as expected on
+this repo. Declined once (Task 8.2: nothing written, `git status` clean, every candidate verified
+traceable to the graph) then confirmed once (Task 8.3: written to
+`945-analysis.initiative-candidates.md`, `cf validate frontmatter` clean, all hand-checks passed).
+Node-id resolution, one independent dependency recount (24, matching exactly), and the initiative-plan
+untouched check (Task 8.4–8.6) all passed.
+
+**All three concept-ordering states exercised (Task 8.7)**, the engagement-informed and
+both-declined cases on scratch copies outside the repo entirely — never in `project-guides/`. The
+archived concept's Q1 answer ("take over maintenance, and modernize it") shifted the Shared
+Foundation candidate up, with the reason declared on the candidate per the design's rule. The
+zero-candidate path (Task 8.8) was simulated against a synthetic one-layer fixture rather than
+executed as a real write, since PM confirmed a fixture graph doesn't warrant a real `analysis/` file.
+
+**Four decisions the design deferred to Phase 6 are now recorded** (in the reconciled Verification
+Walkthrough): the layer-boundary candidacy threshold (resolved as complexity-cluster-only for this
+run — layer-boundary candidates weren't derived, since the design gave no numeric cutoff for when a
+layer boundary alone is "defensible"), per-candidate ordering-influence phrasing (a fixed
+structural-fact → engagement-framing → conclusion shape), scope-statement length (settled at 3–5
+sentences), and node-ID list rendering (a Markdown bullet list per candidate, directly greppable for
+the resolution check).
+
+**Close-out states the slice is mechanically verified, usefulness unjudged** — the non-criterion from
+Phase 4 design is repeated explicitly so a green walkthrough here is never later read as evidence the
+8 real candidates are worth adopting.
+
+Guards green: `ruff format --check .` (446 files), `pytest tests/skills/` (62 passed).
+
+**Commits:** `cf40bd3` flow selector · `a0fe779` preconditions · `3a351b3` derivation model ·
+`3305f99` record shape and dependencies · `f38a325` concept read · `04daf32` write confirmation ·
+`7115147` output conventions · `071890d` walkthrough proof artifact (`945-analysis.initiative-candidates.md`)
+· `7d0da0f` walkthrough reconciliation · `f8257e5` slice complete.
+
+**Next:** slice 365 (Overview Command, independent) or slice 366 (Dispatcher Routing and
+Documentation, last — also where `/sq:analysis understand candidates` becomes real). Issue #68
+(review `allowed_tools` silently ignored by non-SDK providers) remains open and unsized.
+
+### Slice 364: Initiative Candidates — Task Breakdown Complete
+
+**Phase 5 complete.** `364-tasks.initiative-candidates.md` — 440 lines, ten task groups (0–9),
+test-with pattern throughout: every authoring task is followed by its verification task before the
+next section begins.
+
+**Slice review passed first time.** Five findings, all `severity: pass`, nothing to resolve —
+architectural alignment across derivation, the initiative-plan boundary, the optional concept read,
+read discipline, and output conventions.
+
+**Anchors re-traced at write time** (`88e299e`), and two diverged from the design's measurements in
+ways worth recording:
+
+- **The graph is now 56 commits behind HEAD**, up from 45 at 363's walkthrough. Same
+  `gitCommitHash` `1bfbca1`, so the derivation figures are unchanged; preflight warns and proceeds.
+  Recorded as an expected observation rather than a blocker.
+- **Two `candidates` references in the skill, not one.** Line 399 is the flow-selection exclusion
+  note; line 649 is a cross-reference inside the comprehension flow saying initiative candidates
+  are slice 364. Both need updating — 363 hit the same shape and fixed only the equivalent single
+  sentence. Task 1.2 exists specifically for the second one, with a search-for-`364` check so a
+  third reference cannot hide.
+
+Next free analysis index is **945** (`940`–`944` taken).
+
+**Task-file decisions:**
+
+- **Task 0.2 carries a STOP condition** on the layer and complexity figures. The design's reasoning
+  about candidate count and ordering was measured against those numbers; if the graph is
+  re-analyzed before implementation, the reasoning needs re-checking rather than the tasks being
+  run anyway.
+- **The removal in Task 1.1 is "remove, do not amend."** An amended exclusion note still reads as a
+  live exclusion.
+- **362's mechanics are cited, never restated** — repeated as an instruction in Tasks 3.1, 5.2,
+  7.3, and checked in the verify tasks. A restated rule drifts from its original.
+- **Walkthrough Task 8.7 covers all three concept states** — degraded (the default on this repo),
+  engagement-informed, and both-questions-declined — with an explicit prohibition on restoring the
+  archived concept into the real tree. Scratch copies only; it is `docType: notes` /
+  `status: deprecated` and was archived deliberately.
+- **Task 9.2 requires the close-out to state "mechanically verified, usefulness unjudged."** The
+  non-criterion is only useful if it survives into the record; without it a green walkthrough reads
+  later as evidence the candidates are good.
+- **Task 9.1 records the four decisions Phase 4 deferred** — layer-boundary candidacy threshold,
+  per-candidate ordering-influence phrasing, scope-statement length discipline, node-ID list
+  rendering — so they land in the design rather than only in the implementation.
+
+No Python; no test added (`tests/skills/` runs as a regression guard only).
+
+---
+
+### Slice 364: Initiative Candidates — Design Complete
+
+**Phase 4 complete.** `364-slice.initiative-candidates.md` written; both open questions the slice
+plan recorded at planning time are resolved and the two disagreeing documents reconciled.
+
+**Does 364 read the concept? Yes — as an optional input.** The slice plan said graph-only
+(dependencies [361], [362]); 363's Integration Points said 364 consumes Q1's engagement answer via
+the written concept. Settled: the flow reads `000-concept.{project}.md` when one exists and degrades
+to structure-only when it does not. The concept affects **ordering only** — it never creates,
+suppresses, or supplies a candidate the graph does not support, which is what keeps the no-padding
+rule enforceable. Hard dependencies stay [361] and [362]; the concept is an input, not a dependency,
+so the graph-only path every repo has on day one still runs.
+
+The reasoning is grounded in the real graph: ten layers, and `complex` file-level nodes distributed
+14/9/7/7/3/1/1/1 across eight of them. That is roughly eight defensible candidates with no ordering
+principle among them. Q1 ("take over maintenance and modernize" vs "audit it") is the only available
+input that orders the identical set. A both-questions-declined concept is recorded distinctly from a
+missing one — the interview happening and returning nothing is a different fact.
+
+**Where candidate quality gets judged.** Mechanical correctness — signal named, node IDs resolve,
+dependencies counted from `edges[]`, nothing written without confirmation — verifies against
+squadron and the walkthrough does exactly that. Usefulness does not: squadron's initiative plan is
+hand-written, so a proposal cannot be told apart from a restatement of already-scoped work. Recorded
+as an **explicit non-criterion** so a green walkthrough here is not read as evidence the suggestions
+are good.
+
+**Design decisions beyond the two questions:**
+
+- **One signal per candidate**, never two. A candidate citing both a layer boundary and a complexity
+  cluster is checkable against neither.
+- **Node IDs are cited, not summarized.** "Several files in Pipeline Orchestration" is not checkable
+  by someone deciding whether to adopt the proposal.
+- **Dependencies are directional edge counts, not sequencing claims.** The document says "27 imports
+  into Candidate 1's layers"; inferring order from that belongs to the human.
+- **The confirmation defaults to not writing** — the opposite of 363's, which never stalls. 363
+  writes a Phase 0 entry point a repo has no other way to obtain; this writes an advisory list that
+  costs nothing to regenerate.
+- **Zero candidates still asks, and still writes.** A negative result is a real finding about the
+  graph; suppressing it would make it indistinguishable from a failed run.
+- **`[INFERRED]` is not used in this flow**, stated explicitly so the absence reads as a decision. A
+  claim not traceable to a cited signal or node id has no place in the document at all.
+- **362's mechanics are cited, never restated** — file-level definition, `nodeIds | length` counting
+  with type breakdown, ordinal `complexity` handling, drift rule, edge endpoint string-parse.
+
+**Documents corrected:** slice plan entry 4 (both "Open at design time" blocks replaced by the
+resolutions, ordering success criterion and optional-read interface added); 363's Integration Points
+line for 364 qualified with *when a concept exists*.
+
+No Python. `cf validate frontmatter` passes on all three touched documents.
+
+---
+
+## 20260822
+
+### Slice 363: Concept Generation — Implementation Complete
+
+**Phase 6 complete.** `commands/analysis/understand.md` grows from 669 to 1017 lines with a sibling
+**Flow: Concept Generation** section plus a shared flow selector. No Python; the only changed
+non-document file is the skill itself.
+
+**What landed.** A four-case flow selector (none/`comprehension` → comprehension flow, `concept` →
+the new flow, anything else stops; `candidates` stays unrecognized until 364), explicit-argument-only
+with preflight unchanged for both flows. Three preconditions with two terminal stops and the
+`/cf:onboard` boundary. The three-source extraction model — graph (structure, reading strictly less
+than the comprehension flow), root README (intent, cited by file, quoted not paraphrased), and a
+closed filesystem checklist (development practice, where absence is an observation rather than a
+gap). The binding seven-row per-section mapping table with the dropped-topics rule and Solution
+Approach's coverage boundary. The two fixed engagement questions, byte-identical to the design, plus
+the single confirm-or-correct. The User-Provided Concept write-time contract and re-run semantics.
+`[INFERRED]` governance, output conventions, and the concept provenance block.
+
+**Walkthrough outcomes.** The happy path ran live with the PM: both questions answered, and the
+derived description **corrected** on two points — the server surface is expected to move to amoeba,
+and pipelines drive the context-forge state machine rather than orchestrating agents generically.
+The correction landed in the body with provenance `extracted-and-corrected`, exercising that outcome
+as the design intended. `cf validate frontmatter` passes. The dropped-topics check found zero
+occurrences as content **and** zero as gap markers. The two-direction `[INFERRED]` audit passed: two
+marked sentences, both derived from `tour[]` ordering and `layers[]` counts, both listed in
+provenance; every unmarked sentence restates a field, cites a file, or reports an observed signal.
+
+The decline path, all three contract/precondition failure cases (renamed section, guide file absent,
+guide tree absent), and augment re-run semantics were exercised on scratch copies — the real guide
+was never edited and the repo was clean after each. Default stop proved non-mutating against the real
+document (identical hash, clean diff); augment refilled exactly the emptied and gap-marked sections,
+appended under a dated subheading, and left populated sections byte-identical.
+
+**Generated artifact — archived, not adopted.** The walkthrough wrote
+`000-concept.squadron.md` with the filename from the cf project name and the `squadron-ai` graph
+divergence stated in the Overview. It now lives at `user/archive/000-concept.squadron.md` as
+`docType: notes` / `status: deprecated`. It is **not** squadron's concept document: the engagement
+answers were fixtures given to exercise the interview, and squadron is under active development
+rather than a maintenance takeover. Kept because the extraction quality — and specifically the two
+places it needed correcting — is the data for tuning the flow.
+
+**Flow refinements from the walkthrough.** Three findings, all fixed in the same branch:
+
+1. **README precedence.** The Overview drew on `project.description` and the README lead with no
+   rule for disagreement. The graph's description was 45 commits stale and described an earlier,
+   narrower squadron. The flow now states that **the README wins** — it is author-maintained and
+   travels with the code, while `project.description` describes the repo as it stood when the graph
+   was built.
+2. **Disagreement is a finding, not noise.** Where the two sources describe the project as different
+   *kinds of thing*, the flow now surfaces that at the confirmation instead of blending them into an
+   averaged paragraph. A scope that moved without the graph following is worth telling the operator.
+3. **The Overview read only the two top-level summaries.** The context-forge correction was
+   initially recorded as unreachable intent. That was wrong, and the PM caught it: squadron has
+   driven the context-forge state machine since long before the graph was built, and the graph says
+   so — `context-forge` appears in **two** layer descriptions and in
+   `src/squadron/integrations/context_forge.py`. It was in scope and the draft missed it, because
+   the Overview drew only on `project.description` and the README lead, both of which are summaries
+   and both of which drop the specific systems a project integrates with. The Overview row now reads
+   `layers[]` descriptions too (no extra read — already loaded for Solution Approach), with a
+   checkable rule: a system named in two or more layer descriptions and absent from the Overview
+   belongs there. Verified against this graph, the check selects exactly `context-forge`.
+4. **Decided-but-unbuilt intent is invisible to all three sources.** This holds for **one** of the
+   two corrections: the server surface moving to amoeba is a decision that exists nowhere in the
+   code. The confirmation carries one bounded, skippable prompt for that class of fact — **part of
+   the confirmation, not a third interview question**, so SC2's two-question limit is intact, and a
+   skipped answer adds nothing to the document. It is explicitly **not** a substitute for reading
+   the sources properly: a fact already present in `layers[]` or a module name is an extraction
+   failure when the operator has to supply it.
+
+**Deviations.** One beyond the task file: a second stale forward-reference at the comprehension
+flow's Project identity section ("in slice 363") was corrected alongside Task 7.4's, since it was the
+same class of defect. Task 8's `[INFERRED]` audit and augment case were run as scripted checks over
+the real and scratch documents rather than by eye, which is what makes them re-runnable by an
+external agent.
+
+### Slice 363: Concept Generation — Task Breakdown Complete
+
+**Phase 5 complete.** `user/tasks/363-tasks.concept-generation.md` (375 lines, frontmatter gate
+clean) converts the redesigned slice into 10 task groups: branch + premise re-verification (with
+STOP condition against the design's Verified-facts table), flow selector, preconditions and the
+`/cf:onboard` boundary, the three-source extraction model (graph / root README / filesystem
+signals), the binding per-section mapping table, the two-question engagement interview and single
+confirmation (byte-identical wording verification — an improvised question is a defect against
+SC2), the User-Provided Concept contract with re-run semantics, `[INFERRED]` governance + output
+conventions + provenance, the 6-step verification walkthrough (happy path with PM live, decline
+path, contract failure on a scratch guide copy, re-run, flow selection, discipline/scope), and
+slice close. Verification is paired with each authoring task per test-with; commits are
+distributed at seven checkpoints. Anchors re-traced today on `main` at `dfce803`: graph `1bfbca1`
+unchanged, README/tests/CI/config signals present, concept guide holds `## User-Provided Concept`
+exactly once, no existing `000-concept.*`. Task file carries an explicit PM-interaction notice:
+walkthrough 8.1 needs the PM live, framed before any question is asked, plain text only. Stale cf
+`slice`/`tasks` fields (still naming the deleted `-with-interview` documents) corrected to
+`363-slice.concept-generation` / `363-tasks.concept-generation`. Awaiting PM approval of the
+breakdown before Phase 6 (branch `363-slice.concept-generation` from `main`).
+
+### Slice 363: Design Rejected and Redesigned — Concept Generation
+
+The PM rejected the original 363 design at the start of its Phase 6 verification walkthrough: the
+six fixed interview questions ("what problem does this solve and for whom?", "why now?", audience
+evolution, methodology preferences) are generic product-discovery boilerplate with no value for an
+existing codebase — the answers either sit in the repo's own artifacts or do not matter. The slice
+was reset to Phase 4; the task file and both reviews were deleted (`4628f18`), the slice branch and
+its one implementation commit deleted, and the design rewritten.
+
+**Root defect:** the architecture treated the graph as the only machine-readable source, so every
+graph gap defaulted to interviewing the human. Two measured facts expose it: squadron's README lead
+answers "what is this, what problem, who reaches it" directly (the old flow would have asked the PM
+while the answer sat in README line 3), and the filesystem carries `tests/`, `.github/workflows/`,
+and ruff/pytest config even though the graph has zero test/CI nodes — the old design made
+Development Approach interview-primary because it only looked at the graph.
+
+**Redesign** (`363-slice.concept-generation.md`, replacing
+`363-slice.concept-generation-with-interview.md`): three extraction sources — graph (structure),
+root README (intent, cited by file), filesystem signals (development practice, closed checklist) —
+all read before any human contact. Interview reduced to two skippable engagement-context questions
+(what the operator needs to do with the codebase; unwritten constraints), answers verbatim into
+User-Provided Concept. One confirm-or-correct on the derived description before write. Why-now and
+audience questions are dropped entirely, not gap-marked. Retained from the old design: flow
+selection, the User-Provided Concept cross-repo contract, re-run semantics, `[INFERRED]` governance,
+output conventions, read discipline.
+
+**Architecture amended in place** (PM-sanctioned): Flow steps 3–5 now read prose/signals before a
+two-question interview; the Interview scope section carries the new source model and per-section
+table; the settled open question on interview wording is removed. Slice plan entry 3 rewritten to
+match — risk drops to Low, effort 4/5 → 3/5. New precondition made explicit: the ai-project-guide
+must be installed (`/cf:onboard` owns setup and the greenfield conversational path; this flow owns
+brownfield artifact-derived drafting — complementary, not overlapping).
+
+### Slice 363: Phase 5 Task Breakdown Complete — Concept Generation with Interview
+
+> **Superseded same day** — this design was rejected at Phase 6 entry; see the redesign entry above.
+
+Design review landed PASS (z-ai/glm-5.2, 6 pass-severity findings, no CONCERNS to carry into
+implementation) before task breakdown began. Converted the design into
+`363-tasks.concept-generation-with-interview.md`, 394 lines, ten task groups mirroring 362's proven
+shape: branch/premise verification, then one group per major design decision (flow selection,
+extract-then-ask procedure and decision table, interview questions, User-Provided Concept contract,
+re-run semantics, `[INFERRED]` governance and declines, output conventions, verification
+walkthrough, close-out), test-with cadence throughout.
+
+**Task 0 re-measures the same three graph facts the design rests on** — `project.name` vs the
+squadron project name, non-empty `languages`/`frameworks`, and zero test/CI nodes — as a stated STOP
+condition before any implementation task runs, since the per-section decision table was built
+directly on those numbers.
+
+**The cross-repo contract check (Task 4) is tested both directions on a scratch copy only** — the
+real `guide.ai-project.000-concept.md` is never mutated, matching the design's own terminal-failure
+framing for that check.
+
+**All 15 success criteria mapped to specific tasks** with no gaps: flow selection (1) → Task 1;
+extract-then-ask scoping (2) → Task 2; question wording (3) → Task 3; declines (4) → Task 6;
+User-Provided Concept verbatim/preserve/fail-loud (5, 6) → Task 4; re-run non-destructiveness (7) →
+Task 5; frontmatter and gate (8) → Task 7; provenance shape (9) → Task 7; `[INFERRED]` governance
+(10) → Task 6; filename vs `project.name` (11) → Task 7; coverage boundary (12) → Task 8; read
+discipline and scope (13, 15) → Task 8; PM-usable output (14) → Task 8.
+
+---
+
+## 20260820
+
+### Slice 363: Phase 4 Slice Design Complete — Concept Generation with Interview
+
+Design written for the interview-driven half of capability (a): produce `000-concept.{project}.md`
+for a codebase that has no concept document. Markdown only — a sibling flow section in
+`commands/analysis/understand.md`, no Python, no change to `src/squadron/` and none to the
+ai-project-guide.
+
+**Three measurements against the real graph changed the design.** `project.name` is `squadron-ai`,
+the distribution name — deriving the output filename from it would write
+`000-concept.squadron-ai.md`, which no `cf` introspection would find, so the filename's `{project}`
+is the squadron project name and the graph's value is reported in provenance instead.
+`project.description` is upstream prose generated at `1bfbca1` that still calls squadron "a
+template-driven code review framework", so Overview is confirm-or-correct with `lastAnalyzedAt`
+shown at the moment of judgment rather than extract-and-accept. And `.understandignore` excludes
+`/tests/`, `.github/`, `/commands/`, `project-documents/`, and all `*.md`, leaving zero test nodes
+and zero CI nodes — so the architecture's "test/CI config nodes as weak evidence" for Development
+Approach does not hold here, and that section is interview-primary with the attempt still coded for
+differently-configured repos.
+
+**Interview wording and ordering settled** — the parent architecture's first open question. Six
+fixed questions, asked before any extracted content is shown. Intent first, for two reasons: a PM
+shown a machine's description answers in the machine's vocabulary, and intent questions are the ones
+a PM may decline, so declining early costs nothing. Question 6 is an open catch so the fixed set does
+not silently bound what the PM can contribute. Nothing structural is asked. Answers to 1–4 serve both
+as the verbatim User-Provided Concept content and as the source for the matching Refined Concept
+sections, which is the concept guide's own model.
+
+**`[INFERRED]` governance, deferred here by 362, is settled.** The concept flow uses it where the
+comprehension flow does not: a sentence carries the marker when it is derived from a named graph
+field but asserts something the field does not literally state, carries no marker when it restates
+the field, and does not belong in the document at all when no field is behind it. A PM-confirmed
+inference stays marked — the marker describes provenance, not confidence.
+
+**The concept is the initiative's one non-idempotent output.** Every other document takes a fresh
+index per run; this one has a fixed path, so a re-run necessarily meets an existing document. It is
+never overwritten. Augmenting appends to User-Provided Concept under a dated subheading and fills
+only Refined Concept sections that are empty or hold a gap marker — mechanically distinguishable,
+since a section whose body is exactly a `[GAP: ...]` marker is machine-written.
+
+**The cross-repo contract is verified at write time, and its failure is terminal, not a gap
+marker.** A missing or renamed **User-Provided Concept** section means the document cannot be
+correctly written at all, which is a different thing from a document missing something.
+
+---
+
+## 20260819
+
+### Slice 362: Comprehension Analysis and Graph Extraction — Implementation Complete
+
+**Phase 6 complete** on branch `362-slice.comprehension-analysis-and-graph-extraction` (7 commits, unmerged — merge is PM-gated). All ten task groups done; walkthrough executed in full with every step passing.
+
+**Both STOP gates cleared before any edit.** Premise re-measurement returned 238/238/238 with layer compositions matching the design exactly (Packaged Declarative Content 34 `config:13 file:1 pipeline:20`, Project Configuration 6 `config:4 file:2`). The id-prefix contract held at `ok:true, n:925`, zero filePaths containing a colon, zero edges with an absent endpoint — so endpoint resolution is a pure string parse and no function/class node is ever read.
+
+**Three 361-contract corrections landed, each verified against the real graph before its commit:**
+
+- **Correction 1 (`4e1ec80`)** — layer count is `nodeIds | length` with a type breakdown where mixed, plus a drift cross-check that reports rather than filters. Verified: 34, 6, sum 238, zero drift on both the type check and the filePath check.
+- **Correction 2 (`2aafe86`)** — file-level selector widened to `select(.type != "function" and .type != "class")`. Verified 238, reconciling exactly with `meta.json` `analyzedFiles`; zero survivors lack `filePath`. The old allow-list form yields 201, losing 17 `config` and 20 `pipeline` nodes.
+- **Correction 3 (`1204380`)** — the `fingerprints.json` churn note now names the two actual writers. Confirmed against the installed plugin's own `hooks/hooks.json`: the post-commit hook is gated on `"autoUpdate".*true` in `config.json` and the plugin's default is `autoUpdate: false`, so on this repo (which sets only `outputLanguage`) it never fires. Reading a graph never writes fingerprints — later confirmed empirically, see below.
+
+**Skill now carries the full seven-section contract**: the extraction mapping table (verified byte-identical to design lines 241–249), three new sections (project identity, entry points, coverage/scope limits — closing all three 361 deferrals), four deepened sections with explicit ordering rules and fallbacks, the `[INFERRED]`-is-a-defect governance with its mechanical closing-observation test, and the `analyze-codebase-prompt.md` decision (two conventions adopted, no structure, document retained unchanged).
+
+**Generated sample 944** (`user/analysis/944-analysis.codebase-comprehension.md`): seven sections in mapping order, Provenance under the H1, seven inline `From ...` lead sentences satisfying SC1, `grep -c INFERRED` = 0, frontmatter gate clean with a real model id. 943 not overwritten.
+
+**Two numbers changed from the design's measurements — both consequences of correction 2, not premise failures:**
+
+- **Entry points are 28, not 27.** The design counted `type == "file"` only; the corrected selector adds `pyproject.toml`, a `config`-type node genuinely carrying the `entry-point` tag and declaring the `sq` console script. The narrow selector was silently dropping a real entry point — the correction proving itself on its first use.
+- **Complexity distribution is 43/89/106 across 238**, where 943 reported 42/76/83 across 201. Same cause; both are internally consistent with their own selector. 943 deliberately retains the pre-correction numbers as the historical record.
+
+**Walkthrough outcomes.** Gap-marker paths (empty `tour`, no `entry-point` tag, absent `meta.json`) each degrade exactly one section and complete. Induced unresolvable endpoints both detected and named — dangling target reported `UNRESOLVED`, malformed source reported `MALFORMED` — with the control run on the unmodified graph returning 0, which is what makes the positives meaningful rather than a check that always fires. Coverage discrepancy reports both numbers (999 vs 238) preferring neither. Full-slice: no `src/` diff, 446 files formatted, 62 skills tests pass.
+
+**One spot-check reported rather than reconciled.** The CLI Surface layer `description` says "27 `sq` sub-commands"; `app.py` registers 23 top-level entries (15 commands + 8 sub-groups) and `cli/commands/` holds 26 non-`__init__` modules. Layer descriptions are upstream-generated prose quoted verbatim, so this is recorded as a caveat in the generated document; the layer's computed node count (29) is unaffected. Numbers embedded in upstream prose carry upstream's authority, not the document's.
+
+**Read discipline held throughout and is now empirically demonstrated.** Every graph access was a field-scoped `jq` selection; no `cat`, `head`, or Read tool call targeted `knowledge-graph.json`, and `git status` on `.understand-anything/` reports no modification — `fingerprints.json` included, which is direct evidence for correction 3's claim.
+
+The design's Verification Walkthrough was updated in place with actual commands, results, and a per-step outcome table, so an external agent can re-run it. Awaiting PM review and merge authorization.
+
+### Slice 362: Comprehension Analysis and Graph Extraction — Task Breakdown Complete
+
+**Phase 5 complete.** Task file at `user/tasks/362-tasks.comprehension-analysis-and-graph-extraction.md` (378 lines, status not_started). Committed to `main` (planning work, no branch). Ten task groups: branch + premise re-verification (with the design's two STOP conditions promoted to explicit gate tasks 0.2/0.3), the three 361-contract corrections each paired with its own verification and commit, the extraction mapping table, the three new sections and four deepened sections as separate per-component subtasks with test-with verification, recorded decisions + cross-reference line, the full eight-step walkthrough (including induced unresolvable-endpoint and coverage-discrepancy paths), and slice close.
+
+**One recorded deviation from the design:** Implementation Notes step 1 says re-run the flow immediately after corrections 1–2. The breakdown instead verifies corrections by executing the corrected skill's own `jq` selections (deterministic, zero tokens, same 34/6/238 evidence) and runs the full flow once at the walkthrough — an interim LLM run would write a throwaway numbered sample at 944 and displace the walkthrough's expected index. Flagged in the task file with the literal-fidelity alternative (walkthrough doc at 945) if the PM prefers.
+
+**Anchors re-verified at breakdown time on `837ff73`:** skill file present (388 lines), graph unchanged since design (`gitCommitHash` `1bfbca1`), next analysis index 944, `.gitignore` trash-only scope already in place (so correction 3 touches only the skill's note text).
+
+Awaiting PM approval of the task breakdown before Phase 6.
+
+## 20260818
+
+### Slice 361: Phase 6 Implementation Complete — Graph Contract and Provenance
+
+Foundation slice of initiative 360 delivered. Everything is markdown authoring: the only new
+non-document file is `commands/analysis/understand.md`. No Python was added, `src/squadron/` is
+untouched, and the full suite is green at 3021 passed / 2 skipped (both skips pre-existing).
+
+**The contract lives inside the skill file, not a fragment.** `_install_prefix()` globs every pack
+`*.md` and installs each as its own skill, so a `graph-contract.md` fragment would have surfaced to
+users as a bogus installable command. Slices 362-364 extend this same file; 365 copies the
+conventions instead, since a first-party `commands/sq/` command cannot assume the analysis pack is
+installed.
+
+**Two divergences from the design, both found by running against a real graph rather than reading
+about one.**
+
+The first is the one worth carrying forward: `complexity` is an **ordinal string** — `simple` (83),
+`moderate` (76), `complex` (42) across 201 file-level nodes — not the numeric sort key the design
+assumed. `sort_by(-.complexity)` fails outright with `string ("simple") cannot be negated`, which is
+at least a loud failure rather than a silent miscount. The Complexity hotspots section now selects
+the top tier. Per Task 0.1's stop-and-escalate rule this was assessed as a contract question, and it
+is a **narrowing, not a break**: the field's name and presence match the architecture's documented
+shape, so no escalation was required. Recorded for 362.
+
+The second: `layers[].nodeIds` mixes file, function, and class nodes, so a file count requires
+intersecting with `type == "file"`. Taking `nodeIds | length` would have reported node counts as
+file counts — wrong by roughly 4x, and wrong in a way that reads as plausible.
+
+**Upstream contract drift remains the initiative's standing risk, and this slice is the mitigation
+working as intended.** Both divergences were caught in minutes because validation runs before every
+read and because verification used real data. Neither would have been caught by authoring alone.
+
+**Staleness during implementation is expected, not a defect.** Each commit moves HEAD past the
+graph's `gitCommitHash`, so runs late in the slice legitimately report "N commits behind HEAD". The
+943 sample records the drift, notes that the intervening commits touched only the skill file and
+`.gitignore`, and logs proceeding as a deliberate choice — which is precisely the behavior the
+provenance block exists to produce.
+
+**Environment caveat worth knowing.** A globally installed `sq` (uv tool at `~/.local/bin/sq`)
+resolves its bundled pack from its own snapshot and reports `1 file(s)`, silently ignoring the
+working tree. `uv run sq skills install analysis` reports `2 file(s)` and is what exercises the
+working-tree installer. This cost a diagnostic detour; the walkthrough now names it.
+
+Verification produced `project-documents/user/analysis/943-analysis.codebase-comprehension.md`, whose
+two spot-checked claims both held against the real repo: the CLI Surface layer's "27 sq sub-commands"
+matches exactly 27 modules in `src/squadron/cli/commands/`, and `pipeline/sdk_session.py`'s `complex`
+rating matches a real 288-line SDK-session wrapper. The design's Verification Walkthrough has been
+rewritten with actual commands and observed output so an external agent can re-run it.
+
+**Next:** slice 362 (Comprehension Analysis and Graph Extraction), which deepens this flow and
+inherits three deferrals — `config.json` / `.understandignore` coverage limits, `meta.json`'s
+`analyzedFiles`, and governance of `[INFERRED]` in deeper analysis.
+
+---
+
+
+### Initiative 360: Phase 3 Slice Planning Complete — Document Intelligence
+
+Slice plan written to `project-documents/user/architecture/360-slices.document-intelligence.md`.
+Six slices across foundation, feature, and integration work, breaking down the two capabilities the
+parent architecture describes.
+
+**Slice boundaries follow the dependency structure, not the capability split.** The obvious cut —
+one slice per capability — would have produced a 4/5-effort monolith for (a) and hidden the fact
+that its three outputs share exactly one thing: the graph-reading contract. That contract is the
+only foundation work here, so it became slice 361 with the comprehension analysis as its proving
+consumer. The remaining (a) outputs (362 extraction, 363 concept+interview, 364 candidates) are
+ordered by how much human input they need, cheapest first, so extraction quality is verifiable
+before interview complexity lands on top.
+
+**Capability (b) is genuinely independent and the plan says so.** Slice 365 reads no graph and has
+no external dependency. It is numbered last for coherence but explicitly insertable anywhere —
+including first, if a client-facing artifact is wanted sooner, or when the marketplace plugin is
+unavailable. Stating that in the implementation order matters more than the number.
+
+**Risk ordering put the upstream contract first.** 361 leads because it is the only place this
+initiative can be broken by someone else's release — the `understand-anything` plugin is actively
+developed and its output shape is observed, not guaranteed. Proving the contract against a real
+graph early surfaces that risk before three skills depend on it. It is also the only Medium-risk
+slice besides 363, whose risk is interview quality rather than external change.
+
+**Both of the parent's open questions were assigned rather than left floating** — interview wording
+to 363, `analyze-codebase-prompt.md` reuse to 362. Gap-marker syntax, which surfaced during the
+architecture review, is settled in 361 because the first generated artifact needs it. No open
+question remains unowned.
+
+**No slice adds Python.** Every one is markdown skill content plus, in 366, three edits to an
+existing dispatcher. `sq install-commands` copies `commands/sq/*.md` wholesale and
+`_install_prefix()` copies all `*.md` from `commands/analysis/`, so registration is free for both
+capabilities. The plan records this as a tripwire: a slice design concluding otherwise means scope
+has drifted from the architecture.
+
+Four items went to Future Work, notably the 900-band index re-cut — the band now carries reviews,
+analyses, maintenance tasks, and generated documents in 100 slots, with 940-949 overflowing by
+design. That touches `file-naming-conventions.md` and therefore every project on the guide, so it
+belongs in 900-band maintenance, not here.
+
+---
+
+### Slice 362: Comprehension Analysis and Graph Extraction — Slice Design Complete
+
+**Phase 4 complete.** Design at `user/slices/362-slice.comprehension-analysis-and-graph-extraction.md`; the slice plan entry already carried the (362) index. Committed to `main` (planning work, no branch).
+
+**Two corrections to the shipped 361 contract, both found by probing the real v2.8.1 graph while writing this design.** These make the slice a defect fix rather than a purely additive one:
+
+- **`layers[].nodeIds` does not mix function and class nodes.** The 361 skill says it does and instructs intersecting with `type == "file"` to get a file count. Measured: all 238 `nodeIds` entries across all 10 layers resolve to `file` (201), `config` (17), or `pipeline` (20) — zero function or class. The intersect instruction therefore **undercounts** two layers: Packaged Declarative Content reports 1 file instead of **34**, Project Configuration 2 instead of **6**. The generated `943` sample carries both wrong numbers. Fix is `nodeIds | length` plus a cross-check that every entry resolves to a node carrying `filePath` — a `function`/`class` entry is reported as upstream drift, not silently filtered, which keeps the simplification safe on graphs nobody has measured.
+- **"File-level" means "carries a `filePath`", not `type == "file"`.** The architecture names nine file-level types; 361 collapsed that to one, silently dropping 37 real analyzed files — every review template, every pipeline definition, `pyproject.toml`. Selector becomes `select(.type != "function" and .type != "class")`, stated as an exclusion so a future tenth upstream type is included automatically rather than dropped. This also repairs the coverage arithmetic: 238 file-level nodes reconciles exactly with `meta.json`'s `analyzedFiles` (238), which is what makes the new coverage section verifiable instead of decorative.
+
+Neither is an upstream contract change — the graph matches what the architecture documented, and the 361 skill text is what diverged. No escalation.
+
+**Extraction mapping is the core deliverable:** seven sections, each binding a source-field list, an ordering rule, and a fallback. Order is identity → structure → detail → caveats. The fallback column has no third option — every section resolves to sourced content or a gap marker, never a silent omission.
+
+**Three new sections** the corrected reading makes sourceable: project identity (`project.name/.description/.languages/.frameworks`, none read by 361), entry points (the `entry-point` tag, 27 nodes — the architecture required these and 361 did not deliver them), and coverage/scope limits, which closes all three 361 deferrals (`analyzedFiles`, `config.json`, `.understandignore`) in one place.
+
+**Both open questions settled:**
+- **`[INFERRED]`** — defined but not used by this flow; its appearance in a comprehension document is a defect. Every claim traces to a named field, so a gap marker is the correct output where inference would go. The marker stays documented for 363's interview path, which genuinely needs it.
+- **`analyze-codebase-prompt.md` reuse** — adopt its fact/inference discipline and its say-so-explicitly rule; adopt none of its ten-part template, which is built for a probe+Repomix backend supplying CI configs, dependency versions, and source text the graph does not have. Adopting it would yield a document that is mostly gap markers. The document is retained unchanged in `user/reference/` and gains only a cross-reference line.
+
+**Also recorded:** the architecture documents `config.json` as carrying `autoUpdate` and `outputLanguage`; the real file carries only `outputLanguage`. Section 7 therefore reports what is present rather than checking for expected keys.
+
+The walkthrough opens with a re-measurement step — if layer sum, `analyzedFiles`, and the file-level node count do not all agree at 238, implementation stops rather than proceeding on a stale premise. The 943 sample is deliberately left unedited; 944 will be the corrected sample and the divergence is evidence the fix landed.
+
+**Design review — CONCERNS** (`362-review.slice...md`, deepseek/deepseek-v4-flash-0731, 7 findings: 4 pass / 3 concern). All three concerns addressed in the design; no escalation.
+
+- **F001 (function/class endpoint resolution contradicts the "not read" rule)** — **valid, and it was a real contradiction.** Success Criterion 9 said no function/class node is read while Section detail item 6 said their edge endpoints are "resolved to their owning file's layer". Resolved better than any of the three options the reviewer offered: node `id` is `<type>:<filePath>[:<name>]`, and measurement shows the second colon field equals `filePath` for **all 925 nodes**, with no `filePath` containing a colon. Endpoint resolution is therefore a string parse of the edge's own `source`/`target` — **no node is read at all**, so both statements are now true simultaneously. Also measured the stakes: only **16 of 610** `imports`/`depends_on` edges touch a function/class endpoint (2.6%), so this is a correctness guarantee for a small tail, and the design now names the file-level-only fallback if the id contract ever fails.
+- **F002 (no failure path for unresolvable edge endpoints)** — **valid.** The fallback covenant said "no third option" and the dependency row had a hole. Added: an endpoint that fails to parse, or that resolves to no file-level node, is excluded from the tally and **reported as drift naming the id**, with the excluded count carried as a `[GAP: ...]` when non-zero. Zero of 2184 edges hit this in the real graph, but that is one graph. Walkthrough step 5b induces both variants against scratch copies and states that a silent-looking pass is a failure of the step.
+- **F003 (three sections beyond the architecture's declared four)** — **partly valid, and the specifics were right.** The architecture does list exactly four (line 163) and does assign `project.languages`/`frameworks` to the *concept* doc (line 220). Added a **Section count vs the architecture** subsection grounding each: reading order is **inherited from 361**, not new; coverage is an **architecture-sanctioned slot** (line 89 calls `.understandignore` the reference for "explaining coverage gaps"); project identity is the **one genuine extension**, justified because until 363 lands no artifact anywhere states what the project is — and explicitly marked as the section to drop if the PM disagrees, since nothing depends on it.
+
+Also corrected a stale line while in the file: `.understandignore` was described as "all-comments" while reporting 17 active lines.
+
+**Next:** Phase 5 task breakdown for 362.
+
+### Slice 361: Graph Contract and Provenance — Task Breakdown Complete
+
+**Phase 5 complete.** Tasks at `user/tasks/361-tasks.graph-contract-and-provenance.md` (349 lines, within guideline). Design review came back **PASS** (`361-review.slice.graph-contract-and-provenance.md`, minimax/minimax-m3, 15 findings: 12 pass / 3 note, zero concerns).
+
+**Review notes dispositioned in Task 1.1, no design change:**
+- **F013** (`model:` frontmatter field novel, may need schema validation) — **resolved empirically**. The gate delegates to `cf validate frontmatter` ([frontmatter_gate.py:44](src/squadron/events/builtin/frontmatter_gate.py#L44)); squadron owns no schema. Ran `cf validate frontmatter` against `942-analysis.tech-debt-audit.md`, which already carries `model:` — passes. Recorded as a verified fact in the task file rather than left as an assumption.
+- **F011** (`config.json`, `.understandignore` unaddressed) and **F012** (`meta.json` `analyzedFiles` unused) — correctly out of scope at 361's proving depth; forwarded to 362 as an in-skill note so that author sees the deferral instead of rediscovering it.
+
+**One deviation from the design, promoted to a blocking task.** The design's walkthrough opens with "Prerequisite: a real graph." Verified at task-authoring time: `.understand-anything/` **does not exist** in this repo. Every verification task depends on it, and generating it runs a marketplace plugin over the whole repo (token cost, writes to the working tree), so it became **Task 0.1** — PM-gated, not unattended. Task 0.1 also carries the stop-and-escalate rule: if the real graph's shape differs from the architecture's documented contract, stop rather than adapt, since upstream drift is this initiative's standing risk.
+
+**Structure:** 8 task groups, 17 tasks, test-with ordering throughout (2.1 author → 2.3 verify, 3.1 → 3.2, 4.1 → 4.2, 6.1 → 6.2/6.3). Five commit checkpoints rather than a single terminal commit. Also verified `.gitignore` currently has no `understand`/`trash` entry, so Task 4.2's first case exercises the create-and-append path rather than the already-present path.
+
+**Task review — PASS**, 10 findings (8 pass / 2 note), zero concerns. Both notes addressed in place (357 lines, still within guideline):
+
+- **F009 (`model:` population not explicit)** — genuine gap, not cosmetic. Task 5.3 listed `model` among the fields but never said it must hold the *generating* model's id, and `cf validate frontmatter` is permissive enough to pass on a placeholder. Tightened 5.3 to require a real id and added a matching check to Task 6.2's success criteria, since the gate cannot catch it. Also wrote the instruction to avoid a hallucination trap: no example model id appears near the requirement, and a model that cannot determine its own id must say so rather than reach for the nearest plausible token.
+- **F010 (deferral note owned by 1.1, authored in 2.1)** — reworded 1.1 so it plainly produces a decision rather than skill text, and named Task 2.1 as the authoring owner. A linear reader can no longer mistake 1.1 for incomplete.
+
+**Next:** Phase 6 implementation on branch `361-slice.graph-contract-and-provenance`, starting with the PM-gated Task 0.1.
+
+### Slice 361: Graph Contract and Provenance — Slice Design Complete
+
+**Phase 4 complete.** Design at `user/slices/361-slice.graph-contract-and-provenance.md`; slice plan entry already carried the (361) index. Committed to `main` (planning work, no branch).
+
+Key decisions settled in the design:
+- The graph contract lives as named sections **inside** `commands/analysis/understand.md`, not a separate fragment file — `_install_prefix()` installs every pack `*.md` as its own skill, so a fragment would surface as a bogus installable command. Slices 362-364 extend the same file; 365 copies the conventions (no runtime dependency on the pack).
+- Three distinct preflight failures with distinct messages: absent graph (points at `/understand`), unparseable JSON, malformed shape (names each bad key + graph version identity). Empty `tour` warns and proceeds; empty `nodes`/`edges`/`layers` reject.
+- `.gitignore` idempotency is tested semantically via `git check-ignore -q .understand-anything/.trash-probe/` rather than pattern-grepping, so any equivalent broader ignore satisfies it.
+- Gap-marker syntax settled: `[GAP: {what is missing} — {which input would supply it}]`, sibling to the retained `[INFERRED]` convention; markers appear in the body at the point of absence and are listed in provenance.
+- Provenance block format specified line-by-line (`## Provenance` directly under the title); generated doc frontmatter matches the 940-series shape (`topic:`, `model:` fields), index = lowest unused ≥ 940.
+- All graph reads are field-scoped `jq` selections; missing `jq` stops the run rather than falling back to whole-file reads. No Python added.
+
+**Next:** Phase 5 task breakdown for 361.
+
+## 20260817
+
+### Slice 914: Phase 4 Design Complete — Strict Type Checking Over the Test Suite
+
+Design written to
+`project-documents/user/slices/914-slice.strict-type-checking-over-the-test-suite.md`.
+Closes the fourth and final step of issue #50 by widening
+`[tool.pyright] include` from `["src"]` to `["src", "tests"]` under the existing
+`typeCheckingMode = "strict"`.
+
+**Re-measured the baseline rather than trusting the plan's numbers.** Set the
+include, ran `pyright --outputjson`, reverted. Result: **905 errors across 104
+files**, against the plan's "868 across 234 test files." Both figures were off —
+the count drifted up by 37 as slices 909–915 added tests, and 234 was the number
+of files *analyzed*, not the number containing errors. The real shape is
+concentrated, not broad: the top 10 files carry 45% of all errors and the top 50
+carry 90%. That concentration is what made per-directory landing the right call.
+
+**All three open design questions resolved on evidence, two of them against the
+assumption in the question:**
+
+- **`MagicMock` noise (D1) — premise is false.** The plan asked whether
+  `reportUnknownMemberType` noise on mocks warranted a narrower rule set for
+  `tests/`. Of 362 `reportUnknown*` errors, exactly **2** mention `Mock`. The
+  unknown-type errors are ordinary missing annotations — untyped lambda params
+  (68), unannotated locals (57), unannotated helper signatures (55). A
+  per-directory relaxation would have suppressed real annotation debt to solve a
+  problem that does not exist. `tests/` runs full strict, no rule overrides.
+- **One sweep vs. per-directory (D2) — per-directory.** `include` widens in the
+  first commit with `exclude` seeded with every still-erroring test directory;
+  each subsequent commit fixes one directory and deletes its line. Pyright
+  passes at *every* commit, not just the last — the same principle as 913's D7
+  applied to a config key. Ordered cheapest-signal-first: providers/server →
+  cli → pipeline → remainder, with `tests/pipeline` (382 errors, 46 files) last
+  because it is where the judgment calls live.
+- **Fixture factories vs. annotations (D5) — neither, as posed.** A general
+  fixture-factory rewrite is a refactor disguised as a type-checking slice, and
+  is out of scope. Instead, two helpers identified from the error data erase 110
+  errors mechanically. The larger one is a self-inflicted bug: 12 test modules
+  wrap `CliRunner.invoke`, and `test_dispatch_run.py:17` annotates the wrapper
+  `-> object`, discarding the properly typed `Result` — that single annotation
+  causes **all 42** `reportAttributeAccessIssue` errors
+  (`Cannot access attribute "exit_code" for class "object"`).
+
+**Two findings that changed the slice's risk profile.** `reportPrivateUsage` is
+the second-largest rule at 172 errors — tests importing underscore-prefixed
+production symbols (`_execute_summary` ×16, `_write_atomic` ×11,
+`_run_pipeline_sdk` ×10, `_REGISTRY` ×9). Pyright has no honest inline
+suppression for this; the rule is asking a design question (is this symbol part
+of the module's contract?), so D3 resolves each site by re-export/rename with
+justified single-line suppression as the fallback. **That means the slice edits
+`src`**, and the plan's recorded basis of "test-only; no production code
+changes" is stale — risk corrected from Low to **Low-Medium** and effort from
+3/5 to **4/5** in the plan entry alongside this design.
+
+Separately, 11 of the 23 `reportUnusedFunction` errors sit on
+`@pytest.fixture(autouse=True)` functions — a genuine pyright/pytest idiom
+conflict that gets a justified suppression (D4). The other 12 are inspected
+individually and deleted if genuinely dead, not suppressed by association.
+
+`reportArgumentType` (175, the largest rule) gets no shortcut: only 9 have the
+`monkeypatch.setattr` overload shape, and the other 166 are real mismatches
+between what a test passes and what production declares — the errors most likely
+to be actual findings. D6 requires any wrong *production* signature discovered
+there to be recorded in the completion notes, and records zero if zero: the
+slice's value claim is falsifiable rather than assumed.
+
+Verification walkthrough guards the failure mode that matters — a config typo
+matching nothing also reports 0 errors, so the walkthrough checks pyright's
+`filesAnalyzed` (~444, not ~210) and plants a deliberate type error to prove the
+test tree is really being checked.
+
+**Next:** Phase 5 task breakdown for 914. No implementation started; working tree
+carries only the design doc and the plan-entry update.
+
+### Slice 913: Complete — Ruff Rule-Set Adoption (`B`, `ASYNC`, `BLE`)
+
+Implemented across three commits, one per rule set, each enabling its rule in
+`select` in the same commit that zeroes its violations (design D7) — no commit
+in history has a rule live and failing. Branch
+`913-slice.ruff-rule-set-adoption-b-async-ble`, merged into `main`.
+`pyproject.toml`'s `select` now reads the Python guide's baseline verbatim:
+`["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]`.
+
+**Part A — `B`.** Added the `B008` `per-file-ignores` entry, then proved it
+didn't disable `B` wholesale for the CLI by planting a real `B006` (mutable
+default) and confirming it still fired while `B008` stayed silent. Fixed all 54
+`B904` sites — 53 with `raise ... from None` (the CLI print-then-`typer.Exit`
+pattern, where a chained traceback would be noise on an already-explained exit)
+and 1 with `raise ... from exc` (`pipeline/emit.py`, a data-parsing function
+that re-raises a different `ValueError` with no user-facing message first).
+Fixed the three stragglers (`B905` `zip(strict=True)`, `B007` renamed unused
+loop var, `B017` narrowed a blind `pytest.raises(Exception)`).
+
+**Part B — `ASYNC`.** Moved four blocking calls off the event loop via stdlib
+`asyncio.to_thread` — the daemon client's `Path.exists()` socket probe
+(production I/O path), two test files' `subprocess.run` calls, and a test
+mock's `write_text`. Added direct test coverage for both of `_get_client`'s
+socket-detection branches, since the existing suite only exercised the
+socket-absent path implicitly through a fixture. `sq doctor` confirmed the
+daemon client still behaves correctly end-to-end after the change.
+
+**Part C — `BLE`.** The substantive part. Exempted
+`project-documents/**/*.py` from `BLE001` only (not `extend-exclude`, per the
+design review's D3 narrowing) — verified the glob drops `BLE` from 28 to
+exactly the 23 `src` sites while `E,F,W,I,UP` stay enforced on the tree.
+
+Every other site got one of three outcomes. Two matched **issue #49's own
+shape exactly** and were fixed as real bugs rather than narrowed or logged:
+
+- `prompt_renderer.py`'s dispatch and summary model-resolution fallbacks
+  (`except Exception: model_id = alias; profile = None`) silently reinterpreted
+  an unresolvable model alias as a literal model id with no profile — since
+  `profile` controls SDK-vs-non-SDK dispatch routing in both call sites, a
+  resolver failure could misroute the dispatch. Removed the catch entirely for
+  both; a `pool:` misconfiguration (the only way `resolve()` can actually raise
+  here, since both callers guarantee a non-`None` alias) now propagates instead
+  of silently degrading. `_render_review`'s equivalent site stayed
+  caught-and-logged rather than propagated, since there the resolved value is
+  display-only — the real dispatch command uses the raw alias independently.
+- `cf_op.py`'s `--embed` detection — the exact site issue #49 was filed
+  against — was still unfixed. Narrowed to the resolver's actual raisable set
+  (`ModelResolutionError`, `ModelPoolNotImplemented`, `PoolNotFoundError`),
+  added `logger.exception`, kept the plain-build fallback but made it
+  auditable. Fixing this surfaced a second, independent bug: the test
+  fixture's mock resolver had no `.resolve.return_value` configured, so it
+  silently unpacked to a `ValueError` the old bare `except` had been
+  swallowing — the tests had never actually exercised the embed-detection
+  branch. Fixed the fixture and added a dedicated resolution-failure test.
+
+`executor.py`'s two fan_out broad catches (branch-model resolution, branch
+gather) stayed broad by design — the raisable set is genuinely open-ended
+(any exception any branch's step execution can raise) and an invalid
+branch-model spec must become a reported `FAILED` step, not a crash — but both
+were previously silent on failure; added `logger.exception` to each so a
+programming error surfaced this way is still diagnosable. The remaining sites
+split roughly evenly between narrowing (7: `client/http.py`, `loader.py`,
+`state.py` ×2, `doctor_checks.py`, plus the two above) and justified
+keep-broad (13 `# noqa: BLE001`, down from 28 pre-slice violations) — mostly
+SDK/subprocess teardown boundaries (`sdk_session.py`, both provider agents'
+`shutdown()`) and CLI process boundaries wrapping provider/daemon calls. Every
+retained `noqa` was individually read and confirmed to carry both a comment
+naming why the boundary must not let anything escape and a nearby
+`logger.exception`/`logger.warning(exc_info=True)` call (Task 3.6 audit).
+
+Acceptance test: reintroduced `except Exception: pass` in `pipeline/`,
+confirmed `ruff check` failed with `BLE001`, reverted. The failure mode that
+produced #49 is now caught mechanically by CI rather than by review — the
+actual point of this slice.
+
+Test count grew from the 3016/2-skipped baseline to 3021/2-skipped across the
+three parts (new coverage: both `_get_client` branches, the two `BLE`-flagged
+sites' resolution-failure paths, and a `state.py` narrowing's previously
+untested missing-field path). `ruff check`, `ruff format --check`, `pyright`
+(0 errors), and `pytest -q` all pass at each part's gate and at the final
+whole-tree check.
+
+Closes steps 1–3 of issue #50 (comment posted). Step 4 (pyright strict over
+`tests`, 868 errors / 234 files) remains open as slice 914, sequenced after
+this one for review-cost reasons only — the two sweeps are independent.
+
+## 20260815
+
+### Slice 913: Phase 4 Design Complete — Ruff Rule-Set Adoption (`B`, `ASYNC`, `BLE`)
+
+Design written to
+`user/slices/913-slice.ruff-rule-set-adoption-b-async-ble.md`. Re-measured every
+count against the current tree rather than trusting issue #50's figures, and two
+of the drifts changed the design rather than just the arithmetic.
+
+**`B904` is a CLI-shaped problem.** 53 of 54 sites are in
+`src/squadron/cli/commands/` — 25 in `run.py` alone — with one straggler in
+`pipeline/emit.py`. The plan describes Part A as a codebase-wide mechanical
+pass; it is a single-directory pass that happens to touch the same directory as
+the `B008` ignore. Far more reviewable than the raw count implies.
+
+**`BLE` is 28, not 23.** The 23-in-`src` figure is correct as far as it goes,
+but CI runs `ruff check` with no path argument, so it also lints the tracked
+`project-documents/user/reference/codebase-probe.py` — five more sites in a
+one-off analysis script that is not packaged, not imported, and appropriately
+best-effort. D3 exempts the documents tree from `BLE001` rather than applying
+the production exception policy to a document-tree scratch script. Called out
+explicitly in both the design and the plan entry: it is the only part of this
+slice that narrows what CI enforces instead of widening it.
+
+Decisions worth recording: `B008` gets a directory-scoped `per-file-ignores`
+rather than 14 rewrites of the standard Typer idiom (D1), and the verification
+walkthrough proves the ignore didn't disable `B` wholesale for the CLI by
+planting a real `B006` and confirming it still fails. `B904` picks `from exc`
+vs. `from None` per site rather than uniformly (D2) — `ruff --fix` doesn't fix
+`B904`, so all 54 are hand-touched regardless and choosing correctly is free.
+`ASYNC240` in `client/http.py:42` is fixed with stdlib `asyncio.to_thread`, not
+the `anyio.Path`/`trio.Path` the rule message suggests — the project is
+asyncio-native and adding a dependency to satisfy a lint message is the wrong
+trade (D4). Test-side `ASYNC221` gets the same treatment rather than a `tests/`
+exemption, since those tests are what future tests get copied from (D5).
+
+Part C's `BLE` sites get a forced three-way choice — narrow, or keep-broad with
+`logger.exception` + justified `# noqa`, or fix a real bug — with "leave it
+broad without comment" explicitly excluded (D6). Two sites already look like
+#49's shape: `prompt_renderer.py:158` swallows a `resolver.resolve` failure into
+`model_id = action_model, profile = None`, silently degrading an unresolvable
+model into a wrong-but-plausible dispatch; and `executor.py:1603` converts any
+exception — including a programming error inside the `try` — into a `FAILED`
+StepResult with a bare message and no traceback. D6 caps the blast radius: a
+genuine bug of more than trivial size gets filed and fixed in its own slice, not
+absorbed under a lint banner.
+
+Rule sets are enabled one part at a time (D7), each in the commit that zeroes
+it, so no part leaves the build red and `git bisect` stays meaningful. The
+acceptance test for the slice is reintroducing #49's shape and watching CI catch
+it.
+
+### Slice 913: Design Review — PASS, D3 narrowed in response
+
+Review at `user/reviews/913-review.slice.ruff-rule-set-adoption-b-async-ble.md`
+(minimax/minimax-m3, reviewed `df47148`): **PASS**, eight pass findings and two
+notes, no blockers.
+
+**F009 acted on.** D3 originally read `extend-exclude = ["project-documents/"]`,
+dropping the whole tree from ruff. The reviewer's objection is correct and
+sharper than the tradeoff I recorded in the design: excluding the directory
+discards `E`/`F`/`W`/`I`/`UP` on a file that passes them today, not merely on
+hypothetical future scripts — a coverage reduction well past the problem, which
+was five `BLE001` sites in a best-effort probe. Narrowed to a rule-scoped
+`per-file-ignores` entry (`"project-documents/**/*.py" = ["BLE001"]`), which
+gives up only the rule that does not fit and keeps everything else live.
+Verified against the tree before committing rather than assuming the glob
+resolves: with the entry applied, `BLE` drops from 28 to exactly the 23 `src`
+sites and `ruff check --select E,F,W,I,UP project-documents/` still passes. The
+rejected alternative is recorded in D3 so it is not re-litigated at
+implementation. Success criteria gained an explicit "no `extend-exclude` is
+added" check and the walkthrough a step proving the tree kept its other
+coverage.
+
+**F010 accepted without change.** Document weight is high against the
+architecture's "lighter-weight given the maintenance nature" guidance, and the
+reviewer allows the complexity is defensible — the density sits in D6 and the
+re-measured baseline, which are the two things that caught real problems. Noted
+as a calibration point, not an alignment failure.
+
+One review defect, not verdict-affecting: F008's `location` points at the
+success criteria, but the "reintroduce #49's shape" step it praises is in the
+verification walkthrough. Body text names the right section; only the field is
+off.
+
+### Slice 913: Phase 5 Task Breakdown Complete
+
+Tasks at `user/tasks/913-tasks.ruff-rule-set-adoption-b-async-ble.md` — 386
+lines, no split needed. Fifteen tasks across the three parts plus a final
+verification group, sequenced A → B → C with each part's `select` change landing
+in the same task that zeroes its rule (D7), so no commit in history has a rule
+enabled and failing.
+
+Sized the mechanical work against per-file counts rather than totals, which
+changes how Part A is executed: Task 1.3 works largest-file-first —
+`run.py` (25 of the 54 `B904`), then `skills.py` and `dispatch_run.py` (4 each),
+down to six single-site files. A 54-site diff is unreviewable; a 25-site diff in
+one CLI module is not.
+
+Two tasks exist purely to prove a suppression didn't overreach, both derived
+from decisions the design made rather than from the rule counts. Task 1.2 plants
+a genuine `B006` in a CLI module and requires it to fire, proving the D1 `B008`
+ignore didn't disable `B` wholesale for that directory. Task 4.2 inventories the
+final suppression set and asserts `extend-exclude` appears nowhere — the F009
+narrowing is easy to silently undo at implementation time by reaching for the
+simpler form when the glob looks fiddly.
+
+Part C's task split follows blast radius, not file count. Task 3.2 isolates the
+two sites already identified as issue-#49-shaped
+(`prompt_renderer.py:158`'s silent degradation to a wrong-but-plausible
+dispatch, `executor.py:1603`'s tracebackless failure conversion), and Task 3.3
+is the only new-test task in the slice — those two are the sites where behavior
+actually changes. The remaining 21 are narrowings covered by the existing suite,
+split by subsystem (3.4 pipeline, 3.5 CLI/provider/client/core/events). Task 3.6
+gates on reading every retained `noqa` before `BLE` is enabled, since a
+`noqa` without justification is a failed criterion rather than a passing one
+with a note.
+
+Task 3.4 carries a specific instruction to read issue #49 before touching
+`actions/cf_op.py` — it is the module that defect lived in, and its remaining
+broad catch should be confirmed not to be a second instance of the same bug.
+
+Task 4.1 is the slice's acceptance test: reintroduce `except Exception: pass` in
+`pipeline/`, confirm `ruff check` fails, revert. If that step doesn't fail, the
+slice didn't deliver what it claims regardless of the violation count.
+
+Also carried into the tasks: the frontmatter gate rejects hyphenated status
+values (`not-started` failed the pre-commit hook when the design was first
+written), so Task 4.3 names the accepted set explicitly.
+
+### Slice 913: Task Breakdown Review — CONCERNS, three acted on
+
+Review at `user/reviews/913-review.tasks.ruff-rule-set-adoption-b-async-ble.md`
+(minimax/minimax-m3, reviewed `7174524`): **CONCERNS** — six pass, five concerns,
+two notes. Three concerns acted on, two declined with reasons.
+
+**F011 acted on** — the sharpest of the five. Task 1.3 spans 13 files, and
+nothing told the implementer not to commit partway through; doing so would leave
+a commit with the `B904` fixes but without `B` in `select`, the exact inverse of
+D7's contract. Added an explicit "do not commit here, Part A lands as one commit
+at Task 1.5" bullet naming 1.1/1.2/1.4 as well.
+
+**F008 acted on.** Task 3.2's scope guard was judgmental ("if it turns out to be
+a larger fix"), which is not a usable stopping rule for someone who has not read
+the resolver. Replaced with three observable triggers — the fix needs a file
+outside the two named modules, it changes a signature or return type, or the
+raisable set is not determinable from the resolver and its direct callees. Also
+stated that taking the guard is a *passing* outcome, not a failure, since an
+implementer who reads a stopping rule as an admission of defeat will push
+through it.
+
+**F007 acted on, but not as suggested.** The concern is real: Tasks 3.4/3.5
+narrow ~18 sites and lean on "the existing suite", and a narrowing that changes
+an untested path passes the suite by construction. The reviewer's proposed fix —
+review `--tb=long` output during the gate — does not address it, since that shows
+tracebacks for failing tests and these paths are silent when they change. Fixed
+instead by extending Task 3.6 into a per-site audit: for every narrowed site,
+record what now escapes and where it lands, and name the existing test covering
+that failure path or add one. Retitled and re-rated 1/5 → 2/5.
+
+**F009 declined.** The reviewer notes `extend-exclude` is mentioned repeatedly
+but never installed, and self-resolves it in the same paragraph ("no action
+needed... flagging only because a reviewer scanning for scope items might
+miscount"). The repetition is deliberate: it is the F009 narrowing from the
+*design* review, and the negative assertions in Tasks 3.1 and 4.2 exist so the
+simpler rejected form is not reached for at implementation time.
+
+**F010 declined.** Suggests the acceptance probe also exercise `B904` and an
+`async` variant. Task 4.1 tests one specific claim — that #49's shape is now
+caught mechanically — and `except Exception: pass` is exactly that shape. `B`
+and `ASYNC` are already gated by their own zero-violation checks at Tasks 1.5
+and 2.5; re-probing them in 4.1 tests ruff rather than the slice. Declining keeps
+the acceptance test pointed at the thing the slice claims.
+
+F012 (Part C is the largest commit) and F013 (no load test needed) were
+informational and need no change.
+
+---
+
+## 20260813
+
+### Slice 915: Complete — Loop Checkpoint-Pause Resume Correctness
+
+Phase 6 complete, three commits landed as separable parts per the design's
+bisect requirement. **Part A** (`6a0db23`): `first_unfinished_step` filters on
+status (`PAUSED`/`FAILED` via `_RESUMABLE_STATUSES`, never string literals)
+instead of mere presence, so resume returns *to* a paused or failed step
+rather than past it — fixing both the loop-abandonment bug and the identical
+`FAILED`-step skip in one predicate change. `resume_iteration_for` gives
+`StepState.iteration` its first reader. Audited the two non-resume callers of
+the changed predicate the design hadn't accounted for (`run.py`'s prompt-only
+`--next` finalizer and `--step-done`'s next-step lookup) — neither needed
+adjustment, since `completed_steps` was already append-only with no
+uniqueness assumption. Two integration tests asserted the pre-fix step count;
+updated from 10 to 11 since the resumed step now legitimately re-executes and
+is recorded twice.
+
+**Part C** (`3f4a84f`): a loop that short-circuits on an inner pause now logs
+a WARNING — pipeline, step, paused round, rounds not run — from one shared
+helper covering both loop shapes (`_execute_loop_step` single-action,
+`_execute_loop_body` multi-step), so the signal that would have made #48
+self-reporting instead of silent is single-sourced rather than duplicated.
+
+**Part B** (`04f4a7e`): `execute_pipeline` gains `start_from_iteration`,
+threaded only to the `start_from` step's loop; both loop executors gain
+`start_iteration`, replacing the hardcoded `range(1, max+1)`. A resume
+request above the loop's `max:` (only reachable from malformed state) fails
+loudly with a WARNING rather than silently reporting `COMPLETED` for zero
+rounds run — re-creating the exact defect class this slice fixes was the one
+thing to avoid here. Both resume paths in `run.py` (`--resume` and implicit
+paused-run detection) now read the round through one shared helper. End-to-end
+coverage proves the `max:` counting rule directly: a loop paused at round 2 of
+3 resumes at round 2, not round 1, and runs at most rounds 2–3.
+
+Verification followed 910's precedent exactly rather than a live `sq run`:
+copied all 22 new/updated tests into a `git worktree` at the pre-fix commit
+and confirmed every one fails there, proving they'd have caught the original
+bug. `--validate`/`--dry-run` (no live model calls) were run against the
+operator's real `p45b.yaml` as a sanity check; live pause/resume against
+actual Claude dispatch/review calls was declined — real API cost and writes
+to the operator's real run state for evidence the test suite already covers
+more precisely. Corrected the design doc's line citations to match the
+implemented code (several drifted when the Part A audit finding and small
+resume-path helpers landed).
+
+Filed #59 for the known limitation this slice records rather than fixes:
+`each:`/`fan_out:` steps return no `iteration`, so Part A stops them being
+silently skipped on resume but they still restart from the top rather than
+re-entering mid-branch — a per-branch completion record is a larger
+data-model change than the single integer `loop:` needed. Documented the
+resume contract (round counting, empty `prior_iteration_step_outputs` on
+re-entry, the WARNING/INFO signals, the `each`/`fan_out` limitation) in
+`docs/PIPELINES.md`'s `loop` section. Closes #48.
+
+---
+
+## 20260812
+
+### Loop Backlog Triage; Slice 915 Designed
+
+Went to address the four open "loop bugs" and found three of them were
+already fixed. Slices 910 and 911 shipped in v0.9.0 and closed only #44 at
+merge time — #42 (findings feedback between iterations), #43 (ambiguous
+`until:` with multiple verdict-bearing actions), and #45 (`--dry-run` loop
+expansion) stayed open despite their fixes being live. Verified each against
+`main` before closing: `running_prior` threading in `_execute_loop_body`,
+`_validate_verdict_count` in `LoopStepType`, and the loop-expansion branch in
+`--dry-run` rendering are all present. Closed all three with pointers to the
+implementing commits. Housekeeping gap, not a code gap — worth noting that
+merge-time issue closure is manual and was missed for a whole slice.
+
+That left **#48** as the only real remaining loop defect, and it is not small:
+a checkpoint firing inside a loop body pauses the run, the loop step is
+recorded as *completed* anyway, and resume skips it — silently dropping every
+remaining round. `on-concerns` fires on CONCERNS/FAIL/UNKNOWN, so a retry loop
+that pauses for human review hits this on its first non-passing round, which
+is precisely the case the checkpoint exists to serve.
+
+Traced the mechanism end-to-end against `main` (the issue's line citations had
+drifted since 305 and 173 landed). Four points confirmed: the loop
+short-circuits on inner `PAUSED` (preserving `iteration`), `on_step_complete`
+runs two lines *before* the `PAUSED` early-return, `_append_step` appends
+unconditionally, and `first_unfinished_step` builds its completed-set from
+step *names* without ever inspecting status. Two findings shaped the design:
+`StepState.iteration` is written and never read anywhere in the repo — the
+re-entry coordinate is already persisted, just unused — and `start_from` is
+step-name granular, with no notion of resuming *into* a step at a round.
+
+Designed slice **915** (`900` plan, sequenced after 910/911) with three parts:
+status-aware `first_unfinished_step` (also fixes the identical `FAILED`-step
+skip), a `start_from_iteration` coordinate threaded to the loop's range, and a
+WARNING when a loop abandons rounds. Answered the issue's open question rather
+than deferring it again (910/911 precedent): **a checkpoint-paused loop is
+re-enterable** — `until:` is the loop's contract and a pause is not a verdict,
+`checkpoint: continue` already means "keep going," and "a human takes over"
+already has a spelling in `Exit`. Rejected making it configurable; the knob
+would double the resume test surface for a mode nobody asked for.
+
+Recorded one known limitation rather than conflating it: `each:`/`fan_out:`
+return no `iteration`, so Part A stops them being skipped but they resume by
+restart, not re-entry.
+
+---
+
+## 20260811
+
+### Slice 173: Complete — User-Definable Actions on Supported Events
+
+Phase 6 complete. Built `squadron/events/` (types, contexts, protocol,
+namespaced registry, `events.yaml` manifest loader, declared-import plugin
+discovery, dispatcher) and migrated the hardcoded 909 dispatch-artifact
+post-condition and 911 revision-number stamp off `executor.py` onto it as
+`squadron.dispatch-artifact` and `squadron.revision-stamp` — the acceptance
+test — with zero assertion changes in the existing tests (they exercised
+`execute_pipeline` end-to-end, never the private helpers by dotted path, so
+no patch-target strings needed to move). `squadron.frontmatter-gate`
+refactors 172's bespoke installer-driven gate onto the mechanism as a
+`COMMIT`-bound built-in. `sq events fire` / `sq events list` ship as a Typer
+sub-app; `.githooks/pre-commit` and `setup_install.py`'s `PRE_COMMIT_HOOK`
+repoint from `cf validate frontmatter` to `sq events fire commit`, byte-
+identity test intact. `sq run --step-done` now runs `POST_ACTION` bindings
+before recording a step done, closing the prompt-only parity gap from
+issue #15 — a bug in that wiring (the `{slice}` placeholder wasn't resolved
+against the run's own params before reaching the event context) was found
+during the manual verification walkthrough and fixed, with a regression
+test asserting the resolved value reaches the dispatcher.
+
+Four commits (Parts A+B combined since `bootstrap_event_actions()` imports
+all three built-ins together, forcing `frontmatter-gate` in ahead of its
+originally-planned Part C slot; then Part C; then Part D; then docs).
+`docs/EVENTS.md` is new; `docs/PIPELINES.md`, `docs/COMMANDS.md`,
+`CHANGELOG.md` (two flagged breaking changes), and
+`140-arch.pipeline-foundation.md` (deferred-171 section replaced with what
+173 actually built) are updated. Full suite: 2991 passed, 2 skipped;
+pyright strict and ruff clean throughout. Slice marked complete; slice-plan
+entry 28 checked.
+
+---
+
+### Slice 173: Task Breakdown — User-Definable Actions on Supported Events
+
+Phase 5 complete. Task file at
+`user/tasks/173-tasks.user-definable-actions-on-supported-events.md` (284
+lines, 24 tasks in five parts, test-with ordering, commit checkpoint per
+part). Part order preserves the design's reasoning: A events package →
+B migrate 909/911 (the acceptance test — T12 instructs STOP if any existing
+assertion needs changing) → C frontmatter gate + `sq events` CLI + hook
+repoint → D prompt-only `--step-done` parity → E docs/closeout. Slice is
+ready for Phase 6 implementation on branch
+`173-slice.user-definable-actions-on-supported-events` pending PM approval.
+
+---
+
+## 20260809
+
+### Slice 173: Design — User-Definable Actions on Supported Events
+
+Phase 4 complete. Design at
+`user/slices/173-slice.user-definable-actions-on-supported-events.md`;
+slice-plan entry 28 marked Design Complete. Supersedes deferred 171, whose
+authority/failure-mode/ordering contracts carry forward cited.
+
+The one open question from the overview — `ActionContext` vs. a narrower
+event context — resolved for the narrower context (D1): `ActionContext`
+demands `resolver`, `run_id`, `step_index`, `prior_outputs`, none of which a
+commit has, and lacks the staged paths it does have; reusing it would mean
+placeholder values, which the no-silent-fallback rule bans. Event actions get
+an event-typed context family (`CommitContext`, `PostActionContext` — the
+latter is 171's `HookContext` renamed) while sharing `ActionResult`,
+`ValidationError`, and the registry idiom. The pipeline `Action` protocol and
+registry are untouched; the events registry is the third instance of the
+established Protocol-plus-registry pattern, alongside actions and gate
+policies.
+
+Other decisions: closed `EventType` enum (D2); mandatory dotted namespacing
+with collision/reserved-prefix guards (D3); observe/fail/mutate authority with
+no severity axis — the revision stamp's never-fail contract is its own
+behavior, not a runner clamp (D4); coarse attributed failure handling, hard
+exit, never skip (D5); `events.yaml` manifest project → user first-found with
+in-code `DEFAULT_BINDINGS` and a `disable:` list (D6); declared-import
+discovery, no scanning (D7); `sq events fire commit` as the process entry
+point, with the 172 hook and installer repointed onto it (D8); prompt-only
+`--step-done` parity carried from 171 unchanged (D9). Migration of the
+hardcoded 909/911 executor checks onto the mechanism is the acceptance test —
+no assertion in their existing tests may change, only patch targets.
+
+---
+
+### Slice 172 Part 10: Retire the Parallel Validator, Install the Gate Everywhere
+
+Context Forge 0.12.0 shipped `cf validate frontmatter` (cf#72/#73), unblocking
+Part 10 (T27–T32). Slice 172 is now complete.
+
+**Retired.** `documents/validate.py`, `cli/commands/validate.py`, their tests,
+and the `validate.docs_root` config key are deleted; `sq validate` is gone.
+`schema.py` is reduced to the values squadron writes (dropped the
+required-field tuples and the managed-marker constant; kept the enums, aliases,
+and machine-artifact docTypes — all still imported by writers or the
+literal-scan test).
+
+**The gate.** `.githooks/pre-commit` runs `cf validate frontmatter` on staged
+`.md` files; `cf` missing on PATH is a hard exit 1, and cf exit 2 (invocation
+error, e.g. an unregistered cf project) gets its own message pointing at
+`cf init`. `sq setup` now installs the gate without prompting: `setup_install.py`
+carries the hook as `PRE_COMMIT_HOOK` (byte-identity with the tracked copy is
+test-pinned), `_install_git_hook` writes it and sets `core.hooksPath` —
+refusing to overwrite a foreign hooksPath — and `AUTO_INSTALL_CHECKS` marks it
+as run-without-asking (D11). `check_git_hooks` now takes `cf_available`; an
+installed hook without `cf` reports WARN "gate cannot run" in `sq doctor`, and
+`sq setup` now resolves and passes the hooksPath (it previously never saw the
+hook check at all).
+
+**Drift test repointed at cf.** `test_schema_drift.py` no longer parses
+`file-naming-conventions.md`; it writes fixtures into the document root and
+runs `cf validate frontmatter --json`, asserting `filesChecked` on every call
+because cf silently skips out-of-root paths (exit 0, 0 checked — a naive test
+would false-pass). Probing cf's schema showed it validates only 8 of the 15
+spec docTypes (`guide`, `reference`, `slice`, `notes`, `template`,
+`intro-guide`, `migration` fall through unvalidated), so the status assertions
+run against `review` — the one docType squadron writes, which cf does
+validate. The machine-artifact test pins that cf requires neither `status` nor
+`dateUpdated` for `review-resolution`/`gate-evidence`/`devlog` (T32, landed in
+cf under #73).
+
+---
+
+## 20260804
+
+### Slice 172: Implementation — `sq validate docs` Mechanical Frontmatter Enforcement
+
+Implemented all 26 tasks across 10 parts on branch
+`172-slice.sq-validate-docs-mechanical-frontmatter-enforcement`, in 12 commits
+that follow the design's ordering constraints (writer fix before cleanup,
+cleanup before CI).
+
+**The validator.** `documents/schema.py` defines `DocumentStatus`, `DocType`,
+and the machine-artifact docType set in one place; a drift test fails (never
+skips) if they disagree with `file-naming-conventions.md`. `documents/validate.py`
+implements the eight `FM001`–`FM008` checks as a pure function —
+`validate_document`/`validate_paths` return `list[Violation]`, no printing, no
+`sys.exit` — wired into `sq validate docs` via a new `validate.docs_root`
+config key (default `project-documents/user`).
+
+**The writer fix and the hardening.** `review/persistence.py:222` now quotes
+`location` through `yaml_escape`, closing the exact defect that corrupted five
+review artifacts. `documents/frontmatter.py`'s `update_frontmatter` and
+`render_frontmatter_block` now raise on a present-and-invalid top-level
+`status`, and `update_frontmatter` gained a required `today=` keyword that
+stamps `dateUpdated` on every call — squadron's only in-place document edit
+(`executor.py`'s `revision_number` stamp) now keeps that date current, and the
+devlog stub and append path were brought in line with the same rule.
+
+**Cleanup, gate, and CI.** All 27 pre-existing violations were fixed in one
+commit, separate from the feature work: the five corrupted reviews (quote
+`location`), six non-canonical `status` values (three mechanical, three judged
+from document content — e.g. `superseded` on a design replaced by a later
+slice became `deprecated`, not left as-is), three missing `status` fields on
+fully-checked-off task files (`complete`), eleven `task-breakdown`/`slice-tasks`
+docTypes (`tasks`, confirmed unread by any source), and two documents with no
+frontmatter block. `.githooks/pre-commit` ships tracked and executable;
+`sq doctor` reports whether `core.hooksPath` is set to it. CI gained
+`submodules: true` and a `sq validate docs` step, landing only after the
+cleanup commit so the branch's own CI history is never red between two
+commits of the same slice.
+
+**T21's cross-check found a real bug, not a hypothetical one.** Running
+`cf check --fix` against this repo (not just re-reading its source) showed one
+of context-forge's thirteen `update-frontmatter` fix actions writing
+`status: in-progress` — hyphenated, disagreeing with `VALID_STATUSES` — into
+`900-arch.maintenance-and-refactoring.md`. Root cause: `introspection/types.ts`'s
+`STATUS.InProgress`/`STATUS.NotStarted` constants are hyphenated while
+`schema/frontmatterSchema.ts`'s `VALID_STATUSES` (and the spec) are
+underscored — two enums for the same values, and at least 6 of 13 fix actions
+reference the wrong one. `FM005` caught it correctly; the bad write was
+hand-corrected and filed as
+[context-forge#72](https://github.com/ecorkran/context-forge/issues/72),
+distinct from #71 (the `dateUpdated`-stamp gap, already tracked). Two of
+`cf check --fix`'s other proposed changes were declined outright — marking
+this slice's own parent architecture (140) complete mid-implementation, and
+marking a slice (344) complete when its own frontmatter says `deprecated` and
+its body says "DEPRECATED / DESCOPED, not merged."
+
+**Full verification:** `uv run ruff check`, `uv run ruff format --check`,
+`uv run pyright`, `uv run pytest` (2960 passed, 2 skipped), and
+`uv run sq validate docs` (413 documents, 0 violations) all clean. All nine
+Verification Walkthrough steps run in order and matched the design, with two
+corrections folded back into it: the `update_frontmatter` probe command needed
+`today=`, and D8a's `cf check --fix` claim was updated from "verified by
+reading source" to "verified by running it, with one exception found and
+filed."
+
+---
+
+### Slice 172: Date-Field Audit — `dateCreated` Everywhere, `dateUpdated` on Every Write
+
+Audited how `dateCreated` and `dateUpdated` are produced across squadron and
+Context Forge, and folded the result into the 172 design and tasks. The rule
+being enforced: `dateCreated` belongs on every created file; `dateUpdated`
+belongs on every file edited after creation, and its absence means "never
+edited."
+
+**Measurement first.** All 413 documents under `project-documents/user/` were
+scanned: zero missing `dateCreated`, zero missing `dateUpdated`, zero with
+`dateUpdated` earlier than `dateCreated`. The authored side complies in full.
+Also corrected an earlier miscount — a `grep` for `resolution`/`gate.` had
+matched *slice names*, not artifacts. There are **zero** `review-resolution`
+and **zero** `gate-evidence` files in the corpus, so the emitter fixes below
+carry no cleanup and no back-compatibility constraint.
+
+**The split that decides the validator's shape.** `dateCreated` is checkable
+from a single file. `dateUpdated` presence is not — no tool reading one file
+can know whether that file was ever edited. So the validator requires
+`dateCreated` of both document classes and never requires `dateUpdated`; the
+second half is a writer-side obligation. This also corrects D2, which had
+described the machine artifacts as a blanket exemption from date fields. The
+right classification is per-artifact, by whether the thing is ever rewritten:
+`review-resolution` is append-only and already correct, `gate-evidence` needs
+`dateCreated`, and `devlog` is the only artifact rewritten in place.
+
+**Three squadron write paths did not stamp.** `gate_evidence_frontmatter`
+emits no date at all; the devlog stub emits only `docType`; and
+`executor.py:269` — the only in-place document edit squadron performs —
+stamps `revision_number` into slice and task documents while leaving the dates
+untouched. D8 now puts the stamp inside `update_frontmatter` itself, taking
+`today` as a required keyword rather than calling a clock inline. Placing it
+there rather than at the call site is what makes the rule hold for callers
+that do not exist yet. The evidence that a hand-maintained convention does not
+survive: this file's own frontmatter read `dateUpdated: 20260803` while
+carrying a `20260804` entry.
+
+**Context Forge boundary, written down as D8a.** Both tools validate
+frontmatter in the same tree, so the division of labor is now stated rather
+than assumed. `cf check` owns per-`docType` schemas (eight docTypes; unknown
+ones pass through at `frontmatterSchema.ts:210`) and cross-document
+consistency; `sq validate docs` owns structural integrity and universal
+fields, for every docType including squadron's own. Three conflict surfaces
+were checked and are clear: all thirteen `update-frontmatter` fix actions in
+`ConsistencyChecker.ts` write only `status`, from the same five canonical
+values `FM005` accepts; CF's `FILENAME_PARTS_RE` cannot match
+`{index}-resolution.…` or `{index}-gate.…`, and its docType inference fires
+only when `docType` is absent, which squadron's emitters never leave it. The
+load-bearing consequence is negative: `FM004` must **not** require
+`dateUpdated`, because CF requires it and backfills it from `dateCreated`
+(`frontmatterSchema.ts:224`) — requiring it here too would make squadron's
+hook *block* commits on documents CF considers valid and fixable.
+
+CF has the mirror-image gap: `updateFrontmatterField`
+(`markdownWriter.ts:52`) writes one key and leaves `dateUpdated` alone. Filed
+as [context-forge#71](https://github.com/ecorkran/context-forge/issues/71).
+Tracked, not a dependency — 172 fixes only squadron's half.
+
+**Changes.** Design: D2 rewritten per-artifact with the date rule and an
+emitter table; D8 extended with the stamp; D8a added for the CF boundary;
+components list extended by three files; criteria 21–24 added; the
+`dateUpdated < dateCreated` ordering check recorded as Future Work rather than
+added as a ninth code, since it has zero violations today and would enforce
+nothing on arrival. Tasks: T1 gains
+`MACHINE_ARTIFACT_REQUIRED_FIELDS` and an explicit prohibition on requiring
+`dateUpdated`; new Part 5A (T23–T26) covers the stamp, the emitters, and a
+test that squadron's own rendered output validates clean; T21 gains a
+`cf check --fix` then `sq validate docs` cross-check. Task numbers are
+append-only — renumbering T1–T22 would invalidate every reference in the
+design, the reviews, and this log.
+
+---
+
+### Slice 172: Task Review Resolved — CONCERNS, Both Findings Real
+
+Reviewed by `minimax/minimax-m3`:
+[172-review.tasks.…md](project-documents/user/reviews/172-review.tasks.sq-validate-docs-mechanical-frontmatter-enforcement.md).
+Verdict CONCERNS on two findings, six passes, two notes. Both concerns were
+right, and the first one turned out to be hiding a worse problem than the
+review described.
+
+**F001 — success criterion 6 had no implementing task.** Correct: SC6 says no
+status or docType literal survives outside the enum module, T21's close-out
+greps for it, and nothing in between actually removed any. There are five such
+sites — `review/persistence.py:187` (`"docType: review"`) and `:195`
+(`"status: complete"`), plus the three machine-artifact constants in
+`resolution_artifact.py:25`, `evidence.py:26`, and `devlog.py:104`.
+
+Writing the fix exposed the real defect. T1 said to *source* the
+machine-artifact docTypes from those three modules — `documents/schema.py`
+importing from `review/` and `pipeline/`. That inverts the layering
+(`documents/` is the shared primitives package) and, once T13 makes
+`frontmatter.py` import `schema.py` for the status check, it is a literal
+import cycle: `documents.frontmatter` → `documents.schema` →
+`review.resolution_artifact` → `documents.frontmatter`. Reversed: `schema.py`
+defines all three values and the emitting modules import them. That is also
+what makes SC6 true rather than aspirational.
+
+Rather than renumber 22 tasks to insert a sweep, each literal now lands in the
+task that already owns its file — the three constants in T1, the two
+`persistence.py` lines in T11, which is already editing that function. And SC6
+gets teeth: T12 adds a test that greps `src/**/*.py` for the enum members,
+driven by the enum so a value added later is covered without editing the test.
+A criterion enforced only by a grep in a close-out checklist is one that
+silently rots.
+
+**F002 — function-name mismatch between SC8 and T5.** Real mismatch, but the
+review's recommended direction was backwards. It proposed changing SC8 to
+match T5; both function pairs exist (`render_gate_evidence` /
+`gate_evidence_frontmatter`, `render_resolution` / `resolution_frontmatter`),
+and SC8 named the better ones. The validator reads *files*, so the test must
+render the whole document — fence included — not just the frontmatter mapping.
+T5 now uses the full-document renderers, with a line saying why.
+
+**F008/F009 (notes)** — no action. T4's size is cohesive (one function, one
+acceptance condition), and T19's manual walkthrough is deliberate: a git hook
+is not meaningfully testable without actually attempting a commit.
+
+---
+
+## 20260803
+
+### Slice 172: Task Breakdown Complete
+
+[172-tasks.…md](project-documents/user/tasks/172-tasks.sq-validate-docs-mechanical-frontmatter-enforcement.md)
+— 22 tasks across 9 parts, 402 lines, test-with throughout.
+
+**Sequencing is the one thing this breakdown adds that the design left
+implicit.** Three orderings are load-bearing and each is called out in the
+task file rather than left to be discovered:
+
+1. The review-writer fix (Part 4) lands *before* the cleanup (Part 6).
+   Reversed, a single review written between the two commits reintroduces the
+   corruption the cleanup just removed.
+2. The cleanup lands *before* CI (Part 8). Reversed, `main` is red between two
+   commits of the same slice.
+3. `schema.py` and its drift test come first, because every later part imports
+   the values and the whole slice is an argument about defining them once.
+
+Two implementation details worth pinning down now rather than during Phase 6.
+`sq doctor`'s hook check must stay pure — `doctor_checks.py`'s docstring
+promises no subprocesses — so the resolved `core.hooksPath` is obtained in
+`doctor.py` via the existing `run_git` (`review/git_utils.py:19`) and passed
+in. And the cleanup task deliberately refuses to carry a transcribed list of
+the 24 violations: it says to run the validator and use its output, then
+compare. A work list copied into a document is stale the moment something else
+touches the tree.
+
+The `FM002` fixture is specified as the real defect string
+(`location: Slice design: Implementation Details`) rather than a synthetic
+colon, per the project rule that a parser's test fixture must include the
+format it will actually consume.
+
+---
+
+### Slice 172: Design Review Resolved — PASS, One Pass Finding and Six Notes
+
+Reviewed by `minimax/minimax-m3`:
+[172-review.slice.…md](project-documents/user/reviews/172-review.slice.sq-validate-docs-mechanical-frontmatter-enforcement.md).
+Verdict PASS. Three of the six notes were worth acting on; all three turned out
+to be about the *architecture* being stale, not the slice being wrong.
+
+- **F001 (pass)** — the slice's positioning against deferred 171 reads correctly.
+  No action.
+- **F002 (note) — planned module names.** The architecture reserved
+  `documents/status.py` (DocumentStatus) and `documents/paths.py`
+  (`USER_DOCS_ROOT`), both marked "171 — DEFERRED." 172 builds `schema.py`
+  instead (status *and* docType *and* the machine-artifact set belong together)
+  and replaces `USER_DOCS_ROOT` with the `validate.docs_root` config key — a
+  module constant is the wrong shape for a value that differs per project.
+  Fixed at the source: the architecture's package structure now names
+  `schema.py` and `validate.py`. Leaving two placeholder filenames in place
+  would have set a revived 171 up to define a second `DocumentStatus`, which is
+  precisely the drift this slice exists to prevent.
+- **F003 (note) — "CI/CD integration" is listed out of scope.** The reviewer's
+  own reading is right: that bullet sits among GUI-for-pipeline-monitoring,
+  cross-slice parallelism, and pipeline marketplace — it means *running
+  pipelines as CI jobs*, not "squadron's repo may not have CI steps," which
+  would be a strange thing for a document to say about a repo that already runs
+  ruff, pyright, and pytest in CI. Narrowed the bullet's wording so nobody
+  re-litigates it.
+- **F004 (note) — cross-package edit to `review/persistence.py`.** Accepted, no
+  change. The `documents/` package owns the primitives; `review/` owns its own
+  rendering, and the fix is a one-line change to a `review/` file that produces
+  invalid documents today. The boundary-respecting version — render that block
+  through `render_frontmatter_block` — is already recorded as Future Work, held
+  up by test coupling to the exact rendered text, not by the boundary.
+- **F005 (note) — the architecture's own example teaches the bug.** Correct and
+  worth fixing. Its structured-findings sample quotes `summary` and leaves
+  `location` bare, the exact asymmetry D9 removes. The sample values happen not
+  to contain a colon-space so it is valid YAML, which is the problem: it looks
+  fine and reproduces the pattern. Both example locations are now quoted, with
+  a comment saying why.
+- **F006 (note)** — no NFRs apply. No action.
+- **F007 (note) — implicit edge cases in the exit-code contract.** The real
+  gap. Added `FM008` (file under the root not decodable as UTF-8) and rewrote
+  the exit-code paragraph around *who is wrong*: exit 2 means the command was
+  called incorrectly and no validation happened (missing root, missing named
+  path, permission/IO fault); anything about a document's content, including
+  undecodable bytes, is a violation on exit 1. Success criterion 10 now
+  enumerates the cases a CLI test must cover, and criterion 4 counts eight
+  check classes.
+
+One aside worth recording: this review artifact is itself another instance of
+the unquoted `location:` render — its seven finding locations are bare scalars
+carrying `.md#anchor` values. It parses (verified: 7 findings, verdict PASS)
+only because no anchor happens to contain a colon-space. The corruption class
+is not historical; it is one review away, in every review squadron writes.
+
+---
+
+### Slice 172: `sq validate docs` — Slice Design Complete
+
+Phase 4 design for the replacement 171 made room for:
+[172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md](project-documents/user/slices/172-slice.sq-validate-docs-mechanical-frontmatter-enforcement.md).
+Five pieces — the validator, a tracked pre-commit hook, a CI backstop with a
+one-time cleanup, status validation on squadron's own frontmatter writers, and
+a fix to the review writer. Effort holds at 1/5.
+
+**The design was written against a scan, not against a hunch.** All 409
+markdown documents under `project-documents/user/` were checked: 24 violate the
+spec. Six carry a non-canonical `status` (`active`, `draft` ×2, `in-progress`,
+`not-started`, `superseded`), three are missing `status` entirely, eleven use a
+`docType` outside the canonical list (`task-breakdown` ×10, `slice-tasks`), and
+two have no frontmatter block.
+
+**The fifth class was invisible and is the most interesting.** Five review
+artifacts have frontmatter that *looks* correct and does not parse — a finding's
+`location:` value carries a colon-space (`location: Slice design:
+Implementation Details`), which YAML reads as a nested mapping. `read_frontmatter`
+returns `None` for a YAML error exactly as it does for a file with no block at
+all, so nothing distinguished "no metadata" from "corrupted metadata" until a
+scan asked directly. The consequence is a hard failure at a distance:
+`metrology/identity.py:180` raises `MetrologyTargetError` and
+`review/resolution_evidence.py:132` raises `ResolutionError`, so
+`sq metrology capture` and `sq review resolve` cannot process those five files.
+
+The producer is squadron. `review/persistence.py:222` renders that line as an
+unquoted f-string while its neighbor on line 220 quotes `summary` through
+`yaml_escape` — the two fields carrying model-authored free text, one guarded
+and one not. The slice quotes `location` and repairs the five artifacts. The
+larger fix (render the whole block through `render_frontmatter_block`, as gate
+evidence and resolution artifacts already do) is recorded as future work: it is
+correct, and several test modules assert on the exact rendered text, so it is
+its own unit.
+
+**Decisions worth their own line.** Scope is a configured document root
+(`validate.docs_root`, default `project-documents/user`), because a repo-wide
+sweep would flag `README.md`, `CLAUDE.md`, `docs/*`, `commands/sq/*.md`, and
+`.claude/agents/*.md` — all correctly frontmatter-free. Paths given on the
+command line are *filtered* against that root rather than trusted, which is what
+lets the hook hand over the entire staged file list without knowing anything
+about document conventions. Squadron's own machine artifacts (`review-resolution`,
+`gate-evidence`, `devlog`) land inside the root and legitimately carry no
+`status`, so they are a recognized second document class — a gate that fires on
+its own tool's correct output is how people learn to use `--no-verify`. Seven
+check classes, each with exactly one mechanical fix; no `--fix` mode, since
+`draft` and `superseded` have no unambiguous target and a hook that silently
+rewrites staged documents is worse than one that stops.
+
+Drift against the spec — the risk that ended 171's frontmatter consumer — is
+handled by a test that parses `file-naming-conventions.md` and compares it to
+the enums, failing (never skipping) when the submodule is absent. That needs
+`submodules: true` on the CI checkout; `ecorkran/ai-project-guide` is public, so
+no token.
+
+Slice plan entry 29 updated with the design link and the corruption finding.
+
+---
+
+### Slice 171: Deferred — No Third Consumer
+
+Deferred immediately after a passing design review and before any
+implementation. **The design is not the reason.** It reviewed at CONCERNS with
+all findings resolved, and it stands as written.
+
+The slice rests on one load-bearing argument: the executor has accreted two
+hardcoded post-action checks (909's dispatch artifact post-condition, 911's
+`revision_number` stamp), so a third means editing the executor again — the
+open/closed violation the project's own review rules name. That argument is
+worth 3/5 effort only if a third consumer exists. Asked directly, there isn't
+one.
+
+And the nominal *first* consumer does not survive scrutiny. A frontmatter
+`status:` validator is better served by a `sq validate docs` command: it
+catches every document rather than only those touched during a pipeline run,
+it can go in CI where it actually blocks, and it is a fraction of the work.
+It also arguably is not squadron's job — `cf check` exists and Context Forge
+owns `file-naming-conventions.md`, which defines the canonical set. The
+design's own "accepted drift risk" note about mirroring another project's
+spec in a squadron enum was the tell, written down and then walked past.
+
+Building a mechanism to hold two checks that already work, for a consumer
+better served elsewhere, is speculative generality — which the project rules
+ban. The two checks stay hardcoded. A third is cheaper to add in place than
+this mechanism is to build.
+
+**Un-defers on:** naming a consumer that must run *inside* a pipeline and
+*block* it, i.e. one that cannot wait for CI or a manual command.
+
+Two reworks surfaced in discussion after the review and are recorded in the
+slice design's Deferral section rather than folded into the body:
+
+1. **Authoring flow.** As designed, adding a hook means editing squadron —
+   a module under `hooks/builtin/` plus a bootstrap line. No project-level
+   hook file exists. A feature that is a pain to use will not get used.
+   Likely shape if revived: a `.squadron/hooks/*.py` convention imported at
+   bootstrap, registering through the already-public
+   `register_post_action_hook`. The `conftest.py` pattern — in-repo, typed,
+   no shell door opened.
+2. **The watermark is wrong, and duplicate suppression is its symptom.**
+   `frontmatter-status` scopes to documents with mtime `>= run_started_at` —
+   a *run*-level watermark, so a document written in step 1 keeps matching
+   after every later action, which is the only reason the design needed a
+   dedup component at all. Correct shape: the runner computes the
+   changed-document set once per action (delta since the *previous* action)
+   and passes it in `HookContext`. A hook with nothing to do gets an empty
+   set and returns PASS; each document is validated once, when written; the
+   scan is shared across hooks; dedup disappears. Rejected alternative:
+   actions self-reporting what they wrote — `dispatch` cannot know, since an
+   agent writes files out of band, which is the whole premise of the 909 bug.
+
+Also unresolved and worth knowing before any revival: hook records would land
+in `ActionResult.metadata` (persisted free via `dataclasses.asdict` at
+`state.py:291`), but only at **step** completion, and prompt-only
+`record_step_done` builds an `action_results` list only when `--verdict` is
+passed — so there is nowhere to hang them. And the design recorded only
+non-`PASS` outcomes, making "ran and passed" indistinguishable from "never
+fired." The "no silent path" rule was applied to failures and not to the
+silence that actually bites.
+
+Documents updated: slice design `status: deferred` with a Deferral section at
+the top; slice-plan entry 28 marked DEFERRED with a Notes entry; the
+architecture's Post-Action Hooks section, component diagram, package
+structure, and YAML grammar all marked designed-not-built so the architecture
+does not read as describing shipped behavior.
+
+---
+
+### Slice 171: Design Review — Resolved
+
+`171-review.slice...md` returned **CONCERNS** — two concerns, two notes, four
+PASS. All four acted on.
+
+- **F001** — frontmatter `dependencies` omitted 911, which the Prerequisites
+  section, the migration plan, and success criteria #13/#17 all lean on.
+  Now `[142, 149, 909, 911]`.
+- **F002** — the slice introduces architecture-level surface (a third
+  registry, a new pipeline-YAML block, two config keys) at slice level. Chose
+  to update the parent architecture rather than record a deferral:
+  `140-arch.pipeline-foundation.md` gains the hook registry in its Component
+  Architecture diagram and Package Structure, the `hooks:` block in its
+  Grammar, and a "Post-Action Hooks" section under Action Extensibility
+  carrying the authority model — trigger, severity as a single axis, the
+  clamp, chain-stop, and the `result.outputs` bar. Initiative 180's
+  convergence strategies need to know this extension point exists and what
+  authority it holds. Slice design gained success criterion #24 so the
+  architecture update is a deliverable, not a courtesy.
+- **F003** — recorded the trigger condition for widening the config type
+  system: a **third** list-valued config key. Two keys do not justify
+  touching a shared type system; three do. Fixing it on a count rather than
+  on irritation.
+- **F004** — the dedup set's lifetime is the process, not the run, and those
+  coincide only under the in-process executor. In prompt-only mode each
+  `--step-done` is a fresh process, so a recurring warning surfaces once per
+  invocation. That is right for a mode whose steps are separated by human
+  turns — a warning suppressed in a process the user has walked away from is
+  a warning lost — but "once per run" was not true as written. Success
+  criterion #10 restated in per-process terms so it is testable.
+
+Also corrected `status: in-progress` → `in_progress` in both the 140 slice
+plan and the 140 architecture frontmatter. Outside the canonical set, and
+precisely what this slice's `frontmatter-status` hook is being built to catch.
+
+---
+
+### Slice 171: Post-Action Hooks — Phase 4 Slice Design Complete
+
+Design written for slice 171 (initiative 140, Pipeline Foundation), issue #52.
+Provider-independent post-action hooks: the equivalent of Claude Code's
+`PostToolUse` at the layer squadron owns, since Claude hooks reach exactly one
+of the seven provider profiles squadron runs.
+
+Framed as a generalization, not a new mechanism. Squadron already has two
+hardcoded post-action hooks sitting below the single action-execution site at
+`executor.py:1124` — the 909 dispatch artifact post-condition (which can fail
+an action) and the 911 `revision_number` stamp (which must never fail one).
+Migrating both onto the mechanism is the acceptance test, with the binding
+constraint that **no assertion in an existing 909/911 test may change** —
+only mock target paths move, the same discipline slice 306 used when
+relocating `run_git`.
+
+Contracts settled:
+
+- **What a hook is** — a registered Python callable behind a
+  `runtime_checkable` Protocol, mirroring the `Action` registry and
+  `bootstrap_step_types()` idiom. Not arbitrary shell: that is what makes
+  Claude's hooks a security surface, and it can be added later but not
+  removed later. `check()` is `async` so `asyncio.wait_for` is the timeout
+  mechanism.
+- **What a hook may do** — `PASS` / `WARN` / `FAIL`, on **one** declared
+  severity axis that governs both the outcome and the breakage case. The
+  runner clamps a `WARN`-severity hook that returns `FAIL`, which is what
+  keeps the revision stamp from ever failing a converging loop. Hooks may
+  write files; they may not otherwise mutate `ActionResult`.
+- **Trigger granularity** — `HookTrigger` carries action types and
+  success-only, and deliberately cannot express pipeline structure. Step-derived
+  facts (`expected_artifact_kind`, `run_started_at`, `iteration`) go into
+  `HookContext` and the hook self-selects — which is today's `expected_kind is
+  not None` guard relocated to the hook that cares.
+- **Ordering** — registration order, stated in one place; a `FAIL` stops the
+  chain, which expresses the existing stamp-after-post-condition dependency
+  as ordering rather than an `elif`.
+- **Activation** — `hooks.disabled` (str, comma-separated; the config type
+  system supports only `int`/`str`) unioned with a per-pipeline YAML
+  `hooks: {disable: [...]}` block. No re-enable override, so no precedence
+  puzzle.
+- **Failure modes** — raise, timeout, disabled, clamp, chain-stop each have a
+  defined outcome and an observable signal; every non-`PASS` outcome lands in
+  `result.metadata["hooks"]` and logs at WARNING+.
+
+Two decisions worth recording because they were not in the issue:
+
+**Prompt-only parity is closed, not inherited.** The 909 post-condition runs
+only in the in-process executor today — prompt-only mode has no post-action
+moment, so a `/sq:run` P4 whose dispatch wrote no design advances anyway. The
+design runs the same hooks at `sq run --step-done`, and a `FAIL` there refuses
+to record the step and exits non-zero. That is a real break in a scripted
+command's exit-code contract, flagged for CHANGELOG. It is also why hooks are
+barred from reading `result.outputs` — there are none in prompt-only, so a
+hook depending on them would work in one mode and silently no-op in the other,
+which is the exact failure this slice exists to remove.
+
+**The frontmatter status validator is `WARN`, not `FAIL`.** A bad `status:`
+is a metadata defect, not a broken artifact; failing an action over it would
+block work on a pre-existing bad file the run did not create. Escalating later
+is a one-line change, de-escalating after it has blocked a pipeline is a bug
+report. The validator needs a mechanical definition of the canonical set,
+which squadron does not have — so the slice adds `DocumentStatus(StrEnum)`,
+mirroring the prose in `file-naming-conventions.md` with the drift risk stated
+rather than hidden.
+
+Slice-plan entry 28 marked Design Complete. No code written; Phase 4 only.
+
+---
+
+### Slice 306: Code Review — Resolved
+
+`306-review.code...md` returned **PASS** — four PASS findings, six notes, no CONCERN+. Four of the six notes were acted on; two were not, for stated reasons.
+
+**F009 was the one worth having.** `_save_and_report` catches the archive guard's `OSError`, prints the refusal, and returned — so a review that ran, displayed, and then could not be written exited 0. Downstream readers gate on the file, not on terminal output, so that is a silent failure of exactly the class Part D exists to prevent. Save failures now exit 1, with a `FAIL` verdict keeping its more specific exit 2; the tasks command still saves every part before exiting, since the reviews have already been paid for. Documented in the exit-code table.
+
+**F007 was more than cosmetic.** `_render_findings` promises the judge one finding per line, but finding text is model-authored and arrives through YAML, where a block scalar carries real newlines — and `records_from_frontmatter` does not strip them. A multi-line summary would not merely look untidy: it would present as an extra finding, and a line shaped like `F002: addressed` would read as a status. Every field is now collapsed to one line at render time, which is the seam that owns the format.
+
+**F006** renamed `exceeds_injection_cap` → `injection_cap_if_exceeded`; the old name promised a boolean and the function returns the cap value, which the caller needs in order to name it in the warning.
+
+**F005/F010** added CLI-layer tests for `--since` (including a bad ref, which must be a named git failure rather than a crash), `--model`/`--profile` passthrough asserted at the transport, and `-v`'s note column.
+
+**F008 left as-is.** `resolution.py` is 384 lines against a ~300 guideline the project states as "where practical"; the reviewer called it an observation rather than a violation, and the file is already the second half of a split made during implementation. Splitting again would trade one over-long orchestrator for three modules whose seams are less obvious than the first cut's.
+
+---
+
+### Slice 306: Review Resolution — Implementation (Phase 6)
+
+Both task files complete on `306-slice.review-resolution-recording-that-findings-were-addressed`. `sq review resolve <n> [TYPE]` ships, `reviewedSha:` is stamped at review-authoring time, and re-running a review no longer destroys the previous one.
+
+**The dependency-direction problem Part 0 was built to solve turned out to reach further than the design anticipated.** Design review F002 barred `review/` from importing `pipeline/`, and the relocation moved models, parsing, verification, and the judge transport into `review/addressed/` accordingly. But two of the moved modules annotate `RoundDiff`, which the design left in the pipeline package as loop-specific machinery — resolved in file 1 with `TYPE_CHECKING` imports, which held only because the uses were annotations. T21 needs to *construct* one, and `TYPE_CHECKING` cannot launder that.
+
+Resolved by splitting the screens on the criterion the design itself states — what needs loop context stays. `RoundDiff`, the git measurement, `ScreenResult`, `screen_byte_identical`, and `screen_git_failure` need none of it and moved to `review/addressed/screens.py`; screen 0 (needs an iteration number) and screen 2 (needs a fresh review) stayed. The two `TYPE_CHECKING` shims became plain imports. 305's gate tests pass with only mock-target relocation — no assertion changed.
+
+The measurement itself unified along the way. `compute_round_diff` and the new base-parameterized diff are the same function: `git diff <base>` with a single commit argument spans base→working tree, so `compute_round_diff` is `compute_diff_since("HEAD")` and the gate's failed-command string is unchanged.
+
+**Two gaps the task file did not anticipate, both found by running the thing.** First: a review file is written *after* the commit its own `reviewedSha` names, so it always appears in its own diff — the empty-diff screen would have been unreachable, and every stale review would have gone to the judge with the review itself as its only evidence. The reviews directory is now excluded from the measurement. Second: `review/git_utils` already owns the name `resolve_diff_base` for a different question (which branch slice work forks from), and the conftest patches it autouse; the new one is `resolve_review_diff_base`.
+
+**T25's injection cap.** 305 enforces `review.max_total_injection_bytes` on file injections but does not apply it to the judge's change-set input. Per T25's instruction, the check was added on this path only; the gap in 305 is logged as issue #53 (low priority) rather than silently fixed here. 305's gate measures a round against `HEAD`, so its change set is bounded in practice — the resolve path's `--since` is what makes the cap load-bearing.
+
+Scope notes. T13's guard grew to both persistence paths with PM approval (file 1). `_yaml_safe` and the `safe_dump` pattern were promoted out of `evidence.py` into `documents/frontmatter.py` as `yaml_safe`/`render_frontmatter_block`, both call sites updated; `evidence.py`'s duplicate reviews-dir constant now points at `persistence.REVIEWS_DIR`. `resolution.py` hit 613 lines and was split at the evidence/decision seam into `resolution_evidence.py` (locate, load, diff base, measure, screens) and `resolution.py` (decide, orchestrate), with `resolution_artifact.py` holding render and the versioned writer. T31/T32 landed inside T29/T30's commit rather than their own — the writer was needed to lint the module it lives in.
+
+Still open: T39's Context Forge coordination note has no agreed delivery mechanism (issue, message, or shared doc) — a question for the PM, not something to guess at.
+
+---
+
+### Slice 306: Task Breakdown Review (Part 2) — Resolved
+
+File 2's task-breakdown review returned CONCERNS — three concerns, two notes. All fixed. One of the three concerns (F005, the Phase 5 cf-archive-scanning checklist item) turned out to already be resolved: this reviewer flagged it as unconfirmable from file 2 alone ("I can only review file 2"), and file 1's own review had independently caught the same gap as its F002 and fixed it before this review was read — both reviewers converged on the same real gap from different files.
+
+The other two concerns were genuine coverage holes. F004: `metrology/capture.py` has its own index-scoped review-discovery glob, distinct from `discover_judge_results` — confirmed by reading the source — and T32 only tested the latter; SC11's own wording says "and," so both now get asserted separately. F006: T33's "no swallowed WARNING/ERROR" requirement had no test anywhere; T34 gained a `caplog` assertion using the file-history-fallback WARNING as a convenient, already-set-up case.
+
+File 2 is now 502 lines, 52 over the ~450 guideline — inside the "don't split under ~100 overrun" threshold, left as one file.
+
+---
+
+### Slice 306: Task Breakdown Review (Part 1) — Resolved
+
+File 1's task-breakdown review (306-review.tasks...part-1.md) returned CONCERNS — four concerns, three notes, no fails. All fixed in the task file, no scope or numbering left inconsistent.
+
+The structural fix (F002) reordered Part D: the cf-archive-scanning checkpoint is now T12, placed *before* the archive-guard implementation and its test (renumbered T13/T14) rather than after with a "don't mark done until" note — the reviewer's point was that a forward-referencing gate is fragile in practice, and reordering makes it structural instead. The two coverage gaps (F001: the read-back-verification-fails branch had no test distinct from copy-cannot-be-created; F004: no task confirmed `format_review_markdown`'s findings shape survives the `reviewedSha` addition, which file 2's frontmatter reader depends on) both got dedicated test bullets rather than being folded into existing ones. F003 added explicit NOTEs to T2/T4/T6 clarifying that Part 0's intermediate verification steps are focused subsets, not the full-suite gate — T8 remains that gate.
+
+---
+
+### Slice 306: Review Resolution — Task Breakdown (Phase 5)
+
+Task breakdown complete: `user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md` (Parts 0/A/D, T1–T14) and `-2.md` (Parts B/C + Closeout, T15–T40), 306 and 461 lines — split at the natural infrastructure/feature seam rather than a mechanical line-count cut, since Part B's every task imports from what Part 0 relocates. Slice design's `status:` moved to `in_progress`; no branch created yet.
+
+40 tasks, each paired with its test task per the test-with rule. Three sequencing notes worth keeping in mind at Phase 6: **Part 0 (the `review/addressed/` relocation) must land first** — every task in file 2 imports from the new location, and it is verified purely by re-running 305's existing suite unchanged, with no new tests written for code that only moved. **Part D (the overwrite guard) is independent of Part B** and fixes a live data-loss bug on its own, so it does not need to wait on the interactive command; T14's cf-archive-scanning check (design review F005) gates T12's completion in practice, even though it is numbered after it — the task file says so explicitly rather than relying on numbering to imply it. **Three design-review-added failure-closed rules got their own dedicated task pairs** rather than being folded into general error handling: the verdict-consistency screen (T23/T24, F001 — an empty CONCERN+ set against a FAIL/CONCERNS verdict is inconsistent evidence, not a pass, citing issue #28's parser-drop lineage directly in the task text), the judge-leg failure modes and injection cap (T25/T26, F004), and the archive-copy failure path (T12/T13, F003).
+
+One judgment call surfaced while breaking down T25: 305's architecture states an injection-cap constraint, but the breakdown does not know whether 305 enforces it in code today. Rather than assume and rather than silently expanding this slice's scope to add the check to 305 if it's missing there too, T25 instructs whoever implements it to add the same check on this path and separately flag the gap to the Project Manager if 305 turns out not to enforce it — scope stays bounded to 306, the fact surfaces either way.
+
+---
+
+## 20260802
+
+### Slice 306: Review Resolution — Slice Design (Phase 4)
+
+Design complete at `user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md`; slice plan entry 7 updated with the pointer. Issue #51.
+
+The design holds the constraint that motivated the issue: agents stay barred from editing `verdict:`, and nothing one word an agent can write may unblock a gate. Resolution is a *second assertion* in a *second artifact* — `{index}-resolution.{type}.{name}-r{n}.md`, `docType: review-resolution`, top-level field `resolution: ADDRESSED|UNADDRESSED|UNKNOWN` (deliberately not `verdict:`), derived by 305's discipline: screens first, judge over what remains, `verify_outcomes` downgrading unsupportable claims, UNKNOWN evaluated before failure.
+
+Four parts. **A:** `reviewedSha` stamped into review frontmatter at authoring time by both persistence paths — the anchor for "what changed since the review"; file-history fallback with WARNING for legacy reviews, `--since` override. **B:** `sq review resolve <index>` in a new `review/resolution.py`, reusing 305's building blocks with the judge transport extracted context-free (`judge_residue` becomes a thin ActionContext wrapper; 305's tests must pass unchanged). Known asymmetry stated rather than hidden: no fresh review exists on this path, so 305's exact-match screen cannot run — the judge sees all CONCERN+ findings when the diff is non-empty, and `MOVED` always downgrades. **C:** the frontmatter schema as the cf coordination seam (review-gating lives in cf; squadron writes the record, cf owns the gate), plus the interim PM procedure — verdict edits stay manual, now citing machine-derived evidence. **D:** `save_review_file` archives the prior content and warns before overwriting, closing the data-loss hazard found during scoping (a re-review silently destroyed hand-written Resolution sections).
+
+Effort 3/5 (B dominates). Not in scope: cf code changes, running a fresh review inside `resolve`, any squadron-side verdict edit.
+
+---
+
+### Slice 305: Code Review Resolution
+
+Code review returned FAIL with one fail, five concerns and three notes. All nine addressed on `305-slice.findings-addressed-gate`; suite 2832 passed / 2 skipped, ruff and pyright clean.
+
+**The FAIL was real and total.** `CONCERN_PLUS_SEVERITIES` is built from `Severity.CONCERN`/`Severity.FAIL` — uppercase — but `ReviewResult.structured_findings` emits `f.severity.value.lower()`, so the membership test in `concern_plus` was always `False`. Every gate handed `prior_findings=[]` to the screens, took the "prior round raised no CONCERN+ findings" PASS, never ran Screens 1–2, never consulted the judge, and reduced to the fresh review's verdict. The policy was inert on its happy path from the day it shipped. Fixed by normalizing at the boundary (`_as_severity` in `read_findings`) rather than lowercasing the constant, so the constant stays tied to the enum and cannot drift when a producer changes case.
+
+**It survived a full slice because no test used the production shape.** Every fixture wrote `{"severity": "CONCERN", ...}` by hand — exactly the trap CLAUDE.md names. The e2e fixtures now build a `ReviewResult` and take `.structured_findings`, which also means the `F00n` ids come from the property that assigns them rather than from a literal. Two of the e2e round-2 assertions now fail without the fix.
+
+**Loop-body step outputs are scoped to their iteration.** Part A published inner-step results into the run-wide `step_outputs`, which nothing cleared: a round whose review failed left round N-1's result standing under the same name, and the fresh leg read it as this round's evidence with no round stamp to tell them apart. Each iteration now gets a fresh view — a copy of the pre-loop outputs plus its own body steps — and the run-wide dict is left alone. That also closes two effects the review noted in passing: an inner step can no longer overwrite a same-named top-level step, and body step names stop resolving after the loop exits.
+
+**Screen 0 was conflating two states.** `prior_result is None` fires both for a legitimate first round and for a round whose predecessor's review crashed or emitted no verdict — and returned an annotated PASS for both. It now branches on `iteration`: ≤ 1 is the first round (PASS), > 1 is an evidence gap (UNKNOWN, `deciding_screen` unset, WARNING naming the missing step), matching the module's own contract that a check which could not run is UNKNOWN.
+
+**Frontmatter is serialized, not formatted.** `_yaml_scalar` was `str(value)` with no quoting, and notes interpolate finding locations, which `review/parsers.py` returns "stripped, unchanged" — arbitrary model text. `location: src/foo.py: line 45` produced a mapping-value error inside the block. Now built as a dict and dumped with `yaml.safe_dump`, with enum members coerced first (SafeDumper dispatches on exact type, so a `StrEnum` member raises).
+
+**The ordering rule became policy-agnostic.** `_validate_verdict_count`'s consumed-name exclusion assumes `_last_with_verdict` lands on the gate, which holds only if the gate follows the steps it names — but only `findings-addressed` gates were ordering-checked. `[gate(most-severe, review_from: r), review r]` validated while `until:` gated on the review and the gate was discarded. `_validate_gate_ordering` now checks every gate in a body. A referenced name that matches no body step is left alone: it may name a pre-loop step, which consumes nothing.
+
+**Notes.** Judge status parsing switched to `finditer` per line with first-wins accumulation, so several statuses on one line are all read and later prose cannot overwrite an answer already given. `review/parsers._location_path` was promoted to public `location_path` and the copy in `verification` deleted; `screens._match_key` was left alone, since matching on the full location string is a deliberate 911 constraint rather than a third copy of the same rule.
+
+**Not adopted: the lint/type config gap (F009).** The Python guide's baseline also selects `B`, `BLE`, `ASYNC` and includes `tests` in pyright. Measured: 70 `B`, 23 `BLE`, 6 `ASYNC` violations and 868 pyright-strict errors, essentially all pre-existing in modules unrelated to any current slice, and `BLE`/`ASYNC` remediation means narrowing exception types and moving blocking calls off the event loop — behavior changes, not formatting. `W` (zero violations) is enabled; the rest is recorded with its counts in `pyproject.toml` and tracked as issue #50, with a suggested sequencing (B008 per-file-ignores for the Typer CLI modules → B → ASYNC → BLE → pyright sweep). Note that 13 of the 70 `B` violations are `typer.Option` in signature defaults — the standard Typer idiom, not debt.
+
+---
+
+### Slice 305: Findings-Addressed Gate Policy — Implemented
+
+Phase 6, branch `305-slice.findings-addressed-gate`, seven commits — one per part, each with its own tests green before the next began.
+
+**The two loop-executor defects Phase 5 found are fixed, and the fix stands alone (`59944b6`).** `_execute_loop_body` now writes each inner step's verdict-bearing result into `step_outputs` under its step name, using the same `_last_with_verdict` rule the top-level walk uses — so a gate inside a loop resolves its named legs for *every* policy, including 304's `most-severe`, which had been emitting `UNKNOWN` every round since it shipped. `ActionContext` gained `prior_iteration_step_outputs`, scoped to the loop body's own steps and empty on iteration 1, so a policy comparing rounds cannot read its own round through a positional key that the current iteration has already overwritten. Both changes are additive; the full suite passed unchanged.
+
+**Policy config is now per-policy, from one table.** `GatePolicy` (StrEnum) plus `GATE_POLICY_CONTRACTS` — required fields, forbidden fields, and whether the policy has a model layer — is the single source consumed by `steps/gate.py`, `loader.py`, and `steps/loop.py`. `most-severe` requires both legs and rejects a `judge:` block; `findings-addressed` requires `review_from`, rejects `judge_from`, and accepts `judge: {model:}`. `GateAction` now dispatches to a registered `GatePolicyImplementation` instead of reducing unconditionally; a valid policy with no registered implementation fails closed with an explicit error rather than silently borrowing another policy's answer.
+
+**Loop validation counts unconsumed verdicts.** A step named by a gate in the same body is that gate's input, not a competing answer, so `[dispatch, review, gate]` validates while `[review, review]` still rejects with 910 Part B's original message. Two loop-scoped rejections were added for `findings-addressed`, both at validation time per design decision 8: no per-round commit source (the evidence is absent by configuration), and a `review_from` naming no earlier step in the body (the loader cannot see inside a body, so this is where the reference is resolvable).
+
+**The policy is a package**, not a module — `models`, `screens`, `parsing`, `judge`, `verification`, `evidence`, `policy` — because the single file the design named ran to ~400 lines before the judge leg existed. Layer order: Screen 0 (no prior round → annotated PASS, decided before any git call), Screen 1 (empty working-tree diff against `HEAD` *and* empty `git status --porcelain` → every prior finding unaddressed, leg FAIL), Screen 2 (exact `location`+`category` match, `unverified` locations excluded), then a judge over the residue only. A git failure is the one condition that earns `UNKNOWN`, and the log names the exact failed command.
+
+**Derived, not declared, end to end.** The bundled `judge.findings-addressed` template carries no `judge:` block — deliberately, since `is_judge` derives from it and metrology sweeps `*-review.*` for judge samples. Its output is parsed leniently into per-finding statuses; a finding the judge said nothing about is `disputed`, not dropped. `moved` without a successor present in the fresh findings, and `addressed` over a file the round never touched, are downgraded to `disputed` with a WARNING. The verdict is computed from the surviving statuses with `UNKNOWN` evaluated before `FAIL`, so a check that could not run never reads as a check that ran and failed.
+
+**Evidence artifact:** `{index}-gate.{policy}.{name}-r{revision}.md` under `project-documents/user/reviews/`, `docType: gate-evidence`, written before the round's commit so it lands in that round's history. One `GateEvidence` object backs both the file and `ActionResult.metadata` — the facts are never assembled twice. `discover_judge_results` over a directory containing one returns it in no sample set; that is asserted in `tests/metrology/` against the real discovery function, not against the glob.
+
+**What is recordable, and what is not.** The prior round's SHA (`HEAD` at gate time) plus `revision_number`. Round N's own SHA is not: the artifact is written before the commit that contains it. Round N's commit is discoverable afterwards as the commit containing the artifact.
+
+T28's resume finding is now pinned by a test in `test_state.py`: a paused loop step is appended to `completed_steps` and resume continues past it, so no execution path reaches the gate with a prior round missing — the policy contains no resume branch. Issue #48 (whether a checkpoint-paused loop *should* be re-enterable) is untouched and still open; the fail-closed end-to-end test asserts the pause, not a resumed loop.
+
+End-to-end coverage runs the target shape over a real git repository with only the model call stubbed: round 1 annotated, round 2's recurring finding failing the gate, round 3 judged-addressed and exiting — one transport call across three rounds. Byte-identical rounds and judge-transport failure have their own end-to-end tests.
+
+---
+
+### Slice 305: Findings-Addressed Gate Policy — In Progress
+
+Phase 5 task breakdown. Design (Phase 4) and its slice review were completed and resolved earlier the same day; commits `0917dae`, `2e2c94c`, `534c689`, `84121df`, `221b8c7`, all on `main`, all planning documents. This session produced `305-tasks.findings-addressed-gate-1.md` (Parts A–C, T1–T11) and `-2.md` (Parts D–G, T12–T30) — split because the single file ran 608 lines against a ~450 target.
+
+**Breakdown found two pre-existing loop-executor defects, both verified on disk.** Neither is a 305 concern; 305 is just the first consumer to walk into them.
+
+1. **`step_outputs` is never populated for steps inside a loop body, so any gate in a loop is broken today.** The only writer is `executor.py:959`, in the top-level step walk; `_execute_loop_body` passes the dict through but never writes it. `GateAction` is its only reader anywhere in the codebase (`actions/gate.py:95-96`), so a gate in a loop resolves neither leg and emits `UNKNOWN` every round. 304's plain `most-severe` gate fails exactly the same way — this is not specific to the new policy.
+2. **`prior_outputs` means "prior round" or "current round" depending on where a step sits in the body.** `running_prior` keys are positional (`executor.py:1400-1402`) and overwrite each iteration. 910's findings-feedback is correct only because dispatch happens to run first; reorder the body and it silently feeds the current round's findings back into itself. The gate sits late, so it cannot read the prior round this way at all.
+
+Plus one ordering fact the design had backwards: round N has no commit SHA at gate time, because `commit_each_iteration` commits after all inner steps (`executor.py:1417-1440`). The design's Screen 1 signal (`committed: False`) describes round N-1 vs N-2, one round stale.
+
+The correction is simpler than what the design specified: populate `step_outputs` for inner steps, carry the prior iteration's step outputs on a new `ActionContext` field, and detect a byte-identical round as an empty working-tree diff against `HEAD` — which *is* the prior round's commit at that moment, so the screen needs no SHA plumbing at all. Both executor changes are additive and cannot alter existing behavior: nothing but the gate reads `step_outputs`, and nothing but the new policy reads the new field. Part A carries them; they add `pipeline/executor.py` and `pipeline/models.py` beyond the design's Files Touched table.
+
+Task ordering follows the design's stated sequence with the plumbing prepended: A (executor evidence) → B (validator refinement) → C (policy config surface) → D (deterministic screens) → E (judge residue) → F (evidence artifact) → G (integration, docs, close-out).
+
+Design decision 5's resume caveat was closed during breakdown rather than carried into Phase 6: findings do survive state persistence (`state.py:291`, `:417-434`), and squadron has no mid-loop resume — a paused loop step is appended to `completed_steps` (`state.py:304-309`) and `first_unfinished_step` skips past it, so the loop is never re-entered. The policy gets no resume special case; T27 pins the behavior with a test instead. Whether a checkpoint-paused loop *should* be re-enterable is a real pipeline-foundation question and deliberately not this slice's.
+
+No code written; no branch created.
+
+---
+
+## 20260801
+
+### Slice 911: Loop Iteration Versioning and Review Evidence — Implementation Complete
+
+**Phase 6 complete.** Branch `911-slice.loop-iteration-versioning-and-review-evidence` off `main`. All three parts landed in the design's A1 → B → A2/A3 → C order, one commit per sub-part (`ad5d97b` through `412839c`).
+
+- **A1 (`ad5d97b`):** `ActionContext.iteration: int = 0` added and threaded through `_execute_step_once`; `CommitAction` appends ` (iteration N)` to a composed message when `iteration >= 1`, leaving an explicit `message:` param verbatim.
+- **B (`07db9f1`, `443a2ce`):** new `src/squadron/documents/frontmatter.py` (lenient read/update, byte-preserving body, named exception on malformed input); `read_review_frontmatter` delegates its parse to it. Dispatch's post-condition stamps `revision_number` (n+1 or 1) on the artifact when `expected_kind is not None` and `iteration >= 1`; `format_review_markdown` emits the same field on review files when supplied.
+- **A2/A3 (`36f64ad`, `f330517`, `80a725e`):** `commit_each_iteration: true` validated on `LoopStepType` (rejects a body that already commits, reusing `_validate_verdict_count`'s traversal rather than a second walk); `_execute_loop_body` appends one commit per iteration before the `until:` check; a clean-tree commit inside a loop now logs a WARNING naming the iteration.
+- **C (`ac25cdf`, `412839c`):** `--dry-run` shows `commit_each_iteration` when set; `docs/PIPELINES.md`'s "no per-iteration commit" section replaced with the opt-in contract and the `revision_number` field contract.
+
+**Full validation gate:** `ruff format`/`ruff check` clean, `pyright` strict 0 errors, full `tests/` suite 2745 passed / 2 skipped vs. a `main`-baseline of 2698 passed / 2 skipped (a separate worktree checkout) — the +47 delta is exactly the new tests added across T3/T5/T7/T9/T11/T13/T15/T17/T19, no regressions, no new skips.
+
+**Live smoke test, and what it actually showed.** Ran `commit_each_iteration: true` end-to-end in a disposable scratch repo (`~/source/repos/manta/temp/squadron-smoke-911`, outside this repo, since `sq run`'s SDK-mode dispatch refuses to execute nested inside a Claude Code session — this session couldn't run it itself). Confirmed real: one commit per iteration with a distinguishable message (`chore: loop-{name} (iteration N)`), and a non-empty `git diff HEAD~1 HEAD -- <path>` between rounds. One apparent anomaly — two commits both reading "iteration 1" — was traced to two separate un-resumed `sq run loop-smoke` invocations 28 seconds apart (confirmed via distinct `run_id`s in `~/.config/squadron/runs/`), not a defect: each fresh run numbers its own iterations from 1. Separately, and not a squadron defect: the smoke fixture's dispatch prompt asked the model to write a throwaway `calc.py`, but the coding agent went off-task and copied this repo's own `CLAUDE.md`/`.claude/` scaffolding into the scratch project instead — a smoke-test-prompt problem to note if reused, not something this slice's code caused. The mechanism itself (not this one fixture's prompt-following) is independently covered by `tests/pipeline/test_executor_loop_body.py` and `tests/pipeline/actions/test_commit.py`.
+
+**ai-project-guide issue #14** (registering `revision_number` in the canonical frontmatter schema) is still open with no comments as of close-out — no rename needed; `revision_number` ships as designed.
+
+**Slice marked complete.** Entry 9 in `900-slices.maintenance-and-refactoring.md` checked off. Issue #44 to be closed on merge, not before.
+
+**Next:** slice 912 (Review Evidence — Prior-Version Access) needs its own design conversation before Phase 4.
+
+### Slice 911: Loop Iteration Versioning and Review Evidence — Review Resolution
+
+**Verdict CONCERNS**, 5 concerns / 4 pass / 3 note across 13 findings. Verified each concern against the actual code rather than taking the review at face value:
+
+- **F002 (FIXED):** `_stamp_revision_number` caught only `(ValueError, TypeError)` around `_expected_artifact_paths`, but `cf_client` is duck-typed and the real `ContextForgeCLI` raises `ContextForgeError`/`ContextForgeNotAvailable`/`KeyError` on a CF hiccup — none caught. Confirmed this would have propagated uncaught through `_execute_step_once`, violating the function's own "must not fail a converging loop" contract. Widened to `Exception` with a comment tying it to that contract; new test drives the real `ContextForgeError` path via a two-call `side_effect` (post-condition succeeds, stamp call raises).
+- **F004 (FIXED):** confirmed the sibling post-condition function already warns on an empty `_expected_artifact_paths()` result but the stamp function silently no-opped on the same condition. Added the matching WARNING; new test forces an empty-but-non-raising resolution distinct from the post-condition's own call.
+- **F013 (FIXED):** closed by the same fix/test as F002 — the new test exercises the previously-untested non-`FrontmatterError` exception path.
+- **F003 (ACKNOWLEDGED):** the `revision_number` vs. loop-iteration naming tension is the exact tradeoff the design's Field Contract table already decided with the PM — no action.
+- **F001 (ACKNOWLEDGED):** the review's own prose downgrades this to a NOTE; no action.
+- **F005-F012:** pass/note, no action.
+
+Full gate re-run after the fix: 2747 passed / 2 skipped (up from 2745 — the two new regression tests), no regressions. Resolution appended to `911-review.code.loop-iteration-versioning-and-review-evidence.md`.
+
+## 20260731
+
+### Slice 910: Loop Convergence Correctness — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/910-slice.loop-convergence-correctness.md` on branch `main` (planning work, no slice branch), from the slice-plan entry in `900-slices.maintenance-and-refactoring.md`. Three defects on the `loop:` execution path bundled into one slice because Parts A and B share `_execute_loop_body` and one test file: Part A findings-feedback gap (#42, High), Part B ambiguous multi-review `until:` gating (#43, High), Part C `--dry-run` loop-body expansion (#45, Low).
+
+**Grounded every anchor against on-disk code, extending the scoping already done in the slice-plan entry:**
+- **Part A:** re-confirmed `_execute_loop_body` (`executor.py:1298-1321`) passes the outer `prior_outputs` unchanged into every iteration, and that `DispatchAction._resolve_prompt_from_prior_review` (`dispatch.py:258-291`) is a complete, already-shipped consumer waiting on real data. Added a design-time decision the plan entry left open: keep the existing `{action_type}-{action_index}` key scheme for the accumulated `prior_outputs` (letting a later iteration's same-key write overwrite the earlier one) rather than folding the iteration number into the key, since the consumer only ever wants the *most recent* review, not a full history — full history is 911's job.
+- **Part B:** traced which step types can actually produce a verdict-bearing action, since the fix counts them at validation time. Confirmed it's not just `StepTypeName.REVIEW` — `PhaseStepType.expand()` (`phase.py:156-169`) appends a `review` action from an inline `review:` sub-field, and `gate` (`actions/gate.py`) also produces a `verdict`. A loop body with two `phase:` steps each carrying inline `review:` is ambiguous under #43 even though neither inner step is literally type `review` — the validation check must expand inner steps and count actions, not pattern-match step-type names. Placed the check inside `LoopStepType.validate()` (`loop.py:30-115`) alongside the existing nested-loop ban, reusing the already-imported `unpack_inner_steps` helper. Flagged a fallback (raw-config inspection instead of calling `expand()`) in case any inner step type's `expand()` isn't side-effect-free.
+- **Part C:** confirmed the exact one-line render site (`run.py:983`) and scoped the fix to a single `if step.step_type == "loop"` branch reusing `unpack_inner_steps` for the indented inner-step listing — no new rendering abstraction, matching Parts A/B's no-new-machinery bar.
+
+**Also recorded, not fixed:** the `on_exhaust: skip` fall-through gap the plan entry already flagged as deferred (verified present at `executor.py:873/881`, `SKIPPED` absent from the run loop's early-return checks) is carried into the slice design as an explicit Known Issue, out of scope for all three parts, unchanged from the plan-entry framing.
+
+**Sequencing:** Part B before Part A (establishes the one-verdict-per-body invariant Part A's tests assert against); Part C independent, any order.
+
+**Next:** Phase 5 (Task Breakdown) for slice 910, not yet started.
+
+### Slice 910: Loop Convergence Correctness — Review Resolution
+
+**Review verdict PASS with one CONCERN (F001)**, raised against the three items the design deferred to implementation: Part A's `prior_outputs` key scheme, Part A's `step_outputs` interaction, and Part B's reliance on `expand()` purity. Traced all three against the actual code instead of leaving them open:
+
+- **Key naming:** the plain `{action_type}-{action_index}` scheme (no iteration number folded in, same-key overwrite across iterations) is safe by construction, not just convenient — `action_type` carries no inner-step identity, so a same-key collision within one iteration can only happen if two inner steps produce the same action type, which is exactly the shape Part B's validation bans. Once Part B lands first, the collision case cannot occur.
+- **`step_outputs`:** confirmed it's a disjoint mechanism from `prior_outputs` — created once per run, threaded by reference (never copied), written exactly once per top-level step after that step fully returns. Part A's fix never touches it.
+- **`expand()` purity:** read every `expand()` implementation reachable inside a loop body (`compact`, `devlog`, `dispatch`, `gate`, `phase`, `review`, `summary`) — each is a pure dict transform with no I/O. Confirmed safe to call at validation time.
+
+Updated the slice design in place (Part A and Part B sections rewritten from "confirm during implementation" to "resolved, not deferred" / "resolved, purity confirmed"), removed the Risk Assessment section since no open risk remained, and appended a Resolution block to the review file (F001 ACCEPTED, F002 ACKNOWLEDGED, F003/F004 no action) following the same pattern slice 909's review used.
+
+### Slice 910: Loop Convergence Correctness — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/910-tasks.loop-convergence-correctness.md` (13 tasks, 269 lines) from the reviewed slice design. Order: Part B (T1-T4) → Part A (T5-T8) → Part C (T9-T12) → final validation (T13), matching the design's sequencing rationale.
+
+**Found and resolved a design-document defect before writing tasks, not silently:** the slice design's Success Criteria and Verification Walkthrough for Parts B and C repeatedly cite `p45b.yaml` as an existing shipped pipeline demonstrating the two-loop-sequence pattern (design→review, then tasks→review). A full repo search found no such file — `src/squadron/data/pipelines/` contains only `judge-cycle.yaml` and `test-loop.yaml`, both single-loop, neither matching the two-loop shape the design describes. Rather than substitute a different pipeline or silently drop the walkthrough steps, raised this to the PM (AskUserQuestion) per the "stop and request clarifying information" rule in the Phase 5 guide and the project's "don't guess, ask" instruction. **Resolved:** `p45b.yaml` is real, provided directly by the PM, and confirmed present at `~/.config/squadron/pipelines/p45b.yaml` — squadron's user pipeline directory (`_USER_DIR`, `loader.py:23`), which `load_pipeline`/`sq run` already discover automatically. No task creates or moves it; Part B's T3 and Part C's T11 reference it by bare name exactly as the design's walkthrough specifies, and its actual two-sequential-single-review-loop shape is the precedent Part B's validation check is designed to keep valid.
+
+**Test-with applied throughout:** T1 (validation check) → T2 (unit tests in `test_loop.py` + `test_loop_validation.py`) → T3 (manual confirm against real `p45b.yaml`); T5 (accumulate `prior_outputs`) → T6 (loop-body integration test) → T7 (end-to-end prompt-content assertion, closing the gap between "data is threaded" and "the consumer actually uses it"); T9 (`--dry-run` expansion) → T10 (CLI test) → T11 (manual confirm against real `p45b.yaml`). Each part's implementation task is immediately followed by its test task, per the guide.
+
+**Next:** Phase 6 (Implementation) for slice 910, not yet started.
+
+### Slice 910: Loop Convergence Correctness — Implementation Complete
+
+**Phase 6 complete.** Branch `910-slice.loop-convergence-correctness` off `main` (`git.integration_branch` unset). All three parts landed in the design's B → A → C order, one commit per part, each preceded by tests confirmed to fail against pre-fix code and pass after.
+
+- **Part B (`4f62163`, #43):** `LoopStepType.validate()` gained `_validate_verdict_count`, gated on `until_val is not None`, which expands every inner step via its registered `StepType.expand()` and counts `"review"`/`"gate"` actions across the full body. **One deviation from the design worth flagging:** the design's sketch called `expand()` on every inner step unconditionally; in practice an inner step whose own config is invalid (e.g. a bare `{"review": {}}` with no `template:`) makes `expand()` raise `KeyError`, because `validate_pipeline()` has never validated inner loop-body steps and never guaranteed they're well-formed before `expand()` assumes they are. Added a guard: skip verdict-counting for an inner step that fails its own `.validate()` first — its own error is a separate, more specific problem than "how many verdicts does this contribute." 23 new/updated tests across `test_loop.py` and `test_loop_validation.py`.
+- **Part A (`31c0164`, #42):** `_execute_loop_body` now threads a `running_prior` snapshot (seeded from `prior_outputs`, updated after each inner step with `f"{action_type}-{action_index}"` keys) into each iteration instead of the static outer `prior_outputs` — exactly the design's sketch, no deviations. Two new tests in `test_executor_loop_body.py` prove both halves of the design's Success Criteria separately: `prior_outputs` actually contains the prior iteration's review result, and the resolved prompt text (via `DispatchAction._resolve_prompt_from_prior_review`) contains the prior finding's summary. Both confirmed to fail pre-fix via `git stash`.
+- **Part C (`d4fb644`, #45):** single `if step.step_type == "loop"` branch in `run.py`'s `--dry-run` render loop, reusing `unpack_inner_steps` — matches the design exactly. Two new tests in `test_run.py`.
+
+**Verification Walkthrough executed against real artifacts, not just unit tests** (results written into the slice design in place): `sq run --validate p45b` (bare name, no `.yaml`) exits 0 both before and after Part B lands, confirming the existing two-sequential-single-review-loop pipeline is unaffected; a throwaway ambiguous fixture (two `review:` steps + `until:` in one loop body) exits 1 naming both offending steps; `sq run --dry-run p45b 999` (a `slice` target arg is required — the design's walkthrough commands omitted it) shows both loops fully expanded with `max`/`until`/`on_exhaust` and their inner `design`/`tasks` steps.
+
+**Corrections folded back into the slice design's Verification Walkthrough section**, since the original commands as drafted don't work against the real CLI: pipeline names passed to `sq run` omit the `.yaml` extension (the loader appends it), and `p45b.yaml` requires a trailing `slice` target argument.
+
+**Full validation gate:** `ruff format --check .` (397 files, all formatted), `ruff check .` (all checks passed), `pyright` full-project strict (0 errors), full `tests/` suite (2697 passed, 2 skipped, 0 failed — no regressions from any of the three parts).
+
+Slice marked complete: frontmatter `status: complete` in the slice design, slice-plan entry (`900-slices.maintenance-and-refactoring.md` item 8) checked off with completion date. Issues #42, #43, #45 to be closed on merge per the task file's final-validation step.
+
+**Next:** merge `910-slice.loop-convergence-correctness` into `main`. Slice 911 (Loop Iteration Versioning and Review Evidence) is scoped-only and depends on this slice's Part A, now landed — ready to move into Phase 4 (Slice Design) when picked up.
+
+### Slice 911: Loop Iteration Versioning and Review Evidence — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/911-slice.loop-iteration-versioning-and-review-evidence.md` on `main` (planning work, no slice branch), from slice-plan entry 9 in `900-slices.maintenance-and-refactoring.md`. Three parts: A per-iteration commits (#44), B `revision_number:` frontmatter on the artifact, C the round contract.
+
+**Part D split out to a new slice 912**, per PM decision and on the plan entry's own instruction ("if it grows, split it rather than expanding the slice"). Part D — may a reviewer see the prior version, and do findings carry forward — is the prerequisite *consumer* of 911's output, not part of it: it needs per-iteration commits to diff against and `revision_number:` to name the round it is judging. Added as slice-plan entry 10 with the original framing (anchoring risk, the #32 failure shape, the clean-eyes-plus-addressed-check candidate resolution) preserved verbatim, and the "needs a design conversation before its Phase 4 design is written" flag carried over.
+
+**Corrected the plan entry's central factual premise.** Part A's scoping said "a `commit` step type already exists, so the machinery is present." It does not exist: `commit` is an *action* (`ActionType.COMMIT`), absent from `StepTypeName`, emitted only by phase-step expansion (`phase.py:176`), and `docs/PIPELINES.md` documents "Constraint: no per-iteration commit" as a hard rule. Consequences, verified on disk and now driving the design:
+- A loop whose body is **phase steps** (`p45b.yaml`) **already commits every iteration** — issue #44's premise is false for that shape. The real gap there is that all three rounds emit the identical message `chore: phase-4 slice {n}`, so `git log` cannot tell them apart.
+- A loop whose body is a bare **`dispatch:`** (`judge-cycle.yaml`, `test-loop.yaml`) commits nothing, which is #44 as written.
+- `CommitAction` no-ops on a clean tree, returning `success=True, outputs={"committed": False}` (`commit.py:37-42`). So #44's hoped-for "empty commit is a useful signal" does not happen today — a byte-identical round leaves *no* trace at all. Part A makes that a WARNING, since it is exactly the #42 symptom.
+
+Part A therefore splits three ways: A1 iteration-qualified commit messages (add `iteration` to `ActionContext`, which `_execute_step_once` already receives), A2 opt-in `commit_each_iteration: true` on `loop:` with validation that **rejects** it when the body already commits (mirroring 910 Part B's reject-the-ambiguity stance rather than tolerating a silent double-commit), A3 the no-change WARNING.
+
+**Part B hooks onto 909 Part A's machinery**, which was the useful find: `_expected_artifact_paths()` (`executor.py:109-121`) and the dispatch artifact post-condition (`executor.py:1064-1082`) already resolve and confirm the file a phase-step dispatch was supposed to write. Squadron stamps `revision_number:` immediately after that check passes, so it only ever writes into a file it has confirmed exists from this run. Squadron never authors slice designs or task files itself — `DispatchAction` has no file-write code — so agent-side stamping was rejected as unreliable (a missed stamp is indistinguishable from a pre-field artifact). Also confirmed **no generic frontmatter read/modify/write utility exists**; `read_review_frontmatter` (`metrology/identity.py:162`) is lenient but review-scoped and declares itself the only reader of a persisted review. New `documents/frontmatter.py` provides the general primitive and `read_review_frontmatter` delegates its parse to it, so there is one lenient parser rather than two.
+
+**Part C decisions:** clean regeneration (a round regenerates; `revision_number:` is the only carryover; round history lives in git, not in the document), and absent `revision_number:` means "never stamped by squadron" — explicitly *not* round 1, so readers must not default it. `revision_number:` is monotonic across runs (read prior, write n+1), not the loop's iteration index, since "which revision am I looking at" is the question it answers.
+
+**Cross-repo seam recorded, not crossed.** `project-documents/ai-project-guide` is a git submodule (`ecorkran/ai-project-guide`); its `file-naming-conventions.md` is the canonical frontmatter schema Context Forge also reads. Per PM decision the slice is squadron-side only; registering `revision_number:` in that schema is a follow-up in the guide repo, and whether CF's own frontmatter consumers tolerate an unregistered key must be confirmed before it is proposed. `docs/PIPELINES.md` also needs its "no per-iteration commit" section replaced, tracked as a Part C task.
+
+**Field named `revision_number`, not `version` (PM decision, same day).** The design initially proposed `version:`. PM raised that registering a field makes it *usable* — other agents will read it and some will write it — so its semantics have to ship with it rather than after it. Two responses: (1) added a **Field contract** table to Part C stating what the field counts, that squadron alone writes it, that absent means *no information* rather than round 1, which docTypes it is defined for, and that nothing may branch on its value; (2) renamed it. `version` invites the semver misreading; `revision` alone still leaves room to treat the value as a label; `revision_number` cannot be read as anything but an integer counter, so nothing downstream can reinterpret it as a draft state or stage name.
+
+**Also corrected during review of the design: the p45b commit account.** The first draft said a phase-bodied loop "already commits once per iteration." True only conditionally. The commit is the *last* action in the phase expansion `[cf-op ×3, dispatch, review, checkpoint, commit]`, and `_execute_step_once` returns immediately on any action failure (`executor.py:1116-1124`) or on a checkpoint `Exit` (`executor.py:1104-1111`). A review action returns `success=True` regardless of verdict (`review.py:288`), so a FAIL alone does not skip the commit — but `checkpoint: on-fail` fires on FAIL *and* UNKNOWN (`checkpoint.py:23`) and sits one line before the commit (`phase.py:174-176`). Choosing Exit at that prompt discards the round entirely: no commit, loop short-circuits to PAUSED. So the rounds most worth keeping are the ones most likely to be dropped, and every round that *is* kept emits the byte-identical message `chore: phase-4 slice {n}` — three indistinguishable `git log` lines.
+
+**Sequencing:** A1 → B → A2/A3 → C. A1 first because both Part A's messages and Part B's review-file stamping depend on `ActionContext.iteration`; B second because it is the only genuinely new code and the only part carrying a document-corruption risk worth isolating in its own commit.
+
+**Next:** Phase 5 (Task Breakdown) for slice 911, not yet started. Slice 912 needs its design conversation before Phase 4.
+
+### Slice 911: Loop Iteration Versioning and Review Evidence — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/911-tasks.loop-iteration-versioning-and-review-evidence.md` on `main` — 21 tasks across four groups (A1, B, A2/A3, C), 346 lines, no split needed. Test-with throughout: every implementation task is immediately followed by its test task, and T3's tests gate the start of Part B.
+
+**One design correction found while writing the breakdown, and it was worth the pass.** The design specified `ActionContext.iteration: int | None = None`. The executor already declares `iteration: int = 0` on `_execute_step_once` (`executor.py:995`), and only the two loop paths pass it (`_execute_loop_step` `:1201`, `_execute_loop_body` `:1309`) — the top-level, `each`, and `fan_out` callers take the default. Adding an `int | None` alongside it would have created a second sentinel for the same concept and forced a conversion at the one place they meet. Changed the design to `iteration: int = 0` with `0` meaning "not inside a loop", and rewrote the three gating conditions (A1's message suffix, A3's no-change warning, Part B's stamp gate) from `is not None` to `>= 1`.
+
+Same pass tightened the interface-parity note: there are **two** paths that emit no `revision_number:` key — a review action running outside a loop (`iteration == 0`) and a CLI-invoked `sq review` (never goes through the action at all). The design had only recorded the CLI one.
+
+**Two places where the breakdown deliberately constrains the implementer rather than leaving a choice:**
+- **T12** must factor out and reuse the traversal inside `_validate_verdict_count` (`loop.py:165-213`) instead of writing a second inner-step walk. That helper skips any inner step failing its own `validate()` before calling `expand()` (`loop.py:186-190`) because `expand()` raises `KeyError` on an incomplete config — a fix landed during slice 910 implementation. An independent walk would reintroduce that crash, so T13 carries an explicit regression guard for it.
+- **T14** must keep the loop-appended commit's staging identical to the phase-emitted one (`git add -A`). Scoped staging is tempting, but applying it to one of two commit paths is worse than the sweep it avoids; noted in the design's Risk section as a follow-up, not a change to make inconsistently.
+
+**T21 carries a live external dependency:** re-check ai-project-guide issue #14 before close-out. If it settles on a name other than `revision_number`, rename during Phase 6 rather than shipping a name that needs migrating afterward. The task file also tells the implementer not to change the field name on their own initiative.
+
+**Next:** Phase 6 (Implementation) for slice 911 — branch `911-slice.loop-iteration-versioning-and-review-evidence` off `main`, not yet created.
+
+---
+
+## 20260730
+
+### `/sq:summary --restore <key>` — reaching a specific saved summary (#7)
+
+`--restore` picked the most recent summary by mtime, unconditionally, so once a newer summary was written the older one could not be reached at all — even though the multi-summary picker was already listing it by key. Added an optional `--key` that filters on the same key the picker displays.
+
+Key matching is case-insensitive, so the same argument resolves identically on case-sensitive and case-insensitive filesystems. Key derivation is shared between the picker listing and the filter rather than implemented twice, so the naming rule lives in one place. Bare `--restore` is unchanged — most recent still wins. An unknown key exits 1 and lists what is available; the one behavior deliberately not implemented is falling back to the most recent, which would restore a summary the user did not ask for and give no sign of it.
+
+Closes #7 part (a). Part (b) — interactive runs also writing to the restorable summaries location — remains open in the 140 future-work list.
+
+---
+
+## 20260729
+
+### `sq review code` computed the diff against the wrong base
+
+`resolve_slice_diff_range` hardcoded `main` as the merge-base ref. On a repo with `git.integration_branch` set — or any repo where earlier band work had already been promoted to main — the three-dot diff returned the entire accumulated band rather than the slice's own changes. The consequence is worse than a noisy diff: the reviewer fanned out over dozens of already-merged, already-reviewed files and converged on PASS, reporting a confident verdict on code that nothing had actually reviewed. A review that examines the wrong input and passes is indistinguishable from one that examined the right input and passed.
+
+Reproduced on a scratch repo before fixing: a slice branch forked from `dev/erik` returns 2 files against `main` (including an unrelated integration-branch commit) and 1 file against `dev/erik`.
+
+`ContextForgeClient.get_config(key)` reads `cf config get <key> --json`; `resolve_diff_base()` resolves `git.integration_branch` and **degrades to `main`** when the key is unset, when cf is absent, or when the read fails — `sq review --diff` has to keep working with no Context Forge installed, so this path never raises. `resolve_slice_diff_range` gained `base=None` (resolve from config) so both existing callers pick up the fix without changing. `_find_merge_commit` searches base first, then main: reachability means a slice merged before the integration branch was adopted is normally still found on base, and the fallback covers the rest.
+
+---
+
+## 20260728
+
+**Fixed the new-user install path (#29). Released v0.8.1.**
+
+Started from a real report: install via `uv`, discover you have `sq` but no `cf`, and nothing tells you. Issue #29 had it filed. Investigating turned up worse than what was reported.
+
+**The instructions pointed at a package that does not exist.** Every shipped reference — `doctor_checks.py`, `install.sh`, two tests — said `npm i -g @manta-digital/context-forge`. That 404s. Anyone following our own output hit a dead package.
+
+Finding the right name needed care rather than a guess. The obvious candidate, `@context-forge/core`, is **wrong**: it declares no `bin` at all, so installing it leaves the user with no `cf`. The unscoped `context-forge` on npm is an unrelated third party's project — "correcting" to it would install someone else's software. The answer is `@context-forge/cli`, which declares `bin: {cf}` and pulls `core` in transitively; verified by installing into a clean sandbox and running the binary, not by reading metadata.
+
+**`sq doctor` hid the remedy it already knew.** `doctor.py:67` read `fix_hint and status != WARN or (fix_hint and verbose)`. `and` binds tighter than `or`, so a WARN row without `--verbose` printed the problem and swallowed the fix. Missing `cf` was a WARN. The clause was also dead: line 58 already skips WARN rows unless verbose, so any row reaching line 67 should show its hint unconditionally. Simplified to `if row.fix_hint`.
+
+**All seven remediation anchors were dead**, not the one #29 reported — they pointed at `step-N-...` headings that never existed in QUICKSTART. Slug-matched every entry against real headings and added a test that fails if any stops resolving. The provider entries deliberately share one anchor: QUICKSTART documents providers in a table, not per-provider subsections, so giving each its own would recreate the same dead link.
+
+**`sq setup` now installs rather than advises.** It had no execution path at all — 218 lines of renderer, zero `subprocess` calls. It printed `sq install-commands` and `npm i -g ...` and trusted you to run them. Now Enter runs them: `/sq:` commands in-process, `cf` via npm, then `cf install-commands` for `/cf:`. Scope is deliberately narrow — provider credentials stay advisory, because those need a human decision or a secret.
+
+**`cf init` is deliberately not automated.** It writes guides and IDE config *into the current directory*, so it belongs to a project the user picked, not to a global setup pass that might be running anywhere. Setup ends by pointing at it. Verified `cf install-commands` is standalone and user-global (installs all 9 `/cf:*` into a clean fake HOME with no project and no `cf init`) and idempotent, so a later `cf init` cannot conflict.
+
+`cf` also changed from optional to required: Squadron assembles every dispatch prompt through it, so an install without it is broken, not reduced. That reclassification alone would have unhidden the fix hint, since the precedence bug only suppressed WARN.
+
+---
+
+**Released v0.8.0.** First tag since v0.7.0 on 20260714 — 179 commits over two weeks.
+
+The headline is **initiative 320 (Judge Calibration & Quality Metrology) landing whole**: all five slices, from the metrology store and blind human-sample capture (320), through agreement/dispersion/trend reporting (321) and the calibration-to-threshold feedback loop (322), to the tech-debt-audit oracle's data half (323) and its intervention (324). Alongside it: the `gate` step, the `judge-cycle` reference pipeline, substantial provider rate-limit handling, and a long run of review-correctness fixes (#18-#24).
+
+Minor bump rather than major: everything is additive. No CLI surface was removed or renamed, and pipelines that don't opt into the new steps behave exactly as before — the 324 work in particular was built so that a pipeline without `pre_emption_fragment` produces a byte-identical prompt.
+
+**CHANGELOG housekeeping.** The `[Unreleased]` section had accumulated *two* separate `### Fixed` blocks from incremental appends across the initiative; merged into one under `[0.8.0]`. Three user-facing items had also never been written up despite shipping: the rate-limit backoff work, audit liveness reporting, and the new model aliases (Fable 5, Opus/Sonnet 5, Kimi K2.7, GLM 5.2, MiniMax M3, Trinity). Added. `docs/COMMANDS.md` gained the `metrology.preemption_fragment_dir` row it was missing.
+
+**Known gaps carried into the release**, none blocking: 324's live `audit delta` was never run end-to-end (the audit harness spawns the Claude Code CLI, which refuses to nest inside a Claude Code session) and is covered by fixture plus stubbed-harness tests; two pre-existing failures in `tests/review/test_content_injection.py` are unrelated and reproduce with all 324 work stashed; slice 344 remains `deprecated` with its plan entry checked; and the 322 review verdict still parses as `UNKNOWN` (issue #28).
+
+---
+
+**Slice 324 implemented — pre-emption prompt & delta measurement. Initiative 320 closed.**
+
+The audit oracle's intervention half, and the last of initiative 320's five anticipated slices.
+
+**What shipped.** `squadron.metrology.preemption` renders a project's stored 323 baseline into a static guidance fragment from a fixed, human-authored `CATEGORY_GUIDANCE` table (one line per `AuditCategory`) — deliberately not model-generated prose, which would reintroduce the per-run non-determinism 323 spent the slice normalizing away. `audit_delta.py` compares a fresh run to the baseline against the floor's *observed spread* (`max - min`), never a derived confidence interval. `sq metrology preempt generate [--check]` and `sq metrology audit delta` are the surfaces; they live in `cli/commands/metrology_preemption.py` because `metrology.py` had already reached ~1000 lines, and mount onto the existing apps so the command surface is unchanged.
+
+**The injection point.** `DispatchAction._apply_pre_emption_fragment` prepends *after* `_apply_override`, so a checkpoint override stays innermost and nearest the task. `pre_emption_fragment` threads through `DispatchStepType.expand()` and `PhaseStepType.expand()` conditionally, matching the existing `if "prompt" in cfg:` idiom — all 32 pre-existing exact-dict-equality `expand()` assertions pass unmodified, which was the design's stated criterion for the field being genuinely additive.
+
+**Three-state, not boolean.** `within_floor` is `True`/`False`/`None`, where `None` means no floor was measured. An unmeasured floor licenses no claim in either direction, and `False` would read as "measured, and significant." Same discipline in the fragment reader: missing, unreadable, and malformed/empty each degrade to a skipped prepend plus a *distinguishable* WARNING — never a dispatch failure. That asymmetry with 323's audit-run handling (which must persist nothing) is deliberate: a missing fragment has no measurement to poison.
+
+**One model change.** `ProjectBaseline` gained a required `measured_at`, populated from `run.measured_at` at its single construction site. T2/T3 required the fragment to stamp the baseline's timestamp, but `ProjectBaseline` carried only `run_id`; the alternative was re-fetching the `AuditRun` by id — redundant I/O to recover a field `baseline_report` already had in hand. PM approved.
+
+**Two things real data taught us.** The multi-instrument guard fired on the first live attempt: `migratory-viewer` spans two audit instruments, so the fragment refuses rather than silently picking one (a project audited at several commits under *one* instrument is fine — most recent wins). And the live `audit delta` run failed with `Claude Code cannot be launched inside another Claude Code session` — the audit harness spawns the Claude Code CLI and the implementation session ran inside Claude Code. The guard was not bypassed; unsetting `CLAUDECODE` risks crashing active sessions. That failure did verify the refusal path for free: `the audit run failed (stream_error) — no delta computed`, exit 1, no partial delta. The end-to-end delta render remains outstanding and is recorded as such in the slice's Verification Walkthrough rather than quietly marked done.
+
+**Also noted.** Two pre-existing failures in `tests/review/test_content_injection.py` (truncation tests) are unrelated to 324 — confirmed by stashing all 324 work and reproducing them identically. Issue #40 (empty system prompt on one-shot dispatch) stayed out of scope as planned.
+
+---
+
+### Slice 324 task breakdown (Phase 5) — 13 tasks, closes initiative 320 on completion
+
+Created `324-tasks.pre-emption-prompt-delta-measurement.md` (228 lines) from
+the Phase 4 design, verified against current code rather than re-derived
+from the design's prose alone: confirmed `_apply_override`,
+`DispatchStepType.expand()`/`PhaseStepType.expand()`'s conditional-forward
+idiom, and `audit_report.baseline_report`/`ProjectBaseline`/`BaselineCell`
+signatures all still match what the design cites, and that
+`metrology.preemption_fragment_dir` is not yet registered in
+`config/keys.py`.
+
+**Sequencing:** fragment/delta Pydantic models (T1) → fragment generator
+and its fixed `CATEGORY_GUIDANCE` mapping (T2-T4, test-with) → delta
+computation (T5-T6, test-with) → the one new config key (T7, ordered before
+anything reads it) → the dispatch injection point itself, extending
+`_apply_override`'s prepend with full failure-mode handling (T8) → threading
+`pre_emption_fragment` through both `expand()` methods (T9) → tests proving
+every pre-existing exact-dict-equality `expand()` assertion still passes
+unmodified (T10) → CLI shells for `preempt generate [--check]` and `audit
+delta` (T11-T12) → end-to-end verification (T13).
+
+**Notes carried into the task file, not to be re-litigated:** the injection
+point is `DispatchAction._resolve_prompt`, strictly after `_apply_override`,
+never touching `cf_op.py`; `expand()` stays a pure dict transformation with
+no new file I/O; a broken/missing/malformed fragment file always degrades
+to a skipped prepend plus a `WARNING`, never a dispatch failure; issue #40
+(empty system prompt) stays out of scope.
+
+T13, once complete, is where 324's own frontmatter status and the 320
+slice plan both get marked complete — closing initiative 320's fifth and
+final anticipated slice. Not done yet; tasks are `not_started`.
+
+**Next:** Phase 6 implementation of `324-tasks.pre-emption-prompt-delta-measurement.md`.
+
+---
+
+### Slice 324 designed: pre-emption prompt & delta measurement (Phase 4) — closes the 320 slice plan
+
+Created `324-slice.pre-emption-prompt-delta-measurement.md`, the fifth and
+last anticipated slice of initiative 320. Depends on 323 (complete,
+20260727): the persisted baseline and its measured noise floor are what
+324's fragment and delta report consume.
+
+**The substantial design question was the injection point, not the delta
+math.** The slice plan left "pre-emption fragment format and regeneration
+cadence" explicitly open. Investigation (two rounds of Explore-agent
+research plus direct verification) found **no static-prompt-injection
+point exists anywhere in dispatch today**: `AgentConfig.system_prompt`
+exists on `DispatchAction` but is never populated by any current
+`expand()` — dead wiring, always resolving to `""`. The production
+design/tasks/implement prompt is assembled entirely by an external `cf
+build` subprocess (`cf_op.py:95-111`), passed through byte-for-byte; the
+only point in squadron's own code that already concatenates onto an
+assembled prompt is `DispatchAction._apply_override` (`dispatch.py:291-302`,
+the checkpoint-override prepend). Decision: extend that same prepend
+pattern with a new opt-in `pre_emption_fragment` param, threaded through
+`DispatchStepType.expand()`/`PhaseStepType.expand()` only when a pipeline
+explicitly sets it — additive by construction, verified safe against the
+existing exact-dict-equality `expand()` tests, and never touching
+`cf_op.py` or context-forge.
+
+**A pre-existing bug surfaced and was filed separately, not folded in.**
+Tracing `system_prompt`'s dead wiring found that `one_shot_dispatch`
+always sends `instructions=""` (not `None`), which per `AgentConfig`'s own
+docstring sends a literal empty `--system-prompt ""` to the Claude Code
+CLI — stripping the CLI's default tool-use discipline on every one-shot
+dispatch today, independent of 324. Further verified this has no
+equivalent fix for non-SDK providers: `use_default_system_prompt` is read
+only by `sdk/provider.py`; the `openai`-backed profiles (`openrouter`,
+`gemini`, `local`, plain `openai`) and `codex` never read it at all, and
+have no analogous "use your own default persona" concept to fall back to.
+Filed as [#40](https://github.com/ecorkran/squadron/issues/40), split
+into the fixable SDK-profile case and the genuinely open non-SDK-provider
+design question — not addressed in 324's scope.
+
+**What the design commits to:** a fixed (not model-generated) ten-line
+category-to-guidance mapping rendered from 323's `ProjectBaseline.cells`,
+written to a static file by an explicit `sq metrology preempt generate`
+command (never auto-regenerated), with a `--check` freshness mode
+comparing the fragment's recorded `audit_prompt_hash` against the current
+baseline. The delta report (`sq metrology audit delta`) re-runs one audit
+(not a variance series) and compares to the stored baseline, flagging any
+delta smaller than the floor's observed spread as indistinguishable from
+noise, with a fixed observational/non-causal disclaimer on every report.
+No new store record type — the delta is computed on demand from existing
+`AuditRun` records, not persisted.
+
+Updated `320-slices...md` (324 entry annotated `*(designed — see
+...)*`) and `320-reference...md` (status table and glossary — also
+corrected 323's row, which still read "not started" despite being
+`status: complete` since 20260727; the reference doc's own stated
+authority rule is the slice design's frontmatter wins over this table).
+
+**Next:** Phase 6 implementation of 324, the initiative's terminal slice.
+
+---
+
+## 20260727
+
+### Slice 323: Phase 6 Implementation and First Noise Floor
+
+**T1-T21 complete; T22 complete for two projects, two deferred.** Three measurable results.
+
+**The dispersion is a property of the instrument, not a model.**
+
+| Instrument | Runs | Mean | Spread | % of mean |
+|---|---|---|---|---|
+| Opus, hash `d17ac6bf` | 22, 25, 27, 30 | 26.0 | 8 | 31% |
+| Sonnet 5, hash `a5bc5b31` | 19, 22, 27 | 22.7 | 8 | 35% |
+
+Two models, two sessions, two prompt hashes, the same absolute spread of 8 findings — a claim neither series could support alone.
+
+**It widens with codebase size, worse than proportionally.**
+
+| Project | LOC | Runs | Mean | Spread | % of mean |
+|---|---|---|---|---|---|
+| migratory-viewer | 3.2k | 19, 22, 27 | 22.7 | 8 | 35% |
+| migratory | 44.4k | 49, 60, 82 | 63.7 | 33 | **52%** |
+| squadron | large | 17, 79, 71 | 55.7 | 62 | **111%** |
+
+On squadron the spread **exceeds its own mean** — 17 findings on one run, 79 on another, same unchanged commit. `migratory` clears the fan-out condition (44,359 LOC, 9 top-level dirs — the condition is >50k LOC *or* >5 modules) and run 1 made **360 tool calls** against 60-80 for a viewer run. This confirms the design's stated risk that fan-out is itself a variance source and can vary *within* a series, since the threshold is a prompt instruction rather than enforced code. It is also the concrete justification for the per-project floor decision: a single global threshold would understate large repos badly.
+
+Two cautions on reading these numbers. Squadron's mean (55.7) is *lower* than the smaller `migratory` (63.7) only because one run drew 17 — with n=3, a single low draw moves the mean more than the codebases differ. And the floors themselves are correspondingly imprecise: three runs demonstrate that dispersion is large and size-dependent, but do not pin any one project's floor tightly. `metrology.audit_variance_runs` exists to raise that where a tighter floor is worth the cost.
+
+**Per-category dispersion is where the usable signal is.** `architectural-decay` was the most stable category on both projects — 7-7 (sd 0) on viewer, 8-11 on a 14x larger codebase with fan-out — while `type-contract-debt` tripled (1-3 → 4-12). Some categories are plausibly gate-worthy today; totals are not. That distinction is what 324 needs and could not have been guessed from the totals.
+
+The category vocabulary held across both: `other` was 0/22 and 2/49 (~4%).
+
+**Deliberate deviation from the task text.** `AuditCategory`/`AuditSeverity`/`AuditEffort`/`AuditFinding`/`FloorStat`/`AuditRun`/`AuditNoiseFloor` all live in `metrology/models.py`, not `audit_models.py`. `AuditRun.findings` and `AuditNoiseFloor.per_category` embed them, so defining them separately would reintroduce the circular import the 322 layering correction removed. `audit_models.py` re-exports the full set.
+
+#### Defects found by running it, not by testing it
+
+Nine defects surfaced in T22 that fixture tests could not have caught. In rough order of how much they cost:
+
+1. **`rate_limit_event` is not a throttle.** The CLI's own schema describes it as "emitted when rate limit info changes" — a usage-meter status event whose `rate_limit_info.status` is `allowed | allowed_warning | rejected` — and the CLI's own SDK adapter ignores the type outright (`[sdkMessageAdapter] Ignoring rate_limit_event message`). Squadron substring-matched `"rate_limit"` and slept. On a heavily-used account these fire constantly, so every audit paused and restarted its stream on each usage tick. Every "Rate limited (attempt N/10)" line before `72bbcb3` was a meter update; the account was never throttled. Measured payloads confirmed it: 12 events in a healthy 471s run, all `status: allowed`.
+2. **A parse failure kills the stream permanently, so the old skip never worked.** The SDK calls `parse_message` *inside* the `async for` driving its message generator (`_internal/client.py:141`), so a raised `MessageParseError` terminates that generator — every later `__anext__` raises `StopAsyncIteration`. `_skip_unparseable` caught and `continue`d on a corpse. Short runs ended quietly with partial output, which is why this went unnoticed until an audit long enough to span a meter update. Fixed by absorbing informational events in the parser itself (`install_rate_limit_parser_shim`) so nothing raises. Two SDK call sites needed patching — client mode imports at call time, query mode binds at module scope — verified rather than assumed after patching one left the other broken.
+3. **The whole skill file was being sent as the prompt.** `build_audit_prompt` sent all 17KB including YAML frontmatter (`disable-model-invocation: true`) and 6.5KB of human installation docs. The model read it as a document and returned ~2KB of acknowledgement. `extract_audit_protocol` now strips both halves: 17430 → 10975 bytes.
+4. **The findings were being read from the response stream.** The design's own recorded ground truth said the skill writes a file and does not return findings; the harness parsed the stream anyway. `find_audit_file` now locates the file, mtime-restricted so a stale audit cannot persist under a new run id.
+5. **Wrong artifact path, twice.** Output goes to `project-documents/user/analysis/`, not `analysis/`, because the skill cites `file-naming-conventions`. Also git collapses a wholly-untracked tree to its *shallowest* ancestor (`?? project-documents/`), so every prefix of both locations must match the dirty-worktree exemption.
+6. **The variance series refused its own output file** — would have produced zero floors campaign-wide (`5340c0f`).
+7. **No `Write`/`Edit` in the allowed-tools list** while the audit's entire product is a file. It did not fail loudly: the model routed around it via Bash heredocs.
+8. **Zero-delay retry loops.** Both carried a comment claiming "the CLI handles the backoff delay" and slept for nothing — measured at 11 attempts in 0.1ms. Also present on the pipeline path (`sdk_session.py`), so it affected review and dispatch equally, not just audits.
+9. **The retry budget never reset.** Initialised outside the loop, so it bounded throttles-per-run rather than consecutive failures; a long run exhausted it while still making progress.
+
+#### Instrument provenance was unpinned in three ways
+
+All three were invisible in the stored record, and all three can drift:
+
+- **Model.** Squadron sent no `--model`, so the CLI chose its own — measured as `claude-opus-4-6[1m]`, the most expensive option available. The record stored the literal `"sdk"` and so could not say what ran. Fixed by `metrology.audit_model` (`aee96b2`), which also writes the resolved model onto the record.
+- **Effort and thinking.** Squadron sends neither `--effort` nor `--thinking`; `AgentConfig` has no fields for them, so they are structurally unreachable rather than merely unset. The CLI's default for these is *undocumented and unreported*. Filed as #33.
+- **The skill's own output.** Now required to carry a `model:` frontmatter field (canonical fork `bf94c72`, vendored in sync). This moved `audit_prompt_hash` `d17ac6bf` → `a5bc5b31`, closing the Opus generation — accepted deliberately rather than reverted.
+
+#### Open, filed, not fixed
+
+- **#34: squadron draws ~3x the session budget of the same skill run interactively.** Same model, same repo, same commit: ~1% manual vs ~3% squadron. Model is eliminated as a cause. Tool-call counts (60-80) against a raw-CLI baseline of 63 do not obviously explain it either.
+- **#30: the SDK pin is now blocking, not hygiene.** Squadron runs the SDK's *bundled* CLI 2.1.47 (July 8) while interactive sessions run 2.1.220 — ~170 versions apart. This invalidated every squadron-vs-manual comparison attempted during the session until it was found, and it is why the parser lacks a `rate_limit_event` case at all.
+- **#33/#36: token and cost capture.** `ResultMessage` carries full usage accounting; `translate_sdk_message` discards all of it. One measured audit: 2.17M cache-read, 137k cache-creation, 15k output, $2.37. Note for whoever implements it — **do not sum per-message `usage`**, it repeats a snapshot within a turn (7.08M summed vs 2.17M authoritative, while understating output 2,174 vs 15,231).
+- **#35: alternative providers.** Cross-model agreement is a stronger quality signal than one model's repeat rate, and unreachable while the harness is Anthropic-only.
+- **#38: SDK teardown leaks an unretrieved task exception.** A successful squadron run printed a raw `ProcessError: exit code -15` traceback mid-campaign. Exit -15 is SIGTERM from the SDK's own `close()`; the run had already completed and persisted. `shutdown()` catches `disconnect()` errors but this one is raised in the SDK's background reader task, which nothing awaits. Cosmetic for data, but it cost real diagnostic time — it was initially mistaken for a truncated run — and a *genuine* teardown failure would look identical.
+- **#37: the skill emits inline YAML scalars for prose.** `migratory` run 1 needed `_quote_prose_scalars` repair before parsing (`mapping values are not allowed here`). The retry recovered a complete 82-finding audit rather than discarding it, so the fallback works — but block scalars at the source would remove the failure mode. Deliberately not fixed during the campaign: it changes the skill and therefore `audit_prompt_hash`.
+
+#### Process note
+
+The branch convention slipped: 34 implementation commits went to `main` instead of a `323-slice.*` branch. Caught late, and by then 24 were already pushed. Left as-is at the PM's call. The check belongs at the *first* implementation commit, not partway through.
+
+---
+
+## 20260726
+
+### Slice 322 implemented: calibration-to-threshold feedback (Phase 6) — slice complete, initiative 320 human-oracle chain closed
+
+Implemented all 18 tasks (T1-T18) of `322-tasks.calibration-to-threshold-feedback.md`
+directly on `main` (no slice branch existed yet at session start; work proceeded
+under the same working tree conventions as the prior planning phases). Full
+suite green throughout, strict pyright and ruff clean on every commit. This
+is the terminal slice of the human-oracle chain 320 -> 321 -> 322; the 320
+slice-plan's `(322)` entry is now `[x]`.
+
+**What shipped**, mirroring the LLD's component structure:
+- `identity.py` — `_template_content_hash` (renamed public
+  `template_content_hash` during T18, see below) narrowed to exclude the
+  `judge:` threshold block, fixing the self-defeating loop: acting on a
+  `GRADUATE` recommendation no longer re-keys the config and resets
+  accumulated evidence to zero. One-time, deliberate historical re-key.
+- `models.py` — `EvidenceSnapshot` and `GraduatedConfig` (version-scoped:
+  carries the full `JudgeConfigId` including `template_content_hash`, not
+  just `template_name`+`model`), plus `RECORD_TYPE_GRADUATED_CONFIG` and a
+  `MetrologyRecord.graduated_config` field behind the existing envelope, no
+  store migration. Landed here rather than `calibration_models.py` (T3's
+  original location) to avoid a circular import — confirmed with PM mid-T11.
+- `calibration_models.py` — `RecommendationDirection`, `ThresholdTarget`,
+  `ThresholdRecommendation`, `RecommendationReport`, `OfferTarget`.
+- `calibration.py` — surface-agnostic core: `classify_direction` (the
+  asymmetric bands — loosening floor-gated, tightening not, precedence
+  fixed per the tasks-review F001 finding), `read_current_thresholds`
+  (degrades a malformed `judge:` block to `None`+WARNING rather than
+  letting `resolve_thresholds`' bare `float()` cast raise — a deviation
+  from the task's original wording, confirmed with PM during T7),
+  `recommend_thresholds` (the full per-cell report, no-mutation verified by
+  test), and `read_current_template_content_hash` (added during T18, see
+  below).
+- `graduation.py` — `write_graduation`/`find_graduation`/`list_graduations`
+  (exact-identity matching, idempotent re-graduate updates in place) and
+  `select_residual_offers` (the non-empty-offers architecture guarantee;
+  lapsed-graduation detection deferred to the CLI layer per the task's own
+  stated allowance).
+- `discovery.py` — `discover_judge_results`, a new whole-project judge-result
+  enumeration surface that 320 never built (confirmed gap, not a runtime
+  choice — resolved at task-breakdown time per tasks-review F003).
+  `capture.py`'s `_REVIEWS_SUBDIR` promoted to public `REVIEWS_SUBDIR` so
+  both modules share one definition.
+- `config/keys.py` — `metrology.graduate_match_rate` (0.9),
+  `metrology.tighten_match_rate` (0.6), `metrology.residual_sample_rate`
+  (0.1); `metrology.min_evidence_n` reused from 321, not redefined.
+- `cli/commands/metrology.py` — `sq metrology recommend`/`graduate`/`offers`,
+  thin Typer shells matching the `sample`/`list`/`report` conventions.
+
+**Two correctness gaps found and fixed during T18's verification walkthrough**
+(neither caught by unit/CLI tests, which register templates in-process and
+never exercise the real load path):
+1. **Templates never loaded in the metrology CLI.** `sq review`'s commands
+   call `load_all_templates()`; `sq metrology`'s never did. In a real
+   separate-process invocation this meant `get_template` always returned
+   `None`, every record resolved `unversioned`, and `GRADUATE` was
+   permanently unreachable — the walkthrough's very first `report agreement`
+   run showed 1 excluded/unversioned sample where 0 was expected, which is
+   what surfaced it. Fixed by calling `load_all_templates()` at the top of
+   `sample`/`recommend`/`graduate`/`offers`. Exposed `identity`'s hash
+   function publicly (`template_content_hash`) since `calibration.py` now
+   needed cross-module access. Added a `tests/metrology/conftest.py`
+   autouse fixture clearing the template registry around every test, since
+   the fix meant `load_all_templates()` now genuinely fires from
+   CLI-invoking tests and would otherwise leak the real built-in
+   `judge.slice-vs-arch` template across test files that use that same name
+   as a hand-built fixture.
+2. **`graduate` cell selection was ambiguous across a prompt edit.** It
+   filtered only on `(template_name, model, level)` and took the first
+   match; when evidence spans a prompt edit (walkthrough steps 5-7's exact
+   scenario), two cells can share that triple while differing in
+   `template_content_hash`, and the wrong (stale) instrument's evidence
+   could be silently graduated. Fixed by filtering to the cell matching the
+   template's currently-resolvable hash (new
+   `read_current_template_content_hash`), refusing with a clear message if
+   none match. Covered by a dedicated regression test
+   (`test_calibration_cli.py::TestGraduateCellDisambiguation`).
+
+Both fixes were confirmed with the Project Manager before implementation
+(neither was in the task list; both were discovered live during the
+walkthrough) rather than patched around silently.
+
+**Verification walkthrough**: all nine steps executed end-to-end against a
+scratch repo with an isolated `metrology.store_dir`; actual commands and
+output pasted into the slice design. Full suite 2392 passed / 2 skipped
+(pre-existing, unrelated) after the two fixes above; pyright and ruff clean
+across the whole repo.
+
+**Deferred, correctly absent**: automatic threshold mutation, a new gating
+mechanism, the coordinated 300 write-path version field (320-plan Future
+Work #1, still open), judge-verdict persistence on the sample (321 Future
+Work #2), audit-oracle work (323/324).
+
+### Task Breakdown 323: Tech-Debt-Audit Baseline Harness — Phase 5 Complete
+
+**Phase 5 complete.** Created `user/tasks/323-tasks.tech-debt-audit-baseline-harness.md` — 22 tasks, 370 lines (under the 450 target, no split). Test tasks sit immediately after their implementation task throughout, per the test-with pattern.
+
+**Ordering is driven by one constraint: the instrument must be stable before anything measures with it.** So the fork edits come first (T1-T3: findings block → category vocabulary + independent-run mode → vendor into squadron), with the CI sync guard at T4. Everything downstream hashes the vendored copy, so an unstable instrument early would poison every later comparison.
+
+Sequence: fork + vendor + sync test (T1-T4) → models + store extension (T5-T8) → parser (T9-T10) → harness with failure handling (T11-T14) → variance reduction (T15-T16) → baseline report (T17-T18) → config keys (T19) → CLI (T20-T21) → end-to-end + the real campaign (T22).
+
+**Deliberate cost shaping.** T22 is the *only* task that spends real tokens at scale (the 12-audit campaign). T1-T21 are all testable on fixtures with a stubbed agent at zero token cost, and the task file says so explicitly so an implementer does not casually burn a campaign mid-development. T14's pre-flight test asserts the agent stub was *never constructed* on a misconfigured project — proving zero spend, not just correct behavior.
+
+**Tasks that encode a correctness trap rather than a feature:**
+- **T15 per-category zero-fill** — a category absent from one run counts as 0 for that run, not as missing. Otherwise the spread is computed over the wrong denominator and the floor is silently wrong.
+- **T13/T14 persist-nothing-on-failure** — the design's Decision 9 restated as an assertion: each simulated failure persists *zero* records. A partial record would let a hung run masquerade as a low-finding sample and bias the floor downward, the same direction the repeat-run hazard threatened.
+- **T9 distinct absent-vs-malformed errors** — not stylistic; T13 logs them differently, and conflating them would hide a model that stopped emitting the block at all behind "parse noise."
+- **T8 vocabulary-isolation test** — asserts no `AuditSeverity` value equals any review `Severity` value, so a future edit cannot quietly merge two deliberately disjoint vocabularies.
+- **T20/T21 honest campaign summary** — a campaign with failed runs must not exit 0 as though all succeeded.
+
+**Open item carried into implementation:** the `other`-category share per project is a real output of T22, not just a metric — a high share means the 9 dimensions do not fit that codebase, which is information for 324 rather than something to suppress.
+
+**Task review resolved (same day, z-ai/glm-5.2 — a new reviewer model for this project).** Verdict CONCERNS with one **FAIL**, and the FAIL was a real defect I introduced: config-key registration was sequenced *after* the task that reads `metrology.audit_timeout_s`, while that task's own text said "this must precede any code that reads them." A self-contradiction that would have failed at implementation, since `get_config` raises `KeyError` for an unregistered key. Config keys moved to T11 ahead of all `audit.py` work; old T11-T18 renumbered to T12-T19; six internal cross-references updated; an explicit ordering note added so a future edit cannot silently re-break it.
+
+- **F002** — T4 asserted the independent-run *marker* was present but never that T2's rewording of the repeat-run clause landed, leaving the design's success criterion unverified. Assertion added. Higher-stakes than a normal coverage gap: an unconditional repeat-run clause would silently correlate variance runs and bias the floor toward zero.
+- **F003 (T14 sizing)** — acknowledged, no change, using the reviewer's own reasoning: splitting would create an artificial seam, because Decision 9 makes failure handling *part of* the execution contract rather than a wrapper. A basic-execution task that persisted before failure handling landed would be a partial-record path — exactly what the design forbids.
+- **F004** — explicit push-to-remote step added to T3. Vendoring from an unpushed local fork would satisfy squadron while leaving every other fork consumer on the pre-contract instrument.
+
+Worth noting across the three reviews this slice has now had (kimi-k2.7-code and claude-sonnet-5 on the design, glm-5.2 on the tasks): each model found something the others did not, and glm-5.2 was the only one to catch a hard sequencing error — the kind of defect that is invisible when reading a document for sense and obvious when tracing execution order.
+
+---
+
+### Slice Design 323: Tech-Debt-Audit Baseline Harness — Phase 4 Complete
+
+**Phase 4 complete.** Created `user/slices/323-slice.tech-debt-audit-baseline-harness.md`; marked the 320 slice-plan entry as designed. First slice of the **audit oracle** — reuses the 320 spine (persistence + trend) but at the project/issue-class grain, with no agreement dimension.
+
+**Reconnaissance changed the design's shape.** Three properties of the `tech-debt-audit` skill were verified against the file rather than assumed:
+- It writes to a **model-chosen path** (`analysis/nnn-analysis.*.md`, `:62`) — capturing response text gets narration, not the audit.
+- **Repeat-run mode** (`:103`) makes run 2 of a variance series read run 1 and emit a diff. This biases a measured noise floor *toward zero* — the worst direction, since it makes every later 324 delta look significant. The unmodified skill is therefore incompatible with the measurement this slice exists to take.
+- **Category is free text** (the 9 dimensions at `:40-56` are prose headings), so cross-project comparison at the issue-class grain is impossible without a closed vocabulary.
+
+**Key decision — fix the fork, do not wrap it.** The initial approach was composing a prompt in Python (strip the Deliverable/repeat-run sections, append a squadron-authored output contract). PM noted the "shipped" skill *is* our fork (`github:ecorkran/tech-debt-audit`), already adapted for cf/squadron. That removes the only reason to wrap: with the contract in the skill file, `/analysis:tech-debt-audit` and the harness consume one artifact, so **no drift is possible between what users run and what the baseline measures**. Strictly less machinery. Makes `[340]` a real coupling — 323 modifies a shipped 340-band artifact — recorded as a decision rather than a discovery.
+
+**Other decisions of consequence:**
+- **Findings block is fenced YAML**, not a markdown pipe table — reuses the known-good frontmatter reader (`identity.py:162`); no table parser exists in the repo. Emitted *in addition to* the human table, mirroring the review system's serialize-twice precedent (`persistence.py:130-186`).
+- **Severity vocabularies stay disjoint.** Audit `Critical/High/Medium/Low` is *not* mapped onto review `PASS/NOTE/CONCERN/FAIL` — different things on different artifacts; a mapping would manufacture equivalence.
+- **Locations recorded, not resolved** — deliberately unlike the review parser's `_check_path_existence`. The count and class are the measurement; a fabricated location does not corrupt a count, and re-verifying across N×M runs is I/O the measurement does not need.
+- **Floor is per-project at a pinned commit**, 3 runs (`metrology.audit_variance_runs`). A project without a measured floor is marked "no floor measured" and never borrows another's. Dirty worktree or mismatched SHAs across a series is *refused, not averaged* — otherwise "unchanged code" is an assumption rather than a verified precondition.
+- **One run = one persisted unit**; series reduction is a separate pure pass. At 12-audit scale, a failure on run 3 must not discard runs 1-2, and the reduction stays unit-testable at zero token cost.
+- **`audit_prompt_hash` on every record** — same discipline 322 canonized for judge templates. Since this slice edits the skill, baselines across that edit are not comparable and are grouped, not pooled.
+
+**Variance set chosen for contrast, sized from the actual repos** (not assumed): squadron (py, ~64k LOC), migratory (py+GPU, ~44k), context-forge (TS, ~61k — isolates language from size), migratory-viewer (TS/UI, ~6.2k — order-of-magnitude smaller). All resolve identity from a git remote, so no `metrology.project_id` prerequisite. `trading-data` recorded as a **stretch case in Future Work**, not the committed set — it is the most likely to expose whether the 9 dimensions fit a database-heavy codebase, which is a question about the instrument rather than a gate on this slice. Note squadron/context-forge both exceed the skill's 50k-LOC subagent threshold (`:97`), making fan-out a plausible variance source — measured, not mitigated, which is why the small repo is in the set.
+
+**Cost is stated, not hidden:** 4 projects × 3 runs = 12 full-repo LLM audits, plus one baseline run each. Dominant cost of the slice and the reason the harness is resumable by design.
+
+**Fork sync made explicit scope (PM decision).** The skill has three homes — the standalone fork, squadron's bundled `commands/analysis/` copy, and installed `~/.claude/commands/` copies. **The fork is canonical**; squadron vendors it. Chosen over squadron-canonical because the skill is distributable beyond squadron: if squadron led, other consumers would run the pre-contract instrument, and since `audit_prompt_hash` correctly refuses to pool audits from differing prompts, the symptom would be a **silent measurement gap** (audits that never compare) rather than a loud error. Sync is enforced by the category-match test rather than remembered, and the hash is computed from the vendored copy actually used so divergence is recorded in the data even if it escapes CI.
+
+**Slice-design review resolved (same day).** Two independent reviews ran against the design — kimi-k2.7-code (filed to `user/analysis/` for reference) and claude-sonnet-5 (`user/reviews/`). Both returned CONCERNS and both independently found the failure-mode gap, which is why it was treated as confirmed without further verification. The Sonnet review was materially more thorough (6 findings vs 3) specifically because it cross-referenced the architecture, slice plan, and *sibling slice frontmatter* rather than reviewing the document against itself — which is what surfaced the two structural findings kimi missed.
+
+- **F001 failure modes** — real gap, now fixed. Verifying the premise made it stronger than the finding stated: `run_review_with_profile` has **no** handling to inherit (`review_client.py:134-156` is a bare `async for` with only `finally: shutdown()` — no timeout, no exception handling around the stream; every try/except in that module guards file/git I/O). Tolerable for an interactive review, not for an unattended 12-run campaign against an external cwd with subagent fan-out. Added an eight-mode table with detection/response/signal, anchored on Decision 9: **a run persists a complete `AuditRun` or nothing** — so a hung or truncated run can never masquerade as a low-finding sample and bias the floor downward (the same direction Fact 2 warns about). Plus pre-flight checks before token spend, series-degrade-not-abort, and `metrology.audit_timeout_s` (default 3600).
+- **F002 `interfaces: []`** — a genuine bug in my frontmatter, diagnosed exactly right by the reviewer as copy-paste from 322. Verified against siblings (320 → `[321,322,323,324]`, 321 → `[322]`): the field lists *downstream consumers*, 322 is `[]` correctly because it is terminal, but 324 consumes 323's baseline and floor. Corrected to `interfaces: [324]`.
+- **F003 340 boundary** — recorded in the parent architecture's Related Work, which had described 340 as read-only ("ships the analysis pack... this component's code-quality oracle runs"). It now states 323 makes it read-write, names the MIT fork as canonical, notes edits reach every consumer of that fork, and records PM approval. The reviewer graded this NOTE and credited the disclosure, correctly — but the sign-off lived only in conversation and the DEVLOG, not where a future reader of the architecture would find it.
+
+**Fan-out on the large repos is expected and deliberately not suppressed.** `:97` dispatches Task subagents above 50k LOC / 5 top-level modules — squadron and context-forge clear it. It is a prompt instruction, not enforced code, so it may vary *within* a series and widen that project's floor. That is correct: it is noise a real user of the skill experiences, so it belongs inside the measured floor rather than engineered out of it.
+
+**One plan-level open question resolved:** finding-normalization schema + repeated-run count (both recorded in the 320 plan Notes). Four Future Work items opened: human-table fallback parser, `trading-data` stretch run, periodic re-audit cadence, project registry.
+
+---
+
+## 20260725
+
+### Slice 321 implemented: agreement & dispersion reporting (Phase 6) — slice complete
+
+Implemented all 17 tasks (T1–T17) of `321-tasks.agreement-dispersion-reporting.md`
+on branch `321-slice.agreement-dispersion-reporting`, forked from `main` after
+fast-forward-merging the completed 320 keystone branch. Each task committed
+separately per its task-file commit marker; full suite green throughout
+(2324 passed, 2 pre-existing skips), strict pyright and ruff clean on every
+commit.
+
+**What shipped**, mirroring the LLD's component structure:
+- `metrology/levels.py` — `ArtifactLevel` enum + `derive_artifact_level`, a
+  single module-level dict mapping the review types the code actually
+  produces (`judge.tasks-vs-slice`/`tasks`, `judge.slice-vs-arch`/`slice`,
+  `arch`) to a level, `UNCLASSIFIED` as the explicit fallthrough.
+- `metrology/report_models.py` — the typed Pydantic report shapes 322 will
+  consume (`GroupKey`, `AgreementCell`, `ArtifactKey`, `DispersionCell`,
+  `ExclusionSummary`, `AgreementReport`/`DispersionReport`/`TrendReport`),
+  all JSON round-trip tested.
+- `config/keys.py` — `metrology.min_evidence_n` (default 5) and
+  `metrology.trend_bucket` (default `month`), added *before* the
+  report-computation tasks that read them (slice-review F004).
+- `metrology/report.py` — the aggregation core, surface-agnostic, no Typer
+  import (asserted by test):
+  - `enrich_samples` — the one join pass. Re-reads each sample's referenced
+    review file, verifies its `content_hash` against a freshly-derived one,
+    and only on a match joins the judge verdict; any mismatch, missing
+    file, or unparseable/verdict-less frontmatter marks the sample
+    `stale-judge-result` with `judge_verdict=None` — never joined to the
+    wrong verdict. The same read yields `sourceDocument` for the dispersion
+    key, at no extra I/O cost.
+  - `agreement_report` — groups admissible samples by
+    `(ArtifactLevel, JudgeConfigId)`; naive percent match rate + n;
+    `below_floor` when n is under the configured floor; unversioned records
+    (`template_content_hash is None`) segregated into their own cell,
+    never pooled with a hash-bearing same-name+model record.
+  - `dispersion_report` — groups by **artifact identity**
+    `(project_id, source_document, ArtifactLevel)`, per the F001 fix from
+    Phase 4; only artifacts graded by ≥2 distinct `JudgeConfigId`s produce a
+    cell (the cross-config dispersion the slice ships); the same-config
+    repeated-measurement path is structurally supported by the same
+    grouping but stays dormant until 300 FW#1 lands.
+  - `trend_report` — buckets by `captured_at` (`day`/`week`/`month`) and
+    reuses `agreement_report`/`dispersion_report` per bucket — the grain is
+    never re-derived.
+- `cli/commands/metrology.py` — a `report` sub-group
+  (`sq metrology report agreement|dispersion|trend`), thin Typer shells with
+  `--project`/`--level`/`--json`/`--cwd` (`--bucket` on `trend`); `--json`
+  emits the report model verbatim via `typer.echo` (not `rprint`, which was
+  found during T16 to corrupt JSON output by line-wrapping it at terminal
+  width — a real bug caught by a CLI round-trip test, not a cosmetic one).
+
+**Bugs found and fixed during implementation** (beyond the planned scope):
+- `rprint(report.model_dump_json())` wrapped long JSON lines at the Rich
+  console width, invalidating the JSON — `--json` output is machine-facing
+  and must never be routed through a wrapping console printer. Switched all
+  three report commands to `typer.echo`, matching the convention already
+  used by `review.py`/`doctor.py` for JSON output. Caught by
+  `test_report_cli.py`'s JSON round-trip assertion, not by a human reading
+  the terminal.
+
+**Verification Walkthrough executed end-to-end** (not just read) against a
+scratch git repo: captured two levels of agreement evidence, confirmed
+per-level rows with n and `below_floor` marking, overwrote a review file and
+confirmed `stale-judge-result` exclusion, captured a second judge config
+against the same artifact and confirmed one dispersion cell (not two, and
+not keyed on the differing `result_ref`s), confirmed the "no multi-config
+artifacts yet" honest-empty line on a single-config store, ran `report
+trend --bucket month` and confirmed grain preservation, and confirmed
+byte-for-byte store/review-file invariance (SHA-1 snapshot before/after)
+across all three report commands. The slice design's Verification
+Walkthrough section was updated in place with the actual commands and
+observed output.
+
+**Full validation (T17):** `uv run pytest` — 2324 passed, 2 pre-existing
+skips (unrelated to metrology); `uv run pyright` — 0 errors repo-wide;
+`uv run ruff check` / `ruff format --check` — clean. Slice 321 marked
+`status: complete` in its slice-design frontmatter; the 320 slice-plan
+entry `(321)` checked off; all 17 task-file items checked off via
+task-checker.
+
+Relative effort 3/5 (matches the design's estimate). Dependencies: [320]
+(complete). Interfaces: [322] — `AgreementReport` (with `below_floor` +
+`ExclusionSummary`) is ready to consume. Next: PM review/merge, then 322
+(Calibration-to-Threshold Feedback).
+
+---
+
+### Slice Design 322: Calibration-to-Threshold Feedback — Phase 4 Complete
+
+**Phase 4 complete.** Created `user/slices/322-slice.calibration-to-threshold-feedback.md`; materialized `(322)` in the 320 slice plan and marked its entry as designed. Terminal slice of the human-oracle chain (320 → 321 → 322), so `interfaces: []` — 323/324 are the audit oracle and share the 320 *spine*, not this path.
+
+**Three plan-level open questions resolved, all against the actual code rather than the prose:**
+
+1. **Version identity → the content-hash-at-capture fallback ships.** 320's `derive_judge_config_id` already computes `template_content_hash` and 321 already enforces non-blending on it, so no 300 write-path change is taken. The initiative's own *read-side over 300's write path* principle points here. 320-plan Future Work #1 (the 300 version field) and 321 Future Work #2 (judge-verdict persistence, which would ride with it) both stay **open**.
+
+2. **The comparability hash must exclude the `judge:` block — a correctness fix, not a preference.** `identity.py:298` currently hashes `{name, description, system_prompt, model, prompt_template, **judge**}`, and `judge` *is* `pass_floor`/`concerns_floor`. So acting on a graduation recommendation changes the hash → new `JudgeConfigId` → accumulated n resets to 0 → the cell drops below the floor → no further recommendation possible. **The calibration loop would destroy its own evidence every time it worked.** The plan flagged template *editing* as the churn risk; the loop's own success is in fact the dominant source. Fix: narrow the hash to the judged behavior, excluding thresholds — thresholds are the calibration's *output*, not part of the instrument. A judge that scores identically but bands differently is the same instrument with a different readout. Rejected the plan's third framing (a similarity/inherit policy) as more machinery than the actual failure needs. Costs a one-time re-key of historical records, accepted deliberately and documented.
+
+3. **Residual sampling → policy + offer-selection core, CLI-drained.** `capture.py`'s `sample_budget` is a ceiling on *writes*, not offers, and 320 explicitly deferred offer/selection — so the architecture's "continued forced random sampling" commitment needed a selection surface, which 322 adds. Offers are pull-based and non-blocking (nothing in a pipeline/gate/dispatch waits); "forced rate" means offers are *generated* at that rate. Doc-only was rejected: the architecture demands this be *asserted by a test* ("a graduated judge still produces sampled data"), which a documented policy cannot satisfy.
+
+**Other decisions of substance:**
+- **Direction bands are asymmetric.** Loosening is floor-gated; **tightening is not** — requiring a large sample before *warning* about a judge that disagrees with the human would suppress the signal most worth having early. Honest reading of the architecture's "refuses to recommend *loosening* below a floor."
+- **Recommendations are directions + evidence, never a computed `pass_floor`.** Deriving a specific numeric threshold would imply precision small-n data cannot support and would edge toward the forbidden self-tuning loop. Output shows *currently configured* thresholds (read via `resolve_thresholds`) so the operator sees the delta and picks the magnitude.
+- **The (template,model) ↔ (template,step) mismatch is per-recommendation output**, not a footnote — every recommendation carries the note, including the runtime-drawn-model (180 pool) case where the threshold cannot track the drawn model. Making it output is what stops it being ignored at the moment of action.
+
+**Verified against code, not assumed:** two threshold surfaces exist and neither has a model dimension (`judge.py:41-57` merges step override → template default → module constant `75.0`/`50.0`; template blocks live in the judge YAMLs at `pass_floor: 78`/`82`). `GraduatedConfig` persists behind 320's reserved `record_type` discriminator — no store migration.
+
+**Pending.** Frontmatter `status: not-started`. Next: Phase 5 (task breakdown) for 322. Effort 3/5.
+
+### 322 Slice Review — Addressed (F002 valid, F003 declined)
+
+Slice review (`322-review.slice...`, kimi-k2.7-code): 1 PASS, 1 CONCERN, 1 NOTE.
+
+- **F002 (CONCERN, `GraduatedConfig` omits judge-configuration identity) — correct, and the same bug class as the hash-scope issue: an identity missing its version key.** I keyed graduation on `(template_name, model, artifact_level)`, which is **invariant across a prompt edit** — so a graduation earned under one prompt would silently transfer to a rewritten judge, and `select_residual_offers` would keep drawing spot-checks against it. Version-blending at the one point in the initiative where a *trust* decision is recorded rather than a measurement, with residual sampling then verifying an instrument nobody calibrated. Fixed: `GraduatedConfig` carries the full `JudgeConfigId`; offers match that exact identity; added the *Graduation is version-scoped* decision, a lapsed-graduation failure-mode row (empty offers **with** an explanatory line — an operator who edits a prompt learns the graduation lapsed rather than discovering sampling quietly stopped), a success criterion, walkthrough step 7, and test coverage.
+
+  Worth recording how this composes with the hash narrowing: because the hash **excludes** the threshold block, graduation survives the operator acting on it; because it **includes** prompt and model, graduation expires on genuine drift. The two decisions are what make each other safe — either alone is wrong.
+
+- **F003 (NOTE, low-level I/O failure modes) — declined with rationale.** Asked for rows on store lock contention and read timeouts. Checked the code: these paths are local-filesystem with no lock and no timeout-bearing transport; `store.py:177` already skips unreadable siblings on `(OSError, ValueError, SchemaVersionError)` with a WARNING and reports over what loaded, and writes are atomic write-then-rename. Adding rows for mechanisms that don't exist would document fiction. Recorded the actual inherited behavior instead, and noted that an off-filesystem store (280 convergence) would bring its own transport failure modes and its own rows.
+
+### cf config hygiene
+
+`custom.recentEvents` (rendered as "Current Project State" in `/cf:build` output) still pointed at the orchestration-v2 initiative (`100-arch`/`100-slices`) while the authoritative `Architecture:`/`Slice Plan:` fields correctly read 320. Updated to the 320 artifacts so the loaded context stops contradicting itself.
+
+### Slice 322: Calibration-to-Threshold Feedback — Phase 5 Task Breakdown Complete
+
+Created `user/tasks/322-tasks.calibration-to-threshold-feedback.md` — 17 tasks, test-with pattern throughout, following the design's suggested implementation order.
+
+**Sequencing follows the design's own reasoning, not just its task list:** the `identity._template_content_hash` narrowing (T1/T2) comes first because everything downstream — the recommendation core, the graduated-config registry — accumulates evidence under the corrected key; doing it later would mean re-deriving fixtures once the hash changed underneath them. Config keys (`metrology.graduate_match_rate`, `metrology.tighten_match_rate`, `metrology.residual_sample_rate`) land (T5/T6) before the calibration-core tasks that read them (T7-T10), same lesson 321 already applied (its F004) to avoid a task hard-coding a temporary default.
+
+**Direction classification (T7/T8) calls out a precedence subtlety explicitly:** the floor gates *loosening* only. A below-floor cell with a low match rate must still resolve to `TIGHTEN`, not fall through to `INSUFFICIENT_EVIDENCE` — implementing the bands as a naive top-to-bottom if-chain gated uniformly by the floor would silently swallow the "flag a bad judge early" case the design calls out as the asymmetry's whole point. Wrote the task to spell out the precedence order and require a test for exactly this boundary (below-floor + low-match-rate → `TIGHTEN`).
+
+**Graduation registry (T11-T14) carries the slice-review's F002 fix as a first-class regression test, not an afterthought:** T12 requires two `JudgeConfigId`s sharing `template_name`+`model` but differing `template_content_hash` to *not* cross-match in `find_graduation` — the version-blending bug the review caught, now pinned by a test before implementation is written against it.
+
+**One task (T13, offer selection) carries a deliberate escape hatch:** selecting unsampled judge results matching a graduated config's exact identity may need a result-discovery surface 320 doesn't currently expose (list_samples finds *captured* samples, not all persisted judge results). The task instructs against inventing a new file-walk and to flag the gap to the Project Manager if 320's surface doesn't already support it, rather than guessing at an implementation.
+
+**Not re-litigated:** all three plan-level open questions the design resolved (content-hash version identity, the hash-scope correctness fix, residual-sampling-as-policy) are carried into the task file's context summary as settled facts, per the task-breakdown guide's "don't re-guess at task time" instruction — none reopened here.
+
+Task file is 288 lines, well within the ~450-line guideline. Frontmatter `status: not_started`; slice design frontmatter remains `status: not-started` (Phase 6 implementation not yet started). Coverage-checked against the design's Failure Modes table and Success Criteria — all rows traced to a task.
+
+### 322 Task Review — Addressed (F001 fixed, F002/F003 fixed)
+
+Task review (`322-review.tasks...`, kimi-k2.7-code): 1 PASS, 1 CONCERN, 2 NOTEs.
+
+- **F001 (CONCERN, T7 precedence contradicts its own "tightening is not floor-gated" claim) — correct, and a real bug in the task, not just prose.** T7's original numbered precedence checked `n < floor` first, unconditionally, then claimed a few lines later that `TIGHTEN` was "reachable even if `n < floor`." A literal top-to-bottom if-elif of that ordering makes `TIGHTEN` unreachable below the floor — the numbering itself contradicted the design's Direction Bands table it was supposed to encode. Fixed: reordered so unversioned is checked first, then `TIGHTEN` (before the floor applies), then the floor gates only what's left (`GRADUATE`/`HOLD`). The floor now only ever blocks loosening, matching the design exactly.
+- **F002 (NOTE, T8 claimed a malformed-judge-block test that wasn't actually listed) — correct.** The Coverage Check asserted this was "exercised in T8" but T8's bullets only covered registered-vs-unregistered templates. Added an explicit T8 bullet: a template with a non-numeric `pass_floor` must not fabricate a threshold, delegating to `resolve_thresholds`' inherited WARNING instead.
+- **F003 (NOTE, T13's residual-offer selection leaned on an unverified 320 surface) — correct, and worth resolving rather than deferring further.** Checked `capture.py` directly: `resolve_target` only resolves *one* target given an already-known slice index (`reviews_dir.glob(f"{index}-review.*")`) — there is no whole-project "list every judge review file" surface for residual sampling to diff against. Rather than leave this as a runtime judgment call for whoever implements T13 (my original escape-hatch phrasing), split out a new **T13 (judge-result discovery surface) + T13b (its tests)** ahead of the renumbered offer-selection task (T14), so the gap is resolved at task-breakdown time. Renumbered T13-T17 to T14-T18 throughout, including all cross-references and the Coverage Check.
+
+---
+
+## 20260723
+
+### Slice 321 task breakdown (Phase 5)
+
+Converted the PASS-reviewed 321 slice design into a sequential, test-with task
+list: `project-documents/user/tasks/321-tasks.agreement-dispersion-reporting.md`,
+`status: not_started`, 17 tasks (T1–T17), 249 lines.
+
+Structure mirrors the 320 task file: front matter + context summary, granular
+T-tasks with L1/L2 checkboxes, a per-task success line and commit message, and
+a design→tasks coverage check. Test tasks are paired immediately after each
+implementation task (levels T1→T2, models T3→T4, enrichment T5→T6, agreement
+T7→T8, dispersion T9→T10, trend T11→T12, config T13→T14, CLI T15→T16), with a
+final full-suite/read-only-regression gate (T17).
+
+The two load-bearing LLD facts are carried into the tasks so a junior AI can't
+re-guess them: `artifact_level` derived **at report time** from `reviewType`
+(T1) since 320 leaves it always-None; the judge verdict joined by
+**re-reading + content-hash-verifying** the referenced review file (T5/T6),
+excluding stale results. The slice-review F001 fix is pinned as an explicit
+regression assertion (T10): two configs' review files for one artifact must
+share **one** dispersion cell — proving dispersion keys on artifact identity
+`(project_id, source_document, artifact_level)`, not per-config `result_ref`.
+The no-`fan_out`-import constraint and read-only invariance are both asserted.
+
+**Tasks review: CONCERNS → addressed.** Review (kimi-k2.7-code) returned
+CONCERNS: 3 PASS, 3 concerns, 2 notes. Fixed all five actionable findings —
+F004 (config-key task T13 was sequenced *after* T7/T11 which read its keys →
+moved config keys to T5/T6, before any report computation, renumbering the
+rest); F005 (added a malformed/unparseable-frontmatter enrichment test to T8);
+F006 (added explicit empty-store honest-render tests across agreement/
+dispersion/trend, T10/T12/T14 + CLI T16); F007 (added a corrupt-sibling
+store-read regression on the report path, T16); F008 (a slice-design
+inconsistency, not a task gap — the design prose claimed report commands take
+`--judge-config`; reconciled the design text to the actual API contract where
+`--judge-config` is a `list`-command filter, and fixed a stale `result_ref`
+dispersion-grouping sentence left over from the earlier F001 fix). Task file
+still 17 tasks, within length budget.
+
+Next: PM approval, then Phase 6 implementation on branch
+`321-slice.agreement-dispersion-reporting`.
+
+---
+
+## 20260722
+
+### Slice 321 designed: agreement & dispersion reporting (Phase 4)
+
+Low-level design for slice 321 (Agreement & Dispersion Reporting) — the human
+oracle's headline analysis over the sample 320 accumulates. Written to
+`project-documents/user/slices/321-slice.agreement-dispersion-reporting.md`,
+`status: not_started`, awaiting PM approval.
+
+**What the slice designs:** a pure read-and-aggregate layer over 320's
+`MetrologyStore` — agreement (judge-vs-human), dispersion (judge-vs-judge),
+and trend, always at the per-artifact-level / per-judge-configuration grain,
+every figure carrying its n. No new store engine, no capture change, no
+judging-path change. New surface-agnostic core (`levels.py`, `report.py`,
+`report_models.py`) plus `sq metrology report agreement|dispersion|trend`
+thin shells; report models are the typed interface 322 consumes.
+
+**Two load-bearing facts verified against the code (not assumed) shaped it:**
+- **300 multi-sample judging (FW#1) has NOT shipped** — one `ReviewResult`
+  per review file, no repeated same-config judgments exist. So 321 ships
+  **cross-configuration** dispersion (distinct model/template on one artifact,
+  which the store already holds) and builds/tests the **same-config** path but
+  leaves it **inert until 300 FW#1 lands** — no 300 dependency, no 180
+  `fan_out` dependency introduced. Recorded as an explicit cross-slice
+  coordination point in the slice design and mirrored into the 320 slice-plan
+  Future Work list (new item 4), per PM request to track when/where it goes.
+- **`SampleVerdict.artifact_level` is a reserved, always-`None` hook** with no
+  vocabulary defined. 321 defines an `ArtifactLevel` enum and derives it **at
+  report time** from each sample's `reviewType` — backfilling historical
+  `None` records with **no store migration**; unmappable types land in an
+  explicit `UNCLASSIFIED` bucket.
+
+**Key design decisions:**
+- **Store backend: flat-file retained.** 321 is the 320-inherited SQLite-vs-
+  flat-file revisit point, but the workload (in-memory group-by over a small
+  cross-project sample) does not strain glob-and-filter — keep flat-file, with
+  a recorded trip-wire condition for adopting stdlib `sqlite3` later.
+- **Agreement metric: naive percent + exposed n**, not a chance-corrected
+  coefficient that misbehaves at small n (honest-statistics-at-small-n).
+- **Content-verified judge-side join:** agreement re-reads the referenced
+  review file and verifies `result_ref.content_hash`; a changed/missing file
+  excludes the sample as `stale-judge-result` (counted, never joined to a
+  stale verdict). This is the load-bearing correctness point.
+- **Comparability enforced:** group on `JudgeConfigId`; unversioned records
+  (`template_content_hash` None) are flagged/segregated, never pooled.
+
+**Slice review: FAIL → PASS.** First slice-design review (kimi-k2.7-code)
+returned FAIL on F001: dispersion grouped by `result_ref` (a review-file
+instance whose path + content hash both vary per judge config), so two
+configs on one artifact could never share a dispersion group — making the
+cross-config dispersion the slice claims to ship impossible. Fixed by keying
+dispersion on **artifact identity** `(project_id, source_document,
+artifact_level)` via the review's `sourceDocument` frontmatter (agreement
+keeps `result_ref`, correct for its own join). Also narrowed frontmatter
+`interfaces` to `[322]` (F002 note) — 323/324 relate via the shared 320
+spine, not 321's report path. Re-review returned **PASS** (8/8 findings PASS).
+
+Relative effort 3/5. Dependencies: [320] (complete). Next: PM approval, then
+Phase 5 task breakdown for 321.
+
+---
+
+### Slice 320 keystone implemented: metrology data layer & blind sample capture
+
+Implemented the keystone of initiative 320 (Judge Calibration & Quality
+Metrology) — the durable, user-level metrology store plus the blind,
+non-blocking human-sample capture command. All 16 tasks (T1–T16) landed on
+branch `320-slice.metrology-data-layer-sample-capture-keystone`, each with its
+own commit; full suite green (**2261 passed, 2 skipped**, 46 new metrology
+tests), pyright and ruff clean repo-wide, verification walkthrough executed.
+
+**What shipped:**
+- New surface-agnostic `squadron.metrology` package: `errors.py` (three typed
+  exceptions under `MetrologyError`), `identity.py` (stable project identity +
+  content-addressed judge-result reference + judge-config id), `models.py`
+  (Pydantic records + `record_type` envelope), `store.py` (`MetrologyStore`
+  modeled on `StateManager` — atomic write, schema version, glob-and-filter,
+  no DB), `capture.py` (blind capture core).
+- Thin Typer shell `cli/commands/metrology.py`: `sq metrology sample` /
+  `sq metrology list`, registered in `app.py` (the `config.py` parity pattern).
+- Three config keys: `metrology.store_dir`, `metrology.sample_budget`,
+  `metrology.project_id`.
+
+**Design decisions confirmed in code:**
+- **Stable project identity** is git-remote-URL-derived (normalized: strip
+  credentials/scheme/`.git`, collapse scp-vs-https), `.squadron.toml`
+  `metrology.project_id` fallback, explicit `MetrologyIdentityError` if neither
+  — never a filesystem path.
+- **Content-addressed result ref** `(project_id, relative_review_path,
+  content_hash)`: SHA-256 over a canonical projection of the persisted review's
+  judge frontmatter. The canonical projection **excludes the positional finding
+  id** (F001…) and sorts findings by content, so the same finding set hashes
+  identically regardless of serialized order — a correction made when the
+  order-independence test exposed that positional ids flip on reorder.
+- **Blindness is a data-layer property**: `CapturePayload` structurally holds
+  only `review_file`, `artifact_path`, `ground_truth_text` — there is no field
+  that could carry judge output. Asserted on the object, not by UI convention.
+- **Budget** is enforced as a per-project ceiling on *captures written*
+  (offering policy is 321); at/over the ceiling `record_sample` refuses cleanly
+  and returns a budget-reached outcome (exit 0, not an error).
+
+**Bugs caught during implementation:**
+- The metrology commands must anchor the reviews dir at the **process working
+  directory** (`--cwd`, default `.`), *not* the `cwd` config key (which points
+  inside `project-documents/user` for the review models' content lookups).
+  First CLI smoke produced a doubled path; corrected.
+- Review type is resolved from each candidate's `reviewType` **frontmatter**,
+  not by splitting the filename — a dotted type (`judge.slice-vs-arch`) is
+  unparseable by segment. Caught by the ambiguous-index test.
+
+**Discipline:** the 300 judging path is unmodified; a judge run with no
+metrology store present behaves exactly as before. `record_type` discriminator
+reserves the `audit_finding` path for 323 with no migration.
+
+**Next:** PM review / merge to `main`; then slice 321 (Agreement & Dispersion
+Reporting), the first aggregation workload and the store-backend (SQLite)
+revisit point.
+
+---
+
+## 20260718
+
+### 320 Keystone Task Review — Addressed (F001 budget, F008 traceability)
+
+Task review (`320-review.tasks...`, kimi-k2.7-code) returned 6 PASS, 1 CONCERN, 1 NOTE — both actionable, both fixed:
+- **F001 (CONCERN, sample budget registered but never enforced/tested):** correct gap — I added `metrology.sample_budget` to config but no task read it. Added budget enforcement to T10's `record_sample` (count prior captures for the `project_id` via `list_samples`; at/over budget → refuse the write, no error, a normal "ceiling reached" outcome), T11 asserts the (N+1)th write refuses per-project, T14 reports budget-exhausted and exits 0, T15 asserts it. **Scope correction made explicit in the task:** this slice enforces a ceiling on *captures written*, not on *offering* — the offer/selection policy is deferred to 321, so there is no offer queue here to gate; the write-ceiling is the enforceable slice of the design's "respects the configured budget" criterion.
+- **F008 (NOTE, failure-mode traceability):** Coverage Check mapped all Failure Modes rows to T15, but git-remote-absent is asserted in T3 and malformed-target in T5. Corrected the cross-reference to show T3 + T5 + T15 jointly cover the table.
+
+Task file now 252 lines (within 450). Verdict was CONCERNS; both items resolved in-place.
+
+### Task Breakdown 320: Metrology Keystone — Phase 5 Complete
+
+**Phase 5 complete.** Created `user/tasks/320-tasks.metrology-data-layer-sample-capture-keystone.md` (247 lines, within the 450 target — no split). 16 tasks (T1–T16), sequentially ordered following the LLD's Development Approach (identity → models/store → capture → CLI/config → e2e), test-with pairing throughout (each impl task immediately followed by its test task), per-task semantic commit lines.
+
+**Ordering rationale:** identity first (T2–T5) because it's the hardest new territory and everything keys on it — the content-addressed result ref and project-id derivation are the two things squadron lacks today. Store (T8/T9) modeled on `StateManager` with the cross-project-query test called out explicitly. Blindness (T10/T11) has its own load-bearing test asserting the capture payload excludes judge output (data-layer enforcement, not UI). All Failure Modes table rows collapse into T15's CLI failure-mode coverage (one assertion per row). T16 is the judging-path regression gate + walkthrough smoke + slice-completion marking.
+
+**Coverage check appended** mapping every design element to tasks and confirming the correct absences (321 reporting, 322 version-keying resolution, 323 audit records, MCP tool, 300 write-path change — all deferred by design, none in this task file).
+
+**Pending.** Frontmatter `status: not_started`. Next: PM approval, then Phase 6 (implementation) on branch `320-slice.metrology-data-layer-sample-capture-keystone` (integration branch unset → forks from and merges to `main`).
+
+### 320 Keystone Slice Review — Addressed (F001, F005)
+
+Slice review (`320-review.slice...`, kimi-k2.7-code) returned 3 PASS on the load-bearing dimensions (scope deferral, architectural commitments, version-keying deferral), 1 CONCERN, 1 NOTE — both actionable, both fixed in the design:
+- **F001 (CONCERN, failure-mode enumeration):** design stated "typed errors/actionable messages" without enumerating modes — a direct hit on the project's Failure-Mode Enumeration rule. Added a **Failure Modes** table under Implementation Details covering all new I/O boundaries (git-remote subprocess w/ timeout, project-identity absence, review-file missing/malformed, target zero/multi-match, atomic store-write failure, non-TTY/SIGINT/invalid-input capture), each with an explicit handling decision, an observable signal (typed error at ERROR / clean skip at INFO / no partial record — never silent), and a required test. Introduced three typed exceptions (`MetrologyIdentityError`, `MetrologyTargetError`, `MetrologyStoreError`) so "bad input" is distinguishable from "store broken." Absent git remote is deliberately *not* an error (normal case, defined fallback) but still surfaces loudly if the fallback also yields nothing.
+- **F005 (NOTE, CLI consistency):** walkthrough used `--type` but API Contracts didn't document it. Documented the full `sq metrology sample <target> [--type] [--verdict] [--note] [--skip]` signature and clarified target forms (path alone, or bare index + `--type`, required when the index is ambiguous). Walkthrough now consistent.
+
+Added a Technical Requirement that every Failure Modes row has a test asserting its observable signal.
+
+### Slice Design 320: Metrology Data Layer & Sample Capture (keystone) — Phase 4 Complete
+
+**Phase 4 complete for the keystone.** Created `user/slices/320-slice.metrology-data-layer-sample-capture-keystone.md`. Index already materialized as `(320)` in the slice plan (first slice shares the initiative base). Designed against the actual codebase, not assumptions — mapped 300's persistence and squadron infra first.
+
+**Load-bearing reality that shaped the design:** 300 review results are **id-less flat files** (`review/persistence.py` writes `project-documents/user/reviews/{index}-review.{type}.{slice}.{ext}`, overwritten on re-run — no run-id, no DB, no query surface over scores). So the keystone must *introduce* two things that don't exist in squadron today:
+- **Stable project identity** — git-remote-URL-derived (normalized), fallback to a recorded `.squadron.toml` `metrology.project_id`; **fails explicitly** if neither exists (never a path fallback, per arch + no-silent-fallback rule). No project identity exists in the codebase today (confirmed).
+- **Stable judge-result reference** — content-addressed `(project_id, relative_review_path, content_hash)` over the canonical judge fields, because there is no id to key against and re-runs overwrite the file.
+
+**Store follows the `StateManager` precedent exactly** (`pipeline/state.py`): user-level `~/.config/squadron/metrology/`, Pydantic records at the file boundary, `_SCHEMA_VERSION` + `SchemaVersionError`, atomic write-then-rename, one JSON file per record, glob-and-filter query surface. **No new DB dependency** — matches established squadron convention (config TOML, JSON run state). A `record_type` envelope discriminator (`"sample"` now, `"audit_finding"` reserved) lets 323 add audit records without migration.
+
+**Blindness enforced at the data layer, not the UI:** the capture core builds the presented payload from artifact + ground truth only and never places judge output in it — assertable by a test on the payload, not a fragile render-order convention. Human-load constraints from the prior session's arch amendment are carried through as success criteria (blindness scoped to designated samples; non-blocking; skip records nothing; budget respected as an offered-sample ceiling).
+
+**Parity by shared core:** new `squadron.metrology` package (identity/models/store/capture) is surface-agnostic; `cli/commands/metrology.py` is a thin Typer sub-app delegating to it (the `config.py` pattern). No MCP tool ships (MCP surface is still a stub) — parity is structural, guaranteed when the MCP slice later wraps the same core.
+
+**Command surface:** `sq metrology sample <target>` (blind capture) + `sq metrology list` (inspection aid, not the 321 reporting surface). Config keys added to `CONFIG_KEYS`: `metrology.store_dir`, `metrology.sample_budget`, `metrology.project_id`.
+
+**Deferrals honored:** no agreement/dispersion math (321), no version-keying *resolution* or minimum-evidence floor (322) — this slice records both a template-content hash and the judge-config identity as candidate keys but decides neither; no audit records (323); no judging-path change.
+
+**Pending.** Frontmatter `status: not_started`. Next: Phase 5 (task breakdown) for 320, or design the remaining slices (321–324). Effort 4/5.
+
+### 320 Human-Load Constraints: Blind-Capture Scoping & Sampling Budget
+
+**Concern raised by PM:** the blind-capture design read as "operator must always evaluate before judge output is visible" — an efficiency regression, and incompatible with the Amoeba direction (Amoeba takes over much running of squadron; human only at critical points; concept-stage, but 320's calibrated judges are its prerequisite — uncalibrated judges would make Amoeba's decisions unacceptably unpredictable).
+
+**Evaluation outcome:** architecture direction confirmed correct (calibration is the *exit* from the resident-human loop, not more of it), but the docs left one door open: "which results are offered for sampling" was fully deferred to slice design, and escalation-triggered offering — the tempting cheapest-n choice — would blind every escalated review, strip the judge's assistive value, and bias the sample. Closed that door plus two adjacent ones. Amended 320-arch and 320-slices:
+
+- **Blindness scoped:** attaches only to designated calibration samples, never the escalated-gate review flow. Reviewer-at-gate and calibration-sampler are distinct roles; an escalated verdict (formed after seeing judge output) is anchored and inadmissible as blind agreement data. Escalation may *enqueue* a sample; it is never itself blinded.
+- **New arch principle — sampling is pull-based, budgeted, never blocking:** samples queue for the operator to drain at convenience; no pipeline/gate/dispatch waits on a sample verdict; skip is free; human load is a configured budget (rate/ceiling), not emergent from pipeline volume. Slow evidence → slower graduation + honest floor refusal, never more interruptions.
+- **Division of labor named:** dispersion + trend (321) and the audit oracle are the human-free *continuous* monitors maintaining graduated judges' standing between samples; rising dispersion flags where the scarce human budget is spent.
+- **Template-churn caveat:** version-keying means frequent template edits can perpetually reset n and starve graduation; minor-revision inheritance vs. full re-calibration flagged as a 322 slice-design question.
+- Slice 320 gains matching success criteria (blindness scoping, non-blocking capture, budget respected); open questions gain budget representation and churn items.
+
+### Slice Plan 320: Judge Calibration & Quality Metrology — Phase 3 Complete
+
+**Phase 3 complete.** Created `user/architecture/320-slices.judge-calibration-quality-metrology.md` from the reviewed 320-arch. `cf` Slice Plan field already registered as `320-slices.judge-calibration-quality-metrology`.
+
+**Structure: five slices, keystone-first, two oracles on one spine.** Kept the architecture's anticipated-slice count and boundaries — the load-bearing decisions were already resolved in arch, so no slice reopens them.
+- **(320) Metrology Data Layer & Sample Capture (keystone, High, 4/5)** — the queryable/joinable user-level store keyed on stable explicit project identity (not a path, no 280 dependency) plus the blind inline human-sample capture surface (judge output withheld until the human commits). Done alone, no reporting, per the architecture.
+- **(321) Agreement & Dispersion Reporting (Medium, 3/5)** — human-oracle headline: judge-vs-human agreement + judge-vs-judge dispersion, per artifact level / judge configuration, every figure carrying its n; dispersion sourced from 300's multi-sample (no 180 `fan_out` dependency); refuses to pool across incompatible judge configs.
+- **(322) Calibration-to-Threshold Feedback (Medium, 3/5)** — evidence-floored path to 300's threshold config; graduation-is-not-a-one-way-door forced residual sampling; the (template,model)↔(template,step) mismatch inherited as a config-time model+threshold pairing; resolves the version-keying tension (coordinated 300 write-path field vs. content-hash fallback).
+- **(323) Tech-Debt-Audit Baseline Harness (Medium, 3/5)** — cross-project audit baseline, normalized findings, and the audit's own run-to-run noise floor measured first (variance-before-baseline).
+- **(324) Pre-Emption Prompt & Delta Measurement (Medium, 3/5)** — dispatch-side generated static prompt fragment flowing down-only into dispatch config (dispatch never queries the store at runtime); before/after delta reported against the noise floor as a directional signal, not causal proof; ships only after 323.
+
+**Two ordering constraints honored explicitly.** *Variance, then baseline, then intervention* forces the audit oracle into two slices (323 measures the floor, 324 intervenes after). The keystone is done alone — reporting is a separate slice so storage/join/ergonomics de-risk in isolation. The version-keying tension is resolved in 322 (where the calibration recommendation depends on it), not the keystone; 321 already enforces non-blending on whatever key is present.
+
+**Future Work seeded:** 300 judge-result version/hash field (if 322 takes the preferred path), 280-store convergence (not a dependency), general 180 `fan_out` for dispersion (boundary made explicit, not assumed).
+
+**Pending.** Phase 4 (slice design) not started. Frontmatter `status: not_started`.
+
+### Housekeeping: reconcile `tech-debt-analyze` → `tech-debt-audit` skill-name drift
+
+Surfaced by 320 arch review F011. The shipped analysis-pack skill is `tech-debt-audit` everywhere load-bearing (frontmatter `name:`, file `commands/analysis/tech-debt-audit.md`, live dispatch `/analysis:tech-debt-audit`), but the 340-band planning docs called it `tech-debt-analyze` — a name that never matched what shipped. Blast radius was documentation-only (zero occurrences in `src/` or `commands/`). Fixed all live docs to the canonical name: `340-arch` (4 spots, was also self-inconsistent with its own line 81), `340-slices` (3 spots), `001-initiative-plan` (2 spots in the 340 entry), `340-slice.command-surface-spike` (1 spot, the spike's stub-dispatcher example — skill name only; left the illustrative `tech-debt` dispatch token as prototyped). Historical review artifacts (342/320 reviews) left as-is — they are point-in-time records. Trimmed 320-arch's Related Work note now that 340-arch is correct. No code change.
+
+### Architecture 320: Judge Calibration & Quality Metrology — Design Complete
+
+**Phase 2 complete.** Created `user/architecture/320-arch.judge-calibration-quality-metrology.md` from the initiative-plan entry 10 charter; `cf` arch field already registered as 320. Commit: `39b5f9d` (docs: add 320-arch judge calibration and quality metrology).
+
+**What the component is.** The measurement layer 300 explicitly deferred: judge-vs-human agreement and judge-vs-judge dispersion measured against a **sampled human oracle** (no curated dataset), computed **per artifact level**, feeding 300's escalate-vs-auto-gate threshold config. Second oracle with the same metrology shape: a cross-project **tech-debt-audit code-quality baseline** (skill shipped in 340's analysis pack), with the dispatch-side pre-emption prompt as its first measurable customer.
+
+**Key design decisions recorded in the doc:**
+- Principles: human sampled-not-resident (capture ergonomics are first-class), read-side over 300's write path (no judging-path changes), per-artifact-level calibration only (no blended global accuracy number), baseline-before-intervention ordering, honest small-n statistics (every report carries its sample size; minimum-evidence floor before recommending threshold loosening).
+- Metrology records are keyed by judge configuration (template identity/version, model) so template/model changes don't silently blend incompatible measurements.
+- Cross-project aggregation is a new persistence requirement (300's persistence is per-run/per-project); relation to the not-started 280 shared artifact store flagged as a leading slice-design decision, not assumed.
+- Non-goals: no curated dataset, no changes to the judging path, no automatic threshold mutation (calibration informs, operator decides), no general observability platform.
+- Anticipated slices (exploratory): metrology data layer & sample capture (keystone), agreement/dispersion reporting, calibration-to-threshold feedback, tech-debt-audit baseline harness, pre-emption prompt & delta measurement.
+
+**Pending.** Phase 3 (slice planning, `320-slices.*`) not started. Frontmatter `status: not_started` matches initiative-plan entry status.
+
+**Arch review response (same day).** Review `320-review.arch.judge-calibration-quality-metrology.md` (claude-fable-5, verdict CONCERNS) returned 8 concerns + 3 notes; all 11 addressed in the arch doc. Every factual claim verified against source first. Substantive additions: two new principles — *Graduation is not a one-way door* (forced residual sampling of auto-gated results survives graduation, F002) and *Blind capture, not anchored* (judge output withheld until the human commits an independent verdict, F003); principle *Baseline before intervention* rewritten to *Variance, then baseline, then intervention* (measure the audit's run-to-run noise floor before any delta, F008); new consideration committing pre-emption data to flow **down** as a generated static prompt fragment — dispatch never queries the metrology store at runtime (F007, avoids a 140→320 dependency inversion); the metrology-store consideration now fixes three load-bearing commitments — stable explicit project identity, user-level/central locality, no hard 280 dependency (F006); the template-version consideration now names the read-side/no-version-field unsatisfiability and resolves it (coordinated 300 write-path field preferred, capture-time content-hash fallback, F001). Corrections: `fan_out` re-attributed from 140 to 180 and dispersion scoped to 300's multi-sample only, preserving the plan's "Independent of 180" (F004); `340` added to frontmatter `dependencies` (F005). Notes F009 (per-model calibration resolves to operator config-time choice) and F010 (shared "spine" not "one report path") folded in. **F011 verified inverted:** the shipped skill is genuinely `tech-debt-audit` (frontmatter name, file, live `/analysis:tech-debt-audit` dispatch); `tech-debt-analyze` is 340-arch's stale drift — kept the correct name, flagged 340-arch for reconciliation rather than adopting the wrong identifier. Response recorded in the review file. Dependencies `[100, 140, 300, 340]` all complete.
+
+### Slice 304: Gate Composition — Implementation Complete
+
+**Phase 6 complete.** Branch `304-slice.gate-composition` created from `main` (integration branch unset). All 13 tasks (T1–T13, including T2c/T4c/T7b/T8c) implemented, tested, and verified in dependency order across four bisectable commits. Initiative 300 (eval-actions-llm-as-judge-scoring) is now fully closed — slices 300–304 are all complete.
+
+**T1–T2c: pure reduction core.** `src/squadron/pipeline/actions/gate.py` defines the severity ranking once as an `IntEnum` (`PASS < CONCERNS < FAIL < UNKNOWN`, `UNKNOWN` highest/most-severe) and a pure `reduce_verdicts(a, b) -> str` that normalizes `None → "UNKNOWN"` before ranking and returns `max(severity_a, severity_b).name`. `Provenance.COMPOSED` added to the existing `Provenance` `StrEnum` in `actions/judge.py`. 27 tests cover the full 4×4 cross-product (all 16 pairs incl. the 4 diagonal ties) plus all `None`-leg cases.
+
+**T3–T4c: the 140-adjacent executor touch, confirmed pure and signed off.** Added `ActionContext.step_outputs: dict[str, ActionResult]` (`models.py`) — a step-name-keyed view populated in `execute_pipeline`'s top-level loop (`executor.py`), mirroring exactly how `prior_outputs` itself is accumulated, using the existing `_last_with_verdict` helper to pick each step's most recent verdict-bearing result. Required threading the new field through all 5 nested step-execution paths (`_execute_step_once`, `_execute_loop_step`, `_execute_loop_body`, `_execute_each_step`, `_execute_fan_out_step`) and their 9 call sites — more mechanical surface area than the design's grounding notes implied (they named one `ActionContext` construction site; the executor's loop/each/fan_out helpers each pass `prior_outputs` through independently). **140 sign-off obtained from the Project Manager before implementing**, per the STOP-gate: confirmed as a pure additive read view, no change to `prior_outputs` semantics, no checkpoint code touched. Verified: the full pre-existing pipeline suite (999 tests) passed unmodified both before and after the change, and a dedicated regression test (`TestStepOutputsRegression`) pins that the `review-0` key-collision behavior in `prior_outputs` is byte-for-byte unchanged. The sign-off is recorded in the T4c commit body per the task's requirement.
+
+**T5–T8c: `gate` action + step + loader validation.** `GateAction` resolves `judge_from`/`review_from` (step names) against `context.step_outputs`, reduces via `reduce_verdicts`, and returns `provenance=COMPOSED` with both raw verdicts (and scores/criteria, unreduced) on `metadata`. An unresolved source step or a source with `verdict=None` logs WARNING+ and normalizes to `UNKNOWN` — no silent path. `GateStepType` expands to `[gate]` or `[gate, checkpoint]` (mirroring `ReviewStepType`), with its own `validate()` checking only presence/type of its own config, per the `StepType.validate(config)` protocol's own-config-only scope. **F005 (loader cross-step check):** added `_validate_gate_references` in `loader.py`'s `validate_pipeline`, tracking `prior_step_names` across the existing step loop and requiring `judge_from`/`review_from` to each name a step that appears *earlier* — a misspelled or forward-referencing name now fails at load time, distinct from the action's execute-time `UNKNOWN` fallback. 28 additional tests (action + step type + loader validation, incl. nonexistent-step, later-step, and param-placeholder-skip cases).
+
+**T9–T11: example pipeline, end-to-end checkpoint-driving tests, and the escalation boundary.** `compose-gate-example.yaml` composes a `judge.slice-vs-arch` leg and a `slice`-template review leg into one `gate` step with `checkpoint: on-concerns` — validates clean via `sq run compose-gate-example --validate`. `TestDrivesCheckpoint` proves the *reduced* verdict, not either raw leg, fires the checkpoint: (PASS, CONCERNS) fires, (PASS, PASS) doesn't, (UNKNOWN, PASS) fires (no-silent-pass), and — closing the F003 tasks-review gap — a `None`-leg case runs the full normalize→reduce→checkpoint-fires→WARNING-logged path end-to-end, not just at the action level. `test_boundary_requires_140` encodes escalation condition (3) directly: two gate results with identical reduced verdicts (`FAIL`) but opposite raw legs (judge-FAIL-review-PASS vs. judge-PASS-review-FAIL) prove the checkpoint's read path (`_find_review_verdict`, which reads only `.verdict`) cannot distinguish *which* leg failed — that requires extending the checkpoint itself (option b), which this slice does not do.
+
+**T12: authoring guide.** Added "Composing a judge and a review at one gate" to `docs/PIPELINES.md` as a sibling to 303's "Judge-Gated Cycles" section (cross-linked both ways), plus a `### gate` step-type entry (fields table) and Action Type Catalog row. Documents the composition shape, the most-severe-wins rule with `UNKNOWN`-most-severe and `None → UNKNOWN` rationale, the same-step checkpoint requirement, the 140 boundary (with the "which leg failed" example), and the gate-vs-fan-in distinction so authors don't reach for a gate where a fan-in reducer belongs.
+
+**T13: full-suite gate.** `uv run pytest` (2198 passed, 2 pre-existing/unrelated skips), `uv run pyright` (0 errors, strict), `uv run ruff check` (clean) — all green. Verification Walkthrough re-run against actual output and corrected in the slice design: two of the design's draft `-k` filter strings (`drives_checkpoint`, `unknown_dominates`) didn't match the actual test names/classes written in Phase 6 (`TestDrivesCheckpoint`, `test_judge_unknown_review_pass_fires`) — corrected in place with a caveat note, all 7 walkthrough steps now reproducible verbatim.
+
+**Code review (`moonshotai/kimi-k2.7-code`, CONCERNS) addressed.** 2 concerns, 3 passes, 1 note. **F001:** `GateStepType` validated and forwarded a `policy` field that `GateAction.execute` silently ignored — fixed by having the action read `context.params["policy"]`, fall back to the default with a WARNING+ log on an unrecognized value, and record the resolved policy on the result's `metadata` for auditability. The valid-policy set is now centralized once in `actions/gate.py` (`VALID_GATE_POLICIES`/`DEFAULT_GATE_POLICY`, public rather than private so `steps/gate.py` can import it under pyright strict) instead of duplicated across both files. **F002:** the ~720-line `tests/pipeline/test_gate.py` (over the project's ~300-line guideline) was split into four focused files by concern — `test_gate_reduce.py` (pure reduction core), `test_gate_action.py` (GateAction, now including 3 new policy tests), `test_gate_step.py` (GateStepType + loader cross-step validation), `test_gate_executor.py` (step_outputs read surface, end-to-end checkpoint-driving, escalation boundary). **F006** (note, addressed): added an inline comment on `GateAction.execute`'s `success=True` explaining it reports execution health, not verdict outcome, mirroring `CheckpointAction`. F003–F005 were PASS (fail-closed ranking, additive `step_outputs`, load-time cross-step validation) — no change needed. Full suite re-verified green after the split (2201 passed, up from 2198 net of the 3 new tests).
+
+**Housekeeping:** removed a pre-existing stray line of unrelated content (referencing a different slice, "162") that had contaminated the top of `304-slice.gate-composition.md` since its Phase-4 creation commit, ahead of the frontmatter delimiter — confirmed with the PM before removing, out of caution since it predated this session. Slice design and task file frontmatter both updated to `status: complete`, `dateUpdated: 20260717`; slice-plan checkbox (#5, gate composition) in `300-slices.eval-actions-llm-as-judge-scoring.md` checked off, and the plan's own frontmatter status moved `in_progress` → `complete` (confirmed with PM — all 5 core slices done, remaining items are the separate, explicitly-deferred Future Work section). Future Work item 3 (checkpoint multi-verdict support, 140) remains legitimately unscheduled — the escalation boundary never fired, so option (a) shipped as sufficient and (b) stays future work, not superseded. A `workflow_check --fix` pass also corrected unrelated pre-existing drift project-wide (confirmed with PM before keeping): slice 344's checkbox/frontmatter, and architecture status fields for 140, 300, and 900 — none touch slice 304's own scope.
+
+**Initiative 300 status:** all five slices (300 scoring foundation, 301 threshold enforcement, 302 judge templates, 303 judge-gated cycles, 304 gate composition) are complete; the slice plan's frontmatter now reflects `status: complete`. The one deferred coordination — Future Work 3, checkpoint multi-verdict support — remains a 140 dependency to be picked up only if a future required case needs it.
+
+---
+
+## 20260716
+
+### Issue #14: code review pipeline misfiled findings against a prior slice's merged code (3x across 2 slices)
+
+Traced the root cause to `resolve_slice_diff_range()`'s third fallback
+path, `_find_commit_range()`
+([src/squadron/review/git_utils.py](src/squadron/review/git_utils.py),
+now removed). It ran `git log --all --grep=\b{N}\b` — an unscoped
+word-boundary search over commit-message *prose*, across all refs —
+whenever both the local slice branch and a `--merges` merge commit
+could not be found. Path 2 (`_find_merge_commit`) only matches true
+two-parent merge commits, so any project using squash-merge (GitHub's
+default PR button) never produces one, making path 3 the de facto
+primary fallback the moment a slice branch is cleaned up post-merge.
+
+Verified the collision live against squadron's own history:
+`--grep='\b124\b'` matched not just slice-124 implementation commits
+but unrelated ones like "docs: mark slice 124 as superseded" and a
+reindexing commit — some **older** than slice 124's real work. Since
+the function took the oldest match as the range start, a stray older
+collision silently widened the "diff" to include everything committed
+since, including an entirely different slice's already-merged code —
+exactly the reported symptom (F001-F006 in the issue's slice-124
+occurrence cited files last touched by slice 122, not present in slice
+124's actual diff).
+
+Erik confirmed with a real commit-history excerpt that no regex over
+commit-message text can safely distinguish real slice-work commits
+from incidental mentions (e.g. `fd2469d docs: reconcile 300 initiative
+status to in_progress` — a bare number in an unrelated docs commit).
+Considered narrowing the grep pattern (e.g. matching the branch-name
+convention `{N}-slice` as a message substring) but disproved it against
+the same excerpt: commit messages don't echo branch names literally
+("slice 301", not "301-slice."), so a narrower pattern would just
+trade false positives for false negatives.
+
+Also confirmed with Erik that slice branches are not normally deleted
+before review completes in his workflow — so path 1 (`_find_slice_branch`)
+should fire in the healthy case. Why the reported slice-124 occurrence
+fell through to path 3 despite a branch reportedly existing at review
+time could not be confirmed from squadron's own repo — noted as an open
+verification item requiring the actual `grizcam_mobile_ios` repo state
+at review time, not blocking this fix.
+
+Fix: removed `_find_commit_range()` and path 3 entirely. When no local
+branch and no merge commit can be resolved,
+`resolve_slice_diff_range()` now raises `DiffRangeUnresolvedError`
+(new, in `git_utils.py`) instead of silently guessing or falling back
+to bare `--diff main`. Wired at both call sites: the CLI
+(`review.py:663`) catches it and reports via the existing
+`rprint("[red]Error: ...[/red]")` + `typer.Exit(code=1)` pattern used
+throughout that file; the pipeline action
+(`pipeline/actions/review.py`) added it to the existing named-exception
+tuple in `execute()`'s top-level handler (alongside `KeyError`), so it
+surfaces as a proper failed `ActionResult` with a `_logger.warning`
+instead of falling through to the generic `except Exception` catch-all.
+
+Updated `tests/review/test_git_utils.py`: removed `TestFindCommitRange`
+and `TestResolveSliceDiffRangeWithCommitGrep` (dead code coverage),
+replaced the old fallback-to-`"main"` test with one asserting
+`DiffRangeUnresolvedError` is raised. Verified live: direct call with
+an unresolvable slice number raises with a clear, actionable message.
+Full gate: 2133 tests passed (net -9: -14 dead, +1 new, plus 2 tests
+folded into fewer assertions), pyright strict 0 errors (project-wide
+run — a per-file pyright invocation on the test file alone showed
+pre-existing `reportPrivateUsage` noise unrelated to this change,
+confirmed present before this fix too), ruff clean. Closes #14.
+
+### Slice 304: Gate Composition — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/304-tasks.gate-composition.md` (312 lines, within target) from the review-addressed design. 13 tasks in dependency order, each impl task followed immediately by its test (test-with pattern): reduction core (T1–T2) → executor read surface (T3–T4) → gate action (T5–T6) → gate step (T7–T8) → example pipeline + drives-checkpoint + boundary tests (T9–T11) → authoring guide (T12) → commit (T13).
+
+**Grounded every code anchor against on-disk source before writing tasks, so the junior AI does not re-derive them.** Verified and carried into the task file's grounding notes: the `Action`/`StepType` protocol method sets (`actions/protocol.py`, `steps/protocol.py` — both confirmed present); `register_action`/`register_step_type` signatures; the `ActionType`/`StepTypeName`/`Provenance` `StrEnum`s that each need a new `GATE`/`COMPOSED` member; and — the load-bearing one — that `StepResult` (`executor.py:244`) carries `step_name` + `action_results` and the executor already accumulates a `step_results` list, but `ActionContext` (`models.py:54`) exposes **only** the lossy action-keyed `prior_outputs`, no step-keyed view. That gap is exactly what T3 fills.
+
+**T3 (the F002-flagged executor touch) is written as a STOP-gated task, not a normal one.** It carries an explicit stop-gate: the step-keyed read surface must be a *pure additive* field on `ActionContext` populated from the already-accumulated `step_results`, changing no `prior_outputs` semantics and touching no checkpoint code, and it needs up-front 140 sign-off because `prior_outputs` is 140-owned. If a pure addition proves impossible, the task says STOP and escalate to option (b) per the design's escalation boundary — the task cannot silently absorb a checkpoint change. This mirrors the F002 resolution: the executor touch is 140-adjacent, not in-scope-by-default.
+
+**F001 (None-verdict) is pinned across three tasks:** `reduce_verdicts` normalizes `None → UNKNOWN` before ranking (T1), the 4×4 cross-product plus all `None` cases are required tests (T2), and the gate action's WARNING+ log on a `None`/unresolved leg is asserted via `caplog` (T6). The escalation-to-140 boundary test (T11) is a first-class required task encoding boundary condition (3) — a policy needing the checkpoint to see both raw verdicts distinctly is asserted *not* expressible via the single reduced gate and documented as a 140 concern.
+
+**Real-path corrections while grounding:** the authoring-guide target is `docs/PIPELINES.md` (slice 152's guide, where 303's `Judge-Gated Cycles` section already lives) — T12 names it and cross-links, rather than pointing at a vague "same doc as 303." Verification section maps each task back to the slice's FR1–FR4 and F001/F002 so the coverage is auditable.
+
+**Task-breakdown review (`moonshotai/kimi-k2.6`, CONCERNS) addressed — 2 PASS (test-with pattern, F002 STOP-gate scoping), 3 concerns resolved.** **F003 (no end-to-end `None`→checkpoint test):** added a `None`-leg case to T10 — normalizes to `UNKNOWN`, reduces to `UNKNOWN`, fires the same-step checkpoint, WARNING+ logged on that path; closes the T6 (action-level) ↔ T10 (checkpoint firing) gap. **F004 (commits batched at end):** distributed commits across the four deliverables — T2c (reduction), T4c (read surface, with mandatory 140-sign-off note in the body), T8c (gate action+step+loader validation), T13 (example+docs+full-suite gate); branch now reads as four bisectable commits. **F005 (gate step omits prior-step existence check):** the fix was right but its locus was not — `StepType.validate(config)` sees only its own config (verified `steps/protocol.py`), so it *cannot* check sibling steps; the cross-reference belongs in the loader's `validate_pipeline` (`loader.py:147`), which iterates all steps and already validates review-template refs the same way (`loader.py:210`). Added T7b (loader validates `judge_from`/`review_from` name real *prior* steps, fail-fast at load) and clarified T7's own `validate` as own-config-only; T8 asserts the load-time failure distinct from T5's execute-time `UNKNOWN` defense-in-depth. Task file 314 → 398 lines (within target). Review dispositioned per-finding; `reviewsAddressed` added to task frontmatter.
+
+**Next:** Phase 6 (implementation) for slice 304 — create branch `304-slice.gate-composition` from the target (integration branch unset → `main`), start T1. Design and tasks are both review-addressed; the one open coordination is the T3 140 sign-off, to be obtained at implementation (T4c holds the commit until it lands).
+
+---
+
+### Slice 304: Gate Composition — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/304-slice.gate-composition.md` from the slice-plan entry (#5) in `300-slices.eval-actions-llm-as-judge-scoring.md`. This is the initiative's integration slice: resolve how a judge result and a standard review result compose into a single checkpoint gate. The architecture prescribed the *decision procedure* (prefer option a, upstream reduction, additive; escalate option b, checkpoint multi-verdict, as a 140 dependency if a is insufficient) but not the answer. The design **commits to option (a)** and proves it sufficient, grounded against the real machinery rather than the architecture's prose.
+
+**The decisive constraint was verified in code, not assumed.** The checkpoint is single-verdict-per-step for a *mechanical* reason: (1) the executor accumulates results as `prior_outputs[f"{action_type}-{idx}"]` with `idx` resetting per step (`executor.py:880-883`), and a `review` step expands to exactly one review action (`steps/review.py:69-76`) — so *every* standalone review step, judge or standard, writes the same key `review-0` and later steps **overwrite** earlier ones in the global map; (2) `_find_review_verdict` returns the *first* non-`None` verdict in reverse insertion order (`checkpoint.py:28-37`). Both a judge result (threshold-derived verdict) and a standard review (model verdict) carry a non-`None` verdict, so the checkpoint picks exactly one — whichever ran last — and structurally cannot combine two separately-stepped results. This is precisely why combining two *separate* steps' verdicts is option (b)/140 territory: it requires the checkpoint to look past a single key. Option (a) sidesteps it by reducing to one verdict *upstream*, in the same step as the checkpoint.
+
+**Design: a `gate` reduce action + `gate` step (both additive registrations).** The gate step names its two source steps (`judge_from` / `review_from`), the gate action reduces their verdicts by a documented **most-severe-wins** rule (`UNKNOWN > FAIL > CONCERNS > PASS`, `UNKNOWN` ranked most severe deliberately to preserve the no-silent-pass NFR — a broken judge leg must dominate a passing review leg), and the gate step expands to `[gate, checkpoint?]` so the reduced verdict and the checkpoint land in the **same step** — the one place a checkpoint can read the gate's output via the unchanged `_find_review_verdict`. New `Provenance.COMPOSED` value; both raw verdicts preserved on the gate result's metadata for auditability. `_find_review_verdict` and the checkpoint are **not modified** — that is the whole point of option (a), and any need to modify them is the escalation signal.
+
+**The escalation boundary (a → b) is a stated, checkable rule, not a mid-Phase-6 judgment call.** Option (a) is declared insufficient and (b) escalated to 140 iff, in implementation: (1) exposing per-step results to the gate action can't be done as a pure additive read surface without altering the checkpoint's single-verdict contract; (2) a required case needs the checkpoint itself (not an upstream action) to weigh two verdicts; or (3) the reduction can't be a pure function of the two verdicts because a policy needs the checkpoint to branch on *which* leg produced the severity. None holding → (a) stands, 140 untouched (the default, shipped outcome). The required **escalation-to-140 boundary test** encodes condition (3): it asserts a policy needing both raw verdicts seen distinctly is *not* expressible via the single reduced gate and is documented as a 140 concern — so the slice recognizes its own edge rather than silently overreaching.
+
+**The one additive executor touch is named as the risk.** The gate needs source results keyed by *step*, which the lossy action-keyed `prior_outputs` does not preserve (both legs clobbered `review-0`). Adding a step-keyed read view is the single place the slice reaches into the executor; if it can't be a pure read-surface addition, the escalation boundary fires. This is the architecture's anticipated edge, handled by the prescribed escalation.
+
+**Verification Walkthrough is a Phase-4 draft** (marked as such) — the 4×4 reduction cross-product, drives-checkpoint, unknown-dominates, boundary-requires-140, and non-composed-unchanged tests are specified; actual commands/output to be confirmed in Phase 6.
+
+**Two refinements after PM review.** (1) **Tie behavior made explicit:** two same-severity legs (e.g. `CONCERNS`+`CONCERNS`) reduce to that shared value — most-severe-wins is idempotent on equal ranks, so there is no tie-break to decide (the reduction returns a *rank*, not a chosen *leg*); the 4×4 cross-product's four diagonal ties are now called out as required test cases, and the stale "scores for tie-context" phrasing was removed (ties need no score context). Raw per-leg verdicts stay on `metadata`, so a same-rank tie remains auditable. (2) **Fan-out/fan-in relationship pinned as a distinct-but-co-evolving concern.** The codebase already has a `FanInReducer` protocol + registry (`intelligence/fan_in/reducers.py`, slice 182; `collect`/`first_pass`, with `merge_findings`/`unanimous` planned in 189). The gate reduces **2 heterogeneous** judgments of one artifact (judge verdict *and* review verdict); fan-in converges **N homogeneous** samples (same review across many models). Orthogonal today — multi-sample judging (300 FW1) is explicitly a *fan-in* job, not a gate one, so the gate grows no sample count. But both are "reduce a set of results to one verdict," and the gate's most-severe rule is arguably a special case of a `FanInReducer`; a comparison table and an evolution note are now in the design flagging a likely future unification (gate-as-reducer) as *unscheduled direction*, so a later slice unifies them knowingly rather than by accident. Not attempted now — no caller, and forcing the gate through the fan-out branch model would add complexity nothing needs (project rule).
+
+**Slice-design review (`z-ai/glm-5.2`, CONCERNS) addressed — both concerns dispositioned in the design.** **F001 (missing `None`-verdict failure mode):** the reduction now normalizes a `None` source verdict to `UNKNOWN` *before* ranking — fail-closed, deliberately diverging from `_find_review_verdict`'s skip-`None` behavior, because a gate must not let a verdict-less source vanish and silently advance the other leg. Added the rule, a failure-mode-table row, a required WARNING+-logged unit test, and prose distinguishing it from the *authoring-time* missing-source-name case (which stays fail-fast validation). **F002 (executor read-surface boundary ambiguity):** re-framed the per-step read-surface touch from "in-scope unless downstream escalation fires" to **140-adjacent, requiring up-front 140 sign-off regardless** (`prior_outputs` is 140-owned) — two explicit outcomes (confirmed pure addition → proceed with sign-off, expected default; can't stay pure → escalate to (b), condition 1), with the slice explicitly disclaiming unilateral authority to modify executor result accumulation under 300's additive banner. F003 was a PASS (architectural alignment), no change. Review file updated with per-finding `resolution:` and a Resolution section; `reviewsAddressed` added to the design frontmatter. Verdict left `CONCERNS` as the historical record; a Phase-6 re-review should confirm the commitments hold in code.
+
+**Slice status:** design is `not-started` (Phase 4 artifact exists, review-addressed; implementation not begun). This slice completes the 300 initiative's gating story once implemented — 300/301/302/303 are all `complete`.
+
+**Next:** Phase 5 (task breakdown) for slice 304, or PM direction. No branch created (planning work commits to the current target per the git rules).
+
+---
+
+## 20260715
+
+### Issue #21: `{keep_section}`/`{summarize_section}` never resolved by `_summary-instructions`
+
+Confirmed the issue's own diagnosis against current source: two independent
+render paths existed for compaction templates —
+`compaction_templates.render_instructions()`
+([src/squadron/pipeline/compaction_templates.py:83-116](src/squadron/pipeline/compaction_templates.py#L83-L116)),
+which computes `keep_section`/`summarize_section` from `keep`/`summarize`
+args, and `summary_render.resolve_template_instructions()`
+([src/squadron/pipeline/summary_render.py:22-41](src/squadron/pipeline/summary_render.py#L22-L41)),
+used by the `_summary-instructions` CLI command, which called
+`render_with_params()` directly and never computed those two placeholders
+at all — they fell through `LenientDict`'s missing-key handling and leaked
+into output as literal `{keep_section}` text.
+
+Checked `summary_instructions.py`'s CLI signature: no `--keep`/`--summarize`
+flags exist on this entry point, so `keep`/`summarize` can only ever be
+their defaults (empty list / `False`) here — ruling out "add CLI flags" as
+the fix and confirming the issue's own suggested direction (route through
+`render_instructions()`) was correct. Weighed against computing the two
+placeholders locally in `summary_render.py`: routing through
+`render_instructions()` keeps a single source of truth for which derived
+placeholders a compaction template can reference, at the cost of two unused
+`keep`/`summarize` parameters at this call site — preferred over
+duplicating the placeholder names in two files.
+
+Fix: `resolve_template_instructions()` now calls
+`render_instructions(template, pipeline_params=params)` instead of
+`render_with_params(template.instructions, params)` directly. Added
+`test_keep_section_placeholder_resolved_not_leaked` to
+`tests/pipeline/test_summary_render.py`, asserting `minimal-sdk.yaml`'s
+`{keep_section}` reference resolves rather than leaking. Verified live via
+`sq _summary-instructions minimal-sdk` — no leaked placeholders. Full gate:
+2142 tests passed (+1), pyright strict 0 errors, ruff clean. Closes #21.
+
+### Issue #23: SDKExecutionSession.dispatch had the same no-separator/no-filter join as #22
+
+Same root-cause pattern as #22 (fixed earlier today for `review_client.py`
+and `summary_oneshot.py`), found in a third location while fixing #22:
+`SDKExecutionSession.dispatch()`
+([src/squadron/pipeline/sdk_session.py:143-166](src/squadron/pipeline/sdk_session.py#L143-L166))
+accumulated every translated SDK message's content — including
+`tool_use` ("Using tool: Bash") and `tool_result` (command stdout) —
+via bare list-append + `"".join()`, mixing tool-call narration into the
+dispatch response with no separator.
+
+Traced the two real consumers before fixing, resolving the issue's own
+open question ("is this cosmetic-only?"): `_dispatch_via_session` in
+[src/squadron/pipeline/actions/dispatch.py:191-200](src/squadron/pipeline/actions/dispatch.py#L191-L200)
+passes the joined string to `_check_cli_error` (prefix check only, low
+risk) and stores it as `outputs={"response": response_text}` — which
+persists into `prior_outputs`, read by later steps including the F001
+fix from earlier today (`_resolve_prompt_from_prior_review` scans
+`prior_outputs` for review findings). A corrupted response string here
+can therefore leak tool-call noise into what a later dispatch step's
+prompt is built from — not cosmetic.
+
+Fix: filter `sdk_type in (SDK_RESULT_TYPE, "tool_use", "tool_result")`
+before appending to `response_parts` (session_id capture still runs for
+every translated message, unchanged), and join with `"\n"` instead of
+`""`. Mirrors the #22 fix exactly. Added
+`test_dispatch_excludes_tool_call_noise` to
+`tests/pipeline/test_sdk_session.py`, using `AssistantMessage` with
+mixed `TextBlock`/`ToolUseBlock` content plus a top-level
+`ToolResultBlock` SDK message to match how `translate_sdk_message`
+actually produces these types. Full gate clean: 2141 tests passed,
+pyright strict 0 errors, ruff clean. Closes #23.
+
+### Issue #24: `sq review code` sent its template rules to the model twice
+
+`review_code()` ([src/squadron/cli/commands/review.py:704-711](src/squadron/cli/commands/review.py#L704-L711))
+already fully assembles `rules_content` via `load_review_rules("code",
+resolved_rules_dir, file_paths=..., manual_rules_content=manual_content)`
+— template rules (`review-code.md`) + language auto-detection + any
+explicit `--rules` override, one copy of template rules. It then passed
+both that assembled `rules_content` *and* `rules_dir=resolved_rules_dir`
+into `_run_review_command`, whose own `if rules_dir is not None` guard
+([review.py:322-329](src/squadron/cli/commands/review.py#L322-L329))
+unconditionally re-ran `load_review_rules`, prepending `review-code.md`
+a second time onto content that already had it. `review_slice`/`arch`/
+`tasks` never hit this because they don't pre-assemble — they resolve
+only `rules_dir` and let `_run_review_command` do the one and only
+`load_review_rules` call for those templates.
+
+Fix: `review_code` now passes `rules_dir=None` to `_run_review_command`,
+since its `rules_content` is already complete — the existing guard then
+correctly skips the redundant call for this caller only. Added
+`test_review_code_template_rules_not_duplicated` to
+`tests/review/test_cli_review.py`'s `TestRulesWiring` class, asserting
+the template rules string appears exactly once in the `rules_content`
+actually passed to `run_review_with_profile`. Full gate clean: 2140
+tests passed, pyright strict 0 errors, ruff clean. Closes #24.
+
+### Slice 303 re-review F001: judge-cycle's fix step never saw the judge's findings
+
+Re-verified a finding from an earlier, never-filed comparison-review
+artifact (`project-documents/user/analysis/303-review.code.judge-gated-cycle-conventions-sonnet5.md`,
+run via `/code-review`) before fixing, per this session's ongoing effort
+to eliminate false review findings — confirmed against current source
+rather than taken on faith.
+
+`judge-cycle.yaml`'s loop `dispatch` step had a static hardcoded
+`prompt:`, and `dispatch.py`'s `_resolve_prompt` only scans
+`prior_outputs` for a prompt when no explicit `prompt` param is set —
+so that scan never ran, and the fix step repeated the same generic
+instruction every iteration regardless of what the judge flagged.
+Root cause was actually two-layered: even with the hardcoded prompt
+removed, `_resolve_prompt` had no branch at all for a prior `review`
+action's output — it only knew how to pull `stdout` from a prior
+`cf-op(build_context)` result. Fixed both: removed the YAML's
+hardcoded `prompt:` ([judge-cycle.yaml](src/squadron/data/pipelines/judge-cycle.yaml)),
+and added `_resolve_prompt_from_prior_review`
+([dispatch.py](src/squadron/pipeline/actions/dispatch.py)) — a new
+fallback tier that scans `prior_outputs` for the most recent `review`
+action, formats its structured findings (severity/summary/location)
+into a fix prompt, or falls back to "perform an initial improvement
+pass" when the prior review had no findings (e.g. iteration 1, or a
+clean PASS). Verified `prior_outputs` does thread across loop
+iterations by reference (`executor.py:713-714`, `1013`), so this
+actually reaches the fix step on iteration 2+.
+
+Added `TestDispatchPriorReviewFallback` (4 tests) to
+`tests/pipeline/test_dispatch.py`: explicit `prompt:` still wins over
+a prior review (only steps that omit it fall through), prior-review
+findings become the prompt, a findings-less prior review yields the
+initial-pass message, and no prompt/build_context/review anywhere
+still raises `KeyError`.
+
+### Slice 303 re-review F002: `template.model` fallback invisible to the classification pre-scan
+
+The T7 fix in `ReviewAction._review` (`review.py:120-125`) retries
+model resolution against a review template's own `model:` default
+when the standard 5-level cascade is empty — but that retry is local
+to `_review` and never goes through `ModelResolver.cascade_candidates()`,
+which the slice-243 classification pre-scan (`classification.py`)
+treats as the single source of truth for what the cascade will
+resolve to. A pipeline relying solely on a template's default model
+(no CLI/action/step/pipeline/config override) got a false
+`ClassificationError` before the pipeline even started, even though
+runtime resolution would have succeeded.
+
+Considered making `template.model` a real 6th tier inside
+`ModelResolver` itself, but that would require teaching the generic
+resolver (shared by dispatch/summary/compact, none of which have
+templates) about review templates specifically. Asked Erik, who
+confirmed the surgical option: mirror the exact fallback locally in
+`classification.py` instead. Added `_review_template_model_fallback()`,
+called from both `classify_pipeline`'s top-level action loop and
+`_classify_container_inner` (the loop/each/fan_out inner-step path —
+the one `judge-cycle.yaml` actually exercises) when the cascade comes
+back empty for a `review` action. Loads the template via the same
+`get_template()`/`load_all_templates()` used at runtime; confirmed
+this doesn't violate the module's documented side-effect-freeness
+contract (`test_classification_is_idempotent_and_side_effect_free`
+only asserts idempotency and zero `pool.select()` calls, both
+preserved by a deterministic template load).
+
+Added 3 tests to `tests/pipeline/test_classification.py`: a top-level
+review step with no cascade model falls back to the template's
+default, still raises when the template also has no model, and the
+loop-container inner-step path specifically (matching
+`judge-cycle.yaml`'s actual shape).
+
+### Slice 303 re-review F003: malformed judge threshold silently discarded a completed review
+
+Fixing "judge reviews always persist as UNKNOWN" required moving
+judge-verdict computation (`resolve_thresholds`/`enforce_judge`)
+before persistence in `ReviewAction._review`, so the derived verdict
+could be passed into `verdict_override`. But `resolve_thresholds`
+calls unguarded `float()` on `pass_floor`/`concerns_floor` — a
+malformed step-level `judge:` override (e.g. a non-numeric
+`pass_floor`) now raised *before* persistence's own try/except
+(`review.py:230`) was ever reached, discarding a review whose model
+call had already succeeded, with no file written at all. Previously
+persistence ran first in its own non-fatal try/except, so the
+artifact was always saved regardless.
+
+Wrapped the threshold resolution/enforcement in its own narrow
+`try/except (TypeError, ValueError)` that logs a WARNING and degrades
+to `verdict="UNKNOWN"`/`provenance=judge` — matching the existing
+"no score / out-of-range score → UNKNOWN" behavior already inside
+`enforce_judge` for a different failure mode. Persistence below still
+runs either way.
+
+Added `test_malformed_threshold_override_degrades_to_unknown_and_still_persists`
+to `tests/pipeline/actions/test_review_action.py`, asserting
+`success=True`, `verdict=UNKNOWN`, a WARNING log, and that
+`save_review_file`/`format_review_markdown` were still called.
+
+### Slice 303 re-review F004 (PLAUSIBLE): `as_json` persistence never received `verdict_override`
+
+`save_review_result`'s `as_json=True` branch called `result.to_dict()`
+directly, bypassing `verdict_override` entirely — the docstring said
+as much ("Ignored for `as_json` output"). A judge review persisted as
+JSON would show `UNKNOWN` while the markdown persistence of the
+identical run showed the correct threshold-derived verdict. Dormant
+today (no live caller passes both `as_json=True` and a judge
+template), but real.
+
+Gave `ReviewResult.to_dict()` an optional `verdict_override` parameter
+(mirroring `format_review_markdown`'s existing signature) and threaded
+it through from `save_review_result`. Added 2 tests to
+`tests/review/test_models.py` (`to_dict(verdict_override=...)` in
+isolation) and 1 to `tests/cli/test_review_save.py` (the full
+`save_review_result(as_json=True, verdict_override=...)` path writing
+real JSON to a `tmp_path`).
+
+Full gate (2139 tests, pyright strict, ruff) clean before commit.
+None of F001-F004 were filed as GitHub issues — Erik preferred to fix
+directly since all four were confirmed against current source.
+
+---
+
+### Issue #22: Verified Against Real SDK Run; Issue #24 Filed (Rules Sent Twice)
+
+Erik ran the fixed build in a real terminal (`uv run sq run`, local
+unpublished build — an earlier attempt using the globally-installed
+version predictably still hit the old bug) against `claude-sonnet-5`,
+producing `project-documents/user/reviews/303-review.code.judge-gated-cycle-conventions.md`.
+Checked the saved review for validity: raw output is clean prose
+throughout — no `Using tool:` fragments, no run-on lines, well-formed
+`### [SEVERITY]`/`location:`/`category:` structure. All six findings
+(4 PASS, 2 NOTE) traced against real source and verified accurate — no
+hallucinated paths, lines, or symbols. Confirms the #22 fix (commit
+`2032cf0`) holds against actual Claude Agent SDK message shapes, not
+just the hand-constructed mocks in `test_review_client.py`/
+`test_summary_oneshot.py`. Closed #22.
+
+**New finding surfaced during verification, filed as #24 (not fixed
+this session):** the saved review's debug appendix showed the
+"Design Principles" / SOLID rules content duplicated — once in the
+`### System Prompt` section and again in `### Rules Injected`, and
+duplicated *within* the system prompt section itself. Traced to
+confirm this is a real double-send to the model, not just a debug
+display artifact:
+
+- `review_code` ([cli/commands/review.py:707-711](src/squadron/cli/commands/review.py#L707-L711))
+  calls `load_review_rules("code", resolved_rules_dir, file_paths=...,
+  manual_rules_content=manual_content)` — correctly assembles template
+  rules (`review-code.md`) + auto-detected language rules (`python.md`)
+  + any explicit override. One copy of template rules.
+- It then calls `_run_review_command` ([lines 721-729](src/squadron/cli/commands/review.py#L721-L729)),
+  passing **both** this already-assembled `rules_content` *and*
+  `rules_dir=resolved_rules_dir`.
+- `_run_review_command` ([lines 322-329](src/squadron/cli/commands/review.py#L322-L329))
+  unconditionally re-runs `load_review_rules` whenever `rules_dir is
+  not None`, prepending `review-code.md`'s content a **second time**
+  onto content that already has it.
+- `review_client.py:78-82` bakes the resulting doubled `rules_content`
+  into `AgentConfig.instructions` — the actual system prompt sent to
+  the model. Confirmed this is real, not cosmetic: every `sq review
+  code` run with a rules dir configured (the common case) sends
+  `review-code.md`'s content twice, inflating prompt size and token
+  cost on every call.
+- `slice`/`arch`/`tasks` review commands don't have this bug — they
+  never pre-assemble `rules_content` themselves, so `_run_review_
+  command`'s single internal `load_review_rules` call is the only one
+  that ever runs for those paths. `_run_review_command`'s own comment
+  ("Language auto-detection is handled by the caller... `_run_review_
+  command` only sees the template [rules]") is stale — `review_code`
+  now does its own full `load_review_rules` call including template
+  rules, not just auto-detection, so the comment's assumed division of
+  labor no longer holds.
+
+Not fixed this session — needs its own change (likely: `review_code`
+passes `rules_dir=None` once it has fully assembled `rules_content`
+itself, relying on the existing `if rules_dir is not None` guard to
+skip the redundant call) plus a regression test asserting `review-
+code.md` content appears exactly once in the final system prompt.
+
+Also committed (`477db4f`): the verification review file itself, and
+the untracked `303-review.code.judge-gated-cycle-conventions-kimi26.md`
+comparison-run artifact from the original #19 size-cap investigation
+(previously referenced but never committed).
+
+### Issue #22: SDK Tool-Call Noise No Longer Corrupts Review/Summary Raw Output
+
+Noticed while investigating #20 (fabricated review findings): the fixed
+`sonnet-fail.md` artifact's raw response contained an unreadable run-on
+line — `Using tool: BashUsing tool: BashUsing tool: Read...Clean. Now
+let's run the relevant test suite...` — prose and tool-call narration mashed
+together with no whitespace between them at all.
+
+**Root cause:** `providers/sdk/translation.py` correctly translates each SDK
+content block into its own `Message` — a `TextBlock` (the model's actual
+prose, `sdk_type: assistant_text`) and each `ToolUseBlock` (a tool
+invocation, rendered as `content=f"Using tool: {block.name}"`, `sdk_type:
+tool_use`) are distinct, well-formed messages. The bug was downstream, in
+how callers reassembled them: both `review_client.py:150`
+(`raw_output += response.content`) and `pipeline/summary_oneshot.py:78`
+(identical pattern) accumulated every yielded message — prose, tool-use
+markers, and tool-result content (command stdout / file contents,
+`sdk_type: tool_result`) alike — via bare string concatenation with no
+separator and no type filtering. Whenever a model's turn alternated prose
+and tool calls (normal for any review or summary that reads files or runs
+commands before responding), the result was one run-on line with tool
+narration interleaved mid-sentence.
+
+**Why this isn't just cosmetic:** the corrupted text is exactly what
+`parse_review_output` parses for `## Summary` / `### [SEVERITY] Title`
+structure, and what gets written verbatim into the saved review file body
+and the `-vv`/mismatch debug log. A tool-use marker landing between two
+lines that were meant to be separate can break the very structural patterns
+the parser depends on — plausibly a contributing cause of #20's fabrication
+trigger, independent of #20's own (already-fixed) fallback-extraction bug.
+
+**Fix:** both call sites now filter out `sdk_type in ("tool_use",
+"tool_result")` messages entirely (alongside the pre-existing
+`SDK_RESULT_TYPE` duplicate-content filter) and join the remaining
+assistant-text chunks with `"\n"` instead of bare `+=`. Non-SDK providers
+never set `sdk_type` and are unaffected — the filter only ever excludes
+messages that explicitly opt in to the `tool_use`/`tool_result` marker.
+Updated `test_summary_oneshot.py`'s multi-chunk test to expect newline
+joining instead of the old bare-concatenation shape; added
+`test_capture_summary_filters_tool_messages` and (in
+`test_review_client.py`) `test_raw_output_excludes_tool_call_noise`, both
+asserting tool-call content never reaches the accumulated output.
+
+**Scope note:** `pipeline/sdk_session.py:166` (the main dispatch path for
+design/tasks/implement steps) has the identical pattern
+(`"".join(response_parts)`, no tool-message filtering) but was left
+untouched — it's a different subsystem (dispatch artifacts are mostly
+written by the agent's own file tools, not parsed from the returned string)
+that needs its own look at actual downstream impact before applying the
+same fix blind. Filed as [#23](https://github.com/ecorkran/squadron/issues/23).
+
+**Not yet verified against a real SDK run** — all coverage above is via
+mocked `handle_message` iterators. Real-terminal `sq review code` runs
+against `claude-sonnet-5` (or another SDK profile) are still needed to
+confirm the fix holds against actual Claude Agent SDK message shapes, not
+just the mocked translation this repo's tests construct by hand.
+
+Full gate: `uv run pytest` (2128 passed, 2 skipped), `uv run pyright` (0
+errors), `uv run ruff check`/`format` (clean). Committed directly to `main`
+(non-slice bugfix, no feature branch). Closes
+[#22](https://github.com/ecorkran/squadron/issues/22).
+
+### Issue #20: Parser No Longer Fabricates Findings From Unstructured Prose
+
+Follow-up from slice 303's comparison code-review testing (same batch as
+#19, below). A `sq review code 303 -vv --model claude-sonnet-5` run produced
+a persisted review whose frontmatter `findings` were verifiably garbage:
+truncated mid-sentence fragments lifted from the model's own tool-use
+narration (`"**What's solid:** ruff and pyright are clean..."`) and a
+numbered "Gaps found" list item, each dressed up with an invented severity
+and a fabricated `F001`/`F002` id. Structurally valid-looking, semantically
+meaningless.
+
+**Root cause:** `parsers.py`'s `_extract_findings` correctly requires a real
+structural marker (`### [SEVERITY] Title`, `**[SEVERITY]** Title`, or
+`- [SEVERITY] Title` — five formats total after slice 122's widening). When
+a model's response has a CONCERNS/FAIL verdict but doesn't emit any of those
+markers, the parser fell through to `_lenient_extract_findings`, whose
+`_LENIENT_RE` regex matched on the bare presence of `NOTE`/`CONCERN`/`FAIL`
+*anywhere in a line*, with no structural anchor — the opposite of what
+`_extract_findings` requires. Confirmed via the affected review's own raw
+output: the model wrote free-form prose, and the keyword-anywhere regex
+grabbed sentence fragments after it, truncated to 120 chars, as if they were
+independent findings.
+
+**History check (before fixing):** this fallback path is genuinely old
+(`c0c697f`, 2026-03-25, slice 122 "Review Context Enrichment") and was
+solving a real, documented problem at the time — `minimax` returning a
+CONCERNS verdict with the saved review showing "No specific findings" at
+all, silently dropping real concerns the model had raised. Slice 122's
+design doc (Layer 2/Layer 3 split) conflated two different fixes under one
+"fallback" umbrella: Layer 3 (widening `_FINDING_RE` to accept colon
+separators, bold brackets, bullets — still requiring a real marker) is
+sound and unchanged. Layer 2 (`_lenient_extract_findings` +
+`_synthesize_fallback_finding`, no structural anchor) is what actually
+fabricates. Confirmed via `git log` that nothing in the review subsystem
+changed in the days immediately before this bug was noticed — the parser
+gap is ~4 months old; it was model-response variance (this specific
+`sonnet5` run's prose shape) that exposed it now, not a regression.
+
+**Fix:** removed `_lenient_extract_findings` and
+`_synthesize_fallback_finding` entirely, along with `_LENIENT_RE`. When a
+CONCERNS/FAIL verdict has zero structured findings, `parse_review_output`
+now logs a WARNING (template, model, verdict) and leaves `findings` empty —
+the same "honest empty" shape already used for PASS. Nothing is silently
+lost: `ReviewResult.raw_output` (and the saved review file body) always
+carries the model's full raw response regardless of findings, so a human
+can still read what the model actually said; it's just no longer disguised
+as structured findings. `fallback_used` keeps its existing meaning
+("verdict/findings mismatch was detected") for telemetry/debug-log
+purposes. Updated `tests/review/test_parsers.py`'s `TestFallbackParsing`
+class to assert the new empty-findings-plus-warning behavior instead of
+the old synthesized-finding shape; added `test_mismatch_preserves_raw_output`
+and `test_mismatch_logs_warning`.
+
+Full gate: `uv run pytest` (2126 passed, 2 skipped), `uv run pyright` (0
+errors), `uv run ruff check`/`format` (clean). Committed directly to `main`
+(non-slice bugfix, no feature branch — `git.integration_branch` unset).
+Closes [#20](https://github.com/ecorkran/squadron/issues/20).
+
+### Issue #19: Review File-Injection Size Caps Are Now Configurable
+
+Also from slice 303's comparison code-review testing: a `kimi26` review run
+truncated a 136,191-byte diff because `review_client.py`'s file-injection
+limits (`_MAX_FILE_SIZE` = 100KB, `_MAX_TOTAL_INJECTION` = 500KB) were
+hardcoded module constants with no way to raise them for a model with a
+larger context window.
+
+**Fix:** added two typed config keys, `review.max_file_size_bytes` (default
+100,000) and `review.max_total_injection_bytes` (default 500,000), to
+`config/keys.py` following the existing `ConfigKey` pattern. Removed the
+hardcoded constants from `review_client.py`; `_inject_file_contents` now
+resolves both via `get_config(key, cwd=...)` at call time, scoped to the
+review's `cwd`, with `isinstance` narrowing and an explicit `TypeError` on
+type mismatch (fail-fast per CLAUDE.md, since `_coerce_value` guarantees the
+stored type is always `int` — a mismatch here is genuinely exceptional, not
+a normal missing-config case). `_truncate` now takes `max_file_size` as an
+explicit parameter instead of reading a module constant. No additional
+wiring needed for `sq config get/set/unset/list` — those subcommands
+already operate generically over `CONFIG_KEYS`, so the new keys were live
+immediately; verified with `sq config list` and `sq config get
+review.max_file_size_bytes`.
+
+New test `test_max_file_size_config_override` proves a raised config value
+actually lets larger content through untruncated. Full gate: `uv run
+pytest` (2125 passed, 2 skipped), `uv run pyright` (0 errors, after fixing
+a `reportArgumentType` regression from passing untyped `object` to `int()`
+— resolved with the same `isinstance` narrowing pattern already used in
+`cli/commands/review.py:_resolve_verbosity`), `uv run ruff check`/`format`
+(clean). Committed directly to `main` (`71d8524`, non-slice bugfix, no
+feature branch). Closes [#19](https://github.com/ecorkran/squadron/issues/19).
+
+**Note:** this fix does not address #20 (above) — the `sonnet5` review
+artifact that motivated #20 had a diff well under the size cap; its failure
+is 100% attributable to the parser-fabrication bug, unrelated to injection
+truncation.
+
+### Slice 303: Judge-Gated Cycle Conventions — Complete
+
+Phase 6 implementation complete, T0–T8. Delivered `judge-cycle.yaml` (built-in
+reference pipeline: fix-first `loop [dispatch, review]`, `max: 3`,
+`until: review.pass`, `on_exhaust: checkpoint`, review step templated on
+`judge.slice-vs-arch`), a structural test in `test_loader_integration.py`,
+three control-flow tests in a new `tests/pipeline/test_judge_cycle.py`
+(auto-advance, escalate-at-max, advisory-always-escalates — all driving the
+real `ReviewAction`/loop/`enforce_judge` path with only
+`run_review_with_profile`/persistence/`resolve_slice_info` mocked), and a
+"Judge-Gated Cycles" section plus missing `### loop`/bare-`dispatch` catalog
+entries in `docs/PIPELINES.md`.
+
+**Live validation (T7) surfaced two pre-existing bugs, both fixed:**
+
+1. `judge-cycle.yaml` initially left the review step's `model:` unset,
+   relying on an implicit fallback — inconsistent with every other built-in
+   pipeline's convention (`P4.yaml`, `slice.yaml`: named `model`/
+   `review-model` params, referenced via placeholders). Rewrote
+   `judge-cycle.yaml` to match: `params: {model: sonnet, review-model:
+   minimax}`, both steps reference their param via `"{...}"`.
+2. Independent of (1), `ReviewAction`'s model-resolution cascade (CLI →
+   action → step → pipeline → config) never consulted a review template's
+   own `model:` default — unlike `sq review`'s CLI-side cascade, which
+   falls back to `template.model` as its last resort
+   (`cli/commands/review.py:_resolve_model`). A pipeline `review:` step with
+   no model anywhere always raised `ModelResolutionError`, even for a judge
+   template that declares a sensible default (`judge.slice-vs-arch`:
+   `opus`). Fixed in `pipeline/actions/review.py`: on `ModelResolutionError`
+   from the standard cascade, retry once against `template.model` before
+   giving up. New tests in `test_review_action.py` cover both the rescue
+   path and the case where no template default exists (error still
+   propagates unchanged).
+3. Also surfaced live: the persisted review file's `verdict:` field came
+   from the raw `ReviewResult.verdict`, always `UNKNOWN` for judge templates
+   by design (`judge-slice-vs-arch.yaml`'s prompt explicitly forbids
+   emitting a verdict line — the score is the source of truth). A human
+   reading the file saw `UNKNOWN` next to a score that clearly passed.
+   Fixed: `format_review_markdown`/`save_review_result`
+   (`review/persistence.py`) now accept an optional `verdict_override`;
+   `ReviewAction._review` computes the `enforce_judge`-derived verdict
+   *before* persistence (previously persistence ran first) and supplies it
+   for judge templates. New tests in both `test_review_action.py` and
+   `test_persistence.py` cover the override and the unchanged
+   non-override/non-judge paths.
+
+All three fixes are small, additive parameter/reordering changes to
+*existing* functions — no new step type, action, selector, or executor
+branch, so FR6 ("no new constructs") holds — but they are a deviation from
+the slice's stricter "zero engine code" framing, noted directly in the LLD's
+Success Criteria section rather than glossed over.
+
+**T7 final live run** (`sq run judge-cycle 302`, no manual `--model`,
+minimax via the new param defaults): judge scored slice 302's design at 98
+against its architecture doc, cleared `pass_floor` (82), loop exited on
+iteration 1, pipeline reported `completed`/`PASS`. Persisted file
+(`302-review.judge.slice-vs-arch.design-phase-judge-templates.md`) now shows
+`verdict: PASS` end-to-end. An earlier iteration of this same live run (fix
+leg, score below the floor) genuinely improved
+`302-slice.design-phase-judge-templates.md`'s anchoring-mitigation
+rationale — committed as real design-doc value, not test residue.
+
+**Known gap, not fixed (out of scope):** `LoopStepType.expand()` deliberately
+returns `[]` (iteration is owned by the executor's `_execute_loop_body`, not
+the flat action-list path) — so `--prompt-only` mode cannot drive any `loop`
+step at all, including `judge-cycle`. `sq run` inside a Claude Code session
+also refuses direct SDK execution. A `loop`-based pipeline is therefore only
+runnable from a standalone terminal today. Not filed as a separate GitHub
+issue; noted here and in the slice's Verification Walkthrough for whoever
+picks up prompt-only/loop support next.
+
+Full gate: `uv run pytest` (2124 passed, 2 skipped), `uv run pyright` (0
+errors), `uv run ruff check` (clean). Slice 303 marked complete in its own
+frontmatter and in `300-slices.eval-actions-llm-as-judge-scoring.md`.
+Branch `303-slice.judge-gated-cycle-conventions` ready to merge to `main`.
+
+## 20260714
+
+### Slice 303: Judge-Gated Cycle Conventions — In Progress
+
+Phase 5 (task breakdown) complete: created
+`user/tasks/303-tasks.judge-gated-cycle-conventions.md` (T0–T8) from the
+approved LLD. The slice is data + docs + tests only — no engine change:
+`judge-cycle.yaml` reference pipeline (fix-first `loop [dispatch, judge]`,
+`max: 3`, `until: review.pass`, `on_exhaust: checkpoint`), structural test in
+`test_loader_integration.py`, three control-flow tests (auto-advance,
+escalate-at-max, advisory-always-escalates) in a new
+`tests/pipeline/test_judge_cycle.py`, authoring docs in `docs/PIPELINES.md`,
+and one live unattended validation run.
+
+Two findings surfaced during breakdown, folded into the tasks:
+- `docs/PIPELINES.md` has no `### loop` (or bare-`dispatch`) Step Type
+  Catalog entry — the convention section is unfollowable without them; T6
+  adds both alongside the judge-gated-cycles section.
+- The issue-#18 guard (`4564471`, shipped after the 303 design) makes a
+  missing `input`/`against` file a hard error in `ReviewAction._review`, so
+  the control-flow tests cannot mock `run_review_with_profile` alone — T3's
+  harness must provide real tmp input/against files or patch the slice-input
+  resolution seam, while keeping `resolve_thresholds`/`enforce_judge` and the
+  loop evaluation real.
+
+Pending: Phase 6 implementation on branch
+`303-slice.judge-gated-cycle-conventions` (T0). Resume point: T0/T1.
+
+### Fixed issue #18: review input/against existence guard
+
+`missing_input_files()` (new, `review/template_inputs.py`) returns the
+`input`/`against` keys whose values name no real file — checked against both
+the process cwd (how non-SDK content injection resolves paths) and
+`inputs["cwd"]` (how SDK review agents resolve them), so a path valid under
+either provider semantics is accepted. Both review boundaries now hard-fail
+on a non-empty result before any model call: `_run_review_command` (covers
+`sq review slice|tasks|arch|code`) exits 1 with `Error: {key} file not
+found: {path}`; `ReviewAction._review` raises the same KeyError shape as its
+existing required-inputs check, so judge-awareness (verdict=UNKNOWN) and
+step-failure routing are preserved. Defense-in-depth: `_inject_file_contents`
+now logs a WARNING when it skips a missing `input`/`against` (it previously
+skipped silently — the asymmetry with its logged `OSError` branch was the
+original #18 observation); other keys still skip silently by design since
+they may hold non-path values.
+
+Tests: 11 new (helper unit tests, CLI guard via CliRunner, pipeline action
+guard, injection-warning + no-noise cases). 13 existing tests updated —
+they passed fabricated paths (`slice.md`, `a.md`, `f.md`) to mocked review
+clients and now use real tmp files, which the guard correctly rejected.
+Full gate: ruff clean, format clean, pyright 0 errors, pytest 2112 passed /
+2 skipped.
+
+**Correction to 20260714 (1) below:** its claim that no `143-tasks.*.md`
+existed on disk was a stale snapshot — the file was created minutes later
+by a parallel agent working the same repo, and the review it sourced was
+genuine (verified via timestamps and finding-ID cross-references). Issue
+#18's "observed in the wild" example was retracted on the issue; the code
+gap itself was real regardless and is what this entry fixes. Lesson
+recorded: filesystem facts from earlier in a session decay — re-verify at
+the moment of use, especially before publishing claims.
+
+### Diagnosed field bug: 909 dispatch-artifact fix never released to PyPI
+
+`sq run p5a <slice>` failed in a client repo (grizcam_mobile_ios) at the
+`review template=tasks` step with `missing required input(s): input,
+against` — the exact pre-909 symptom, on a repo confirmed to have current
+guides and no CF-side formatting issue.
+
+**Investigation ruled out, in order:** (1) `p5a.yaml`/`p4.yaml` custom
+pipeline definitions — both correctly use `tasks:`/`design:` phase-step
+shorthand, not raw `dispatch:`, so they get the full 909 post-condition
+guard; (2) context-forge slice-plan parsing — slice 143's checklist line
+(`4. [ ] **(143) ...** — desc`) matches `PLAN_INDEXED_RE` cleanly, confirmed
+by testing the actual line against the regex; (3) CF worktree scoping — not
+in use in the affected repo; (4) a race between the two `resolve_slice_info`
+calls (dispatch's post-condition check and the review step's input
+resolution) — ruled out, `cf list tasks --json` does a live filesystem scan
+with no caching on either side.
+
+**Root cause:** the installed `sq` was `squadron-ai 0.6.2` via `uv tool
+install` — a real PyPI release, not a dev/editable checkout. Confirmed by
+grepping the installed wheel's `executor.py` directly: zero references to
+`_check_dispatch_artifact_written` / `expected_artifact_kind`. The 909 fix
+(commit `49b8522`) merged to `main` on 20260710 but `pyproject.toml`'s
+`version` was never bumped past `0.6.2` and no release was cut — so every
+consulting client running `squadron-ai` from PyPI has been on pre-909
+squadron the entire time, including this session's own local install
+(chalked up as "we should release 0.6.2 anyway" rather than investigated
+further, since the fix and its tests are confirmed correct on `main`).
+
+Slice 143 itself is legitimately `needs-design`/`not-started` — no
+`143-tasks.*.md` exists on disk, consistent with a dispatch agent turn that
+ended without writing the file (same failure shape as the original 303
+repro that motivated 909). On a release containing 49b8522, this would now
+fail loudly at the dispatch step with an accurate message instead of
+surfacing one step later at review.
+
+**Action:** prepared a 0.7.0 release (see below) rather than a 0.6.3 patch
+— `[Unreleased]` already contained a full minor's worth of shipped-but-
+unreleased feature work (judge templates, judge enforcement) alongside the
+three bug fixes, so a minor bump is correct per semver even though this
+investigation only needed the fix half.
+
+### Prepared release 0.7.0
+
+Bumped `pyproject.toml` version `0.6.2` → `0.7.0`, re-ran `uv lock` to sync
+`uv.lock`, converted `CHANGELOG.md`'s `[Unreleased]` section to `## [0.7.0]
+- 20260714` (left a fresh empty `[Unreleased]` above it). Verified `uv
+build` produces a clean sdist/wheel and that the built wheel actually
+contains the 909 fix (`unzip -p ... | grep _check_dispatch_artifact_written`
+→ 2 matches). Full test suite green: 2101 passed, 2 skipped, 0 failed — no
+regressions since the last recorded baseline. Committed and tagged `v0.7.0`;
+`pypi` publish deliberately deferred as a separate, explicit step.
+
+## 20260712
+
+### Slice 906: Quickstart and Onboarding Documentation — Complete
+
+New `docs/QUICKSTART.md`, plus two additive links from `README.md`. Docs-only
+slice; no code changes. Branch `906-slice.quickstart-and-onboarding-documentation`
+merges to `main` on completion, `codeReview: none` (no-code slice, gate
+bypassed via `cf check --set-review-none 906`).
+
+**Design history — two corrections, both discovered by re-verifying live
+state instead of trusting the prior draft:**
+
+1. The original design (20260513) assumed a manual multi-step install
+   narrative (npm → `cf init` → pipx → `sq install-commands` → provider auth)
+   that slice 908 (`sq setup`) has since superseded. Rebuilt 20260711 to lead
+   with `install.sh` → `sq setup` as the canonical path.
+2. That rebuild *itself* turned out to misdescribe the current README: it
+   assumed README's Install section still needed the `curl | sh` one-liner
+   added (908 had already landed it) and that Quickstart needed replacing
+   with an install-pointer (Quickstart is actually a different, already-good
+   section — SDK auth, review-a-design, review-tasks-then-code — unrelated to
+   install steps). Corrected 20260711 after actually reading the live README
+   top to bottom rather than reasoning from the stale design.
+3. During Phase 6 itself, Task 1's re-verification step (built into the task
+   file specifically to catch further drift) found a third error: the design
+   claimed `sq run` was undocumented anywhere in README. It is documented —
+   a `## Pipelines (sq run)` section already exists. "Your first pipeline
+   run" was written as a short bridge/pointer (matching the "Your first
+   review" section's treatment), not as net-new content.
+
+**What QUICKSTART actually covers** (the real, narrower gap after all three
+corrections): how to read `sq doctor`/`sq setup --check-only` output
+(undocumented anywhere before this), the full six-profile provider matrix
+(README's existing Quickstart only documents `sdk` auth), and pointers to
+README/`docs/PIPELINES.md` for review and pipeline walkthroughs rather than
+duplicating them.
+
+**Verification (20260712):** `sq doctor -v`, `sq setup --check-only`,
+`sq run --help`, and `BUILT_IN_PROFILES` all captured live and used verbatim
+in QUICKSTART rather than reconstructed from memory. `sq run slice 906
+--dry-run` confirmed QUICKSTART's example command resolves correctly.
+`git diff README.md` confirmed additive-only (two insertions, zero
+deletions). Full gate: ruff clean, pyright 0 errors, pytest 2101 passed / 2
+skipped / 0 failed — matches pre-slice baseline (docs-only change).
+
+**Takeaway for future doc slices:** a slice design's claims about "what's
+currently documented" or "what's currently missing" are load-bearing facts
+that decay fast — this slice needed re-verification at three separate
+points (initial rebuild, second rebuild, and again inside Phase 6's own
+task list) before its scope was actually correct. Building an explicit
+"re-verify live state" phase into the task file (rather than trusting the
+design as ground truth) is what caught the third error; worth carrying that
+pattern into future docs-only slices.
+
+---
+
+## 20260710
+
+### Slice 909: Pipeline Phase-Step Correctness — Implementation Complete
+
+**Phase 6 complete.** All 18 tasks implemented across three commits, C → B → A: `85f2e03` (Part C, review-code scope guard, #17), `ac01838` (Part B, review frontmatter project name, #16), `49b8522` (Part A, dispatch artifact post-condition, #15). Full suite passes (2101 passed, 2 skipped), ruff clean, pyright clean.
+
+**Part A surfaced a real pre-existing bug while wiring T12/T13, not a design flaw.** `PhaseStepType.expand()` (`steps/phase.py`) hardcoded a bare `"{slice}"` placeholder into the `cf-op(set_slice)` and `review` action tuples. That's correct for ordinary single-slice pipelines, but for `each`-loop pipelines (`design-batch.yaml`, `app.yaml`) the loop's `as: slice` binding puts the *whole slice record* into that variable — so `"{slice}"` resolved to a stringified Python dict instead of the numeric index. This silently corrupted `cf-op(set_slice)` (caught downstream as a `ContextForgeError`) and crashed the `review` action's `int(str(slice_param))` call outright — the identical crash my new post-condition hit immediately, since it reads `slice` on every dispatch rather than only when a review happens to run. Traced this live with the PM (three rounds of investigate-then-report, no guessing) before fixing: root cause was `expand()` receiving the step's *unresolved* config and never reading its own `slice:` key (both `design-batch.yaml` and `app.yaml` already wrote `slice: "{slice.index}"`, correctly anticipating this — it just was never consulted). Fix: `expand()` now uses `cfg.get("slice", "{slice}")` so a step-level override flows into every action tuple that references a slice, resolved later via the pre-existing (and already-correct) dotted-placeholder mechanism. Zero regression for the common case (no `slice` key in step config → identical `"{slice}"` fallback as before).
+
+**Also fixed while chasing test fallout: `execute_pipeline()` never accepted a `runs_dir` parameter.** Any internal `StateManager()` call (the pre-existing SDK-resume-seed code, and my new post-condition) silently read from the *default* runs directory regardless of what the caller configured — a second latent bug, invisible before because the SDK-resume path is rarely hit in tests and never combined with an artifact check. Threaded `runs_dir` through `execute_pipeline` and its loop/each/fan-out helpers; updated the CLI (`run.py`) and 12 pre-existing integration tests across 4 files that broke as a direct, expected consequence of the new post-condition (their mocked dispatch actions never wrote real files, and their `cf_client` mocks couldn't resolve real slices — both now genuinely required).
+
+**A real `sq review code 909 -v` run (not fabricated — this is the fixed Part C path) found four legitimate issues, addressed before closing the slice:** an unhandled `ValueError` in the post-condition's `int()` conversion (now caught, tested with a new case simulating an unresolved `"{slice.index}"` placeholder reaching the check); a swallowed exception in `review_arch`'s project-name resolution with no logging (now logged at WARNING per the exception-handling convention); a DRY violation — `_phase_artifact_cf_client`/`_artifact_writing_action` duplicated verbatim across 4 test files (extracted to `tests/pipeline/conftest.py`); and a scattered `"project-documents/user/tasks/"` magic-string prefix across 3 source files (extracted to a new `TASKS_DIR` constant in `squadron.review.persistence`). One flagged finding (a supposedly misleading error message in `review_code`'s scope guard) was investigated and determined to be a false positive — the code path it described is unreachable, since `_resolve_slice_number` already exits earlier with its own correct "no slice with index N" message.
+
+**Verification Walkthrough updated in the slice design** with actual commands run and real output (not the placeholder command text from Phase 4) — see `909-slice.pipeline-phase-step-correctness.md`. Part A's live-agent repro was not re-run interactively (would require a real dispatch); the automated `TestDispatchArtifactPostCondition` suite (9 cases) exercises the identical code path with mocked dispatch actions standing in, which is documented as the verification tier used, with an explicit note on what a fully-live re-verification would look like.
+
+**Next:** merge slice 909 to main; close issues #15, #16, #17. Then resume slice 303 Phase 5 past its original failure point — the fix that unblocks it (Part A's post-condition) is now in place.
+
+---
+
+## 20260709
+
+### Slice 909: Pipeline Phase-Step Correctness — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/909-tasks.pipeline-phase-step-correctness.md` (18 tasks after task review, 274 lines) from the review-addressed design. Tasks ordered C → B → A per the design's cheapest-first sequencing, with test-with pairing throughout and a commit task closing each part.
+
+**Grounding a trace before writing Part A tasks changed Part A's mechanics — and the design.** Before authoring tasks I traced the executor to answer "where does the artifact post-condition actually fire?" The design said "the phase step verifies after dispatch completes." The trace proved that's not mechanically possible: `PhaseStepType.expand()` (`steps/phase.py:96`) returns a flat action list and is **never consulted again** — the phase step has no post-expansion runtime hook. The only seam that runs right after a phase step's `dispatch` action is the per-action tail of `_execute_step_once` (`executor.py` ~898-943). So the honest split is: `expected_artifact_kind` is a **property on `PhaseStepType`** (declaration of what the phase owns — legitimately phase-step knowledge), but the **check runs in the executor**, keyed on `action_type == "dispatch"`, reading that property. Reconciled the design accordingly (Approach, chosen-home decision, Part A files list now name `executor.py` as a modified file, not just `phase.py`) so the two documents don't contradict.
+
+**Two more grounded facts the tasks now carry (no guessing left for the junior AI):**
+- **Run-start timestamp** for the stale-artifact mtime check is NOT on `ActionContext`; it lives in `RunState.started_at` (`state.py:126`), loadable via `StateManager().load(run_id).started_at` (precedent: `executor.py:603-606`). T12 makes this an explicit task.
+- **Expected-path resolution** reuses `resolve_slice_info(context.cf_client, int(slice)).task_files` / `.design_file` — the exact call the review action already makes at `review.py:264`; `ActionContext` exposes `cwd`, `params["slice"]`, and `cf_client` (a `CfClientProtocol` with the three methods `resolve_slice_info` needs).
+
+**Test-with coverage of the failure-mode table:** T14 enumerates all six Part A cases (present+fresh → pass, absent → fail, stale-mtime → fail, unresolvable-path → fail+WARNING, OSError → fail+log, `implement`/kind-`None` → skipped) plus a "generic dispatch unaffected" assertion. Part B's T5/T8 use real-shaped `cf get --json` fixtures (must include `name`) per the fixture-realism rule; Part C's T2 asserts the review client is **not called** for missing/malformed scope — proving the fabricated-review path is closed.
+
+**Next:** Phase 6 (Implementation) for slice 909, not yet started. Then resume slice 303 Phase 5 past its original failure point.
+
+---
+
+### Slice 909: Pipeline Phase-Step Correctness — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/909-slice.pipeline-phase-step-correctness.md` on branch `909-slice.pipeline-phase-step-correctness`, from the slice-plan entry in `900-slices.maintenance-and-refactoring.md`. Three independent bugs bundled into one maintenance slice (all surfaced during slice 303 planning; all share a silent-success failure signature): Part A dispatch artifact post-condition (#15, Medium), Part B review-frontmatter project literal (#16, Low), Part C review-code scope guard (#17, Medium).
+
+**Grounded every anchor against on-disk code before designing, not the issue text alone:**
+- **Part A:** confirmed `PhaseStepType.expand()` (`steps/phase.py:96`) emits a bare `("dispatch", {"model": model})` with **no** expected-output attached — so the memory-carried claim "the phase step knows the expected artifact" is *aspirational*: the phase→artifact mapping is conceptually known but materialized nowhere. Confirmed both dispatch success paths (`dispatch.py:198`, `:284`) return `success=True` with only a `_check_cli_error` text scan — no artifact post-condition. Design decision recorded: the post-condition belongs on `PhaseStepType` (which *does* know its phase produces an artifact), NOT in generic `DispatchAction` (must stay usable for bare dispatch steps that write nothing) — rejecting the generic-dispatch home on SRP grounds.
+- **Part B:** verified live that `cf get --json` actually returns `"name": "squadron"` — so the fix has a real source, not a hallucinated one. Confirmed `ProjectInfo` (`context_forge.py:52`) has no `name` field, and that `resolve_slice_info` (`persistence.py:66`) *already* calls `get_project()` and merely discards everything but `arch_file`. Confirmed both review write paths (pipeline `save_review_result` → `actions/review.py:193`; CLI `persistence.py:268`) converge on `format_review_markdown`, so a single-point fix there satisfies interface-parity by construction. The `"project: squadron"` literal (`persistence.py:119`) sits directly beside `slice_name`/`slice_index`, which *are* already data-driven with an `"unknown"` fallback — the literal is the lone inconsistency.
+- **Part C:** confirmed the guard at `review.py:641` is `if slice_number is not None and slice_number.isdigit()`, so a **malformed non-digit** argument falls through identically to a missing one — the fix must cover both, not just the missing case. Confirmed `review_slice`/`review_tasks` already hard-guard (`if not against: raise typer.Exit(code=1)` at `review.py:408-410`, `551-553`); Part C mirrors that exact pattern. Confirmed `--model glm51` → `z-ai/glm-5.1` resolves correctly and is NOT part of the bug.
+
+**Cross-check carried from prior 303 work:** re-confirmed `StepTypeName` has no `COMMIT` member (design/tasks/implement/dispatch/compact/summary/review/each/fan_out/loop/devlog) — `commit` is an action, not a step type, consistent with the 303 loop-body finding.
+
+**Suggested implementation order (in the design):** Part C (isolated CLI guard, mirrors existing pattern) → Part B (small data-threading through a verified source) → Part A (the genuine design work: post-condition home + unattended-question routing) last, so the two easy wins land regardless of Part A's depth.
+
+**Next:** Phase 5 (Task Breakdown) for slice 909, not yet started. Then resume slice 303 Phase 5 past its original failure point.
+
+---
+
+## 20260706
+
+### Slice 303: Judge-Gated Cycle Conventions — Slice Design (Phase 4) Complete
+
+Design document authored at `user/slices/303-slice.judge-gated-cycle-conventions.md`
+on branch `300-planning.judge-gated-cycle-conventions`.
+
+**Central finding:** the judge-gated review→fix→re-review cycle is expressible
+today with **zero new code** — it is `loop` + a judge `review` step + `dispatch`
++ `checkpoint`, all pre-existing. Verified against the real constructs:
+- `LoopCondition.REVIEW_PASS` / `REVIEW_CONCERNS_OR_BETTER` (`executor.py:215`)
+  evaluate the last verdict — and a judge's verdict is the score's threshold
+  projection (slice 301). So "gate on the score" needs no score-aware loop
+  condition.
+- `ExhaustBehavior.CHECKPOINT` (`executor.py:257`) → `PAUSED` StepResult is the
+  observable escalation path when the bound (`loop.max`) is hit without clearing.
+- The `review` step already accepts a step-level `judge:` threshold override
+  (`steps/review.py`) — so **advisory-only = `pass_floor > 100`**, a value not a
+  flag. No new "always-escalate" field.
+- `test-loop.yaml` already ships the exact `loop [dispatch, review] until:
+  review.pass` shape with a *standard* review; the delta to a judge cycle is the
+  template name and `on_exhaust: checkpoint` — data only.
+
+**Deliverables the slice defines (for Phase 6):**
+- `data/pipelines/judge-cycle.yaml` — worked reference pipeline (judge-first
+  shape: pre-loop judge, then `loop [fix, judge]`, `until: review.pass`,
+  `on_exhaust: checkpoint`), gating on `judge.slice-vs-arch`.
+- Structural + three control-flow tests (auto-advance, escalate-at-max,
+  advisory-always-escalates) with a mocked judge score to prove the flow
+  deterministically; one live unattended run to validate the fix prompt.
+- Authoring-guide section covering the bound, exit condition, escalation, the
+  two gating modes, and the optional `commit` body step.
+
+**Scope boundaries recorded:** gate composition (judge + review verdict) is
+slice 304; multi-sample judging is Future Work 1; new `each` sources are out of
+scope (only `cf.unfinished_slices` is registered).
+
+**Branch:** `300-planning.judge-gated-cycle-conventions` (created from `main`).
+
+**Next:** Phase 5 (Task Breakdown) for slice 303, then Phase 6 implementation on
+`303-slice.judge-gated-cycle-conventions`.
+
+---
+
+## 20260705
+
+### Slice 302: Design-Phase Judge Templates — Implementation Complete
+
+All 11 tasks (T1–T11) implemented on branch `300-planning.design-phase-judge-templates`.
+
+**What was built:**
+- `data/templates/judge-tasks-vs-slice.yaml` — judge variant of `tasks.yaml`; reuses its evaluation criteria verbatim, swaps the output contract to score+rationale+findings, forbids a verdict summary. `judge: {pass_floor: 78, concerns_floor: 55}`.
+- `data/templates/judge-slice-vs-arch.yaml` — judge variant of `slice.yaml`, same pattern. `judge: {pass_floor: 82, concerns_floor: 60}` (higher floor — architecture alignment is more interpretive ground truth than a concrete task list).
+- `review/template_inputs.py` — two new `TEMPLATE_INPUTS` entries (`judge.tasks-vs-slice`, `judge.slice-vs-arch`), reusing the existing `_tasks_input`/`_design_file`/`_arch_file` source functions unchanged. No prefix-stripping fallback (rejected in the slice design as reintroducing naming-convention dispatch).
+
+**No engine/parser/action changes** — both templates run through the unmodified `ReviewAction._review()` → `run_review_with_profile()` → parser → `enforce_judge()` path built in slice 301/300.
+
+**Tests:** 8 new/extended tests across `test_templates.py` (load + is_judge + threshold differentiation regression guard), `test_template_inputs.py` (resolution + exact-keyset regression), and `test_review_action.py` (T7: rogue model-emitted verdict discarded — confirms `enforce_judge()` never reads `result.verdict`; T8: `TEMPLATE_INPUTS` resolution failure surfaces as `UNKNOWN`/`provenance=judge` via the existing exception handler, not a silent skip). Both new-to-this-slice failure modes needed no new handling code — only new test coverage confirming slice 301's mechanisms already cover them.
+
+**Live-provider verification (T9/T10):** ran both templates against real in-repo artifact pairs via `run_review_with_profile()` directly (openrouter profile, `anthropic/claude-opus-4.5` — the `sdk` profile can't launch from inside an active Claude Code session). `judge.tasks-vs-slice` scored 91.0 reviewing this slice's own task file against its slice design; `judge.slice-vs-arch` scored 86.0 reviewing this slice's design against its architecture doc. Neither run emitted a `## Summary`/verdict line; both produced well-formed `criteria` maps and findings. No prompt revision needed. The slice-vs-arch score (clears `pass_floor=82`) is consistent with the design's already-fixed review findings — the committed human review's `CONCERNS` verdict predates the `d69ee7e` fixes to failure-mode enumeration.
+
+**Full validation:** 2080 passed / 2 skipped (pre-existing, unrelated), `pyright` 0 errors, `ruff check`/`format` clean, `sq review list` shows all 6 templates, no `template_name.startswith("judge.")`-style dispatch found in non-test code.
+
+**Unblocks:** slice 303 (judge-gated cycle conventions) now has two real judges to compose into a pipeline.
+
+---
+
+### Slice 302: Design-Phase Judge Templates — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/302-tasks.design-phase-judge-templates.md` (11 tasks, 318 lines) from the reviewed slice design.
+
+**Found and fixed a defect in the reviewed slice design before writing tasks:** the LLD's Success Criteria #3 and Verification Walkthrough step 3 assumed `sq review <judge-template-name>` was invokable from the CLI. Checked the actual CLI (`src/squadron/cli/commands/review.py`): `sq review` exposes exactly four Typer subcommands (`slice`/`arch`/`tasks`/`code`), each hardcoded to its own template name — there is no generic template-name argument. Judge templates are reachable today only via the pipeline `review` step (arbitrary `template:` config) or by calling `run_review_with_profile()` directly. Raised this to the PM (AskUserQuestion) rather than silently patching it; PM chose to drop the CLI claim from scope and correct the walkthrough to invoke the review client directly instead of a nonexistent CLI form. Both fixes committed to the slice design (`00d14ed`) before task breakdown began.
+
+**Task structure:** author `judge-tasks-vs-slice.yaml` (T1) → test (T2) → author `judge-slice-vs-arch.yaml` (T3) → test (T4) → `TEMPLATE_INPUTS` registry entries for both (T5) → test, including updating the existing exact-keyset regression test (T6) → two tests for the failure modes newly introduced by this slice: rogue model-emitted verdict discarded (T7) and `TEMPLATE_INPUTS` resolution failure → `UNKNOWN` (T8), both confirming slice 301's existing enforcement/exception paths cover these cases with no new code → live-provider verification runs for each template (T9, T10), per the Risk Assessment's flagged prompt-quality-is-unverifiable-by-unit-test-alone risk → full validation gate (T11).
+
+**Key discipline carried from the LLD:** judge templates reuse their standard counterpart's evaluation criteria verbatim — only the output contract changes (score+rationale+findings, no verdict). Default thresholds are deliberately different per template (`tasks-vs-slice`: 78/55; `slice-vs-arch`: 82/60, harder to auto-pass — weaker/more interpretive ground truth). `is_judge` and the `TEMPLATE_INPUTS` dict remain the only dispatch signals; the `judge.` name prefix is human-readable only (T11 greps the diff to confirm no naming-convention dispatch leaked in).
+
+**Next:** Phase 6 (Implementation) for slice 302, not yet started.
+
+---
+
+### Slice 302: Design-Phase Judge Templates — Slice Design Complete
+
+**Phase 4 complete.** Created `project-documents/user/slices/302-slice.design-phase-judge-templates.md` on planning branch `300-planning.design-phase-judge-templates`, following the slice plan entry in `300-slices.eval-actions-llm-as-judge-scoring.md`.
+
+**Grounded in real code, not the plan's sketch alone:** read `templates/__init__.py` (YAML loader, `judge:`/`is_judge` from 301), `data/templates/{slice,tasks}.yaml` (the two standard templates being adapted), `template_inputs.py` (`TEMPLATE_INPUTS` registry — keyed by exact template name, so judge templates need their own entries), `parsers.py` (`_extract_score`/`_extract_criteria` — confirmed these are lenient markdown-line regexes, not a JSON/schema mechanism; `_extract_criteria`'s docstring explicitly flags "the structured-output/JSON variant is slice 302" — but no schema-enforcement mechanism exists in the engine, so the architecture's "structured-output constraint" is realized at the prompt level only), and `review_client.py` (500KB injection cap, unaffected by single-artifact judging).
+
+**Design:** two new built-in template YAML files (`judge-slice-vs-arch.yaml`, `judge-tasks-vs-slice.yaml`) reusing each standard template's evaluation criteria verbatim, swapping the output contract to score+rationale+findings (via the existing `criteria:` block, no new parser target) and explicitly forbidding a verdict summary. Plus two new `TEMPLATE_INPUTS` entries reusing the existing `_design_file`/`_arch_file`/`_tasks_input` source functions unchanged. No engine, parser, or action changes — matches the architecture's "no new engine changes" commitment for this slice.
+
+**Key decisions:** `judge.` name prefix is human-readable only, never a dispatch signal (`is_judge`/`judge:` block presence remains the only signal, per 301's precedent and the project's no-label-as-structure rule); differentiated default thresholds per ground-truth strength (`tasks-vs-slice`: pass_floor=78/concerns_floor=55, stronger ground truth; `slice-vs-arch`: pass_floor=82/concerns_floor=60, more interpretive, escalates more readily), consistent with the architecture's "bubble up the hard calls" principle; rejected a judge→standard template-name-stripping fallback in `TEMPLATE_INPUTS` as reintroducing naming-convention dispatch.
+
+**Flagged risk:** prompt quality (does the model actually skip the verdict, does score-with-rationale reduce anchoring) is unverifiable by unit test alone — walkthrough step 3 and the Risk Assessment call for at least one live-provider run per template during implementation, not just mocked tests.
+
+**Next:** Phase 5 (Task Breakdown) for slice 302, not yet started.
+
+---
+
+### Slice 301: Judge Enforcement Layer — Implementation Complete
+
+**Phase 6 complete.** Implemented all 13 tasks from `301-tasks.judge-enforcement-layer.md` on branch `301-slice.judge-enforcement-layer` (created from `main` after merging the planning branch).
+
+**What shipped:** `ReviewTemplate.judge: dict | None` + `is_judge` property (identified by `judge:` YAML block presence, not naming convention); new `pipeline/actions/judge.py` — `Provenance` StrEnum (`judge`/`review`), `JudgeThresholds` dataclass with `derive_verdict()`, `resolve_thresholds()` (per-key merge: step override → template default → module constant, conservative defaults `pass_floor=75.0`/`concerns_floor=50.0`), and `enforce_judge()` (pure function — logger passed in, never reads `result.verdict`, returns `UNKNOWN` + WARNING log for absent/out-of-range score); `judge:` step-level override passthrough in `ReviewStepType.expand()`; enforcement wired into `ReviewAction._review()` for the success path and into both of `execute()`'s exception handlers (via a best-effort template re-lookup so a judge-template failure still surfaces as `verdict="UNKNOWN", provenance="judge"` rather than silently passing).
+
+**Caveat found during T11/T12:** existing `MagicMock(spec=ReviewTemplate)` test helpers in `test_review_action.py`/`test_review_action_integration.py` auto-mocked `is_judge` (a real `@property` on the spec) as a truthy `Mock`, silently turning every pre-existing review-action test into a "judge" test. Fixed by explicitly setting `mock.judge = None; mock.is_judge = False` on the shared helper. One pre-301 assertion (`provenance is None`) was updated to `"review"`, since this slice makes provenance non-`None` universally, not just for judges.
+
+**Validation:** full suite 2066 passed/2 skipped, `pyright` 0 errors, `ruff check`/`format --check` clean, all 5 LLD walkthrough commands verified against real output, checkpoint `_TRIGGER_THRESHOLDS` confirmed to already include `UNKNOWN` in both `ON_CONCERNS`/`ON_FAIL` (no change needed), grep for naming-convention dispatch leaks found none.
+
+**Slice 301 marked `complete`** in both its own slice-design frontmatter and the initiative slice-plan checklist. CHANGELOG entry added under `[Unreleased]`.
+
+**Next:** slice 302 (Design-Phase Judge Templates) — first real judge YAML templates against this enforcement contract; no engine changes expected.
+
+---
+
+## 20260704
+
+### Slice 301: Judge Enforcement Layer — Task Breakdown Complete
+
+**Phase 5 complete.** Created `project-documents/user/tasks/301-tasks.judge-enforcement-layer.md` (225 lines, 13 tasks) from `301-slice.judge-enforcement-layer.md`.
+
+**Task structure:** `ReviewTemplate.judge`/`is_judge` (T1–T2) → new `pipeline/actions/judge.py` module built incrementally — `Provenance`/`JudgeThresholds` (T3–T4), `resolve_thresholds` (T5–T6), `enforce_judge` (T7–T8) — each paired immediately with its test task → step-level `judge:` passthrough in `ReviewStepType.expand()` (T9–T10) → enforcement wired into `ReviewAction._review()` including the judge-exception path (T11–T12) → full validation gate (T13). Test-with pattern applied throughout; `judge.py`'s three functions are each independently tested before `ReviewAction` integration.
+
+**Key discipline carried from the LLD:** `enforce_judge()` must stay a pure function (logger passed in, no global state); it never reads `result.verdict` — T8 explicitly tests a mismatched-verdict `ReviewResult` to prove score wins. `is_judge` is the only judge-detection signal (T13 greps the diff for naming-convention dispatch). Threshold resolution is per-key (step → template → module constant), not all-or-nothing.
+
+**Branch:** `300-planning.judge-enforcement-layer` (Phase 5 planning work under initiative 300, per branch-naming rules).
+
+**State:** Task breakdown ready for Project Manager approval. Next: Phase 6 implementation of slice 301 on branch `301-slice.judge-enforcement-layer`.
+
+---
+
