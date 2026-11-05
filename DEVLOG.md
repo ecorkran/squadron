@@ -11,6 +11,10 @@ A lightweight, append-only record of development activity. Newest entries first.
 
 ## 20261104
 
+### Release 0.24.22
+
+- **Contents:** the 0.24.21 changes. 0.24.21's tag CI failed on `test_max_cost_cannot_be_set_through_a_param`: CI's forced colour and width split `--max-cost` inside Rich's error box, so the substring check missed it. The test now checks the exit code and `reserved_param_error`. Nothing was published for 0.24.21.
+
 ### Release 0.24.21
 
 - **Contents:** per-run cost cap, `sq run --max-cost` and pipeline `max_cost_usd` (#241); `sq run --io-dir` and the guarded `commit` step (#292). Unblocks amoeba slices 180 and 184–186.
