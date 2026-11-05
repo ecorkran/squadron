@@ -1729,6 +1729,55 @@ class TestReviewUsageRecord:
     @patch(f"{_P}.run_review_with_profile")
     @patch(f"{_P}.get_template")
     @patch(f"{_P}.load_all_templates")
+    async def test_review_result_stamps_the_effort_sent(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        from squadron.pipeline.usage_capture import EFFORT_SENT_KEY
+
+        review = _make_review_result()
+        review.effort = Effort.high
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = review
+
+        result = await ReviewAction().execute(_make_context(cwd=str(tmp_path)))
+
+        assert result.metadata[EFFORT_SENT_KEY] == "high"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.effort_sent_by_profile", return_value=Effort.xhigh)
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_failed_review_without_telemetry_stamps_the_effort_sent(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_effort: MagicMock,
+        tmp_path: Path,
+    ) -> None:
+        from squadron.pipeline.usage_capture import EFFORT_SENT_KEY
+        from squadron.providers.base import USAGE_KEY
+        from squadron.providers.errors import ProviderError
+
+        (tmp_path / "project-documents/user/reviews").mkdir(parents=True)
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.side_effect = ProviderError(_PROVIDER_FAILURE)
+
+        result = await ReviewAction().execute(_make_context(cwd=str(tmp_path)))
+
+        assert result.success is False
+        assert USAGE_KEY not in result.metadata
+        assert result.metadata[EFFORT_SENT_KEY] == "xhigh"
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
     async def test_missing_capture_is_a_clear_error(
         self,
         mock_load: MagicMock,

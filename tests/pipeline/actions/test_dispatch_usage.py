@@ -13,11 +13,11 @@ from squadron.core.models import Effort, Message
 from squadron.core.usage import CostBasis, RunTelemetry, TokenUsage, UsageRecord
 from squadron.pipeline.actions.dispatch import DispatchAction
 from squadron.pipeline.models import ActionContext, ActionResult
-from squadron.pipeline.resolver import ResolvedModel
+from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
 from squadron.pipeline.sdk_session import DispatchStalledError, SDKExecutionSession
 from squadron.pipeline.sdk_turns import SessionReply
 from squadron.pipeline.state import StateManager
-from squadron.pipeline.usage_capture import UsageCapture
+from squadron.pipeline.usage_capture import EFFORT_SENT_KEY, UsageCapture, action_effort_sent
 from squadron.providers.base import COST_USD_KEY, TURNS_KEY, USAGE_KEY
 from squadron.providers.errors import ProviderAPIError
 from tests.pipeline.actions.dispatch_helpers import make_agent_mock, make_context, make_registry
@@ -189,6 +189,7 @@ async def test_session_effort_mismatch_records_session_effort_and_warns_once(
             results.append(await DispatchAction().execute(context))
 
     assert all(_usage(r).effort == Effort.medium.value for r in results)
+    assert all(r.metadata[EFFORT_SENT_KEY] == Effort.medium.value for r in results)
     assert len([r for r in caplog.records if "#216" in r.getMessage()]) == 1
 
 
@@ -206,6 +207,7 @@ async def test_session_effort_match_is_recorded_without_warning(
         )
 
     assert _usage(result).effort == Effort.high.value
+    assert result.metadata[EFFORT_SENT_KEY] == Effort.high.value
     assert not caplog.records
 
 
@@ -219,3 +221,108 @@ async def test_missing_capture_is_a_clear_error() -> None:
 
     assert result.success is False
     assert result.error is not None and "usage capture" in result.error
+
+
+# --- effort_sent stamp on action metadata (slice 420 D5) ---
+
+_CLI_ERROR = 'API Error: 500 {"type":"error"}'
+
+
+def _failing_agent(raised: Exception) -> AsyncMock:
+    async def _handle(_msg: object) -> AsyncIterator[Message]:
+        raise raised
+        yield  # pragma: no cover - makes this an async generator
+
+    agent = AsyncMock()
+    agent.handle_message = _handle
+    return agent
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("effort", [Effort.low, None])
+async def test_one_shot_success_stamps_the_alias_effort(effort: Effort | None) -> None:
+    metadata: dict[str, object] = {TURNS_KEY: 1, USAGE_KEY: TokenUsage(prompt=1, completion=1)}
+
+    result, _ = await _run_one_shot(
+        make_agent_mock("done", metadata=metadata), _one_shot_context(effort)
+    )
+
+    assert action_effort_sent(result.metadata, None) is effort
+
+
+@pytest.mark.asyncio
+async def test_one_shot_provider_error_without_telemetry_still_stamps() -> None:
+    result, _ = await _run_one_shot(
+        _failing_agent(ProviderAPIError("boom", status_code=500)), _one_shot_context()
+    )
+
+    assert result.success is False
+    assert USAGE_KEY not in result.metadata
+    assert result.metadata[EFFORT_SENT_KEY] == "low"
+
+
+@pytest.mark.asyncio
+async def test_one_shot_cli_error_result_stamps() -> None:
+    result, _ = await _run_one_shot(make_agent_mock(_CLI_ERROR), _one_shot_context())
+
+    assert result.success is False
+    assert result.metadata[EFFORT_SENT_KEY] == "low"
+
+
+@pytest.mark.asyncio
+async def test_session_success_stamps_the_session_effort() -> None:
+    session = _session(SessionReply(text="ok", telemetry=RunTelemetry(turns=1)))
+    session.effort = Effort.medium
+
+    result = await DispatchAction().execute(_session_context(session, effort=Effort.high))
+
+    assert result.metadata[EFFORT_SENT_KEY] == "medium"
+
+
+@pytest.mark.asyncio
+async def test_session_provider_error_without_telemetry_still_stamps() -> None:
+    session = _session()
+    session.effort = Effort.high
+    session.dispatch.side_effect = ProviderAPIError("boom", status_code=500)
+
+    result = await DispatchAction().execute(_session_context(session, effort=Effort.high))
+
+    assert result.success is False
+    assert USAGE_KEY not in result.metadata
+    assert result.metadata[EFFORT_SENT_KEY] == "high"
+
+
+@pytest.mark.asyncio
+async def test_session_cli_error_result_stamps() -> None:
+    session = _session(SessionReply(text=_CLI_ERROR, telemetry=RunTelemetry(turns=1)))
+    session.effort = Effort.high
+
+    result = await DispatchAction().execute(_session_context(session, effort=Effort.high))
+
+    assert result.success is False
+    assert result.metadata[EFFORT_SENT_KEY] == "high"
+
+
+@pytest.mark.asyncio
+async def test_set_model_failure_stamps() -> None:
+    session = _session()
+    session.effort = Effort.high
+    session.set_model.side_effect = ProviderAPIError("no such model", status_code=404)
+
+    result = await DispatchAction().execute(_session_context(session, effort=Effort.high))
+
+    assert result.success is False
+    assert result.metadata[EFFORT_SENT_KEY] == "high"
+    session.dispatch.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failure_before_resolution_carries_no_stamp() -> None:
+    session = _session()
+    context = _session_context(session)
+    context.resolver.resolve.side_effect = ModelResolutionError("no model")  # type: ignore[attr-defined]
+
+    result = await DispatchAction().execute(context)
+
+    assert result.success is False
+    assert EFFORT_SENT_KEY not in result.metadata

@@ -66,6 +66,7 @@ from squadron.pipeline.usage_capture import (
     read_effort_sent,
     require_capture,
     stamp,
+    stamp_effort_sent,
 )
 from squadron.project_rules.errors import ProjectRulesError
 from squadron.providers.base import (
@@ -98,6 +99,12 @@ _CLI_ERROR_PREFIX = "API Error:"
 def _optional_str(value: object) -> str | None:
     """``None`` stays ``None``; anything else is its string form."""
     return None if value is None else str(value)
+
+
+def _stamped(result: ActionResult, effort_sent: Effort | None) -> ActionResult:
+    """``result`` with the effort the call sent on its metadata (slice 420 D5)."""
+    stamp_effort_sent(result.metadata, effort_sent)
+    return result
 
 
 def _check_cli_error(response_text: str) -> ActionResult | None:
@@ -436,6 +443,8 @@ class DispatchAction:
             # An unknown git state ends the run; it is never one item's dispatch failure.
             raise
         except ProviderError as exc:
+            # Not stamped with effort_sent: the effort is a local of the dispatch path
+            # that raised, out of reach here (slice 420 D5).
             return self._provider_failure(context, exc, None, None)
         except (ModelResolutionError, ModelPoolNotImplemented, KeyError) as exc:
             return ActionResult(
@@ -465,6 +474,7 @@ class DispatchAction:
                 error=str(exc),
             )
         except Exception as exc:
+            # Not stamped with effort_sent, for the same reason as ProviderError above.
             _logger.exception("dispatch: unexpected error in step %s", context.step_name)
             return ActionResult(
                 success=False,
@@ -663,14 +673,15 @@ class DispatchAction:
         # Resolved before the model switch: a prompt file that cannot be read fails the
         # step first (slice 949 D2). Off the event loop, because it reads files.
         resolved_prompt = await asyncio.to_thread(self._resolve_prompt, context)
+        # Known before the switch so a failed switch is still attributed (slice 420 D5).
+        effort_sent = capture.effort_for_session(resolved, session.effort)
         try:
             await session.set_model(model_id)
         except ProviderError as exc:
             alias = action_model or step_model or model_id
             named = ProviderError(f"model {alias}: {exc}")
-            return self._provider_failure(context, named, None, None)
+            return _stamped(self._provider_failure(context, named, None, None), effort_sent)
 
-        effort_sent = capture.effort_for_session(resolved, session.effort)
         started = time.monotonic()
         try:
             reply = await session.dispatch(resolved_prompt.text)
@@ -688,7 +699,8 @@ class DispatchAction:
                     run_id=context.run_id,
                     step_name=context.step_name,
                 )
-            return self._provider_failure(context, exc, record, resolved_prompt)
+            failure = self._provider_failure(context, exc, record, resolved_prompt)
+            return _stamped(failure, effort_sent)
         record = capture.record_from_telemetry(
             resolved, reply.telemetry, started=started, model=model_id, effort_sent=effort_sent
         )
@@ -696,6 +708,7 @@ class DispatchAction:
 
         if error_result := _check_cli_error(response_text):
             stamp(error_result.metadata, record)
+            stamp_effort_sent(error_result.metadata, effort_sent)
             error_result.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
             return error_result
 
@@ -715,6 +728,7 @@ class DispatchAction:
             "project_rules": sdk_native_record(),
         }
         stamp(metadata, record)
+        stamp_effort_sent(metadata, effort_sent)
         result = ActionResult(
             success=True,
             action_type=self.action_type,
@@ -964,6 +978,7 @@ class DispatchAction:
                 usage_metadata,
             )
         except ProviderError as exc:
+            effort_sent = read_effort_sent(usage_metadata)
             record = None
             if exc.telemetry is not None:
                 record = capture.record_from_telemetry(
@@ -971,19 +986,22 @@ class DispatchAction:
                     exc.telemetry,
                     started=started,
                     model=model_id,
-                    effort_sent=read_effort_sent(usage_metadata),
+                    effort_sent=effort_sent,
                 )
-            return self._provider_failure(context, exc, record, resolved_prompt)
+            failure = self._provider_failure(context, exc, record, resolved_prompt)
+            return _stamped(failure, effort_sent)
+        effort_sent = read_effort_sent(usage_metadata)
         record = capture.record_from_message(
             resolved,
             usage_metadata,
             started=started,
             model=model_id,
-            effort_sent=read_effort_sent(usage_metadata),
+            effort_sent=effort_sent,
         )
 
         if error_result := _check_cli_error(response_text):
             stamp(error_result.metadata, record)
+            stamp_effort_sent(error_result.metadata, effort_sent)
             error_result.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
             return error_result
 
@@ -1000,6 +1018,7 @@ class DispatchAction:
             **tool_telemetry,
         }
         stamp(metadata, record)
+        stamp_effort_sent(metadata, effort_sent)
         if outcome.fail_reason is not None:
             _logger.warning("Dispatch step '%s' failed: %s", context.step_name, outcome.fail_reason)
             return ActionResult(

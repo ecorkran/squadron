@@ -65,30 +65,30 @@ revision_number: 2
 **Commit**: `feat: add effort_sent action stamp and strict readers`
 
 ## Task 3: Stamp effort in dispatch results (D5) — Effort 3
-- [ ] In `pipeline/actions/dispatch.py`, call `stamp_effort_sent` with the value passed to the usage capture (`effort_sent`) at each result built after the effort is known:
-  - [ ] SDK-session path: the success metadata (beside `"profile": "sdk-session"`), the `_check_cli_error` result, and the `ProviderError` result from `session.dispatch`
-  - [ ] one-shot path: the success metadata (beside `"profile": profile_name`), the `_check_cli_error` result, and the `ProviderError` result
-  - [ ] the `set_model` failure result: move the `effort_sent = capture.effort_for_session(...)` line above `session.set_model`, so the effort is known when it fails
-  - [ ] `_provider_failure` stays unchanged. Its callers at the sites above stamp the returned `result.metadata`, because only they hold the effort
-- [ ] Not stamped: failures before resolution; the outer `except ProviderError` and `except Exception` handlers in `execute`, where the effort is a local of `_dispatch` and out of reach. Add a comment at the outer handlers saying so. D5 in the slice design already states this limit
-- [ ] Tests in `tests/pipeline/actions/test_dispatch_usage.py`:
-  - [ ] SDK-session dispatch: `metadata["effort_sent"]` equals the session effort (extend the existing mismatch and match tests)
-  - [ ] one-shot dispatch: equals the alias effort; `None` when the alias sets none
-  - [ ] one-shot and session `ProviderError` with no telemetry: `effort_sent` present, no `UsageRecord`
-  - [ ] `_check_cli_error` result carries it
-  - [ ] `set_model` failure: `effort_sent` present
-  - [ ] failure before resolution: no `effort_sent` key
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `pipeline/actions/dispatch.py`, call `stamp_effort_sent` with the value passed to the usage capture (`effort_sent`) at each result built after the effort is known:
+  - [x] SDK-session path: the success metadata (beside `"profile": "sdk-session"`), the `_check_cli_error` result, and the `ProviderError` result from `session.dispatch`
+  - [x] one-shot path: the success metadata (beside `"profile": profile_name`), the `_check_cli_error` result, and the `ProviderError` result
+  - [x] the `set_model` failure result: move the `effort_sent = capture.effort_for_session(...)` line above `session.set_model`, so the effort is known when it fails
+  - [x] `_provider_failure` stays unchanged. Its callers at the sites above stamp the returned `result.metadata`, because only they hold the effort
+- [x] Not stamped: failures before resolution; the outer `except ProviderError` and `except Exception` handlers in `execute`, where the effort is a local of `_dispatch` and out of reach. Add a comment at the outer handlers saying so. D5 in the slice design already states this limit
+- [x] Tests in `tests/pipeline/actions/test_dispatch_usage.py`:
+  - [x] SDK-session dispatch: `metadata["effort_sent"]` equals the session effort (extend the existing mismatch and match tests)
+  - [x] one-shot dispatch: equals the alias effort; `None` when the alias sets none
+  - [x] one-shot and session `ProviderError` with no telemetry: `effort_sent` present, no `UsageRecord`
+  - [x] `_check_cli_error` result carries it
+  - [x] `set_model` failure: `effort_sent` present
+  - [x] failure before resolution: no `effort_sent` key
+- [x] Success: tests pass; ruff and pyright clean
 
 ## Task 4: Stamp effort in summary results (D5) — Effort 2
-- [ ] In `pipeline/actions/summary.py`, call `stamp_effort_sent` at each result-metadata site that already calls `stamp` (SDK-session success, one-shot success, failure paths), with the value given to the capture
-- [ ] Tests in `tests/pipeline/actions/test_summary.py` (existing effort tests live in `tests/pipeline/test_effort_plumbing.py`; reuse their setup): session summary stamp equals the session effort; one-shot equals the alias effort; failed summary with no telemetry still carries the stamp
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `pipeline/actions/summary.py`, call `stamp_effort_sent` at each result-metadata site that already calls `stamp` (SDK-session success, one-shot success, failure paths), with the value given to the capture
+- [x] Tests in `tests/pipeline/actions/test_summary.py` (existing effort tests live in `tests/pipeline/test_effort_plumbing.py`; reuse their setup): session summary stamp equals the session effort; one-shot equals the alias effort; failed summary with no telemetry still carries the stamp
+- [x] Success: tests pass; ruff and pyright clean
 
 ## Task 5: Stamp effort in review results (D5) — Effort 2
-- [ ] In `pipeline/actions/review.py`, call `stamp_effort_sent` where the part metadata (`stamp(part.metadata, ...)`) and the final result metadata (`"profile": settings.profile_name` block) are built. The value is `result.effort` on success and `effort_sent_by_profile` on failure
-- [ ] Tests in `tests/pipeline/actions/test_review_action.py` (or `test_review_outputs.py`): successful review stamp equals the alias effort; failed review stamp equals `effort_sent_by_profile`
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `pipeline/actions/review.py`, call `stamp_effort_sent` where the part metadata (`stamp(part.metadata, ...)`) and the final result metadata (`"profile": settings.profile_name` block) are built. The value is `result.effort` on success and `effort_sent_by_profile` on failure
+- [x] Tests in `tests/pipeline/actions/test_review_action.py` (or `test_review_outputs.py`): successful review stamp equals the alias effort; failed review stamp equals `effort_sent_by_profile`
+- [x] Success: tests pass; ruff and pyright clean
 
 **Commit**: `fix: stamp effort sent on dispatch, summary and review results`
 

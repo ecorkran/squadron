@@ -18,7 +18,12 @@ from squadron.pipeline.summary_artifacts import (
     with_artifact_section,
 )
 from squadron.pipeline.summary_oneshot import capture_summary_via_profile_with_telemetry
-from squadron.pipeline.usage_capture import read_effort_sent, require_capture, stamp
+from squadron.pipeline.usage_capture import (
+    read_effort_sent,
+    require_capture,
+    stamp,
+    stamp_effort_sent,
+)
 from squadron.providers.errors import ProviderError
 from squadron.providers.profiles import is_sdk_profile
 
@@ -190,6 +195,13 @@ class SummaryAction:
         )
 
 
+def _effort_sent(
+    profile: str | None, session_effort: Effort | None, usage_metadata: dict[str, object]
+) -> Effort | None:
+    """The effort the capture call sent: the session's on the SDK path, else the one-shot's."""
+    return session_effort if is_sdk_profile(profile) else read_effort_sent(usage_metadata)
+
+
 def _log_sources(
     context: ActionContext, *, is_sdk: bool, declared: list[str] | None, allows_tools: bool
 ) -> SummarySources:
@@ -289,6 +301,7 @@ async def _execute_summary(
     usage_metadata: dict[str, object] = {}
     usage_metadata_out: dict[str, object] = {}
     started = time.monotonic()
+    session_effort: Effort | None = None  # set on the SDK path, before the call can fail
     try:
         if is_sdk_profile(profile):
             assert context.sdk_session is not None  # narrowed above
@@ -351,6 +364,8 @@ async def _execute_summary(
         # A named provider failure (issue 200): one ERROR line, no traceback.
         _logger.error("summary action: failed to capture summary: %s", exc)
         usage_metadata_out.update(usage_limit_stamp(exc))
+        effort_sent = _effort_sent(profile, session_effort, usage_metadata)
+        stamp_effort_sent(usage_metadata_out, effort_sent)
         if exc.telemetry is not None:
             stamp(
                 usage_metadata_out,
@@ -359,7 +374,7 @@ async def _execute_summary(
                     exc.telemetry,
                     started=started,
                     model=model_id,
-                    effort_sent=read_effort_sent(usage_metadata),
+                    effort_sent=effort_sent,
                 ),
             )
         return ActionResult(
@@ -382,6 +397,8 @@ async def _execute_summary(
             outputs={},
             error=str(exc),
         )
+
+    stamp_effort_sent(usage_metadata_out, _effort_sent(profile, session_effort, usage_metadata))
 
     from squadron.pipeline.emit import EmitResult
 

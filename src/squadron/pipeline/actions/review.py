@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from squadron.core.models import Effort
 from squadron.core.usage import UsageRecord
 from squadron.models.aliases import UnknownModelAliasError
 from squadron.pipeline.actions import ActionType, register_action
@@ -22,7 +23,12 @@ from squadron.pipeline.resolver import (
     ModelResolutionError,
     ResolvedModel,
 )
-from squadron.pipeline.usage_capture import effort_sent_by_profile, require_capture, stamp
+from squadron.pipeline.usage_capture import (
+    effort_sent_by_profile,
+    require_capture,
+    stamp,
+    stamp_effort_sent,
+)
 from squadron.providers.base import TOOL_CALLS_MADE_KEY, TOOLS_GIVEN_KEY
 from squadron.providers.errors import ProviderError
 from squadron.review.git_utils import (
@@ -120,10 +126,13 @@ def _save_failure_artifact(
 class _PartProviderFailure(Exception):
     """A review part's ProviderError, carrying what the call spent (slice 175 D5)."""
 
-    def __init__(self, error: ProviderError, record: UsageRecord | None) -> None:
+    def __init__(
+        self, error: ProviderError, record: UsageRecord | None, effort_sent: Effort | None
+    ) -> None:
         super().__init__(str(error))
         self.error = error
         self.record = record
+        self.effort_sent = effort_sent
 
 
 @dataclass(frozen=True)
@@ -189,13 +198,16 @@ class ReviewAction:
         except _PartProviderFailure as failure:
             # A named failure: one ERROR line, no traceback (as dispatch and summary do).
             _logger.error("review: step %s failed: %s", context.step_name, failure.error)
-            return self._exception_result(context, failure.error, usage_record=failure.record)
+            return self._exception_result(context, failure.error, failure=failure)
         except Exception as exc:
             _logger.exception("review: unexpected error in step %s", context.step_name)
             return self._exception_result(context, exc)
 
     def _exception_result(
-        self, context: ActionContext, exc: Exception, usage_record: UsageRecord | None = None
+        self,
+        context: ActionContext,
+        exc: Exception,
+        failure: _PartProviderFailure | None = None,
     ) -> ActionResult:
         """Build the ActionResult for an exception from _review().
 
@@ -211,7 +223,9 @@ class ReviewAction:
         )
         is_judge = template is not None and template.is_judge
         metadata: dict[str, object] = {}
-        stamp(metadata, usage_record)
+        if failure is not None:
+            stamp(metadata, failure.record)
+            stamp_effort_sent(metadata, failure.effort_sent)
         return ActionResult(
             success=False,
             action_type=self.action_type,
@@ -497,16 +511,14 @@ class ReviewAction:
                     context.step_name,
                     artifact,
                 )
+            # The call already resolved this profile, so the lookup cannot mask exc.
+            effort_sent = effort_sent_by_profile(settings.profile_name, settings.resolved.effort)
             record = capture.record_from_error(
-                settings.resolved,
-                exc,
-                model=settings.resolved.model_id,
-                # The call already resolved this profile, so the lookup cannot mask exc.
-                effort_sent=effort_sent_by_profile(settings.profile_name, settings.resolved.effort),
+                settings.resolved, exc, model=settings.resolved.model_id, effort_sent=effort_sent
             )
             # Raised, not returned: a failed part must stop the step before later
             # parts run or the fold sees a part with no verdict.
-            raise _PartProviderFailure(exc, record) from exc
+            raise _PartProviderFailure(exc, record, effort_sent) from exc
 
         # Traceability (slice 195 D12, #139): the run that wrote this review.
         result.run_id = context.run_id
@@ -520,6 +532,7 @@ class ReviewAction:
         )
         part = self._part_result(settings, result, inputs, review_file_path, verdict, provenance)
         stamp(part.metadata, capture.record_from_review(result, settings.resolved, result.effort))
+        stamp_effort_sent(part.metadata, result.effort)
         return part
 
     async def _gated_parts(

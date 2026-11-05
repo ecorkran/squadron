@@ -135,4 +135,5 @@ async def test_single_task_file_review_is_unchanged(
         "requested_model": _MODEL,
         "profile": "sdk",
         "template": "tasks",
+        "effort_sent": None,  # slice 420: stamped on every review result
     }

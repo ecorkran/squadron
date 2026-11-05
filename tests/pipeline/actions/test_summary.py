@@ -1148,6 +1148,7 @@ async def test_one_shot_summary_records_usage_and_passes_budget() -> None:
     record = _summary_record(result)
     assert (record.turns, record.effort, record.alias) == (1, "low", "minimax")
     assert record.duration_seconds is not None
+    assert result.metadata[EFFORT_SENT_KEY] == "low"
 
 
 @pytest.mark.asyncio
@@ -1176,6 +1177,7 @@ async def test_session_summary_records_the_session_effort() -> None:
     record = _summary_record(result)
     assert record.effort == Effort.medium.value
     assert (record.turns, record.cost_usd) == (2, 0.01)
+    assert result.metadata[EFFORT_SENT_KEY] == Effort.medium.value
 
 
 @pytest.mark.asyncio
@@ -1221,3 +1223,61 @@ async def test_summary_without_capture_is_a_clear_error() -> None:
             emit_destinations=[],
             action_type="summary",
         )
+
+
+@pytest.mark.asyncio
+async def test_one_shot_failure_without_telemetry_still_stamps_effort() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.providers.errors import ProviderAPIError
+
+    ctx = _make_context(sdk_session=None)
+    ctx.resolver.resolve_full.return_value = ResolvedModel(
+        "minimax-01", "openrouter", effort=Effort.low
+    )
+
+    async def _fail(**kwargs: object) -> tuple[str, dict[str, object]]:
+        usage_metadata = kwargs["usage_metadata"]
+        assert isinstance(usage_metadata, dict)
+        usage_metadata[EFFORT_SENT_KEY] = Effort.low  # recorded before the call fails
+        raise ProviderAPIError("boom")
+
+    with patch(
+        "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+        new=AsyncMock(side_effect=_fail),
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[],
+            action_type="summary",
+        )
+
+    assert result.success is False
+    assert USAGE_KEY not in result.metadata
+    assert result.metadata[EFFORT_SENT_KEY] == "low"
+
+
+@pytest.mark.asyncio
+async def test_session_failure_without_telemetry_stamps_the_session_effort() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.providers.errors import ProviderAPIError
+
+    session = MagicMock()
+    session.current_model = "m"
+    session.effort = Effort.medium
+    session.capture_summary = AsyncMock(side_effect=ProviderAPIError("boom"))
+    ctx = _make_context(sdk_session=session)
+    ctx.resolver.resolve_full.return_value = ResolvedModel("m", "sdk", effort=Effort.high)
+
+    result = await _execute_summary(
+        context=ctx,
+        instructions="summarize",
+        summary_model_alias="opus",
+        emit_destinations=[],
+        action_type="summary",
+    )
+
+    assert result.success is False
+    assert USAGE_KEY not in result.metadata
+    assert result.metadata[EFFORT_SENT_KEY] == Effort.medium.value
