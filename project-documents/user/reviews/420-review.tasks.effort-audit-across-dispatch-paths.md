@@ -188,7 +188,7 @@ Task 1 says "Create the slice branch from the target" without an explicit `cf co
 - [concern] Task 3 edits the design mid-implementation: fixed. The design's D5 was already edited during planning; Task 3 now says D5 states the limit and has no design-edit step.
 - [concern] Task 13 has no bucket for session-effort callers: fixed. The table has a third class, `SENDS_SESSION_EFFORT`, used for the `open_pipeline_session` callers.
 - [concern] Task 12 adds an unnamed module and an unlisted split: fixed. The module is named `replay/config_label.py` and added to the design's Components changed list.
-- [concern] Judge tables are keyed on alias, against D6: rejected. D6 governs producer configs. Judge tables follow D3, one table per distinct `JudgeRef` (alias, model, prompt hash, and now effort sent), which is the intended judge identity.
+- [concern] Judge tables are keyed on alias, against D6: rejected. D6 governs producer configs. Judge tables follow D3, one table per distinct `JudgeRef` (alias, model, prompt hash, and now effort sent), which is the intended judge identity. D6 now says it covers producer configs only.
 - [note] Task 8 does not name the `judge_residue_core` module: fixed. Task 8 names `review/addressed/judge.py`.
 - [note] Path 12 has no named test in Task 13: fixed. Task 13 names the Task 10 tests in `test_outcome.py` and `test_producer_units.py`.
 - [note] The load-test exemption is reasoned: no change.

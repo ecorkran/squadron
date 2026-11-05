@@ -88,6 +88,7 @@ The audit was done while writing this design. Its result is the inventory below.
 - `pipeline/actions/dispatch.py`, `summary.py`, `review.py`, `compact.py`: call `stamp_effort_sent` on success and failure paths.
 - `replay/outcome.py`, `stats/producer_units.py`: read the effort with `action_effort_sent`.
 - `replay/report.py`: config identity without the alias (D6).
+- `replay/config_label.py`: the label code moved out of `report.py`, which is over its line budget.
 - `metrology/replay_models.py`, `cli/commands/replay_common.py`: optional `JudgeRef.effort_sent` (D3); optional `ProducerConfigRef.tool_use` and `max_output_tokens`, filled by `config_ref` (D6).
 
 ### Data Flow
@@ -133,7 +134,7 @@ Status: decided
 ### D5 — Effort sent is stamped on the action, not only on the usage record
 Status: decided
 - `UsageCapture._build` returns no `UsageRecord` when a call reports no turns, tokens or cost, for example when it fails before any response. Replay and `sq stats producers` read effort from that record, so a failed run is read as "not sent" and lands in a different config row. That is a stand-in.
-- `stamp_effort_sent(metadata, effort)` writes `metadata["effort_sent"]` on every action result built after the model is resolved, success or failure, next to the existing `model`/`profile` fields. That includes the `except Exception` branch in `DispatchAction.execute` once resolution has run. The value is the one passed to the capture, so the key and `UsageRecord.effort` cannot disagree.
+- `stamp_effort_sent(metadata, effort)` writes `metadata["effort_sent"]` on every action result built after the model is resolved, success or failure, next to the existing `model`/`profile` fields. That includes the `set_model` failure. The `except Exception` branch in `DispatchAction.execute` is not stamped: the effort is local to `_dispatch` there. The value is the one passed to the capture, so the key and `UsageRecord.effort` cannot disagree.
 - Some failed runs carry no stamp: the `sq run` subprocess died with no run state, the action was cancelled, or resolution itself failed. Nothing was sent in those runs, and replay already marks each with a failure class (`NO_RUN_STATE`, or "no phase step ran"). They are harness or config failures, counted by that class, not by effort.
 - `action_effort_sent(metadata, usage)` is the one reader. If the key is present, it returns that value. If the key is absent, it returns `usage.effort`: under 175 D7 that field already meant "sent", so this rule only reads old records and never substitutes an alias value. With neither, it returns `None`.
 - Run state is persisted as JSON, so a stored value is a string. The reader parses it into `Effort`, ignoring case and whitespace, and raises on an unrecognized value rather than reading it as `None`.
@@ -145,6 +146,7 @@ Status: decided
 - An alias also sets `tool_use` and `max_output_tokens`, and both change what is sent. `config_ref` copies them onto `ProducerConfigRef` as two optional fields (default `None`, so old records load unchanged), and they are part of the identity.
 - A private `config_identity` in `replay/report.py` returns `(model, profile, effort_sent, tool_use, max_output_tokens)`. It is the grouping key for rows and Bradley-Terry contestants. The label shows the identity plus the alias names seen in that group, sorted. `ProducerConfigRef` still stores the alias for provenance.
 - This narrows the architecture's "config (alias, model, profile, effort sent)" to what the slice plan's success criterion requires. The architecture's own rule ("two rows only when the effort really differed on the wire") already implies it.
+- D6 covers producer configs only. A judge's identity is its `JudgeRef` (D3), alias included: a judge table states which judge produced it, and two judge aliases are never pooled.
 
 ### D7 — The inventory is enforced by an enumeration test
 Status: decided
@@ -174,7 +176,7 @@ Status: decided
 - The findings-addressed judge sends its alias's effort from both the pipeline gate and `sq review resolve`.
 - `sq _dispatch-run --effort low` sends `low`. The prompt-only renderer emits `--effort` for a non-SDK dispatch step whose alias sets effort, and omits it otherwise.
 - A dispatch that fails before any telemetry still carries `effort_sent` in its action metadata, and replay and `sq stats producers` attribute it to the config that sent that effort.
-- Two replays whose aliases differ but which sent the same model, profile and effort fall into one report row. Two replays that sent different efforts are two rows.
+- Two replays whose aliases differ but which sent the same model, profile, effort, `tool_use` and `max_output_tokens` fall into one report row (D6). Two replays that differ in any of the five are two rows.
 
 ### Technical Requirements
 - One test per sending path (1–12) asserts the effort sent. The capability gate is tested once in each of `note_effort_sent` and `effort_sent_by_profile`, with a fake provider with `applies_effort=False`, asserting `null`.
