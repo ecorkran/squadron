@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.pipeline.control_params import RUN_IO_DIR, RUN_MAX_COST
+from squadron.pipeline.control_params import RUN_IO_DIR, RUN_MAX_COST, reserved_param_error
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.state import RunState
@@ -69,8 +69,10 @@ def test_max_cost_cannot_be_set_through_a_param() -> None:
     with patch("squadron.cli.commands.run.load_pipeline", return_value=_definition()):
         result = runner.invoke(app, ["run", "test-pipeline", "191", "-p", f"{RUN_MAX_COST}=9"])
 
-    assert result.exit_code != 0
-    assert "--max-cost" in result.output
+    # Checked on the exit code and the message source, not the rendered output: CI's
+    # forced colour and terminal width split the styled error box.
+    assert result.exit_code == 2
+    assert reserved_param_error(RUN_MAX_COST) == f"'{RUN_MAX_COST}' is reserved; use --max-cost"
 
 
 def test_resume_max_cost_replaces_the_stored_cap() -> None:
