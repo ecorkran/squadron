@@ -16,84 +16,79 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261104
 dateUpdated: 20261104
-reviewedSha: 27ee4968f01e6d04a7b1d5db5912e9c565f41bba
+reviewedSha: 694f2e7e474c1fb5d3a596b22112917d464f806e
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 13
-turns: 14
-promptTokens: 548568
-cachedTokens: 472998
-cacheWriteTokens: 75554
-completionTokens: 10649
-durationSeconds: 125.9
-costUsd: 0.912845
+toolCallsMade: 10
+turns: 11
+promptTokens: 508122
+cachedTokens: 422759
+cacheWriteTokens: 85347
+completionTokens: 9921
+durationSeconds: 111.8
+costUsd: 0.966581
 costBasis: provider
 squadronVersion: 0.24.20
 findings:
   - id: F001
     severity: concern
     category: feasibility
-    summary: "The grade can be gamed: the producer can edit the suite the grader runs"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:48"
+    summary: "Restoring tool config from the start commit also reverts the producer's dependency changes"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#architectural-principles"
   - id: F002
     severity: concern
     category: completeness
-    summary: "Old tests that the original fix rewrote will count as regressions against a correct replay"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:52-57"
+    summary: "No pipeline mechanism exists to run \"only the producer step, with its embedded review stripped\""
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#technical-considerations"
   - id: F003
     severity: concern
-    category: feasibility
-    summary: "Rule 1 (\"fails on an assertion\") excludes crash fixes"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:53"
+    category: completeness
+    summary: "The global `sq` install and its site-packages give the producer the answer"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#architectural-principles"
   - id: F004
     severity: concern
-    category: consistency
-    summary: "The `implement` step has its own reviewer, so stopping after it does not remove the reviewer"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:89"
+    category: completeness
+    summary: "How ungraded and failed runs enter paired comparisons is undefined, and excluding them biases results toward flaky configs"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#envisioned-state"
   - id: F005
     severity: concern
-    category: completeness
-    summary: "The answer can still reach the producer: the sandbox does not hide the answer"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:46"
+    category: feasibility
+    summary: "Hidden-set application is file-level, but fixes add test functions to existing files"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#architectural-principles"
   - id: F006
     severity: concern
-    category: consistency
-    summary: "The reference diff is not comparable to replay diffs in pairwise judging"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:91"
+    category: feasibility
+    summary: "The fix-case keystone is unlikely to have the statistical power the design depends on, and the fallback needs work the document doesn't schedule"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#technical-considerations"
   - id: F007
     severity: concern
-    category: feasibility
-    summary: "\"Spread overlaps\" ignores the pairing that the design itself relies on"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:91"
+    category: antipattern
+    summary: "A new production `sq run fix` pipeline is built mainly so the benchmark has something to replay"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#envisioned-state"
   - id: F008
     severity: concern
     category: completeness
-    summary: "The spend bound is in dispatches, not dollars, and grading and judging are outside any cap"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:115"
+    summary: "The dollar bound is undefined when `pipeline.max_cost_usd` is unset, and the run-level cap can overshoot by one full pipeline"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#technical-considerations"
   - id: F009
     severity: concern
-    category: consistency
-    summary: "Qualification goes stale when the environment changes"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:107"
+    category: completeness
+    summary: "Sequential multi-hour runs have no resume semantics"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#non-goals"
   - id: F010
     severity: concern
-    category: feasibility
-    summary: "Inline diffs in coarse records will make the store slow to query"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:123"
+    category: completeness
+    summary: "Qualification runs once and does not detect flaky tests"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#architectural-principles"
   - id: F011
-    severity: concern
-    category: antipattern
-    summary: "Too much scope: a new production pipeline and reviewer recall are built alongside the benchmark"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md#anticipated-slices"
-  - id: F012
-    severity: note
-    category: dependencies
-    summary: "The grading reviewer is used before anything shows it can find defects"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:132-134"
-  - id: F013
     severity: note
     category: consistency
-    summary: "The first slice is named differently in two places"
-    location: "project-documents/user/architecture/420-arch.model-benchmark.md:99"
+    summary: "Redirecting the agent config directory changes the effective prompt versus production"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#technical-considerations"
+  - id: F012
+    severity: note
+    category: other
+    summary: "Grading uses review findings before the reviewer-recall slice measures that reviewer"
+    location: "project-documents/user/architecture/420-arch.model-benchmark.md#anticipated-slices"
 ---
 
 # Review: arch — initiative 420
@@ -103,132 +98,100 @@ findings:
 
 ## Findings
 
-### [CONCERN] The grade can be gamed: the producer can edit the suite the grader runs
+### [CONCERN] Restoring tool config from the start commit also reverts the producer's dependency changes
 
-The principle "The grader is not the producer" says the grader "reads only the resulting tree" and runs "the full suite, lint and type checks" there (line 89). That tree contains the producer's edits to existing tests, to lint config (`ruff` ignores, `# noqa`) and to pyright settings or `# type: ignore`. If the producer deletes, skips or loosens a failing test, the grader counts zero regressions. Implementation agents are known to do exactly this. The hidden test is protected because it is applied from outside, but the regression signal, the check deltas and every slice-case grade (line 105, where there is no hidden test at all) are not. The design needs to pin the grading inputs: run the start commit's test files and tool config on top of the producer's source, or record every edit to test and config files as its own reported signal. Without one of these, "objective before opinion" does not hold for slice cases.
+The grader principle says "the regression suite and the tool config (lint and type-check settings) come from the start commit, not the producer's tree." In squadron, and in most uv/Python projects, the tool config is not its own file. `pyproject.toml` holds `dependencies` (line 21), `[project.scripts]` (line 48), `[tool.ruff]` (line 77) and `[tool.pyright]` (line 95) together. If the grader restores `pyproject.toml` from the start commit, it removes any dependency or entry point the producer added, and a correct slice that adds a library then fails on import. If it keeps the producer's `pyproject.toml`, the producer can loosen ruff or pyright settings, which the principle is meant to stop.
 
-### [CONCERN] Old tests that the original fix rewrote will count as regressions against a correct replay
+The environment has a related gap. The Envisioned State resolves the environment when the sandbox opens, before the producer runs. Nothing says whether the grader reinstalls when the producer changes the lockfile. If it does, environment identity becomes different for each run, which conflicts with "Environment identity ... is part of the grader identity." If it doesn't, the new imports fail. The document needs a rule that works on sections, not files: take the `[tool.*]` tables from the start commit and the dependency tables from the producer, then reinstall. It also needs to say how the grader identity records a lockfile the producer changed.
 
-Fix commits often change existing tests, because the old expected behavior was the bug. Qualification (line 50) checks that "the original work passes its own grade", and it does, because the original tree carries those updated tests. A replay tree starts from the parent's suite. A correct fix fails the old assertions unless the producer happens to change the same tests, and then it scores a regression. The rule is lopsided: it favors producers who rewrite tests, which is the gaming path in the finding above.
+### [CONCERN] No pipeline mechanism exists to run "only the producer step, with its embedded review stripped"
 
-The doc also never says what the "hidden test" is when the fix commit:
-- edits an existing test file rather than adding one;
-- adds fixtures to a `conftest.py`;
-- writes to a path where the producer has already written its own test. The `fix` pipeline writes a failing test first (line 87), and naming conventions make the same path likely, so the overlay needs a defined rule for clashes.
+"Stopping a production pipeline at the producer step" calls this a slice decision: either "a packaged replay pipeline built from the same step definition" or "a run mode that ends after it." The pipeline loader has neither feature. Pipelines are standalone YAML files with no step-reference, include or extends mechanism; `executor.py` has none. The `implement` step in `P6.yaml:16-21` carries `review: { template: code, model: "{review-model}" }` inline. To strip that review without copying the step, the executor needs a new capability: either step overrides when a step is referenced from another pipeline, or a run-time flag that disables a step's embedded review and stops after step N. That work changes the executor and the pipeline schema. Every replay depends on it, so it is an architecture decision, not a slice detail. The "no drift" principle cannot hold until it is decided. Name the mechanism here and put it in the Implementation replay slice.
 
-The case record needs an explicit hidden-test set, a list of superseded tests to leave out of the regression count, and an overlay rule.
+### [CONCERN] The global `sq` install and its site-packages give the producer the answer
 
-### [CONCERN] Rule 1 ("fails on an assertion") excludes crash fixes
+The leak model covers GitHub credentials, squadron and agent config directories, reads outside the sandbox, and `git`/`gh` calls. When the project being benchmarked is squadron itself, which is the first planned case set, the producer's shell has `sq` on `PATH`. That binary resolves to the user's current install, and its installed package source contains the later fix. A producer that runs `sq ...` to reproduce a bug, or reads the source through `python -c "import squadron; print(squadron.__file__)"`, gets the future code. Neither action is a `git`/`gh` call. The second only shows up as a read outside the sandbox if the scanner can parse paths out of arbitrary bash and Python. The uv cache and the real repo, at a known path, are also readable.
 
-The rule only tells assertion failures apart from collection and import errors. Many fixes are for crashes. At the parent, the test fails because project code raises (`TypeError`, `KeyError`, or a CLI exit with a traceback), not because an assertion fails. Those tests are legitimate test-first tests that use no names the fix added. The test that matters is whether the failure comes from a missing or renamed project symbol (`ImportError`, `AttributeError` on a project module, a patch target that is not found). Tightening the rule this way recovers cases from a yield the doc already expects to be "a minority" (line 79).
+Detecting reads from the transcript only works for structured tool calls (SDK Read/Glob). It cannot see file access from inside scripts the model writes. The document should require three things: the sandbox venv's bin first on a `PATH` that excludes the user's tool installs, an explicit list of known leak paths, and a statement that transcript scanning is best effort for bash-tool providers. Without that, a "not leaked" record is a stronger claim than the evidence supports.
 
-### [CONCERN] The `implement` step has its own reviewer, so stopping after it does not remove the reviewer
+### [CONCERN] How ungraded and failed runs enter paired comparisons is undefined, and excluding them biases results toward flaky configs
 
-The Envisioned State says the replay runs "the `implement` step from `P6`" and leaves the review loop out "because it mixes the reviewer into the producer's result". In `src/squadron/data/pipelines/P6.yaml:16-21` and `implement.yaml:15-20`, the `implement` step itself carries `review: { template: code, model: "{review-model}" }`. `PhaseStepType.expand` (`src/squadron/pipeline/steps/phase.py:282-308`) adds a review action and a checkpoint before the commit, and the commit records that review's verdict.
+"Absent is not zero" says a run with no grade "records why" and that reports "count these separately." Paired per-case differences need a value for every (case, config) cell. The document mixes failures caused by the config (the producer crashed, hit `max_cost_usd`, or committed nothing) with failures caused by the harness (the environment did not resolve, the grader timed out, a leak was detected). Leaving config-caused failures out of pass rate rewards configs that fail loudly. The cost section adds a separate rule: when the cap is hit, the run "reports only cases that completed under every config." Whether a leaked or ungraded sample counts as "completed" is never said. The document should split absences into those attributable to the config, which count as a fail, and those attributable to the harness, which drop the case from every config's pairing. It should also say how multiple samples are reduced to one value per case before the bootstrap.
 
-So a replay of "just the producer step" still sends a review to whatever `review-model` defaults to: `deepseek4-flash` in P6, `minimax` in `implement`. The two pipelines differ, so the doc's "P6 and implement" are not one producer. That review adds cost, adds a dispatch that is not in the stated bound, and leaves a pipeline default in the config identity.
+### [CONCERN] Hidden-set application is file-level, but fixes add test functions to existing files
 
-The doc defers how a replay selects the producer step (line 111). That deferral cannot be resolved without deciding whether the step's embedded review is stripped. Stripping it means the replay no longer runs "the same step definition". The architecture should make that decision, and should name which pipeline's step is canonical.
+"The hidden set is applied over the producer's tree at its original paths and wins any clash." Fix commits usually add a test function to an existing `tests/test_x.py`. The reference's whole file then contains (a) the hidden test, (b) any changes that file received from the fix, and (c) none of the tests the producer, which the fix pipeline requires to write a failing test first, added to the same file. Overwriting the whole file silently deletes the producer's new tests. "Recorded as a clash" turns into the normal case, not an exception. It also deletes the signal "the producer's own new tests run as a separate signal." Hidden tests should be applied by node id: append or inject the hidden test functions and conftest fixtures, or put them in a separate file the grader owns. The superseded set needs node-level granularity for the same reason.
 
-### [CONCERN] The answer can still reach the producer: the sandbox does not hide the answer
+### [CONCERN] The fix-case keystone is unlikely to have the statistical power the design depends on, and the fallback needs work the document doesn't schedule
 
-"The answer never reaches the producer" is stated as absolute. The only mechanism behind it is a single-commit directory, and Current State (line 80) says that directory is "not an OS jail". From inside it, the producer, with bash or Claude Code's tools, can reach:
-- the user's real checkout with full history, including the fix commit;
-- `~/.config/squadron/`, where the metrology store holds earlier replay records with other samples' diffs and the reference;
-- `gh issue view` with live comments that link the fix;
-- the user's Claude Code memory and settings.
+Current State counts 46 fix commits with tests, 23 with mocking and 37 with private-looking names. Add the test-first and packaging-boundary rules, and the "exclude when undecidable" stance on re-exports and dynamic imports, and a single-digit yield is plausible. With binary pass/fail on fewer than about 10 cases, a paired bootstrap interval will span zero for almost any pair of configs. The keystone would then prove the machinery but answer nothing. The stated fallback, "pooled from other cf projects' history," has costs the document leaves out:
 
-The Containment section (lines 109, 144) treats this only as a safety question and defers it to #213. Leakage is a question of whether the results are valid, and this component owns that. At minimum, the design needs a way to detect leaks: scan the producer transcript for reads outside the sandbox and for `git`/`gh` calls against other repos, and mark those runs instead of grading them. It should also run with a scrubbed `HOME` or config directory, and with `gh` credentials removed from the environment.
+- Other projects may not be Python, and only the Python adapter is planned.
+- Records are keyed on `ProjectId`, so pooled reports need a cross-project query.
+- Each project's environment resolution and qualification has to run.
 
-### [CONCERN] The reference diff is not comparable to replay diffs in pairwise judging
+Either put a minimum-case power target in the fix-cases slice's exit criteria, or move slice cases forward so the benchmark has a usable second source.
 
-The judge uses "the reference diff as a contestant". Replays stop "at the producer's committed tree", with no close-out, review loop, DEVLOG or merge (line 89). A slice's reference (fork to landing commit, from 403's slice ranges) contains all of those:
-- fixes from the review loop;
-- task-file check-offs;
-- DEVLOG and CHANGELOG entries;
-- review files.
+### [CONCERN] A new production `sq run fix` pipeline is built mainly so the benchmark has something to replay
 
-So the reference is the producer plus the review loop, judged against bare producers. For fix cases, the reference diff includes the hidden test, which replay diffs never contain. The design needs a rule for normalizing diffs: which paths to drop (DEVLOG, task files, review artifacts, CHANGELOG) and whether the hidden test is shown. Otherwise the reference's Bradley-Terry strength mostly measures these artifacts.
+Current State says "Fixes are done interactively, so there is no fix pipeline to replay." The design adds a production pipeline anyway, with its own slice, so that "Replays run the production pipelines" holds for fix cases. Nobody uses that pipeline today. Benchmarking it measures model × a new, unproven prompt, not the workflow that actually produces fixes, so the principle's purpose ("what is benchmarked is the prompt and step a real run uses") isn't met. It is also a scope addition that the initiative plan's entry 15 does not list. Options: keep fix cases but say plainly that they measure the new `fix` pipeline, not how fixes are made today; or drive fix cases through the existing `implement` step with the issue text as its task, and defer `sq run fix` until there is demand for it outside the benchmark.
 
-### [CONCERN] "Spread overlaps" ignores the pairing that the design itself relies on
+### [CONCERN] The dollar bound is undefined when `pipeline.max_cost_usd` is unset, and the run-level cap can overshoot by one full pipeline
 
-The first design goal makes "the case, not the config, the unit of difficulty". That makes this a paired design: every config runs on the same cases. But the report rule is "a config whose sample spread overlaps another's is shown as not distinguishable". That compares marginal spreads and throws away the pairing.
+The pre-dispatch bound is "cases × configs × samples × `pipeline.max_cost_usd`." `config/keys.py:22` states "unset means no cap." With the key unset, the formula has no value, and the design goal "Spend is visible before it happens" fails silently. Per the project's no-silent-fallback rule, the benchmark should refuse to start without a per-run cap (its own setting or the global key) rather than invent one.
 
-Case difficulty varies far more than config quality does, so marginal spreads will almost always overlap, and the report will almost never separate two configs. Also, 320's noise floor is a per-category spread of audit scores. It does not carry over to pass/fail outcomes at small n.
+The run-level cap is also only checked between dispatches. A running P6 subprocess stops only at its own per-pipeline cap, so actual spend can exceed the run cap by up to one `max_cost_usd`. Grading reviews and judge calls need their own estimate inputs; "plus estimates" doesn't name where those come from.
 
-The statistic should be a paired per-case difference, for example a paired bootstrap or sign test over cases, with its interval. It should be named in the architecture, because it decides how many samples, and so how much money, a benchmark needs.
+### [CONCERN] Sequential multi-hour runs have no resume semantics
 
-### [CONCERN] The spend bound is in dispatches, not dollars, and grading and judging are outside any cap
+"No concurrent replays." Implementation replays plus install plus grading take tens of minutes each. A modest run of 20 cases × 3 configs × 3 samples is 180 runs, which is likely more than 50 hours of wall time. The document defines partial runs only for cap exhaustion. It doesn't say what happens after a crash, a sleeping laptop, or Ctrl-C: whether `sq` can continue a run by skipping (case, config, sample) tuples that already have records, how an orphaned sandbox is detected, and how a half-written run is marked. Because each record is coarse and written per case run, resuming is cheap to design now and expensive to retrofit. It belongs in the replay slice's scope.
 
-Design Goals (line 42) promise that "spend is visible before it happens". The mechanism is a bound "on dispatches" plus the 947 cap on each run. An implementation dispatch with tool turns has no fixed cost, so a dispatch count says nothing about dollars. The real upper bound is cases × configs × samples × `max_cost_usd`, plus grading reviews and judge calls, which grow with the square of contestants. The grading reviews and judge calls happen outside any pipeline run, so no cap covers them.
+### [CONCERN] Qualification runs once and does not detect flaky tests
 
-The benchmark needs a cap of its own across the whole run, a stated dollar bound before any dispatch, and a defined behavior when the cap is hit partway through: which records are written, and how the partial set is reported.
+Design Goals rely on "tests and tools that give the same answer every time." Qualification is described as a single pass of the reference's grade, plus the test-first check at the parent. A flaky test in the regression suite or the hidden set will then show up as config noise or a false regression, and the paired statistic will treat it as signal. Qualification should run the reference grade several times, plus the hidden test at the parent for test-first. Tests that disagree should go into a per-case exclusion list that is part of the case's content identity.
 
-### [CONCERN] Qualification goes stale when the environment changes
+### [NOTE] Redirecting the agent config directory changes the effective prompt versus production
 
-Environment identity (lockfile hash, tool versions) is part of the grader identity. The doc also says that qualification at the reference commit only catches environment-sensitive tests "if it runs in the same environment the replays use". But qualification happens once, at case creation (line 85), and the case id is built from start commit, task text, hidden test and grader commands (line 61), with no environment in it. A later replay under a newer Python, `uv`, `ruff` or `pyright` can fail at the reference without anyone knowing.
+The scrubbed environment points the agent's config directory away from the user's, which drops user-level instructions such as `~/.claude/CLAUDE.md`. The sandbox also carries the project `CLAUDE.md` as it stood at the start commit, not the current one. That is reasonable, but it partly contradicts "same prompt, same dispatch" as production. Prompt identity should record the instruction files that were in effect. Whether auth survives the redirect is load-bearing for the whole SDK path. It's deferred to the replay slice, so a negative answer there would force a containment redesign late.
 
-The qualification record should be keyed to the environment identity. A benchmark run should re-qualify a case, or refuse it, when the environment differs.
+### [NOTE] Grading uses review findings before the reviewer-recall slice measures that reviewer
 
-### [CONCERN] Inline diffs in coarse records will make the store slow to query
-
-Line 63 says the store "reads every file on every query". Each implementation record holds a full diff plus normalized review findings, for every case × config × sample. A modest slice-case benchmark (20 cases × 4 configs × 5 samples, diffs in the hundreds of KB) means tens of MB parsed on every `sq stats` or report call, including queries that have nothing to do with the benchmark.
-
-Deferring sidecar files "if list cost becomes visible" means moving the record format later, after records already exist. Storing diffs as content-addressed sidecar files from the first replay slice is about as cheap as inlining them, and avoids that migration.
-
-### [CONCERN] Too much scope: a new production pipeline and reviewer recall are built alongside the benchmark
-
-The core value is implementation replay graded objectively. Three parts can be cut or moved out:
-- **Reviewer recall** (line 93, line 134). Its two central decisions, who writes the defects and how findings are matched to them, are left open (line 121). It shares none of the replay or grader machinery beyond the store. It should be its own initiative, or be deferred until implementation results exist.
-- **`sq run fix`** (line 87). This is a new production pipeline. Its only production justification is "useful on its own", while fixes are actually done interactively (line 78). A benchmark of this pipeline measures a prompt with no production history, which runs against the doc's own principle that replays measure what real runs use (line 59). Either justify the pipeline independently, as a 900 or feature item, or replay fix cases with the `implement` step and the issue text as the task.
-- **Pairwise judging for fix cases.** The hidden test already gives an objective grade. Pairwise judging should be limited to slice cases, where it is the only quality signal beyond regressions.
-
-### [NOTE] The grading reviewer is used before anything shows it can find defects
-
-The replay-and-grading slice uses "a fixed code-review config" as a scoring signal. Reviewer recall, which would show whether that config finds anything, comes last. Until then, review-finding counts in implementation reports come from an unmeasured instrument. Reports should flag that until recall data exists for the grading config.
-
-### [NOTE] The first slice is named differently in two places
-
-Technical Considerations says "the first slice therefore ends at a yield report". Anticipated Slices lists the effort audit first and calls fix cases the keystone. Use one name for it so the slice plan does not pick up both.
+The document already flags review-finding columns as "unmeasured." Since Reviewer recall is the last slice, every report before it carries a column that nobody can interpret. Moving recall earlier, or leaving the grading review out until recall exists, would cut grading cost and remove that caveat. This is optional.
 
 ## Responses
 
-- **F001 (fixed):** The grader runs the start commit's suite and tool config against the producer's source. The producer's new tests run as a separate signal. Edits to existing tests or config, and added `# noqa` and `# type: ignore`, are counted and reported.
-- **F002 (fixed):** New principle: each case lists its hidden test set (tests the fix added or changed, `conftest.py` fixtures included) and its superseded test set (existing tests the reference changed or deleted). Superseded tests don't count as regressions. The hidden set is laid over the producer's tree at its original paths and wins any clash, and the clash is recorded. Both sets are part of the case id.
-- **F003 (fixed):** Rule 1 now rejects only failures from a missing or renamed project symbol. An exception raised by project code qualifies.
-- **F004 (fixed):** A replay runs the `implement` step with its own review removed: same prompt, dispatch and commit, but no review and no verdict. `P6` is canonical. `implement.yaml` has the same step with a different review model, which removing the review makes irrelevant.
-- **F005 (fixed):** Rewrote the principle. The producer runs with no GitHub credentials, and with squadron's and the agent's config directories pointed away from the user's. The transcript is scanned for reads outside the sandbox and for `git`/`gh` calls against other repos. A run that trips the scan is recorded as leaked and not graded. Leak detection belongs to this initiative, and #213 keeps OS-level safety. Whether auth still works with the redirected config is checked in the replay slice.
-- **F006 (fixed):** Before judging, DEVLOG, CHANGELOG, task files, review files and slice docs are dropped from every diff. The reference is reported as a reference line, not ranked as a config. Fix cases aren't judged pairwise (see F011), so the hidden test never reaches the judge.
-- **F007 (fixed):** Configs are compared on paired per-case differences with a paired bootstrap interval over cases, and an interval that spans zero means the two can't be told apart. 320's noise floor now applies only to the LLM signals.
-- **F008 (fixed):** Before any dispatch, the run states a bound in dollars: cases × configs × samples × `max_cost_usd`, plus estimates for grading and judging. The run has its own cap covering all of that. When the cap is hit, the run stops, keeps every record already written, is marked partial, and reports only cases that finished under every config.
-- **F009 (fixed):** The qualification record names the environment it ran in. If a later run's environment differs, the case is qualified again, or dropped with a reason.
-- **F010 (fixed):** Diffs are stored in separate files named by content hash from the first replay record. Findings stay inline.
-- **F011 (partly fixed):**
-  - Pairwise judging is now for slice cases only (fixed).
-  - Reviewer recall stays. It is capability (f) of initiative plan entry 15, it comes last, and it is independent of the other slices.
-  - `sq run fix` stays. The PM approved it. Replaying fix cases through the `implement` step isn't possible: that step needs a slice with a design and a task file (`set_slice`, plus the `check_decisions` gate for #240), and a fix has neither.
-- **F012 (fixed):** New consideration: until recall data exists for the grading reviewer config, reports mark the review-finding columns as coming from an unmeasured reviewer.
-- **F013 (fixed):** "The first slice" is now "the fix-cases slice", matching Anticipated Slices.
+- **F001 (fixed):** Tool config is restored by section, not by file: the `[tool.*]` tables (and a standalone `ruff.toml` or `pyrightconfig.json`) come from the start commit, and the dependency and entry-point tables come from the producer. If the producer changed dependencies, the grader reinstalls and the run records that it did. The grader identity still names the start environment.
+- **F002 (fixed):** Confirmed: no pipeline can reference another's steps, and no run mode stops early. The doc now names the mechanism, a `sq run` producer-only mode that runs only the producer step without its embedded review, commits, and stops. It is in the replay slice.
+- **F003 (fixed):** The producer's `PATH` puts the sandbox's environment first and leaves out the user's tool installs. Known leak paths are listed: the checkout, site-packages, the package manager's cache, the store. A clean run is recorded as "no leak detected", because scanning can't see file access inside scripts the model writes.
+- **F004 (fixed):** A failure the config caused counts as a fail. A failure the harness caused drops the case from every config's comparison. Each config's samples on a case reduce to a pass fraction before the bootstrap.
+- **F005 (fixed):** The hidden and superseded sets are lists of individual tests (node ids), not files. Hidden tests are injected without removing anything the producer wrote. On a name clash the hidden test is renamed and the clash is recorded.
+- **F006 (fixed, in slice scope):** The yield report now says whether the qualified count can separate two configs. That answer decides between pooling cases across projects and moving slice cases ahead.
+- **F007 (partly fixed):** One sentence added: fix-case results measure the new pipeline's prompt, not how fixes are made today, and the `implement` step can't stand in because it needs a slice. The rest is declined, as last round; the PM approved `sq run fix`.
+- **F008 (fixed):** The benchmark refuses to start without both a per-pipeline cap and a run-level cap. Grading and judging estimates come from observed costs in the store. The stated bound includes the one-pipeline overshoot.
+- **F009 (fixed, in slice scope):** Resume added to the replay slice: skip runs that already have records, detect orphaned sandboxes, mark interrupted runs.
+- **F010 (fixed, in slice scope):** Qualification runs several times. Tests that disagree go on a per-case exclusion list that is part of the case's content identity.
+- **F011 (fixed):** Prompt identity records the instruction files in effect. The auth check moved to the fix-cases slice, so a no shows up before replay is built.
+- **F012 (declined):** Optional. Reports already flag the review-finding columns until recall exists.
 
 ### Run Digest
 
-- Response length: 12806 chars
+- Response length: 12801 chars
 - Response is newline-free: no
-- Tool calls made: 13
-- Tool calls failed: 1
+- Tool calls made: 10
+- Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: backend default
-- Turns: 14
-- Tokens — prompt / cached / cache write / completion / reasoning: 548568 / 472998 / 75554 / 10649 / not computed
-- Duration: 125.9 s
-- Cost: $0.91 (provider)
+- Turns: 11
+- Tokens — prompt / cached / cache write / completion / reasoning: 508122 / 422759 / 85347 / 9921 / not computed
+- Duration: 111.8 s
+- Cost: $0.97 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 13
+- Finding-shaped matches — whole response: 12
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 13
-- Finding-shaped matches — surviving validation: 13
+- Finding-shaped matches — in findings section: 12
+- Finding-shaped matches — surviving validation: 12
