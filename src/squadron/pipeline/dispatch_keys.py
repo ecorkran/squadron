@@ -41,10 +41,10 @@ class ReplyFormat(StrEnum):
 def path_error(value: str) -> str | None:
     """Why *value* is not an acceptable file path for these keys, or ``None``.
 
-    Paths resolve against the run's working directory, so they must be relative and must
-    not climb out of it. Symlinks are not resolved: pipelines are trusted author content
-    and this check only catches mistakes (D1). The one function runs at load time and at
-    run time, so the two cannot disagree.
+    Paths resolve against the run's working directory (or ``sq run --io-dir``), so they
+    must be relative and must not climb out of it. Symlinks are not resolved: pipelines
+    are trusted author content and this check only catches mistakes (D1). The one
+    function runs at load time and at run time, so the two cannot disagree.
     """
     if not value.strip():
         return "path is empty"

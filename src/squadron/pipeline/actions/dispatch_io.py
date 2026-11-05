@@ -17,6 +17,7 @@ from typing import cast
 
 from squadron.core.file_write import write_new_file
 from squadron.pipeline.actions import ActionType
+from squadron.pipeline.control_params import RUN_IO_DIR
 from squadron.pipeline.dispatch_keys import (
     DELIVERED_PROMPT_FILE_KEY,
     PROMPT_FILES_KEY,
@@ -108,6 +109,15 @@ def assemble_prompt(
     return _PART_SEPARATOR.join(parts)
 
 
+def io_dir(params: Mapping[str, object], cwd: str) -> str:
+    """The directory the file keys resolve against: ``--io-dir`` when set, else *cwd* (#292).
+
+    Only the files move; the agent's working directory stays *cwd*.
+    """
+    value = params.get(RUN_IO_DIR)
+    return cwd if value is None else str(value)
+
+
 def uses_io_prompt(params: Mapping[str, object]) -> bool:
     """Whether the step names files or an earlier reply to build its prompt from."""
     return PROMPT_FILES_KEY in params or REPLY_FROM_KEY in params
@@ -130,7 +140,7 @@ def assemble_step_prompt(
         prompt=None if prompt is None else str(prompt),
         prompt_files=cast(list[str], files),
         reply=None if reply_from is None else step_reply(prior_outputs, str(reply_from)),
-        cwd=Path(cwd),
+        cwd=Path(io_dir(params, cwd)),
     )
 
 
@@ -270,7 +280,7 @@ def apply_reply_contract(
     prompt_file = _optional_path(params, DELIVERED_PROMPT_FILE_KEY)
     if reply_file is not None or prompt_file is not None:
         write_step_files(
-            cwd=Path(cwd),
+            cwd=Path(io_dir(params, cwd)),
             delivered_prompt_file=prompt_file,
             delivered_prompt=delivered_prompt,
             reply_file=reply_file,

@@ -18,6 +18,9 @@ RESUMED_FROM_HANDOFF = "resumed_from_handoff"
 # Set by ``sq run --max-cost`` (#241). Kept in the run's params so a resume keeps the
 # cap; a resume's own ``--max-cost`` replaces it.
 RUN_MAX_COST = "run_max_cost_usd"
+# Set by ``sq run --io-dir`` (#292): the absolute directory dispatch steps read
+# ``prompt_files`` from and write ``reply_file``/``delivered_prompt_file`` to.
+RUN_IO_DIR = "run_io_dir"
 
 # Each reserved key and the CLI flag that sets it, for the rejection message.
 RESERVED_PARAMS: dict[str, str] = {
@@ -25,6 +28,7 @@ RESERVED_PARAMS: dict[str, str] = {
     ACCEPT_DECISION: "--decision accept",
     RESUMED_FROM_HANDOFF: "sq run --resume (it is set automatically for a hand-off pause)",
     RUN_MAX_COST: "--max-cost",
+    RUN_IO_DIR: "--io-dir",
 }
 
 

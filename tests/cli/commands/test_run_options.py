@@ -1,4 +1,4 @@
-"""``sq run --max-cost`` (#241): a per-run dollar cap kept in the run's params."""
+"""``sq run --max-cost`` (#241) and ``--io-dir`` (#292): run options kept in the run's params."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
-from squadron.pipeline.control_params import RUN_MAX_COST
+from squadron.pipeline.control_params import RUN_IO_DIR, RUN_MAX_COST
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import PipelineDefinition, StepConfig
 from squadron.pipeline.state import RunState
@@ -111,3 +111,28 @@ def test_pipeline_yaml_non_positive_max_cost_usd_is_rejected(tmp_path: Path) -> 
 
     with pytest.raises(ValueError, match="max_cost_usd"):
         load_pipeline(str(pipeline))
+
+
+def test_io_dir_reaches_the_fresh_run_params(tmp_path: Path) -> None:
+    assert _fresh_run_params("--io-dir", str(tmp_path))[RUN_IO_DIR] == str(tmp_path)
+
+
+def test_a_relative_io_dir_is_a_usage_error() -> None:
+    result = runner.invoke(app, ["run", "test-pipeline", "191", "--io-dir", "relative/dir"])
+
+    assert result.exit_code == 2
+
+
+def test_a_missing_io_dir_is_a_usage_error(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["run", "test-pipeline", "191", "--io-dir", str(tmp_path / "nope")])
+
+    assert result.exit_code == 2
+
+
+def test_io_dir_with_prompt_only_is_refused(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["run", "test-pipeline", "191", "--prompt-only", "--io-dir", str(tmp_path)]
+    )
+
+    assert result.exit_code == 1
+    assert "--io-dir cannot be combined with --prompt-only" in result.output

@@ -14,10 +14,12 @@ from squadron.pipeline.actions.dispatch_io import (
     OutputWriteError,
     apply_reply_contract,
     assemble_prompt,
+    assemble_step_prompt,
     extract_json_object,
     step_reply,
     write_step_files,
 )
+from squadron.pipeline.control_params import RUN_IO_DIR
 from squadron.pipeline.models import ActionResult, prior_output_key
 
 # --- extract_json_object (D4) ---
@@ -350,3 +352,41 @@ def test_a_json_step_with_no_object_fails_and_writes_nothing(tmp_path: Path) -> 
 def test_a_bad_reply_format_is_refused() -> None:
     with pytest.raises(DispatchInputError, match="reply_format"):
         apply_reply_contract(_ok("x"), {"reply_format": "yaml"}, "/unused", "D")
+
+
+# --- sq run --io-dir (#292) ---
+
+
+def test_io_dir_moves_prompt_file_reads_out_of_the_working_directory(tmp_path: Path) -> None:
+    workdir, io = tmp_path / "checkout", tmp_path / "io"
+    workdir.mkdir()
+    io.mkdir()
+    (io / "request.md").write_text("FROM IO")
+    params: dict[str, object] = {"prompt_files": ["request.md"], RUN_IO_DIR: str(io)}
+
+    assert assemble_step_prompt(params, {}, str(workdir)) == "FROM IO"
+
+
+def test_io_dir_moves_reply_and_prompt_writes_out_of_the_working_directory(
+    tmp_path: Path,
+) -> None:
+    workdir, io = tmp_path / "checkout", tmp_path / "io"
+    workdir.mkdir()
+    io.mkdir()
+    params: dict[str, object] = {
+        "reply_file": "reply.txt",
+        "delivered_prompt_file": "prompt.txt",
+        RUN_IO_DIR: str(io),
+    }
+
+    apply_reply_contract(_ok("REPLY"), params, str(workdir), "DELIVERED")
+
+    assert (io / "reply.txt").read_text() == "REPLY"
+    assert (io / "prompt.txt").read_text() == "DELIVERED"
+    assert list(workdir.iterdir()) == []
+
+
+def test_without_io_dir_files_resolve_against_the_working_directory(tmp_path: Path) -> None:
+    (tmp_path / "request.md").write_text("FROM CWD")
+
+    assert assemble_step_prompt({"prompt_files": ["request.md"]}, {}, str(tmp_path)) == "FROM CWD"
