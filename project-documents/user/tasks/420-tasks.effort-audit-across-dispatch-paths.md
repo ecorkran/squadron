@@ -93,16 +93,16 @@ revision_number: 2
 **Commit**: `fix: stamp effort sent on dispatch, summary and review results`
 
 ## Task 6: Compaction records the session's effort (D2) — Effort 2
-- [ ] In `pipeline/actions/compact.py`, `execute` already tests `context.sdk_session is not None`. Pass that narrowed session into `_execute_sdk_rotate` as a typed parameter (`SDKExecutionSession`) and use it instead of `context.sdk_session` there, which needs `# type: ignore[union-attr]` today; remove those ignores
-- [ ] Pass `session.effort` as `effort_sent` to `record_from_telemetry` (replacing `None`) and call `stamp_effort_sent` with the same value on the success metadata and on the `except Exception` failure result (the session effort is known before the call)
-- [ ] Update the "Effort is never sent (D7)" comment: the summary turn runs on the session's effort
-- [ ] Do not route through `effort_for_session` (it would warn for every compaction whose alias differs)
-- [ ] Tests in `tests/pipeline/actions/test_compact.py`:
-  - [ ] update every existing assertion of `effort=None` to the session's value
-  - [ ] session effort `high` gives `usage.effort == "high"` and `metadata["effort_sent"] == "high"`
-  - [ ] a compact alias with a different effort logs no mismatch warning
-  - [ ] a `compact()` that raises returns a failed result with `effort_sent` equal to the session effort
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `pipeline/actions/compact.py`, `execute` already tests `context.sdk_session is not None`. Pass that narrowed session into `_execute_sdk_rotate` as a typed parameter (`SDKExecutionSession`) and use it instead of `context.sdk_session` there, which needs `# type: ignore[union-attr]` today; remove those ignores
+- [x] Pass `session.effort` as `effort_sent` to `record_from_telemetry` (replacing `None`) and call `stamp_effort_sent` with the same value on the success metadata and on the `except Exception` failure result (the session effort is known before the call)
+- [x] Update the "Effort is never sent (D7)" comment: the summary turn runs on the session's effort
+- [x] Do not route through `effort_for_session` (it would warn for every compaction whose alias differs)
+- [x] Tests in `tests/pipeline/actions/test_compact.py`:
+  - [x] update every existing assertion of `effort=None` to the session's value
+  - [x] session effort `high` gives `usage.effort == "high"` and `metadata["effort_sent"] == "high"`
+  - [x] a compact alias with a different effort logs no mismatch warning
+  - [x] a `compact()` that raises returns a failed result with `effort_sent` equal to the session effort
+- [x] Success: tests pass; ruff and pyright clean
 
 **Commit**: `fix: record session effort on compaction`
 

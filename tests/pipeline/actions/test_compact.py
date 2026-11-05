@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.pipeline.actions.compact import CompactAction
 from squadron.pipeline.models import ActionContext
-from squadron.pipeline.usage_capture import UsageCapture, UsageCaptureMissingError
+from squadron.pipeline.usage_capture import EFFORT_SENT_KEY, UsageCapture, UsageCaptureMissingError
 from tests.pipeline.conftest import session_reply
 
 _MOD = "squadron.pipeline.actions.compact"
@@ -283,14 +285,66 @@ async def test_capture_turn_records_usage(action: CompactAction) -> None:
     telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=80, completion=8), cost_usd=0.02)
     session = MagicMock()
     session.current_model = None
+    session.effort = Effort.high
     session.compact = AsyncMock(return_value=SessionReply("summary", telemetry))
 
     result = await action.execute(_make_context(sdk_session=session, params={"model": "haiku"}))
 
     record = UsageRecord.from_dict(result.metadata[USAGE_KEY])  # type: ignore[arg-type]
     assert (record.turns, record.cost_usd, record.model) == (1, 0.02, "haiku")
-    assert record.effort is None
+    assert record.effort == "high"
+    assert result.metadata[EFFORT_SENT_KEY] == "high"
     assert record.duration_seconds is not None
+
+
+@pytest.mark.asyncio
+async def test_compact_with_no_session_effort_records_none(action: CompactAction) -> None:
+    from squadron.core.usage import RunTelemetry, TokenUsage, UsageRecord
+    from squadron.pipeline.sdk_turns import SessionReply
+    from squadron.providers.base import USAGE_KEY
+
+    telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=5))
+    session = MagicMock()
+    session.current_model = None
+    session.effort = None
+    session.compact = AsyncMock(return_value=SessionReply("summary", telemetry))
+
+    result = await action.execute(_make_context(sdk_session=session))
+
+    assert UsageRecord.from_dict(result.metadata[USAGE_KEY]).effort is None  # type: ignore[arg-type]
+    assert result.metadata[EFFORT_SENT_KEY] is None
+
+
+@pytest.mark.asyncio
+async def test_compact_alias_effort_mismatch_logs_no_warning(
+    action: CompactAction, caplog: pytest.LogCaptureFixture
+) -> None:
+    from squadron.core.usage import RunTelemetry, TokenUsage
+    from squadron.pipeline.sdk_turns import SessionReply
+
+    telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=5))
+    session = MagicMock()
+    session.current_model = None
+    session.effort = Effort.high
+    session.compact = AsyncMock(return_value=SessionReply("summary", telemetry))
+
+    with caplog.at_level(logging.WARNING):
+        await action.execute(_make_context(sdk_session=session, params={"model": "low-effort-alias"}))
+
+    assert not [r for r in caplog.records if "#216" in r.getMessage()]
+
+
+@pytest.mark.asyncio
+async def test_failed_compact_stamps_the_session_effort(action: CompactAction) -> None:
+    session = MagicMock()
+    session.current_model = None
+    session.effort = Effort.medium
+    session.compact = AsyncMock(side_effect=RuntimeError("sdk blew up"))
+
+    result = await action.execute(_make_context(sdk_session=session))
+
+    assert result.success is False
+    assert result.metadata[EFFORT_SENT_KEY] == "medium"
 
 
 @pytest.mark.asyncio

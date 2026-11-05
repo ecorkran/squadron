@@ -13,13 +13,17 @@ import asyncio
 import datetime
 import logging
 import time
+from typing import TYPE_CHECKING
 
 import claude_agent_sdk
 from claude_agent_sdk import SystemMessage
 
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
-from squadron.pipeline.usage_capture import require_capture, stamp
+from squadron.pipeline.usage_capture import require_capture, stamp, stamp_effort_sent
+
+if TYPE_CHECKING:
+    from squadron.pipeline.sdk_session import SDKExecutionSession
 
 _logger = logging.getLogger(__name__)
 
@@ -62,41 +66,55 @@ class CompactAction:
         instructions = str(instructions_raw) if instructions_raw is not None else ""
 
         if context.sdk_session is not None:
-            return await self._execute_sdk_rotate(context, instructions)
+            return await self._execute_sdk_rotate(context, context.sdk_session, instructions)
         return await self._execute_prompt_only(context, instructions)
 
-    async def _execute_sdk_rotate(self, context: ActionContext, instructions: str) -> ActionResult:
+    async def _execute_sdk_rotate(
+        self, context: ActionContext, session: SDKExecutionSession, instructions: str
+    ) -> ActionResult:
         """True CLI: rotate the session via SDKExecutionSession.compact()."""
         model_raw = context.params.get("model")
         summary_model = str(model_raw) if model_raw is not None else None
-        restore_model = context.sdk_session.current_model  # type: ignore[union-attr]
+        restore_model = session.current_model
         capture = require_capture(context.usage_capture, self.action_type)
+        # The summary turn runs on the session's own effort, whatever the compact alias
+        # says, so that is the effort sent (slice 420 D2). It is not routed through
+        # effort_for_session, which would warn on every alias mismatch.
+        effort_sent = session.effort
 
         started = time.monotonic()
         try:
-            reply = await context.sdk_session.compact(  # type: ignore[union-attr]
+            reply = await session.compact(
                 instructions=instructions,
                 summary_model=summary_model,
                 restore_model=restore_model,
             )
         except Exception as exc:
             _logger.exception("CompactAction: sdk rotate failed in step %s", context.step_name)
+            failed_metadata: dict[str, object] = {}
+            stamp_effort_sent(failed_metadata, effort_sent)
             return ActionResult(
                 success=False,
                 action_type=self.action_type,
                 outputs={},
                 error=str(exc),
+                metadata=failed_metadata,
             )
 
         # The compact model is the alias the step named; no resolution is needed to
-        # attribute spend the SDK already priced (slice 175 D3). Effort is never sent (D7).
+        # attribute spend the SDK already priced (slice 175 D3).
         metadata: dict[str, object] = {}
         stamp(
             metadata,
             capture.record_from_telemetry(
-                None, reply.telemetry, started=started, model=summary_model, effort_sent=None
+                None,
+                reply.telemetry,
+                started=started,
+                model=summary_model,
+                effort_sent=effort_sent,
             ),
         )
+        stamp_effort_sent(metadata, effort_sent)
         return ActionResult(
             success=True,
             action_type=self.action_type,
