@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from typer.testing import CliRunner
 
 from squadron.cli.app import app
+from squadron.core.models import Effort
 
 _runner = CliRunner()
 
@@ -205,3 +206,41 @@ def test_dispatch_run_sdk_system_prompt_appends_to_preset(tmp_path: Path) -> Non
     config = registry.spawn.call_args[0][0]
     assert config.use_default_system_prompt is True
     assert config.instructions == "X"
+
+
+# ---------------------------------------------------------------------------
+# --effort (slice 420 D4)
+# ---------------------------------------------------------------------------
+
+
+def _run_with_effort(tmp_path: Path, *extra: str) -> MagicMock:
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("Write a haiku.", encoding="utf-8")
+    with patch(f"{_MODULE}.one_shot_dispatch", new=AsyncMock(return_value="ok")) as dispatch:
+        result = _runner.invoke(
+            app,
+            [
+                "_dispatch-run",
+                "--prompt-file",
+                str(prompt_file),
+                "--model",
+                "minimax-text-01",
+                "--profile",
+                "openrouter",
+                *extra,
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    return dispatch
+
+
+def test_dispatch_run_effort_flag_reaches_the_dispatch(tmp_path: Path) -> None:
+    dispatch = _run_with_effort(tmp_path, "--effort", "low")
+
+    assert dispatch.call_args.kwargs["effort"] is Effort.low
+
+
+def test_dispatch_run_without_effort_sends_none(tmp_path: Path) -> None:
+    dispatch = _run_with_effort(tmp_path)
+
+    assert dispatch.call_args.kwargs["effort"] is None

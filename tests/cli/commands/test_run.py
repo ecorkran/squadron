@@ -1010,7 +1010,7 @@ class TestPromptOnly:
         mock_mgr = MagicMock()
         mock_mgr.init_run.return_value = "run-test-123"
         mock_cls.return_value = mock_mgr
-        mock_resolver_cls.return_value.resolve.side_effect = ModelPoolNotImplemented("pool:review")
+        mock_resolver_cls.return_value.resolve_full.side_effect = ModelPoolNotImplemented("pool:review")
 
         result = runner.invoke(app, ["run", "slice", "152", "--prompt-only"])
 
@@ -1050,7 +1050,7 @@ class TestPromptOnly:
             status="running",
         )
         mock_cls.return_value = mock_mgr
-        mock_resolver_cls.return_value.resolve.side_effect = ModelResolutionError("no model")
+        mock_resolver_cls.return_value.resolve_full.side_effect = ModelResolutionError("no model")
 
         result = runner.invoke(app, ["run", "--prompt-only", "--next", "--resume", "run-123"])
 

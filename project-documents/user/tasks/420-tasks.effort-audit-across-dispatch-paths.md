@@ -123,10 +123,10 @@ revision_number: 2
 **Commit**: `fix: send alias effort from the replay and findings-addressed judges`
 
 ## Task 9: `_dispatch-run --effort` and prompt-only render (D4) — Effort 2
-- [ ] In `cli/commands/dispatch_run.py` add an optional `--effort` option typed `Effort`, same shape and help text as `summary_run.py`, and pass `effort=effort` to `one_shot_dispatch`
-- [ ] In `pipeline/prompt_renderer.py` `_render_dispatch`: switch `resolver.resolve(action_model)` to `resolve_full`; append `--effort <level>` to the non-SDK command when `resolved.effort` is not `None`, omit it otherwise. Model it on `_render_summary` (near line 450)
-- [ ] Tests: the existing `_dispatch-run` CLI test (grep `dispatch_run` under `tests/cli`): `--effort low` passes `Effort.LOW` to `one_shot_dispatch`, no flag passes `None`. `tests/pipeline/test_prompt_renderer.py`: non-SDK alias with effort emits `--effort low`; without effort omits it; SDK-profile alias still emits no command
-- [ ] Success: tests pass; ruff and pyright clean
+- [x] In `cli/commands/dispatch_run.py` add an optional `--effort` option typed `Effort`, same shape and help text as `summary_run.py`, and pass `effort=effort` to `one_shot_dispatch`
+- [x] In `pipeline/prompt_renderer.py` `_render_dispatch`: switch `resolver.resolve(action_model)` to `resolve_full`; append `--effort <level>` to the non-SDK command when `resolved.effort` is not `None`, omit it otherwise. Model it on `_render_summary` (near line 450)
+- [x] Tests: the existing `_dispatch-run` CLI test (grep `dispatch_run` under `tests/cli`): `--effort low` passes `Effort.LOW` to `one_shot_dispatch`, no flag passes `None`. `tests/pipeline/test_prompt_renderer.py`: non-SDK alias with effort emits `--effort low`; without effort omits it; SDK-profile alias still emits no command
+- [x] Success: tests pass; ruff and pyright clean
 
 **Commit**: `fix: carry alias effort through _dispatch-run and prompt-only render`
 

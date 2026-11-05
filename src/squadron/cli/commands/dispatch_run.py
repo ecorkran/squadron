@@ -14,6 +14,7 @@ from pathlib import Path
 
 import typer
 
+from squadron.core.models import Effort
 from squadron.pipeline.actions.dispatch import one_shot_dispatch
 
 _logger = logging.getLogger(__name__)
@@ -30,6 +31,11 @@ def dispatch_run(
         help="key=value pipeline parameters (repeatable).",
     ),
     system_prompt: str | None = typer.Option(None, "--system-prompt", help="System prompt text."),
+    effort: Effort | None = typer.Option(
+        None,
+        "--effort",
+        help="Reasoning effort of the resolved alias (slice 931); omitted when it sets none.",
+    ),
 ) -> None:
     """[hidden] Run a one-shot dispatch via a non-SDK provider profile."""
     if not prompt_file.exists():
@@ -88,6 +94,7 @@ def dispatch_run(
                 model_id=model_id,
                 profile_name=resolved_profile,
                 system_prompt=system_prompt or "",
+                effort=effort,
             )
         )
     except KeyError as exc:

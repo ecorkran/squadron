@@ -201,7 +201,8 @@ def _render_dispatch(
             instruction="Execute the work using the assembled context",
         )
 
-    model_id, profile = resolver.resolve(action_model)
+    resolved = resolver.resolve_full(action_model)
+    model_id, profile = resolved.model_id, resolved.profile
 
     if is_sdk_profile(profile):
         return ActionInstruction(
@@ -218,11 +219,15 @@ def _render_dispatch(
         if k not in _DISPATCH_INTERNAL_PARAM_KEYS
     ]
     param_str = (" " + " ".join(extra_params)) if extra_params else ""
+    # The command carries the resolved id, not the alias, so the alias's effort rides
+    # along explicitly or the CLI dispatch would drop it (slice 420 D4).
+    effort_str = f" --effort {resolved.effort.value}" if resolved.effort is not None else ""
     command = (
         f"sq _dispatch-run"
         f" --prompt-file {{tmp_path}}"
         f" --model {shlex.quote(model_id)}"
         f" --profile {shlex.quote(profile or '')}"
+        f"{effort_str}"
         f"{param_str}"
     )
 

@@ -6,13 +6,14 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from squadron.core.models import Effort
 from squadron.pipeline.prompt_renderer import _render_dispatch
-from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolver
+from squadron.pipeline.resolver import ModelPoolNotImplemented, ModelResolver, ResolvedModel
 
 
-def _mock_resolver(model_id: str, profile: str | None):
+def _mock_resolver(model_id: str, profile: str | None, effort: Effort | None = None):
     resolver = MagicMock()
-    resolver.resolve.return_value = (model_id, profile)
+    resolver.resolve_full.return_value = ResolvedModel(model_id, profile, effort=effort)
     return resolver
 
 
@@ -140,7 +141,41 @@ def test_render_dispatch_no_model_param() -> None:
 
     assert result.model_switch is None
     assert result.command is None
-    resolver.resolve.assert_not_called()
+    resolver.resolve_full.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Effort (slice 420 D4)
+# ---------------------------------------------------------------------------
+
+
+def test_render_dispatch_command_carries_the_alias_effort() -> None:
+    import shlex
+
+    resolver = _mock_resolver("minimax-text-01", "openrouter", Effort.low)
+
+    result = _render_dispatch({"model": "minimax-low"}, {}, resolver)
+
+    assert result.command is not None
+    parsed = shlex.split(result.command)
+    assert parsed[parsed.index("--effort") + 1] == "low"
+
+
+def test_render_dispatch_command_has_no_effort_when_the_alias_sets_none() -> None:
+    resolver = _mock_resolver("minimax-text-01", "openrouter")
+
+    result = _render_dispatch({"model": "minimax"}, {}, resolver)
+
+    assert result.command is not None
+    assert "--effort" not in result.command
+
+
+def test_render_dispatch_sdk_alias_with_effort_emits_no_command() -> None:
+    resolver = _mock_resolver("claude-opus-4-7", "sdk", Effort.high)
+
+    result = _render_dispatch({"model": "claude-opus-4"}, {}, resolver)
+
+    assert result.command is None
 
 
 # ---------------------------------------------------------------------------

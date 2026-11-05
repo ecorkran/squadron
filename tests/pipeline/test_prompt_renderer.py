@@ -538,6 +538,9 @@ class TestRenderStepInstructions:
             return ("default-model", None)
 
         resolver.resolve.side_effect = _resolve
+        resolver.resolve_full.side_effect = lambda action_model=None, step_model=None: ResolvedModel(
+            *_resolve(action_model, step_model)
+        )
 
         step = StepConfig(
             step_type="design",
