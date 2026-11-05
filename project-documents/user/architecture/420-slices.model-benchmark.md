@@ -84,11 +84,11 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
      - `sq run fix <issue>` on a real issue produces a failing test, a change that makes it pass, passing gates and one commit on the target.
      - Given frozen issue text, the pipeline runs with no GitHub access and commits to the current branch.
      - The pipeline runs under `pipeline.max_cost_usd` and `--max-cost` like any other pipeline.
-     - CLI, slash command and MCP give identical results.
-   - **Dependencies:** none in this initiative. Ordered here because 424 replays it.
+     - CLI and slash command give identical results.
+   - **Dependencies:** [422] (`CodeHost.get_issue` and the issue renderer, for fetched issue text only; file mode needs nothing from 422).
    - **Interfaces:** Provides the `fix` pipeline and its issue-text input. Consumes the existing executor and cost cap.
    - **Risk Level:** Medium
-   - **Relative Effort:** 2/5
+   - **Relative Effort:** 3/5
 
 5. [ ] **(424) Producer-Only Replay Runner** — A new `sq run` producer-only mode that runs only a pipeline's producer step (`implement` from `P6`, the `fix` pipeline's step) with its embedded review stripped: same prompt, same dispatch, same commit, no review action and no verdict, then stop. On top of that, the benchmark runner takes a case set × configs × sample count and, for each run:
    - opens a sandbox at the start commit;
@@ -110,7 +110,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** High (stripping the embedded review without forking the step, and leak detection)
    - **Relative Effort:** 4/5
 
-6. [ ] **(425) Grading and Paired Report** — The grader runs after the producer finishes, in the same sandbox, with its own commands. It:
+6. [ ] **(425) Grading and Paired Report** — The grader runs after the producer finishes, in a fresh sandbox rebuilt from the start commit plus the producer's diff, with its own commands. It:
    - injects the hidden set without removing producer tests, renaming on a clash and recording it;
    - runs the start commit's suite minus the superseded set and the exclusion list;
    - runs the producer's new tests as a separate signal;
@@ -132,7 +132,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** Medium
    - **Relative Effort:** 4/5
 
-7. [ ] **(426) Slice Cases** — Cases from 400 slice-range records: the fork commit is the start, the design and task file at the fork are the task, and the landing commit is the reference. They have no hidden set. The superseded set comes from the reference diff. They are qualified with the same environment-keyed records. Slice cases are graded on regressions, check and snapshot deltas and review findings. Before judging, diffs are normalized (DEVLOG, CHANGELOG, task files, review files and slice documents dropped). The 177 pairwise judge then compares replay diffs within a case, Bradley-Terry ranks configs, and the reference appears as a reference line, not a ranked config. Diffs too large for the judge's context follow a stated rule, never silent truncation.
+7. [ ] **(426) Slice Cases** — Cases from 400 slice-range records: the fork commit is the start, the design and task file at the fork are the task, and the slice branch tip (`tip_sha`) is the reference, so a merge landing does not bring in unrelated work. They have no hidden set. The superseded set comes from the reference diff. They are qualified with the same environment-keyed records. Slice cases are graded on regressions, check and snapshot deltas and review findings. Before judging, diffs are normalized (DEVLOG, CHANGELOG, task files, review files and slice documents dropped). The 177 pairwise judge then compares replay diffs within a case, Bradley-Terry ranks configs, and the reference appears as a reference line, not a ranked config. Diffs too large for the judge's context follow a stated rule, never silent truncation.
    - **Value:** Developer value. Benchmarks the full-slice implementation work where most P6 spend goes.
    - **Success Criteria:**
      - Slice cases build from squadron's 400 slice ranges with recorded exclusion reasons.
@@ -151,7 +151,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
      - The matching rule is defined and tested on findings that match and findings that don't.
      - The report gives recall and unmatched-finding counts per reviewer config, with n.
      - 425's report reads recall for its grading config and flags the review columns only when that recall is missing.
-   - **Dependencies:** [421]; 400 normalized findings, 300 review template. It does not depend on 424–426 and can be built any time after 421.
+   - **Dependencies:** [421, 425]; 400 normalized findings, 300 review template. It imports 425's `ReviewerRef`, review call and bootstrap, and does not depend on 424 or 426.
    - **Interfaces:** Provides planted-defect cases, recall records and the recall report. Consumes 421's records and sandbox, and 400's normalization.
    - **Risk Level:** Medium (how defects are planted and how loose the matcher is decide whether the number means anything)
    - **Relative Effort:** 3/5
@@ -163,8 +163,8 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
 **Key decisions made during planning:**
 - **The keystone and the replay slice are each split in two.** As written in the architecture, each carried more than six concerns. The splits are at a data boundary (sandbox and records vs. fix-case qualification) and at a process boundary (producing a diff vs. grading it). Each half leaves a working, inspectable result.
 - **The auth check lives in 421**, which builds the scrubbed environment, so a no stops the plan before 422 depends on it.
-- **The fix pipeline (423) has no dependencies in this initiative.** It is ordered right before replay because replay needs it, but it can be built earlier.
-- **Reviewer recall (427) is last in the list but needs only 421.** It can move up if code-review model choice becomes the more pressing question.
+- **The fix pipeline (423) depends on 422 only for fetching issue text.** It comes right after 422 in the keystone order.
+- **Reviewer recall (427) needs 421 and 425.** It reuses 425's grading review and statistics instead of defining its own.
 
 **Ordering decided by measurement:**
 - 422's yield report decides what comes after 423. If qualified fix cases can separate two configs, the order stands. If not, either discovery is pooled across cf projects (422 already runs on any project) or 426's case-building part moves ahead of 424, and 424 and 425 are built against slice cases first.

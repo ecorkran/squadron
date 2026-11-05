@@ -9,7 +9,121 @@ dateUpdated: 20261104
 
 A lightweight, append-only record of development activity. Newest entries first.
 
+## 20261105
+
+### Initiative 420: Slice Designs 420–427 Reviewed
+
+- **Run:** `slices-plan` for plan 420 wrote all eight designs and DEVLOG entries, but every item failed at design-1: DEVLOG.md is over 1 MiB, and the Edit tool result carrying it went past the SDK's 1 MiB message buffer. Fixed in ef6d51a9. The review loop never ran.
+- **Reviews:** `sq review slice` with sonnet-high on each: 420–426 CONCERNS, 427 FAIL (the matcher could match one finding to two defects; fixed). Responses are in each review file. Fixes favoured cuts.
+- **Cross-slice changes:**
+  - 423 depends on 422 for issue fetching.
+  - 427 depends on 425 and imports its `ReviewerRef`, review call and `bootstrap_mean_interval`.
+  - 424 owns `CaseKindRunner.requalify`.
+  - 422 creates `/sq:benchmark`.
+  - Config identity adds `tool_use` and `max_output_tokens` (420 D6).
+  - Grading runs with its own cap in a sandbox rebuilt from start commit plus diff.
+  - The slice-case reference is `tip_sha`.
+  - The architecture and slice plan are updated to match.
+- **Next:** Phase 5 task breakdown, starting with 420.
+
 ## 20261104
+
+### Slice 427: Reviewer Recall — Design Complete
+
+- **Delivered:** `427-slice.reviewer-recall.md`. It covers `sq benchmark recall build/run/report/show`, `RecallCase`, `RecallBuild`, `RecallRun` and `RecallReview` records, the `RecallAdapter` seam, the matcher, and 425's recall lookup.
+- **Decided:**
+  - Source diffs are single commits from history, bounded by diff size. No dependency on 422, 424 or 426 (D1).
+  - Defects are planted by a fixed table of nine mutation operators on added source lines, applied as segment-exact text edits. No model plants or matches, so ground truth has no planter bias and building costs no LLM spend. Only correctness and error-handling defects are measured, and the report says so (D2, D3).
+  - A defect is kept only if a test passing on the clean commit fails with that defect alone in every verification run, with an assertion or project exception. Import-only failures are rejected. Defects are spaced so one finding cannot match two (D4).
+  - Matcher: same file, and line span within ±3 or a `path#symbol` anchor on an enclosing def/class. Category is not required and is reported as agreement. `PASS` findings are ignored. Matches are recomputed at report time under `MATCHER_VERSION` (D6).
+  - Recall is the mean per-case found fraction with a case bootstrap interval. Pairs get 425's paired verdicts (D7).
+  - `reviewer_key` is model, profile, effort sent and template hash. Alias and per-tree rules hash are excluded (D8). `ReviewerRef`, the no-tools review call and the bootstrap are shared with 425, written by whichever slice lands first (D9).
+  - 425's `review_flag` shows the grading reviewer's recall when `latest_recall_for` returns a summary (D11).
+- **Open risk:** yield of verifiable defects in squadron, where many lines are reached only through tests that patch internals.
+- **Next:** slice review, then Phase 5 task breakdown for 427.
+
+### Slice 426: Slice Cases — Design Complete
+
+- **Delivered:** `426-slice.slice-cases.md`. It covers `sq benchmark slice-cases build/show`, `sq benchmark judge`, `SliceQualification` and `DiffJudgment` records, the slice-case runner on producer-only `P6`, diff normalization, and slice-case tables in the report.
+- **Decided:**
+  - Candidates come only from 403's `slice_ranges` record. The start is `fork_sha` and the reference is `tip_sha`, not the landing, so on a merge landing the reference holds only the slice's own work. Multiple landings and branches that merged the target are rejected and counted (D1, D2).
+  - Task text is the design plus the task file at the fork, using 177's path patterns. Docs-only slices and cases with an empty regression selection are rejected (D3–D5).
+  - The superseded set and exclusions reuse 422's closure digests and repeats. `SliceCaseAdapter` is structural, so 422's Python adapter satisfies it unchanged (D5, D7).
+  - cf registration runs inside the scrubbed home, so the user's cf registry is never touched. `cf` reaches the producer's `PATH` through `with_tools` without changing `EnvironmentIdentity` (D9).
+  - The judge gets normalized diffs: DEVLOG, CHANGELOG, task, review and slice docs, plus `uv.lock`, are dropped, and binaries become marker lines (D11). Pairs are sample-matched across configs plus each replay against the reference (D13).
+  - Over-size rule: if the longest pair prompt exceeds `benchmark.judge_max_prompt_chars`, the whole case is skipped and counted. Nothing is truncated (D14). A config-absent replay forfeits its pairs (D15).
+  - Pair verdicts come from 425's paired bootstrap over per-case win shares. Bradley-Terry strength is shown but does not decide rank (D17).
+- **Open risk:** whether cf works under a redirected `HOME`. That is implementation step 1 (spike).
+- **Next:** slice review, then Phase 5 task breakdown for 426.
+
+### Slice 425: Grading and Paired Report — Design Complete
+
+- **Delivered:** `425-slice.grading-and-paired-report.md`. It covers `sq benchmark grade` and `sq benchmark report`, `ReferenceGrade`, `ImplementationGrade` and `SampleSizeEstimate` records, the `GradingAdapter` seam, the paired bootstrap, and the measured sample-count estimate.
+- **Decided:**
+  - One fixed grade order per sandbox: review the producer's commit as written, restore tool config, run producer-new tests, snapshot, restore edited test files, run the regression suite, inject and run the hidden set (D1).
+  - Hidden tests go into a sibling `test_sqhidden_<stem>.py` with the reference file, added conftest imports and hidden fixtures. Nothing the producer wrote is overwritten, and clashes are recorded (D3).
+  - All `[tool.*]` tables are restored from the start commit except packaging tables (`uv`, `hatch`, `setuptools`, …), which follow the producer with `[project]` (D4).
+  - The grading review runs with no tools, so it cannot read the user's checkout. Its noise floor is measured per case from repeated reference reviews, because 320's stored floors measure the audit prompt, not this reviewer (D7, D8).
+  - Grading is a separate command with its own run cap and a bound built from the largest observed review cost (D9). Snapshots are measured in the sandbox without writing `code_snapshot` records, and they are stored as sidecars (D11, D12).
+  - Percentile bootstrap over cases, 10,000 resamples, seeded from the benchmark id. Fewer than five cases gives no interval (D14). `sq benchmark yield` shows the measured estimate beside 422's analytic bound (D15).
+- **Next:** slice review, then Phase 5 task breakdown for 425.
+
+### Slice 424: Producer-Only Replay Runner — Design Complete
+
+- **Delivered:** `424-slice.producer-only-replay-runner.md`. It covers `sq run --producer-only`, `sq benchmark run/status/replay-show`, `BenchmarkRun` and `ImplementationReplay` records, diff sidecars, and the leak scan.
+- **Decided:**
+  - Producer-only is a transform of the pipeline definition. It keeps the single top-level step whose type implements `ProducerStep`, and `implement` drops `review` and `checkpoint`. The executor and prompt-only mode stay unchanged (D1–D3).
+  - Leak scans read the runtime's own transcripts in the scrubbed home (Claude Code JSONL, Codex rollouts). OpenAI-compatible profiles have no transcript, so they are refused (D6, D7).
+  - The run cap is set by flag only and applies per invocation. The per-replay cap comes from the flag or `pipeline.max_cost_usd`. The stated bound includes one replay of overshoot (D8).
+  - The 947 cap was checked only after each action, so a one-dispatch replay was unbounded. SDK dispatches now get `max_budget_usd` (affects every capped SDK run). Codex is checked after each dispatch, and an issue is to be filed (D9).
+  - Hidden-test injection moves to 425 and cf sandbox registration to 426. The 421 and 422 lines are corrected.
+- **Open risk:** whether the runtimes write transcripts into a redirected `HOME`. That is implementation step 1 (spike).
+- **Next:** slice review, then Phase 5 task breakdown for 424.
+
+### Slice 423: Fix Pipeline — Design Complete
+
+- **Delivered:** `423-slice.fix-pipeline.md`. `sq run fix <issue>` is one `fix` step that expands to `fix-context → dispatch → commit` (new `fix` commit subject). It has no branch, task file or review.
+- **Decided:**
+  - The issue comes from `CodeHost.get_issue` (from 422, rendered with no cutoff) or from a frozen `issue-file` resolved against `--io-dir`. The commit goes to the target or, with `commit-to=current`, the checked-out branch, with no cf call (D2, D3, D5).
+  - The agent runs the gates and ends its reply with a JSON fix report. The pipeline checks its shape before staging, and `blocked` pauses the run (D4).
+  - The commit is `fix: {summary}` plus `Fixes #n`. It needs a clean tree at the start and an unchanged HEAD (D5, D6).
+  - The `sq run` cf check uses step configs with params substituted, so a sandbox run needs no cf (D7).
+  - Prompt-only parity comes from the hidden `sq _fix-prompt` and `sq _commit --subject fix`, which call the same code. Squadron has no MCP run surface, so MCP parity is out of scope (D9).
+- **Effort:** 3/5 (plan said 2/5).
+- **Next:** slice review, then Phase 5 task breakdown for 423.
+
+### Slice 422: Fix Case Qualification and Yield Report — Design Complete
+
+- **Delivered:** `422-slice.fix-case-qualification-and-yield-report-keystone.md`. It covers discovery from closing commits, frozen issue text through a new `CodeHost.get_issue`, per-node hidden and superseded sets, the Python fairness checks, `FixQualification` records, and the yield report.
+- **Decided:**
+  - Every closing commit is a candidate, including those without tests. Multi-commit and merge fixes are rejected with a counted reason (D1).
+  - Issue text is cut off at the fix commit's committer date. Content edited after that rejects the candidate (D2).
+  - Test sets come from per-node closure digests. Support changes other than added `conftest.py` fixtures reject the candidate (D3).
+  - The boundary check combines a static reference closure with `sys.setprofile` crossings against the parent's script targets and top-level `__all__`. Method calls are allowed. The gaps are stated (D6).
+  - Any patch owned by a project module, class or instance disqualifies the test (D7).
+  - Verdicts are per test, and a case needs one surviving hidden test (D8). Checks run cheapest first (D9).
+  - Records are keyed on the parent's environment digest and `FAIRNESS_RULE_VERSION` (D10).
+  - Separability uses an analytic worst-case MDD until 425 measures real variance, with new config keys `planned_samples` and `target_pass_rate_difference` (D12).
+- **Next:** slice review, then Phase 5 task breakdown for 422.
+
+### Slice 421: Benchmark Sandbox and Case Record — Design Complete
+
+- **Delivered:** `421-slice.benchmark-sandbox-and-case-record.md`. It covers content-addressed case and case-set records, `HistoryFreeSandbox` extracted from `ReplaySandbox`, uv environment resolution, the scrubbed producer environment, the auth check, and the benchmark adapter seam with a pytest suite runner.
+- **Decided:**
+  - `reference_sha` is part of case identity (D1). Case sets are versioned by content and keyed by name (D2). Benchmark record I/O goes in its own module over two new store primitives (D3).
+  - Only `uv.lock` is supported: no lockfile fails with `no_lockfile`, and there is no unpinned fallback (D5).
+  - The scrubbed environment is built from an allowlist with `HOME` redirected, because squadron's config directory has no override variable (D7). Auth files are symlinked, not copied, and the auth check is an empirical probe per profile (D8).
+  - The suite runner uses an injected pytest reporter plugin, not junitxml (D10). Failures get a fifth kind, `other_exception` (D11).
+- **Open risk:** whether Claude auth from the macOS Keychain survives a redirected `HOME`. That is implementation step 1.
+- **Next:** slice review, then Phase 5 task breakdown for 421.
+
+### Slice 420: Effort Audit Across Dispatch Paths — Design Complete
+
+- **Delivered:** `420-slice.effort-audit-across-dispatch-paths.md`, with an inventory of 17 dispatch paths. All three providers apply effort.
+- **Defects found:** compaction records `null` for a turn that ran at the session's effort; the replay judge and the findings-addressed judge drop the alias's effort; `_dispatch-run` has no `--effort`; replay and `sq stats producers` read a failed run with no telemetry as "not sent".
+- **Decided:** `null` stays "not sent" (D1). `effort_sent` is stamped on action metadata on every path that reaches a provider, with one reader that falls back to the legacy record (D5). Replay config identity is (model, profile, effort sent), and the alias is display only (D6). An AST enumeration test keeps the inventory current (D7).
+- **Out of scope:** the findings-addressed judge writes no `UsageRecord` (its spend is unrecorded), so it needs an issue.
+- **Next:** Phase 5 task breakdown for 420.
 
 ### Initiative 420: Model Benchmark — Slice Plan Complete
 
