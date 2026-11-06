@@ -81,8 +81,13 @@ class ProcessRunner(Protocol):
         timeout: float,
         env: Mapping[str, str] | None = None,
         stdin: str | None = None,
+        replace_env: bool = False,
     ) -> ProcessResult:
         """Run ``argv``, returning its result even when it exits non-zero.
+
+        ``env`` is merged over the parent environment by default. With
+        ``replace_env=True`` it is the child's entire environment (``env`` is
+        then required, and the executable is found through its ``PATH``).
 
         Raises ``ProcessNotFoundError`` if the executable is missing,
         ``ProcessCwdNotFoundError`` if ``cwd`` is given and does not exist,
@@ -112,10 +117,18 @@ class SubprocessRunner:
         timeout: float,
         env: Mapping[str, str] | None = None,
         stdin: str | None = None,
+        replace_env: bool = False,
     ) -> ProcessResult:
-        # A replaced environment loses PATH and HOME, which `gh` needs to find
-        # its own config and credentials. Merge over os.environ, never replace.
-        merged_env = {**os.environ, **env} if env is not None else None
+        # Default: a replaced environment loses PATH and HOME, which `gh` needs
+        # to find its own config and credentials, so merge over os.environ.
+        # replace_env=True (benchmark sandboxes) passes env exactly, so no
+        # harness variable reaches the child.
+        if replace_env:
+            if env is None:
+                raise ValueError("replace_env=True requires env")
+            merged_env = dict(env)
+        else:
+            merged_env = {**os.environ, **env} if env is not None else None
         try:
             proc = subprocess.Popen(
                 list(argv),

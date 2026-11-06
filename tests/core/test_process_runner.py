@@ -139,3 +139,32 @@ def test_stdin_is_passed_to_the_child() -> None:
         stdin="body",
     )
     assert result.stdout == "body"
+
+
+def test_replace_env_passes_exactly_the_given_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HARNESS_ONLY_VAR", "leak")
+    result = SubprocessRunner().run(
+        ["/usr/bin/env"],
+        cwd=None,
+        timeout=10,
+        env={"ONLY": "1"},
+        replace_env=True,
+    )
+    assert result.stdout.splitlines() == ["ONLY=1"]
+
+
+def test_merge_mode_still_carries_harness_variable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HARNESS_ONLY_VAR", "kept")
+    result = SubprocessRunner().run(
+        ["/usr/bin/env"], cwd=None, timeout=10, env={"ONLY": "1"}, replace_env=False
+    )
+    assert "HARNESS_ONLY_VAR=kept" in result.stdout.splitlines()
+
+
+def test_replace_env_without_env_raises_value_error() -> None:
+    with pytest.raises(ValueError, match="replace_env"):
+        SubprocessRunner().run(["/usr/bin/env"], cwd=None, timeout=10, replace_env=True)

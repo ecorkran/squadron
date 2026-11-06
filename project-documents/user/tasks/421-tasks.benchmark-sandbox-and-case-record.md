@@ -54,11 +54,11 @@ usageByModel:
 **Commit**: `feat: add benchmark auth-probe timeout config key`
 
 ### Task 3: `ProcessRunner` can replace the environment (D7)
-- [ ] In `core/process_runner.py` add a keyword-only `replace_env: bool` to `ProcessRunner.run` (protocol and `SubprocessRunner`), default `False` so every existing caller is unchanged. When `True`, `env` is required (`None` raises `ValueError`) and is passed to the child exactly, with no merge over `os.environ`. Update the `# Merge over os.environ` comment to say when each applies
-  - [ ] Existing fake runners in `tests/` are not edited: no existing caller passes the parameter, and existing tests in `tests/replay/` must stay unmodified (Tasks 11, 25 and 29)
-  - [ ] The executable is found through the replaced `PATH`, so callers pass absolute paths or a `PATH` that has the tool
-- [ ] Tests (extend the process-runner tests): a real child (`/usr/bin/env`) with `replace_env=True` prints exactly the given variables, and a harness-only variable set with `monkeypatch.setenv` is absent; with `replace_env=False` it is still present; `replace_env=True` with `env=None` raises `ValueError`
-  - [ ] Success: `tests/core` and `tests/codehost` pass
+- [x] In `core/process_runner.py` add a keyword-only `replace_env: bool` to `ProcessRunner.run` (protocol and `SubprocessRunner`), default `False` so every existing caller is unchanged. When `True`, `env` is required (`None` raises `ValueError`) and is passed to the child exactly, with no merge over `os.environ`. Update the `# Merge over os.environ` comment to say when each applies
+  - [x] Existing fake runners in `tests/` are not edited: no existing caller passes the parameter, and existing tests in `tests/replay/` must stay unmodified (Tasks 11, 25 and 29)
+  - [x] The executable is found through the replaced `PATH`, so callers pass absolute paths or a `PATH` that has the tool
+- [x] Tests (extend the process-runner tests): a real child (`/usr/bin/env`) with `replace_env=True` prints exactly the given variables, and a harness-only variable set with `monkeypatch.setenv` is absent; with `replace_env=False` it is still present; `replace_env=True` with `env=None` raises `ValueError`
+  - [x] Success: `tests/core` and `tests/codehost` pass
 
 **Commit**: `feat: let ProcessRunner replace the child environment`
 
