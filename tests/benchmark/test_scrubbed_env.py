@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import tomllib
 from pathlib import Path
 
 import pytest
 
+from squadron.benchmark.python_adapter import PythonBenchmarkAdapter
+from squadron.benchmark.sandbox import BenchmarkSandbox
 from squadron.benchmark.scrubbed_env import (
     BENCHMARK_GIT_USER_EMAIL,
     SQUADRON_CONFIG_SEED,
@@ -16,6 +20,7 @@ from squadron.benchmark.scrubbed_env import (
     MissingHarnessToolError,
     ScrubbedEnvironment,
 )
+from squadron.core.process_runner import ProcessResult, SubprocessRunner
 from squadron.providers.base import ProfileName
 
 
@@ -148,3 +153,48 @@ def test_missing_uv_raises(tmp_path: Path, harness_env: dict[str, str]) -> None:
     env = make_env(tmp_path, harness_env, CredentialGrant.none())
     with pytest.raises(MissingHarnessToolError, match="uv not found"):
         env.prepare()
+
+
+@pytest.mark.network
+def test_real_process_sees_only_the_scrubbed_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The repository's own HEAD, installed from its uv.lock, run through process_env()."""
+    for name in ("GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK"):
+        monkeypatch.setenv(name, "leaked-from-harness")
+    repo_root = Path(__file__).resolve().parents[2]
+    head = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    sandbox = BenchmarkSandbox(
+        start_sha=head,
+        sandbox_id="scrub-real",
+        repo_root=repo_root,
+        runner=SubprocessRunner(),
+        adapter=PythonBenchmarkAdapter(),
+        harness_env=dict(os.environ),
+        install_timeout_s=900,
+        suite_timeout_s=60,
+        root=tmp_path / "root",
+    )
+    with sandbox:
+        env = sandbox.process_env()
+
+        def run(*argv: str) -> ProcessResult:
+            return SubprocessRunner().run(
+                argv, cwd=str(sandbox.tree), timeout=120, env=env, replace_env=True
+            )
+
+        printed = dict(
+            line.split("=", 1) for line in run("/usr/bin/env").stdout.splitlines() if "=" in line
+        )
+        for name in ("GH_TOKEN", "GITHUB_TOKEN", "SSH_AUTH_SOCK"):
+            assert name not in printed
+        assert printed["HOME"] == str(sandbox.home)
+        venv_bin = str(sandbox.tree / ".venv" / "bin")
+        assert printed["PATH"].split(":") == [venv_bin, str(sandbox.home / "bin"), *SYSTEM_PATH_DIRS]
+        assert run("/bin/sh", "-c", "command -v sq").stdout.strip() == f"{venv_bin}/sq"
+        version = tomllib.loads((sandbox.tree / "pyproject.toml").read_text())["project"]["version"]
+        assert version in run("sq", "--version").stdout
+        credential_helper = run("git", "config", "--get", "credential.helper")
+        assert credential_helper.stdout.strip() == ""

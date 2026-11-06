@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import Self, cast
@@ -161,18 +162,30 @@ def _remove_cf_project(runner: ProcessRunner, name: str) -> None:
         _logger.warning("could not remove cf project %s: %s", name, result.stderr.strip())
 
 
-def sweep_orphans(runner: ProcessRunner, root: Path | None = None) -> None:
+def sweep_orphans(
+    runner: ProcessRunner,
+    root: Path | None = None,
+    *,
+    sweep_cf_projects: bool = True,
+    sibling_suffixes: Sequence[str] = (),
+) -> None:
     """Remove sandboxes whose owner is gone, and cf projects whose directory is gone.
 
     A sandbox with a live lock, such as one in a concurrent ``sq replay`` process, is left
     alone. Never raises; each removal or failed removal is a WARNING.
+
+    The keyword-only parameters default to ``sq replay``'s behavior. The benchmark sandbox
+    passes ``sweep_cf_projects=False`` (it registers no cf project) and its sibling
+    suffixes (``.home``, ``.out``): directories that have no lock of their own and go with
+    their owner.
     """
     sandbox_root = root if root is not None else replays_root()
-    _sweep_directories(runner, sandbox_root)
-    _sweep_cf_projects(runner)
+    _sweep_directories(runner, sandbox_root, tuple(sibling_suffixes))
+    if sweep_cf_projects:
+        _sweep_cf_projects(runner)
 
 
-def _sweep_directories(runner: ProcessRunner, root: Path) -> None:
+def _sweep_directories(runner: ProcessRunner, root: Path, sibling_suffixes: tuple[str, ...]) -> None:
     if not root.is_dir():
         return
     try:
@@ -183,11 +196,15 @@ def _sweep_directories(runner: ProcessRunner, root: Path) -> None:
     for entry in entries:
         if not entry.is_dir():
             continue  # the lock files beside the sandboxes
+        if entry.name.endswith(sibling_suffixes):
+            continue  # a sibling directory: removed with its owner below
         lock = lock_path(root, entry.name)
         if not is_orphan(runner, read_lock(lock)):
             continue
         _logger.warning("removing orphaned replay sandbox %s", entry)
         remove_tree(entry)
+        for suffix in sibling_suffixes:
+            remove_tree(root / f"{entry.name}{suffix}")
         unlink_quietly(lock)
 
 

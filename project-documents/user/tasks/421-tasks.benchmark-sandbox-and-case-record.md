@@ -249,26 +249,26 @@ usageByModel:
 **Commit**: `feat: add python suite runner with failure classification`
 
 ### Task 25: `BenchmarkSandbox` (D4, D7, design Data Flow)
-- [ ] `src/squadron/benchmark/sandbox.py`: `benchmark_root()` returns `~/.config/squadron/benchmark/`. `BenchmarkSandbox(start_sha, sandbox_id, repo_root, runner, adapter, harness_env, install_timeout_s, suite_timeout_s, root=None)` composes `HistoryFreeSandbox` (tree `<root>/<id>/`), a `ScrubbedEnvironment` with `CredentialGrant.none()` (home `<id>.home`), and an output directory `<id>.out`. `__enter__` order: history-free build, `ScrubbedEnvironment.prepare()`, `adapter.resolve_environment`. Expose `tree`, `home`, `output_dir`, `identity`, `keep()`, `run_suite(selection)` and `process_env()` (`environment.variables(adapter.path_entries(ctx))`, the map for any child process in the sandbox)
-  - [ ] All four paths (tree, home, out, lock) are removed on exit unless `keep()` was called, and on every failed-enter path (resolution failure leaves nothing)
-- [ ] `sweep_orphans(runner, root=None, *, sweep_cf_projects=True, sibling_suffixes=())`: the new keyword-only parameters default to today's behavior, so `sq replay`'s call (`runner.py`) and the existing tests are unchanged. With `sweep_cf_projects=False` no `cf` command runs. Entries whose name ends in a `sibling_suffixes` value (`.home`, `.out`) are skipped when iterating (they have no lock of their own) and removed with their owner's directory when the owner is an orphan
-- [ ] `sweep_benchmark_orphans(runner, root=None)` in `benchmark/sandbox.py`: calls `sweep_orphans(runner, root or benchmark_root(), sweep_cf_projects=False, sibling_suffixes=(".home", ".out"))`
-- [ ] Tests `tests/benchmark/test_benchmark_sandbox.py` on `env_ok` and `env_no_lock`
-  - [ ] Enter, then `identity`, tree, home and out exist; exit removes all four; `keep()` leaves them
-  - [ ] `env_no_lock` raises `EnvironmentResolutionError(no_lockfile)` and nothing remains under the root
-  - [ ] `sweep_orphans` with `sweep_cf_projects=False` removes an orphaned sandbox and runs no `cf` command; with `sibling_suffixes` it also removes the orphan's siblings and leaves a live owner's alone
-  - [ ] Rerun the Task 10 command: it passes with the same count and no existing replay test modified
-  - [ ] `sweep_benchmark_orphans` removes an orphan's three directories and lock with a WARNING, ignores a live one, runs no `cf` command, and does not touch a `replays/` sibling root
-  - [ ] `run_suite` runs under the scrubbed environment (spot check an env value from inside a test); `process_env()` has the adapter's `.venv/bin` first on `PATH`
+- [x] `src/squadron/benchmark/sandbox.py`: `benchmark_root()` returns `~/.config/squadron/benchmark/`. `BenchmarkSandbox(start_sha, sandbox_id, repo_root, runner, adapter, harness_env, install_timeout_s, suite_timeout_s, root=None)` composes `HistoryFreeSandbox` (tree `<root>/<id>/`), a `ScrubbedEnvironment` with `CredentialGrant.none()` (home `<id>.home`), and an output directory `<id>.out`. `__enter__` order: history-free build, `ScrubbedEnvironment.prepare()`, `adapter.resolve_environment`. Expose `tree`, `home`, `output_dir`, `identity`, `keep()`, `run_suite(selection)` and `process_env()` (`environment.variables(adapter.path_entries(ctx))`, the map for any child process in the sandbox)
+  - [x] All four paths (tree, home, out, lock) are removed on exit unless `keep()` was called, and on every failed-enter path (resolution failure leaves nothing)
+- [x] `sweep_orphans(runner, root=None, *, sweep_cf_projects=True, sibling_suffixes=())`: the new keyword-only parameters default to today's behavior, so `sq replay`'s call (`runner.py`) and the existing tests are unchanged. With `sweep_cf_projects=False` no `cf` command runs. Entries whose name ends in a `sibling_suffixes` value (`.home`, `.out`) are skipped when iterating (they have no lock of their own) and removed with their owner's directory when the owner is an orphan
+- [x] `sweep_benchmark_orphans(runner, root=None)` in `benchmark/sandbox.py`: calls `sweep_orphans(runner, root or benchmark_root(), sweep_cf_projects=False, sibling_suffixes=(".home", ".out"))`
+- [x] Tests `tests/benchmark/test_benchmark_sandbox.py` on `env_ok` and `env_no_lock`
+  - [x] Enter, then `identity`, tree, home and out exist; exit removes all four; `keep()` leaves them
+  - [x] `env_no_lock` raises `EnvironmentResolutionError(no_lockfile)` and nothing remains under the root
+  - [x] `sweep_orphans` with `sweep_cf_projects=False` removes an orphaned sandbox and runs no `cf` command; with `sibling_suffixes` it also removes the orphan's siblings and leaves a live owner's alone
+  - [x] Rerun the Task 10 command: it passes with the same count and no existing replay test modified
+  - [x] `sweep_benchmark_orphans` removes an orphan's three directories and lock with a WARNING, ignores a live one, runs no `cf` command, and does not touch a `replays/` sibling root
+  - [x] `run_suite` runs under the scrubbed environment (spot check an env value from inside a test); `process_env()` has the adapter's `.venv/bin` first on `PATH`
 
 ### Task 26: Real-process scrub test and concurrency load test (success criteria, Technical Requirements)
-- [ ] In `tests/benchmark/test_scrubbed_env.py` add one `network` integration test: build a `BenchmarkSandbox` at the repository's own HEAD commit (it has `uv.lock`) and run through `process_env()`, via `ProcessRunner` with `replace_env=True`, the commands `env`, `command -v sq`, `sq --version` and `git config --get credential.helper`
-  - [ ] `GH_TOKEN`, `GITHUB_TOKEN` and `SSH_AUTH_SOCK` are absent (set them with `monkeypatch.setenv` in the test process first, so the test fails if the runner still merges `os.environ`); `HOME` is the scrubbed home
-  - [ ] Every `PATH` entry under the real home belongs to the sandbox (`<tree>/.venv/bin`, `<id>.home/bin`)
-  - [ ] `command -v sq` is `<tree>/.venv/bin/sq`; `sq --version` matches the version in the tree's `pyproject.toml`; `credential.helper` prints nothing
-  - [ ] Success: the test passes on this machine
-- [ ] Load test `tests/load/test_benchmark_sandbox_concurrency.py` (`network` marker): enter three `BenchmarkSandbox`es on `env_ok` at once (threads), each in its own root and sharing the uv cache, while `sweep_benchmark_orphans` runs on the shared root
-  - [ ] All three resolve their environments within `benchmark.install_timeout_s`, the sweep removes none of them (live locks), and after exit nothing remains under the root
+- [x] In `tests/benchmark/test_scrubbed_env.py` add one `network` integration test: build a `BenchmarkSandbox` at the repository's own HEAD commit (it has `uv.lock`) and run through `process_env()`, via `ProcessRunner` with `replace_env=True`, the commands `env`, `command -v sq`, `sq --version` and `git config --get credential.helper`
+  - [x] `GH_TOKEN`, `GITHUB_TOKEN` and `SSH_AUTH_SOCK` are absent (set them with `monkeypatch.setenv` in the test process first, so the test fails if the runner still merges `os.environ`); `HOME` is the scrubbed home
+  - [x] Every `PATH` entry under the real home belongs to the sandbox (`<tree>/.venv/bin`, `<id>.home/bin`)
+  - [x] `command -v sq` is `<tree>/.venv/bin/sq`; `sq --version` matches the version in the tree's `pyproject.toml`; `credential.helper` prints nothing
+  - [x] Success: the test passes on this machine
+- [x] Load test `tests/load/test_benchmark_sandbox_concurrency.py` (`network` marker): enter three `BenchmarkSandbox`es on `env_ok` at once (threads), with distinct ids under one shared root (so the sweep acts on all three) and sharing the uv cache, while `sweep_benchmark_orphans` runs on that root
+  - [x] All three resolve their environments within `benchmark.install_timeout_s`, the sweep removes none of them (live locks), and after exit nothing remains under the root
 
 **Commit**: `feat: add benchmark sandbox with scrubbed environment`
 
