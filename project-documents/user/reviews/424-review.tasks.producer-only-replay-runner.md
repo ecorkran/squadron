@@ -258,3 +258,16 @@ Task 10 adds a load test under `tests/load/` and confirms CI does not exclude it
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 16
 - Finding-shaped matches — surviving validation: 16
+
+## Responses
+
+- **F001 (fixed, different mechanism):** Real gap. The producer child inherited the harness environment. The fix is not `replace_env`: `SubprocessRunner.run` requires a timeout and the producer has none, so Task 25 instead adds an optional `env` to `run_sq_subprocess` (`subprocess.run(env=...)` replaces the environment exactly; `None` keeps `sq replay` unchanged). The test uses a real child with `GH_TOKEN` set in the test process. Beyond the finding: 421's `BenchmarkSandbox` hardcodes `CredentialGrant.none()`, so the producer had no credentials in the sandbox home it is read back from. Task 25 adds `BenchmarkSandbox.producer_env(profile)` with tests. Task 11 checks the 421 names it uses, and Task 37 corrects D5 and the Data Flow line.
+- **F002 (declined):** 421–423 are declared dependencies and are implemented first, so the gate passes in the normal order. Reordering four tasks to save work in a case the dependency order excludes is churn.
+- **F003 (declined):** Same reason. The slice branch forks when 424 implementation starts, after 421–423 have merged.
+- **F004 (fixed):** Task 32 now builds the production collaborators in `benchmark/production_deps.py` (the `deps` dataclass, every `LeakRules` input, the `sq` path), refuses on a missing input, and has a test.
+- **F005 (declined):** Already recorded as a deliberate design gap in the Context Summary, and Task 37 writes it into the design. The check protects against a dispatch that spends and then refuses.
+- **F006 (declined):** Issue #297 exists (open, "Bound and signal for a benchmark replay that hangs before dispatch") and the task file's Context Summary defers to it.
+- **F007 (declined):** Task 37 already checks sizes and splits by concern. Moving the split earlier only reorders the same work.
+- **F008, F009, F010 (declined):** An implementer can choose the blocking mechanism, scratch slice and gate trimming. None changes what gets built.
+- **F011 (fixed):** Task 37 lists the `scan` signature change and the producer-environment wording alongside the `turns` departure.
+- **F012 (fixed in part):** Task 23 uses `COST_CAP_KEY`. The other wording items are left.
