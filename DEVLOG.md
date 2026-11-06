@@ -13,6 +13,14 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+### Slice 424: Task Breakdown Complete
+
+- **Delivered:** `424-tasks.producer-only-replay-runner.md`: 35 tasks (290 lines), test-with ordering, commit markers after each group.
+- **Order:** preconditions (421–423 implemented, else `BLOCKED:`); the D9 follow-up issue; transcript spike with fixtures (a runtime that writes no transcript into the scrubbed home is `BLOCKED:`); `ProducerStep` and the definition transform; `--producer-only` (flags, fresh, dry-run, resume, prompt-only, `run.md`); real-pipeline executor check; SDK `max_budget_usd`; replay records and diff sidecars; transcript sources and leak rules; identity, caps, bound, refusals; `FixCaseRunner`, outcome classification, `replay_one`; runner (lock, interruption, resume, cap, `--retry-harness`) with a killed-process test; `sq benchmark run` / `replay-show` and `/sq:benchmark`; walkthrough; final validation.
+- **Design gaps found (handled in the Context Summary, design not edited):** `run.py` is ~1560 lines, so producer-only CLI logic goes in `run_producer_only.py`; the resume transform is applied once in `_load_run_definition`; `--producer-only` is also refused with `--explain`, `--validate`, `--status`, `--step-done`, `--next` (the design names only `--from`, `--item`, `--flagged`); `RunState.producer_only` follows the `replay` field's plumbing.
+- **Noted:** Task 2 stops with `BLOCKED:` until 421–423 are implemented. Task 3 files one GitHub issue (Codex/OpenAI-compatible in-dispatch cost enforcement), as D9 requires.
+- **Next:** Project Manager approval, then Phase 6 implementation.
+
 ### Slice 423: Task Breakdown Complete
 
 - **Delivered:** `423-tasks.fix-pipeline.md`: 16 tasks, test-with ordering, commit markers after each group.
