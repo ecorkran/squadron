@@ -9,7 +9,9 @@ enter and every exit removes all of them unless ``keep()`` was called (slice 421
 from __future__ import annotations
 
 import shutil
+import uuid
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Self
@@ -149,3 +151,9 @@ class BenchmarkSandbox:
         shutil.rmtree(self._output_dir, ignore_errors=True)
         self._environment.cleanup()
         self._history.cleanup()
+
+
+def generate_sandbox_id(now: datetime | None = None) -> str:
+    """A unique ``sandbox-{YYYYMMDD}-{uuid8}`` id."""
+    stamp = (now or datetime.now(UTC)).strftime("%Y%m%d")
+    return f"sandbox-{stamp}-{uuid.uuid4().hex[:8]}"

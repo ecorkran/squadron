@@ -22,6 +22,7 @@ from squadron.benchmark.auth_check import (
     run_auth_check,
 )
 from squadron.benchmark.scrubbed_env import MissingHarnessToolError
+from squadron.cli.commands.benchmark_sandbox import sandbox_command
 from squadron.config.keys import BENCHMARK_AUTH_PROBE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
 from squadron.core.process_runner import SubprocessRunner
@@ -32,6 +33,8 @@ benchmark_app = typer.Typer(
     help="Benchmark sandboxes and producer auth checks.",
     no_args_is_help=True,
 )
+
+benchmark_app.command("sandbox")(sandbox_command)
 
 ModelOption = Annotated[str, typer.Option("--model", help="Model alias to probe.")]
 ModelsOption = Annotated[
