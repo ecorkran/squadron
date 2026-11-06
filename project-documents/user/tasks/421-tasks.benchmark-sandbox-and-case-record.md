@@ -11,7 +11,7 @@ projectState: v0.24.23 released, main is the target (git.integration_branch unse
   Slice 420 implemented. Slice 421 design reviewed, findings addressed.
 dateCreated: 20261106
 dateUpdated: 20261106
-status: not_started
+status: complete
 turns: 24
 promptTokens: 1234565
 cachedTokens: 1145200
@@ -280,22 +280,22 @@ usageByModel:
 **Commit**: `feat: add sq benchmark sandbox`
 
 ### Task 28: Verification walkthrough (design Verification Walkthrough, steps 2–7)
-- [ ] Run steps 2 to 7 of the design's walkthrough on this machine (step 1 was Task 9) and note each result in the DEVLOG entry. Set `REV=$(git log --format=%h -n1 v0.20.0)` first (the design's commit; `v0.20.0` has a `uv.lock`) and use it wherever a step names `$REV`
-  - [ ] Step 2: `lockfile_sha256` matches `git show $REV:uv.lock | shasum -a 256`; the kept paths exist
-  - [ ] Step 3: `uv run pytest tests/benchmark/test_scrubbed_env.py -v` passes
-  - [ ] Step 4: `--suite` prints outcome counts; `--node` with one printed id reports exactly one result
-  - [ ] Step 5: `uv run pytest tests/benchmark/test_python_environment.py::test_stale_lock_fails` (and the `no_lockfile` case in the same file) fails with the expected reason, exit 1, no `.venv`
-  - [ ] Step 6: `uv run pytest tests/metrology/test_benchmark_store.py -v` passes
-  - [ ] Step 7: after a plain run nothing remains under `~/.config/squadron/benchmark/`; kill a run mid-install, run again, and the orphan is swept with a WARNING
-  - [ ] `sq replay run` manual check (one run) behaves as before, per Integration Requirements
+- [x] Run steps 2 to 7 of the design's walkthrough on this machine (step 1 was Task 9) and note each result in the DEVLOG entry. Set `REV=$(git log --format=%h -n1 v0.20.0)` first (the design's commit; `v0.20.0` has a `uv.lock`) and use it wherever a step names `$REV`
+  - [x] Step 2: `lockfile_sha256` matches `git show $REV:uv.lock | shasum -a 256`; the kept paths exist
+  - [x] Step 3: `uv run pytest tests/benchmark/test_scrubbed_env.py -v` passes
+  - [x] Step 4: `--suite` prints outcome counts; `--node` with one printed id reports exactly one result
+  - [x] Step 5: `uv run pytest tests/benchmark/test_python_environment.py::test_stale_lock_fails` (and the `no_lockfile` case in the same file) fails with the expected reason, exit 1, no `.venv`
+  - [x] Step 6: `uv run pytest tests/metrology/test_benchmark_store.py -v` passes
+  - [x] Step 7: after a plain run nothing remains under `~/.config/squadron/benchmark/`; kill a run mid-install, run again, and the orphan is swept with a WARNING
+  - [x] `sq replay run` manual check (one run) behaves as before, per Integration Requirements
 
 ### Task 29: Final validation, CHANGELOG, DEVLOG
-- [ ] Run `ruff format`, `ruff check`, `pyright` (zero errors) and the full test suite once; fix any failure at its cause
-  - [ ] Success: all clean; existing `tests/replay/` tests unmodified and passing
-- [ ] Confirm no source file exceeds ~300 lines (`benchmark/python_adapter.py`, `cli/commands/benchmark.py` are the likeliest; split by concern if so)
-- [ ] Update the slice design's Component Structure and Patterns lists with what the tasks added: `UnresolvedProfileError`, `ProbeStartError`, `MissingCredentialError`, `sweep_benchmark_orphans`
-- [ ] CHANGELOG: one short user-facing bullet for `sq benchmark auth-check` and `sq benchmark sandbox`
-- [ ] DEVLOG: implementation entry per the Session State Summary guidance (what was done, the auth answers, verification results, next: 422); mark the slice design `status: complete` and tick its slice-plan entry when all tasks are complete
-  - [ ] Success: slice design and slice plan reflect completion; every task above is checked, including dropped items marked `[x]` with a note
+- [x] Run `ruff format`, `ruff check`, `pyright` (zero errors) and the full test suite once; fix any failure at its cause
+  - [x] Success: all clean; existing `tests/replay/` tests unmodified and passing
+- [x] Confirm no source file exceeds ~300 lines (`benchmark/python_adapter.py`, `cli/commands/benchmark.py` are the likeliest; split by concern if so)
+- [x] Update the slice design's Component Structure and Patterns lists with what the tasks added: `UnresolvedProfileError`, `ProbeStartError`, `MissingCredentialError`, `sweep_benchmark_orphans`
+- [x] CHANGELOG: one short user-facing bullet for `sq benchmark auth-check` and `sq benchmark sandbox`
+- [x] DEVLOG: implementation entry per the Session State Summary guidance (what was done, the auth answers, verification results, next: 422); mark the slice design `status: complete` and tick its slice-plan entry when all tasks are complete
+  - [x] Success: slice design and slice plan reflect completion; every task above is checked, including dropped items marked `[x]` with a note
 
 **Commit**: `feat: complete benchmark sandbox and case record slice`
