@@ -439,6 +439,7 @@ async def test_multi_line_finding_text_stays_on_one_prompt_line() -> None:
             model_id="claude-sonnet-5",
             profile="sdk",
             cwd="/repo",
+            effort=None,
         )
 
     rendered = transport.call_args.args[1]["prior_findings"]

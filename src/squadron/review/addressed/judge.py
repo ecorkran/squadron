@@ -77,7 +77,7 @@ async def judge_residue_core(
     model_id: str | None,
     profile: str,
     cwd: str,
-    effort: Effort | None = None,
+    effort: Effort | None,
 ) -> JudgeLegResult:
     """Ask the judge for one status per residue finding.
 

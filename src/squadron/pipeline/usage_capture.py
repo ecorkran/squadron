@@ -63,6 +63,17 @@ def effort_sent_by_profile(profile_name: str, effort: Effort | None) -> Effort |
     return effort if get_provider(provider).capabilities.applies_effort else None
 
 
+def output_budget_sent_by_profile(profile_name: str, tokens: int | None) -> int | None:
+    """The output budget a call on ``profile_name`` sends: the alias value only if applied.
+
+    The same gate dispatch applies (``applies_output_budget``), for callers that must
+    record what went on the wire before any call is made (slice 420 D6).
+    """
+    provider = get_profile(profile_name).provider
+    ensure_provider_loaded(provider)
+    return tokens if get_provider(provider).capabilities.applies_output_budget else None
+
+
 def _parse_effort(value: object) -> Effort | None:
     """A stored effort as ``Effort | None``; raises on anything unrecognized.
 
@@ -83,6 +94,11 @@ def read_effort_sent(usage_metadata: Mapping[str, object]) -> Effort | None:
 
 def stamp_effort_sent(metadata: dict[str, object], effort: Effort | None) -> None:
     """Record the effort an action sent on its result metadata (slice 420 D5).
+
+    "Sent" means the effort the action attempted to send, known once its model is
+    resolved: a call that failed before any request (a refused model switch) still carries
+    the effort it would have sent, so the failure counts against the config that tried. A
+    result built before that point carries no stamp.
 
     Stored as the value string so it survives the run state's JSON round trip.
     """
@@ -218,18 +234,27 @@ class UsageCapture:
         different one still runs at ``session_effort``. Each alias that mismatches is
         logged once at WARNING.
         """
-        if resolved is not None and resolved.effort != session_effort:
-            mismatch = (resolved.alias, resolved.effort, session_effort)
-            if mismatch not in self._effort_mismatches:
-                self._effort_mismatches.add(mismatch)
-                _logger.warning(
-                    "alias %s asks for effort %s but the SDK session runs at %s; "
-                    "effort is fixed when the session opens (#216)",
-                    resolved.alias,
-                    resolved.effort.value if resolved.effort else "default",
-                    session_effort.value if session_effort else "default",
-                )
+        if resolved is not None:
+            self.note_session_mismatch(resolved.alias, resolved.effort, session_effort)
         return session_effort
+
+    def note_session_mismatch(
+        self, alias: str | None, alias_effort: Effort | None, session_effort: Effort | None
+    ) -> None:
+        """Log once at WARNING that ``alias`` asked for an effort the session cannot apply."""
+        if alias_effort == session_effort:
+            return
+        mismatch = (alias, alias_effort, session_effort)
+        if mismatch in self._effort_mismatches:
+            return
+        self._effort_mismatches.add(mismatch)
+        _logger.warning(
+            "alias %s asks for effort %s but the SDK session runs at %s; "
+            "effort is fixed when the session opens (#216)",
+            alias,
+            alias_effort.value if alias_effort else "default",
+            session_effort.value if session_effort else "default",
+        )
 
     def _build(
         self,

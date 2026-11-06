@@ -5,7 +5,9 @@ The inventory of dispatch paths lives in the slice design. This test keeps it ho
 classified as sending effort (with the test that proves it) or as having no alias to send.
 
 Path coverage: PATH_TESTS maps each inventory path (1-12) to the tests that assert its
-effort, and a test checks that every named test exists, so the map cannot go stale.
+effort, and a test checks that every named test exists and mentions effort, so a renamed or
+emptied test cannot linger in the map. The ``NO_ALIAS`` reasons are a manual register: the
+test enforces that the site is listed, not that the reason still holds.
 """
 
 from __future__ import annotations
@@ -190,10 +192,14 @@ def test_the_table_has_no_stale_entries() -> None:
     assert not stale, "\n".join(stale)
 
 
-def _function_names(path: Path) -> set[str]:
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+def _function_sources(path: Path) -> dict[str, str]:
+    """Each function's name -> its source text (nested functions and methods included)."""
+    text = path.read_text(encoding="utf-8")
+    tree = ast.parse(text, filename=str(path))
     return {
-        node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        node.name: ast.get_source_segment(text, node) or ""
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     }
 
 
@@ -201,7 +207,9 @@ def _assert_test_exists(reference: str) -> None:
     file_part, _, name = reference.partition("::")
     path = _TESTS_ROOT.parent / file_part
     assert path.is_file(), f"{reference}: {file_part} does not exist"
-    assert name in _function_names(path), f"{reference}: no test named {name} in {file_part}"
+    sources = _function_sources(path)
+    assert name in sources, f"{reference}: no test named {name} in {file_part}"
+    assert "effort" in sources[name].lower(), f"{reference}: the test never mentions effort"
 
 
 @pytest.mark.parametrize(

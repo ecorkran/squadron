@@ -223,8 +223,8 @@ async def settle_findings(
     profile: str,
     cwd: str,
     since: str | None = None,
+    effort: Effort | None,
     no_judge: bool = False,
-    effort: Effort | None = None,
 ) -> SettledFindings:
     """Decide each CONCERN+ finding's fate, cheapest evidence first.
 
@@ -318,7 +318,7 @@ async def resolve_review(
     no_judge: bool = False,
     since: str | None = None,
     cwd: str,
-    effort: Effort | None = None,
+    effort: Effort | None,
 ) -> ResolutionResult:
     """Answer "were this review's findings addressed?" and record the answer.
 

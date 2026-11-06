@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 import claude_agent_sdk
 from claude_agent_sdk import SystemMessage
 
+from squadron.models.aliases import model_effort
 from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.usage_capture import require_capture, stamp, stamp_effort_sent
@@ -78,9 +79,12 @@ class CompactAction:
         restore_model = session.current_model
         capture = require_capture(context.usage_capture, self.action_type)
         # The summary turn runs on the session's own effort, whatever the compact alias
-        # says, so that is the effort sent (slice 420 D2). It is not routed through
-        # effort_for_session, which would warn on every alias mismatch.
+        # says, so that is the effort sent (slice 420 D2). An alias that configures a
+        # different effort is warned about once; one that sets none says nothing to drop.
         effort_sent = session.effort
+        alias_effort = model_effort(summary_model)
+        if alias_effort is not None:
+            capture.note_session_mismatch(summary_model, alias_effort, effort_sent)
 
         started = time.monotonic()
         try:

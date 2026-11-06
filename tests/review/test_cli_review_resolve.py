@@ -267,7 +267,7 @@ class TestReviewResolveFlagPassthrough:
         transport = AsyncMock(return_value=_judge_output("F001: addressed"))
         with (
             patch(_JUDGE_TRANSPORT, transport),
-            patch("squadron.cli.commands.review.model_effort", return_value=Effort.high),
+            patch("squadron.cli.commands.review.model_effort", return_value=Effort.high) as reader,
         ):
             result = cli_runner.invoke(
                 app,
@@ -286,6 +286,8 @@ class TestReviewResolveFlagPassthrough:
 
         assert result.exit_code == 0, result.output
         assert transport.call_args.kwargs["effort"] is Effort.high
+        # The effort is read from the alias name as typed, before expansion collapses it.
+        reader.assert_called_once_with("claude-sonnet-5")
 
     def test_unknown_model_alias_is_rejected_on_the_judge_path(
         self, cli_runner: CliRunner, git_repo: Path

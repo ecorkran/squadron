@@ -15,6 +15,8 @@ from squadron.metrology.identity import derive_project_id
 from squadron.metrology.project_id import ProjectId
 from squadron.metrology.replay_models import ModelRef, ProducerConfigRef, ReplayPhase
 from squadron.models.aliases import get_all_aliases, model_allows_tools, model_max_output_tokens
+from squadron.pipeline.usage_capture import output_budget_sent_by_profile
+from squadron.providers.base import ProfileName
 from squadron.replay.start_point import StartPoint, StartPointError, resolve_start_point
 from squadron.review.git_utils import run_git
 from squadron.stats.git_history import GitHistory, GitHistoryError
@@ -53,7 +55,10 @@ def config_ref(alias: str) -> ProducerConfigRef:
         profile=entry["profile"],
         effort_sent=None,
         tool_use=model_allows_tools(alias),
-        max_output_tokens=model_max_output_tokens(alias),
+        # Recorded as sent: only a provider that applies the budget puts it on the wire.
+        max_output_tokens=output_budget_sent_by_profile(
+            entry["profile"] or ProfileName.SDK, model_max_output_tokens(alias)
+        ),
     )
 
 

@@ -30,7 +30,8 @@ def config_label(identity: ConfigIdentity, aliases: Sequence[str]) -> str:
     parts = [
         identity.model,
         identity.profile or "no profile",
-        f"effort {identity.effort_sent or 'none'}",
+        # "none" is a real level (reasoning off); no value at all means none was sent.
+        f"effort {identity.effort_sent or 'not sent'}",
     ]
     if identity.tool_use is False:
         parts.append("tools off")

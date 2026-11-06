@@ -10,12 +10,12 @@ from squadron.cli.commands.replay_common import config_ref
 from squadron.metrology.replay_models import ProducerConfigRef
 
 
-def _aliases(**extra: object) -> dict[str, dict[str, object]]:
-    return {"a": {"model": "m", "profile": "openrouter", **extra}}
+def _aliases(profile: str, **extra: object) -> dict[str, dict[str, object]]:
+    return {"a": {"model": "m", "profile": profile, **extra}}
 
 
-def _config_ref(**extra: object) -> ProducerConfigRef:
-    aliases = _aliases(**extra)
+def _config_ref(profile: str = "openrouter", **extra: object) -> ProducerConfigRef:
+    aliases = _aliases(profile, **extra)
     with (
         patch("squadron.cli.commands.replay_common.get_all_aliases", return_value=aliases),
         patch("squadron.models.aliases.get_all_aliases", return_value=aliases),
@@ -36,6 +36,11 @@ def test_max_output_tokens_is_recorded_when_set_and_none_when_not(budget: int | 
     extra = {} if budget is None else {"max_output_tokens": budget}
 
     assert _config_ref(**extra).max_output_tokens == budget
+
+
+def test_output_budget_is_not_recorded_where_the_provider_does_not_send_it() -> None:
+    """The SDK provider ignores the budget, so aliases differing only in it sent the same thing."""
+    assert _config_ref("sdk", max_output_tokens=4096).max_output_tokens is None
 
 
 def test_a_config_recorded_before_these_fields_loads_with_none() -> None:

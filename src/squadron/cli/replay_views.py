@@ -16,6 +16,8 @@ DECLINED = "Not confirmed; nothing was run."
 
 
 def _config_label(config: ProducerConfigRef) -> str:
+    # The plan names a config by alias, model and profile only: the effort it sent is known
+    # after the run, so the report's identity label (``replay/config_label.py``) is not used.
     return f"{config.alias} ({config.model}, {config.profile or 'no profile'})"
 
 

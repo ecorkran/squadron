@@ -275,7 +275,7 @@ class TestScreensNeverReachTheJudge:
         transport = AsyncMock()
         with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
             )
 
         assert settled.resolution == Resolution.UNADDRESSED
@@ -300,7 +300,7 @@ class TestScreensNeverReachTheJudge:
             caplog.at_level(logging.WARNING),
         ):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -323,7 +323,7 @@ class TestScreensNeverReachTheJudge:
         transport = AsyncMock()
         with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(tmp_path)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -342,7 +342,7 @@ class TestScreensNeverReachTheJudge:
         transport = AsyncMock(return_value=_judge_output("F001: addressed — guarded"))
         with patch(_JUDGE_TRANSPORT, transport):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
             )
 
         transport.assert_called_once()
@@ -381,7 +381,7 @@ class TestVerdictConsistencyScreen:
             patch("squadron.review.addressed.screens.run_git") as screens_git,
         ):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(tmp_path)
             )
 
         assert settled.resolution == Resolution.ADDRESSED
@@ -405,7 +405,7 @@ class TestVerdictConsistencyScreen:
         transport = AsyncMock()
         with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(tmp_path)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -426,7 +426,7 @@ class TestVerdictConsistencyScreen:
 
         with patch(_JUDGE_TRANSPORT, AsyncMock()), caplog.at_level(logging.WARNING):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(tmp_path)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(tmp_path)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -446,7 +446,7 @@ class TestJudgeLeg:
         transport = AsyncMock(return_value=_judge_output("F001: addressed"))
         with patch(_JUDGE_TRANSPORT, transport):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
             )
 
         assert settled.resolution == Resolution.ADDRESSED
@@ -467,6 +467,7 @@ class TestJudgeLeg:
                 load_review(path),
                 model_id=None,
                 profile="sdk",
+                effort=None,
                 cwd=str(git_repo),
                 no_judge=True,
             )
@@ -487,7 +488,7 @@ class TestJudgeLeg:
         transport = AsyncMock(side_effect=RuntimeError("provider unreachable"))
         with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.ERROR):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -511,7 +512,7 @@ class TestJudgeLeg:
             caplog.at_level(logging.WARNING),
         ):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(git_repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -532,7 +533,9 @@ class TestJudgeLeg:
             patch("squadron.review.resolution_evidence.get_config", return_value="lots"),
             pytest.raises(TypeError, match="max_total_injection_bytes"),
         ):
-            await settle_findings(load_review(path), model_id=None, profile="sdk", cwd=str(git_repo))
+            await settle_findings(
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
 
 
 _TWO_CONCERNS_REVIEW = _REVIEW_WITH_FINDINGS.replace("severity: note", "severity: concern")
@@ -568,7 +571,7 @@ class TestClaimVerification:
         transport = AsyncMock(return_value=_judge_output("F001: addressed\nF002: addressed"))
         with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(repo)
             )
 
         statuses = {outcome.finding_id: outcome.status for outcome in settled.outcomes}
@@ -589,7 +592,7 @@ class TestClaimVerification:
         transport = AsyncMock(return_value=_judge_output("F001: moved successor=F009\nF002: addressed"))
         with patch(_JUDGE_TRANSPORT, transport), caplog.at_level(logging.WARNING):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(repo)
             )
 
         statuses = {outcome.finding_id: outcome.status for outcome in settled.outcomes}
@@ -609,7 +612,7 @@ class TestClaimVerification:
         transport = AsyncMock(return_value=_judge_output("F001: disputed\nF002: addressed"))
         with patch(_JUDGE_TRANSPORT, transport):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(repo)
             )
 
         statuses = {outcome.finding_id: outcome.status for outcome in settled.outcomes}
@@ -630,7 +633,7 @@ class TestClaimVerification:
         transport = AsyncMock(return_value=_judge_output("F001: unaddressed\nF002: addressed"))
         with patch(_JUDGE_TRANSPORT, transport):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(repo)
             )
 
         assert settled.resolution == Resolution.UNADDRESSED
@@ -690,7 +693,9 @@ class TestResolveReviewEndToEnd:
 
         transport = AsyncMock(return_value=_judge_output("F001: addressed — guarded"))
         with patch(_JUDGE_TRANSPORT, transport):
-            result = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+            result = await resolve_review(
+                305, model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
 
         assert result.resolution == Resolution.ADDRESSED
         assert result.artifact_path.name.endswith("-r1.md")
@@ -706,8 +711,12 @@ class TestResolveReviewEndToEnd:
 
         transport = AsyncMock()
         with patch(_JUDGE_TRANSPORT, transport):
-            first = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
-            second = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+            first = await resolve_review(
+                305, model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
+            second = await resolve_review(
+                305, model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
 
         assert first.resolution == Resolution.UNADDRESSED
         assert second.resolution == Resolution.UNADDRESSED
@@ -737,7 +746,9 @@ class TestResolveReviewEndToEnd:
         _commit(git_repo, "add review")
 
         with patch(_JUDGE_TRANSPORT, AsyncMock()), caplog.at_level(logging.WARNING):
-            result = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+            result = await resolve_review(
+                305, model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
 
         assert result.base_source == DiffBaseSource.FILE_HISTORY
         fallback_warnings = [
@@ -754,7 +765,9 @@ class TestResolveReviewEndToEnd:
         _commit(git_repo, "add review")
 
         with patch(_JUDGE_TRANSPORT, AsyncMock()):
-            result = await resolve_review(305, model_id=None, profile="sdk", cwd=str(git_repo))
+            result = await resolve_review(
+                305, model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
 
         frontmatter = read_frontmatter(result.artifact_path)
         assert frontmatter is not None
@@ -785,6 +798,7 @@ class TestUnsettledFindingsAreRecorded:
                 load_review(path),
                 model_id=None,
                 profile="sdk",
+                effort=None,
                 cwd=str(repo),
                 no_judge=True,
             )
@@ -802,7 +816,7 @@ class TestUnsettledFindingsAreRecorded:
         transport = AsyncMock(side_effect=RuntimeError("provider unreachable"))
         with patch(_JUDGE_TRANSPORT, transport):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(repo)
             )
 
         assert settled.resolution == Resolution.UNKNOWN
@@ -816,7 +830,7 @@ class TestUnsettledFindingsAreRecorded:
         transport = AsyncMock(return_value=_judge_output("F001: addressed — guarded"))
         with patch(_JUDGE_TRANSPORT, transport):
             settled = await settle_findings(
-                load_review(path), model_id=None, profile="sdk", cwd=str(repo)
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(repo)
             )
 
         assert len(settled.outcomes) == 1

@@ -120,7 +120,7 @@ Status: decided
 ### D2 — Compaction records the session's effort
 Status: decided
 - `SDKExecutionSession.compact` captures the summary with a turn on the live client, which was opened with `session.effort`. The current record says `None`, which is a stand-in. `CompactAction` passes `context.sdk_session.effort` as `effort_sent`.
-- The compact model is named by alias, but that alias's own effort cannot apply (the session's is fixed, #216). Passing it through `effort_for_session` would log a mismatch warning for every compaction whose alias differs. The record takes the session's value directly, with no warning.
+- The compact model is named by alias, but that alias's own effort cannot apply (the session's is fixed, #216). The record takes the session's value directly. A compact alias that configures an effort different from the session's logs the #216 mismatch warning once (`UsageCapture.note_session_mismatch`, as a summary step does); an alias that sets none has nothing to drop and says nothing. Added after the code review (F006).
 
 ### D3 — Both judges send the alias's effort
 Status: decided

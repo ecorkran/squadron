@@ -316,7 +316,33 @@ async def test_compact_with_no_session_effort_records_none(action: CompactAction
 
 
 @pytest.mark.asyncio
-async def test_compact_alias_effort_mismatch_logs_no_warning(
+async def test_compact_alias_with_a_different_effort_warns_once(
+    action: CompactAction, caplog: pytest.LogCaptureFixture
+) -> None:
+    from squadron.core.usage import RunTelemetry, TokenUsage
+    from squadron.pipeline.sdk_turns import SessionReply
+
+    telemetry = RunTelemetry(turns=1, usage=TokenUsage(prompt=5))
+    session = MagicMock()
+    session.current_model = None
+    session.effort = Effort.high
+    session.compact = AsyncMock(return_value=SessionReply("summary", telemetry))
+    context = _make_context(sdk_session=session, params={"model": "low-effort-alias"})
+
+    with (
+        patch(f"{_MOD}.model_effort", return_value=Effort.low),
+        caplog.at_level(logging.WARNING),
+    ):
+        await action.execute(context)
+        await action.execute(context)
+
+    warnings = [r for r in caplog.records if "#216" in r.getMessage()]
+    assert len(warnings) == 1
+    assert "low-effort-alias" in warnings[0].getMessage()
+
+
+@pytest.mark.asyncio
+async def test_compact_alias_that_sets_no_effort_logs_no_warning(
     action: CompactAction, caplog: pytest.LogCaptureFixture
 ) -> None:
     from squadron.core.usage import RunTelemetry, TokenUsage
@@ -328,8 +354,8 @@ async def test_compact_alias_effort_mismatch_logs_no_warning(
     session.effort = Effort.high
     session.compact = AsyncMock(return_value=SessionReply("summary", telemetry))
 
-    with caplog.at_level(logging.WARNING):
-        await action.execute(_make_context(sdk_session=session, params={"model": "low-effort-alias"}))
+    with patch(f"{_MOD}.model_effort", return_value=None), caplog.at_level(logging.WARNING):
+        await action.execute(_make_context(sdk_session=session, params={"model": "plain-alias"}))
 
     assert not [r for r in caplog.records if "#216" in r.getMessage()]
 

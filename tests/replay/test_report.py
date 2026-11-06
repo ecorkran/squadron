@@ -373,3 +373,15 @@ def test_contestants_follow_the_same_grouping() -> None:
     merged = next(r for r in table.rows if r.config is not None and "opus-a" in r.label)
     assert merged.pairs == 2  # r1 vs r2 is one contestant against itself, so it is left out
     assert merged.wins == 2
+
+
+def test_a_config_that_sent_effort_none_reads_differently_from_one_that_sent_nothing() -> None:
+    replays = [
+        _config_replay(1, "opus-a", effort_sent=None),
+        _config_replay(2, "opus-b", effort_sent="none"),
+    ]
+
+    labels = sorted(r.label for r in _config_rows(replays))
+
+    assert any("effort not sent" in label for label in labels)
+    assert any("effort none" in label for label in labels)

@@ -71,10 +71,11 @@ def _labels(members: _Replays) -> dict[str, str]:
     aliases: dict[ConfigIdentity, set[str]] = defaultdict(set)
     for _, replay in members:
         aliases[_config_identity(replay.config)].add(replay.config.alias)
-    return {
-        record_id: config_label(identity := _config_identity(replay.config), sorted(aliases[identity]))
-        for record_id, replay in members
-    }
+    labels: dict[str, str] = {}
+    for record_id, replay in members:
+        identity = _config_identity(replay.config)
+        labels[record_id] = config_label(identity, sorted(aliases[identity]))
+    return labels
 
 
 class _Judged(NamedTuple):
