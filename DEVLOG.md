@@ -13,6 +13,10 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261105
 
+### Release 0.24.23
+
+- **Contents:** slice 420 (effort audit across dispatch paths); #293 (implement step continues while task items are unchecked, and a partial branch no longer skips implement); SDK buffer-size fix for files over 1 MiB.
+
 ### Slice 420: Effort Audit Across Dispatch Paths: Implemented
 
 - **Done:** every dispatch path now sends the alias's effort or records that none was sent. `stamp_effort_sent` writes the effort on dispatch, summary, review and compaction results (also on failures that have no usage record); `action_effort_sent` is the one reader. Compaction records the session's effort. The replay judge and the findings-addressed judge (pipeline gate and `sq review resolve`) send their alias's effort. `_dispatch-run` takes `--effort` and prompt-only rendering passes it. Replay outcomes and `sq stats producers` read the stamp first.
