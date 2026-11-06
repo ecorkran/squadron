@@ -13,6 +13,14 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+### Slice 425: Task Breakdown Complete
+
+- **Delivered:** `425-tasks.grading-and-paired-report.md`: 47 tasks, test-with ordering, 25 commit markers.
+- **Order:** `is_within_floor(float)` and `measure_snapshot` (need nothing from 421–424); the precondition gate (420, 421, 422, 424 implemented, else `BLOCKED:`); `ContentSidecars`, config keys, models, records, ids, store; `GradingAdapter` and real-commit fixture trees, then restoration, deps-changed, test edits, suppressions, injection and clashes; the grading review and its floor; `grade_one` in four steps plus the reference path and a per-`GradeAbsence` test; a live reference grade; `paired_stats` and the sample-count estimate; plan, bound, runner, resume and a killed-process test; report model and sections; `sq benchmark grade` and `report`; the yield line; `/sq:benchmark`; walkthrough; final validation.
+- **Design gaps found (handled in the Context Summary, design not edited until Task 47):** `measure_snapshot` needs a `files` parameter (`take_snapshot_at` passes `exported.files`; the grader uses `resolve_files`); `audit_variance._stat` is private, so Task 22 makes it public instead of copying it; `benchmark.review_timeout_s` has no stated default, so it is declared with none and `grade` refuses naming it; new records and store methods may need `grade_models.py` / `grade_store.py` to keep the shared modules under ~300 lines.
+- **Noted:** 421–424 are not implemented, so Task 4 stops with `BLOCKED:` there; Tasks 2–3 do not wait. Task 31 (live reference grade) and the walkthrough carry `BLOCKED:` conditions for a missing case or reviewer alias.
+- **Next:** Project Manager approval, then Phase 6 implementation after 424.
+
 ### Slice 424: Task Breakdown Complete
 
 - **Delivered:** `424-tasks.producer-only-replay-runner.md`: 37 tasks, test-with ordering, commit markers after each group.
