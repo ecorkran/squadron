@@ -62,8 +62,8 @@ usageByModel:
 
 **Commit**: `feat: let ProcessRunner replace the child environment`
 
-- [ ] Correct the slice design: its Interfaces Required bullet for `ProcessRunner` and the last bullet of D7 say `env=` alone applies the scrub; reword both to say callers pass `replace_env=True`
-  - [ ] Success: neither passage claims `env=` alone applies the scrub
+- [x] Correct the slice design: its Interfaces Required bullet for `ProcessRunner` and the last bullet of D7 say `env=` alone applies the scrub; reword both to say callers pass `replace_env=True`
+  - [x] Success: neither passage claims `env=` alone applies the scrub
 
 **Commit**: `docs: correct slice 421 design on ProcessRunner environment`
 

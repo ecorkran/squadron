@@ -61,7 +61,7 @@ It also answers the riskiest open question before anything is built on it: wheth
 
 ### Interfaces Required
 
-- `ProcessRunner` (`core/process_runner.py`). Its `env` parameter already lets every child process get the scrubbed environment.
+- `ProcessRunner` (`core/process_runner.py`). Its `env` parameter merges over `os.environ`, so callers pass `replace_env=True` (added in Task 3) for a child to get exactly the scrubbed environment.
 - `ProviderProfile.api_key_env` and `ProfileName` (`providers/profiles.py`, `providers/base.py`). The scrubbed environment uses them to decide which credential variable passes through.
 - Model alias resolution (`models.toml`), for the auth check.
 - `SourceLanguage` (`metrology/snapshot_models.py`), so the benchmark registry is keyed the same way as 400's.
@@ -171,7 +171,7 @@ Status: decided
   - `.config/squadron/` copies of whichever of `SQUADRON_CONFIG_SEED = ("config.toml", "models.toml", "providers.toml")` exist. Aliases and `pipeline.max_cost_usd` must resolve. `metrology/`, `runs/`, `replays/`, `reviews/` and logs are left out, so there is no store and no memory.
   - `.gitconfig` with `user.name`/`user.email` set to a fixed benchmark identity and `init.defaultBranch=main`.
 - `CredentialGrant` says what auth enters: `CredentialGrant.none()` for suite runs, or `CredentialGrant.for_profiles(profiles)` for producer runs. The grant adds each profile's `api_key_env` variable, read from the profile definition and never hard-coded, plus that profile's carryover files (D8).
-- Every child process the harness starts in a sandbox (pytest, the probe, and later `sq run`) receives `ScrubbedEnvironment.variables()` through `ProcessRunner.run(env=...)`. The SDK merges `os.environ` with its options env, so agent CLIs started by a scrubbed `sq run` inherit the scrub.
+- Every child process the harness starts in a sandbox (pytest, the probe, and later `sq run`) receives `ScrubbedEnvironment.variables()` through `ProcessRunner.run(env=..., replace_env=True)`; `env=` alone merges over `os.environ` and would not apply the scrub. The SDK merges `os.environ` with its options env, so agent CLIs started by a scrubbed `sq run` inherit the scrub.
 
 ### D8 — Auth carryover and the auth check
 Status: decided
