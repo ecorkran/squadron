@@ -3,7 +3,7 @@ docType: slice-design
 slice: reviewer-recall
 project: squadron
 parent: user/architecture/420-slices.model-benchmark.md
-dependencies: [421, 425, 300, 400, 402]
+dependencies: [421, 424, 425, 300, 400, 402, 420, 917]
 interfaces: [425]
 dateCreated: 20261104
 dateUpdated: 20261105
@@ -56,6 +56,7 @@ No model is involved in planting or matching. A defect written by one model fami
 ### Prerequisites
 
 - **421:** `HistoryFreeSandbox`, `BenchmarkSandbox`, `EnvironmentIdentity`, `ScrubbedEnvironment` with `CredentialGrant.none()`, `run_suite` with `SuiteSelection.nodes(...)`, `NodeResult`, `FailureKind`, the adapter registry keyed by `SourceLanguage`, 421 D11's project-source rule, `CaseSet` and `BenchmarkRecordStore`, and `benchmark.suite_timeout_s`.
+- **424:** `BenchmarkStatus` (`running`, `complete`, `partial`, `interrupted`), and its lock and interruption rule (D10).
 - **425:** `ReviewerRef` with `reviewer_key`, `review_tree_diff`, `bootstrap_mean_interval`, `MIN_PAIRED_CASES` and `review_flag` (D9, D11).
 - **402:** `normalize_result_categories`, `ReviewCategory` and `CodeReviewFinding`.
 - **917 / review parsers:** `location_path` and `location_span` (`review/parsers.py`), so a finding's location is read the same way the rest of squadron reads it.
@@ -63,7 +64,7 @@ No model is involved in planting or matching. A defect written by one model fami
 - **420:** effort sent on the review path. The reviewer key uses it (D8).
 - **External:** `git` and `uv`, as for 421.
 
-427 does not depend on 422, 424 or 426.
+427 does not depend on 422 or 426.
 
 ### Interfaces Required
 
@@ -85,7 +86,7 @@ src/squadron/
     recall_build.py          discovery, planting, verification, RecallCase / RecallBuild
     recall_runner.py         plan, bound, cap, lock, resume
     recall_match.py          match(findings, defects) -> MatchResult; MATCHER_VERSION, RECALL_LINE_WINDOW
-    recall_report.py         RecallReport model assembled from records
+    recall_report.py         RecallReport model assembled from records; RecallSummary, latest_recall_for (D11)
     registry.py              + recall adapters
   metrology/
     benchmark_models.py      + RecallCase, PlantedDefect, RecallBuild, RecallRun, RecallReview
@@ -120,15 +121,16 @@ for commit C with parent P:
        proving = nodes failing with assertion_failure | project_exception in every run
        proving empty → skip site; else keep defect; restore file
        stop at defects_per_case kept, or max attempts
-   kept 0 → reject no_verified_defect; else write RecallCase
-write case set (421 D2) and one RecallBuild record (candidates, kept, rejections by reason)
+   kept 0 → reject mutant_timeout if a hang ended the attempts, else no_verified_defect
+   else combine the kept edits per file, bottom-up (D4); derive each defect's defected-tree lines; write RecallCase
+write case set (421 D2: latest version's ids ∪ kept ids, D5) and one RecallBuild record (candidates, kept, rejections by reason)
 ```
 
 **Running** (`sq benchmark recall run --set recall --review-model A --review-model B --samples 3 --max-cost 8`):
 
 ```
 load set, cases; resolve reviewers → ReviewerRef each
-refuse: missing --max-cost | fewer than 2 samples | no per-review cost figure | case project without --repo
+refuse: missing --max-cost | fewer than 2 samples | no per-review cost figure | case project without --repo | set of benchmark cases (D5)
 plan: (case, reviewer, sample) with no RecallReview record
 print bound ─── nothing dispatched before this line
 take run lock
@@ -182,7 +184,8 @@ Status: decided
 ### D4 — Planting and verification
 Status: decided
 - **Textual edits.** A site is an ast node on an added line. Its edit replaces exactly the node's source segment (`lineno`, `col_offset`, `end_lineno`, `end_col_offset`), or deletes whole lines for `call-drop` and `guard-drop`. The file is never re-emitted with `ast.unparse`, which would reformat it and give the defect away. The mutated file must still parse.
-- **Deletion span.** A deletion records `line_start = line_end =` the line that now holds the text after the deleted lines, in defected-tree numbering, which is the line where the deleted text began.
+- **Stored edit.** Each kept defect stores its edit in original-tree coordinates: `edit_span = (start_line, start_col, end_line, end_col)` and the replacement text. A deletion's span runs from column 0 of its first line to column 0 of the line after its last, with an empty replacement. Matching text is never searched for again, so a second `<` on a line cannot be mistaken for the planted one.
+- **Combined tree and line numbers.** Defects are verified alone, but reviewed together. When the kept set is final, its edits are applied per file from the last position to the first, so earlier spans stay valid. Each defect's `line_start` and `line_end` are then derived: its original start line plus the net line change of every kept edit above it in the same file. A deletion's span is zero width at the line where the deleted text began, in that numbering. The combined files must parse. A failure is a planter bug and raises, it is not a rejection. The run step applies the stored edits the same way and does not recompute anything.
 - **Order.** Sites are visited in an order shuffled with a seed taken from the commit sha, so a rebuild gives the same case and defects are not always the commit's first lines.
 - **Spacing.** A kept defect blocks every site in the same file within `2 × RECALL_LINE_WINDOW + 1` lines of it, so a one-line finding is never in the window of two defects. Wider spans and shared anchors can still reach two, which D6 handles. `RECALL_LINE_WINDOW` comes from `recall_match.py`.
 - **Test selection** is for speed only. It is the baseline-passing nodes whose test file's static import closure (ast imports, followed through project modules) reaches the mutated module. A selection that misses a test can only reject a real defect. It never admits a false one, because the proving test is actually run.
@@ -193,9 +196,11 @@ Status: decided
 
 ### D5 — Case content identity
 Status: decided
-- `RecallCase` identity fields: `project_id`, `parent_sha`, `commit_sha`, `defects` (sorted by path and line), `mutation_table_version`. `case_id` is `rcase-` followed by the first 16 hex digits of the sha256 of the canonical JSON of those fields, validated on read like 421 D1.
+- `RecallCase` identity fields: `project_id`, `parent_sha`, `commit_sha`, `defects` (sorted by path and line, each with its `edit_span` and replacement, so the identity fixes the exact edit), `mutation_table_version`. `case_id` is `rcase-` followed by the first 16 hex digits of the sha256 of the canonical JSON of those fields, validated on read like 421 D1.
 - Provenance (`created_at`, the environment identity digest it was verified under, the build id) is stored but is not identity.
 - A recall case set is a 421 `CaseSet`. `write_case_set` accepts ids of either `benchmark_case` or `recall_case` records, and a set must hold one kind only. A mixed list raises `MetrologyStoreError` naming both kinds.
+- `write_case_set` writes exactly the list it is given (421 D2). `recall build` therefore passes the union of the set's latest version and the cases it kept, deduplicated by id, so a rebuild that finds the same cases leaves the version alone and a build on another cf project into the same set name pools the two. A set cannot shrink: to start over, build into a new set name.
+- `recall run` checks the kind of the set it loads, and refuses a set that holds `benchmark_case` ids with `set <name> holds benchmark cases, not recall cases`. `get_recall_case` of any other id raises `MetrologyStoreError` naming the kind.
 
 ### D6 — The matching rule
 Status: decided
@@ -208,6 +213,7 @@ Status: decided
 - Category is not part of the match. A reviewer that finds the bug and names it `error-handling-observability` instead of `correctness` has still found it. Category agreement is reported as its own column.
 - **Outcomes per review:** findings are taken in finding order. Each defect is `found` or `missed`. Each counted finding is `matched` (it claimed a defect not yet found), `duplicate` (every defect it reaches is already found), `unlocated` (no path, or a path with neither a line nor an anchor) or `unmatched` (located, reaching no defect).
 - Unmatched findings are not called false positives. The original commit can hold real issues.
+- The window and anchor rules are loose by design, so some credit is by chance. That rate is not measured here, and the report header says so (issue #300).
 - `MATCHER_VERSION` is an int constant. The report prints it. A change to W, to the anchor or claim rule, or to the counted severities bumps it.
 - Rejected: a judge call per finding. It adds an unmeasured LLM to the measurement. Rejected: requiring category agreement for a match. That would measure labelling, not finding.
 
@@ -221,7 +227,7 @@ Status: decided
 
 ### D8 — Reviewer identity
 Status: decided
-- A reviewer is resolved from an alias to `ReviewerRef(alias, model, profile, effort, template_hash, rules_hash)`, the type 425 defines. `effort` is resolved before dispatch, as 425 does: the alias's effort when the profile's provider applies effort, else `None` (the rule `review_client` uses for the effort it sends). The bound, the run id and resume therefore need no review to have run. A review whose `ReviewResult.effort` differs from the resolved value is the absence `review_failed`, with both values in `detail`.
+- A reviewer is resolved from an alias to `ReviewerRef(alias, model, profile, effort, template_hash, rules_hash)`, the type 425 defines. `effort` is resolved before dispatch, as 425 does: the alias's effort when the profile's provider applies effort, else `None` (the rule `review_client` uses for the effort it sends). The bound, the run id and resume therefore need no review to have run. Effort is recorded as sent by construction: 425's `review_tree_diff` passes `reviewer.effort` to `run_review_with_profile` verbatim (425 D7), and 427 reaches the reviewer only through it, so there is no second value to compare and 427 adds no mismatch check or change to `ReviewOutcome`.
 - `ReviewerRef.reviewer_key` is 425's derived field: the sha256 of `model`, `profile`, `effort` and `template_hash`, with `effort` `None` hashed as JSON `null`. Recall records and the 425 lookup use it. The alias is excluded because aliases are renamed. `rules_hash` is excluded because rules come from each case's tree, so it differs per project and per commit. It describes the case, not the reviewer.
 
 ### D9 — Pieces imported from 425
@@ -230,20 +236,24 @@ Status: decided
   1. `ReviewerRef` with `reviewer_key` (425's storage schema).
   2. `review_tree_diff(tree, base_sha, reviewer) -> ReviewOutcome` in `benchmark/grade_review.py` (425 D7).
   3. `bootstrap_mean_interval` and `MIN_PAIRED_CASES` in `benchmark/paired_stats.py` (425 D14).
-- Raising, or returning verdict `UNKNOWN` with no findings, is the harness absence `review_failed`, as in 425 D7.
+- Raising, timing out (`benchmark.review_timeout_s`, which 425 D7 applies inside `review_tree_diff`), or returning verdict `UNKNOWN` with no findings, is the harness absence `review_failed`, as in 425 D7.
 
 ### D10 — Caps, bound and resume
 Status: decided
 - `run` requires `--max-cost USD` and refuses without it. Build dispatches no model and has no cap.
 - The per-review figure is the largest observed review cost for the same `reviewer_key` in the store (recall reviews and 425 grades), or `--review-cost USD`. With neither, `run` refuses and names the flag.
 - The bound prints before the first review: reviews planned × figure, capped at the run cap, plus one review of overshoot. The figure is an estimate and no per-review cap exists, as 425 says, and the bound says so. The cap is checked before each review. Hitting it stops, keeps every record and exits 2.
+- **Unpriced reviews** (`cost_usd` is `None`) count at the per-review figure toward the cap, and the summary reports how many were unpriced, as 425 D9 does.
+- **The cap is per invocation.** Spend restarts at zero on a rerun, and `RecallRun.spent_usd` accumulates across invocations, as in 424. Walkthrough step 6 relies on this.
+- **Interruption** follows 424's rule. Taking the lock finds a stored `running` run whose lock was free: the run is set `interrupted` and reported before planning, and is written back as `running` only after the bound is printed. The run's state is a `BenchmarkStatus`, not a second set of values.
 - `recall_run_id` is `recall-` followed by the first 12 hex digits of the sha256 of the set name, set version, sorted reviewer keys and K. Rerunning the same command resumes: planned reviews that already have a record are skipped. `--retry-harness` deletes harness-absent reviews first and reports how many, as 425 D9 does.
 - Absences: `case_setup_failed` and `review_failed` are the `RecallAbsence` values. An absence on any sample removes the case from every config's comparison, and the report counts each absence per config, so a reviewer that fails often stays visible.
 - A run stopped at its cap is `partial`. Its report uses only cases with all K samples recorded for every config, as the architecture states for partial runs.
 
 ### D11 — 425 reads recall
 Status: decided
-- `BenchmarkRecordStore.latest_recall_for(reviewer_key) -> RecallSummary | None` returns the most recent recall run that includes the key, with recall, its interval, n cases, K, set name and version, and matcher version. Runs with fewer than `MIN_PAIRED_CASES` compared cases are skipped.
+- `latest_recall_for(store, reviewer_key) -> RecallSummary | None` lives in `recall_report.py`, on top of the store's read methods (`latest_recall_run`, `reviews_for`, `get_recall_case`). The store stays record I/O, and `metrology/` imports nothing from `benchmark/`. It finds the most recent recall run that includes the key, runs `match` and the statistics, and returns recall, its interval, n cases, K, set name and version, and matcher version. Runs with fewer than `MIN_PAIRED_CASES` compared cases are skipped.
+- `RecallSummary` is a frozen dataclass in `recall_report.py` with exactly those fields. Its interval uses `bootstrap_mean_interval(values, seed)` with the seed derived from the sha256 of `run_id` and `reviewer_key`, so the report and 425's line print the same interval.
 - 427 changes 425's `review_flag(reviewer) -> str` alone. When a summary exists it returns `reviewer recall 0.62 [0.48, 0.75] (n=12, k=3, set recall v1, no tools)`, which the review-findings heading shows in place of the flag. Without a summary, it returns the flag as 425 wrote it.
 
 ### Technology Choices
@@ -280,6 +290,7 @@ class RecallAdapter(Protocol):
 recall run recall-8d2e…  set recall v1  matcher v1 (window ±3)  no tools
 cases 14 · compared 13 · dropped 1 (case_setup_failed) · defects 37 · k 3
 measured categories: correctness, error-handling-observability
+chance-match rate: not measured (see matcher notes)
 
 reviewer                         recall   95% interval    found/total   cat. agree
   gpt-review (openai-oauth, med)  0.61    [0.47, 0.74]     68/111        0.71
@@ -306,8 +317,9 @@ findings per review   unmatched   duplicate   unlocated
 class PlantedDefect(BaseModel, frozen=True):
     defect_id: str                     # d1, d2 … in path/line order
     path: str
-    line_start: int                    # in the defected tree
+    line_start: int                    # in the defected tree, derived from the combined edits (D4)
     line_end: int
+    edit_span: tuple[int, int, int, int]   # original tree: start line, start col, end line, end col
     operator: str                      # id from the operator table
     category: ReviewCategory
     original: str
@@ -341,7 +353,9 @@ class RecallRun(BaseModel, frozen=True):
     reviewers: tuple[ReviewerRef, ...]
     samples: int
     max_cost_usd: float
-    state: Literal["running", "complete", "partial", "interrupted"]
+    spent_usd: float                   # accumulated across invocations
+    unpriced_reviews: int
+    state: BenchmarkStatus             # 424's enum
     created_at: datetime
 
 class RecallReview(BaseModel, frozen=True):
@@ -358,13 +372,13 @@ class RecallReview(BaseModel, frozen=True):
     created_at: datetime
 ```
 
-Review record id: `rreview-<run_id[7:]>-<case_id[6:18]>-<reviewer_key[:8]>-s<sample>`. `BenchmarkRecordStore` gains `write_recall_case`, `get_recall_case`, `list_recall_cases(project_id)`, `write_recall_build`, `write_recall_run`, `get_recall_run`, `latest_recall_run`, `write_recall_review`, `reviews_for(run_id)`, `delete_recall_reviews(ids)` (for `--retry-harness` only) and `latest_recall_for(reviewer_key)`.
+Review record id: `rreview-<run_id[7:]>-<case_id[6:18]>-<reviewer_key[:8]>-s<sample>`. `BenchmarkRecordStore` gains `write_recall_case`, `get_recall_case`, `list_recall_cases(project_id)`, `write_recall_build`, `write_recall_run`, `get_recall_run`, `latest_recall_run`, `write_recall_review`, `reviews_for(run_id)`, and `delete_recall_reviews(ids)` (for `--retry-harness` only).
 
 ## Integration Points
 
 ### Provides to Other Slices
 
-- **425:** `latest_recall_for(reviewer_key)` and `review_flag` reading it (D11).
+- **425:** `latest_recall_for(store, reviewer_key)` and `review_flag` reading it (D11).
 
 ### Consumes from Other Slices
 
@@ -379,7 +393,7 @@ Review record id: `rreview-<run_id[7:]>-<case_id[6:18]>-<reviewer_key[:8]>-s<sam
 - `sq benchmark recall build` on squadron writes recall cases and a `RecallBuild` record. Every candidate is either kept or listed with a `RecallRejection`.
 - Every planted defect has path, lines, operator, a `ReviewCategory` and at least one proving node that passes on the clean commit and fails with the defect alone in every verification run. A rebuild from the same commits gives the same case ids.
 - No two defects in a case are within `2 × RECALL_LINE_WINDOW + 1` lines of each other in one file. The defected diff differs from `P..C` only on the planted lines.
-- The matcher has tests for: a span inside the window, a span just outside it, a `path#function` anchor, a bare path (unlocated), `a/` and `./` prefixes, an absolute path under the tree, a `PASS` finding (not counted), a duplicate, a category mismatch that still matches, a multi-line span reaching two defects (claims the nearest), an anchor shared by two defects (one finding claims one; a second claims the other), and a deletion defect's zero-width span.
+- The matcher has tests for: a span inside the window, a span just outside it, a `path#function` anchor, a bare path (unlocated), `a/` and `./` prefixes, an absolute path under the tree, a `PASS` finding (not counted), a duplicate, a category mismatch that still matches, a multi-line span reaching two defects (claims the nearest), an anchor shared by two defects (one finding claims one; a second claims the other), and a deletion defect's zero-width span. The planter has a test with a line-removing defect above another defect in the same file: the lower defect's stored lines are shifted, and applying the stored edits to the original tree gives the defected tree the lines describe.
 - `recall run` without `--max-cost`, with K < 2, or with no per-review figure refuses and names what is missing. The bound prints before the first review. Hitting the cap exits 2 and keeps records. A rerun skips completed reviews.
 - The report gives recall with an interval, found and total counts, and unmatched, duplicate and unlocated counts per reviewer config, with n cases, n defects and K. It lists the measured categories and the matcher version. A pair of configs gets a paired verdict.
 - 425's report shows the grading reviewer's recall when `latest_recall_for` returns a summary, and the unmeasured-reviewer flag when it does not.
@@ -395,7 +409,7 @@ Review record id: `rreview-<run_id[7:]>-<case_id[6:18]>-<reviewer_key[:8]>-s<sam
 ### Integration Requirements
 
 - 427 changes 425's `review_flag` to read `latest_recall_for`, with no other change to 425's report code.
-- `tests/benchmark/` and `tests/metrology/` pass, with 421's set tests extended for recall ids and mixed-kind rejection.
+- `tests/benchmark/` and `tests/metrology/` pass, with 421's set tests extended for recall ids and mixed-kind rejection, and tests that a rebuild leaves the set version alone, a second build pools into it, and `recall run` refuses a set of benchmark cases.
 
 ### Verification Walkthrough
 
@@ -413,8 +427,9 @@ These are draft commands. `sq benchmark recall` does not exist until this slice 
    ```
    Each defect shows its operator, category, original and mutated text, and proving nodes. Check one by hand in a kept sandbox:
    ```bash
-   sq benchmark recall build --limit 1 --keep
+   sq benchmark recall build --set scratch --limit 1 --keep
    ```
+   The scratch set keeps this check out of the `recall` set that steps 3 to 6 measure.
    In the kept tree, apply one defect's edit and run `.venv/bin/python -m pytest <proving node>`. It fails. Revert the edit, and it passes.
 
 3. **Run two reviewers.**
@@ -441,12 +456,13 @@ These are draft commands. `sq benchmark recall` does not exist until this slice 
 ### Technical Risks
 
 - **Operator defects may be easier or harder to see than real ones.** A flipped comparison in a short diff can be easy to spot. A deleted call can be hard to spot. Recall here measures these operators, not defects in general.
+- **A loose matcher inflates recall.** Any finding within ±3 lines credits a defect whatever it says, and an anchor on a class credits one defect inside it, so a reviewer that emits many findings gains recall by chance. The chance-match rate is not measured in this slice (a decoy-site control is issue #300). Paired comparisons use the same matcher for both configs, and the report shows unmatched, duplicate and unlocated counts and states the rate is unmeasured; a recall figure is read as an upper bound on what the reviewer found.
 - **Yield.** Many squadron source lines are reached only through CLI tests that patch internals, or through no test at all, so many sites will have no proving test.
 
 ### Mitigation Strategies
 
 - The per-operator breakdown shows which kinds a reviewer finds, so an operator that every reviewer finds, or that none does, is visible and can be changed with a `MUTATION_TABLE_VERSION` bump.
-- The build report counts rejections per reason. If yield is low, `--limit` widens the commit range, and builds can run on other cf projects into the same set name, since each case carries its own `project_id`.
+- The build report counts rejections per reason. If yield is low, `--limit` widens the commit range, and builds can run on other cf projects into the same set name, which pools the cases (D5), since each case carries its own `project_id`.
 
 ## Implementation Notes
 
@@ -458,7 +474,7 @@ These are draft commands. `sq benchmark recall` does not exist until this slice 
 4. `recall_build` and `sq benchmark recall build` and `show`. Build on squadron and check two defects by hand (walkthrough step 2).
 5. `recall_match` and the statistics, pure, on 425's bootstrap.
 6. `recall_runner`: plan, bound, cap, lock, resume.
-8. `recall_report`, the CLI and slash command, then `latest_recall_for` and `review_flag` (D11). Run the walkthrough.
+7. `recall_report`, the CLI and slash command, then `latest_recall_for` and `review_flag` (D11). Run the walkthrough.
 
 Effort: 3/5.
 

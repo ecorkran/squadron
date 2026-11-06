@@ -8,172 +8,248 @@ rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/427-slice.reviewer-recall.md
-aiModel: claude-sonnet-5-5
+aiModel: claude-opus-5-5
 aiProfile: sdk
 status: complete
-dateCreated: 20261104
-dateUpdated: 20261104
-reviewedSha: ef6d51a92bef416c09d60faee087b218920b0079
+dateCreated: 20261106
+dateUpdated: 20261106
+reviewedSha: f2bf39ab0cf0c9456a30e1259b800f2e54b1e91b
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 9
-effort: high
-turns: 10
-promptTokens: 420647
-cachedTokens: 324195
-cacheWriteTokens: 96442
-completionTokens: 10962
-durationSeconds: 95.0
-costUsd: 0.565875
+toolCallsMade: 17
+turns: 18
+promptTokens: 465272
+cachedTokens: 342571
+cacheWriteTokens: 122691
+completionTokens: 17571
+durationSeconds: 175.4
+costUsd: 1.402272
 costBasis: provider
-squadronVersion: 0.24.22
+squadronVersion: 0.24.23
 findings:
   - id: F001
-    severity: fail
-    category: correctness
-    summary: "The matcher's \"a finding can never match two defects\" invariant does not hold, and the stated response is to raise"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#D6 — The matching rule (and D4 Spacing)"
-  - id: F002
-    severity: concern
-    category: integration
-    summary: "Reviewer key depends on effort that is only known after the first review, but the bound, run id and resume need it earlier"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#D8, #D10"
-  - id: F003
-    severity: concern
-    category: dependencies
-    summary: "Coupling to 425 is bidirectional and disagrees with 425's own document"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#D9, #D11, Integration Requirements"
-  - id: F004
-    severity: concern
-    category: error-handling
-    summary: "Failure modes for new build and run I/O paths are incomplete"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#D4, #D10, Data Flow"
-  - id: F005
     severity: concern
     category: under-specification
-    summary: "Defect location is undefined for deletion operators"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#D3, #D4, #D6, PlantedDefect"
+    summary: "Stored defect records can't reproduce the defected tree, and no step produces defected-tree line numbers"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:306-316"
+  - id: F002
+    severity: concern
+    category: measurement-validity
+    summary: "Matcher looseness is not measured, and the only control is excluded"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:204-212"
+  - id: F003
+    severity: concern
+    category: architecture
+    summary: "`latest_recall_for` on the store inverts the dependency direction"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:246"
+  - id: F004
+    severity: concern
+    category: integration
+    summary: "D8's effort check can't be done through `review_tree_diff`"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:224"
+  - id: F005
+    severity: concern
+    category: integration
+    summary: "Building into a shared set name replaces the set, which breaks the mitigation and the walkthrough"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:449"
   - id: F006
-    severity: note
-    category: scope
-    summary: "Proportionality"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#Technical Scope"
+    severity: concern
+    category: error-handling
+    summary: "D10 leaves unpriced reviews, resumed spend and interrupted runs undefined"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:239-242"
   - id: F007
+    severity: concern
+    category: consistency
+    summary: "Data flow disagrees with D4 on the hang rejection"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:123"
+  - id: F008
+    severity: note
+    category: documentation
+    summary: "Frontmatter and step numbering have small gaps"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:6"
+  - id: F009
+    severity: note
+    category: error-handling
+    summary: "Review hang handling is inherited, not stated"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:233"
+  - id: F010
     severity: pass
     category: architecture
-    summary: "Alignment with the architecture's recall, cost and answer-protection principles"
-    location: "project-documents/user/slices/427-slice.reviewer-recall.md#D2, #D9, #D10, Special Considerations"
+    summary: "Planting and ground truth align with the architecture"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md#d2--defects-are-planted-by-mutation-operators-not-written"
+  - id: F011
+    severity: pass
+    category: architecture
+    summary: "Answer isolation and history-free review hold"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:467-468"
+  - id: F012
+    severity: pass
+    category: architecture
+    summary: "Measurement principles are followed"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md#d7--recall-statistics"
+  - id: F013
+    severity: pass
+    category: nfr
+    summary: "Spend bound and cap are restated with concrete targets"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md:237-239"
+  - id: F014
+    severity: pass
+    category: integration
+    summary: "Imports from 421, 425 and existing code match their sources"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md#d9--pieces-imported-from-425"
+  - id: F015
+    severity: pass
+    category: proportionality
+    summary: "Scope is proportionate"
+    location: "project-documents/user/slices/427-slice.reviewer-recall.md#technical-scope"
 ---
 
 # Review: slice — slice 427
 
-**Verdict:** FAIL
-**Model:** claude-sonnet-5-5
+**Verdict:** CONCERNS
+**Model:** claude-opus-5-5
 
 ## Findings
 
-### [FAIL] The matcher's "a finding can never match two defects" invariant does not hold, and the stated response is to raise
+### [CONCERN] Stored defect records can't reproduce the defected tree, and no step produces defected-tree line numbers
 
-D4 spacing separates defects by `2W+1` lines. D6 then says a finding matching two defects is "impossible by D4 and raises". Two cases break that:
-- **Anchor match.** A `path#name` finding matches any defect whose enclosing function or class has that name. D4 only spaces defects by line distance, so up to 3 defects can sit more than 7 lines apart inside the same function. One `path#func` finding then matches all of them.
-- **Multi-line spans.** `location_span` can return a range such as `file.py:10-40`. That overlaps the windows of two defects 7 or more lines apart, so spacing says nothing about it.
+There are two linked gaps in the central artifact.
 
-Both locations are ordinary model output. The matcher is the instrument the slice exists to build, and the plan lists matcher looseness as the main risk to whether the number means anything. As written, the report either crashes on realistic data or, if the raise is removed, one broad finding credits several defects and inflates recall.
+1. **Replay data.** The run step applies "planted edits" in a fresh sandbox (line 135), but `PlantedDefect` stores no patch and no column offsets.
+   - It holds only `line_start`, `line_end`, `original` and `mutated`, in defected-tree numbering.
+   - D4 requires exact segment edits, but `original` can occur twice on a line, such as a second `<` or `x + 1`.
+   - A deletion records the line after the deleted text, not where to delete in the original.
 
-Fix before proceeding:
-1. Define the many-to-one rule. For example, a finding claims at most one defect, preferring the nearest line match, or anchor matches are made exclusive.
-2. Say how an anchor-only finding is treated when several defects share the symbol.
-3. Remove the "impossible, raises" clause, or restrict it to a case that is actually impossible.
-4. Add matcher tests for a multi-line span covering two defects and an anchor shared by two defects.
+2. **Line numbering.** D4 and the schema require defected-tree line numbers, but each defect is planted and verified alone, then the file is restored (line 121).
+   - `call-drop`, `guard-drop` and a multi-line `return-none` all remove lines. Later defects in that file therefore have different numbers once all edits are applied.
+   - No step rebases those numbers. D6 matches in a ±3 window, so an unrebased shift can silently miss a defect or credit the wrong one.
 
-### [CONCERN] Reviewer key depends on effort that is only known after the first review, but the bound, run id and resume need it earlier
+**Fix:** have the build compute the combined edit once and store it on the case, either as a patch or as original-tree spans with columns. Include it in the D5 identity. Derive each defect's `line_start` and `line_end` from the combined result, and add a test with a deletion above another defect in the same file.
 
-- **D8:** `effort` is "read from `ReviewResult.effort` on the first review". `reviewer_key` hashes it.
-- **D10:** the per-review cost figure is the largest observed cost "for the same `reviewer_key`". The bound prints before the first review, and `recall_run_id` hashes "sorted reviewer keys".
-- **Consequence:** none of these three can be computed before a review has run. The run id changes if effort comes back different from what was expected, so resume breaks. A mid-run effort change also splits a run across keys, and the plan does not say how.
+### [CONCERN] Matcher looseness is not measured, and the only control is excluded
 
-425 resolves the effort from the alias before dispatch. State the same here, and say what happens when `ReviewResult.effort` differs from the pre-dispatch value. For example, record the mismatch and refuse, or mark the review. Also state how `None` ("not sent", per the architecture's "absent is not zero") enters the hash.
+The architecture warns that "a loose matcher inflates recall". The slice plan says the matcher's looseness decides "whether the number means anything". D6 is deliberately loose:
+- Any finding within ±3 lines gets credit, whatever it says.
+- Any finding anchored on an enclosing function or class also gets credit, and for a class that covers every defect inside it.
 
-### [CONCERN] Coupling to 425 is bidirectional and disagrees with 425's own document
+A reviewer that emits many findings therefore gains recall by chance, and the paired verdict (D7) can rank it ahead for that reason alone. Showing unmatched counts beside recall doesn't quantify this. The clean-diff control is excluded (line 51), and Risk Assessment doesn't mention matcher looseness.
 
-The slice plan says 427 needs only 421. This slice depends on 425 in several places:
-- It shares `ReviewerRef`, `review_tree_diff` and the bootstrap, and edits 425's `review_flag`.
-- Walkthrough step 5 needs a graded 425 benchmark.
+**Fix:** add a chance-match figure that needs no LLM spend. For example, run the existing `match` against decoy locations (unplanted mutation sites in the same case) and report the decoy hit rate per config beside recall. Add the risk to the Risk Assessment. If a decoy rate is rejected, the design should state that the chance-match rate is unmeasured and that the report says so.
 
-It covers both landing orders ("whichever lands first writes it", "if 427 lands before 425, 425 implements it this way"). That doubles the design surface, and the spec for the shared pieces lives only in this document. The 425 design disagrees:
-- It has no `review_tree_diff`, no `reviewer_key` and no `latest_recall_for`. Its ReviewerRef (`ReviewerRef` in its schema) has no `reviewer_key` field.
-- It says "427 changes `review_flag` alone" (lines 456 and 493). This slice says "425 removes the flag by reading `latest_recall_for`".
-- 425 D7 and D14 describe the review call and bootstrap inline and do not name the shared function.
+### [CONCERN] `latest_recall_for` on the store inverts the dependency direction
 
-Cut the order-agnostic wording. The slice plan already lists 427 last, so make 425 a stated prerequisite and have 427 import the shared pieces. Then reconcile the following with 425's design, or record the required 425 edits explicitly:
-- Who adds `reviewer_key`.
-- Who owns `review_flag`.
-- The `review_tree_diff` signature.
+Match results aren't stored (line 147), so returning recall and an interval means running `recall_match` and `bootstrap_mean_interval`. D11 places this on `BenchmarkRecordStore`, so `metrology/` would have to import from `benchmark/`. No module in `metrology/` imports `squadron.benchmark` today, and 421 D3 limits that store to record I/O.
 
-If 427 must stay independent of 425, the walkthrough needs a step that does not require 425.
+Two related items are undefined:
+- `RecallSummary` appears in no schema.
+- D7 gives no seed for `bootstrap_mean_interval(values, seed)`, although 425 derives a seed so that reports reproduce. Without one, the report and the 425 line could print different intervals.
 
-### [CONCERN] Failure modes for new build and run I/O paths are incomplete
+**Fix:** move `latest_recall_for` into `recall_report.py` on top of the store's read methods, define `RecallSummary` there, and derive the seed from the run id and reviewer key.
 
-The doc enumerates rejections and absences well, and requires a test double for each. These paths still have no stated handling:
-- **Mutations that hang.** `condition-negate` on a `while` and `call-drop` on a loop-advancing call can produce non-terminating code. The suite then hits `benchmark.suite_timeout_s`. D4's proof accepts only `assertion_failure` or `project_exception`, so the site is skipped. But each hang costs timeout × `verify_runs` × up to 20 attempts per commit, which is unbounded in wall time. Name the timeout outcome. Either skip it and count it, or cap total build time per commit. Add it to the rejection and skip accounting.
-- **Baseline suite timeout or `SuiteRunError`.** The baseline suite across the whole candidate has no matching `RecallRejection` value. 425 has `grader_timeout` and `suite_error` for the same event.
-- **Review call hang.** `review_failed` covers raise and `UNKNOWN`. No timeout is stated for the call, and no per-review cost cap exists. The "one review of overshoot" bound is also only as good as the observed maximum, and 425 D9 says this explicitly. Add that caveat to the printed bound.
-- **Sandbox creation failure at run time.** `HistoryFreeSandbox(P)` can fail when `P` is missing from `--repo`, or `git commit` can fail. Neither is in `RecallAbsence`. Only `diff_apply_failed` is listed.
-- **Partial samples and cap-stopped runs.** D10 says an absence drops the case from every config's comparison. It does not say what happens when 1 of K samples fails. Nor does it say whether cases left incomplete by an exit-2 cap stop are excluded, and whether the run is then marked `partial`. D7's `r(c)` assumes K samples. The architecture says a partial run reports only cases completed under every config.
+### [CONCERN] D8's effort check can't be done through `review_tree_diff`
 
-### [CONCERN] Defect location is undefined for deletion operators
+D8 makes a mismatch between `ReviewResult.effort` and the resolved effort a `review_failed` absence. However, `recall_runner` reaches the reviewer only through `review_tree_diff` (line 98), and 425's `ReviewOutcome` has only `findings`, `unnormalized_count` and `cost_usd`. 425 D7 doesn't perform this check either, so the runner never sees the effort that was sent.
 
-`call-drop` and `guard-drop` delete whole lines. `PlantedDefect.line_start` and `line_end` are "in the defected tree", where those lines no longer exist. The doc does not say what span is recorded for a deletion, and D6's window is computed from it. State the rule, for example the line where the deleted text used to start, in defected-tree numbering, with zero width. Add a matcher test on it. Without this, recall for those operators (and the per-operator breakdown) depends on an unspecified choice.
+This matters because the architecture requires effort to be recorded as sent, and `reviewer_key` depends on it.
 
-### [NOTE] Proportionality
+**Fix:** either have 427 add `effort_sent` to `ReviewOutcome`, or have `review_tree_diff` raise on a mismatch. Either way, list it as a change to 425, because line 397 currently limits changes to 425's report code to `review_flag`.
 
-Effort 3/5 matches the plan. The load is mostly the nine-operator adapter, import-closure selection and verification. Three items could be deferred if the slice runs long:
-- The category-agreement column.
-- The by-severity split of unmatched findings.
-- The two-orders contingency wording (see the 425 coupling concern).
+### [CONCERN] Building into a shared set name replaces the set, which breaks the mitigation and the walkthrough
 
-The per-operator breakdown earns its place because the mitigation strategy relies on it. None of this blocks progress.
+421 D2's `write_case_set(name, case_ids)` writes a new version containing exactly the list it is given. The design passes it only the current build's cases (line 124), with these results:
+- **Mitigation:** a build on a second cf project "into the same set name" replaces the first project's cases instead of pooling them.
+- **Walkthrough:** step 2's `build --limit 1 --keep` (line 416) writes the default `recall` set with one case. Step 3 then measures only that case.
 
-### [PASS] Alignment with the architecture's recall, cost and answer-protection principles
+Recall sets also have no kind check on read. `recall run --set fixes` and `sq benchmark run --set recall` hit ids the other side can't load, and neither path is in a refusal list.
 
-- **Defect planting.** Mechanical planting with test proof resolves the architecture's open "who writes defects" question. It rejects hand-written and LLM-written defects for reasons that match the non-goals, and the matcher is deterministic with no judge call.
-- **No-tools review.** The review uses the same `code` template and no-tools condition as the 425 grader, and the report states that condition.
-- **Answer protection.** The commit message is fixed, and `show` and `--keep` are the only paths that expose the answers.
-- **Cost and cap.** `--max-cost` is required, the bound prints before dispatch, and the run stops at its cap with records kept and exit 2.
-- **Record format.** Records are coarse, optional siblings keyed on `ProjectId`, with no migration. Match results are recomputed, not stored.
-- **Statistics.** The case is the unit, and there is no composite score.
-- **Recall flag.** The recall-to-425 flag handoff is read-only, so it measures and does not gate.
+**Fix:** define whether a build merges with the latest version or replaces it. Pooling needs a merge, or a `--merge` flag. Give step 2 its own set name, and add a named refusal for a set of the wrong kind on the recall side. Have `write_case_set` or the set load report the kind so that 424's run can refuse too.
+
+### [CONCERN] D10 leaves unpriced reviews, resumed spend and interrupted runs undefined
+
+`RecallReview.cost_usd` can be `None`, but D10 doesn't say how that counts against the cap. 425 D9 counts it at the per-review figure and reports how many were unpriced. Without the same rule, a config with no reported cost could run past `--max-cost` unnoticed, which breaks the architecture's goal that spend is visible and capped.
+
+Two other cases are also open:
+- **Resumed spend:** nothing says whether spend restarts at zero on rerun. Walkthrough step 6 depends on the answer.
+- **Process death:** `RecallRun.state` includes `interrupted` (line 344), but nothing says when it is set, and D10 only defines `partial`. A process killed mid-run has no stated handling. 424 does define this: a `running` record with a free lock becomes `interrupted`.
+
+**Fix:** adopt 425 D9's unpriced rule and 424's interrupted rule by reference, state that the cap applies per invocation or per run, and reuse `BenchmarkStatus` rather than a second `Literal` of the same values.
+
+### [CONCERN] Data flow disagrees with D4 on the hang rejection
+
+The flow says "kept 0 → reject no_verified_defect". D4 (line 190) says a commit that ends on a hang with nothing kept is rejected as `mutant_timeout`. Rejection counts are the design's yield diagnostic, and line 393 requires a test for each reason, so implementers need one rule.
+
+**Fix:** add the `mutant_timeout` branch to the flow.
+
+### [NOTE] Frontmatter and step numbering have small gaps
+
+The prerequisites name 420 (effort on the review path) and 917 (location parsers), but the `dependencies` list omits both. Development Approach also jumps from step 6 to step 8 (lines 460-461).
+
+### [NOTE] Review hang handling is inherited, not stated
+
+D9 cites 425 D7 for `review_failed`, and D7 covers hangs through `benchmark.review_timeout_s`, so the behavior is defined. However, 427 never mentions the timeout key. Naming it in D9 would make the review path's hang handling explicit.
+
+### [PASS] Planting and ground truth align with the architecture
+
+Mutation planting settles the open question in a way that fits the non-goals on curated data and per-case human review. Each defect has a location, a 402 category and a proving test that passes clean and fails with the defect. Excluding import-only failures is sound, and the report states which categories were measured.
+
+### [PASS] Answer isolation and history-free review hold
+
+The review runs with no tools in a history-free tree, with a fixed commit message and identity. The answers stay out of the review path, and `show` labels its output as containing them.
+
+### [PASS] Measurement principles are followed
+
+The case is the statistical unit, comparisons are paired, and n is shown throughout. No composite score is computed, unmatched findings aren't called false positives, and nothing gates on results. Absences follow 425's harness rule and are counted per config.
+
+### [PASS] Spend bound and cap are restated with concrete targets
+
+`--max-cost` is required, and the bound prints before dispatch with one review of overshoot. The cap is checked between reviews and hitting it keeps records and exits 2, matching the architecture's cost section. Unpriced reviews are the one gap, covered above.
+
+### [PASS] Imports from 421, 425 and existing code match their sources
+
+These imports all exist as the design describes them:
+- From 425: `ReviewerRef`, `review_tree_diff`, `bootstrap_mean_interval`, `MIN_PAIRED_CASES` and `review_flag`.
+- From 421: the D11 project-source rule and `FailureKind`.
+- From the codebase: `location_path`, `location_span`, `ReviewCategory` and `CodeReviewFinding`.
+
+`review_flag` is the seam 425 reserved for this slice, and 427 defines no copies.
+
+### [PASS] Scope is proportionate
+
+Every slice plan criterion is covered and nothing assigned to this slice is deferred. The `RecallAdapter` seam follows the architecture's per-language adapter rule, and import-closure test selection is justified by suite time. I found nothing that should be cut.
 
 ### Run Digest
 
-- Response length: 8731 chars
+- Response length: 11462 chars
 - Response is newline-free: no
-- Tool calls made: 9
+- Tool calls made: 17
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
 - System prompt: preset+append
 - Settings sources: project
 - Reasoning characters: 0
-- Effort: high
-- Turns: 10
-- Tokens — prompt / cached / cache write / completion / reasoning: 420647 / 324195 / 96442 / 10962 / not computed
-- Duration: 95.0 s
-- Cost: $0.57 (provider)
+- Effort: backend default
+- Turns: 18
+- Tokens — prompt / cached / cache write / completion / reasoning: 465272 / 342571 / 122691 / 17571 / not computed
+- Duration: 175.4 s
+- Cost: $1.40 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
-- Finding-shaped matches — whole response: 7
+- Finding-shaped matches — whole response: 15
 - Finding-shaped matches — inside fences: 0
-- Finding-shaped matches — in findings section: 7
-- Finding-shaped matches — surviving validation: 7
+- Finding-shaped matches — in findings section: 15
+- Finding-shaped matches — surviving validation: 15
 
 ## Responses
 
-- **F001 (fixed):** D6 now says a finding claims at most one defect: of the not-yet-found defects it reaches, a line span claims the nearest and a shared anchor claims the first by `defect_id`. The "impossible, raises" clause is gone, D4 and the overview no longer claim spacing prevents all double matches, and matcher tests for a two-defect span and a shared anchor are added.
-- **F002 (fixed):** D8 resolves effort before dispatch, as 425 does (the alias's effort when the provider applies effort, else `None`), so the bound, run id and resume need no prior review. A review whose sent effort differs is `review_failed` with both values in `detail`, and `None` hashes as JSON `null`.
-- **F003 (fixed):** 425 is now a stated prerequisite and D9 imports `ReviewerRef` with `reviewer_key`, `review_tree_diff` and `bootstrap_mean_interval` from 425. All either-order wording is cut, and D11 says 427 changes `review_flag` alone to return the recall line, matching 425's design.
-- **F004 (fixed):** Added `baseline_failed` and `mutant_timeout` rejections; a mutation run that times out ends the commit's attempts, so a hang costs at most one suite timeout per commit. Sandbox and commit failures at run time join `case_setup_failed` (renamed from `diff_apply_failed`), the bound notes it is an estimate with no per-review cap, and D10 says any absent sample drops the case and a cap-stopped run is `partial`, reporting only complete cases.
-- **F005 (fixed):** D4 defines a deletion's span as zero width at the line where the deleted text began, in defected-tree numbering, with a matcher test.
-- **F006 (noted):** Cut the by-severity split of unmatched findings and the two-orders wording. The category-agreement column stays because it is one ratio and is what D6 relies on to keep category out of the match.
+- **F001 (fixed):** Each defect now stores its edit in original-tree coordinates (`edit_span` plus the replacement), so no text search can pick the wrong occurrence. When the kept set is final, edits are combined per file from the last position to the first, and each defect's defected-tree lines are derived from that, so a line-removing defect shifts the ones below it. `edit_span` is part of the case identity. A planter test covers a deletion above another defect in the same file.
+- **F002 (declined, recorded):** A decoy-site control adds stored decoys and a second figure to a slice already at effort 3, and decoy hits can be real issues, so the rate would be an upper bound. The design now states the chance-match rate is unmeasured, adds the risk to Risk Assessment, and the report header says so. Deferred as #300.
+- **F003 (fixed):** `latest_recall_for(store, reviewer_key)` and `RecallSummary` move to `recall_report.py` on top of the store's read methods, so `metrology/` imports nothing from `benchmark/`. The interval seed is the sha256 of the run id and reviewer key.
+- **F004 (fixed differently):** No mismatch check. Effort is resolved before dispatch, and 425's `review_tree_diff` passes `reviewer.effort` to the review call verbatim, so the recorded effort is the sent one by construction. No change to 425's `ReviewOutcome`.
+- **F005 (fixed):** `build` writes the union of the set's latest version and the kept cases, so a rebuild leaves the version alone and a second project pools in. A set cannot shrink; a fresh start uses a new set name. Walkthrough step 2 uses `--set scratch`. `recall run` refuses a set of benchmark cases. The matching refusal in `sq benchmark run` (424) is not changed here; a recall id there fails on load.
+- **F006 (fixed):** Unpriced reviews count at the per-review figure and are reported (425 D9). The cap is per invocation and `spent_usd` accumulates. Interruption follows 424's rule, and `RecallRun.state` is a `BenchmarkStatus`. 424 is now a stated prerequisite.
+- **F007 (fixed):** The data flow has the `mutant_timeout` branch.
+- **F008 (fixed):** `dependencies` lists 424, 420 and 917, and the step numbering is 1 to 7.
+- **F009 (fixed):** D9 names `benchmark.review_timeout_s`.
