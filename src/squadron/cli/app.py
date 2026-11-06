@@ -9,6 +9,7 @@ import typer
 from dotenv import load_dotenv
 
 from squadron.cli.commands.auth import auth_app
+from squadron.cli.commands.benchmark import benchmark_app
 from squadron.cli.commands.branch_run import branch_run
 from squadron.cli.commands.commit_run import commit_run
 from squadron.cli.commands.config import config_app
@@ -73,6 +74,7 @@ app.add_typer(events_app, name="events")
 app.add_typer(pr_app, name="pr")
 app.add_typer(stats_app, name="stats")
 app.add_typer(replay_app, name="replay")
+app.add_typer(benchmark_app, name="benchmark")
 app.add_typer(onboard_app, name="onboard")
 app.command("run", **STRAY_PARAM_COMMAND)(run_command)
 app.command("doctor")(doctor)
