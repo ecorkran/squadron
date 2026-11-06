@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261105
+dateUpdated: 20261106
 ---
 
 # Development Log
@@ -10,6 +10,15 @@ dateUpdated: 20261105
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261106
+
+### Slice 421: Task Breakdown Complete
+
+- **Delivered:** `421-tasks.benchmark-sandbox-and-case-record.md`: 26 tasks, test-with ordering, commit markers after each group.
+- **Order:** config keys; auth spike (`ScrubbedEnvironment`, `CredentialGrant`, `_auth-probe`, `sq benchmark auth-check`, live run recorded in DEVLOG); `HistoryFreeSandbox` extraction with replay tests as baseline; case and case-set records with `BenchmarkRecordStore`; adapter seam and uv environment resolution; fixture project, reporter plugin, classification and `run_suite`; `BenchmarkSandbox`; real-process scrub test; `sq benchmark sandbox`; walkthrough and final validation.
+- **Noted:** a `no` from the auth check is recorded as a result for the PM before 422; it does not block the rest of 421. The probe goes through `one_shot_dispatch`. `registry.py` lands with `run_suite` (Task 21) so the adapter satisfies the protocol first.
+- **Next:** Project Manager approval, then Phase 6 implementation.
 
 ## 20261105
 
