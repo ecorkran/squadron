@@ -18,6 +18,7 @@ from enum import StrEnum
 from pydantic import BaseModel
 
 from squadron.core.finding_categories import AuditCategory as AuditCategory  # re-exported
+from squadron.metrology.benchmark_models import BenchmarkCase, CaseSet
 from squadron.metrology.levels import ArtifactLevel
 from squadron.metrology.project_id import ProjectId as ProjectId  # re-exported
 from squadron.metrology.project_id import ProjectIdSource as ProjectIdSource  # re-exported
@@ -45,6 +46,9 @@ RECORD_TYPE_CODE_SNAPSHOT = "code_snapshot"
 RECORD_TYPE_CODE_REVIEW = "code_review"
 #: Written by 403's slice-range resolver: one record per project.
 RECORD_TYPE_SLICE_RANGES = "slice_ranges"
+#: Written by 421's benchmark case store: one record per case, one per case-set version.
+RECORD_TYPE_BENCHMARK_CASE = "benchmark_case"
+RECORD_TYPE_CASE_SET = "case_set"
 
 
 class JudgeResultRef(BaseModel):
@@ -245,7 +249,8 @@ class MetrologyRecord(BaseModel):
     ``record_type`` discriminates the payload. 320 writes ``"sample"``
     records; 322 writes ``"graduated_config"``; 323 writes
     ``"audit_finding"`` (an ``AuditRun``, findings inline) and
-    ``"audit_noise_floor"``. Each addition is an optional sibling field, so
+    ``"audit_noise_floor"``; 421 writes ``"benchmark_case"`` and ``"case_set"``.
+    Each addition is an optional sibling field, so
     the envelope shape stays backward compatible and ``schema_version``
     does not move — no store migration is needed.
     """
@@ -261,3 +266,5 @@ class MetrologyRecord(BaseModel):
     code_snapshot: CodeSnapshot | None = None
     code_review: CodeReviewRecord | None = None
     slice_ranges: SliceRanges | None = None
+    benchmark_case: BenchmarkCase | None = None
+    case_set: CaseSet | None = None

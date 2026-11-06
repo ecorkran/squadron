@@ -139,33 +139,33 @@ usageByModel:
 **Commit**: `refactor: extract HistoryFreeSandbox from ReplaySandbox`
 
 ### Task 12: Benchmark record models (D1, D2)
-- [ ] Create `src/squadron/metrology/benchmark_models.py` with `StrEnum`s `CaseKind` (`fix`, `slice`) and `GraderCommandKind` (`suite`, `lint`, `typecheck`); frozen models `ConftestFixture` (conftest path, fixture name), `GraderCommand` (kind, argv), `CaseProvenance` (source ref, created_at, built_by), `BenchmarkCase`, `CaseSet` with the fields in the design's Database / Storage Schema
-- [ ] `BenchmarkCase.case_id` derivation per D1: `case-` plus the first 16 hex digits of the sha256 of canonical JSON (sorted keys, no whitespace) of the ten identity fields, lists sorted first; provenance excluded. A `model_validator` recomputes it and rejects a mismatch. Provide a `BenchmarkCase.build(...)` factory that computes the id
-- [ ] `CaseSet`: `name` validated as a lowercase slug, `version >= 1`, `case_ids` sorted and unique; a helper for the record id `caseset-<sha256(name)[:12]>-v<version>`
-- [ ] Tests `tests/metrology/test_benchmark_models.py`
-  - [ ] Parametrized over each of the ten identity fields: changing only that field changes `case_id`
-  - [ ] Changing provenance alone does not change it; list order does not matter; JSON round trip equals the original
-  - [ ] A record with a wrong stored `case_id` fails validation
-  - [ ] `CaseSet` rejects a bad slug, version 0, duplicate ids; sorts ids
+- [x] Create `src/squadron/metrology/benchmark_models.py` with `StrEnum`s `CaseKind` (`fix`, `slice`) and `GraderCommandKind` (`suite`, `lint`, `typecheck`); frozen models `ConftestFixture` (conftest path, fixture name), `GraderCommand` (kind, argv), `CaseProvenance` (source ref, created_at, built_by), `BenchmarkCase`, `CaseSet` with the fields in the design's Database / Storage Schema
+- [x] `BenchmarkCase.case_id` derivation per D1: `case-` plus the first 16 hex digits of the sha256 of canonical JSON (sorted keys, no whitespace) of the ten identity fields, lists sorted first; provenance excluded. A `model_validator` recomputes it and rejects a mismatch. Provide a `BenchmarkCase.build(...)` factory that computes the id
+- [x] `CaseSet`: `name` validated as a lowercase slug, `version >= 1`, `case_ids` sorted and unique; a helper for the record id `caseset-<sha256(name)[:12]>-v<version>`
+- [x] Tests `tests/metrology/test_benchmark_models.py`
+  - [x] Parametrized over each of the ten identity fields: changing only that field changes `case_id`
+  - [x] Changing provenance alone does not change it; list order does not matter; JSON round trip equals the original
+  - [x] A record with a wrong stored `case_id` fails validation
+  - [x] `CaseSet` rejects a bad slug, version 0, duplicate ids; sorts ids
 
 ### Task 13: Store primitives and record envelope (D3)
-- [ ] `metrology/models.py`: add `RECORD_TYPE_BENCHMARK_CASE` and `RECORD_TYPE_CASE_SET` constants and optional `benchmark_case` and `case_set` fields on `MetrologyRecord` (extend the docstring that lists record types); `schema_version` unchanged
-- [ ] `metrology/store.py`: add public `write_record(record_id, record)` wrapping the atomic write, and `iter_records()` exposing `_iter_records`; existing methods keep their behavior and the file is otherwise not changed
-- [ ] Tests (extend the existing store tests): `write_record` then `load_record` round trip; `iter_records` skips a corrupt file with the existing WARNING; a record file written before this change (no new fields) still loads
-  - [ ] Success: `tests/metrology/` passes
+- [x] `metrology/models.py`: add `RECORD_TYPE_BENCHMARK_CASE` and `RECORD_TYPE_CASE_SET` constants and optional `benchmark_case` and `case_set` fields on `MetrologyRecord` (extend the docstring that lists record types); `schema_version` unchanged
+- [x] `metrology/store.py`: add public `write_record(record_id, record)` wrapping the atomic write, and `iter_records()` exposing `_iter_records`; existing methods keep their behavior and the file is otherwise not changed
+- [x] Tests (extend the existing store tests): `write_record` then `load_record` round trip; `iter_records` skips a corrupt file with the existing WARNING; a record file written before this change (no new fields) still loads
+  - [x] Success: `tests/metrology/` passes
 
 ### Task 14: `BenchmarkRecordStore` cases (D1, D3)
-- [ ] `src/squadron/metrology/benchmark_store.py`: `BenchmarkRecordStore(store: MetrologyStore)` with `write_case(case) -> str` (idempotent: an identical case returns the same id and leaves one file), `get_case(case_id)`. It calls `MetrologyStore.load_record` (which raises `FileNotFoundError` for an absent record and a raw pydantic `ValidationError` for a tampered one) and maps the outcomes itself: `FileNotFoundError` → `None`; `ValueError` (which covers `ValidationError`), `SchemaVersionError`, `OSError`, or a record that is not a `benchmark_case` → log at ERROR and raise `MetrologyStoreError` from the cause. A tampered file never comes back as `None`. Also `list_cases(project_id)`, which skips a mismatching file with a WARNING
-- [ ] Tests `tests/metrology/test_benchmark_store.py`
-  - [ ] Write then get returns an equal case; writing twice leaves one file; an unknown id returns `None`; a case-set record id passed to `get_case` raises `MetrologyStoreError`
-  - [ ] Hand-edit a stored file's `task_text`: `get_case` raises `MetrologyStoreError`, `list_cases` logs a WARNING and omits it (assert with `caplog`)
-  - [ ] `list_cases` filters by `project_id`
+- [x] `src/squadron/metrology/benchmark_store.py`: `BenchmarkRecordStore(store: MetrologyStore)` with `write_case(case) -> str` (idempotent: an identical case returns the same id and leaves one file), `get_case(case_id)`. It calls `MetrologyStore.load_record` (which raises `FileNotFoundError` for an absent record and a raw pydantic `ValidationError` for a tampered one) and maps the outcomes itself: `FileNotFoundError` → `None`; `ValueError` (which covers `ValidationError`), `SchemaVersionError`, `OSError`, or a record that is not a `benchmark_case` → log at ERROR and raise `MetrologyStoreError` from the cause. A tampered file never comes back as `None`. Also `list_cases(project_id)`, which skips a mismatching file with a WARNING
+- [x] Tests `tests/metrology/test_benchmark_store.py`
+  - [x] Write then get returns an equal case; writing twice leaves one file; an unknown id returns `None`; a case-set record id passed to `get_case` raises `MetrologyStoreError`
+  - [x] Hand-edit a stored file's `task_text`: `get_case` raises `MetrologyStoreError`, `list_cases` logs a WARNING and omits it (assert with `caplog`)
+  - [x] `list_cases` filters by `project_id`
 
 ### Task 15: `BenchmarkRecordStore` case sets (D2)
-- [ ] Add `write_case_set(name, case_ids) -> CaseSet`: compare to the latest version; equal list returns the existing set, a different list writes latest + 1, a first write is v1; every id must exist in the store or raise `MetrologyStoreError` naming the missing ids
-- [ ] Add `get_case_set(name, version=None)` (latest when `None`; `None` when absent) and `list_case_sets()` (every stored version of every set, sorted by name then version)
-- [ ] Tests (same file): v1 created; same list (any order) returns v1; changed list creates v2 and v1 is untouched; unknown ids rejected naming each; `get_case_set` latest and by version; `list_case_sets` returns all versions of two names in name-then-version order; two names do not collide
-  - [ ] Success: `tests/metrology/` passes
+- [x] Add `write_case_set(name, case_ids) -> CaseSet`: compare to the latest version; equal list returns the existing set, a different list writes latest + 1, a first write is v1; every id must exist in the store or raise `MetrologyStoreError` naming the missing ids
+- [x] Add `get_case_set(name, version=None)` (latest when `None`; `None` when absent) and `list_case_sets()` (every stored version of every set, sorted by name then version)
+- [x] Tests (same file): v1 created; same list (any order) returns v1; changed list creates v2 and v1 is untouched; unknown ids rejected naming each; `get_case_set` latest and by version; `list_case_sets` returns all versions of two names in name-then-version order; two names do not collide
+  - [x] Success: `tests/metrology/` passes
 
 **Commit**: `feat: add benchmark case and case-set records`
 

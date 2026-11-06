@@ -432,6 +432,21 @@ class MetrologyStore:
         judgments.sort(key=lambda j: j.created_at, reverse=True)
         return judgments
 
+    def write_record(self, record_id: str, record: MetrologyRecord) -> None:
+        """Atomically persist an already-enveloped record under *record_id*.
+
+        The public primitive for record types whose I/O lives outside this
+        module (benchmark records, slice 421 D3).
+        """
+        self._write_atomic(
+            self._record_path(record_id),
+            json.dumps(record.model_dump(mode="json"), indent=2),
+        )
+
+    def iter_records(self) -> Iterator[tuple[str, MetrologyRecord]]:
+        """Yield ``(record_id, record)`` for every readable file; corrupt ones warn and skip."""
+        return self._iter_records()
+
     def record_location(self, record_id: str) -> Path:
         """Where the record with *record_id* is (or would be) stored."""
         return self._record_path(record_id)
