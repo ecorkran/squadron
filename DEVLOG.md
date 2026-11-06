@@ -13,6 +13,14 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+### Slice 423: Task Breakdown Complete
+
+- **Delivered:** `423-tasks.fix-pipeline.md`: 16 tasks, test-with ordering, commit markers after each group.
+- **Order:** shared names and enum entries; issue ref and frozen-file source; fix report; fix commit plan and `CommitAction` FIX subject; dispatch prompt fallback; prompt file; `FixContextAction` with a load test; `FixStepType` and `fix.yaml`; executor-level test; hidden commands (`sq _fix-prompt`, `sq _commit --subject fix`); prompt-only rendering, `run.md` and parity test; docs and CHANGELOG for file mode; fetched source (needs 422 `get_issue` and `render_issue`, not implemented yet, so it stops with `BLOCKED:` until 422 Tasks 5–6 land); walkthrough including a cf-registered target-mode run.
+- **Design gaps found (corrected in the task file's Context Summary, design not edited):** the dispatch prompt fallback only accepts a `cf-op` result and reads `stdout`, so D2's "DispatchAction does not change" is wrong (Task 7 widens one condition); the commit action adds no attribution lines (D6); `IssueSource` names both an enum and a class; `sq run --prompt-only` refuses `--io-dir`, so `sq _fix-prompt --io-dir` is unreachable from `/sq:run`.
+- **Noted:** Task 11 stops with `BLOCKED:` if 422's `get_issue` or `render_issue` is absent; Tasks 1–10 and 12–13 need nothing from 422. Walkthrough step 6 (`/sq:run`) is covered by the parity test plus rendered-JSON inspection.
+- **Next:** Project Manager approval, then Phase 6 implementation.
+
 ### Slice 422: Task Breakdown Complete
 
 - **Delivered:** `422-tasks.fix-case-qualification-and-yield-report-keystone.md`: 31 tasks, test-with ordering, commit markers after each group.
