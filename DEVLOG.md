@@ -13,6 +13,14 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+### Slice 427: Task Breakdown Complete
+
+- **Delivered:** `427-tasks.reviewer-recall.md`: 40 tasks, test-with ordering, 22 commit markers, 308 lines.
+- **Order:** design corrections; config keys, operator table, edit engine and the Python adapter (need nothing from 421–425); the precondition gate (`BLOCKED:` while 421–425 are unimplemented); records and store; fixtures, verification, planting and build; the shared case materializer and `build`/`show`; a live build; matcher and statistics; runner and `run`; report, `latest_recall_for` and `review_flag`; slash commands; walkthrough; final validation.
+- **Design gaps found (Task 1 writes them into the design):** `ReviewerRef` has no `rules_hash` after 425; `review_tree_diff` raises `ReviewFailed`; `RecallAdapter` needs `is_source_path`; `edit_span` columns are UTF-8 byte offsets; "diff lines" is added plus removed from `--numstat`; `run` and `show` need one shared materializer; recall models and store go in new modules; `review_flag` gets a `records` parameter because it has no store today (one call-site change in 425's report); interval seeds use sha256.
+- **Noted:** 421–425 are not implemented, so Task 10 stops with `BLOCKED:` there; Tasks 2–9 do not wait. A live build that keeps no case files an issue and does not block the pure matcher and statistics tasks.
+- **Next:** Project Manager approval, then Phase 6 implementation after 425.
+
 ### Slice 426: Task Breakdown Complete
 
 - **Delivered:** `426-tasks.slice-cases.md`: 40 tasks, test-with ordering, 21 commit markers, 343 lines.
