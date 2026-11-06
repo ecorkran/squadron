@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from squadron.core.process_runner import ProcessResult
 
@@ -51,3 +54,20 @@ def ok(argv: Sequence[str], stdout: str = "", stderr: str = "") -> ProcessResult
 
 def failed(argv: Sequence[str], code: int = 1, stderr: str = "") -> ProcessResult:
     return ProcessResult(tuple(argv), code, "", stderr)
+
+
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+
+
+def git_tree(fixture: str, tmp_path: Path) -> Path:
+    """Copy a fixture project into a one-commit git repository and return its path."""
+    tree = tmp_path / fixture
+    shutil.copytree(FIXTURES_DIR / fixture, tree)
+    git = ["git", "-C", str(tree)]
+    subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
+    subprocess.run([*git, "add", "-A"], check=True)
+    subprocess.run(
+        [*git, "-c", "user.name=t", "-c", "user.email=t@t.invalid", "commit", "-q", "-m", "init"],
+        check=True,
+    )
+    return tree
