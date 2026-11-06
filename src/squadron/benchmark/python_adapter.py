@@ -20,7 +20,10 @@ from squadron.benchmark.adapter import (
     EnvironmentIdentity,
     EnvironmentResolutionError,
     SandboxContext,
+    SuiteRun,
+    SuiteSelection,
 )
+from squadron.benchmark.python_suite import run_pytest_suite
 from squadron.benchmark.scrubbed_env import SCRUB_SPEC_VERSION
 from squadron.core.process_runner import (
     ProcessNotFoundError,
@@ -64,6 +67,10 @@ class PythonBenchmarkAdapter:
 
     def path_entries(self, ctx: SandboxContext) -> tuple[Path, ...]:
         return (ctx.tree / VENV_DIR / "bin",)
+
+    def run_suite(self, ctx: SandboxContext, selection: SuiteSelection) -> SuiteRun:
+        """Run pytest under the scrubbed environment and fold the reporter's records."""
+        return run_pytest_suite(ctx, selection, ctx.env.variables(self.path_entries(ctx)))
 
     @staticmethod
     def _python(tree: Path) -> Path:

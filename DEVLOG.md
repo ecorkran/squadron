@@ -18,6 +18,7 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 - **Auth check (Task 9), run with this branch's `sq` (`.venv/bin/sq`):** `openai-oauth` (alias `luna`): **yes**. `sdk` (alias `sonnet`): **no**, `Not logged in · Please run /login`. No carried symlink was replaced. Aliases `haiku` and `luna` were used instead of the first listed alias per profile (`fable`, `astra`) to keep probe cost low; the answer is per profile.
 - **Why `sdk` is a no:** `~/.claude/.credentials.json` does not exist on this machine (macOS); Claude Code keeps its login in the Keychain, so the carryover file in `auth_carryover.py` has nothing to link. The same probe unscrubbed answers `ok`. **PM decision needed before 422 starts:** how `sdk` producers get auth in a scrubbed home (Keychain access, an API-key profile, or openai-oauth only).
 - **Replay baseline (Task 10):** `tests/replay tests/cli/test_replay_run.py` = 191 passed before the `HistoryFreeSandbox` extraction; 197 after (6 new tests, no existing test modified).
+- **Design addition (Task 22):** `run_suite` passes `--continue-on-collection-errors`; without it one broken module makes pytest stop before running any test, and `all_tests()` would return only the collection error. Exit codes other than 0, 1, 4, 5 raise `SuiteRunError`.
 - **Note:** `ProcessRunner.run` gained `replace_env` (Task 3): `env=` alone merged over `os.environ`.
 
 ### Slice 427: Task Breakdown Complete

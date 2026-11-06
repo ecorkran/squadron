@@ -194,57 +194,57 @@ usageByModel:
 **Commit**: `feat: add benchmark adapter seam and python environment resolution`
 
 ### Task 19: Fixture project for suite classification
-- [ ] Create `tests/benchmark/fixtures/classify_project/` with a committed `uv.lock`, pytest as a dev dependency, `pytest` config `pythonpath = ["src"]`, a package `pkg` (`pkg/core.py` with a function that raises `ZeroDivisionError` and a plain function), and tests covering one node per case:
-  - [ ] assertion (`assert 1 == 2`); project-code crash (calls the raising `pkg.core` function); import of a missing name from a project module (`ImportError`/`ModuleNotFoundError` inside the test body); `AttributeError` on a project module (`pkg.core.absent()`); `mock.patch("pkg.core.absent")`; exception raised in test code (`TypeError` in the test); a passing test; a skipped test; an xfail; a parametrized test whose id has brackets
-  - [ ] a separate module `test_collect_fails.py` that fails at import
-  - [ ] A second fixture, `tests/benchmark/fixtures/sleep_project/`: a copy of `env_ok` (same dependencies, its own `uv.lock` from `uv lock`) with one test that sleeps for 60 seconds. It is a separate project so that no run of `classify_project` can stall; Task 23's timeout test uses it with a `suite_timeout_s` of a few seconds
-  - [ ] a `conftest.py` and a test helper in the project (to confirm both are treated as test code, not project source)
-  - [ ] Success: `uv sync --locked` works in the fixture; running its tests with the harness's pytest from a `git_tree` copy shows the expected failures by hand; `uv run pytest tests/benchmark --collect-only -q` lists no node under `fixtures/`
+- [x] Create `tests/benchmark/fixtures/classify_project/` with a committed `uv.lock`, pytest as a dev dependency, `pytest` config `pythonpath = ["src"]`, a package `pkg` (`pkg/core.py` with a function that raises `ZeroDivisionError` and a plain function), and tests covering one node per case:
+  - [x] assertion (`assert 1 == 2`); project-code crash (calls the raising `pkg.core` function); import of a missing name from a project module (`ImportError`/`ModuleNotFoundError` inside the test body); `AttributeError` on a project module (`pkg.core.absent()`); `mock.patch("pkg.core.absent")`; exception raised in test code (`TypeError` in the test); a passing test; a skipped test; an xfail; a parametrized test whose id has brackets
+  - [x] a separate module `test_collect_fails.py` that fails at import
+  - [x] A second fixture, `tests/benchmark/fixtures/sleep_project/`: a copy of `env_ok` (same dependencies, its own `uv.lock` from `uv lock`) with one test that sleeps for 60 seconds. It is a separate project so that no run of `classify_project` can stall; Task 23's timeout test uses it with a `suite_timeout_s` of a few seconds
+  - [x] a `conftest.py` and a test helper in the project (to confirm both are treated as test code, not project source)
+  - [x] Success: `uv sync --locked` works in the fixture; running its tests with the harness's pytest from a `git_tree` copy shows the expected failures by hand; `uv run pytest tests/benchmark --collect-only -q` lists no node under `fixtures/`
 
 ### Task 20: The reporter plugin (D10)
-- [ ] Create `src/squadron/benchmark/pytest_reporter/squadron_benchmark_reporter.py`, importing only the standard library and `pytest`. Implement `pytest_collectreport` and a `pytest_runtest_makereport` hookwrapper (hooks available since pytest 7.0). The record format is pinned here and consumed by Tasks 21 and 22. One JSONL line per collection failure and per test phase, with exactly these keys: `node_id`; `phase` (`collect`, `setup`, `call`, `teardown`); `outcome` (`passed`, `failed`, `skipped`, `xfailed`, `xpassed`); `exc_type` (qualified name, or null); `exc_module` (module defining the exception class, or null); `named_module_file` (file of the module the exception names: `ImportError.name`, `AttributeError.obj`, or for an `AttributeError` raised inside `unittest/mock.py` the `target` module of the `_patch` object found in the innermost frame; null otherwise); `frame_file` and `frame_line` (innermost traceback frame, or null). The output path comes from the environment variable `SQUADRON_BENCHMARK_REPORT`. The plugin creates (truncates) that file in `pytest_configure`, so a file that exists proves the plugin loaded
-- [ ] Create `src/squadron/benchmark/python_failure.py` (Task 21 extends it) holding `REPORT_PATH_ENV = "SQUADRON_BENCHMARK_REPORT"` and `REPORT_KEYS` (the key tuple above) for the harness side; the plugin cannot import it, so it repeats both as module constants
-- [ ] Confirm the wheel ships it: `uv build`, then list the wheel contents (`unzip -l`); if hatch omits non-package files, add the needed `pyproject.toml` include. Locate the plugin directory at runtime with `importlib.resources` or `Path(__file__)`, never the cwd
-- [ ] Tests `tests/benchmark/test_pytest_reporter.py`: run the harness's pytest with `-p squadron_benchmark_reporter` and `PYTHONPATH` on a `git_tree` copy of `classify_project` (no venv needed) and read the JSONL
-  - [ ] Every executed node has a line for each phase; the failing nodes carry exception qualname/module; the mock-patch node records the patched module's file; the collection failure has its own line
-  - [ ] Every line has exactly `REPORT_KEYS`; the plugin's own constants equal `REPORT_PATH_ENV` and `REPORT_KEYS` (load the plugin by path with `importlib`); the file exists and is empty after a run that collects no tests
-  - [ ] The plugin file imports nothing outside the standard library and `pytest` (assert by AST)
-  - [ ] The wheel-content check passes
+- [x] Create `src/squadron/benchmark/pytest_reporter/squadron_benchmark_reporter.py`, importing only the standard library and `pytest`. Implement `pytest_collectreport` and a `pytest_runtest_makereport` hookwrapper (hooks available since pytest 7.0). The record format is pinned here and consumed by Tasks 21 and 22. One JSONL line per collection failure and per test phase, with exactly these keys: `node_id`; `phase` (`collect`, `setup`, `call`, `teardown`); `outcome` (`passed`, `failed`, `skipped`, `xfailed`, `xpassed`); `exc_type` (qualified name, or null); `exc_module` (module defining the exception class, or null); `named_module_file` (file of the module the exception names: `ImportError.name`, `AttributeError.obj`, or for an `AttributeError` raised inside `unittest/mock.py` the `target` module of the `_patch` object found in the innermost frame; null otherwise); `frame_file` and `frame_line` (innermost traceback frame, or null). The output path comes from the environment variable `SQUADRON_BENCHMARK_REPORT`. The plugin creates (truncates) that file in `pytest_configure`, so a file that exists proves the plugin loaded
+- [x] Create `src/squadron/benchmark/python_failure.py` (Task 21 extends it) holding `REPORT_PATH_ENV = "SQUADRON_BENCHMARK_REPORT"` and `REPORT_KEYS` (the key tuple above) for the harness side; the plugin cannot import it, so it repeats both as module constants
+- [x] Confirm the wheel ships it: `uv build`, then list the wheel contents (`unzip -l`); if hatch omits non-package files, add the needed `pyproject.toml` include. Locate the plugin directory at runtime with `importlib.resources` or `Path(__file__)`, never the cwd
+- [x] Tests `tests/benchmark/test_pytest_reporter.py`: run the harness's pytest with `-p squadron_benchmark_reporter` and `PYTHONPATH` on a `git_tree` copy of `classify_project` (no venv needed) and read the JSONL
+  - [x] Every executed node has a line for each phase; the failing nodes carry exception qualname/module; the mock-patch node records the patched module's file; the collection failure has its own line
+  - [x] Every line has exactly `REPORT_KEYS`; the plugin's own constants equal `REPORT_PATH_ENV` and `REPORT_KEYS` (load the plugin by path with `importlib`); the file exists and is empty after a run that collects no tests
+  - [x] The plugin file imports nothing outside the standard library and `pytest` (assert by AST)
+  - [x] The wheel-content check passes
 
 ### Task 21: Fold records and classify failures (D11)
-- [ ] In `python_failure.py` add `classify(record, tree)` turns one reporter record into a `FailureKind`, assigned in D11's order (collection_error, missing_symbol, assertion_failure, project_exception, other_exception). "Project source" is a file under `tree`, not under `.venv`, and not `test_*.py`, `*_test.py` or `conftest.py`; a project module is a module whose file is project source
-- [ ] `fold_records(records, tree) -> dict[node_id, NodeResult]`: one `NodeResult` per node from its per-phase records, by this precedence. A failed `setup` → `error`, classified from that record. Else a failed `call` → `failed`, classified from it. Else a failed `teardown` → `error`, classified from it. Else the `call` outcome (`passed`, `skipped`, `xfailed`, `xpassed`), or the `setup` outcome when there is no `call` record (a skip in setup). A failed `collect` record → `error` with `collection_error`, under the file's node id
-- [ ] Tests `tests/benchmark/test_python_failure.py` (ordering, edge and fold rules on small synthetic records, using `REPORT_KEYS`; real-pytest coverage is Task 23)
-  - [ ] An `ImportError` naming a project module → `missing_symbol`; naming a third-party module → `other_exception`
-  - [ ] `AttributeError` with project-module `named_module_file` → `missing_symbol`; mock-patch record with a project target → `missing_symbol`; innermost frame in a test helper → `other_exception`
-  - [ ] `AssertionError` and pytest `Failed` → `assertion_failure`; `ZeroDivisionError` from a project frame → `project_exception`; a frame under `.venv` → `other_exception`
-  - [ ] A collection record → `collection_error` even when its exception is an `ImportError` of a project name (order test)
-  - [ ] Fold: failed setup beats a call record; failed call with failed teardown → `failed`; passed call with failed teardown → `error`; setup skip with no call → `skipped`; xfail and xpass map to `xfailed` and `xpassed`
+- [x] In `python_failure.py` add `classify(record, tree)` turns one reporter record into a `FailureKind`, assigned in D11's order (collection_error, missing_symbol, assertion_failure, project_exception, other_exception). "Project source" is a file under `tree`, not under `.venv`, and not `test_*.py`, `*_test.py` or `conftest.py`; a project module is a module whose file is project source
+- [x] `fold_records(records, tree) -> dict[node_id, NodeResult]`: one `NodeResult` per node from its per-phase records, by this precedence. A failed `setup` → `error`, classified from that record. Else a failed `call` → `failed`, classified from it. Else a failed `teardown` → `error`, classified from it. Else the `call` outcome (`passed`, `skipped`, `xfailed`, `xpassed`), or the `setup` outcome when there is no `call` record (a skip in setup). A failed `collect` record → `error` with `collection_error`, under the file's node id
+- [x] Tests `tests/benchmark/test_python_failure.py` (ordering, edge and fold rules on small synthetic records, using `REPORT_KEYS`; real-pytest coverage is Task 23)
+  - [x] An `ImportError` naming a project module → `missing_symbol`; naming a third-party module → `other_exception`
+  - [x] `AttributeError` with project-module `named_module_file` → `missing_symbol`; mock-patch record with a project target → `missing_symbol`; innermost frame in a test helper → `other_exception`
+  - [x] `AssertionError` and pytest `Failed` → `assertion_failure`; `ZeroDivisionError` from a project frame → `project_exception`; a frame under `.venv` → `other_exception`
+  - [x] A collection record → `collection_error` even when its exception is an `ImportError` of a project name (order test)
+  - [x] Fold: failed setup beats a call record; failed call with failed teardown → `failed`; passed call with failed teardown → `error`; setup skip with no call → `skipped`; xfail and xpass map to `xfailed` and `xpassed`
 
 ### Task 22: `run_suite` on the Python adapter (D10)
-- [ ] Add `benchmark.suite_timeout_s` (default 1800) to `config/keys.py` beside the other benchmark keys, with a default and an override test
-- [ ] In `python_adapter.py` implement `run_suite(ctx, selection)`: copy the plugin into `<out>/plugin`, run `<tree>/.venv/bin/python -m pytest -p squadron_benchmark_reporter -p no:cacheprovider` with the selection's node ids or `--deselect` arguments, `cwd=tree`, through `ctx.runner` with `replace_env=True` and `ctx.env.variables(self.path_entries(ctx))` plus `PYTHONPATH=<out>/plugin` and `REPORT_PATH_ENV` pointing into `<out>`, bounded by `ctx.suite_timeout_s`. Read the JSONL, fold it with `fold_records`, and return a `SuiteRun`
-  - [ ] The result set: for `nodes(ids)`, one `NodeResult` per requested id; for `all_tests()`, one per node that has a record
-  - [ ] A requested id with no record: if its file has a collection failure it takes that error; otherwise it is `error` with `collection_error` (not collected)
-  - [ ] Timeout → `SuiteRun(timed_out=True)` built from the lines written so far; every requested node without a result is `not_run`
-  - [ ] JSONL file missing (the plugin never loaded), at any pytest exit code, or a line that does not parse → `SuiteRunError` carrying pytest's stderr, logged at ERROR. An existing empty file is valid only for pytest exit 5 (nothing collected: empty result for `all_tests()`) or exit 4 with `nodes(ids)` (the ids were not found: each is `error` / `collection_error`); an empty file at any other exit code, including 0, raises `SuiteRunError`
-  - [ ] `.pytest_cache` and the plugin directory do not appear in the tree
-- [ ] Tests `tests/benchmark/test_python_suite_runner.py` with a scripted `ProcessRunner`
-  - [ ] The command line has the plugin flags, the node ids or `--deselect` arguments, and `replace_env=True`; the env has no credential variable and carries `PYTHONPATH` and the report path
-  - [ ] Missing JSONL with exit 0 and with non-zero exit each raise `SuiteRunError`; an unparseable line raises; an empty file with exit 0 and with exit 1 each raise; an empty file with exit 5 and `all_tests()` gives no results; an empty file with exit 4 and `nodes(ids)` gives `error` / `collection_error` per id; a requested id with no record is `error` / `collection_error`
-  - [ ] `ProcessTimedOutError` → `timed_out=True`, with the nodes that reported kept and the rest `not_run`
+- [x] Add `benchmark.suite_timeout_s` (default 1800) to `config/keys.py` beside the other benchmark keys, with a default and an override test
+- [x] In `python_adapter.py` implement `run_suite(ctx, selection)`: copy the plugin into `<out>/plugin`, run `<tree>/.venv/bin/python -m pytest -p squadron_benchmark_reporter -p no:cacheprovider` with the selection's node ids or `--deselect` arguments, `cwd=tree`, through `ctx.runner` with `replace_env=True` and `ctx.env.variables(self.path_entries(ctx))` plus `PYTHONPATH=<out>/plugin` and `REPORT_PATH_ENV` pointing into `<out>`, bounded by `ctx.suite_timeout_s`. Read the JSONL, fold it with `fold_records`, and return a `SuiteRun`
+  - [x] The result set: for `nodes(ids)`, one `NodeResult` per requested id; for `all_tests()`, one per node that has a record
+  - [x] A requested id with no record: if its file has a collection failure it takes that error; otherwise it is `error` with `collection_error` (not collected)
+  - [x] Timeout → `SuiteRun(timed_out=True)` built from the lines written so far; every requested node without a result is `not_run`
+  - [x] JSONL file missing (the plugin never loaded), at any pytest exit code, or a line that does not parse → `SuiteRunError` carrying pytest's stderr, logged at ERROR. An existing empty file is valid only for pytest exit 5 (nothing collected: empty result for `all_tests()`) or exit 4 with `nodes(ids)` (the ids were not found: each is `error` / `collection_error`); an empty file at any other exit code, including 0, raises `SuiteRunError`
+  - [x] `.pytest_cache` and the plugin directory do not appear in the tree
+- [x] Tests `tests/benchmark/test_python_suite_runner.py` with a scripted `ProcessRunner`
+  - [x] The command line has the plugin flags, the node ids or `--deselect` arguments, and `replace_env=True`; the env has no credential variable and carries `PYTHONPATH` and the report path
+  - [x] Missing JSONL with exit 0 and with non-zero exit each raise `SuiteRunError`; an unparseable line raises; an empty file with exit 0 and with exit 1 each raise; an empty file with exit 5 and `all_tests()` gives no results; an empty file with exit 4 and `nodes(ids)` gives `error` / `collection_error` per id; a requested id with no record is `error` / `collection_error`
+  - [x] `ProcessTimedOutError` → `timed_out=True`, with the nodes that reported kept and the rest `not_run`
 
 ### Task 23: Real-pytest suite tests
-- [ ] Tests `tests/benchmark/test_python_suite.py` run real pytest in a module-scoped sandbox of `classify_project` (`network` marker); build it with `git_tree` and `resolve_environment`
-  - [ ] One test per kind: assertion, project crash, missing import of a project name, project-module `AttributeError`, `mock.patch` of a missing target, collection error, exception in test code, not-collected node id; and a timeout in a module-scoped sandbox of `sleep_project` with a `suite_timeout_s` of a few seconds
-  - [ ] Passed, skipped, xfailed outcomes map correctly; a bracketed parametrized id round-trips exactly
-  - [ ] `SuiteSelection.nodes` runs only the given nodes and returns exactly those results; `deselect` removes nodes from an all-tests run
-  - [ ] Success: all pass against real pytest, with no synthetic JSONL
+- [x] Tests `tests/benchmark/test_python_suite.py` run real pytest in a module-scoped sandbox of `classify_project` (`network` marker); build it with `git_tree` and `resolve_environment`
+  - [x] One test per kind: assertion, project crash, missing import of a project name, project-module `AttributeError`, `mock.patch` of a missing target, collection error, exception in test code, not-collected node id; and a timeout in a module-scoped sandbox of `sleep_project` with a `suite_timeout_s` of a few seconds
+  - [x] Passed, skipped, xfailed outcomes map correctly; a bracketed parametrized id round-trips exactly
+  - [x] `SuiteSelection.nodes` runs only the given nodes and returns exactly those results; `deselect` removes nodes from an all-tests run
+  - [x] Success: all pass against real pytest, with no synthetic JSONL
 
 ### Task 24: Adapter registry (D9)
-- [ ] `src/squadron/benchmark/registry.py`: `adapter_for(language: SourceLanguage) -> BenchmarkAdapter` returns `PythonBenchmarkAdapter` for `PYTHON`; any other language raises a named error. It is the only importer of concrete adapters
-- [ ] Test `tests/benchmark/test_registry.py`: Python returns the adapter; every other `SourceLanguage` raises
-  - [ ] Success: tests pass; `pyright` accepts the adapter as a `BenchmarkAdapter`
+- [x] `src/squadron/benchmark/registry.py`: `adapter_for(language: SourceLanguage) -> BenchmarkAdapter` returns `PythonBenchmarkAdapter` for `PYTHON`; any other language raises a named error. It is the only importer of concrete adapters
+- [x] Test `tests/benchmark/test_registry.py`: Python returns the adapter; every other `SourceLanguage` raises
+  - [x] Success: tests pass; `pyright` accepts the adapter as a `BenchmarkAdapter`
 
 **Commit**: `feat: add python suite runner with failure classification`
 

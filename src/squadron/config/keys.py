@@ -21,6 +21,7 @@ RUN_HEARTBEAT_INTERVAL_KEY = "pipeline.run_heartbeat_interval_s"
 CF_CLI_TIMEOUT_KEY = "cf.cli_timeout_s"
 BENCHMARK_AUTH_PROBE_TIMEOUT_KEY = "benchmark.auth_probe_timeout_s"
 BENCHMARK_INSTALL_TIMEOUT_KEY = "benchmark.install_timeout_s"
+BENCHMARK_SUITE_TIMEOUT_KEY = "benchmark.suite_timeout_s"
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
 COST_CAP_KEY = "pipeline.max_cost_usd"
 
@@ -501,6 +502,16 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "Wall-clock cap in seconds on installing a benchmark sandbox's "
             "dependencies from its lockfile (uv sync --locked). Exceeding it fails "
             "environment resolution with reason install_timeout."
+        ),
+    ),
+    BENCHMARK_SUITE_TIMEOUT_KEY: ConfigKey(
+        name=BENCHMARK_SUITE_TIMEOUT_KEY,
+        type_=int,
+        default=1800,
+        description=(
+            "Wall-clock cap in seconds on one benchmark suite run (pytest in the "
+            "sandbox). A run that exceeds it returns the results reported so far, "
+            "with every unreported node marked not_run."
         ),
     ),
     "codex.turn_timeout_s": ConfigKey(
