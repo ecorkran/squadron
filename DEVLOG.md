@@ -13,6 +13,14 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+### Slice 422: Task Breakdown Complete
+
+- **Delivered:** `422-tasks.fix-case-qualification-and-yield-report-keystone.md`: 31 tasks, test-with ordering, commit markers after each group.
+- **Order:** config keys; qualification record models and store; `get_issue` and frozen issue text; closing-commit discovery; fairness types and diff classification; test sets; fixture project and history helper; trace plugin (collect, static references, crossings, patches); Python fix-case adapter (collection, then file states and overlay); test-first; boundary resolver; trace verdict and registry; qualification pipeline in three stages; fixture end-to-end scenarios; `case_build` and separability; yield report; CLI and `/sq:benchmark`; real-commit pins; walkthrough; final validation.
+- **Design gaps found (interface gaps 1–3 corrected in Task 31; the two success-criteria gaps are left for the Project Manager):** `trace` needs the `AllowedBoundary`; `FixCaseAdapter` needs `lockfile_names`, `is_test_source` and a `pyproject_text` argument on `is_test_side`, because diff classification runs before any sandbox; `TraceVerdict` and `FairnessVerdict` are one type; 9fc4fc1c and d6535d62 both close #291 (`multiple_closing_commits`) and ebd45f3f has no closing keyword, so the design's real examples cannot reach the fairness checks through `build`; walkthrough step 4 cannot show `reused` on pre-sandbox rejections.
+- **Noted:** 421 is not implemented, so Task 1 stops if it is not. Tasks 29 and 30 carry `BLOCKED:` conditions (no real example for a fairness check; no second uv project).
+- **Next:** Project Manager approval, then Phase 6 implementation after 421.
+
 ### Slice 421: Task Breakdown Complete
 
 - **Delivered:** `421-tasks.benchmark-sandbox-and-case-record.md`: 26 tasks, test-with ordering, commit markers after each group.
