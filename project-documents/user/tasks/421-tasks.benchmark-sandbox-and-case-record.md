@@ -125,16 +125,16 @@ usageByModel:
 **Commit**: `feat: add sq benchmark auth-check`
 
 ### Task 10: Baseline the replay tests before the extraction
-- [ ] Run `uv run pytest tests/replay tests/cli/test_replay_run.py -q` on the unmodified code and note the pass count in the DEVLOG entry
-  - [ ] Success: all pass; the count is recorded for comparison after Task 11
+- [x] Run `uv run pytest tests/replay tests/cli/test_replay_run.py -q` on the unmodified code and note the pass count in the DEVLOG entry
+  - [x] Success: all pass; the count is recorded for comparison after Task 11
 
 ### Task 11: Extract `HistoryFreeSandbox` (D4)
-- [ ] In `src/squadron/replay/sandbox.py` create `HistoryFreeSandbox(start_sha, sandbox_id, repo_root, runner, root)` holding the lock, shallow fetch, checkout, submodule refusal, `path`, `keep()`, context manager and cleanup. It does not create a branch or touch cf
-  - [ ] `sandbox.py` is 298 lines now; if the result exceeds ~300 lines move the class to `replay/history_free_sandbox.py` and re-export it from `sandbox.py`
-- [ ] `ReplaySandbox` composes it and keeps `_register_with_cf`, `cf_project`, `branch` (created after the repository is built) and its public surface unchanged
-- [ ] Tests: add `tests/replay/test_history_free_sandbox.py`: one-commit repository at `start_sha`, no refs to later history, submodule refusal, lock written before the directory, cleanup on every exit path, `keep()`
-- [ ] Verify before the marker: rerun the Task 10 command
-  - [ ] Success: everything passes; the pass count is the Task 10 count plus the new tests in `test_history_free_sandbox.py`; `git status --short tests/replay tests/cli/test_replay_run.py` shows only added files (no existing test modified)
+- [x] In `src/squadron/replay/sandbox.py` create `HistoryFreeSandbox(start_sha, sandbox_id, repo_root, runner, root)` holding the lock, shallow fetch, checkout, submodule refusal, `path`, `keep()`, context manager and cleanup. It does not create a branch or touch cf
+  - [x] `sandbox.py` is 298 lines now; if the result exceeds ~300 lines move the class to `replay/history_free_sandbox.py` and re-export it from `sandbox.py`
+- [x] `ReplaySandbox` composes it and keeps `_register_with_cf`, `cf_project`, `branch` (created after the repository is built) and its public surface unchanged
+- [x] Tests: add `tests/replay/test_history_free_sandbox.py`: one-commit repository at `start_sha`, no refs to later history, submodule refusal, lock written before the directory, cleanup on every exit path, `keep()`
+- [x] Verify before the marker: rerun the Task 10 command
+  - [x] Success: everything passes; the pass count is the Task 10 count plus the new tests in `test_history_free_sandbox.py`; `git status --short tests/replay tests/cli/test_replay_run.py` shows only added files (no existing test modified)
 
 **Commit**: `refactor: extract HistoryFreeSandbox from ReplaySandbox`
 
