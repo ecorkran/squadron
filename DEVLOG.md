@@ -13,6 +13,25 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: PASS)
+- revise-code:commit-5: PASS
+
 ### Slice 421: Benchmark Sandbox and Case Record — Implementation Complete
 
 - **Auth check (Task 9), run with this branch's `sq` (`.venv/bin/sq`):** `openai-oauth` (alias `luna`): **yes**. `sdk` (alias `sonnet`): **no**, `Not logged in · Please run /login`. No carried symlink was replaced. Aliases `haiku` and `luna` were used instead of the first listed alias per profile (`fable`, `astra`) to keep probe cost low; the answer is per profile.
@@ -1233,4 +1252,3 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 - **SDK surface checked against `openai-codex` 0.159.3** (installed in a throwaway venv, not the project): `login_chatgpt`/`login_chatgpt_device_code` handles, `account()` → `ChatgptAccount(email, plan_type)`, `thread.run(effort=ReasoningEffort)`, `TurnResult.usage.last`, bundled binary via `codex_cli_bin`.
 - **Decisions:** `InteractiveLogin` as a separate runtime-checkable Protocol (no `AuthStrategy` change); one `CodexRuntime` resolver shared by agent/provider/doctor; `Effort` → `ReasoningEffort` by value, no table; sandbox validated via `Sandbox` enum.
 - **Open for PM:** upper version cap on `openai-codex` (0.x SDK); whether `OAuthFileStrategy`'s `OPENAI_API_KEY` fallback works with the app-server (unverified, to be checked during implementation).
-
