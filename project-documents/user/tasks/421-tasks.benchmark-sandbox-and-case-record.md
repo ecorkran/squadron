@@ -41,15 +41,15 @@ usageByModel:
 ## Tasks
 
 ### Task 1: Create the slice branch
-- [ ] Run `cf config get git.integration_branch`; the target is its value, or `main` when empty
-- [ ] `git checkout -b 421-slice.benchmark-sandbox-and-case-record <target>` (or switch to it if it exists)
-  - [ ] Success: `git branch --show-current` prints the slice branch (uncommitted planning files carry over; the tree need not be clean)
+- [x] Run `cf config get git.integration_branch`; the target is its value, or `main` when empty
+- [x] `git checkout -b 421-slice.benchmark-sandbox-and-case-record <target>` (or switch to it if it exists)
+  - [x] Success: `git branch --show-current` prints the slice branch (uncommitted planning files carry over; the tree need not be clean)
 
 ### Task 2: Auth-probe timeout config key (D12)
-- [ ] In `src/squadron/config/keys.py` add `BENCHMARK_AUTH_PROBE_TIMEOUT_KEY` and a `CONFIG_KEYS` entry `benchmark.auth_probe_timeout_s` (default 120), following `CF_CLI_TIMEOUT_KEY`; read it through `get_positive_int_config` (find how `cf.cli_timeout_s` is read and copy that). The install and suite keys are added with their consumers in Tasks 18 and 22
-  - [ ] Success: the key resolves to its default when unset and to a set value when set
-- [ ] Tests (existing config tests, or `tests/benchmark/test_config_keys.py`): default and override
-  - [ ] Success: tests pass
+- [x] In `src/squadron/config/keys.py` add `BENCHMARK_AUTH_PROBE_TIMEOUT_KEY` and a `CONFIG_KEYS` entry `benchmark.auth_probe_timeout_s` (default 120), following `CF_CLI_TIMEOUT_KEY`; read it through `get_positive_int_config` (find how `cf.cli_timeout_s` is read and copy that). The install and suite keys are added with their consumers in Tasks 18 and 22
+  - [x] Success: the key resolves to its default when unset and to a set value when set
+- [x] Tests (existing config tests, or `tests/benchmark/test_config_keys.py`): default and override
+  - [x] Success: tests pass
 
 **Commit**: `feat: add benchmark auth-probe timeout config key`
 
