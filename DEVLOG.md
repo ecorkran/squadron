@@ -13,6 +13,14 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+### Slice 426: Task Breakdown Complete
+
+- **Delivered:** `426-tasks.slice-cases.md`: 40 tasks, test-with ordering, 21 commit markers, 343 lines.
+- **Order:** design corrections; `judge_pair`, `CfRegistration`, public artifact patterns and two config keys (need nothing from 421–425); the precondition gate (`BLOCKED:` while 421–425 are unimplemented); `with_tools` and the cf spike (`BLOCKED:` on a no); records and store; fixtures, `normalize`, discovery, fork task text, no-code check; qualification in three steps, build, `slice-cases build`, yield rows, live build; `SliceCaseRunner`, requalify routing, live replay; pairing, forfeits, prompt, over-size, judge loop, plan, bound and cap, `judge` command; per-kind report, pairwise reduction and rendering, mixed-kind test; slash commands; walkthrough; final validation.
+- **Design gaps found (Task 1 writes them into the design):** `judge_pair` needs an `on_call` counter to keep `JudgeSummary.calls`; `plan_file_for` reads a working tree, so the fork's slice plans are written to a temp dir (D3); task files sort by numeric suffix, not name; `CfRegistration` needs a `registered` flag and its own error so `ReplaySandbox` cleanup is unchanged.
+- **Noted:** 421–425 are not implemented, so Task 6 stops with `BLOCKED:` there; Tasks 2–5 do not wait.
+- **Next:** Project Manager approval, then Phase 6 implementation after 425.
+
 ### Slice 425: Task Breakdown Complete
 
 - **Delivered:** `425-tasks.grading-and-paired-report.md`: 47 tasks, test-with ordering, 25 commit markers.
