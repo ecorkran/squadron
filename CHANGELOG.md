@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Effort sent is now recorded on every dispatch path: compaction, the replay judge, and the findings-addressed gate and `sq review resolve` (which now run at their alias's `effort`, so cost and latency can change). `sq _dispatch-run` takes `--effort`. `sq replay report` merges aliases that sent the same thing into one row; replays recorded before this release report as separate rows until re-run.
 - SDK dispatches no longer fail with "JSON message exceeded maximum buffer size" when the agent edits a file larger than 1 MiB.
+- An implement step no longer ends with task items still unchecked (#293). If the agent stops early, for example to wait on a background task-checker, the session is prompted to continue; if it still checks nothing off, the step fails with `unfinished_tasks` instead of running review and merge on partial work. A rerun of a slice branch that has commits but unchecked items now continues the implementation instead of skipping it.
 
 ## [0.24.22] - 20261104
 

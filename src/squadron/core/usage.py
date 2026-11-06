@@ -98,6 +98,15 @@ class RunTelemetry:
         """An independent copy; later folds into ``self`` do not reach it."""
         return replace(self)
 
+    def plus(self, other: RunTelemetry) -> RunTelemetry:
+        """The telemetry of ``self`` followed by ``other``, as one new value."""
+        return RunTelemetry(
+            turns=self.turns + other.turns,
+            reasoning_chars=self.reasoning_chars + other.reasoning_chars,
+            usage=self.usage.plus(other.usage),
+            cost_usd=add_optional_float(self.cost_usd, other.cost_usd),
+        )
+
 
 class CostBasis(StrEnum):
     """Where a cost came from (175 D3)."""

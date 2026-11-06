@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import functools
 import logging
 import time
 from enum import StrEnum
@@ -86,7 +87,9 @@ from squadron.tools import resolve_effective_tools
 from squadron.tools.builtin import DEFAULT_WRITE_STEP_TOOLS
 
 if TYPE_CHECKING:
+    from squadron.pipeline.implement_progress import TaskProgress
     from squadron.pipeline.sdk_session import SDKExecutionSession
+    from squadron.pipeline.sdk_turns import SessionReply
     from squadron.pipeline.steps import StepTypeName
 
 _logger = logging.getLogger(__name__)
@@ -343,6 +346,9 @@ def _kept_branch_work(context: ActionContext) -> dict[str, object] | None:
     Work is the branch's own commits ahead of the target, merge commits excluded. A
     failed count raises ``GitStateUnknownError``; it is never read as no work.
 
+    A branch whose task files still have unchecked items is partial work (#293), so the
+    step dispatches again to continue it. A cf or file error reading them propagates.
+
     A step resumed from a hand-off pause (a ``BLOCKED`` task, slice 947 D8) did not
     finish: the commits on the branch are partial work, not a finished step, so it
     dispatches again.
@@ -354,6 +360,7 @@ def _kept_branch_work(context: ActionContext) -> dict[str, object] | None:
         parse_slice_index,
         read_integration_target,
     )
+    from squadron.pipeline.implement_progress import read_task_progress
 
     if context.params.get(RESUMED_FROM_HANDOFF) is True:
         _logger.info(
@@ -364,6 +371,19 @@ def _kept_branch_work(context: ActionContext) -> dict[str, object] | None:
     branch, _ = slice_facts(parse_slice_index(context.params.get(SLICE_PARAM)), context.cf_client)
     ahead = branch_work_count(branch, target, cwd=context.cwd)
     if ahead == 0:
+        return None
+    slice_index = parse_slice_index(context.params.get(SLICE_PARAM))
+    unchecked = read_task_progress(context.cf_client, slice_index, context.cwd).unchecked
+    if unchecked:
+        _logger.info(
+            "implement: step %s found %d unchecked task item(s) on %s (%d commits ahead of %s); "
+            "the branch is partial work, dispatching to continue it",
+            context.step_name,
+            len(unchecked),
+            branch,
+            ahead,
+            target,
+        )
         return None
     _logger.info(
         "implement: step %s keeps existing work on %s (%d commits ahead of %s)",
@@ -685,6 +705,7 @@ class DispatchAction:
         started = time.monotonic()
         try:
             reply = await session.dispatch(resolved_prompt.text)
+            reply, unfinished = await self._finish_implementation(context, session, reply)
         except ProviderError as exc:
             stalled_unusable = isinstance(exc, DispatchStalledError) and not exc.session_usable
             record = None
@@ -712,6 +733,9 @@ class DispatchAction:
             error_result.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
             return error_result
 
+        if unfinished is not None and unfinished.needs_continuation:
+            return self._unfinished_failure(context, unfinished, record, resolved_prompt, effort_sent)
+
         metadata: dict[str, object] = {
             PROMPT_METADATA_KEY: resolved_prompt.identity(),
             "model": model_id,
@@ -736,6 +760,47 @@ class DispatchAction:
             metadata=metadata,
         )
         return await self._with_reply_contract(context, result, resolved_prompt.text)
+
+    async def _finish_implementation(
+        self, context: ActionContext, session: SDKExecutionSession, reply: SessionReply
+    ) -> tuple[SessionReply, TaskProgress | None]:
+        """Hold an implement step's session to its task file; other steps pass through (#293)."""
+        from squadron.pipeline.implement_progress import (
+            continue_until_finished,
+            implement_slice_index,
+            read_task_progress,
+        )
+
+        slice_index = implement_slice_index(context.params)
+        if slice_index is None:
+            return reply, None
+        read_progress = functools.partial(
+            read_task_progress, context.cf_client, slice_index, context.cwd
+        )
+        return await continue_until_finished(session, reply, read_progress)
+
+    def _unfinished_failure(
+        self,
+        context: ActionContext,
+        progress: TaskProgress,
+        record: UsageRecord | None,
+        prompt: ResolvedPrompt,
+        effort_sent: Effort | None,
+    ) -> ActionResult:
+        """The failed result for an implement dispatch that stopped with items unchecked."""
+        from squadron.pipeline.implement_progress import unfinished_message
+
+        error = unfinished_message(progress)
+        _logger.warning("dispatch: step %s: %s", context.step_name, error)
+        metadata: dict[str, object] = {
+            PROMPT_METADATA_KEY: prompt.identity(),
+            FAILURE_KIND_KEY: FailureKind.UNFINISHED_TASKS.value,
+        }
+        stamp(metadata, record)
+        stamp_effort_sent(metadata, effort_sent)
+        return ActionResult(
+            success=False, action_type=self.action_type, outputs={}, error=error, metadata=metadata
+        )
 
     def _resolve_prompt(self, context: ActionContext) -> ResolvedPrompt:
         """Return the delivered prompt for this dispatch, with its source (D8).

@@ -30,6 +30,7 @@ class FailureKind(StrEnum):
     USAGE_LIMIT = "usage_limit"  # the account's usage limit is used up; the run pauses (#248)
     AGENT_QUESTION = "agent_question"  # the agent ended on a question, no artifact; pauses (#249)
     TOOL_ISOLATION = "tool_isolation"  # allowed_tools: [] on a provider that runs its own tools (949)
+    UNFINISHED_TASKS = "unfinished_tasks"  # an implement dispatch stopped with unchecked items (#293)
 
 
 #: Kinds that wait on something outside the run (a reset, an answer); the rest fail it.

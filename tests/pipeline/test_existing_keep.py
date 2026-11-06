@@ -307,6 +307,12 @@ def _commit(repo: Path, name: str) -> None:
     run_test_git(repo, "commit", "-q", "-m", f"add {name}")
 
 
+def _write_task_items(repo: Path, items: str) -> None:
+    path = repo / TASKS
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"---\ndocType: tasks\n---\n# tasks\n\n{items}")
+
+
 async def _run_implement(repo: Path) -> tuple[ActionResult, AsyncMock]:
     context = _implement_context(repo)
     normal = ActionResult(success=True, action_type="dispatch", outputs={"response": "built"})
@@ -325,6 +331,7 @@ async def test_implement_keeps_a_branch_with_work(
     run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
     _commit(temp_git_repo, "a.py")
     _commit(temp_git_repo, "b.py")
+    _write_task_items(temp_git_repo, "- [x] 1.1 first\n- [x] 1.2 second\n")
 
     with caplog.at_level(logging.INFO, logger=_P):
         result, agent = await _run_implement(temp_git_repo)
@@ -337,6 +344,23 @@ async def test_implement_keeps_a_branch_with_work(
         in r.getMessage()
         for r in caplog.records
     )
+
+
+@pytest.mark.asyncio
+async def test_implement_continues_a_branch_with_unchecked_task_items(
+    temp_git_repo: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """#293: commits plus open task items are partial work, not a finished step."""
+    run_test_git(temp_git_repo, "checkout", "-q", "-b", BRANCH)
+    _commit(temp_git_repo, "a.py")
+    _write_task_items(temp_git_repo, "- [x] 1.1 first\n- [ ] 1.2 second\n- [ ] 1.3 third\n")
+
+    with caplog.at_level(logging.INFO, logger=_P):
+        result, agent = await _run_implement(temp_git_repo)
+
+    agent.assert_awaited_once()
+    assert result.outputs == {"response": "built"}
+    assert any(f"found 2 unchecked task item(s) on {BRANCH}" in r.getMessage() for r in caplog.records)
 
 
 @pytest.mark.asyncio
