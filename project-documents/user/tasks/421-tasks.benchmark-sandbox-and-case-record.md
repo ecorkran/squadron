@@ -68,23 +68,23 @@ usageByModel:
 **Commit**: `docs: correct slice 421 design on ProcessRunner environment`
 
 ### Task 4: Credential grant and auth carryover table (D7, D8)
-- [ ] Create `src/squadron/benchmark/__init__.py` and `auth_carryover.py`: one table from `ProfileName` to home-relative carryover files (`openai-oauth` → `.codex/auth.json`; `sdk` → `.claude/.credentials.json`; API-key profiles → none). Table is keyed by the enum, not by strings
-- [ ] Create `CredentialGrant` in `scrubbed_env.py`: `none()` and `for_profiles(profiles)`. For each profile it records the variable named by `ProviderProfile.api_key_env` (read from the profile definition, never hard-coded) and the carryover files from the table
-- [ ] Test `tests/benchmark/test_credential_grant.py`
-  - [ ] Each `ProfileName` has an explicit table entry (a profile added later without one fails the test)
-  - [ ] `none()` grants no variables and no files; `for_profiles` of an API-key profile grants exactly its `api_key_env`; of `sdk`/`openai-oauth` grants the carryover file and no variable
+- [x] Create `src/squadron/benchmark/__init__.py` and `auth_carryover.py`: one table from `ProfileName` to home-relative carryover files (`openai-oauth` → `.codex/auth.json`; `sdk` → `.claude/.credentials.json`; API-key profiles → none). Table is keyed by the enum, not by strings
+- [x] Create `CredentialGrant` in `scrubbed_env.py`: `none()` and `for_profiles(profiles)`. For each profile it records the variable named by `ProviderProfile.api_key_env` (read from the profile definition, never hard-coded) and the carryover files from the table
+- [x] Test `tests/benchmark/test_credential_grant.py`
+  - [x] Each `ProfileName` has an explicit table entry (a profile added later without one fails the test)
+  - [x] `none()` grants no variables and no files; `for_profiles` of an API-key profile grants exactly its `api_key_env`; of `sdk`/`openai-oauth` grants the carryover file and no variable
 
 ### Task 5: `ScrubbedEnvironment` (D7)
-- [ ] In `src/squadron/benchmark/scrubbed_env.py` define `SCRUB_SPEC_VERSION` (int), `SQUADRON_CONFIG_SEED = ("config.toml", "models.toml", "providers.toml")` and `HARNESS_TOOL_ALLOWLIST = ("git", "uv")`
-- [ ] `ScrubbedEnvironment(root, sandbox_id, grant, harness_env)`: `harness_env` is an injected mapping (no direct `os.environ` read, so tests control it). Adapter path entries are not known until the environment is installed, after the home exists, so they are an argument of `variables(path_entries)`, not of the constructor
-  - [ ] `home` is `<root>/<id>.home`. `prepare()` creates it, seeds `.config/squadron/` with the seed files that exist (and nothing else), writes `.gitconfig` (`user.name=squadron-benchmark`, `user.email=benchmark@squadron.invalid`, `init.defaultBranch=main`; define the two values as constants), creates `bin/` with symlinks to `git` and `uv` as resolved from the harness `PATH`, and symlinks each granted carryover file whose source exists
-  - [ ] `variables(path_entries)` returns only: pass-through `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR` (when set in `harness_env`); `HOME`, `TZ=UTC`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`, `PATH` (`path_entries`, then `<home>/bin`, then `/usr/bin:/bin:/usr/sbin:/sbin`); plus the grant's variables, valued from `harness_env`
-  - [ ] A granted variable absent from `harness_env`, or a missing `git`/`uv` on the harness `PATH`, raises a named error (`MissingCredentialError` for the variable; no silent skip)
-- [ ] Tests `tests/benchmark/test_scrubbed_env.py` (map level; the real-process test is Task 26)
-  - [ ] A harness env containing `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `VIRTUAL_ENV` and an invented `NEW_VAR`: none appear in `variables()`
-  - [ ] Seeding copies only the three seed files that exist; `metrology/` and `runs/` in the real home are not copied
-  - [ ] `PATH` is exactly the given entries, then `<home>/bin`, then the four system directories, in that order; carried files are symlinks to the source; `CredentialGrant.none()` adds no credential variable
-  - [ ] Missing granted variable and missing `uv` each raise with the right message
+- [x] In `src/squadron/benchmark/scrubbed_env.py` define `SCRUB_SPEC_VERSION` (int), `SQUADRON_CONFIG_SEED = ("config.toml", "models.toml", "providers.toml")` and `HARNESS_TOOL_ALLOWLIST = ("git", "uv")`
+- [x] `ScrubbedEnvironment(root, sandbox_id, grant, harness_env)`: `harness_env` is an injected mapping (no direct `os.environ` read, so tests control it). Adapter path entries are not known until the environment is installed, after the home exists, so they are an argument of `variables(path_entries)`, not of the constructor
+  - [x] `home` is `<root>/<id>.home`. `prepare()` creates it, seeds `.config/squadron/` with the seed files that exist (and nothing else), writes `.gitconfig` (`user.name=squadron-benchmark`, `user.email=benchmark@squadron.invalid`, `init.defaultBranch=main`; define the two values as constants), creates `bin/` with symlinks to `git` and `uv` as resolved from the harness `PATH`, and symlinks each granted carryover file whose source exists
+  - [x] `variables(path_entries)` returns only: pass-through `LANG`, `LC_ALL`, `LC_CTYPE`, `TERM`, `USER`, `LOGNAME`, `SHELL`, `TMPDIR` (when set in `harness_env`); `HOME`, `TZ=UTC`, `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_TERMINAL_PROMPT=0`, `PATH` (`path_entries`, then `<home>/bin`, then `/usr/bin:/bin:/usr/sbin:/sbin`); plus the grant's variables, valued from `harness_env`
+  - [x] A granted variable absent from `harness_env`, or a missing `git`/`uv` on the harness `PATH`, raises a named error (`MissingCredentialError` for the variable; no silent skip)
+- [x] Tests `tests/benchmark/test_scrubbed_env.py` (map level; the real-process test is Task 26)
+  - [x] A harness env containing `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `VIRTUAL_ENV` and an invented `NEW_VAR`: none appear in `variables()`
+  - [x] Seeding copies only the three seed files that exist; `metrology/` and `runs/` in the real home are not copied
+  - [x] `PATH` is exactly the given entries, then `<home>/bin`, then the four system directories, in that order; carried files are symlinks to the source; `CredentialGrant.none()` adds no credential variable
+  - [x] Missing granted variable and missing `uv` each raise with the right message
 
 **Commit**: `feat: add scrubbed producer environment and credential grants`
 
