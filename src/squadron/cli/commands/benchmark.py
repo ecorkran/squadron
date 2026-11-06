@@ -22,6 +22,7 @@ from squadron.benchmark.auth_check import (
     run_auth_check,
 )
 from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
+from squadron.cli.commands.benchmark_common import stderr_exit
 from squadron.cli.commands.benchmark_sandbox import sandbox_command
 from squadron.config.keys import BENCHMARK_AUTH_PROBE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
@@ -47,26 +48,21 @@ class SqNotFoundError(Exception):
     """``sq`` is not on the harness PATH, so the probe has no binary to run."""
 
 
-def _stderr_exit(message: str) -> typer.Exit:
-    typer.echo(message, err=True)
-    return typer.Exit(1)
-
-
 @benchmark_app.command("_auth-probe", hidden=True)
 def auth_probe(model: ModelOption) -> None:
     """Send the probe prompt through the real dispatch path (run in a scrubbed home)."""
     try:
         model_id, profile = resolve_alias_profile(model)
     except UnresolvedProfileError as exc:
-        raise _stderr_exit(str(exc)) from exc
+        raise stderr_exit(str(exc)) from exc
     try:
         response = asyncio.run(
             one_shot_dispatch(prompt=PROBE_PROMPT, model_id=model_id, profile_name=profile)
         )
     except Exception as exc:  # noqa: BLE001 - process boundary: any failure is a "no"
-        raise _stderr_exit(f"{type(exc).__name__}: {exc}") from exc
+        raise stderr_exit(f"{type(exc).__name__}: {exc}") from exc
     if not response.strip():
-        raise _stderr_exit("empty response")
+        raise stderr_exit("empty response")
     sys.stdout.write(response)
 
 
@@ -109,7 +105,7 @@ def auth_check(model: ModelsOption) -> None:
         MissingHarnessToolError,
         MissingHarnessHomeError,
     ) as exc:
-        raise _stderr_exit(str(exc)) from exc
+        raise stderr_exit(str(exc)) from exc
     typer.echo(f"{'profile':<14} {'alias':<20} result")
     for row in rows:
         typer.echo(_result_line(row))

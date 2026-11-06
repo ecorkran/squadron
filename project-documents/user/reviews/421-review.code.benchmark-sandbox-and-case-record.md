@@ -116,3 +116,10 @@ The keyword set is enforced only at runtime, when `_canonical_identity` raises `
 - Finding-shaped matches — inside fences: 0
 - Finding-shaped matches — in findings section: 6
 - Finding-shaped matches — surviving validation: 6
+
+## Responses
+
+- **F003 (fixed):** `stderr_exit` now lives once in `cli/commands/benchmark_common.py`, and both benchmark command modules use it. 422 and later add more benchmark commands, so the duplicate would have grown.
+- **F004 (accepted):** The duplication is deliberate (the plugin runs inside the sandboxed project's environment) and a test guards drift. No change.
+- **F005 (declined):** Versions are never rewritten or deleted, so the walk cannot hit a gap, and the cost is fine at expected set sizes. No change.
+- **F006 (declined):** Both callers build the identity from `IDENTITY_FIELDS` and tests cover the round trip and each field. A typed identity dataclass would add a second definition of the same field list.

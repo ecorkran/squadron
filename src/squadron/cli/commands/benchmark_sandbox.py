@@ -23,6 +23,7 @@ from squadron.benchmark.sandbox import (
     sweep_benchmark_orphans,
 )
 from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
+from squadron.cli.commands.benchmark_common import stderr_exit
 from squadron.config.keys import BENCHMARK_INSTALL_TIMEOUT_KEY, BENCHMARK_SUITE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
 from squadron.core.process_runner import ProcessRunner, SubprocessRunner
@@ -33,15 +34,10 @@ FAILING_OUTCOMES = (NodeOutcome.FAILED, NodeOutcome.ERROR)
 GIT_TIMEOUT_S = 60
 
 
-def _stderr_exit(message: str) -> typer.Exit:
-    typer.echo(message, err=True)
-    return typer.Exit(1)
-
-
 def _git(runner: ProcessRunner, repo_root: str, *args: str) -> str:
     result = runner.run(["git", "-C", repo_root, *args], cwd=None, timeout=GIT_TIMEOUT_S)
     if result.returncode != 0:
-        raise _stderr_exit(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+        raise stderr_exit(f"git {' '.join(args)} failed: {result.stderr.strip()}")
     return result.stdout.strip()
 
 
@@ -98,6 +94,6 @@ def sandbox_command(
                 sandbox.keep()
                 typer.echo(f"tree: {sandbox.tree}\nhome: {sandbox.home}\nout: {sandbox.output_dir}")
     except EnvironmentResolutionError as exc:
-        raise _stderr_exit(f"environment resolution failed: {exc.reason.value}\n{exc.detail}") from exc
+        raise stderr_exit(f"environment resolution failed: {exc.reason.value}\n{exc.detail}") from exc
     except (SandboxError, SuiteRunError, MissingHarnessHomeError, MissingHarnessToolError) as exc:
-        raise _stderr_exit(str(exc)) from exc
+        raise stderr_exit(str(exc)) from exc
