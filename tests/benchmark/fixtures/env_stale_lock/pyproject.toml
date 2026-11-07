@@ -1,0 +1,8 @@
+[project]
+name = "env_stale_lock"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["iniconfig>=2"]
+
+[dependency-groups]
+dev = ["pytest>=8"]

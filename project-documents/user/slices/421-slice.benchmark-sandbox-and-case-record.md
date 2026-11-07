@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [420, 177, 320]
 interfaces: [422, 424, 425, 426, 427]
 dateCreated: 20261104
-dateUpdated: 20261105
-status: not_started
+dateUpdated: 20261106
+status: complete
 ---
 
 # Slice Design: Benchmark Sandbox and Case Record
@@ -61,7 +61,7 @@ It also answers the riskiest open question before anything is built on it: wheth
 
 ### Interfaces Required
 
-- `ProcessRunner` (`core/process_runner.py`). Its `env` parameter already lets every child process get the scrubbed environment.
+- `ProcessRunner` (`core/process_runner.py`). Its `env` parameter merges over `os.environ`, so callers pass `replace_env=True` (added in Task 3) for a child to get exactly the scrubbed environment.
 - `ProviderProfile.api_key_env` and `ProfileName` (`providers/profiles.py`, `providers/base.py`). The scrubbed environment uses them to decide which credential variable passes through.
 - Model alias resolution (`models.toml`), for the auth check.
 - `SourceLanguage` (`metrology/snapshot_models.py`), so the benchmark registry is keyed the same way as 400's.
@@ -77,21 +77,25 @@ src/squadron/
     benchmark_store.py      BenchmarkRecordStore (composes MetrologyStore)
     store.py                + write_record(), iter_records() public primitives
   replay/
-    sandbox.py              HistoryFreeSandbox extracted; ReplaySandbox composes it
+    history_free_sandbox.py HistoryFreeSandbox, SandboxError, shared sandbox helpers
+    sandbox.py              ReplaySandbox composes HistoryFreeSandbox; sweep_orphans gains
+                            sweep_cf_projects and sibling_suffixes
   benchmark/
     adapter.py              BenchmarkAdapter protocol, SuiteSelection,
                             SuiteRun, NodeResult, FailureKind, EnvironmentIdentity
     registry.py             adapter_for(language): the only importer of concrete adapters
     python_adapter.py       PythonBenchmarkAdapter: resolve_environment, run_suite
-    python_failure.py       classification of pytest report data into FailureKind
+    python_suite.py         pytest run and fold of the reporter's JSONL into a SuiteRun
+    python_failure.py       record contract, classify and fold_records (FailureKind)
     pytest_reporter/        reporter plugin source (stdlib + pytest only), shipped as package data
-    sandbox.py              BenchmarkSandbox
+    sandbox.py              BenchmarkSandbox, benchmark_root, sweep_benchmark_orphans
     scrubbed_env.py         ScrubbedEnvironment, CredentialGrant, SCRUB_SPEC_VERSION
     auth_carryover.py       per-profile carryover table
-    auth_check.py           probe orchestration and AuthCheckResult
+    auth_check.py           probe orchestration, AuthCheckResult, UnresolvedProfileError,
+                            ProbeStartError
   cli/commands/
-    benchmark.py            `sq benchmark auth-check`, `sq benchmark sandbox`,
-                            hidden `sq benchmark _auth-probe`
+    benchmark.py            `sq benchmark auth-check`, hidden `sq benchmark _auth-probe`
+    benchmark_sandbox.py    `sq benchmark sandbox`
 ```
 
 `benchmark/` depends on `metrology/` and `replay/sandbox.py`. Neither of those depends on `benchmark/`. CLI code reaches concrete adapters only through `registry.py`.
@@ -171,7 +175,7 @@ Status: decided
   - `.config/squadron/` copies of whichever of `SQUADRON_CONFIG_SEED = ("config.toml", "models.toml", "providers.toml")` exist. Aliases and `pipeline.max_cost_usd` must resolve. `metrology/`, `runs/`, `replays/`, `reviews/` and logs are left out, so there is no store and no memory.
   - `.gitconfig` with `user.name`/`user.email` set to a fixed benchmark identity and `init.defaultBranch=main`.
 - `CredentialGrant` says what auth enters: `CredentialGrant.none()` for suite runs, or `CredentialGrant.for_profiles(profiles)` for producer runs. The grant adds each profile's `api_key_env` variable, read from the profile definition and never hard-coded, plus that profile's carryover files (D8).
-- Every child process the harness starts in a sandbox (pytest, the probe, and later `sq run`) receives `ScrubbedEnvironment.variables()` through `ProcessRunner.run(env=...)`. The SDK merges `os.environ` with its options env, so agent CLIs started by a scrubbed `sq run` inherit the scrub.
+- Every child process the harness starts in a sandbox (pytest, the probe, and later `sq run`) receives `ScrubbedEnvironment.variables()` through `ProcessRunner.run(env=..., replace_env=True)`; `env=` alone merges over `os.environ` and would not apply the scrub. The SDK merges `os.environ` with its options env, so agent CLIs started by a scrubbed `sq run` inherit the scrub.
 
 ### D8 — Auth carryover and the auth check
 Status: decided
@@ -184,6 +188,7 @@ Status: decided
   - No: anything else. A probe that outlives `benchmark.auth_probe_timeout_s` is a no with reason `timed out`, since a missing login can hang on a prompt. The result carries the exit code and stderr. It is reported in a table, and the command exits 1. No fallback to the unscrubbed environment, no added variables.
   - After each probe, the check verifies that every carried symlink is still a symlink. A runtime that replaced it with a regular file (write-by-rename) is reported as `yes, but carryover replaced`, because the user's real token may now be stale.
 - If a provider answers no, the remedy is a PM decision (for example, a declared token variable for `sdk`). It is never a silent workaround in code.
+- Deferred (squadron#301): carried credentials are symlinks to the real files, so a tool that opens one for writing can modify the real login. Symlinks are what lets the check detect a replaced file; whether to copy instead is a separate decision.
 - Rejected: checking auth by reading files. The question is whether the runtime authenticates, not whether a file exists.
 
 ### D9 — A separate benchmark adapter seam
@@ -234,7 +239,11 @@ Status: decided
 ### Patterns and Conventions
 
 - The store follows 400's pattern: deterministic record ids, an optional sibling payload, Pydantic at the file boundary.
-- Errors: `SandboxError` (repository), `EnvironmentResolutionError(reason, detail)`, `SuiteRunError`, `MetrologyStoreError`. Each is logged at ERROR where it is raised, carries the failing command's stderr, and never resolves to a default.
+- Errors: `SandboxError` (repository), `EnvironmentResolutionError(reason, detail)`, `SuiteRunError`, `MetrologyStoreError`, `MissingCredentialError` (a granted variable is unset), `MissingHarnessToolError`, `UnresolvedProfileError` (alias unknown or without a profile), `ProbeStartError` (`sq` cannot start in the scrubbed environment; not an auth answer). Each is logged at ERROR where it is raised, carries the failing command's stderr, and never resolves to a default.
+- `sweep_benchmark_orphans` (in `benchmark/sandbox.py`) is `sweep_orphans` with no cf sweep and the `.home`/`.out` sibling suffixes; `sq benchmark sandbox` calls it first.
+- The dependency install runs under the scrubbed environment (`replace_env=True`) with uv's real cache and Python directories (`UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, from `uv cache dir` and `uv python dir`); proxy and index settings are not carried over.
+- `MetrologyStore.create_record` fails with `FileExistsError` if the record exists; `write_case_set` re-reads and retries so concurrent writers never overwrite a version.
+- `run_suite` passes `--continue-on-collection-errors`, so one broken module does not hide every other node.
 - Reason and kind values are `StrEnum`s defined once (`EnvironmentFailureReason`, `FailureKind`, `NodeOutcome`, `CaseKind`, `GraderCommandKind`).
 
 ## Implementation Details
@@ -324,36 +333,36 @@ class CaseSet(BaseModel, frozen=True):
 
 ### Verification Walkthrough
 
-These are draft commands. `sq benchmark` does not exist until this slice is implemented.
+Run from the squadron checkout with this branch's `sq` first on `PATH`: `uv sync && export PATH="$PWD/.venv/bin:$PATH"` (an older installed `sq` lacks the probe). Verified on macOS, 2026-11-06.
 
 1. **Auth under the scrubbed environment:**
    ```bash
-   sq benchmark auth-check --model opus --model sol
+   sq benchmark auth-check --model sonnet --model luna
    ```
-   Expect one row per profile with `yes` or `no`. A `no` row shows the probe's error, and the command exits 1. Record the answers in the DEVLOG. A `no` goes to the PM before 422.
+   Prints `probing with: <path to .venv/bin/sq>` then one row per profile: `openai-oauth luna yes`; `sdk sonnet no (… Not logged in …)`. Exit 1 while any row is not `yes`. On this machine `sdk` is a `no`: the Claude Code login is in the macOS Keychain and `~/.claude/.credentials.json` does not exist, so nothing is carried over. Recorded in the DEVLOG for the PM.
 
-2. **A historical sandbox with its own environment.** From the squadron checkout, pick a commit some releases back:
+2. **A historical sandbox with its own environment.** (In zsh write `${REV}:uv.lock`; `$REV:u` is read as a modifier.)
    ```bash
    REV=$(git log --format=%h -n1 v0.20.0)
    sq benchmark sandbox $REV --keep
-   git show $REV:uv.lock | shasum -a 256
+   git show ${REV}:uv.lock | shasum -a 256
    ```
-   The printed `lockfile_sha256` matches the shasum. The printed tree, home and output paths exist.
+   Prints `language`, `lockfile_path`, `lockfile_sha256`, `interpreter_version`, `installer_version`, `platform`, `scrub_spec_version`, `identity_digest`, then the `tree:`, `home:` and `out:` paths, which exist. `lockfile_sha256` equals the shasum (`3e75a85f…` for `69550e3e`).
 
-3. **The installed `sq` is out of reach.** `uv run pytest tests/benchmark/test_scrubbed_env.py -v` runs the integration test that checks `command -v sq`, `sq --version`, the credential variables and `credential.helper` from inside a sandbox.
+3. **The installed `sq` is out of reach.** `uv run pytest tests/benchmark/test_scrubbed_env.py -v` passes (9 tests, about 10 s with a warm uv cache). Its integration test installs the repository's own HEAD and checks `env`, `command -v sq`, `sq --version` and `credential.helper` from inside the sandbox.
 
 4. **Suite run with classification:**
    ```bash
    sq benchmark sandbox $REV --suite
    sq benchmark sandbox $REV --node <node-id>
    ```
-   For `<node-id>`, take any node id that `--suite` printed. Expect per-outcome counts, and for any failure, its node id and kind. The single-node run reports exactly one result.
+   `--suite` at `69550e3e` took about 10 minutes and printed `outcomes: failed=6, passed=5748, skipped=8` and `failure kinds: assertion_failure=6`, with one `failed <node id> (assertion_failure)` line per failure (cf-schema and PR-fixture tests that need `cf`, absent from the scrubbed `PATH`). `--node` with one of those ids prints `outcomes: failed=1` and that node. `--suite` with `--node` exits 2.
 
-5. **A lockfile that does not resolve:** run `sq benchmark sandbox` at a commit of a project with no `uv.lock`, or use the fixture test `tests/benchmark/test_python_environment.py::test_stale_lock_fails`. Expect `no_lockfile` or `lock_stale_or_unresolvable` and exit 1, with no `.venv` created.
+5. **A lockfile that does not resolve:** `uv run pytest tests/benchmark/test_python_environment.py::test_stale_lock_fails tests/benchmark/test_python_environment.py::test_no_lockfile_runs_nothing -v` passes: reasons `lock_stale_or_unresolvable` (uv's message kept) and `no_lockfile`, no `.venv` left. `sq benchmark sandbox` on such a commit prints `environment resolution failed: <reason>` and uv's stderr, and exits 1.
 
-6. **Case records:** `uv run pytest tests/metrology/test_benchmark_store.py -v` covers id derivation, idempotent writes, tamper rejection and set versioning.
+6. **Case records:** `uv run pytest tests/metrology/test_benchmark_store.py -v` passes (12 tests).
 
-7. **Cleanup:** after step 2, `sq benchmark sandbox $REV` without `--keep` leaves nothing under `~/.config/squadron/benchmark/`. Kill a run mid-install, then run again: the earlier directories are swept with a WARNING.
+7. **Cleanup:** after a plain `sq benchmark sandbox $REV`, `ls ~/.config/squadron/benchmark/` is empty. Start a run and kill it about a second in (`sq benchmark sandbox $REV & pid=$!; sleep 1; kill -9 $pid`): a `sandbox-…` directory and `.lock` remain. The next run prints `removing orphaned replay sandbox <path>` as a WARNING and leaves nothing behind. A `--keep` sandbox is swept the same way by the next run.
 
 ## Risk Assessment
 

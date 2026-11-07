@@ -1,71 +1,54 @@
 """A history-free sandbox repository for one producer replay (slice 177 D3).
 
-A git worktree shares the repository's refs, so a tool-using producer could read the
-original artifact from ``main`` (``git show main:…``, ``git log --all``). The sandbox is a
-fresh repository holding exactly one commit, the replay's start point, and no ref to
-later history. It is registered with cf as ``replay-<replay_id>`` because cf resolves the
-project from the cwd and ``P4``/``P5`` run cf operations, and it is removed on exit.
-
-The ``<dir>.lock`` file (pid + process start time, shared with the PR-review scratch
-worktree via ``core.process_lock``) is written before the directory exists, so a
-concurrent sweep never reads a half-built sandbox as an orphan.
+The repository itself is a ``HistoryFreeSandbox`` (one commit, no later history). This
+adds the replay branch and registers the sandbox with cf as ``replay-<replay_id>``, because
+cf resolves the project from the cwd and ``P4``/``P5`` run cf operations; it is removed on
+exit.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import shutil
 from collections.abc import Sequence
 from pathlib import Path
 from types import TracebackType
 from typing import Self, cast
 
-from squadron.core.process_lock import (
-    ProcessIdentityUnresolvable,
-    current_process_lock,
-    is_orphan,
-    read_lock,
-)
-from squadron.core.process_runner import (
-    ProcessCwdNotFoundError,
-    ProcessNotFoundError,
-    ProcessResult,
-    ProcessRunner,
-    ProcessTimedOutError,
+from squadron.core.process_lock import is_orphan, read_lock
+from squadron.core.process_runner import ProcessRunner
+from squadron.replay.history_free_sandbox import (
+    LOCK_SUFFIX,
+    PROCESS_FAILURES,
+    SANDBOX_COMMAND_TIMEOUT_SECONDS,
+    HistoryFreeSandbox,
+    SandboxError,
+    lock_path,
+    remove_tree,
+    run_command,
+    unlink_quietly,
 )
 from squadron.stats.planning_docs import UnknownSliceError, plan_file_for
 
+__all__ = [
+    "LOCK_SUFFIX",
+    "SANDBOX_COMMAND_TIMEOUT_SECONDS",
+    "ReplaySandbox",
+    "SandboxError",
+    "replays_root",
+    "sweep_orphans",
+]
+
 _logger = logging.getLogger(__name__)
 
-#: Wall-clock bound on each git or cf command the sandbox runs.
-SANDBOX_COMMAND_TIMEOUT_SECONDS = 120
-LOCK_SUFFIX = ".lock"
 #: A sandbox's cf project is ``CF_PROJECT_PREFIX`` + its replay id.
 CF_PROJECT_PREFIX = "replay-"
 BRANCH_PREFIX = "replay/"
-_GITMODULES = ".gitmodules"
-_SUBMODULE_SECTION = "[submodule"
-_PROCESS_FAILURES = (ProcessNotFoundError, ProcessCwdNotFoundError, ProcessTimedOutError)
-
-
-class SandboxError(Exception):
-    """The sandbox could not be built; carries the failing command's stderr when it has one."""
 
 
 def replays_root() -> Path:
     """``~/.config/squadron/replays/`` — sibling of the PR-review ``worktrees`` directory."""
     return Path.home() / ".config" / "squadron" / "replays"
-
-
-def _lock_path(root: Path, name: str) -> Path:
-    return root / f"{name}{LOCK_SUFFIX}"
-
-
-def _run(runner: ProcessRunner, argv: Sequence[str], cwd: Path | None) -> ProcessResult:
-    return runner.run(
-        argv, cwd=None if cwd is None else str(cwd), timeout=SANDBOX_COMMAND_TIMEOUT_SECONDS
-    )
 
 
 class ReplaySandbox:
@@ -83,18 +66,21 @@ class ReplaySandbox:
     ) -> None:
         self._start_sha = start_sha
         self._replay_id = replay_id
-        # Absolute: the fetch runs under `git -C <sandbox>`, where a relative path would
-        # name the sandbox itself.
-        self._repo_root = repo_root.resolve()
         self._slice_index = slice_index
         self._runner = runner
-        self._root = root if root is not None else replays_root()
-        self._kept = False
+        self._repository = HistoryFreeSandbox(
+            start_sha=start_sha,
+            sandbox_id=replay_id,
+            repo_root=repo_root,
+            runner=runner,
+            root=root if root is not None else replays_root(),
+        )
         self._registered = False
+        self._kept = False
 
     @property
     def path(self) -> Path:
-        return self._root / self._replay_id
+        return self._repository.path
 
     @property
     def cf_project(self) -> str:
@@ -106,14 +92,14 @@ class ReplaySandbox:
 
     def keep(self) -> None:
         """Leave the sandbox in place on exit (the runner keeps it when a store write fails)."""
+        self._repository.keep()
         self._kept = True
 
     def __enter__(self) -> Self:
-        self._root.mkdir(parents=True, exist_ok=True)
+        self._repository.__enter__()
         built = False
         try:
-            self._write_lock()
-            self._build_repository()
+            self._repository.checked("git", "-C", str(self.path), "switch", "-q", "-c", self.branch)
             self._register_with_cf()
             built = True
         finally:
@@ -128,42 +114,8 @@ class ReplaySandbox:
         tb: TracebackType | None,
     ) -> None:
         if not self._kept:
-            self._cleanup()
-
-    def _write_lock(self) -> None:
-        try:
-            lock = current_process_lock(self._runner)
-        except ProcessIdentityUnresolvable as exc:
-            raise SandboxError(str(exc)) from exc
-        lock_path = _lock_path(self._root, self._replay_id)
-        try:
-            lock_path.write_text(lock.to_json())
-        except OSError as exc:
-            raise SandboxError(f"cannot write sandbox lock {lock_path}: {exc}") from exc
-
-    def _build_repository(self) -> None:
-        sandbox = str(self.path)
-        self._checked("git", "init", "-q", sandbox)
-        self._checked(
-            "git", "-C", sandbox, "fetch", "-q", "--depth", "1", str(self._repo_root), self._start_sha
-        )
-        self._checked("git", "-C", sandbox, "checkout", "-q", "--detach", "FETCH_HEAD")
-        self._checked("git", "-C", sandbox, "switch", "-q", "-c", self.branch)
-        if self._declares_submodules():
-            raise SandboxError(
-                f"start commit {self._start_sha} declares submodules in {_GITMODULES}; "
-                "submodule replay is not supported"
-            )
-
-    def _declares_submodules(self) -> bool:
-        """Whether ``.gitmodules`` has a submodule entry; squadron tracks an empty one."""
-        path = self.path / _GITMODULES
-        if not path.is_file():
-            return False
-        try:
-            return _SUBMODULE_SECTION in path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as exc:
-            raise SandboxError(f"cannot read {_GITMODULES} at {self._start_sha}: {exc}") from exc
+            self._remove_cf_registration()  # before the directory, as cf reads its path
+        self._repository.__exit__(exc_type, exc, tb)
 
     def _register_with_cf(self) -> None:
         """Register the sandbox as a cf project and point cf at the slice's initiative.
@@ -173,10 +125,11 @@ class ReplaySandbox:
         ``cf set arch`` names the initiative whose plan lists the slice (Task 1 spike).
         """
         initiative = self._initiative()
-        self._checked("cf", "init", "--lite", "--no-ide", "--name", self.cf_project, cwd=self.path)
+        checked = self._repository.checked
+        checked("cf", "init", "--lite", "--no-ide", "--name", self.cf_project, cwd=self.path)
         self._registered = True
-        self._checked("cf", "config", "set", "git.integration_branch", self.branch, cwd=self.path)
-        self._checked("cf", "set", "arch", initiative, cwd=self.path)
+        checked("cf", "config", "set", "git.integration_branch", self.branch, cwd=self.path)
+        checked("cf", "set", "arch", initiative, cwd=self.path)
 
     def _initiative(self) -> str:
         """The initiative index of the slice plan listing the slice, at the start point."""
@@ -188,62 +141,51 @@ class ReplaySandbox:
             ) from exc
         return plan.name.split("-", 1)[0]
 
-    def _checked(self, *argv: str, cwd: Path | None = None) -> None:
-        """Run a command; a failure raises ``SandboxError`` carrying its stderr."""
-        command = " ".join(argv)
-        try:
-            result = _run(self._runner, argv, cwd)
-        except _PROCESS_FAILURES as exc:
-            raise SandboxError(f"{command}: {exc}") from exc
-        if result.returncode != 0:
-            raise SandboxError(f"{command} failed: {result.stderr.strip()}")
-
     def _cleanup(self) -> None:
         """Remove the cf project, the directory, then the lock. Never raises."""
+        self._remove_cf_registration()
+        self._repository.cleanup()
+
+    def _remove_cf_registration(self) -> None:
         if self._registered:
             _remove_cf_project(self._runner, self.cf_project)
-        _remove_tree(self.path)
-        _unlink(_lock_path(self._root, self._replay_id))
+            self._registered = False
 
 
 def _remove_cf_project(runner: ProcessRunner, name: str) -> None:
     try:
-        result = _run(runner, ["cf", "project", "rm", name, "--yes"], None)
-    except _PROCESS_FAILURES as exc:
+        result = run_command(runner, ["cf", "project", "rm", name, "--yes"], None)
+    except PROCESS_FAILURES as exc:
         _logger.warning("could not remove cf project %s: %s", name, exc)
         return
     if result.returncode != 0:
         _logger.warning("could not remove cf project %s: %s", name, result.stderr.strip())
 
 
-def _remove_tree(path: Path) -> None:
-    try:
-        shutil.rmtree(path)
-    except FileNotFoundError:
-        pass  # never created, or already swept: nothing to remove
-    except OSError as exc:
-        _logger.warning("could not remove replay sandbox %s: %s", path, exc)
-
-
-def _unlink(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except OSError as exc:
-        _logger.warning("could not remove replay lock %s: %s", path, exc)
-
-
-def sweep_orphans(runner: ProcessRunner, root: Path | None = None) -> None:
+def sweep_orphans(
+    runner: ProcessRunner,
+    root: Path | None = None,
+    *,
+    sweep_cf_projects: bool = True,
+    sibling_suffixes: Sequence[str] = (),
+) -> None:
     """Remove sandboxes whose owner is gone, and cf projects whose directory is gone.
 
     A sandbox with a live lock, such as one in a concurrent ``sq replay`` process, is left
     alone. Never raises; each removal or failed removal is a WARNING.
+
+    The keyword-only parameters default to ``sq replay``'s behavior. The benchmark sandbox
+    passes ``sweep_cf_projects=False`` (it registers no cf project) and its sibling
+    suffixes (``.home``, ``.out``): directories that have no lock of their own and go with
+    their owner.
     """
     sandbox_root = root if root is not None else replays_root()
-    _sweep_directories(runner, sandbox_root)
-    _sweep_cf_projects(runner)
+    _sweep_directories(runner, sandbox_root, tuple(sibling_suffixes))
+    if sweep_cf_projects:
+        _sweep_cf_projects(runner)
 
 
-def _sweep_directories(runner: ProcessRunner, root: Path) -> None:
+def _sweep_directories(runner: ProcessRunner, root: Path, sibling_suffixes: tuple[str, ...]) -> None:
     if not root.is_dir():
         return
     try:
@@ -254,18 +196,34 @@ def _sweep_directories(runner: ProcessRunner, root: Path) -> None:
     for entry in entries:
         if not entry.is_dir():
             continue  # the lock files beside the sandboxes
-        lock = _lock_path(root, entry.name)
+        owner = _sibling_owner(entry.name, sibling_suffixes)
+        if owner is not None and (root / owner).is_dir():
+            continue  # a sibling whose owner directory exists: removed with the owner below
+        # A sibling without its owner directory (a crash after the tree was removed) is
+        # judged by the owner's lock, so it does not leak forever.
+        lock = lock_path(root, owner or entry.name)
         if not is_orphan(runner, read_lock(lock)):
             continue
         _logger.warning("removing orphaned replay sandbox %s", entry)
-        _remove_tree(entry)
-        _unlink(lock)
+        remove_tree(entry)
+        if owner is None:
+            for suffix in sibling_suffixes:
+                remove_tree(root / f"{entry.name}{suffix}")
+        unlink_quietly(lock)
+
+
+def _sibling_owner(name: str, sibling_suffixes: tuple[str, ...]) -> str | None:
+    """The owner's name when *name* ends in a sibling suffix, else ``None``."""
+    for suffix in sibling_suffixes:
+        if name.endswith(suffix):
+            return name.removesuffix(suffix)
+    return None
 
 
 def _sweep_cf_projects(runner: ProcessRunner) -> None:
     try:
-        result = _run(runner, ["cf", "project", "list", "--json"], None)
-    except _PROCESS_FAILURES as exc:
+        result = run_command(runner, ["cf", "project", "list", "--json"], None)
+    except PROCESS_FAILURES as exc:
         _logger.warning("could not list cf projects to sweep replay sandboxes: %s", exc)
         return
     if result.returncode != 0:

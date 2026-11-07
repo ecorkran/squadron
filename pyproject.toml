@@ -76,6 +76,8 @@ packages = ["src/squadron"]
 
 [tool.ruff]
 line-length = 104
+# Deliberately failing/odd projects that tests copy into sandboxes.
+extend-exclude = ["tests/benchmark/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]

@@ -66,6 +66,7 @@ class _HybridRunner:
         timeout: float,
         env: Mapping[str, str] | None = None,
         stdin: str | None = None,
+        replace_env: bool = False,
     ) -> ProcessResult:
         argv_tuple = tuple(argv)
         self.calls.append(argv_tuple)

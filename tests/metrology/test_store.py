@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 
 from squadron.metrology.errors import MetrologyStoreError
-from squadron.metrology.models import JudgeConfigId
+from squadron.metrology.models import RECORD_TYPE_SAMPLE, JudgeConfigId, MetrologyRecord
 from squadron.metrology.store import MetrologyStore, SchemaVersionError
 from tests.metrology.conftest import make_sample_verdict
 
@@ -167,3 +167,41 @@ class TestQuery:
         )
         assert store.count_samples("github.com/o/proj-a") == 3
         assert store.count_samples("github.com/o/proj-b") == 1
+
+
+class TestPublicRecordPrimitives:
+    """write_record / iter_records, the primitives benchmark records build on (421 D3)."""
+
+    @staticmethod
+    def _envelope() -> MetrologyRecord:
+        return MetrologyRecord(
+            schema_version=1,
+            record_type=RECORD_TYPE_SAMPLE,
+            sample=make_sample_verdict(sample_id="sample-20260722-cccc3333"),
+        )
+
+    def test_write_record_then_load_record_round_trips(self, tmp_path: Path) -> None:
+        store = MetrologyStore(store_dir=tmp_path)
+        record = self._envelope()
+        store.write_record("sample-20260722-cccc3333", record)
+        assert store.load_record("sample-20260722-cccc3333") == record
+
+    def test_iter_records_skips_corrupt_file_with_warning(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        store = MetrologyStore(store_dir=tmp_path)
+        store.write_record("sample-20260722-cccc3333", self._envelope())
+        (tmp_path / "broken.json").write_text("{not json", encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            ids = [record_id for record_id, _ in store.iter_records()]
+        assert ids == ["sample-20260722-cccc3333"]
+        assert "Skipping unreadable metrology record" in caplog.text
+
+    def test_record_written_before_benchmark_fields_still_loads(self, tmp_path: Path) -> None:
+        store = MetrologyStore(store_dir=tmp_path)
+        data = self._envelope().model_dump(mode="json")
+        del data["benchmark_case"], data["case_set"]
+        (tmp_path / "old.json").write_text(json.dumps(data), encoding="utf-8")
+        loaded = store.load_record("old")
+        assert loaded.benchmark_case is None
+        assert loaded.case_set is None

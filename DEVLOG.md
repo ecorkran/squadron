@@ -13,6 +13,38 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261106
 
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: PASS)
+- revise-code:commit-5: PASS
+
+### Slice 421: Benchmark Sandbox and Case Record — Implementation Complete
+
+- **Auth check (Task 9), run with this branch's `sq` (`.venv/bin/sq`):** `openai-oauth` (alias `luna`): **yes**. `sdk` (alias `sonnet`): **no**, `Not logged in · Please run /login`. No carried symlink was replaced. Aliases `haiku` and `luna` were used instead of the first listed alias per profile (`fable`, `astra`) to keep probe cost low; the answer is per profile.
+- **Why `sdk` is a no:** `~/.claude/.credentials.json` does not exist on this machine (macOS); Claude Code keeps its login in the Keychain, so the carryover file in `auth_carryover.py` has nothing to link. The same probe unscrubbed answers `ok`. **PM decision needed before 422 starts:** how `sdk` producers get auth in a scrubbed home (Keychain access, an API-key profile, or openai-oauth only).
+- **Replay baseline (Task 10):** `tests/replay tests/cli/test_replay_run.py` = 191 passed before the `HistoryFreeSandbox` extraction; 197 after (6 new tests, no existing test modified).
+- **Design addition (Task 22):** `run_suite` passes `--continue-on-collection-errors`; without it one broken module makes pytest stop before running any test, and `all_tests()` would return only the collection error. Exit codes other than 0, 1, 4, 5 raise `SuiteRunError`.
+- **Walkthrough (Task 28), `REV=69550e3e` (`v0.20.0`):** step 2 `lockfile_sha256` `3e75a85f…` matches `git show ${REV}:uv.lock | shasum -a 256` and the kept tree/home/out paths existed (write `${REV}:uv.lock`: zsh reads `$REV:u` as an uppercase modifier). Step 3 passes (9). Step 4 `--suite`: `failed=6, passed=5748, skipped=8`, all six `assertion_failure` (cf-schema and PR-fixture tests that need `cf`, which is not on the scrubbed PATH); `--node` with one printed id: exactly one result. Step 5 `test_stale_lock_fails` and the no-lockfile case pass. Step 6 passes (12). Step 7: a plain run leaves nothing under `~/.config/squadron/benchmark/`; a run killed 1 s in left a tree and lock, and the next run swept them with a WARNING; a `--keep` sandbox was swept the same way.
+- **`sq replay run` manual check (Task 28):** `sq replay run --phase tasks --slice 400 --config luna --reviewer luna --max-revisions 1 --yes` ran to completion (`luna: accepted rounds 2 $0.0033`, exit 0, 1 record written, no sandbox left under `~/.config/squadron/replays/`), so the extraction and the unchanged `sweep_orphans` call behave as before.
+- **Final validation (Task 29):** full suite 9029 passed, 5 skipped; ruff check and pyright (zero errors) clean; every new source file under 300 lines. `sq benchmark sandbox` and `sq benchmark auth-check` are CLI-only (no slash command until 422).
+- **Open for the PM before 422:** `sdk` auth does not survive the scrub on this machine (Keychain login, no carryover file).
+- **Next:** slice 422 (fix-case qualification).
+- **Note:** `ProcessRunner.run` gained `replace_env` (Task 3): `env=` alone merged over `os.environ`.
+
 ### Slice 427: Task Breakdown Complete
 
 - **Delivered:** `427-tasks.reviewer-recall.md`: 40 tasks, test-with ordering, 22 commit markers, 308 lines.
@@ -1220,4 +1252,3 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 - **SDK surface checked against `openai-codex` 0.159.3** (installed in a throwaway venv, not the project): `login_chatgpt`/`login_chatgpt_device_code` handles, `account()` → `ChatgptAccount(email, plan_type)`, `thread.run(effort=ReasoningEffort)`, `TurnResult.usage.last`, bundled binary via `codex_cli_bin`.
 - **Decisions:** `InteractiveLogin` as a separate runtime-checkable Protocol (no `AuthStrategy` change); one `CodexRuntime` resolver shared by agent/provider/doctor; `Effort` → `ReasoningEffort` by value, no table; sandbox validated via `Sandbox` enum.
 - **Open for PM:** upper version cap on `openai-codex` (0.x SDK); whether `OAuthFileStrategy`'s `OPENAI_API_KEY` fallback works with the app-server (unverified, to be checked during implementation).
-

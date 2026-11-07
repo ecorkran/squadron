@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `sq benchmark auth-check` reports whether each provider profile's login still works in the scrubbed producer environment, and `sq benchmark sandbox REV` builds a history-free sandbox at a commit, installs its locked environment, and can run its tests with failures classified.
+
 ## [0.24.23] - 20261105
 
 ### Fixed

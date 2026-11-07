@@ -3,7 +3,7 @@ docType: slice-plan
 parent: 420-arch.model-benchmark.md
 project: squadron
 dateCreated: 20261104
-dateUpdated: 20261104
+dateUpdated: 20261106
 status: not_started
 ---
 
@@ -36,7 +36,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
    - **Risk Level:** Low
    - **Relative Effort:** 2/5
 
-2. [ ] **(421) Benchmark Sandbox and Case Record** — The shared base for cases, replay and grading:
+2. [x] **(421) Benchmark Sandbox and Case Record** — The shared base for cases, replay and grading:
    - The case and case-set record types in the 320 store. A case is identified by its content: start commit, task text, hidden and superseded test sets, exclusion list and grader commands. A case set is a named, versioned list of case ids. These are optional sibling payloads, keyed on `ProjectId`, with no migration.
    - Sandbox environment resolution on top of 177's history-free sandbox: install the project at the start commit and record an environment identity (lockfile hash, tool versions).
    - The scrubbed producer environment: no GitHub credentials, squadron and agent config directories redirected, `PATH` with the sandbox environment first and no user tool installs. This includes the check that agent auth still works with the config directory redirected.
