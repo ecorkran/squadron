@@ -109,6 +109,8 @@ def _summary(
         resume=resume,
         problem=problem,
         started_at=datetime(2026, 10, 6, 14, 2, tzinfo=UTC),
+        working_directory=None,
+        checkpoint=None,
     )
 
 

@@ -230,6 +230,30 @@ class TestInitRun:
         assert state.pipeline == "test-pipeline"
 
 
+class TestWorkingDirectory:
+    """RunState.working_directory records where a run started (#303)."""
+
+    def test_kept_across_a_resume(self, state_manager: StateManager, tmp_path: Path) -> None:
+        run_id = state_manager.init_run("pipe", {}, working_directory=str(tmp_path))
+        state_manager.finalize(
+            run_id,
+            PipelineResult(pipeline_name="pipe", status=ExecutionStatus.PAUSED, step_results=[]),
+        )
+
+        state_manager.claim(run_id, RunOwner.current(30))
+
+        assert state_manager.load(run_id).working_directory == str(tmp_path)
+
+    def test_a_file_without_it_reads_as_none(self, state_manager: StateManager, tmp_path: Path) -> None:
+        run_id = state_manager.init_run("pipe", {}, working_directory=str(tmp_path))
+        path = tmp_path / f"{run_id}.json"
+        raw = json.loads(path.read_text())
+        del raw["working_directory"]
+        path.write_text(json.dumps(raw))
+
+        assert state_manager.load(run_id).working_directory is None
+
+
 class TestPipelinePath:
     """RunState.pipeline_path records a path run's source file (slice 940 D4)."""
 

@@ -383,6 +383,7 @@ async def _run_pipeline(
             owner=owner,
             pipeline_path=run_path,
             replay=replay,
+            working_directory=os.getcwd(),
         )
         _announce_run_id(run_id)
 
@@ -851,7 +852,11 @@ def _handle_prompt_only_init(
     state_mgr = StateManager()
     run_name, run_path = _run_record_identity(pipeline_name)
     run_id = state_mgr.init_run(
-        run_name, params, execution_mode=ExecutionMode.PROMPT_ONLY, pipeline_path=run_path
+        run_name,
+        params,
+        execution_mode=ExecutionMode.PROMPT_ONLY,
+        pipeline_path=run_path,
+        working_directory=os.getcwd(),
     )
     _announce_run_id(run_id)
 

@@ -41,6 +41,7 @@ from squadron.pipeline.run_liveness import (
     assess_liveness,
     process_alive,
 )
+from squadron.pipeline.run_outcome import checkpoint_document
 from squadron.pipeline.state import (
     RESUMABLE_STATUSES,
     RUNNING_STATUS,
@@ -91,6 +92,8 @@ class RunSummary:
     resume: ResumePoint | None
     problem: ResumeProblem | None  # set only when resume is None
     started_at: datetime
+    working_directory: str | None  # None for runs recorded before #303
+    checkpoint: dict[str, object] | None  # `sq runs wait --json`'s object; paused runs only
     # Set only for running runs (slice 174 D3).
     liveness: LivenessAssessment | None = None
     active_step: str | None = None
@@ -170,12 +173,26 @@ def list_run_summaries(
             liveness = assess_liveness(
                 state, now=assessed_at, hostname=host, process_alive=process_alive
             )
-            summaries.append(_summary(state, None, None, liveness))
+            summaries.append(_summary(state, None, None, liveness, load_definition))
             continue
         resume, problem = _resolve(state, state_manager.runs_dir, definitions, load_report)
         if include_all or resume is not None or problem is not None:
-            summaries.append(_summary(state, resume, problem, None))
+            summaries.append(_summary(state, resume, problem, None, load_definition))
     return RunListing(summaries, definitions.failures)
+
+
+def listing_document(listing: RunListing) -> list[dict[str, object]]:
+    """``sq runs list --json``: one entry per row, keys documented in docs/COMMANDS.md."""
+    return [
+        {
+            "run_id": row.run_id,
+            "pipeline": row.pipeline,
+            "status": row.status,
+            "working_directory": row.working_directory,
+            "checkpoint": row.checkpoint,
+        }
+        for row in listing.rows
+    ]
 
 
 def _summary(
@@ -183,8 +200,10 @@ def _summary(
     resume: ResumePoint | None,
     problem: ResumeProblem | None,
     liveness: LivenessAssessment | None,
+    load_definition: DefinitionLoader,
 ) -> RunSummary:
     running = liveness is not None
+    paused = state.status == ExecutionStatus.PAUSED.value
     return RunSummary(
         run_id=state.run_id,
         pipeline=state.pipeline,
@@ -193,6 +212,8 @@ def _summary(
         resume=resume,
         problem=problem,
         started_at=state.started_at,
+        working_directory=state.working_directory,
+        checkpoint=checkpoint_document(state, load_definition) if paused else None,
         liveness=liveness,
         active_step=state.active_step if running else None,
         active_item=state.active_item if running else None,

@@ -68,7 +68,7 @@ def run_outcome(
         "reviews": _reviews(state),
     }
     if state.status == ExecutionStatus.PAUSED.value:
-        doc["checkpoint"] = _checkpoint(state, load_definition)
+        doc["checkpoint"] = checkpoint_document(state, load_definition)
     elif state.status == ExecutionStatus.FAILED.value:
         doc["failure"] = _failure(state)
     return doc
@@ -120,7 +120,8 @@ def _last_step(state: RunState, name: str | None, status: str) -> StepState | No
     return None
 
 
-def _checkpoint(state: RunState, load_definition: DefinitionLoader) -> dict[str, object]:
+def checkpoint_document(state: RunState, load_definition: DefinitionLoader) -> dict[str, object]:
+    """The ``checkpoint`` object for a paused run; ``sq runs list --json`` reuses it (#303)."""
     recorded = state.checkpoint
     step = _last_step(state, recorded.step if recorded else None, ExecutionStatus.PAUSED.value)
     is_loop = step is not None and step.step_type == StepTypeName.LOOP

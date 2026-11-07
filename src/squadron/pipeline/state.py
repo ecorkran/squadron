@@ -250,6 +250,10 @@ class RunState(BaseModel):
     # (#229). Absent in older files, which read as False.
     replay: bool = False
 
+    # Absolute directory the run started in; resume keeps it (#303). None in older
+    # files and in scratch runs that never record it.
+    working_directory: str | None = None
+
     @property
     def load_target(self) -> str:
         """What ``load_pipeline`` is given to reload this run's pipeline (D4).
@@ -384,6 +388,7 @@ class StateManager:
         owner: RunOwner | None = None,
         pipeline_path: str | None = None,
         replay: bool = False,
+        working_directory: str | None = None,
     ) -> str:
         """Create an initial state file and return the run_id.
 
@@ -394,6 +399,8 @@ class StateManager:
         the owner, so no v5 ``running`` file is ever ownerless (slice 174 D13).
         With *pipeline_path*, the absolute source file of a path run is kept so
         resume reloads that file rather than a same-named pipeline (slice 940 D4).
+        *working_directory* is where the run started, so an outside tool can find
+        the checkout to resume it in (#303).
 
         A given *run_id* names a new run: an existing file for it raises
         ``FileExistsError`` rather than being overwritten (slice 177 D4). Resuming
@@ -424,6 +431,7 @@ class StateManager:
             progress_at=now if owner is not None else None,
             pipeline_path=pipeline_path,
             replay=replay,
+            working_directory=working_directory,
         )
         self._save(state)
         self.prune(pipeline_name)

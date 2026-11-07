@@ -6,6 +6,7 @@ project pipelines are read from the temp cwd.
 
 from __future__ import annotations
 
+import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -110,6 +111,51 @@ class TestRunsList:
         assert batch in out
         assert paused not in out
 
+
+class TestRunsListJson:
+    def _list_json(self, *args: str) -> list[dict[str, object]]:
+        result = CliRunner().invoke(app, ["runs", "list", "--json", *args])
+        assert result.exit_code == 0, result.output
+        return json.loads(result.stdout)
+
+    def test_paused_run_entry(self, sm: StateManager) -> None:
+        run_id = sm.init_run("steps", {"slice": "199"}, working_directory=str(Path.cwd()))
+        pause_at(sm, run_id, STEP_NAMES[1], done=[STEP_NAMES[0]])
+
+        [entry] = self._list_json()
+
+        assert set(entry) == {"run_id", "pipeline", "status", "working_directory", "checkpoint"}
+        assert entry["run_id"] == run_id
+        assert entry["pipeline"] == "steps"
+        assert entry["status"] == ExecutionStatus.PAUSED.value
+        assert entry["working_directory"] == str(Path.cwd())
+        checkpoint = entry["checkpoint"]
+        assert isinstance(checkpoint, dict)
+        assert checkpoint["step"] == STEP_NAMES[1]  # type: ignore[index]
+
+    def test_run_without_a_directory_lists_null(self, sm: StateManager) -> None:
+        run_id = begin(sm, "steps")
+
+        [entry] = self._list_json()
+
+        assert entry["run_id"] == run_id
+        assert entry["working_directory"] is None
+        assert entry["checkpoint"] is None
+
+    def test_honors_all_and_pipeline(self, sm: StateManager) -> None:
+        done = begin(sm, "steps")
+        end(sm, done, ExecutionStatus.COMPLETED)
+        batch = completed_batch_run(sm, "batch")
+
+        assert [e["run_id"] for e in self._list_json()] == [batch]
+        assert done in [e["run_id"] for e in self._list_json("--all")]
+        assert [e["run_id"] for e in self._list_json("--all", "--pipeline", "steps")] == [done]
+
+    def test_empty_listing_is_an_empty_array(self, sm: StateManager) -> None:
+        assert self._list_json() == []
+
+
+class TestRunsGroup:
     def test_bare_group_prints_help(self) -> None:
         result = CliRunner().invoke(app, ["runs"])
         assert "list" in result.output

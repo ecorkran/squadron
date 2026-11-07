@@ -16,7 +16,7 @@ from squadron.cli.run_views import (
     unavailable_summary,
 )
 from squadron.pipeline.loader import load_pipeline
-from squadron.pipeline.run_listing import list_run_summaries
+from squadron.pipeline.run_listing import list_run_summaries, listing_document
 from squadron.pipeline.run_liveness import LivenessAssessment, assess_liveness
 from squadron.pipeline.run_outcome import run_outcome
 from squadron.pipeline.run_prune import (
@@ -47,10 +47,19 @@ def list_runs(
     verbose: bool = typer.Option(
         False, "-v", "--verbose", help="Name each unavailable pipeline and why it failed to load."
     ),
+    as_json: bool = typer.Option(
+        False,
+        "--json",
+        help="Print the runs as JSON on stdout (run id, pipeline, status, working "
+        "directory, checkpoint).",
+    ),
 ) -> None:
     """List running and resumable runs, newest first: where each is, or where it resumes."""
     listing = list_run_summaries(StateManager(), pipeline=pipeline, include_all=include_all)
-    render_run_listing(listing.rows, include_all=include_all)
+    if as_json:
+        typer.echo(json.dumps(listing_document(listing), indent=2))
+    else:
+        render_run_listing(listing.rows, include_all=include_all)
     if listing.unavailable:
         typer.echo(unavailable_summary(listing), err=True)
         if verbose:

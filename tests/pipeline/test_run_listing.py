@@ -124,7 +124,7 @@ class TestRowTypes:
             point.step_name = "other"  # type: ignore[misc]
 
     def test_run_summary_is_frozen(self) -> None:
-        summary = RunSummary("r", "p", {}, "paused", None, None, datetime.now(UTC))
+        summary = RunSummary("r", "p", {}, "paused", None, None, datetime.now(UTC), None, None)
         with pytest.raises(dataclasses.FrozenInstanceError):
             summary.status = "failed"  # type: ignore[misc]
 

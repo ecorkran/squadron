@@ -717,6 +717,17 @@ sq runs list [OPTIONS]
 | `--all` | flag | no | off | Include completed runs with nothing to resume |
 | `--pipeline` | string | no | — | Only runs of this pipeline (case-insensitive) |
 | `-v`, `--verbose` | flag | no | off | Name each unavailable pipeline and why it failed to load |
+| `--json` | flag | no | off | Print the listed runs as a JSON array on stdout instead of the table. The unavailable-pipeline summary stays on stderr |
+
+**`--json` entries.** One object per listed run, newest first, same filters as the table. Keys may be added. A key that does not apply or can't be determined is `null`.
+
+| Key | Meaning |
+|---|---|
+| `run_id` | The run |
+| `pipeline` | Pipeline name |
+| `status` | The status the run recorded: `running`, `completed`, `paused`, `failed` |
+| `working_directory` | Absolute directory the run started in, kept across resumes. Resume from there. `null` for runs started before it was recorded |
+| `checkpoint` | When paused, the same object `sq runs wait --json` prints under `checkpoint`; else `null` |
 
 ## runs wait
 
