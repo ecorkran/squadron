@@ -29,6 +29,7 @@ from squadron.benchmark.python_failure import (
     REPORTER_MODULE,
     fold_records,
     reporter_plugin_dir,
+    venv_bin,
 )
 from squadron.core.process_runner import ProcessResult, ProcessTimedOutError
 
@@ -66,14 +67,19 @@ def _pytest_argv(python: Path, selection: SuiteSelection) -> list[str]:
     return argv + list(selection.node_ids or ())
 
 
-def _read_report(report: Path, stderr: str) -> list[dict[str, Any]]:
+def _read_report(report: Path, stderr: str, timed_out: bool) -> list[dict[str, Any]]:
     if not report.is_file():
         raise _fail(f"the reporter plugin never loaded (no report file); pytest stderr: {stderr}")
+    lines = report.read_text(encoding="utf-8").splitlines()
     records: list[dict[str, Any]] = []
-    for number, line in enumerate(report.read_text(encoding="utf-8").splitlines(), start=1):
+    for number, line in enumerate(lines, start=1):
         try:
             records.append(json.loads(line))
         except json.JSONDecodeError as exc:
+            if timed_out and number == len(lines):
+                # The kill can land mid-write; the lines before it are complete.
+                _logger.warning("dropping truncated final report line after timeout")
+                break
             raise _fail(
                 f"report line {number} does not parse ({exc}); pytest stderr: {stderr}"
             ) from exc
@@ -134,7 +140,7 @@ def run_pytest_suite(
     shutil.copy2(reporter_plugin_dir() / f"{REPORTER_MODULE}.py", plugin_dir)
     report = ctx.output_dir / REPORT_FILE
     child_env = {**env, "PYTHONPATH": str(plugin_dir), REPORT_PATH_ENV: str(report)}
-    argv = _pytest_argv(ctx.tree / ".venv" / "bin" / "python", selection)
+    argv = _pytest_argv(venv_bin(ctx.tree) / "python", selection)
     timed_out = False
     result: ProcessResult | None = None
     try:
@@ -144,7 +150,7 @@ def run_pytest_suite(
     except ProcessTimedOutError:
         timed_out = True
     stderr = result.stderr if result is not None else ""
-    records = _read_report(report, stderr)
+    records = _read_report(report, stderr, timed_out)
     if result is not None:
         _check_exit(records, selection, result.returncode, stderr)
     folded = fold_records(records, ctx.tree)

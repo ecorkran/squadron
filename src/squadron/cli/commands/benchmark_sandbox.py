@@ -22,6 +22,7 @@ from squadron.benchmark.sandbox import (
     generate_sandbox_id,
     sweep_benchmark_orphans,
 )
+from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
 from squadron.config.keys import BENCHMARK_INSTALL_TIMEOUT_KEY, BENCHMARK_SUITE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
 from squadron.core.process_runner import ProcessRunner, SubprocessRunner
@@ -98,5 +99,5 @@ def sandbox_command(
                 typer.echo(f"tree: {sandbox.tree}\nhome: {sandbox.home}\nout: {sandbox.output_dir}")
     except EnvironmentResolutionError as exc:
         raise _stderr_exit(f"environment resolution failed: {exc.reason.value}\n{exc.detail}") from exc
-    except (SandboxError, SuiteRunError) as exc:
+    except (SandboxError, SuiteRunError, MissingHarnessHomeError, MissingHarnessToolError) as exc:
         raise _stderr_exit(str(exc)) from exc

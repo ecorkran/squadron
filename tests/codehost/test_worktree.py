@@ -706,6 +706,7 @@ class _OverlapTrackingRunner:
         timeout: float,
         env: Mapping[str, str] | None = None,
         stdin: str | None = None,
+        replace_env: bool = False,
     ) -> ProcessResult:
         argv = tuple(argv)
         if argv[:1] == ("ps",):

@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -442,6 +443,25 @@ class MetrologyStore:
             self._record_path(record_id),
             json.dumps(record.model_dump(mode="json"), indent=2),
         )
+
+    def create_record(self, record_id: str, record: MetrologyRecord) -> None:
+        """Atomically create a record, failing with ``FileExistsError`` if it exists.
+
+        For versioned records two writers may both pick the next version; the loser must
+        see the winner's file instead of replacing it. The data lands on a uniquely named
+        temp file, then ``os.link`` publishes it only if the final path is free.
+        """
+        path = self._record_path(record_id)
+        tmp = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
+        try:
+            tmp.write_text(json.dumps(record.model_dump(mode="json"), indent=2), encoding="utf-8")
+            os.link(tmp, path)
+        except FileExistsError:
+            raise
+        except OSError as exc:
+            raise MetrologyStoreError(f"Failed to write metrology record {path}: {exc}") from exc
+        finally:
+            tmp.unlink(missing_ok=True)
 
     def iter_records(self) -> Iterator[tuple[str, MetrologyRecord]]:
         """Yield ``(record_id, record)`` for every readable file; corrupt ones warn and skip."""

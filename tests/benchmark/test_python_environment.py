@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import subprocess
+import uuid
 from pathlib import Path
 
 import pytest
@@ -27,7 +29,11 @@ ADAPTER = PythonBenchmarkAdapter()
 
 
 def context(tree: Path, tmp_path: Path, runner: object) -> SandboxContext:
-    env = ScrubbedEnvironment(tmp_path / "root", "ctx", CredentialGrant.none(), {})
+    # A real, prepared scrubbed environment (the install runs under it); unique per call.
+    env = ScrubbedEnvironment(
+        tmp_path / "root", f"ctx-{uuid.uuid4().hex[:6]}", CredentialGrant.none(), dict(os.environ)
+    )
+    env.prepare()
     return SandboxContext(
         tree=tree,
         output_dir=tmp_path / "out",
@@ -96,3 +102,26 @@ def test_timeout_and_missing_uv(tmp_path: Path) -> None:
     with pytest.raises(EnvironmentResolutionError) as caught:
         ADAPTER.resolve_environment(context(tree, tmp_path, ScriptedRunner(missing)))
     assert caught.value.reason is EnvironmentFailureReason.INSTALLER_MISSING
+
+
+def test_install_runs_under_the_scrubbed_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GH_TOKEN", "leaked")
+    seen: list[RunnerCall] = []
+
+    def handler(call: RunnerCall) -> ProcessResult:
+        seen.append(call)
+        if call.argv[:2] == ("uv", "sync"):
+            raise ProcessTimedOutError(call.argv, 1)
+        return ProcessResult(call.argv, 0, "/some/dir\n", "")
+
+    tree = git_tree("env_ok", tmp_path)
+    with pytest.raises(EnvironmentResolutionError):
+        ADAPTER.resolve_environment(context(tree, tmp_path, ScriptedRunner(handler)))
+    install = next(call for call in seen if call.argv[:2] == ("uv", "sync"))
+    assert install.replace_env is True
+    assert install.env is not None
+    assert "GH_TOKEN" not in install.env
+    assert install.env["UV_CACHE_DIR"] == "/some/dir"
+    assert install.env["UV_PYTHON_INSTALL_DIR"] == "/some/dir"

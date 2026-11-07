@@ -173,3 +173,14 @@ def test_sweep_benchmark_orphans_removes_siblings_and_spares_live_owner(
     assert leftovers(root) == ["alive", "alive.home", "alive.lock", "alive.out"]
     assert "removing orphaned replay sandbox" in caplog.text
     assert (replays / "other").exists()
+
+
+def test_sweep_removes_siblings_whose_owner_directory_is_missing(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    live = current_process_lock(SubprocessRunner())
+    for name in ("gone.home", "gone.out", "kept.home"):
+        (root / name).mkdir(parents=True)
+    (root / "gone.lock").write_text(ProcessLock(pid=_dead_pid(), started_at=live.started_at).to_json())
+    (root / "kept.lock").write_text(live.to_json())
+    sweep_benchmark_orphans(SubprocessRunner(), root)
+    assert leftovers(root) == ["kept.home", "kept.lock"]

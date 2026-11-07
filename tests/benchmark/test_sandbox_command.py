@@ -19,6 +19,7 @@ from squadron.benchmark.adapter import (
     SuiteRun,
     SuiteSelection,
 )
+from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
 from squadron.cli.app import app
 from squadron.metrology.snapshot_models import SourceLanguage
 
@@ -158,3 +159,12 @@ def test_bad_rev_exits_one_before_any_sweep() -> None:
     assert result.exit_code == 1
     assert "rev-parse" in result.stderr
     assert FakeSandbox.events == []
+
+
+@pytest.mark.parametrize("error", [MissingHarnessHomeError(), MissingHarnessToolError("uv")])
+def test_missing_home_or_tool_exits_one_without_a_traceback(error: Exception) -> None:
+    FakeSandbox.enter_error = error
+    result = invoke("HEAD")
+    assert result.exit_code == 1
+    assert isinstance(result.exception, SystemExit) or result.exception is None
+    assert str(error) in result.stderr

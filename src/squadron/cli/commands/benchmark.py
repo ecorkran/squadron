@@ -21,7 +21,7 @@ from squadron.benchmark.auth_check import (
     resolve_alias_profile,
     run_auth_check,
 )
-from squadron.benchmark.scrubbed_env import MissingHarnessToolError
+from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
 from squadron.cli.commands.benchmark_sandbox import sandbox_command
 from squadron.config.keys import BENCHMARK_AUTH_PROBE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
@@ -107,6 +107,7 @@ def auth_check(model: ModelsOption) -> None:
         UnresolvedProfileError,
         ProbeStartError,
         MissingHarnessToolError,
+        MissingHarnessHomeError,
     ) as exc:
         raise _stderr_exit(str(exc)) from exc
     typer.echo(f"{'profile':<14} {'alias':<20} result")

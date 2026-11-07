@@ -162,3 +162,27 @@ def test_timeout_keeps_reported_nodes_and_marks_the_rest_not_run(
         NodeOutcome.NOT_RUN,
         NodeOutcome.NOT_RUN,
     ]
+
+
+def test_timeout_drops_a_truncated_final_line(
+    make_ctx: Callable[[ScriptedRunner], SandboxContext],
+) -> None:
+    def handler(call: RunnerCall) -> ProcessResult:
+        assert call.env is not None
+        complete = "".join(json.dumps(r) + "\n" for r in passing())
+        Path(call.env[REPORT_PATH_ENV]).write_text(
+            complete + '{"node_id": "tests/slo', encoding="utf-8"
+        )
+        raise ProcessTimedOutError(call.argv, 30)
+
+    run = ADAPTER.run_suite(make_ctx(ScriptedRunner(handler)), SuiteSelection.all_tests())
+    assert run.timed_out
+    assert [r.node_id for r in run.results] == [NODE]
+
+
+def test_truncated_line_without_a_timeout_still_raises(
+    make_ctx: Callable[[ScriptedRunner], SandboxContext],
+) -> None:
+    runner = runner_writing('{"node_id": "tests/slo', 0)
+    with pytest.raises(SuiteRunError):
+        ADAPTER.run_suite(make_ctx(runner), SuiteSelection.all_tests())

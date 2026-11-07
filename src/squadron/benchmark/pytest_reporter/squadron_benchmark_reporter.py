@@ -46,8 +46,10 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def _write(record: dict[str, Any]) -> None:
-    assert _report_path is not None
-    assert tuple(record) == REPORT_KEYS
+    if _report_path is None:
+        raise RuntimeError("squadron_benchmark_reporter wrote before pytest_configure ran")
+    if tuple(record) != REPORT_KEYS:
+        raise RuntimeError(f"report record keys {tuple(record)} differ from {REPORT_KEYS}")
     # One append per line: a run killed on timeout keeps every line written so far.
     with open(_report_path, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(record) + "\n")

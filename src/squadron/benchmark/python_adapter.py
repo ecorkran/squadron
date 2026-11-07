@@ -23,6 +23,7 @@ from squadron.benchmark.adapter import (
     SuiteRun,
     SuiteSelection,
 )
+from squadron.benchmark.python_failure import VENV_DIR, venv_bin
 from squadron.benchmark.python_suite import run_pytest_suite
 from squadron.benchmark.scrubbed_env import SCRUB_SPEC_VERSION
 from squadron.core.process_runner import (
@@ -38,7 +39,6 @@ LOCKFILE_NAME = "uv.lock"
 UNSUPPORTED_LOCKFILES = ("poetry.lock",)
 REQUIREMENTS_GLOB = "requirements*.txt"
 INSTALL_ARGV = ("uv", "sync", "--locked", "--all-extras", "--dev")
-VENV_DIR = ".venv"
 VERSION_COMMAND_TIMEOUT_S = 60
 
 
@@ -66,7 +66,7 @@ class PythonBenchmarkAdapter:
         )
 
     def path_entries(self, ctx: SandboxContext) -> tuple[Path, ...]:
-        return (ctx.tree / VENV_DIR / "bin",)
+        return (venv_bin(ctx.tree),)
 
     def run_suite(self, ctx: SandboxContext, selection: SuiteSelection) -> SuiteRun:
         """Run pytest under the scrubbed environment and fold the reporter's records."""
@@ -74,7 +74,7 @@ class PythonBenchmarkAdapter:
 
     @staticmethod
     def _python(tree: Path) -> Path:
-        return tree / VENV_DIR / "bin" / "python"
+        return venv_bin(tree) / "python"
 
     @staticmethod
     def _require_lockfile(tree: Path) -> Path:
@@ -91,11 +91,40 @@ class PythonBenchmarkAdapter:
         raise _failure(EnvironmentFailureReason.NO_LOCKFILE, f"no {LOCKFILE_NAME} in the tree")
 
     @staticmethod
-    def _install(ctx: SandboxContext) -> None:
-        # Harness environment, not the scrubbed one: the install needs the user's uv cache
-        # and network settings. Producers and tests run later under the scrub.
+    def _uv_directory(ctx: SandboxContext, kind: str) -> str:
+        """uv's real cache or python directory, asked of uv under the harness environment.
+
+        The scrubbed home would otherwise hide the user's uv cache and managed Pythons,
+        turning every install into a full download.
+        """
+        result = ctx.runner.run(
+            ["uv", kind, "dir"], cwd=str(ctx.tree), timeout=VERSION_COMMAND_TIMEOUT_S
+        )
+        if result.returncode != 0:
+            raise _failure(
+                EnvironmentFailureReason.INSTALLER_MISSING,
+                f"uv {kind} dir exited {result.returncode}: {result.stderr.strip()}",
+            )
+        return result.stdout.strip()
+
+    @classmethod
+    def _install(cls, ctx: SandboxContext) -> None:
+        # Dependency build scripts run arbitrary code, so the install gets the scrubbed
+        # environment (no GH_TOKEN and the rest), plus uv's real cache and Python
+        # directories so it stays fast. Proxy and index settings are not carried over.
         try:
-            result = ctx.runner.run(INSTALL_ARGV, cwd=str(ctx.tree), timeout=ctx.install_timeout_s)
+            env = {
+                **ctx.env.variables(()),
+                "UV_CACHE_DIR": cls._uv_directory(ctx, "cache"),
+                "UV_PYTHON_INSTALL_DIR": cls._uv_directory(ctx, "python"),
+            }
+            result = ctx.runner.run(
+                INSTALL_ARGV,
+                cwd=str(ctx.tree),
+                timeout=ctx.install_timeout_s,
+                env=env,
+                replace_env=True,
+            )
         except ProcessTimedOutError as exc:
             shutil.rmtree(ctx.tree / VENV_DIR, ignore_errors=True)
             raise _failure(EnvironmentFailureReason.INSTALL_TIMEOUT, str(exc)) from exc

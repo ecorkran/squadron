@@ -196,16 +196,28 @@ def _sweep_directories(runner: ProcessRunner, root: Path, sibling_suffixes: tupl
     for entry in entries:
         if not entry.is_dir():
             continue  # the lock files beside the sandboxes
-        if entry.name.endswith(sibling_suffixes):
-            continue  # a sibling directory: removed with its owner below
-        lock = lock_path(root, entry.name)
+        owner = _sibling_owner(entry.name, sibling_suffixes)
+        if owner is not None and (root / owner).is_dir():
+            continue  # a sibling whose owner directory exists: removed with the owner below
+        # A sibling without its owner directory (a crash after the tree was removed) is
+        # judged by the owner's lock, so it does not leak forever.
+        lock = lock_path(root, owner or entry.name)
         if not is_orphan(runner, read_lock(lock)):
             continue
         _logger.warning("removing orphaned replay sandbox %s", entry)
         remove_tree(entry)
-        for suffix in sibling_suffixes:
-            remove_tree(root / f"{entry.name}{suffix}")
+        if owner is None:
+            for suffix in sibling_suffixes:
+                remove_tree(root / f"{entry.name}{suffix}")
         unlink_quietly(lock)
+
+
+def _sibling_owner(name: str, sibling_suffixes: tuple[str, ...]) -> str | None:
+    """The owner's name when *name* ends in a sibling suffix, else ``None``."""
+    for suffix in sibling_suffixes:
+        if name.endswith(suffix):
+            return name.removesuffix(suffix)
+    return None
 
 
 def _sweep_cf_projects(runner: ProcessRunner) -> None:

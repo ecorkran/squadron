@@ -73,19 +73,25 @@ class BenchmarkRecordStore:
         missing = [cid for cid in wanted.case_ids if self.get_case(cid) is None]
         if missing:
             raise MetrologyStoreError(f"Case set '{name}' names unknown case ids: {missing}")
-        latest = self.get_case_set(name)
-        if latest is not None and latest.case_ids == wanted.case_ids:
-            return latest
-        created = wanted.model_copy(update={"version": 1 if latest is None else latest.version + 1})
-        self._store.write_record(
-            created.record_id,
-            MetrologyRecord(
-                schema_version=_SCHEMA_VERSION,
-                record_type=RECORD_TYPE_CASE_SET,
-                case_set=created,
-            ),
-        )
-        return created
+        while True:
+            latest = self.get_case_set(name)
+            if latest is not None and latest.case_ids == wanted.case_ids:
+                return latest
+            next_version = 1 if latest is None else latest.version + 1
+            created = wanted.model_copy(update={"version": next_version})
+            try:
+                self._store.create_record(
+                    created.record_id,
+                    MetrologyRecord(
+                        schema_version=_SCHEMA_VERSION,
+                        record_type=RECORD_TYPE_CASE_SET,
+                        case_set=created,
+                    ),
+                )
+            except FileExistsError:
+                # A concurrent writer took this version; re-read and compare against it.
+                continue
+            return created
 
     def get_case_set(self, name: str, version: int | None = None) -> CaseSet | None:
         """The named set at *version* (latest when ``None``); ``None`` when absent."""

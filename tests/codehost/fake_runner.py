@@ -53,6 +53,7 @@ class FakeProcessRunner:
         timeout: float,
         env: Mapping[str, str] | None = None,
         stdin: str | None = None,
+        replace_env: bool = False,
     ) -> ProcessResult:
         argv_tuple = tuple(argv)
         self.calls.append(RecordedCall(argv=argv_tuple, cwd=cwd, timeout=timeout, env=env, stdin=stdin))

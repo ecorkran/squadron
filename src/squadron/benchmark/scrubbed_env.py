@@ -39,6 +39,13 @@ class MissingCredentialError(Exception):
         self.variable = variable
 
 
+class MissingHarnessHomeError(Exception):
+    """The harness environment has no HOME, so there is no real home to seed from."""
+
+    def __init__(self) -> None:
+        super().__init__("HOME is not set in the harness environment")
+
+
 class MissingHarnessToolError(Exception):
     """A tool the sandbox needs is not on the harness PATH."""
 
@@ -102,7 +109,7 @@ class ScrubbedEnvironment:
 
     def prepare(self) -> None:
         """Create the home: seed config, gitconfig, tool symlinks, carried files."""
-        real_home = Path(self._require("HOME"))
+        real_home = self._real_home()
         self.home.mkdir(parents=True)
         self._seed_config(real_home)
         self._write_gitconfig()
@@ -138,11 +145,11 @@ class ScrubbedEnvironment:
     def _missing_credential(name: str) -> str:
         raise MissingCredentialError(name)
 
-    def _require(self, name: str) -> str:
-        value = self._harness_env.get(name)
-        if not value:
-            raise MissingCredentialError(name)
-        return value
+    def _real_home(self) -> Path:
+        home = self._harness_env.get("HOME")
+        if not home:
+            raise MissingHarnessHomeError
+        return Path(home)
 
     def _seed_config(self, real_home: Path) -> None:
         source_dir = real_home / _SQUADRON_CONFIG_RELATIVE

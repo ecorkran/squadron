@@ -61,9 +61,23 @@ class CaseProvenance(BaseModel):
     built_by: str
 
 
+IDENTITY_FIELDS = (
+    "project_id",
+    "kind",
+    "start_sha",
+    "reference_sha",
+    "task_text",
+    "hidden_tests",
+    "hidden_fixtures",
+    "superseded_tests",
+    "excluded_tests",
+    "grader_commands",
+)
+
+
 def _canonical_identity(
     *,
-    project_id: str,
+    project_id: ProjectId,
     kind: CaseKind,
     start_sha: str,
     reference_sha: str,
@@ -76,7 +90,7 @@ def _canonical_identity(
 ) -> str:
     """Canonical JSON (sorted keys, no whitespace) of the identity fields, lists sorted."""
     payload: dict[str, Any] = {
-        "project_id": project_id,
+        "project_id": project_id.value,
         "kind": kind.value,
         "start_sha": start_sha,
         "reference_sha": reference_sha,
@@ -118,18 +132,7 @@ class BenchmarkCase(BaseModel):
     provenance: CaseProvenance
 
     def _identity_id(self) -> str:
-        return compute_case_id(
-            project_id=self.project_id.value,
-            kind=self.kind,
-            start_sha=self.start_sha,
-            reference_sha=self.reference_sha,
-            task_text=self.task_text,
-            hidden_tests=self.hidden_tests,
-            hidden_fixtures=self.hidden_fixtures,
-            superseded_tests=self.superseded_tests,
-            excluded_tests=self.excluded_tests,
-            grader_commands=self.grader_commands,
-        )
+        return compute_case_id(**{name: getattr(self, name) for name in IDENTITY_FIELDS})
 
     @model_validator(mode="after")
     def _id_matches_content(self) -> Self:
@@ -155,32 +158,21 @@ class BenchmarkCase(BaseModel):
         provenance: CaseProvenance,
     ) -> Self:
         """Construct a case with its derived ``case_id``."""
-        case_id = compute_case_id(
-            project_id=project_id.value,
-            kind=kind,
-            start_sha=start_sha,
-            reference_sha=reference_sha,
-            task_text=task_text,
-            hidden_tests=hidden_tests,
-            hidden_fixtures=hidden_fixtures,
-            superseded_tests=superseded_tests,
-            excluded_tests=excluded_tests,
-            grader_commands=grader_commands,
-        )
-        return cls(
-            case_id=case_id,
-            project_id=project_id,
-            kind=kind,
-            start_sha=start_sha,
-            reference_sha=reference_sha,
-            task_text=task_text,
-            hidden_tests=hidden_tests,
-            hidden_fixtures=hidden_fixtures,
-            superseded_tests=superseded_tests,
-            excluded_tests=excluded_tests,
-            grader_commands=grader_commands,
-            provenance=provenance,
-        )
+        fields: dict[str, Any] = {
+            "project_id": project_id,
+            "kind": kind,
+            "start_sha": start_sha,
+            "reference_sha": reference_sha,
+            "task_text": task_text,
+            "hidden_tests": hidden_tests,
+            "hidden_fixtures": hidden_fixtures,
+            "superseded_tests": superseded_tests,
+            "excluded_tests": excluded_tests,
+            "grader_commands": grader_commands,
+            "provenance": provenance,
+        }
+        case_id = compute_case_id(**{name: fields[name] for name in IDENTITY_FIELDS})
+        return cls(case_id=case_id, **fields)
 
 
 class CaseSet(BaseModel):

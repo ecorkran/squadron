@@ -44,9 +44,14 @@ _ASSERTION_ERROR = "AssertionError"
 _PYTEST_OUTCOMES_MODULE = "_pytest.outcomes"
 _PYTEST_FAILED = "Failed"
 _TEST_FILE_PATTERNS = ("test_*.py", "*_test.py", "conftest.py")
-_VENV_DIR = ".venv"
+VENV_DIR = ".venv"
 
 Record = Mapping[str, Any]
+
+
+def venv_bin(tree: Path) -> Path:
+    """The ``bin`` directory of the environment installed in ``tree``."""
+    return tree / VENV_DIR / "bin"
 
 
 def is_project_source(path: str | None, tree: Path) -> bool:
@@ -57,7 +62,7 @@ def is_project_source(path: str | None, tree: Path) -> bool:
         relative = Path(path).resolve().relative_to(tree.resolve())
     except ValueError:
         return False
-    if _VENV_DIR in relative.parts:
+    if VENV_DIR in relative.parts:
         return False
     return not any(fnmatch(relative.name, pattern) for pattern in _TEST_FILE_PATTERNS)
 

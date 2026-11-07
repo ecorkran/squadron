@@ -17,6 +17,7 @@ from squadron.benchmark.scrubbed_env import (
     SYSTEM_PATH_DIRS,
     CredentialGrant,
     MissingCredentialError,
+    MissingHarnessHomeError,
     MissingHarnessToolError,
     ScrubbedEnvironment,
 )
@@ -198,3 +199,10 @@ def test_real_process_sees_only_the_scrubbed_environment(
         assert version in run("sq", "--version").stdout
         credential_helper = run("git", "config", "--get", "credential.helper")
         assert credential_helper.stdout.strip() == ""
+
+
+def test_missing_home_raises_its_own_error(tmp_path: Path, harness_env: dict[str, str]) -> None:
+    del harness_env["HOME"]
+    env = make_env(tmp_path, harness_env, CredentialGrant.none())
+    with pytest.raises(MissingHarnessHomeError, match="HOME"):
+        env.prepare()

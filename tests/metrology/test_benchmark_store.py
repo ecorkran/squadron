@@ -152,3 +152,28 @@ class TestCaseSets:
         listed = store.list_case_sets()
         assert [(s.name, s.version) for s in listed] == [("alpha", 1), ("alpha", 2), ("zeta", 1)]
         assert case_set_record_id("alpha", 1) != case_set_record_id("zeta", 1)
+
+
+def test_concurrent_writers_never_overwrite_a_version(
+    store: BenchmarkRecordStore, raw: MetrologyStore
+) -> None:
+    ids = [store.write_case(make_case(task)) for task in ("a", "b", "c", "d")]
+    first = store.write_case_set("race", ids[:1])
+    real_get = store.get_case_set
+    calls = {"n": 0}
+
+    def stale_then_real(name: str, version: int | None = None):  # type: ignore[no-untyped-def]
+        # The first lookup misses the version a concurrent writer is about to create.
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return first
+        return real_get(name, version)
+
+    # A rival writes v2 between our read of v1 and our write.
+    rival = BenchmarkRecordStore(raw)
+    rival.write_case_set("race", ids[:2])
+    store.get_case_set = stale_then_real  # type: ignore[method-assign]
+    mine = store.write_case_set("race", ids[2:])
+    assert mine.version == 3
+    assert [s.version for s in store.list_case_sets()] == [1, 2, 3]
+    assert rival.get_case_set("race", 2).case_ids == tuple(sorted(ids[:2]))  # type: ignore[union-attr]

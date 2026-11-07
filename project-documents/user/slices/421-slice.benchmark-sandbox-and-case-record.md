@@ -188,6 +188,7 @@ Status: decided
   - No: anything else. A probe that outlives `benchmark.auth_probe_timeout_s` is a no with reason `timed out`, since a missing login can hang on a prompt. The result carries the exit code and stderr. It is reported in a table, and the command exits 1. No fallback to the unscrubbed environment, no added variables.
   - After each probe, the check verifies that every carried symlink is still a symlink. A runtime that replaced it with a regular file (write-by-rename) is reported as `yes, but carryover replaced`, because the user's real token may now be stale.
 - If a provider answers no, the remedy is a PM decision (for example, a declared token variable for `sdk`). It is never a silent workaround in code.
+- Deferred (squadron#301): carried credentials are symlinks to the real files, so a tool that opens one for writing can modify the real login. Symlinks are what lets the check detect a replaced file; whether to copy instead is a separate decision.
 - Rejected: checking auth by reading files. The question is whether the runtime authenticates, not whether a file exists.
 
 ### D9 — A separate benchmark adapter seam
@@ -240,6 +241,8 @@ Status: decided
 - The store follows 400's pattern: deterministic record ids, an optional sibling payload, Pydantic at the file boundary.
 - Errors: `SandboxError` (repository), `EnvironmentResolutionError(reason, detail)`, `SuiteRunError`, `MetrologyStoreError`, `MissingCredentialError` (a granted variable is unset), `MissingHarnessToolError`, `UnresolvedProfileError` (alias unknown or without a profile), `ProbeStartError` (`sq` cannot start in the scrubbed environment; not an auth answer). Each is logged at ERROR where it is raised, carries the failing command's stderr, and never resolves to a default.
 - `sweep_benchmark_orphans` (in `benchmark/sandbox.py`) is `sweep_orphans` with no cf sweep and the `.home`/`.out` sibling suffixes; `sq benchmark sandbox` calls it first.
+- The dependency install runs under the scrubbed environment (`replace_env=True`) with uv's real cache and Python directories (`UV_CACHE_DIR`, `UV_PYTHON_INSTALL_DIR`, from `uv cache dir` and `uv python dir`); proxy and index settings are not carried over.
+- `MetrologyStore.create_record` fails with `FileExistsError` if the record exists; `write_case_set` re-reads and retries so concurrent writers never overwrite a version.
 - `run_suite` passes `--continue-on-collection-errors`, so one broken module does not hide every other node.
 - Reason and kind values are `StrEnum`s defined once (`EnvironmentFailureReason`, `FailureKind`, `NodeOutcome`, `CaseKind`, `GraderCommandKind`).
 
