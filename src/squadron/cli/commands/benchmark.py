@@ -23,6 +23,7 @@ from squadron.benchmark.auth_check import (
 )
 from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
 from squadron.cli.commands.benchmark_common import stderr_exit
+from squadron.cli.commands.benchmark_fix_cases import fix_cases_app, yield_command
 from squadron.cli.commands.benchmark_sandbox import sandbox_command
 from squadron.config.keys import BENCHMARK_AUTH_PROBE_TIMEOUT_KEY
 from squadron.config.manager import get_positive_int_config
@@ -36,6 +37,8 @@ benchmark_app = typer.Typer(
 )
 
 benchmark_app.command("sandbox")(sandbox_command)
+benchmark_app.add_typer(fix_cases_app, name="fix-cases")
+benchmark_app.command("yield")(yield_command)
 
 ModelOption = Annotated[str, typer.Option("--model", help="Model alias to probe.")]
 ModelsOption = Annotated[

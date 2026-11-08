@@ -355,13 +355,15 @@ The text shows one separability line per row (each project, then pooled) and the
 **Commit**: `feat: add yield report`
 
 ### Task 28: CLI commands (Data Flow, API Contracts)
-- [ ] In `cli/commands/benchmark.py` register, the way 421 registers `sandbox`, `fix-cases build --set NAME [--repo PATH] [--commit SHA ...] [--keep]`, `fix-cases show COMMIT|CASE_ID`, `yield [--repo PATH ...] [--json]`. If `benchmark.py` would pass ~300 lines, put them in `cli/commands/benchmark_fix_cases.py` as a sub-app registered from `benchmark.py`. Concrete adapters are reached only through `registry.py`
-  - [ ] `build`: sweeps benchmark orphans first (as 421's `sandbox` does), prints one line per candidate, then the yield report for this project; `--keep` is passed to the sandbox factory so sandboxes are kept; exit 0 whenever the run finished, 1 on `BuildHalted` or an unresolvable repository with the reason
-  - [ ] `show`: `case-…` looks up by `case_id`; anything else is a commit prefix matched against the project's records (ambiguous prefix → exit 1 listing the matches). Prints the environment digest, each hidden test with verdict and detail, superseded and excluded tests with reasons, and the frozen task text. No record → exit 1
-  - [ ] `yield`: no `--repo` reads every project with `fix_qualification` records; `--json` prints the report's JSON only
-- [ ] `commands/sq/benchmark.md`: a slash command that runs `sq benchmark $ARGUMENTS`, in the form of `commands/sq/replay.md`, listing the three subcommands with their arguments (no interpretation, so output is identical to the CLI)
-- [ ] Tests `tests/benchmark/test_fix_cases_cli.py` with the build function patched at its boundary: each command's output and exit codes, including `--commit` repeated, ambiguous prefix, missing record, `BuildHalted`, `--json`, and `--keep` (the factory receives keep set with the flag and unset without it); `tests/cli/test_command_surface.py` and `tests/cli/test_install_commands.py` pass, with the new command file covered wherever those tests enumerate command files
-  - [ ] Success: tests pass; `sq benchmark --help` lists the new commands
+- [x] In `cli/commands/benchmark.py` register, the way 421 registers `sandbox`, `fix-cases build --set NAME [--repo PATH] [--commit SHA ...] [--keep]`, `fix-cases show COMMIT|CASE_ID`, `yield [--repo PATH ...] [--json]`. If `benchmark.py` would pass ~300 lines, put them in `cli/commands/benchmark_fix_cases.py` as a sub-app registered from `benchmark.py`. Concrete adapters are reached only through `registry.py`
+  - [x] `build`: sweeps benchmark orphans first (as 421's `sandbox` does), prints one line per candidate, then the yield report for this project; `--keep` is passed to the sandbox factory so sandboxes are kept; exit 0 whenever the run finished, 1 on `BuildHalted` or an unresolvable repository with the reason
+  - [x] `show`: `case-…` looks up by `case_id`; anything else is a commit prefix matched against the project's records (ambiguous prefix → exit 1 listing the matches). Prints the environment digest, each hidden test with verdict and detail, superseded and excluded tests with reasons, and the frozen task text. No record → exit 1
+  - [x] `yield`: no `--repo` reads every project with `fix_qualification` records; `--json` prints the report's JSON only
+- [x] `commands/sq/benchmark.md`: a slash command that runs `sq benchmark $ARGUMENTS`, in the form of `commands/sq/replay.md`, listing the three subcommands with their arguments (no interpretation, so output is identical to the CLI)
+- [x] Tests `tests/benchmark/test_fix_cases_cli.py` with the build function patched at its boundary: each command's output and exit codes, including `--commit` repeated, ambiguous prefix, missing record, `BuildHalted`, `--json`, and `--keep` (the factory receives keep set with the flag and unset without it); `tests/cli/test_command_surface.py` and `tests/cli/test_install_commands.py` pass, with the new command file covered wherever those tests enumerate command files
+  - [x] Success: tests pass; `sq benchmark --help` lists the new commands
+
+Also added the Codex twin `commands/agents/sq-benchmark/SKILL.md` (the install tests require one per Claude command) and moved the shared `git_output` helper and `GIT_TIMEOUT_S` into `benchmark_common.py`. `tests/cli/test_command_surface.py` needed no entry: it only pins the PR commands.
 
 **Commit**: `feat: add sq benchmark fix-cases and yield commands`
 
