@@ -70,11 +70,16 @@ for var in $cred_vars; do
 done
 printf '%s\n' "${hostile_vars[@]}" > "$clone/.env"
 
-# 4. Minimal PATH: the clone's venv, then system dirs only.
+# 4. Minimal PATH: the clone's venv, a dir holding only uv, then system dirs.
+#    The benchmark sandbox links uv from the harness PATH (slice 421), so uv
+#    must be reachable; a dedicated dir keeps the rest of uv's home dir (and cf)
+#    off the PATH.
+mkdir -p "$work/tools"
+ln -s "$uv_bin" "$work/tools/uv"
 hostile_env=(
     env -i
     HOME="$hostile_home"
-    PATH="$clone/.venv/bin:/usr/bin:/bin"
+    PATH="$clone/.venv/bin:$work/tools:/usr/bin:/bin"
     "${hostile_vars[@]}"
 )
 

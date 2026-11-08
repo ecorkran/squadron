@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
@@ -64,10 +65,14 @@ def git_tree(fixture: str, tmp_path: Path) -> Path:
     tree = tmp_path / fixture
     shutil.copytree(FIXTURES_DIR / fixture, tree)
     git = ["git", "-C", str(tree)]
-    subprocess.run([*git, "init", "-q", "-b", "main"], check=True)
-    subprocess.run([*git, "add", "-A"], check=True)
+    # Module-scoped fixtures call this before the per-test hermetic fixture has
+    # replaced the host's git config, so ignore the host's config explicitly.
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    subprocess.run([*git, "init", "-q", "-b", "main"], check=True, env=env)
+    subprocess.run([*git, "add", "-A"], check=True, env=env)
     subprocess.run(
         [*git, "-c", "user.name=t", "-c", "user.email=t@t.invalid", "commit", "-q", "-m", "init"],
         check=True,
+        env=env,
     )
     return tree

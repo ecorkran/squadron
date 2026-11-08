@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from collections.abc import Generator
 from types import TracebackType
@@ -32,6 +33,7 @@ REPORT_KEYS = (
     "frame_line",
 )
 _MOCK_FILE_SUFFIX = os.path.join("unittest", "mock.py")
+_ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 _report_path: str | None = None
 
 
@@ -155,9 +157,9 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
     crash = getattr(report.longrepr, "reprcrash", None)
     message: str = getattr(crash, "message", "") or ""
     if not message:
-        error_lines = [
-            line[1:].strip() for line in str(report.longrepr).splitlines() if line.startswith("E ")
-        ]
+        # Colour output (FORCE_COLOR, --color=yes) wraps the "E" in escape codes.
+        rendered = _ANSI_ESCAPE.sub("", str(report.longrepr))
+        error_lines = [line[1:].strip() for line in rendered.splitlines() if line.startswith("E ")]
         message = error_lines[0] if error_lines else ""
     qualified = message.split(":", 1)[0].strip()
     module, _, name = qualified.rpartition(".")
