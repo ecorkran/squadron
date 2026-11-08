@@ -13,6 +13,13 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261108
 
+### Slice 422: Correction and outcome
+
+- **Correction:** the D7 exemption covered only `_load_env_file`. `tests/conftest.py` has two more autouse fixtures that patch project code in every test (`DispatchBranchWorkAction._count_work` and `BlockedTasksAction._read_markers`, standing in for git and the task files). Most of the 546 `patches_project_code` verdicts, and the deciding targets in the Task 29 pins, come from those, not from the tests' own patches.
+- **Re-measurement (uncommitted experiment, not kept):** exempting all three fixtures and re-judging the 10 most recent `no_qualifying_hidden_test` candidates under rule version 3 qualified 0 of 10 (35m48s). Project-wide `patches_project_code` fell 546 → 456 and `reaches_past_boundary` rose 2 → 92: squadron's tests call internals, which the fairness design rejects.
+- **Outcome:** fix-case yield on squadron is not enough to separate configs (PM kill rule: fewer than 3 of 10). The exemption edits were not committed because the Task 29 pins would then fail under rule version 3. Slices 423–427 as planned are not started and not recommended. Existing `sq replay` (design and tasks) and `sq stats producers` answer the model-comparison questions for those phases.
+- **Order decision above** (pool across projects, or 426 earlier) is superseded by this outcome.
+
 ### Slice 422: Real-commit verdicts (Task 29)
 
 - **Full run (once):** `sq benchmark fix-cases build --set fix-squadron` over all 94 closing commits: 1 qualified (21013615, `case-85c975f100d51ec1`), 70 rejected, 23 `harness_error` (20 of them `submodule replay is not supported`, 1 trace timeout). Hidden verdicts: 553 `patches_project_code`, 3 `reaches_past_boundary`, 1 qualified. Squadron alone reads n=1, MDD 1.14, "not enough (need >= 33 cases)".
@@ -28,7 +35,7 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 - **Steps 2 and 3:** `show` on 13e8381a (every hidden test `patches_project_code`) and on `case-85c975f100d51ec1`. The frozen text of the case contains issue #171's body; the issue has no comments, so the committer-date cutoff excluded nothing.
 - **Step 4:** reran three commits, not all 94 (5.8 s): 21013615 and 13e8381a print `reused`, d4850abc repeats `merge_commit`; the case set stayed `fix-squadron` v1. The design's "every line says `reused`" is not met (Context Summary gap 5): candidates rejected before the sandbox stage repeat their reason.
 - **Step 5:** the first other uv project with a `uv.lock` and a GitHub remote in `cf project list` order is context-visualizer. It has 1 closing commit and was built whole (3.5 s): 1 candidate, 0 qualified, `harness_error` (its start commit declares submodules, which the sandbox does not replay). Squadron n=1 of 94 (MDD 1.14), context-visualizer none, pooled n=1 of 95: all "not enough (need >= 33 cases)".
-- **Order decision implied (design line 28):** the qualified count cannot separate two configs, so 423 → 424 → 425 does not stand as is; fix cases are pooled across cf projects, or 426's case building moves ahead of 424. The data do not choose between the two. Where the yield goes: 546 of 553 rejected hidden tests are `patches_project_code`, and 21 of the 24 `harness_error` records across both projects are the submodule limitation of the history-free sandbox.
+- **Order decision implied (design line 28):** the qualified count cannot separate two configs, so 423 → 424 → 425 does not stand as is; fix cases are pooled across cf projects, or 426's case building moves ahead of 424. The data do not choose between the two. Where the yield goes is corrected in "Correction and outcome" below; the `patches_project_code` count here is mostly squadron's autouse conftest fixtures. 21 of the 24 `harness_error` records across both projects are the submodule limitation of the history-free sandbox.
 - **Step 6:** `yield --json` lists `fix-squadron` v1; the step 4 rerun created no new version.
 
 ### Slice 422: Final validation (Task 31)
