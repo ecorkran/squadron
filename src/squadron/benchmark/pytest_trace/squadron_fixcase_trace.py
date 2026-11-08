@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 import squadron_fixcase_closure
 import squadron_fixcase_crossings
+import squadron_fixcase_patches
 
 CONFIG_PATH_ENV = "SQUADRON_FIXCASE_TRACE_CONFIG"
 MODE_COLLECT = "collect"
@@ -35,10 +36,11 @@ MODE_TRACE = "trace"
 _config: dict[str, Any] | None = None
 _closures: squadron_fixcase_closure.ClosureBuilder | None = None
 _recorder: squadron_fixcase_crossings.CrossingRecorder | None = None
+_patches: squadron_fixcase_patches.PatchInterceptor | None = None
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    global _config, _closures, _recorder
+    global _config, _closures, _recorder, _patches
     path = os.environ.get(CONFIG_PATH_ENV)
     if not path:
         raise pytest.UsageError(f"{CONFIG_PATH_ENV} is not set")
@@ -48,6 +50,9 @@ def pytest_configure(config: pytest.Config) -> None:
     _config = loaded
     _closures = squadron_fixcase_closure.ClosureBuilder(Path(loaded["tree"]), loaded["test_side_files"])
     _recorder = squadron_fixcase_crossings.CrossingRecorder(_closures)
+    _patches = squadron_fixcase_patches.PatchInterceptor(_closures)
+    if loaded["mode"] == MODE_TRACE:
+        _patches.install()
     with open(loaded["output"], "w", encoding="utf-8"):
         pass  # truncate: the file existing proves this plugin loaded
 
@@ -161,14 +166,16 @@ def pytest_collection_finish(session: pytest.Session) -> None:
 
 def _recorded_phase(item: pytest.Item) -> Generator[None, Any, None]:
     """Record crossings for ``item`` while the wrapped phase runs (trace mode only)."""
-    tracing = _config is not None and _config["mode"] == MODE_TRACE and _recorder is not None
-    if tracing and _recorder is not None:
+    tracing = _config is not None and _config["mode"] == MODE_TRACE
+    if tracing and _recorder is not None and _patches is not None:
         _recorder.start(item.nodeid)
+        _patches.activate(item.nodeid)
     try:
         yield
     finally:
-        if tracing and _recorder is not None:
+        if tracing and _recorder is not None and _patches is not None:
             _recorder.stop()
+            _patches.deactivate()
 
 
 @pytest.hookimpl(hookwrapper=True)
@@ -188,11 +195,15 @@ def pytest_collectreport(report: pytest.CollectReport) -> None:
 
 
 def _finished_nodes() -> dict[str, dict[str, Any]]:
-    """The collected nodes with the crossings recorded while they ran."""
-    if _recorder is None:
+    """The collected nodes with the crossings and patches recorded while they ran."""
+    if _recorder is None or _patches is None:
         raise RuntimeError("squadron_fixcase_trace finished before pytest_configure ran")
     return {
-        node_id: {**record, "crossings": _recorder.crossings(node_id)}
+        node_id: {
+            **record,
+            "crossings": _recorder.crossings(node_id),
+            "patches": _patches.patches(node_id),
+        }
         for node_id, record in _trace_nodes.items()
     }
 
@@ -201,6 +212,8 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     if _config is None:
         return
     if _config["mode"] == MODE_TRACE:
+        if _patches is not None:
+            _patches.uninstall()
         _write_output(
             {"has_co_qualname": hasattr(types.CodeType, "co_qualname"), "nodes": _finished_nodes()}
         )
