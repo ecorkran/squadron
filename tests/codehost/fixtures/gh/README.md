@@ -20,6 +20,13 @@ the wire.
 | `reviewthreads-populated.json` | `gh api graphql` reviewThreads | see caveat below |
 | `graphql-notfound.json` | `gh api graphql` on a nonexistent repo | GraphQL `NOT_FOUND` error type |
 | `rest-422.json` | `gh api repos/.../pulls -X POST` with a bad head | REST 422 |
+| `issue-edited-comment.json` | `gh api graphql` `ISSUE_QUERY`, issue 126 | first comment has a non-null `lastEditedAt` |
+| `issue-never-edited.json` | `ISSUE_QUERY`, issue 304 | two comments, no edits, no renames |
+| `issue-title-renamed.json` | `ISSUE_QUERY`, issue 257 | one `RenamedTitleEvent` |
+| `issue-is-pull-request.json` | `ISSUE_QUERY`, number 83 | `__typename` is `PullRequest` |
+| `issue-not-found.json` | `ISSUE_QUERY`, number 99999 | GraphQL `NOT_FOUND`; `gh` exits 1 and writes this to stdout |
+
+The `issue-*` files (slice 422) were captured 20261107 on `ecorkran/squadron` with the command in the comment above `ISSUE_QUERY` in `github_queries.py`.
 
 ## Caveat: the populated `reviewThreads` fixture
 

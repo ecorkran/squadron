@@ -12,10 +12,13 @@ A field that should be present and is not is ``gh`` drift, reported as
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any, cast
 
 from squadron.codehost.errors import HostResponseMalformedError
 from squadron.codehost.models import (
+    IssueComment,
+    IssueSnapshot,
     PullRequestRecord,
     PullRequestState,
     RepositoryLocator,
@@ -135,3 +138,56 @@ def to_discussions(threads: Mapping[str, Any]) -> list[ReviewDiscussion]:
                 )
             )
     return discussions
+
+
+def to_timestamp(payload: Mapping[str, Any], key: str, argv: Sequence[str]) -> datetime:
+    """Read a required ISO-8601 field as a timezone-aware datetime."""
+    text = require_str(payload, key, argv)
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise HostResponseMalformedError(
+            tuple(argv), f"field {key!r} is not a timestamp: {text!r}"
+        ) from exc
+    if parsed.tzinfo is None:
+        raise HostResponseMalformedError(tuple(argv), f"field {key!r} has no timezone: {text!r}")
+    return parsed
+
+
+def to_optional_timestamp(payload: Mapping[str, Any], key: str, argv: Sequence[str]) -> datetime | None:
+    """Read an ISO-8601 field that is ``null`` when the thing was never edited."""
+    if payload.get(key) is None:
+        return None
+    return to_timestamp(payload, key, argv)
+
+
+def to_issue_comment(node: Mapping[str, Any]) -> IssueComment:
+    """Build an issue comment from a GraphQL comment node."""
+    argv = ("gh", "graphql")
+    return IssueComment(
+        # A deleted account's comments carry a null author.
+        author_login=_nested_str(node, "author", "login"),
+        body=str(node.get("body") or ""),
+        created_at=to_timestamp(node, "createdAt", argv),
+        last_edited_at=to_optional_timestamp(node, "lastEditedAt", argv),
+    )
+
+
+def to_issue_snapshot(
+    locator: RepositoryLocator,
+    issue: Mapping[str, Any],
+    comments: Sequence[Mapping[str, Any]],
+    renames: Sequence[Mapping[str, Any]],
+) -> IssueSnapshot:
+    """Build an issue snapshot from the first page's issue node and every page's nodes."""
+    argv = ("gh", "graphql")
+    return IssueSnapshot(
+        locator=locator,
+        number=require_int(issue, "number", argv),
+        title=str(issue.get("title") or ""),
+        body=str(issue.get("body") or ""),
+        created_at=to_timestamp(issue, "createdAt", argv),
+        last_edited_at=to_optional_timestamp(issue, "lastEditedAt", argv),
+        comments=tuple(to_issue_comment(comment) for comment in comments),
+        title_renamed_at=tuple(to_timestamp(event, "createdAt", argv) for event in renames),
+    )

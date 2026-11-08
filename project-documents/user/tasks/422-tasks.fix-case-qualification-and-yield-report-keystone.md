@@ -81,15 +81,17 @@ usageByModel:
 **Commit**: `feat: add fix qualification records`
 
 ### Task 5: Issue snapshot models and `get_issue` (D2)
-- [ ] Capture real responses for the new query with `gh api graphql` into `tests/codehost/fixtures/gh/` (as the module docstring of `github_queries.py` requires): one issue with comments, one of them with a non-null `lastEditedAt` (any public issue will do; if none can be found, write `BLOCKED:` with the search tried under this task), one issue never edited, one issue with a title rename event (any public issue; same fallback), one number that is a pull request, one number that does not exist. Record the command used in a comment at the top of the query
-- [ ] `codehost/models.py`: frozen `IssueComment` (author_login, body, created_at, last_edited_at | None) and `IssueSnapshot` (locator, number, title, body, created_at, last_edited_at | None, comments, `title_renamed_at`: a tuple of the timestamps of title rename events)
-- [ ] `codehost/github_queries.py`: `ISSUE_QUERY` through `issueOrPullRequest`, selecting `__typename`, the issue fields, comments, and title rename events (`timelineItems` with `itemTypes: [RENAMED_TITLE_EVENT]`, `createdAt` only; the snapshot's only source for title edits). Page each connection the way `REVIEW_THREADS_QUERY` is paged, bounded by the existing `MAX_DISCUSSION_PAGES` in `github_cli.py`; exceeding the bound raises rather than truncating
-- [ ] `codehost/errors.py`: `IssueNotFoundError` and `ReferenceIsPullRequestError`, both `CodeHostError`
-- [ ] `codehost/protocol.py` and `github_cli.py`: add `get_issue(locator, number) -> IssueSnapshot`. A GraphQL NOT_FOUND maps to `IssueNotFoundError`; a pull-request typename to `ReferenceIsPullRequestError`; every other failure keeps its existing typed error. Update every other `CodeHost` implementation in `src` and `tests` (find them with grep for `serves_host`)
-- [ ] Tests (`tests/codehost/test_github_cli.py` style, scripted runner replaying the captured fixtures)
-  - [ ] Each fixture maps to the expected snapshot or error; the edited comment carries `last_edited_at` and the rename fixture carries `title_renamed_at`; a multi-page comment list is joined in order; the page bound raises
-  - [ ] Timeout and unauthenticated failures surface as `HostCommandTimeoutError` and `HostUnauthenticatedError`, unchanged
-  - [ ] Success: `tests/codehost/` passes, including `test_import_boundaries.py`
+- [x] Capture real responses for the new query with `gh api graphql` into `tests/codehost/fixtures/gh/` (as the module docstring of `github_queries.py` requires): one issue with comments, one of them with a non-null `lastEditedAt` (any public issue will do; if none can be found, write `BLOCKED:` with the search tried under this task), one issue never edited, one issue with a title rename event (any public issue; same fallback), one number that is a pull request, one number that does not exist. Record the command used in a comment at the top of the query
+- [x] `codehost/models.py`: frozen `IssueComment` (author_login, body, created_at, last_edited_at | None) and `IssueSnapshot` (locator, number, title, body, created_at, last_edited_at | None, comments, `title_renamed_at`: a tuple of the timestamps of title rename events)
+- [x] `codehost/github_queries.py`: `ISSUE_QUERY` through `issueOrPullRequest`, selecting `__typename`, the issue fields, comments, and title rename events (`timelineItems` with `itemTypes: [RENAMED_TITLE_EVENT]`, `createdAt` only; the snapshot's only source for title edits). Page each connection the way `REVIEW_THREADS_QUERY` is paged, bounded by the existing `MAX_DISCUSSION_PAGES` in `github_cli.py`; exceeding the bound raises rather than truncating
+- [x] `codehost/errors.py`: `IssueNotFoundError` and `ReferenceIsPullRequestError`, both `CodeHostError`
+- [x] `codehost/protocol.py` and `github_cli.py`: add `get_issue(locator, number) -> IssueSnapshot`. A GraphQL NOT_FOUND maps to `IssueNotFoundError`; a pull-request typename to `ReferenceIsPullRequestError`; every other failure keeps its existing typed error. Update every other `CodeHost` implementation in `src` and `tests` (find them with grep for `serves_host`)
+- [x] Tests (`tests/codehost/test_github_cli.py` style, scripted runner replaying the captured fixtures)
+  - [x] Each fixture maps to the expected snapshot or error; the edited comment carries `last_edited_at` and the rename fixture carries `title_renamed_at`; a multi-page comment list is joined in order; the page bound raises
+  - [x] Timeout and unauthenticated failures surface as `HostCommandTimeoutError` and `HostUnauthenticatedError`, unchanged
+  - [x] Success: `tests/codehost/` passes, including `test_import_boundaries.py`
+
+Added `IssueTooLargeError` (page bound raises) and updated the error-class count in tests/cli/test_pr_show.py (20 → 23); no other CodeHost implementation exists to update.
 
 **Commit**: `feat: add CodeHost.get_issue`
 
