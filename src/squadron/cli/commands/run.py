@@ -12,7 +12,7 @@ from collections.abc import Coroutine
 from contextlib import AbstractAsyncContextManager, ExitStack, nullcontext
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, TextIO
+from typing import TYPE_CHECKING, Any, NoReturn, TextIO
 
 import typer
 import yaml
@@ -80,6 +80,7 @@ from squadron.pipeline.loader import (
     validate_pipeline,
 )
 from squadron.pipeline.models import ActionResult, PipelineDefinition, StepConfig
+from squadron.pipeline.pause_hook import start_pause_command
 from squadron.pipeline.prompt_renderer import (
     CompletionResult,
     PromptOnlyUnsupportedError,
@@ -720,6 +721,17 @@ def _display_result(result: PipelineResult) -> None:
     _display_recovery(result)
 
 
+def _finish_run(result: PipelineResult, pause_hook: bool) -> NoReturn:
+    """Show the result, start the on-pause command for a paused run, and exit.
+
+    Called after ``_locked`` returned, so the run lock is already released (#302).
+    """
+    _display_result(result)
+    if pause_hook and result.status == ExecutionStatus.PAUSED and result.run_id is not None:
+        start_pause_command(result.run_id, os.getcwd())
+    raise typer.Exit(_exit_code(result))
+
+
 def _display_recovery(result: PipelineResult) -> None:
     """The command that picks the run up again, when there is one (#248)."""
     if result.run_id is None:
@@ -1196,6 +1208,11 @@ def run(
         hidden=True,
         help="Mark the run as a `sq replay` experiment so observed-run stats leave it out.",
     ),
+    pause_hook: bool = typer.Option(
+        True,
+        "--pause-hook/--no-pause-hook",
+        help="Start pipeline.on_pause_command when the run ends paused (default on).",
+    ),
     max_cost: float | None = typer.Option(
         None,
         "--max-cost",
@@ -1470,8 +1487,7 @@ def run(
             rprint(f"Resume with: [bold]sq run --resume {escape(str(run_id))}[/bold]")
             raise typer.Exit(1) from None
 
-        _display_result(result)
-        raise typer.Exit(_exit_code(result))
+        _finish_run(result, pause_hook)
 
     # ---- standard execution ----
     assert pipeline is not None  # guarded above
@@ -1531,8 +1547,7 @@ def run(
                         rprint(f"Resume with: [bold]sq run --resume {escape(str(match.run_id))}[/bold]")
                         raise typer.Exit(1) from None
 
-                    _display_result(result)
-                    raise typer.Exit(_exit_code(result))
+                    _finish_run(result, pause_hook)
 
     # Fresh run
     try:
@@ -1562,5 +1577,4 @@ def run(
         rprint("Resume with: [bold]sq run --resume <run-id>[/bold]")
         raise typer.Exit(1) from None
 
-    _display_result(result)
-    raise typer.Exit(_exit_code(result))
+    _finish_run(result, pause_hook)

@@ -1193,6 +1193,12 @@ An agent that cannot finish a task without you writes a line starting with `BLOC
 
 Resolve the blocker, delete the `BLOCKED:` line, and `sq run --resume <run-id>`: the `implement` step runs again, even though the agent may already have committed part of the work (a hand-off pause is the one pause `existing: keep` does not skip over). The marker is the uppercase word at the start of a line, after any quote marks, list bullet, checkbox or bold: `> BLOCKED: …`, `- [ ] BLOCKED: …`, `**BLOCKED:** …`. Lowercase "blocked by" in prose does not count. Turn the check off with `disable: [squadron.blocked-tasks]` in `events.yaml`.
 
+### Starting a command when a run pauses
+
+`sq config set pipeline.on_pause_command "<command>"` starts that command whenever an `sq run` (fresh or `--resume`) ends `paused`, for any checkpoint kind. Read `checkpoint.kind` from `sq runs wait --json` to tell them apart. The run id is appended as the last argument, and the command runs in the run's directory with no shell (the string is split like a shell line).
+
+It starts after the run's state is saved and the run lock is released, so it can take the lock or resume the run at once. It is detached in its own session: it survives the terminal closing, `sq run` never waits for it, and it never changes the run's status or exit code. If it cannot start, one warning is logged. A resumed run that pauses again starts it again. Item resumes (`--item`, `--flagged`) do not start it. `sq run --no-pause-hook` skips it for one run; unset means nothing starts.
+
 ### Background shells
 
 A shell the agent leaves running past its turn (a Bash command that outlives its `timeout`, or the Monitor tool) ends later in a continuation turn that nothing reads once the dispatch has returned. So an SDK-session dispatch waits for it: it returns after the continuation turn, not when the first turn ends. Agents it started are waited for the same way.

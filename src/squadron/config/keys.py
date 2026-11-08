@@ -24,6 +24,8 @@ BENCHMARK_INSTALL_TIMEOUT_KEY = "benchmark.install_timeout_s"
 BENCHMARK_SUITE_TIMEOUT_KEY = "benchmark.suite_timeout_s"
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
 COST_CAP_KEY = "pipeline.max_cost_usd"
+# Read by pipeline.pause_hook.start_pause_command (#302); unset means no command.
+ON_PAUSE_COMMAND_KEY = "pipeline.on_pause_command"
 
 CONFIG_KEYS: dict[str, ConfigKey] = {
     "cwd": ConfigKey(
@@ -135,6 +137,19 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "shell that runs longer than this is stopped. After that, they are stopped "
             "and the dispatch returns what it has. Foreground turns use "
             "pipeline.foreground_idle_timeout_s."
+        ),
+    ),
+    ON_PAUSE_COMMAND_KEY: ConfigKey(
+        name=ON_PAUSE_COMMAND_KEY,
+        type_=str,
+        default=None,
+        description=(
+            "Command started when an `sq run` ends paused, for any checkpoint kind; it "
+            "receives the run id as its last argument and runs in the run's directory. "
+            "Started detached after run state is saved and the run lock is released, so it "
+            "may resume the run at once. `sq run` never waits for it; if it cannot start, "
+            "one warning is logged and the run is unchanged. Split like a shell line but "
+            "run without a shell. Skip it for one run with --no-pause-hook. Unset means none."
         ),
     ),
     COST_CAP_KEY: ConfigKey(
