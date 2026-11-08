@@ -855,6 +855,23 @@ class TestToolTelemetry:
         assert "tool_calls_made" not in messages[-1].metadata
 
     @pytest.mark.asyncio
+    async def test_declared_empty_tool_list_reports_zero_calls(self, input_message: Message) -> None:
+        """A tool-less step (#299) still reports its call count, so a leak is visible."""
+        agent = ClaudeSDKAgent(name="toolless", options=ClaudeAgentOptions(), tools_given=[])
+
+        async def gen(*, prompt: str, options: object = None) -> AsyncIterator[object]:
+            yield AssistantMessage(
+                content=[ToolUseBlock(id="t1", name="Read", input={})], model="claude"
+            )
+            yield _make_result()
+
+        with patch(_QUERY, side_effect=gen):
+            messages = await _collect(agent.handle_message(input_message))
+
+        assert messages[-1].metadata["tools_given"] == []
+        assert messages[-1].metadata["tool_calls_made"] == 1
+
+    @pytest.mark.asyncio
     async def test_tools_given_but_unused_reports_zero_calls(
         self, tooled_query_agent: ClaudeSDKAgent, input_message: Message
     ) -> None:

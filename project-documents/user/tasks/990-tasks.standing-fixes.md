@@ -134,3 +134,16 @@ dateUpdated: 20261021
 - [x] The listing shows each hidden pipeline in its own group, marked `shadowed by <winner source>`, counted in the group; the winner keeps `shadows <source>`
 - [x] Tests: loader keeps both hidden levels; listing keeps the built-in in the Built-in group and count; a user pipeline hidden by a project one is listed under User
 - [x] CHANGELOG bullet
+
+## #299 allowed_tools: [] on an SDK (Claude) model runs tool-less
+
+- [x] Live probe (Agent SDK 0.2.162, `sonnet`): with `tools=[]`, `setting_sources=[]`, empty system prompt, the init message lists `tools: []`, the model reports no tools, planted `CLAUDE.md` text does not appear (it does with `setting_sources=["project"]`), and `can_use_tool` is never called because there is nothing to call
+- [x] Layer 1: `tools=[]` (already built by the SDK provider) plus an isolated config for a declared `allowed_tools: []` on the SDK: `setting_sources=[]`, no auto-memory, no project rules, `use_default_system_prompt=False`. No `disallowed_tools` list: the probe shows `tools=[]` leaves no built-in tool, and a denylist drifts when the CLI adds tools
+- [x] Layer 2: `permission_mode="default"` with a deny-everything `can_use_tool` that logs at ERROR, for `allowed_tools == []` only
+- [x] Layer 3: the agent reports `tool_calls_made` for a declared empty list, and dispatch fails the step with `tool_isolation` (reply discarded) when it is above 0
+- [x] Routing: a no-tools step never uses the persistent session, and the "explicit sdk profile needs a session" guard does not apply to it; fresh agent per dispatch (one-shot)
+- [x] `ProviderCapabilities.honors_empty_tools` replaces the `can_read_files` check in `tool_isolation_error`; the error names the missing property; Codex still refused
+- [x] `--validate --strict` reports a no-tools step whose literal model cannot be isolated
+- [x] Layer 4: live probe kept as `tests/providers/sdk/test_tool_less_live.py` (`SQ_LIVE_SDK=1`), rerun on every Agent SDK bump
+- [x] Tests, docs/PIPELINES.md and CHANGELOG bullet
+- **Commit**: `fix: run allowed_tools: [] dispatch steps tool-less on SDK models (#299)`

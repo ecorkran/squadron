@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from claude_agent_sdk import ClaudeAgentOptions
+from claude_agent_sdk import ClaudeAgentOptions, PermissionResultDeny, ToolPermissionContext
 
 from squadron.core.models import AgentConfig, Effort
 from squadron.logging import get_logger
@@ -19,6 +19,20 @@ _log = get_logger("squadron.providers.sdk.provider")
 
 # Default permission mode for programmatic agents — interactive mode hangs.
 _DEFAULT_PERMISSION_MODE = "acceptEdits"
+# Asks `can_use_tool` about every tool call; used for a step that declared no tools (#299).
+_TOOL_LESS_PERMISSION_MODE = "default"
+
+
+async def deny_every_tool(
+    tool_name: str, tool_input: dict[str, object], context: ToolPermissionContext
+) -> PermissionResultDeny:
+    """``can_use_tool`` callback for a step that declared ``allowed_tools: []`` (#299).
+
+    With an empty tool list the model has nothing to call, so reaching here means the
+    isolation leaked. Deny the call so nothing runs unchecked, and say so at ERROR.
+    """
+    _log.error("tool-less SDK step was offered tool %r; denied (isolation leak)", tool_name)
+    return PermissionResultDeny(message="This step runs without tools.")
 
 
 def sdk_effort_options(effort: Effort | None) -> dict[str, object]:
@@ -48,6 +62,7 @@ class ClaudeSDKProvider:
             supports_system_prompt=True,
             supports_streaming=True,
             applies_effort=True,
+            honors_empty_tools=True,
         )
 
     async def create_agent(self, config: AgentConfig) -> ClaudeSDKAgent:
@@ -103,8 +118,14 @@ class ClaudeSDKProvider:
         if config.setting_sources is not None:
             kwargs["setting_sources"] = settings["setting_sources"]
 
+        # A tool-less step is not auto-approved (#299): the default mode asks
+        # `can_use_tool` about every call, and that callback denies them all.
+        tool_less = config.allowed_tools == []
+        if tool_less:
+            kwargs["can_use_tool"] = deny_every_tool
+        default_mode = _TOOL_LESS_PERMISSION_MODE if tool_less else _DEFAULT_PERMISSION_MODE
         kwargs["permission_mode"] = (
-            config.permission_mode if config.permission_mode is not None else _DEFAULT_PERMISSION_MODE
+            config.permission_mode if config.permission_mode is not None else default_mode
         )
 
         hooks = config.credentials.get("hooks")

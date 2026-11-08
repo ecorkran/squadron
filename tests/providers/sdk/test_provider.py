@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
-from claude_agent_sdk import ClaudeAgentOptions
+from claude_agent_sdk import ClaudeAgentOptions, PermissionResultDeny
 
 from squadron.core.models import AgentConfig, Effort
 from squadron.providers.errors import ProviderError
@@ -218,6 +219,42 @@ class TestCreateAgent:
 
             opts = mock_cls.call_args.kwargs["options"]
             assert opts.permission_mode == "acceptEdits"
+
+    @pytest.mark.asyncio
+    async def test_empty_allowed_tools_is_not_auto_approved_and_denies_every_call(
+        self, provider: ClaudeSDKProvider, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        config = AgentConfig(name="toolless", agent_type="sdk", provider="sdk", allowed_tools=[])
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            opts = mock_cls.call_args.kwargs["options"]
+            assert opts.tools == []
+            assert opts.permission_mode == "default"
+            assert opts.can_use_tool is not None
+            assert mock_cls.call_args.kwargs["tools_given"] == []
+
+        with caplog.at_level(logging.ERROR):
+            verdict = await opts.can_use_tool("Write", {"file_path": "x"}, MagicMock())
+
+        assert isinstance(verdict, PermissionResultDeny)
+        assert "Write" in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_listed_tools_keep_the_default_mode_and_no_callback(
+        self, provider: ClaudeSDKProvider
+    ) -> None:
+        config = AgentConfig(
+            name="tooled", agent_type="sdk", provider="sdk", allowed_tools=["read_file"]
+        )
+        with patch(_AGENT_PATCH, create=True) as mock_cls:
+            mock_cls.return_value = MagicMock()
+            await provider.create_agent(config)
+
+            opts = mock_cls.call_args.kwargs["options"]
+            assert opts.permission_mode == "acceptEdits"
+            assert opts.can_use_tool is None
 
     @pytest.mark.asyncio
     async def test_mode_from_credentials(self, provider: ClaudeSDKProvider) -> None:

@@ -427,7 +427,10 @@ def validate_pipeline(
 
     errors.extend(implement_branch_errors(definition.steps))
     if strict:
+        from squadron.pipeline.isolation_validation import no_tools_isolation_errors
+
         errors.extend(unknown_key_errors(definition.steps))
+        errors.extend(no_tools_isolation_errors(definition))
     return errors
 
 

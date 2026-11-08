@@ -27,9 +27,15 @@ from tests.pipeline.actions.dispatch_helpers import sdk_profile as _sdk_profile
 _MODEL_ID = "claude-sonnet-4-20250514"
 
 
-def _provider_stub(*, can_read_files: bool) -> SimpleNamespace:
+def _capabilities(*, can_read_files: bool, honors_empty_tools: bool = False) -> ProviderCapabilities:
+    return ProviderCapabilities(can_read_files=can_read_files, honors_empty_tools=honors_empty_tools)
+
+
+def _provider_stub(*, can_read_files: bool, honors_empty_tools: bool = False) -> SimpleNamespace:
     """A provider whose capabilities are the only thing the guard may look at."""
-    return SimpleNamespace(capabilities=ProviderCapabilities(can_read_files=can_read_files))
+    return SimpleNamespace(
+        capabilities=_capabilities(can_read_files=can_read_files, honors_empty_tools=honors_empty_tools)
+    )
 
 
 def _context(profile: str | None, *, session: object = None, **params: object) -> ActionContext:
@@ -59,36 +65,46 @@ def test_declares_no_tools(params: dict[str, object], expected: bool) -> None:
 # --- tool_isolation_error ---
 
 
-def _error(route: DispatchRoute, *, can_read_files: bool) -> str | None:
+def _error(route: DispatchRoute, capabilities: ProviderCapabilities) -> str | None:
     return tool_isolation_error(
         step_name="extract",
         model="some-model",
         provider="some-provider",
         route=route,
-        can_read_files=can_read_files,
+        capabilities=capabilities,
     )
 
 
-@pytest.mark.parametrize("can_read_files", [True, False])
-def test_session_route_always_errors(can_read_files: bool) -> None:
-    assert _error(DispatchRoute.SESSION, can_read_files=can_read_files) is not None
+@pytest.mark.parametrize("honors_empty_tools", [True, False])
+def test_session_route_always_errors(honors_empty_tools: bool) -> None:
+    caps = _capabilities(can_read_files=True, honors_empty_tools=honors_empty_tools)
+    message = _error(DispatchRoute.SESSION, caps)
+    assert message is not None
+    assert "persistent session" in message
 
 
-def test_agent_route_errors_when_the_provider_reads_files() -> None:
-    assert _error(DispatchRoute.AGENT, can_read_files=True) is not None
+def test_agent_route_errors_when_the_provider_brings_tools_it_cannot_drop() -> None:
+    message = _error(DispatchRoute.AGENT, _capabilities(can_read_files=True))
+    assert message is not None
+    assert "cannot run with none" in message
+
+
+def test_agent_route_is_clear_when_the_provider_honors_an_empty_tool_list() -> None:
+    assert (
+        _error(DispatchRoute.AGENT, _capabilities(can_read_files=True, honors_empty_tools=True)) is None
+    )
 
 
 def test_agent_route_is_clear_when_the_provider_reads_no_files() -> None:
-    assert _error(DispatchRoute.AGENT, can_read_files=False) is None
+    assert _error(DispatchRoute.AGENT, _capabilities(can_read_files=False)) is None
 
 
 def test_error_names_step_model_and_provider() -> None:
-    message = _error(DispatchRoute.AGENT, can_read_files=True)
+    message = _error(DispatchRoute.AGENT, _capabilities(can_read_files=True))
     assert message is not None
     assert "extract" in message
     assert "some-model" in message
     assert "some-provider" in message
-    assert "openrouter" in message
 
 
 def test_tool_isolation_does_not_pause_the_run() -> None:
@@ -104,32 +120,93 @@ def action() -> DispatchAction:
 
 
 @pytest.mark.asyncio
-async def test_session_route_fails_before_any_model_call(
-    action: DispatchAction, caplog: pytest.LogCaptureFixture
-) -> None:
+async def test_no_tools_step_skips_the_persistent_session(action: DispatchAction) -> None:
+    """The session carries earlier conversation and bypassPermissions; the step runs one-shot (#299)."""
     session = AsyncMock()
     ctx = _context(ProfileName.SDK, session=session, allowed_tools=[])
+    registry = make_registry(make_agent_mock("from the prompt alone"))
     with (
+        patch(f"{_P}.get_registry", return_value=registry),
         patch(f"{_P}.get_profile", return_value=_sdk_profile()),
         patch(f"{_P}.ensure_provider_loaded"),
-        patch(f"{_P}.get_provider", return_value=_provider_stub(can_read_files=True)),
-        caplog.at_level(logging.WARNING, logger=_P),
+        patch(
+            f"{_P}.get_provider",
+            return_value=_provider_stub(can_read_files=True, honors_empty_tools=True),
+        ),
     ):
         result = await action.execute(ctx)
 
-    assert result.success is False
-    assert result.metadata[FAILURE_KIND_KEY] == "tool_isolation"
+    assert result.success is True
     session.set_model.assert_not_called()
     session.dispatch.assert_not_called()
-    assert any("allowed_tools" in r.message and r.levelno == logging.WARNING for r in caplog.records)
+    registry.spawn.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_file_reading_one_shot_route_fails_before_any_model_call(
+async def test_no_tools_sdk_step_without_a_session_runs_one_shot(action: DispatchAction) -> None:
+    """An explicit sdk profile with no session used to fail the 'needs a session' guard."""
+    ctx = _context(ProfileName.SDK, allowed_tools=[])
+    registry = make_registry(make_agent_mock("ok"))
+    with (
+        patch(f"{_P}.get_registry", return_value=registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(
+            f"{_P}.get_provider",
+            return_value=_provider_stub(can_read_files=True, honors_empty_tools=True),
+        ),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.success is True
+
+
+@pytest.mark.asyncio
+async def test_no_tools_sdk_step_is_isolated_in_the_spawned_config(action: DispatchAction) -> None:
+    ctx = _context(ProfileName.SDK, allowed_tools=[], system_prompt="be brief")
+    registry = make_registry(make_agent_mock("ok"))
+    with (
+        patch(f"{_P}.get_registry", return_value=registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(
+            f"{_P}.get_provider",
+            return_value=_provider_stub(can_read_files=True, honors_empty_tools=True),
+        ),
+    ):
+        await action.execute(ctx)
+
+    config = registry.spawn.call_args[0][0]
+    assert config.allowed_tools == []
+    assert config.setting_sources == []
+    assert config.auto_memory is False
+    assert config.use_default_system_prompt is False
+    assert config.instructions == "be brief"
+
+
+@pytest.mark.asyncio
+async def test_tooled_sdk_step_keeps_the_preset_and_settings(action: DispatchAction) -> None:
+    """The isolation applies only to allowed_tools == []."""
+    ctx = _context(None, allowed_tools=["read_file"])
+    registry = make_registry(make_agent_mock("ok"))
+    with (
+        patch(f"{_P}.get_registry", return_value=registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+    ):
+        await action.execute(ctx)
+
+    config = registry.spawn.call_args[0][0]
+    assert config.use_default_system_prompt is True
+    assert config.setting_sources
+
+
+@pytest.mark.asyncio
+async def test_provider_that_cannot_drop_its_tools_fails_before_any_model_call(
     action: DispatchAction, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The SDK one-shot and Codex routes both land here: the provider reads files."""
-    ctx = _context(None, allowed_tools=[])  # no alias profile: the SDK one-shot default
+    """Codex-like: reads files itself and does not honor an empty tool list."""
+    ctx = _context(None, allowed_tools=[])
     registry = make_registry(make_agent_mock("never used"))
     with (
         patch(f"{_P}.get_registry", return_value=registry),
@@ -144,7 +221,59 @@ async def test_file_reading_one_shot_route_fails_before_any_model_call(
     assert result.metadata[FAILURE_KIND_KEY] == FailureKind.TOOL_ISOLATION.value
     registry.spawn.assert_not_called()
     assert "generate" in (result.error or "")  # the step name make_context gives
+    assert "cannot run with none" in (result.error or "")
     assert any(r.levelno == logging.WARNING for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_tool_use_in_a_no_tools_step_fails_the_step(
+    action: DispatchAction, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The reply is the check: the options withhold tools, this does not trust them (#299)."""
+    ctx = _context(None, allowed_tools=[])
+    leaked = make_agent_mock(
+        "I read the file",
+        metadata={"tools_given": [], "tool_calls_made": 2, "failed_tool_calls": 0},
+    )
+    registry = make_registry(leaked)
+    with (
+        patch(f"{_P}.get_registry", return_value=registry),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(
+            f"{_P}.get_provider",
+            return_value=_provider_stub(can_read_files=True, honors_empty_tools=True),
+        ),
+        caplog.at_level(logging.ERROR, logger=_P),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.success is False
+    assert result.metadata[FAILURE_KIND_KEY] == FailureKind.TOOL_ISOLATION.value
+    assert "2 tool call" in (result.error or "")
+    assert result.outputs == {}
+    assert any(r.levelno == logging.ERROR for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_no_tools_step_that_used_none_succeeds(action: DispatchAction) -> None:
+    ctx = _context(None, allowed_tools=[])
+    clean = make_agent_mock(
+        "answer", metadata={"tools_given": [], "tool_calls_made": 0, "failed_tool_calls": 0}
+    )
+    with (
+        patch(f"{_P}.get_registry", return_value=make_registry(clean)),
+        patch(f"{_P}.get_profile", return_value=_sdk_profile()),
+        patch(f"{_P}.ensure_provider_loaded"),
+        patch(
+            f"{_P}.get_provider",
+            return_value=_provider_stub(can_read_files=True, honors_empty_tools=True),
+        ),
+    ):
+        result = await action.execute(ctx)
+
+    assert result.success is True
+    assert result.outputs["response"] == "answer"
 
 
 @pytest.mark.asyncio

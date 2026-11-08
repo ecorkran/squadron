@@ -91,9 +91,9 @@ class ClaudeSDKAgent:
         self._rate_limit_stats = RateLimitStats()
         # Canonical squadron tool names (design D5 parity with the OpenAI agent's
         # ``_tools_given``): what the run was offered, independent of whether it was used.
-        # Empty when no tools were configured, so a caller can tell "offered but unused"
-        # apart from "never offered" (issue #110).
-        self._tools_given: list[str] = list(tools_given) if tools_given else []
+        # None when no tool list was configured, so a caller can tell "offered but unused"
+        # apart from "never offered" (issue #110); [] is a declared tool-less run (#299).
+        self._tools_given: list[str] | None = None if tools_given is None else list(tools_given)
         self._tool_calls_made = 0
         self._failed_tool_calls = 0
         self._reasoning_chars = 0
@@ -243,7 +243,9 @@ class ClaudeSDKAgent:
                 self._telemetry.usage if self._telemetry.usage.reported else None
             )
             final.metadata[COST_USD_KEY] = self._telemetry.cost_usd
-            if self._tools_given:
+            # `is not None`, not truthiness: a tool-less step (#299) reports 0 calls made,
+            # which is how the dispatch notices a model that used a tool anyway.
+            if self._tools_given is not None:
                 final.metadata[TOOLS_GIVEN_KEY] = list(self._tools_given)
                 final.metadata[TOOL_CALLS_MADE_KEY] = self._tool_calls_made
         return translated

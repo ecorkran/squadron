@@ -14,6 +14,7 @@ from typing import cast
 
 from squadron.pipeline.actions import ActionType
 from squadron.pipeline.models import ActionContext
+from squadron.providers.base import ProviderCapabilities
 
 
 class DispatchRoute(StrEnum):
@@ -37,21 +38,26 @@ def tool_isolation_error(
     model: str,
     provider: str,
     route: DispatchRoute,
-    can_read_files: bool,
+    capabilities: ProviderCapabilities,
 ) -> str | None:
     """The error for a no-tools step whose route would still run tools, else ``None``.
 
-    A persistent session and a provider that reads files itself (the SDK, Codex) bring
-    their own tools, so ``allowed_tools: []`` cannot take them away. Reading the
-    capability, never the provider's name, covers a new provider without a change here.
+    A persistent session fixes its tools when it connects, so it cannot drop them for one
+    step. A provider that reads files itself brings tools of its own, and can run a step
+    tool-less only when it honors an empty tool list (the SDK does; Codex does not yet).
+    Reading the capability, never the provider's name, covers a new provider without a
+    change here. The message names the property that is missing.
     """
-    if route is not DispatchRoute.SESSION and not can_read_files:
+    if route is DispatchRoute.SESSION:
+        missing = "it resolved to a persistent session, whose tool set is fixed at connect time"
+    elif capabilities.can_read_files and not capabilities.honors_empty_tools:
+        missing = f"the '{provider}' provider brings tools of its own and cannot run with none"
+    else:
         return None
     return (
-        f"Step '{step_name}' declares 'allowed_tools: []' but model '{model}' runs on the "
-        f"'{provider}' provider ({route.value} route), which runs tools of its own. The step "
-        "would not be isolated. Use a model whose provider runs no tools of its own (for "
-        "example an openrouter alias), or remove 'allowed_tools'."
+        f"Step '{step_name}' declares 'allowed_tools: []' but cannot be isolated on model "
+        f"'{model}': {missing}. Use a model whose provider can run without tools, or remove "
+        "'allowed_tools'."
     )
 
 

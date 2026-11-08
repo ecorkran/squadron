@@ -197,6 +197,8 @@ async def one_shot_dispatch_with_telemetry(
     """
     profile = get_profile(profile_name)
     ensure_provider_loaded(profile.provider)
+    # Read before the gates below can empty the list: only an explicit [] asks for isolation.
+    declared_no_tools = allowed_tools == []
     # A write step that declared no tools gets the default set on a provider that runs
     # squadron's tools, so a stock pipeline works with any producer. The SDK brings its
     # own tools and Codex refuses squadron tools; both are left alone.
@@ -231,19 +233,25 @@ async def one_shot_dispatch_with_telemetry(
     # with. A step system_prompt is appended to that preset, as reviews do (#85). On the
     # non-SDK side an empty prompt becomes no system message at all, so with tools the
     # guidance block (composed in the agent, slice 267 D1) is the whole system prompt.
-    use_default_system_prompt = is_sdk
+    # A declared no-tools step (#299) gets neither: the preset carries tool-use text and
+    # environment details, and project rules are a context source the step did not list.
+    use_default_system_prompt = is_sdk and not declared_no_tools
+    isolated = is_sdk and declared_no_tools
     # Pipeline settings policy (slice 932 D10/D11); not applicable off the SDK.
     config_cwd = cwd or "."
     # Slice 935: project rules follow the step system_prompt; the agent appends the
     # tool-use guidance (267) after both.
     rules_block, rules_record = (
         await project_rules_for_dispatch(rule_step, ProviderType(profile.provider), config_cwd)
-        if rule_step is not None
+        if rule_step is not None and not isolated
         else ("", None)
     )
     instructions = "\n\n".join(part for part in (system_prompt, rules_block) if part) or None
+    # An isolated step loads no CLAUDE.md, rules, settings-file servers or auto-memory.
     setting_sources = (
-        list(
+        []
+        if isolated
+        else list(
             pipeline_setting_sources(
                 include_user=get_typed_config("pipeline.user_settings", bool, cwd=config_cwd)
             )
@@ -251,7 +259,9 @@ async def one_shot_dispatch_with_telemetry(
         if is_sdk
         else None
     )
-    auto_memory = is_sdk and get_typed_config("pipeline.auto_memory", bool, cwd=config_cwd)
+    auto_memory = (
+        is_sdk and not isolated and get_typed_config("pipeline.auto_memory", bool, cwd=config_cwd)
+    )
 
     branch_suffix = f"-b{branch_idx}" if branch_idx is not None else ""
     capabilities = get_provider(profile.provider).capabilities
@@ -568,9 +578,12 @@ class DispatchAction:
             return ActionResult(success=True, action_type=self.action_type, outputs=kept)
         model_id, alias_profile = self._resolve_model(context)
         session = context.sdk_session
+        # A no-tools step never uses the persistent session (#299): the session carries the
+        # earlier steps' conversation, its tools and bypassPermissions. It runs one-shot.
+        no_tools = declares_no_tools(context)
         # Guard: pool selected an explicitly SDK-profiled alias at runtime,
         # but no persistent session is available.
-        if session is None and alias_profile == ProfileName.SDK:
+        if session is None and alias_profile == ProfileName.SDK and not no_tools:
             step_name = context.step_name
             return ActionResult(
                 success=False,
@@ -582,9 +595,9 @@ class DispatchAction:
                     "this pool's runtime selection does not yield an SDK alias."
                 ),
             )
-        use_session = session is not None and is_sdk_profile(alias_profile)
+        use_session = session is not None and is_sdk_profile(alias_profile) and not no_tools
         route = DispatchRoute.SESSION if use_session else DispatchRoute.AGENT
-        if declares_no_tools(context):
+        if no_tools:
             isolation_failure = self._tool_isolation_failure(context, route, model_id, alias_profile)
             if isolation_failure is not None:
                 return isolation_failure
@@ -612,7 +625,7 @@ class DispatchAction:
             model=model_id,
             provider=provider_name,
             route=route,
-            can_read_files=get_provider(provider_name).capabilities.can_read_files,
+            capabilities=get_provider(provider_name).capabilities,
         )
         if error is None:
             return None
@@ -1070,6 +1083,12 @@ class DispatchAction:
             error_result.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
             return error_result
 
+        if (breach := self._isolation_breach(context, allowed_tools, tool_telemetry)) is not None:
+            stamp(breach.metadata, record)
+            stamp_effort_sent(breach.metadata, effort_sent)
+            breach.metadata[PROMPT_METADATA_KEY] = resolved_prompt.identity()
+            return breach
+
         outcome = assess_tool_outcome(requires_writes, tool_telemetry)
         for warning in outcome.warnings:
             _logger.warning("Dispatch step '%s': %s", context.step_name, warning)
@@ -1100,6 +1119,35 @@ class DispatchAction:
             metadata=metadata,
         )
         return await self._with_reply_contract(context, result, resolved_prompt.text)
+
+    def _isolation_breach(
+        self,
+        context: ActionContext,
+        allowed_tools: list[str] | None,
+        tool_telemetry: dict[str, object],
+    ) -> ActionResult | None:
+        """The failed result when a no-tools step's reply shows tool use anyway (#299), else ``None``.
+
+        The options already withhold every tool; this is the check that does not trust them.
+        The reply is discarded: it came from a run that was not isolated.
+        """
+        if allowed_tools != []:
+            return None
+        made = tool_telemetry.get(TOOL_CALLS_MADE_KEY, 0)
+        if not isinstance(made, int) or made <= 0:
+            return None
+        error = (
+            f"Step '{context.step_name}' declares 'allowed_tools: []' but the model made "
+            f"{made} tool call(s). The step was not isolated, so its reply is discarded."
+        )
+        _logger.error("dispatch: step %s: %s", context.step_name, error)
+        return ActionResult(
+            success=False,
+            action_type=self.action_type,
+            outputs={},
+            error=error,
+            metadata={FAILURE_KIND_KEY: FailureKind.TOOL_ISOLATION.value, **tool_telemetry},
+        )
 
     async def _with_reply_contract(
         self, context: ActionContext, result: ActionResult, delivered_prompt: str

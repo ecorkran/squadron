@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `sq benchmark auth-check` reports whether each provider profile's login still works in the scrubbed producer environment, and `sq benchmark sandbox REV` builds a history-free sandbox at a commit, installs its locked environment, and can run its tests with failures classified.
 - `sq runs list --json` lists runs as JSON with each run's status, working directory and checkpoint. Run files now record the directory a run started in.
+- A dispatch step with `allowed_tools: []` now runs on Claude (SDK) models instead of failing with `tool_isolation` (#299). It runs one-shot with no tools, no `CLAUDE.md` or settings and no Claude Code system prompt; any tool use fails the step. `sq run --validate --strict` reports a no-tools step whose model cannot be isolated.
 - `pipeline.on_pause_command` starts a command, detached, whenever an `sq run` ends paused (#302). It gets the run id as its last argument and runs in the run's directory, after the run lock is released. `--no-pause-hook` skips it for one run.
 
 ## [0.24.23] - 20261105

@@ -76,6 +76,13 @@ class ProviderCapabilities:
     runs_squadron_tools: bool = False
     """Agent executes squadron's own tools from ``AgentConfig.allowed_tools`` (slice 945)."""
 
+    honors_empty_tools: bool = False
+    """``AgentConfig.allowed_tools == []`` leaves the agent with no tools at all (#299).
+
+    Only meaningful for a provider that brings tools of its own (``can_read_files``): it
+    says the provider can be told to drop them, and shows it by refusing any tool use.
+    """
+
 
 @runtime_checkable
 class Agent(Protocol):
