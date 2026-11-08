@@ -16,6 +16,15 @@ from datetime import datetime
 from pathlib import Path
 
 from squadron.benchmark.build_errors import BuildHalted
+from squadron.codehost.errors import (
+    AmbiguousHostRemoteError,
+    ForeignRepositoryError,
+    NoHostRemoteError,
+)
+from squadron.codehost.models import LocalRemote, RepositoryLocator
+from squadron.codehost.protocol import CodeHost
+from squadron.codehost.remotes import select_remote
+from squadron.codehost.targets import PullRequestTarget, TargetForm
 from squadron.core.process_runner import (
     ProcessNotFoundError,
     ProcessResult,
@@ -189,3 +198,36 @@ def discover(runner: ProcessRunner, repo_root: Path, *, timeout_seconds: float) 
             FixCandidate(commit.sha, parent, commit.committer_date, written, repository, number)
         )
     return DiscoveryResult(tuple(candidates), tuple(rejections))
+
+
+def _issue_target(candidate: FixCandidate) -> PullRequestTarget:
+    """The target form ``select_remote`` needs for the candidate's reference."""
+    if candidate.repository is None:
+        return PullRequestTarget(form=TargetForm.NUMBER, number=candidate.number)
+    owner, _, repository = candidate.repository.partition("/")
+    return PullRequestTarget(
+        form=TargetForm.OWNER_REPO_NUMBER, owner=owner, repository=repository, number=candidate.number
+    )
+
+
+def resolve_locator(
+    candidate: FixCandidate, remotes: Sequence[LocalRemote], host: CodeHost
+) -> RepositoryLocator | DiscoveryRejection:
+    """The repository holding the candidate's issue, or ``no_issue_host``.
+
+    An ``owner/repo#n`` reference uses the host of the remote that points at that
+    repository. A bare ``#n`` needs exactly one remote on a host ``host`` serves, the
+    same rule ``select_remote`` applies to a bare pull-request target. Anything the
+    selection cannot settle (no remote, several remotes, a host nobody serves) has no
+    issue host; ``detail`` carries the selection's own message.
+    """
+    try:
+        locator = select_remote(_issue_target(candidate), remotes, host.serves_host)
+    except (ForeignRepositoryError, NoHostRemoteError, AmbiguousHostRemoteError) as exc:
+        return DiscoveryRejection(candidate.sha, CandidateRejection.NO_ISSUE_HOST, str(exc))
+    if not host.serves_host(locator.host):
+        detail = (
+            f"remote {locator.remote_name} is on {locator.host}, which the code host does not serve"
+        )
+        return DiscoveryRejection(candidate.sha, CandidateRejection.NO_ISSUE_HOST, detail)
+    return locator

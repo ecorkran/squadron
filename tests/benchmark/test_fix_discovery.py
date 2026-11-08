@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -11,9 +12,15 @@ from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.fix_discovery import (
     CLOSING_REFERENCE,
     GIT_LOG_FORMAT,
+    DiscoveryRejection,
     DiscoveryResult,
+    FixCandidate,
     discover,
+    resolve_locator,
 )
+from squadron.codehost.github_cli import GitHubCli
+from squadron.codehost.models import LocalRemote, RepositoryLocator
+from squadron.codehost.remotes import parse_remote_url
 from squadron.core.process_runner import (
     ProcessNotFoundError,
     ProcessResult,
@@ -29,6 +36,7 @@ from tests.benchmark.support import (
     failed,
     ok,
 )
+from tests.codehost.fake_runner import FakeProcessRunner
 
 TIMEOUT = 60.0
 SAMPLES = Path(__file__).parent / "fixtures" / "git_log_samples.txt"
@@ -243,3 +251,92 @@ def test_a_malformed_record_halts_with_an_error_log(caplog: pytest.LogCaptureFix
     with caplog.at_level(logging.ERROR), pytest.raises(BuildHalted, match="fields"):
         discover(runner, Path("/x"), timeout_seconds=TIMEOUT)
     assert any(record.levelno == logging.ERROR for record in caplog.records)
+
+
+# --- Issue repository resolution (Task 8) ------------------------------------
+
+SERVED_HOST = "github.com"
+
+
+def remote(name: str, url: str) -> LocalRemote:
+    return parse_remote_url(name, url)
+
+
+def issue_host() -> GitHubCli:
+    return GitHubCli(FakeProcessRunner([]), frozenset({SERVED_HOST}))
+
+
+def candidate_for(number: int, repository: str | None = None) -> FixCandidate:
+    ref = f"{repository}#{number}" if repository else f"#{number}"
+    return FixCandidate(
+        sha="a" * 40,
+        parent_sha="b" * 40,
+        committer_date=datetime(2026, 11, 1, tzinfo=UTC),
+        issue_ref=ref,
+        repository=repository,
+        number=number,
+    )
+
+
+def test_a_bare_reference_uses_the_single_served_remote() -> None:
+    remotes = [remote("origin", "git@github.com:acme/widgets.git")]
+    locator = resolve_locator(candidate_for(5), remotes, issue_host())
+    assert isinstance(locator, RepositoryLocator)
+    assert (locator.host, locator.owner, locator.repository) == ("github.com", "acme", "widgets")
+
+
+def test_a_bare_reference_ignores_remotes_on_unserved_hosts() -> None:
+    remotes = [
+        remote("mirror", "git@gitlab.example:acme/widgets.git"),
+        remote("origin", "https://github.com/acme/widgets.git"),
+    ]
+    locator = resolve_locator(candidate_for(5), remotes, issue_host())
+    assert isinstance(locator, RepositoryLocator)
+    assert locator.remote_name == "origin"
+
+
+def test_an_owner_repo_reference_uses_the_matching_remotes_host() -> None:
+    remotes = [
+        remote("origin", "git@github.com:acme/widgets.git"),
+        remote("other", "git@github.com:other/repo.git"),
+    ]
+    locator = resolve_locator(candidate_for(15, "other/repo"), remotes, issue_host())
+    assert isinstance(locator, RepositoryLocator)
+    assert (locator.owner, locator.repository, locator.remote_name) == ("other", "repo", "other")
+
+
+@pytest.mark.parametrize(
+    ("remotes", "repository"),
+    [
+        ([], None),
+        ([], "other/repo"),
+        ([remote("origin", "git@gitlab.example:acme/widgets.git")], None),
+        ([remote("origin", "git@gitlab.example:other/repo.git")], "other/repo"),
+        ([remote("origin", "git@github.com:acme/widgets.git")], "other/repo"),
+        (
+            [
+                remote("origin", "git@github.com:acme/widgets.git"),
+                remote("fork", "git@github.com:me/widgets.git"),
+            ],
+            None,
+        ),
+        ([remote("odd", "some-local-thing")], None),
+    ],
+    ids=[
+        "no remote, bare",
+        "no remote, explicit",
+        "unserved host, bare",
+        "unserved host, explicit",
+        "explicit repo not among remotes",
+        "two served remotes, bare",
+        "unparseable remote",
+    ],
+)
+def test_no_issue_host_when_selection_cannot_settle(
+    remotes: list[LocalRemote], repository: str | None
+) -> None:
+    result = resolve_locator(candidate_for(5, repository), remotes, issue_host())
+    assert isinstance(result, DiscoveryRejection)
+    assert result.rejection is CandidateRejection.NO_ISSUE_HOST
+    assert result.sha == "a" * 40
+    assert result.detail

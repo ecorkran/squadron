@@ -124,8 +124,8 @@ Added `IssueTooLargeError` (page bound raises) and updated the error-class count
 **Commit**: `feat: discover fix candidates from closing commits`
 
 ### Task 8: Issue repository resolution (D1)
-- [ ] In `fix_discovery.py` add `resolve_locator(candidate, remotes, host: CodeHost)`: an `owner/repo#n` reference uses that repository on the host of the matching remote; a bare `#n` uses the single remote the host serves (use `list_remotes` and the same selection `remotes.py` uses for bare targets; do not duplicate its logic). No serving remote → `no_issue_host`
-- [ ] Tests (extend `tests/benchmark/test_fix_discovery.py`, scripted remotes): both reference forms resolve; `no_issue_host` with no remote and with a remote on an unserved host
+- [x] In `fix_discovery.py` add `resolve_locator(candidate, remotes, host: CodeHost)`: an `owner/repo#n` reference uses that repository on the host of the matching remote; a bare `#n` uses the single remote the host serves (use `list_remotes` and the same selection `remotes.py` uses for bare targets; do not duplicate its logic). No serving remote → `no_issue_host`
+- [x] Tests (extend `tests/benchmark/test_fix_discovery.py`, scripted remotes): both reference forms resolve; `no_issue_host` with no remote and with a remote on an unserved host
 
 **Commit**: `feat: resolve issue repositories for fix candidates`
 
