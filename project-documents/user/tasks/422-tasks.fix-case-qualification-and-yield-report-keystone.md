@@ -61,22 +61,22 @@ usageByModel:
 **Commit**: `feat: add benchmark qualification config keys`
 
 ### Task 3: Qualification record models (D8, D10, Patterns)
-- [ ] In `metrology/benchmark_models.py` add `StrEnum`s `CandidateRejection`, `TestRejection`, `QualificationOutcome` (`qualified`, `rejected`, `harness_error`) and `HiddenTestVerdictKind` (`qualified`, `rejected`). Values are exactly the lists in the design's Patterns and Conventions
-- [ ] Add frozen models `HiddenTestVerdict` and `FixQualification` with the fields in the design's Database / Storage Schema. A `model_validator` enforces: `qualified` has a `case_id` and no rejection; `rejected` has a `rejection` and no `case_id`; `harness_error` has neither; a `rejected` verdict has a `TestRejection` and a `qualified` one has none
-- [ ] Add `fix_qualification_record_id(project_id, commit_sha, env_digest | None)` returning `fixqual-<sha256(project_id.value)[:12]>-<commit[:12]>-<env digest[:12] or "pre">` (D10)
-- [ ] Tests (extend `tests/metrology/test_benchmark_models.py`)
-  - [ ] Each enum has exactly the design's values (a value added without a design change fails)
-  - [ ] Each validator rule rejects its bad combination; a JSON round trip equals the original
-  - [ ] Record id: the `pre` form when no environment, the digest form otherwise; two projects with the same commit differ
+- [x] In `metrology/benchmark_models.py` add `StrEnum`s `CandidateRejection`, `TestRejection`, `QualificationOutcome` (`qualified`, `rejected`, `harness_error`) and `HiddenTestVerdictKind` (`qualified`, `rejected`). Values are exactly the lists in the design's Patterns and Conventions
+- [x] Add frozen models `HiddenTestVerdict` and `FixQualification` with the fields in the design's Database / Storage Schema. A `model_validator` enforces: `qualified` has a `case_id` and no rejection; `rejected` has a `rejection` and no `case_id`; `harness_error` has neither; a `rejected` verdict has a `TestRejection` and a `qualified` one has none
+- [x] Add `fix_qualification_record_id(project_id, commit_sha, env_digest | None)` returning `fixqual-<sha256(project_id.value)[:12]>-<commit[:12]>-<env digest[:12] or "pre">` (D10)
+- [x] Tests (extend `tests/metrology/test_benchmark_models.py`)
+  - [x] Each enum has exactly the design's values (a value added without a design change fails)
+  - [x] Each validator rule rejects its bad combination; a JSON round trip equals the original
+  - [x] Record id: the `pre` form when no environment, the digest form otherwise; two projects with the same commit differ
 
 ### Task 4: Store the qualification records (D10)
-- [ ] `metrology/models.py`: add `RECORD_TYPE_FIX_QUALIFICATION` and an optional `fix_qualification` field on `MetrologyRecord` (extend the docstring of record types); `schema_version` unchanged
-- [ ] `benchmark_store.py`: add `write_fix_qualification(q)` (a newer result under the same id overwrites), `get_fix_qualification(project_id, commit_sha, env_digest)` and `list_fix_qualifications(project_id=None)`. Error mapping is the same as 421's `get_case`: absent → `None`; a tampered or wrong-type file → ERROR log and `MetrologyStoreError`; `list_` skips a mismatching file with a WARNING
-- [ ] Tests (extend `tests/metrology/test_benchmark_store.py`)
-  - [ ] Write then get is equal; a second write under the same key leaves one file holding the later result; a different environment digest leaves two
-  - [ ] `list_fix_qualifications` filters by project; a tampered file raises from `get_` and is skipped (with WARNING via `caplog`) by `list_`
-  - [ ] A record file written before this change still loads
-  - [ ] Success: `tests/metrology/` passes
+- [x] `metrology/models.py`: add `RECORD_TYPE_FIX_QUALIFICATION` and an optional `fix_qualification` field on `MetrologyRecord` (extend the docstring of record types); `schema_version` unchanged
+- [x] `benchmark_store.py`: add `write_fix_qualification(q)` (a newer result under the same id overwrites), `get_fix_qualification(project_id, commit_sha, env_digest)` and `list_fix_qualifications(project_id=None)`. Error mapping is the same as 421's `get_case`: absent → `None`; a tampered or wrong-type file → ERROR log and `MetrologyStoreError`; `list_` skips a mismatching file with a WARNING
+- [x] Tests (extend `tests/metrology/test_benchmark_store.py`)
+  - [x] Write then get is equal; a second write under the same key leaves one file holding the later result; a different environment digest leaves two
+  - [x] `list_fix_qualifications` filters by project; a tampered file raises from `get_` and is skipped (with WARNING via `caplog`) by `list_`
+  - [x] A record file written before this change still loads
+  - [x] Success: `tests/metrology/` passes
 
 **Commit**: `feat: add fix qualification records`
 

@@ -10,11 +10,18 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
-from squadron.metrology.benchmark_models import BenchmarkCase, CaseSet, case_set_record_id
+from squadron.metrology.benchmark_models import (
+    BenchmarkCase,
+    CaseSet,
+    FixQualification,
+    case_set_record_id,
+    fix_qualification_record_id,
+)
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.models import (
     RECORD_TYPE_BENCHMARK_CASE,
     RECORD_TYPE_CASE_SET,
+    RECORD_TYPE_FIX_QUALIFICATION,
     MetrologyRecord,
     ProjectId,
 )
@@ -110,6 +117,44 @@ class BenchmarkRecordStore:
             record.case_set for _, record in self._store.iter_records() if record.case_set is not None
         ]
         return sorted(sets, key=lambda case_set: (case_set.name, case_set.version))
+
+    # ------------------------------------------------------ fix qualifications
+
+    def write_fix_qualification(self, qualification: FixQualification) -> str:
+        """Persist *qualification*; a newer result under the same key replaces the older."""
+        record_id = qualification.record_id
+        self._store.write_record(
+            record_id,
+            MetrologyRecord(
+                schema_version=_SCHEMA_VERSION,
+                record_type=RECORD_TYPE_FIX_QUALIFICATION,
+                fix_qualification=qualification,
+            ),
+        )
+        return record_id
+
+    def get_fix_qualification(
+        self, project_id: ProjectId, commit_sha: str, env_digest: str | None
+    ) -> FixQualification | None:
+        """The stored result for the key, ``None`` when absent; a tampered or foreign file raises."""
+        record_id = fix_qualification_record_id(project_id, commit_sha, env_digest)
+        record = self._load(record_id)
+        if record is None:
+            return None
+        if record.record_type != RECORD_TYPE_FIX_QUALIFICATION or record.fix_qualification is None:
+            _logger.error("record %s is not a fix qualification", record_id)
+            raise MetrologyStoreError(f"Record {record_id} is not a fix qualification")
+        return record.fix_qualification
+
+    def list_fix_qualifications(self, project_id: ProjectId | None = None) -> list[FixQualification]:
+        """Every stored result, of one project when given; unreadable files warn and are skipped."""
+        found = [
+            record.fix_qualification
+            for _, record in self._store.iter_records()
+            if record.fix_qualification is not None
+            and (project_id is None or record.fix_qualification.project_id.value == project_id.value)
+        ]
+        return sorted(found, key=lambda item: item.record_id)
 
     # ---------------------------------------------------------------- helpers
 

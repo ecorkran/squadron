@@ -17,6 +17,7 @@ from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from squadron.metrology.benchmark_environment import EnvironmentIdentity
 from squadron.metrology.project_id import ProjectId
 
 CASE_ID_PREFIX = "case-"
@@ -213,3 +214,126 @@ def case_set_record_id(name: str, version: int) -> str:
     """``caseset-<sha256(name)[:12]>-v<version>``."""
     digest = hashlib.sha256(name.encode("utf-8")).hexdigest()
     return f"{CASE_SET_ID_PREFIX}{digest[:CASE_SET_NAME_HASH_DIGITS]}-v{version}"
+
+
+FIX_QUALIFICATION_ID_PREFIX = "fixqual-"
+FIX_QUALIFICATION_HASH_DIGITS = 12
+FIX_QUALIFICATION_NO_ENVIRONMENT = "pre"
+
+
+class CandidateRejection(StrEnum):
+    """Why a whole fix candidate is not a case (slice 422, Patterns and Conventions)."""
+
+    MERGE_COMMIT = "merge_commit"
+    MULTIPLE_CLOSING_COMMITS = "multiple_closing_commits"
+    MULTIPLE_ISSUES_CLOSED = "multiple_issues_closed"
+    NO_ISSUE_HOST = "no_issue_host"
+    ISSUE_NOT_FOUND = "issue_not_found"
+    REFERENCE_IS_PULL_REQUEST = "reference_is_pull_request"
+    ISSUE_EDITED_AFTER_FIX = "issue_edited_after_fix"
+    NO_FIX_CASE_ADAPTER = "no_fix_case_adapter"
+    NO_TEST_CHANGE = "no_test_change"
+    TEST_DATA_CHANGED = "test_data_changed"
+    MODIFIES_TEST_SUPPORT = "modifies_test_support"
+    CHANGES_LOCKFILE = "changes_lockfile"
+    ENVIRONMENT_UNRESOLVED = "environment_unresolved"
+    COLLECTION_FAILED = "collection_failed"
+    NO_PACKAGING_BOUNDARY = "no_packaging_boundary"
+    BOUNDARY_UNDECIDABLE = "boundary_undecidable"
+    NO_QUALIFYING_HIDDEN_TEST = "no_qualifying_hidden_test"
+
+
+class TestRejection(StrEnum):
+    """Why one hidden test, or one ``excluded_tests`` entry, is not usable."""
+
+    __test__ = False  # pytest: a class named Test* is not a test class
+
+    PASSES_AT_PARENT = "passes_at_parent"
+    USES_SYMBOL_ADDED_BY_FIX = "uses_symbol_added_by_fix"
+    UNDECIDABLE_FAILURE_AT_PARENT = "undecidable_failure_at_parent"
+    REACHES_PAST_BOUNDARY = "reaches_past_boundary"
+    PATCHES_PROJECT_CODE = "patches_project_code"
+    BOUNDARY_UNDECIDABLE = "boundary_undecidable"
+    FLAKY = "flaky"
+    FAILS_AT_REFERENCE = "fails_at_reference"
+
+
+class QualificationOutcome(StrEnum):
+    QUALIFIED = "qualified"
+    REJECTED = "rejected"
+    HARNESS_ERROR = "harness_error"
+
+
+class HiddenTestVerdictKind(StrEnum):
+    QUALIFIED = "qualified"
+    REJECTED = "rejected"
+
+
+class HiddenTestVerdict(BaseModel):
+    """The result for one hidden candidate; ``detail`` names the symbol, target or runs."""
+
+    model_config = ConfigDict(frozen=True)
+
+    node_id: str
+    kind: HiddenTestVerdictKind
+    rejection: TestRejection | None = None
+    detail: str = ""
+
+    @model_validator(mode="after")
+    def _rejection_matches_kind(self) -> Self:
+        rejected = self.kind is HiddenTestVerdictKind.REJECTED
+        if rejected and self.rejection is None:
+            raise ValueError("a rejected verdict needs a rejection")
+        if not rejected and self.rejection is not None:
+            raise ValueError("a qualified verdict cannot carry a rejection")
+        return self
+
+
+def fix_qualification_record_id(project_id: ProjectId, commit_sha: str, env_digest: str | None) -> str:
+    """``fixqual-<sha256(project_id)[:12]>-<commit[:12]>-<env digest[:12] or "pre">``."""
+    project_hash = hashlib.sha256(project_id.value.encode("utf-8")).hexdigest()
+    environment = (
+        FIX_QUALIFICATION_NO_ENVIRONMENT
+        if env_digest is None
+        else env_digest[:FIX_QUALIFICATION_HASH_DIGITS]
+    )
+    return (
+        f"{FIX_QUALIFICATION_ID_PREFIX}{project_hash[:FIX_QUALIFICATION_HASH_DIGITS]}"
+        f"-{commit_sha[:FIX_QUALIFICATION_HASH_DIGITS]}-{environment}"
+    )
+
+
+class FixQualification(BaseModel):
+    """One qualification result for a closing commit (slice 422 D10)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    project_id: ProjectId
+    commit_sha: str
+    parent_sha: str
+    issue_ref: str | None
+    rule_version: int
+    environment: EnvironmentIdentity | None
+    repeats: int
+    outcome: QualificationOutcome
+    case_id: str | None = None
+    rejection: CandidateRejection | None = None
+    detail: str = ""
+    hidden_verdicts: tuple[HiddenTestVerdict, ...] = ()
+    excluded_with_reasons: tuple[tuple[str, TestRejection], ...] = ()
+    created_at: datetime
+
+    @model_validator(mode="after")
+    def _outcome_matches_fields(self) -> Self:
+        qualified = self.outcome is QualificationOutcome.QUALIFIED
+        rejected = self.outcome is QualificationOutcome.REJECTED
+        if qualified != (self.case_id is not None):
+            raise ValueError("case_id is set exactly when the outcome is qualified")
+        if rejected != (self.rejection is not None):
+            raise ValueError("rejection is set exactly when the outcome is rejected")
+        return self
+
+    @property
+    def record_id(self) -> str:
+        digest = None if self.environment is None else self.environment.identity_digest
+        return fix_qualification_record_id(self.project_id, self.commit_sha, digest)

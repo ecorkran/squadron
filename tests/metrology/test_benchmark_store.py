@@ -19,7 +19,7 @@ from squadron.metrology.benchmark_store import BenchmarkRecordStore
 from squadron.metrology.errors import MetrologyStoreError
 from squadron.metrology.project_id import ProjectId, ProjectIdSource
 from squadron.metrology.store import MetrologyStore
-from tests.metrology.test_benchmark_models import NOW
+from tests.metrology.test_benchmark_models import NOW, environment, qualification
 
 
 def project(value: str = "proj") -> ProjectId:
@@ -152,6 +152,88 @@ class TestCaseSets:
         listed = store.list_case_sets()
         assert [(s.name, s.version) for s in listed] == [("alpha", 1), ("alpha", 2), ("zeta", 1)]
         assert case_set_record_id("alpha", 1) != case_set_record_id("zeta", 1)
+
+
+class TestFixQualifications:
+    @staticmethod
+    def digest_of(env_lock: str = "l" * 64) -> str:
+        return environment(env_lock).identity_digest
+
+    def test_write_then_get_returns_equal_record(self, store: BenchmarkRecordStore) -> None:
+        record = qualification()
+        assert store.write_fix_qualification(record) == record.record_id
+        found = store.get_fix_qualification(project(), record.commit_sha, self.digest_of())
+        assert found == record
+
+    def test_absent_key_is_none(self, store: BenchmarkRecordStore) -> None:
+        assert store.get_fix_qualification(project(), "c" * 40, None) is None
+
+    def test_second_write_under_same_key_keeps_one_file_with_later_result(
+        self, store: BenchmarkRecordStore, tmp_path: Path
+    ) -> None:
+        store.write_fix_qualification(qualification(detail="first"))
+        store.write_fix_qualification(qualification(detail="second"))
+        assert len(list(tmp_path.glob("*.json"))) == 1
+        found = store.get_fix_qualification(project(), "c" * 40, self.digest_of())
+        assert found is not None
+        assert found.detail == "second"
+
+    def test_different_environment_digest_leaves_two_records(
+        self, store: BenchmarkRecordStore, tmp_path: Path
+    ) -> None:
+        store.write_fix_qualification(qualification())
+        store.write_fix_qualification(qualification(environment=environment("m" * 64)))
+        assert len(list(tmp_path.glob("*.json"))) == 2
+        assert store.get_fix_qualification(project(), "c" * 40, self.digest_of("m" * 64))
+
+    def test_list_filters_by_project(self, store: BenchmarkRecordStore) -> None:
+        mine = qualification()
+        theirs = qualification(project_id=project("other"))
+        store.write_fix_qualification(mine)
+        store.write_fix_qualification(theirs)
+        assert store.list_fix_qualifications(project()) == [mine]
+        assert store.list_fix_qualifications(project("other")) == [theirs]
+        assert len(store.list_fix_qualifications()) == 2
+
+    def test_tampered_file_raises_on_get_and_warns_on_list(
+        self,
+        store: BenchmarkRecordStore,
+        raw: MetrologyStore,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        record = qualification()
+        store.write_fix_qualification(record)
+        path = raw.record_location(record.record_id)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["fix_qualification"]["outcome"] = "rejected"  # now disagrees with case_id
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(MetrologyStoreError):
+            store.get_fix_qualification(project(), record.commit_sha, self.digest_of())
+        with caplog.at_level("WARNING"):
+            assert store.list_fix_qualifications(project()) == []
+        assert "Skipping unreadable metrology record" in caplog.text
+
+    def test_wrong_type_record_raises_on_get(
+        self, store: BenchmarkRecordStore, raw: MetrologyStore
+    ) -> None:
+        record = qualification()
+        case = make_case()
+        store.write_case(case)
+        # A case envelope planted under the qualification's id is a foreign record.
+        raw.write_record(record.record_id, raw.load_record(case.case_id))
+        with pytest.raises(MetrologyStoreError, match="not a fix qualification"):
+            store.get_fix_qualification(project(), record.commit_sha, self.digest_of())
+
+    def test_record_written_before_this_change_still_loads(
+        self, store: BenchmarkRecordStore, raw: MetrologyStore
+    ) -> None:
+        case = make_case()
+        store.write_case(case)
+        path = raw.record_location(case.case_id)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data.pop("fix_qualification")  # the envelope as 421 wrote it
+        path.write_text(json.dumps(data), encoding="utf-8")
+        assert store.get_case(case.case_id) == case
 
 
 def test_concurrent_writers_never_overwrite_a_version(
