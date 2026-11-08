@@ -7,7 +7,9 @@ loaded; every mutation test edits a fresh copy and compares digests with the bas
 from __future__ import annotations
 
 import ast
+import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -111,7 +113,8 @@ def test_a_run_that_collects_nothing_writes_valid_json_with_empty_items(tmp_path
     run = run_trace_plugin(tree, tmp_path / "out", "collect", ["-k", "no_such_test_anywhere"])
     assert run.returncode == 5
     assert run.output["items"] == []
-    assert run.output["conftest_fixtures"] == []
+    # Defined fixtures are reported even when no test is selected.
+    assert len(run.output["conftest_fixtures"]) == 2
     assert run.output["collection_errors"] == []
 
 
@@ -128,3 +131,73 @@ def test_the_plugin_files_import_only_pytest_the_standard_library_and_each_other
                 imported = [node.module]
             for name in imported:
                 assert name.split(".")[0] in allowed, f"{path.name} imports {name}"
+
+
+# --- Conftest fixtures, collection errors, packaging (Task 13) --------------------
+
+SCALE = ["tests/conftest.py", "scale"]
+WORKDIR = ["tests/conftest.py", "workdir"]
+
+
+def test_each_item_lists_the_conftest_fixtures_it_reaches(tmp_path: Path) -> None:
+    tree = git_tree(FIXTURE, tmp_path)
+    run = run_trace_plugin(tree, tmp_path / "out", "collect")
+    reached = {item["node_id"]: item["fixtures"] for item in run.output["items"]}
+    assert reached[FIXTURE_USER] == [SCALE]
+    assert reached["tests/test_reach.py::test_workdir_fixture"] == [WORKDIR]
+    assert reached[DIRECT] == []
+    assert reached[UNRELATED] == []
+
+
+def test_every_defined_conftest_fixture_is_reported_by_path_and_name(tmp_path: Path) -> None:
+    tree = git_tree(FIXTURE, tmp_path)
+    run = run_trace_plugin(tree, tmp_path / "out", "collect")
+    assert run.output["conftest_fixtures"] == [SCALE, WORKDIR]
+
+
+def test_a_conftest_fixture_no_test_reaches_is_still_defined(tmp_path: Path) -> None:
+    tree = git_tree(FIXTURE, tmp_path)
+    conftest = tree / "tests" / "conftest.py"
+    conftest.write_text(
+        conftest.read_text(encoding="utf-8") + "\n\n@pytest.fixture\ndef orphan():\n    return 1\n",
+        encoding="utf-8",
+    )
+    run = run_trace_plugin(tree, tmp_path / "out", "collect")
+    assert ["tests/conftest.py", "orphan"] in run.output["conftest_fixtures"]
+    assert all(["tests/conftest.py", "orphan"] not in item["fixtures"] for item in run.output["items"])
+
+
+@pytest.mark.parametrize(
+    ("name", "text"),
+    [
+        ("test_syntax.py", "def test_broken(:\n    pass\n"),
+        ("test_import.py", "import module_that_does_not_exist_anywhere\n\n\ndef test_x():\n    pass\n"),
+    ],
+)
+def test_a_test_file_that_fails_collection_is_reported_with_its_file(
+    tmp_path: Path, name: str, text: str
+) -> None:
+    tree = git_tree(FIXTURE, tmp_path)
+    (tree / "tests" / name).write_text(text, encoding="utf-8")
+    run = run_trace_plugin(tree, tmp_path / "out", "collect")
+    errors = run.output["collection_errors"]
+    assert [error["file"] for error in errors] == [f"tests/{name}"]
+    assert errors[0]["message"]
+    # Files that did collect are still reported.
+    assert DIRECT in {item["node_id"] for item in run.output["items"]}
+
+
+@pytest.mark.network
+def test_the_built_wheel_ships_the_trace_plugin(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(tmp_path)],
+        cwd=repo_root,
+        check=True,
+        capture_output=True,
+    )
+    wheel = next(tmp_path.glob("*.whl"))
+    with zipfile.ZipFile(wheel) as archive:
+        shipped = set(archive.namelist())
+    for module in sorted(path.name for path in trace_plugin_dir().glob("*.py")):
+        assert f"squadron/benchmark/pytest_trace/{module}" in shipped

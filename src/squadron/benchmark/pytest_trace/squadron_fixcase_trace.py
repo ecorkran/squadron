@@ -15,6 +15,7 @@ proves the plugin loaded; the result JSON is written when the session reaches it
 
 from __future__ import annotations
 
+import inspect
 import json
 import os
 from pathlib import Path
@@ -51,29 +52,73 @@ def _write_output(result: dict[str, Any]) -> None:
     Path(_config["output"]).write_text(json.dumps(result), encoding="utf-8")
 
 
-def _fixture_functions(item: pytest.Function) -> list[Any]:
-    """The fixture functions pytest resolved for ``item``: the nearest definition of each."""
+CONFTEST_NAME = "conftest.py"
+_collection_errors: list[dict[str, str]] = []
+
+
+def _active_fixtures(item: pytest.Function) -> list[Any]:
+    """The fixture definitions pytest resolved for ``item``: the nearest definition of each name."""
     definitions = item._fixtureinfo.name2fixturedefs  # pyright: ignore[reportPrivateUsage]
-    return [chain[-1].func for chain in definitions.values() if chain]
+    return [chain[-1] for chain in definitions.values() if chain]
 
 
-def _digest(item: pytest.Item) -> str:
+def _conftest_reference(fixturedef: Any) -> list[str] | None:
+    """``[conftest path, fixture name]`` when the fixture is defined in a test-side conftest."""
+    if _closures is None:
+        raise RuntimeError("squadron_fixcase_trace asked about fixtures before pytest_configure ran")
+    func = inspect.unwrap(fixturedef.func)
+    try:
+        source_file = inspect.getsourcefile(func)
+    except TypeError:
+        return None
+    relative = _closures.relative_file(source_file)
+    if relative is None or Path(relative).name != CONFTEST_NAME:
+        return None
+    return [relative, str(fixturedef.argname)]
+
+
+def _digest(item: pytest.Function) -> str:
     if _closures is None:
         raise RuntimeError("squadron_fixcase_trace digested before pytest_configure ran")
-    if isinstance(item, pytest.Function):
-        # item.obj is the function, or the bound method for a test in a class.
-        return _closures.digest(item.obj, _fixture_functions(item))
-    raise RuntimeError(f"cannot digest {item.nodeid}: {type(item).__name__} is not a function item")
+    # item.obj is the function, or the bound method for a test in a class.
+    return _closures.digest(item.obj, [definition.func for definition in _active_fixtures(item)])
 
 
-def _collect_result(items: list[pytest.Item]) -> dict[str, Any]:
+def _item_record(item: pytest.Item) -> dict[str, Any]:
+    if not isinstance(item, pytest.Function):
+        raise RuntimeError(f"cannot digest {item.nodeid}: {type(item).__name__} is not a function item")
+    reached = [_conftest_reference(definition) for definition in _active_fixtures(item)]
     return {
-        "items": [{"node_id": item.nodeid, "digest": _digest(item), "fixtures": []} for item in items],
-        "conftest_fixtures": [],
-        "collection_errors": [],
+        "node_id": item.nodeid,
+        "digest": _digest(item),
+        "fixtures": sorted(reference for reference in reached if reference is not None),
     }
 
 
-def pytest_collection_finish(session: pytest.Session) -> None:
-    if _config is not None and _config["mode"] == MODE_COLLECT:
-        _write_output(_collect_result(session.items))
+def _defined_conftest_fixtures(session: pytest.Session) -> list[list[str]]:
+    """Every conftest fixture defined for the session, whether or not a test reaches it."""
+    manager = session._fixturemanager  # pyright: ignore[reportPrivateUsage]
+    found: set[tuple[str, str]] = set()
+    for chain in manager._arg2fixturedefs.values():  # pyright: ignore[reportPrivateUsage]
+        for definition in chain:
+            reference = _conftest_reference(definition)
+            if reference is not None:
+                found.add((reference[0], reference[1]))
+    return [list(pair) for pair in sorted(found)]
+
+
+def pytest_collectreport(report: pytest.CollectReport) -> None:
+    if report.failed:
+        _collection_errors.append({"file": report.nodeid, "message": str(report.longrepr)})
+
+
+def pytest_sessionfinish(session: pytest.Session) -> None:
+    if _config is None or _config["mode"] != MODE_COLLECT:
+        return
+    _write_output(
+        {
+            "items": [_item_record(item) for item in session.items],
+            "conftest_fixtures": _defined_conftest_fixtures(session),
+            "collection_errors": _collection_errors,
+        }
+    )

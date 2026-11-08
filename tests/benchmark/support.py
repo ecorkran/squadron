@@ -208,7 +208,7 @@ def run_trace_plugin(
     ``test_side_files`` defaults to every tracked ``.py`` file under ``tests/``.
     """
     if test_side_files is None:
-        listing = hermetic_git(tree, "ls-files", "tests")
+        listing = hermetic_git(tree, "ls-files", "--cached", "--others", "--exclude-standard", "tests")
         test_side_files = [line for line in listing.splitlines() if line.endswith(".py")]
     work_dir.mkdir(parents=True, exist_ok=True)
     output = work_dir / "trace_output.json"

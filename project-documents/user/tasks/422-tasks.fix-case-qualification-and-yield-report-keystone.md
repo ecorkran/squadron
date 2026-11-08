@@ -173,12 +173,14 @@ The plugin is two files in `pytest_trace/` (entry plus `squadron_fixcase_closure
 **Commit**: `feat: add trace plugin node ids and closure digests`
 
 ### Task 13: Trace plugin, collect mode: conftest fixtures, collection errors, packaging (D3)
-- [ ] Fill `fixtures` (the conftest fixtures each item reaches, by path and name) and `conftest_fixtures` (every conftest fixture defined). Add a `pytest_collectreport` hook that writes each failed collection to `collection_errors` with its file and message
-- [ ] Packaging: locate the plugin directory at runtime with `importlib.resources` or `Path(__file__)`; confirm with `uv build` and `unzip -l` that the wheel ships it, adding a `pyproject.toml` include if hatch omits it
-- [ ] Tests (extend `tests/benchmark/test_trace_collect.py`)
-  - [ ] Conftest fixtures reached by an item and all conftest fixtures defined are reported by path and name
-  - [ ] A test-side file that fails to import appears in `collection_errors` with its file
-  - [ ] The wheel-content check passes
+- [x] Fill `fixtures` (the conftest fixtures each item reaches, by path and name) and `conftest_fixtures` (every conftest fixture defined). Add a `pytest_collectreport` hook that writes each failed collection to `collection_errors` with its file and message
+- [x] Packaging: locate the plugin directory at runtime with `importlib.resources` or `Path(__file__)`; confirm with `uv build` and `unzip -l` that the wheel ships it, adding a `pyproject.toml` include if hatch omits it
+- [x] Tests (extend `tests/benchmark/test_trace_collect.py`)
+  - [x] Conftest fixtures reached by an item and all conftest fixtures defined are reported by path and name
+  - [x] A test-side file that fails to import appears in `collection_errors` with its file
+  - [x] The wheel-content check passes
+
+No pyproject include was needed: hatch's `packages = ["src/squadron"]` already ships the plugin files, which the wheel-content test checks. Output is written in `pytest_sessionfinish` so collection errors still produce a result.
 
 **Commit**: `feat: report conftest fixtures and collection errors from the trace plugin`
 
