@@ -145,8 +145,8 @@ Added `IssueTooLargeError` (page bound raises) and updated the error-class count
 **Commit**: `feat: classify fix diffs and define the fix-case adapter seam`
 
 ### Task 10: Test sets (D3)
-- [ ] `src/squadron/benchmark/test_sets.py`: pure `sort_tests(parent: CollectedTests, reference: CollectedTests) -> TestSets` giving `hidden_candidates`, `superseded`, `unchanged`, and `hidden_fixtures` (a conftest fixture present at the reference, absent at the parent, reached by some hidden candidate's closure, as 421's `ConftestFixture`). Sorting rules are D3's four cases exactly; outputs are sorted tuples
-- [ ] Tests `tests/benchmark/test_test_sets.py` on synthetic `CollectedTests` pairs: one shaped like the success-criteria fix (adds one test to an existing file, changes one test, deletes one test, adds one conftest fixture) produces exactly those entries; an added fixture no hidden test reaches is not hidden; a changed test is in both hidden and superseded; equal digests are unchanged
+- [x] `src/squadron/benchmark/test_sets.py`: pure `sort_tests(parent: CollectedTests, reference: CollectedTests) -> TestSets` giving `hidden_candidates`, `superseded`, `unchanged`, and `hidden_fixtures` (a conftest fixture present at the reference, absent at the parent, reached by some hidden candidate's closure, as 421's `ConftestFixture`). Sorting rules are D3's four cases exactly; outputs are sorted tuples
+- [x] Tests `tests/benchmark/test_test_sets.py` on synthetic `CollectedTests` pairs: one shaped like the success-criteria fix (adds one test to an existing file, changes one test, deletes one test, adds one conftest fixture) produces exactly those entries; an added fixture no hidden test reaches is not hidden; a changed test is in both hidden and superseded; equal digests are unchanged
 
 **Commit**: `feat: sort tests into hidden and superseded sets`
 
