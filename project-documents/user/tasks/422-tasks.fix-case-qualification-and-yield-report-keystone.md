@@ -212,14 +212,16 @@ Two changes beyond the task text: `BenchmarkSandbox.context()` is a new public a
 **Commit**: `feat: add file states, overlay and grader commands`
 
 ### Task 16: Test-first check (D5)
-- [ ] `src/squadron/benchmark/test_first.py`: `judge_parent_result(result: NodeResult) -> TestRejection | None` as an ordered rule list over `NodeOutcome` and `FailureKind`, first match wins:
+- [x] `src/squadron/benchmark/test_first.py`: `judge_parent_result(result: NodeResult) -> TestRejection | None` as an ordered rule list over `NodeOutcome` and `FailureKind`, first match wins:
   1. kind `collection_error` or `missing_symbol`, whatever the outcome → `uses_symbol_added_by_fix`
   2. outcome `error` (a setup or teardown failure) → `undecidable_failure_at_parent`
   3. outcome `passed` → `passes_at_parent`
   4. outcome `failed` with kind `assertion_failure` or `project_exception` → holds (`None`)
   5. anything else (`failed` with `other_exception`, `skipped`, `xfailed`, `xpassed`, `not_run`) → `undecidable_failure_at_parent`
-- [ ] `run_test_first(adapter, ctx, node_ids, repeats)`: runs `run_suite(nodes(ids))` `repeats` times and returns per-node verdict plus per-run outcome and failure kind in `detail`. A node whose verdict differs across runs is `flaky`. A timeout or `SuiteRunError` raises `HarnessFailure` carrying the detail
-- [ ] Tests `tests/benchmark/test_test_first.py`: every reachable `(outcome, kind)` pair, including `error` with `collection_error` and with `missing_symbol` (rule 1) and `error` with `assertion_failure` (rule 2); a new `NodeOutcome` or `FailureKind` value fails a test until the rules are reviewed; a scripted flaky sequence → `flaky`; scripted timeout and `SuiteRunError` each raise `HarnessFailure` with the detail and log at ERROR. Create the scenario `test_first` (the reference adds one test that calls a symbol the fix added, and one test whose assertion fails against the parent's behavior), then on its parent plus overlay in a real sandbox (`network` marker): the first gives `uses_symbol_added_by_fix`, the second holds
+- [x] `run_test_first(adapter, ctx, node_ids, repeats)`: runs `run_suite(nodes(ids))` `repeats` times and returns per-node verdict plus per-run outcome and failure kind in `detail`. A node whose verdict differs across runs is `flaky`. A timeout or `SuiteRunError` raises `HarnessFailure` carrying the detail
+- [x] Tests `tests/benchmark/test_test_first.py`: every reachable `(outcome, kind)` pair, including `error` with `collection_error` and with `missing_symbol` (rule 1) and `error` with `assertion_failure` (rule 2); a new `NodeOutcome` or `FailureKind` value fails a test until the rules are reviewed; a scripted flaky sequence → `flaky`; scripted timeout and `SuiteRunError` each raise `HarnessFailure` with the detail and log at ERROR. Create the scenario `test_first` (the reference adds one test that calls a symbol the fix added, and one test whose assertion fails against the parent's behavior), then on its parent plus overlay in a real sandbox (`network` marker): the first gives `uses_symbol_added_by_fix`, the second holds
+
+`run_test_first` runs each test file separately in every repeat: requested together, 421's suite runner reports nothing for the other files when one file fails to import, and those nodes would read as collection errors (a wrong `uses_symbol_added_by_fix`). Recorded for the DEVLOG as a finding about 421's runner. The scenario adds three tests: an attribute call, a module-level import and an assertion.
 
 **Commit**: `feat: add test-first check for hidden tests`
 

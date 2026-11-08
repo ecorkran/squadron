@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from squadron.benchmark.adapter import SandboxContext
 from squadron.core.process_runner import ProcessResult
 
 
@@ -233,3 +234,15 @@ def run_trace_plugin(
     )
     parsed: dict[str, Any] = json.loads(output.read_text(encoding="utf-8"))
     return TracePluginRun(output=parsed, returncode=result.returncode, stderr=result.stderr)
+
+
+def bare_context(tree: Path, *, suite_timeout_s: float = 1) -> SandboxContext:
+    """A ``SandboxContext`` for code that only reads ``tree`` or hands ``ctx`` to a fake."""
+    return SandboxContext(
+        tree=tree,
+        output_dir=tree,
+        env=None,  # type: ignore[arg-type]
+        runner=ScriptedRunner(lambda call: ok(call.argv)),
+        install_timeout_s=1,
+        suite_timeout_s=suite_timeout_s,
+    )
