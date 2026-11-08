@@ -10,17 +10,27 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
-import shutil
 import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from squadron.benchmark.adapter import SandboxContext
-from squadron.benchmark.fairness import CollectedTests, CollectionFailed, HarnessFailure
+from squadron.benchmark.fairness import (
+    AllowedBoundary,
+    CollectedTests,
+    CollectionFailed,
+    HarnessFailure,
+)
 from squadron.benchmark.python_adapter import LOCKFILE_NAME
+from squadron.benchmark.python_boundary import resolve_boundary
 from squadron.benchmark.python_failure import venv_bin
-from squadron.benchmark.python_tree_files import PYPROJECT_NAME, grader_commands_for, overlay_files
+from squadron.benchmark.python_tree_files import (
+    PYPROJECT_NAME,
+    copy_trace_plugin,
+    grader_commands_for,
+    overlay_files,
+)
 from squadron.core.process_runner import ProcessNotFoundError, ProcessTimedOutError
 from squadron.metrology.benchmark_models import ConftestFixture, GraderCommand
 from squadron.metrology.snapshot_models import SourceLanguage
@@ -30,7 +40,6 @@ _logger = logging.getLogger(__name__)
 TRACE_MODULE = "squadron_fixcase_trace"
 TRACE_CONFIG_ENV = "SQUADRON_FIXCASE_TRACE_CONFIG"
 MODE_COLLECT = "collect"
-PLUGIN_SUBDIR = "fixcase_plugin"
 CONFIG_FILE = "fixcase_trace_config.json"
 OUTPUT_FILE = "fixcase_trace_output.json"
 GIT_QUERY_TIMEOUT_S = 60
@@ -39,11 +48,6 @@ GIT_QUERY_TIMEOUT_S = 60
 _COLLECT_EXIT_CODES = (0, 2, 5)
 _DEFAULT_TEST_DIRS = ("tests", "test")
 _DEFAULT_TEST_FILE_PATTERNS = ("test_*.py", "*_test.py", "conftest.py")
-
-
-def trace_plugin_dir() -> Path:
-    """The directory holding the trace plugin, located from this file, never the cwd."""
-    return Path(__file__).parent / "pytest_trace"
 
 
 def _harness_failure(detail: str) -> HarnessFailure:
@@ -105,6 +109,10 @@ class PythonFixCaseAdapter:
     def grader_commands(self, tree: Path) -> tuple[GraderCommand, ...]:
         return grader_commands_for(tree)
 
+    def boundary(self, ctx: SandboxContext) -> AllowedBoundary:
+        """The packaging boundary at the tree's current state (raises ``BoundaryUndecidable``)."""
+        return resolve_boundary(ctx)
+
     def collect(self, ctx: SandboxContext) -> CollectedTests:
         """Node ids, closure digests and conftest fixtures at the tree's current file state.
 
@@ -140,13 +148,7 @@ class PythonFixCaseAdapter:
 
     def _run_plugin(self, ctx: SandboxContext, mode: str, pytest_args: Sequence[str]) -> dict[str, Any]:
         """Run pytest in the sandbox with the trace plugin and return its parsed output."""
-        plugin_dir = ctx.output_dir / PLUGIN_SUBDIR
-        shutil.copytree(
-            trace_plugin_dir(),
-            plugin_dir,
-            dirs_exist_ok=True,
-            ignore=shutil.ignore_patterns("__pycache__"),
-        )
+        plugin_dir = copy_trace_plugin(ctx)
         config = ctx.output_dir / CONFIG_FILE
         output = ctx.output_dir / OUTPUT_FILE
         config.write_text(

@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import tomllib
 from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 
+from squadron.benchmark.adapter import SandboxContext
 from squadron.benchmark.fairness import HarnessFailure
 from squadron.metrology.benchmark_models import GraderCommand, GraderCommandKind
 
@@ -20,6 +22,7 @@ PYPROJECT_NAME = "pyproject.toml"
 SUITE_ARGV = ("python", "-m", "pytest")
 LINT_ARGV = ("ruff", "check")
 TYPECHECK_ARGV = ("pyright",)
+PLUGIN_SUBDIR = "fixcase_plugin"
 _RUFF_CONFIG_FILE = "ruff.toml"
 _PYRIGHT_CONFIG_FILE = "pyrightconfig.json"
 
@@ -91,3 +94,17 @@ def grader_commands_for(tree: Path) -> tuple[GraderCommand, ...]:
     if "pyright" in tools or (tree / _PYRIGHT_CONFIG_FILE).is_file():
         commands.append(GraderCommand(kind=GraderCommandKind.TYPECHECK, argv=TYPECHECK_ARGV))
     return tuple(commands)
+
+
+def trace_plugin_dir() -> Path:
+    """The directory holding the trace plugin, located from this file, never the cwd."""
+    return Path(__file__).parent / "pytest_trace"
+
+
+def copy_trace_plugin(ctx: SandboxContext) -> Path:
+    """Copy the plugin directory next to the sandbox (never into the tree) and return the copy."""
+    plugin_dir = ctx.output_dir / PLUGIN_SUBDIR
+    shutil.copytree(
+        trace_plugin_dir(), plugin_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__")
+    )
+    return plugin_dir
