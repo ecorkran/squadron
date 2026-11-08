@@ -150,6 +150,14 @@ def get_positive_int_config(key: str, cwd: str = ".") -> int:
     return value
 
 
+def get_open_unit_interval_config(key: str, cwd: str = ".") -> float:
+    """Get a float config value that must be in ``(0, 1)``; raise ``ValueError`` naming *key*."""
+    value = get_typed_config(key, float, cwd=cwd)
+    if not 0 < value < 1:
+        raise ValueError(f"{key} must be greater than 0 and less than 1, got {value!r}")
+    return value
+
+
 def set_config(
     key: str,
     value: str,

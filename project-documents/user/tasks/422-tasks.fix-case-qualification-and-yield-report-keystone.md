@@ -9,8 +9,8 @@ dependencies:
 projectState: v0.24.23 released, main is the target (git.integration_branch unset).
   Slice 421 tasks written, not implemented. Slice 422 design written.
 dateCreated: 20261106
-dateUpdated: 20261106
-status: not_started
+dateUpdated: 20261107
+status: in_progress
 turns: 23
 promptTokens: 1290204
 cachedTokens: 1184813
@@ -47,16 +47,16 @@ usageByModel:
 ## Tasks
 
 ### Task 1: Create the slice branch
-- [ ] Run `cf config get git.integration_branch`; the target is its value, or `main` when empty
-- [ ] `git checkout -b 422-slice.fix-case-qualification-and-yield-report-keystone <target>` (or switch to it if it exists)
-  - [ ] Success: `git branch --show-current` prints the slice branch
-- [ ] Confirm slice 421 is implemented: `grep -c '^\s*- \[ \]' project-documents/user/tasks/421-tasks.benchmark-sandbox-and-case-record.md` prints `0` and `src/squadron/benchmark/registry.py` exists. If not, write `BLOCKED: slice 421 is not implemented` under this task, leave it unchecked, and stop
+- [x] Run `cf config get git.integration_branch`; the target is its value, or `main` when empty
+- [x] `git checkout -b 422-slice.fix-case-qualification-and-yield-report-keystone <target>` (or switch to it if it exists)
+  - [x] Success: `git branch --show-current` prints the slice branch
+- [x] Confirm slice 421 is implemented: `grep -c '^\s*- \[ \]' project-documents/user/tasks/421-tasks.benchmark-sandbox-and-case-record.md` prints `0` and `src/squadron/benchmark/registry.py` exists. If not, write `BLOCKED: slice 421 is not implemented` under this task, leave it unchecked, and stop
 
 ### Task 2: Config keys (D9, D12)
-- [ ] In `src/squadron/config/keys.py` add keys beside 421's benchmark keys, each with a constant, a `CONFIG_KEYS` entry, a description and a default: `benchmark.qualification_repeats` (int, 3), `benchmark.planned_samples` (int, 3), `benchmark.target_pass_rate_difference` (float, 0.20). Read the ints through `get_positive_int_config` and the float through `get_typed_config(..., float)`
-  - [ ] A float key with a value `<= 0` or `>= 1` fails loudly where it is read; add that check in one reader function, not at each caller
-- [ ] Tests (`tests/benchmark/test_config_keys.py`, extend 421's): defaults, overrides, and rejection of a zero repeat count and an out-of-range difference
-  - [ ] Success: tests pass
+- [x] In `src/squadron/config/keys.py` add keys beside 421's benchmark keys, each with a constant, a `CONFIG_KEYS` entry, a description and a default: `benchmark.qualification_repeats` (int, 3), `benchmark.planned_samples` (int, 3), `benchmark.target_pass_rate_difference` (float, 0.20). Read the ints through `get_positive_int_config` and the float through `get_typed_config(..., float)`
+  - [x] A float key with a value `<= 0` or `>= 1` fails loudly where it is read; add that check in one reader function, not at each caller
+- [x] Tests (`tests/benchmark/test_config_keys.py`, extend 421's): defaults, overrides, and rejection of a zero repeat count and an out-of-range difference
+  - [x] Success: tests pass
 
 **Commit**: `feat: add benchmark qualification config keys`
 
