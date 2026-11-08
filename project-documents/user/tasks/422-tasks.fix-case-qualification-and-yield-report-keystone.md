@@ -162,11 +162,13 @@ Added `IssueTooLargeError` (page bound raises) and updated the error-class count
 **Commit**: `test: add fixfair fixture project and history helper`
 
 ### Task 12: Trace plugin, collect mode: node ids and closure digests (D3)
-- [ ] `src/squadron/benchmark/pytest_trace/squadron_fixcase_trace.py`: configuration and output as the Context Summary pins. This task fills `items` with `node_id` and `digest` and writes `fixtures`, `conftest_fixtures` and `collection_errors` as empty lists (Task 13 fills them). Collect mode implements `pytest_collection_finish`. For each item it writes the node id and the closure digest: sha256 over the test source (decorators and parametrize ids included) plus every test-side definition reached (fixtures from pytest's resolved definitions; module-level functions, classes and constants named in `co_names` of the test and fixtures, recursively within test-side files only). Test-side is membership in `test_side_files`
-- [ ] Tests `tests/benchmark/test_trace_collect.py`: run the harness's pytest with `-p squadron_fixcase_trace` and the config JSON on a `git_tree` copy of the fixture (no venv)
-  - [ ] Digest changes when the test body changes, when a fixture it uses changes, when a helper it calls (two levels deep) changes, and when its parametrize ids change; it does not change when an unrelated test changes
-  - [ ] A parametrized id with brackets round-trips exactly; a run that collects nothing writes valid JSON with empty `items`
-  - [ ] The plugin file imports only `pytest` and the standard library (assert by AST)
+- [x] `src/squadron/benchmark/pytest_trace/squadron_fixcase_trace.py`: configuration and output as the Context Summary pins. This task fills `items` with `node_id` and `digest` and writes `fixtures`, `conftest_fixtures` and `collection_errors` as empty lists (Task 13 fills them). Collect mode implements `pytest_collection_finish`. For each item it writes the node id and the closure digest: sha256 over the test source (decorators and parametrize ids included) plus every test-side definition reached (fixtures from pytest's resolved definitions; module-level functions, classes and constants named in `co_names` of the test and fixtures, recursively within test-side files only). Test-side is membership in `test_side_files`
+- [x] Tests `tests/benchmark/test_trace_collect.py`: run the harness's pytest with `-p squadron_fixcase_trace` and the config JSON on a `git_tree` copy of the fixture (no venv)
+  - [x] Digest changes when the test body changes, when a fixture it uses changes, when a helper it calls (two levels deep) changes, and when its parametrize ids change; it does not change when an unrelated test changes
+  - [x] A parametrized id with brackets round-trips exactly; a run that collects nothing writes valid JSON with empty `items`
+  - [x] The plugin file imports only `pytest` and the standard library (assert by AST)
+
+The plugin is two files in `pytest_trace/` (entry plus `squadron_fixcase_closure.py`), so the AST check allows imports of pytest, the standard library and sibling plugin files; pyproject.toml gained a pyright `executionEnvironments` entry so pyright resolves the bare sibling import.
 
 **Commit**: `feat: add trace plugin node ids and closure digests`
 

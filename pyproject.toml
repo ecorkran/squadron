@@ -104,6 +104,12 @@ pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingImports = true
 reportMissingTypeStubs = false
+# The trace plugin directory is copied into a sandbox and put on PYTHONPATH, so its modules
+# import one another by bare name; this environment makes pyright resolve them the same way.
+executionEnvironments = [
+    { root = "src/squadron/benchmark/pytest_trace", extraPaths = ["src/squadron/benchmark/pytest_trace"] },
+    { root = "." },
+]
 
 [dependency-groups]
 dev = [

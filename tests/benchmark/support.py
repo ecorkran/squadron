@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from squadron.core.process_runner import ProcessResult
 
@@ -173,3 +176,60 @@ def fix_history(fixture: str, scenario: str, tmp_path: Path) -> FixHistory:
     hermetic_git(repo, "add", "-A")
     hermetic_git(repo, "commit", "-q", "-m", f"fix: apply {scenario}", "-m", FIX_COMMIT_BODY)
     return FixHistory(repo=repo, parent_sha=parent_sha, fix_sha=hermetic_git(repo, "rev-parse", "HEAD"))
+
+
+TRACE_CONFIG_ENV = "SQUADRON_FIXCASE_TRACE_CONFIG"
+
+
+@dataclass(frozen=True)
+class TracePluginRun:
+    """One pytest run with the trace plugin loaded."""
+
+    output: dict[str, Any]
+    returncode: int
+    stderr: str
+
+
+def trace_plugin_dir() -> Path:
+    import squadron.benchmark as benchmark_package
+
+    return Path(benchmark_package.__file__).parent / "pytest_trace"
+
+
+def run_trace_plugin(
+    tree: Path,
+    work_dir: Path,
+    mode: str,
+    pytest_args: Sequence[str] = (),
+    test_side_files: Sequence[str] | None = None,
+) -> TracePluginRun:
+    """Run the harness's pytest over ``tree`` (no venv) with the trace plugin and read its output.
+
+    ``test_side_files`` defaults to every tracked ``.py`` file under ``tests/``.
+    """
+    if test_side_files is None:
+        listing = hermetic_git(tree, "ls-files", "tests")
+        test_side_files = [line for line in listing.splitlines() if line.endswith(".py")]
+    work_dir.mkdir(parents=True, exist_ok=True)
+    output = work_dir / "trace_output.json"
+    config = work_dir / "trace_config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "mode": mode,
+                "tree": str(tree),
+                "test_side_files": list(test_side_files),
+                "output": str(output),
+            }
+        ),
+        encoding="utf-8",
+    )
+    env = {**os.environ, "PYTHONPATH": str(trace_plugin_dir()), TRACE_CONFIG_ENV: str(config)}
+    argv = [sys.executable, "-m", "pytest", "-p", "squadron_fixcase_trace", "-p", "no:cacheprovider"]
+    if mode == "collect":
+        argv += ["--collect-only", "-q"]
+    result = subprocess.run(
+        [*argv, *pytest_args], cwd=tree, env=env, capture_output=True, text=True, check=False
+    )
+    parsed: dict[str, Any] = json.loads(output.read_text(encoding="utf-8"))
+    return TracePluginRun(output=parsed, returncode=result.returncode, stderr=result.stderr)
