@@ -130,15 +130,17 @@ Added `IssueTooLargeError` (page bound raises) and updated the error-class count
 **Commit**: `feat: resolve issue repositories for fix candidates`
 
 ### Task 9: Fairness types, adapter protocol, diff classification (D1, D3, D4, D6, D10, API Contracts)
-- [ ] `src/squadron/benchmark/fairness.py`: `FAIRNESS_RULE_VERSION = 1` with a comment that it is bumped whenever any check changes; frozen `CollectedTests` (node id → closure digest; conftest fixtures reached per node; every conftest fixture defined, by path and name); `AllowedBoundary` (entries as `(module, qualname)`); `FairnessVerdict` (rejection `TestRejection | None`, detail); errors `BoundaryUndecidable`, `CollectionFailed` (names the file) and `HarnessFailure` (carries the detail; a harness failure is never a test verdict); the `FixCaseAdapter` protocol as in the design's API Contracts with the Context Summary changes: `is_test_side(pyproject_text: str | None, path)`, `lockfile_names()`, `is_test_source(path)`, `trace(ctx, node_ids, allowed)`
-- [ ] `src/squadron/benchmark/diff_classify.py`: `classify_diff(changes, adapter, parent_pyproject, read_parent, read_reference) -> DiffClassification | CandidateRejection`; `DiffClassification` holds `added`, `changed`, `deleted` and `test_side` path tuples. `changes` come from `git diff --name-status parent..commit` (renames and copies parse as delete plus add; handle quoted paths leniently)
-  - [ ] No test-side file in the diff → `no_test_change`
-  - [ ] A test-side file that is not test source (`adapter.is_test_source` false) → `test_data_changed`
-  - [ ] A diff path in `adapter.lockfile_names()` → `changes_lockfile`
-  - [ ] A changed or deleted `conftest.py` → `modifies_test_support` unless every difference is an added top-level `pytest.fixture` function or an added import (D3). An added plain function, class or constant, and any changed or removed definition, are rejected. Compare with `ast`; an unparsable conftest at either side is `modifies_test_support` with the syntax error in `detail`
-  - [ ] Precedence is the order above
-- [ ] Tests `tests/benchmark/test_diff_classify.py` with synthetic changes, a stub adapter and conftest text: one case per reason, a conftest that only adds a fixture and an import passing, a conftest whose existing fixture body changes failing, a conftest that adds a plain helper function failing, a rename
-  - [ ] Success: tests pass; `pyright` is clean on the protocol
+- [x] `src/squadron/benchmark/fairness.py`: `FAIRNESS_RULE_VERSION = 1` with a comment that it is bumped whenever any check changes; frozen `CollectedTests` (node id → closure digest; conftest fixtures reached per node; every conftest fixture defined, by path and name); `AllowedBoundary` (entries as `(module, qualname)`); `FairnessVerdict` (rejection `TestRejection | None`, detail); errors `BoundaryUndecidable`, `CollectionFailed` (names the file) and `HarnessFailure` (carries the detail; a harness failure is never a test verdict); the `FixCaseAdapter` protocol as in the design's API Contracts with the Context Summary changes: `is_test_side(pyproject_text: str | None, path)`, `lockfile_names()`, `is_test_source(path)`, `trace(ctx, node_ids, allowed)`
+- [x] `src/squadron/benchmark/diff_classify.py`: `classify_diff(changes, adapter, parent_pyproject, read_parent, read_reference) -> DiffClassification | CandidateRejection`; `DiffClassification` holds `added`, `changed`, `deleted` and `test_side` path tuples. `changes` come from `git diff --name-status parent..commit` (renames and copies parse as delete plus add; handle quoted paths leniently)
+  - [x] No test-side file in the diff → `no_test_change`
+  - [x] A test-side file that is not test source (`adapter.is_test_source` false) → `test_data_changed`
+  - [x] A diff path in `adapter.lockfile_names()` → `changes_lockfile`
+  - [x] A changed or deleted `conftest.py` → `modifies_test_support` unless every difference is an added top-level `pytest.fixture` function or an added import (D3). An added plain function, class or constant, and any changed or removed definition, are rejected. Compare with `ast`; an unparsable conftest at either side is `modifies_test_support` with the syntax error in `detail`
+  - [x] Precedence is the order above
+- [x] Tests `tests/benchmark/test_diff_classify.py` with synthetic changes, a stub adapter and conftest text: one case per reason, a conftest that only adds a fixture and an import passing, a conftest whose existing fixture body changes failing, a conftest that adds a plain helper function failing, a rename
+  - [x] Success: tests pass; `pyright` is clean on the protocol
+
+`classify_diff` returns `DiffClassification | DiffRejection` (rejection plus detail) rather than a bare `CandidateRejection`, so the conftest reason reaches the record; it takes the narrower `DiffAdapter` protocol that `FixCaseAdapter` satisfies; a copy parses as an add only because its source stays.
 
 **Commit**: `feat: classify fix diffs and define the fix-case adapter seam`
 
