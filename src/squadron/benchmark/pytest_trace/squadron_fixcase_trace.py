@@ -19,11 +19,14 @@ import ast
 import inspect
 import json
 import os
+import types
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
 import pytest
 import squadron_fixcase_closure
+import squadron_fixcase_crossings
 
 CONFIG_PATH_ENV = "SQUADRON_FIXCASE_TRACE_CONFIG"
 MODE_COLLECT = "collect"
@@ -31,10 +34,11 @@ MODE_TRACE = "trace"
 
 _config: dict[str, Any] | None = None
 _closures: squadron_fixcase_closure.ClosureBuilder | None = None
+_recorder: squadron_fixcase_crossings.CrossingRecorder | None = None
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    global _config, _closures
+    global _config, _closures, _recorder
     path = os.environ.get(CONFIG_PATH_ENV)
     if not path:
         raise pytest.UsageError(f"{CONFIG_PATH_ENV} is not set")
@@ -43,6 +47,7 @@ def pytest_configure(config: pytest.Config) -> None:
         raise pytest.UsageError(f"unknown trace mode {loaded['mode']!r}")
     _config = loaded
     _closures = squadron_fixcase_closure.ClosureBuilder(Path(loaded["tree"]), loaded["test_side_files"])
+    _recorder = squadron_fixcase_crossings.CrossingRecorder(_closures)
     with open(loaded["output"], "w", encoding="utf-8"):
         pass  # truncate: the file existing proves this plugin loaded
 
@@ -55,6 +60,8 @@ def _write_output(result: dict[str, Any]) -> None:
 
 CONFTEST_NAME = "conftest.py"
 _collection_errors: list[dict[str, str]] = []
+#: Trace mode: node id -> {"references": [...], "crossings": [...], "patches": [...]}.
+_trace_nodes: dict[str, dict[str, Any]] = {}
 
 
 def _active_fixtures(item: pytest.Function) -> list[Any]:
@@ -134,13 +141,69 @@ def _defined_conftest_fixtures(config: pytest.Config) -> list[list[str]]:
     return [list(pair) for pair in sorted(found)]
 
 
+def _references(item: pytest.Function) -> list[list[str]]:
+    if _closures is None:
+        raise RuntimeError("squadron_fixcase_trace traced before pytest_configure ran")
+    functions = [definition.func for definition in _active_fixtures(item)]
+    return [list(reference) for reference in _closures.references(item.obj, functions)]
+
+
+def pytest_collection_finish(session: pytest.Session) -> None:
+    if _config is None or _config["mode"] != MODE_TRACE:
+        return
+    for item in session.items:
+        if not isinstance(item, pytest.Function):
+            raise RuntimeError(
+                f"cannot trace {item.nodeid}: {type(item).__name__} is not a function item"
+            )
+        _trace_nodes[item.nodeid] = {"references": _references(item), "crossings": [], "patches": []}
+
+
+def _recorded_phase(item: pytest.Item) -> Generator[None, Any, None]:
+    """Record crossings for ``item`` while the wrapped phase runs (trace mode only)."""
+    tracing = _config is not None and _config["mode"] == MODE_TRACE and _recorder is not None
+    if tracing and _recorder is not None:
+        _recorder.start(item.nodeid)
+    try:
+        yield
+    finally:
+        if tracing and _recorder is not None:
+            _recorder.stop()
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_setup(item: pytest.Item) -> Generator[None, Any, None]:
+    """The fixtures' setup is part of what a test reaches, so it is recorded too."""
+    yield from _recorded_phase(item)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item: pytest.Item) -> Generator[None, Any, None]:
+    yield from _recorded_phase(item)
+
+
 def pytest_collectreport(report: pytest.CollectReport) -> None:
     if report.failed:
         _collection_errors.append({"file": report.nodeid, "message": str(report.longrepr)})
 
 
+def _finished_nodes() -> dict[str, dict[str, Any]]:
+    """The collected nodes with the crossings recorded while they ran."""
+    if _recorder is None:
+        raise RuntimeError("squadron_fixcase_trace finished before pytest_configure ran")
+    return {
+        node_id: {**record, "crossings": _recorder.crossings(node_id)}
+        for node_id, record in _trace_nodes.items()
+    }
+
+
 def pytest_sessionfinish(session: pytest.Session) -> None:
-    if _config is None or _config["mode"] != MODE_COLLECT:
+    if _config is None:
+        return
+    if _config["mode"] == MODE_TRACE:
+        _write_output(
+            {"has_co_qualname": hasattr(types.CodeType, "co_qualname"), "nodes": _finished_nodes()}
+        )
         return
     _write_output(
         {

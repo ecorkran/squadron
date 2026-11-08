@@ -226,17 +226,21 @@ Two changes beyond the task text: `BenchmarkSandbox.context()` is a new public a
 **Commit**: `feat: add test-first check for hidden tests`
 
 ### Task 17: Trace plugin, static references (D6)
-- [ ] Trace mode, part 1: for each requested test, follow the globals named by the test function, its fixtures and test-side helpers (`co_names`, recursing through nested code objects), resolve them in `__globals__`, and record every project module, class or function reached as `references`. "Project" is a file under `tree`, outside `.venv`, and not in `test_side_files`. A reference to a project module object is kind `module`
-- [ ] Add tests to `fixfair_project` for each: reference to an exported function, to an internal function, to a non-exported class, to a project module object, a fixture or helper that reaches an internal function, and a test that drives the CLI entry point by calling the script target
-- [ ] Tests `tests/benchmark/test_trace_static.py` (harness pytest, no venv): each fixture test yields the expected reference set; nested code objects (a lambda or comprehension naming a project function) are followed
+- [x] Trace mode, part 1: for each requested test, follow the globals named by the test function, its fixtures and test-side helpers (`co_names`, recursing through nested code objects), resolve them in `__globals__`, and record every project module, class or function reached as `references`. "Project" is a file under `tree`, outside `.venv`, and not in `test_side_files`. A reference to a project module object is kind `module`
+- [x] Add tests to `fixfair_project` for each: reference to an exported function, to an internal function, to a non-exported class, to a project module object, a fixture or helper that reaches an internal function, and a test that drives the CLI entry point by calling the script target
+- [x] Tests `tests/benchmark/test_trace_static.py` (harness pytest, no venv): each fixture test yields the expected reference set; nested code objects (a lambda or comprehension naming a project function) are followed
+
+Global names and attribute names are told apart from the bytecode (`LOAD_GLOBAL`/`LOAD_NAME` versus `LOAD_ATTR`/`LOAD_METHOD`), not from `co_names`, so an attribute that shares a spelling with a global is not mistaken for it. Attributes read off a test-side module are matched by name against that module (over-approximation); attributes read off project objects are not followed.
 
 ### Task 18: Trace plugin, dynamic crossings (D6)
-- [ ] Trace mode, part 2: a `sys.setprofile` hook records each call whose immediate caller frame is test-side code and whose callee frame is project source, as `crossings` `(module, co_qualname, kind)` with `module` the callee frame's `f_globals["__name__"]`, only while the test's call phase runs (and its fixtures' setup), restoring any previous profiler. `kind` is `constructor` when the callee's `co_name` is `__init__` or `__new__`, `function` when the `co_qualname` has no class prefix, and `method` otherwise. The plugin also records `has_co_qualname`; an interpreter without it sets it false
-- [ ] Tests `tests/benchmark/test_trace_crossings.py` (harness pytest, no venv; add the fixture tests to `fixfair_project`)
-  - [ ] A test calling an exported function records one `function` crossing; a test calling an internal function records it
-  - [ ] Constructing a class records one `constructor` crossing, and a method call on the instance records a `method` crossing; the two are distinct records
-  - [ ] Dependency-invoked callback: a project function registered with `contextlib.ExitStack.callback` and run when the stack closes is **not** a crossing (the stdlib frame is its caller); the Typer-style case in the design is the same mechanism
-  - [ ] Two tests in one run do not leak crossings into each other; a test that installs its own profiler does not break the run
+- [x] Trace mode, part 2: a `sys.setprofile` hook records each call whose immediate caller frame is test-side code and whose callee frame is project source, as `crossings` `(module, co_qualname, kind)` with `module` the callee frame's `f_globals["__name__"]`, only while the test's call phase runs (and its fixtures' setup), restoring any previous profiler. `kind` is `constructor` when the callee's `co_name` is `__init__` or `__new__`, `function` when the `co_qualname` has no class prefix, and `method` otherwise. The plugin also records `has_co_qualname`; an interpreter without it sets it false
+- [x] Tests `tests/benchmark/test_trace_crossings.py` (harness pytest, no venv; add the fixture tests to `fixfair_project`)
+  - [x] A test calling an exported function records one `function` crossing; a test calling an internal function records it
+  - [x] Constructing a class records one `constructor` crossing, and a method call on the instance records a `method` crossing; the two are distinct records
+  - [x] Dependency-invoked callback: a project function registered with `contextlib.ExitStack.callback` and run when the stack closes is **not** a crossing (the stdlib frame is its caller); the Typer-style case in the design is the same mechanism
+  - [x] Two tests in one run do not leak crossings into each other; a test that installs its own profiler does not break the run
+
+Known gap, recorded in the tests: a test that replaces the profiler hides its own later calls from the recorder (the run still completes and later tests record normally). Crossings from threads the test starts are not seen.
 
 **Commit**: `feat: add trace plugin references and crossings`
 
