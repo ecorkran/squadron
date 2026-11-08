@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.diff_classify import (
@@ -182,4 +182,5 @@ def run_pre_sandbox_stages(deps: QualifyDeps, candidate: FixCandidate) -> Qualif
     except GitCommandFailed as exc:
         _logger.exception("git failure qualifying %s", candidate.sha[:12])
         return _harness_error(deps, candidate, str(exc), issue_ref)
-    return deps.sandbox_stages(candidate, second, task_text, deps)
+    # The sandbox stages record the resolved reference, not the spelling in the commit message.
+    return deps.sandbox_stages(replace(candidate, issue_ref=issue_ref), second, task_text, deps)

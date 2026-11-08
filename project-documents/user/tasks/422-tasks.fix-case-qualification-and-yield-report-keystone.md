@@ -309,16 +309,18 @@ Two corrections to D6's mechanism: `packages_distributions()` returns nothing fo
 **Commit**: `feat: add qualification pipeline through test-first`
 
 ### Task 24: Qualification pipeline, repeats, exclusions, case build (D8, D9, D11)
-- [ ] Stage 7, in `qualify_in_sandbox`: with at least one surviving hidden test, switch back to the reference state and run the full suite `benchmark.qualification_repeats` times. Hidden test differing across reference runs → `flaky`; failing every reference run → `fails_at_reference`; a non-hidden node differing across runs → `excluded_tests` with `flaky`; a non-hidden node failing every run → `excluded_tests` with `fails_at_reference`. Superseded tests are removed from the regression set but never excluded for failing. A `HarnessFailure`, `ProcessTimedOutError` or `SuiteRunError` from a stage 7 run → `harness_error` with the detail, logged at ERROR (the same rule as stages 3–6)
-- [ ] Build the `BenchmarkCase` (`BenchmarkCase.build`) from the qualified hidden tests, hidden fixtures reached by them, superseded tests, sorted excluded tests, `adapter.grader_commands(parent_tree)` and the frozen `task_text`; provenance source ref is the issue reference. Write it with `write_case`; a `MetrologyStoreError` is logged at ERROR and raised as `BuildHalted`. No qualified hidden test → `no_qualifying_hidden_test` with per-test reasons kept in the record (D8). The record's `case_id` is set when qualified
-- [ ] `qualification_for(case, environment, store) -> FixQualification | None` returns a record only when project, commit, environment digest and rule version match (D10). `qualify_candidate` is re-runnable by 424 with the sandbox it already holds
-- [ ] Tests `tests/benchmark/test_qualify_repeats.py` with scripted suite results
-  - [ ] Each of the four exclusion and hidden-flake rules; a test with differing outcomes across parent runs is `flaky`
-  - [ ] A case built with a flaky non-hidden node has a different `case_id` from one built without it
-  - [ ] A fix with one fair and one patching hidden test qualifies with one hidden test (D8) and the other's reason in the record
-  - [ ] `qualification_for` returns the record on a full match and `None` for a different environment digest and for a bumped rule version
-  - [ ] A scripted suite timeout and a `SuiteRunError` in a repeat each yield `harness_error` with detail and an ERROR log
-  - [ ] A failing `write_case` raises `BuildHalted` with an ERROR log
+- [x] Stage 7, in `qualify_in_sandbox`: with at least one surviving hidden test, switch back to the reference state and run the full suite `benchmark.qualification_repeats` times. Hidden test differing across reference runs → `flaky`; failing every reference run → `fails_at_reference`; a non-hidden node differing across runs → `excluded_tests` with `flaky`; a non-hidden node failing every run → `excluded_tests` with `fails_at_reference`. Superseded tests are removed from the regression set but never excluded for failing. A `HarnessFailure`, `ProcessTimedOutError` or `SuiteRunError` from a stage 7 run → `harness_error` with the detail, logged at ERROR (the same rule as stages 3–6)
+- [x] Build the `BenchmarkCase` (`BenchmarkCase.build`) from the qualified hidden tests, hidden fixtures reached by them, superseded tests, sorted excluded tests, `adapter.grader_commands(parent_tree)` and the frozen `task_text`; provenance source ref is the issue reference. Write it with `write_case`; a `MetrologyStoreError` is logged at ERROR and raised as `BuildHalted`. No qualified hidden test → `no_qualifying_hidden_test` with per-test reasons kept in the record (D8). The record's `case_id` is set when qualified
+- [x] `qualification_for(case, environment, store) -> FixQualification | None` returns a record only when project, commit, environment digest and rule version match (D10). `qualify_candidate` is re-runnable by 424 with the sandbox it already holds
+- [x] Tests `tests/benchmark/test_qualify_repeats.py` with scripted suite results
+  - [x] Each of the four exclusion and hidden-flake rules; a test with differing outcomes across parent runs is `flaky`
+  - [x] A case built with a flaky non-hidden node has a different `case_id` from one built without it
+  - [x] A fix with one fair and one patching hidden test qualifies with one hidden test (D8) and the other's reason in the record
+  - [x] `qualification_for` returns the record on a full match and `None` for a different environment digest and for a bumped rule version
+  - [x] A scripted suite timeout and a `SuiteRunError` in a repeat each yield `harness_error` with detail and an ERROR log
+  - [x] A failing `write_case` raises `BuildHalted` with an ERROR log
+
+Exclusions look only at unchanged tests (a new test the fix rejects does not exist at the parent, so it cannot charge a replay); a hidden test must pass in every reference run, so one that is consistently skipped is `fails_at_reference`. `TestSets` gained `fixtures_by_hidden` so the case lists only fixtures reached by qualified tests; `run_selection` in `test_first.py` is shared by the repeats; `qualify_candidate`'s candidate reaches the sandbox stages with the resolved `owner/repo#n` reference.
 
 **Commit**: `feat: add repeated qualification and case construction`
 

@@ -62,16 +62,21 @@ def _describe(result: NodeResult) -> str:
     return f"{result.outcome.value}/{kind}"
 
 
-def _run_once(
-    runner: SuiteRunner, ctx: SandboxContext, node_ids: tuple[str, ...]
+def run_selection(
+    runner: SuiteRunner, ctx: SandboxContext, selection: SuiteSelection
 ) -> Mapping[str, NodeResult]:
+    """One suite run folded to ``node id -> result``; a timeout or ``SuiteRunError`` is a failure.
+
+    Raises ``HarnessFailure`` (after an ERROR log) so a harness problem is never read as a test
+    outcome. Shared by the test-first runs and the repeated reference runs.
+    """
     try:
-        run = runner.run_suite(ctx, SuiteSelection.nodes(node_ids))
+        run = runner.run_suite(ctx, selection)
     except SuiteRunError as exc:
-        _logger.exception("test-first suite run failed")
-        raise HarnessFailure(f"test-first suite run failed: {exc}") from exc
+        _logger.exception("suite run failed")
+        raise HarnessFailure(f"suite run failed: {exc}") from exc
     if run.timed_out:
-        detail = f"test-first suite run timed out after {ctx.suite_timeout_s}s"
+        detail = f"suite run timed out after {ctx.suite_timeout_s}s"
         _logger.error("fix-case harness failure: %s", detail)
         raise HarnessFailure(detail)
     return {result.node_id: result for result in run.results}
@@ -90,7 +95,7 @@ def _run_by_file(
         by_file.setdefault(node_id.split("::", 1)[0], []).append(node_id)
     results: dict[str, NodeResult] = {}
     for group in by_file.values():
-        results.update(_run_once(runner, ctx, tuple(group)))
+        results.update(run_selection(runner, ctx, SuiteSelection.nodes(tuple(group))))
     return results
 
 

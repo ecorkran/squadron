@@ -121,7 +121,8 @@ class ScriptedAdapter:
         return step
 
     def overlay(self, ctx: SandboxContext, files: Mapping[str, bytes | None]) -> None:
-        contents = {(content or b"")[:1] for content in files.values()}
+        # Absent files (None) say nothing about the state; the first byte is the source sha letter.
+        contents = {content[:1] for content in files.values() if content}
         label = {frozenset({b"f"}): "reference", frozenset({b"p"}): "parent"}.get(
             frozenset(contents), "parent+overlay"
         )

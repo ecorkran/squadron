@@ -5,6 +5,7 @@ Pure: two ``CollectedTests`` in, one ``TestSets`` out. Nothing here runs a test.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from squadron.benchmark.fairness import CollectedTests
@@ -26,6 +27,9 @@ class TestSets:
     superseded: tuple[str, ...]
     unchanged: tuple[str, ...]
     hidden_fixtures: tuple[ConftestFixture, ...]
+    #: hidden candidate -> the added conftest fixtures it reaches (callers narrow ``hidden_fixtures``
+    #: to the candidates that qualify).
+    fixtures_by_hidden: Mapping[str, tuple[ConftestFixture, ...]]
 
 
 def _fixture_order(fixture: ConftestFixture) -> tuple[str, str]:
@@ -44,16 +48,25 @@ def sort_tests(parent: CollectedTests, reference: CollectedTests) -> TestSets:
 
     parent_keys = {_fixture_order(fixture) for fixture in parent.conftest_fixtures}
     added_keys = {_fixture_order(fixture) for fixture in reference.conftest_fixtures} - parent_keys
-    # Keyed by (path, name): deduplicates across hidden tests and gives the sort order.
-    reached = {
-        _fixture_order(fixture): fixture
-        for node in hidden
-        for fixture in reference.fixtures_reached.get(node, ())
-        if _fixture_order(fixture) in added_keys
+    by_hidden = {
+        node: tuple(
+            sorted(
+                (
+                    fixture
+                    for fixture in reference.fixtures_reached.get(node, ())
+                    if _fixture_order(fixture) in added_keys
+                ),
+                key=_fixture_order,
+            )
+        )
+        for node in sorted(hidden)
     }
+    # Keyed by (path, name): deduplicates across hidden tests and gives the sort order.
+    reached = {_fixture_order(f): f for fixtures in by_hidden.values() for f in fixtures}
     return TestSets(
         hidden_candidates=tuple(sorted(hidden)),
         superseded=tuple(sorted(superseded)),
         unchanged=tuple(sorted(unchanged)),
         hidden_fixtures=tuple(reached[key] for key in sorted(reached)),
+        fixtures_by_hidden=by_hidden,
     )

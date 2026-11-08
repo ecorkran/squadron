@@ -257,7 +257,8 @@ def test_a_clean_candidate_reaches_the_sandbox_stages_with_the_frozen_task_text(
     with pytest.raises(AssertionError, match="must not run"):
         qualify_candidate(CANDIDATE, setup.deps)
     ((candidate, classification, task_text),) = setup.sandbox_calls
-    assert candidate is CANDIDATE
+    assert candidate.sha == CANDIDATE.sha
+    assert candidate.issue_ref == "acme/widgets#5", "the sandbox stages get the resolved reference"
     assert classification.added == ("tests/test_new.py",)
     assert "more detail" in task_text and "after the fix" not in task_text
 
