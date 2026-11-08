@@ -142,6 +142,28 @@ def test_carried_file_is_symlink_to_source(
     assert env.carried_paths == [carried]
 
 
+def test_sdk_grant_passes_oauth_token_when_set(tmp_path: Path, harness_env: dict[str, str]) -> None:
+    harness_env["CLAUDE_CODE_OAUTH_TOKEN"] = "tok"
+    grant = CredentialGrant.for_profiles([ProfileName.SDK])
+    env = make_env(tmp_path, harness_env, grant)
+    assert env.variables(())["CLAUDE_CODE_OAUTH_TOKEN"] == "tok"
+
+
+def test_sdk_grant_without_oauth_token_is_not_an_error(
+    tmp_path: Path, harness_env: dict[str, str]
+) -> None:
+    grant = CredentialGrant.for_profiles([ProfileName.SDK])
+    env = make_env(tmp_path, harness_env, grant)
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in env.variables(())
+
+
+def test_oauth_token_not_granted_to_other_profiles(tmp_path: Path, harness_env: dict[str, str]) -> None:
+    harness_env["CLAUDE_CODE_OAUTH_TOKEN"] = "tok"
+    grant = CredentialGrant.for_profiles([ProfileName.OPENAI_OAUTH])
+    env = make_env(tmp_path, harness_env, grant)
+    assert "CLAUDE_CODE_OAUTH_TOKEN" not in env.variables(())
+
+
 def test_missing_granted_variable_raises(tmp_path: Path, harness_env: dict[str, str]) -> None:
     grant = CredentialGrant.for_profiles([ProfileName.OPENAI])
     env = make_env(tmp_path, harness_env, grant)

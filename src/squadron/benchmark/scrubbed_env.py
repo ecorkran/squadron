@@ -7,7 +7,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from squadron.benchmark.auth_carryover import AUTH_CARRYOVER_FILES
+from squadron.benchmark.auth_carryover import AUTH_CARRYOVER_FILES, AUTH_OPTIONAL_VARIABLES
 from squadron.providers.base import ProfileName
 from squadron.providers.profiles import get_profile
 
@@ -60,6 +60,7 @@ class CredentialGrant:
 
     variables: tuple[str, ...] = ()
     carryover_files: tuple[str, ...] = ()
+    optional_variables: tuple[str, ...] = ()
 
     @classmethod
     def none(cls) -> CredentialGrant:
@@ -68,9 +69,10 @@ class CredentialGrant:
 
     @classmethod
     def for_profiles(cls, profiles: Iterable[ProfileName]) -> CredentialGrant:
-        """Grant each profile's ``api_key_env`` variable and its carryover files."""
+        """Grant each profile's ``api_key_env`` variable, carryover files and optional tokens."""
         variables: list[str] = []
         files: list[str] = []
+        optional: list[str] = []
         for profile_name in profiles:
             env_name = get_profile(profile_name).api_key_env
             if env_name is not None and env_name not in variables:
@@ -78,7 +80,14 @@ class CredentialGrant:
             for path in AUTH_CARRYOVER_FILES[profile_name]:
                 if path not in files:
                     files.append(path)
-        return cls(variables=tuple(variables), carryover_files=tuple(files))
+            for name in AUTH_OPTIONAL_VARIABLES.get(profile_name, ()):
+                if name not in optional:
+                    optional.append(name)
+        return cls(
+            variables=tuple(variables),
+            carryover_files=tuple(files),
+            optional_variables=tuple(optional),
+        )
 
 
 class ScrubbedEnvironment:
@@ -139,6 +148,9 @@ class ScrubbedEnvironment:
         )
         for name in self._grant.variables:
             env[name] = self._harness_env.get(name) or self._missing_credential(name)
+        for name in self._grant.optional_variables:
+            if self._harness_env.get(name):
+                env[name] = self._harness_env[name]
         return env
 
     @staticmethod

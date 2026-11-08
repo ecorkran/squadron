@@ -16,3 +16,10 @@ AUTH_CARRYOVER_FILES: dict[ProfileName, tuple[str, ...]] = {
     ProfileName.SDK: (".claude/.credentials.json",),
     ProfileName.OPENAI_OAUTH: (".codex/auth.json",),
 }
+
+# Subscription tokens that stand in for a carried file where the login lives
+# elsewhere (macOS Keychain). Granted only when set in the harness environment:
+# the auth check, not this table, says whether a profile can authenticate.
+AUTH_OPTIONAL_VARIABLES: dict[ProfileName, tuple[str, ...]] = {
+    ProfileName.SDK: ("CLAUDE_CODE_OAUTH_TOKEN",),
+}
