@@ -15,6 +15,7 @@ proves the plugin loaded; the result JSON is written when the session reaches it
 
 from __future__ import annotations
 
+import ast
 import inspect
 import json
 import os
@@ -95,15 +96,41 @@ def _item_record(item: pytest.Item) -> dict[str, Any]:
     }
 
 
-def _defined_conftest_fixtures(session: pytest.Session) -> list[list[str]]:
-    """Every conftest fixture defined for the session, whether or not a test reaches it."""
-    manager = session._fixturemanager  # pyright: ignore[reportPrivateUsage]
+def _fixture_name(node: ast.stmt) -> str | None:
+    """The fixture name a top-level function defines (``name=`` overrides), else ``None``."""
+    if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+        return None
+    for decorator in node.decorator_list:
+        target = decorator.func if isinstance(decorator, ast.Call) else decorator
+        called = target.attr if isinstance(target, ast.Attribute) else getattr(target, "id", None)
+        if called != "fixture":
+            continue
+        if isinstance(decorator, ast.Call):
+            for keyword in decorator.keywords:
+                if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
+                    return str(keyword.value.value)
+        return node.name
+    return None
+
+
+def _defined_conftest_fixtures(config: pytest.Config) -> list[list[str]]:
+    """Every fixture defined in a loaded test-side conftest, whether or not a test reaches it.
+
+    Read from the conftest sources rather than from pytest's fixture manager, whose
+    internals differ between pytest releases.
+    """
+    if _closures is None:
+        raise RuntimeError("squadron_fixcase_trace asked about fixtures before pytest_configure ran")
     found: set[tuple[str, str]] = set()
-    for chain in manager._arg2fixturedefs.values():  # pyright: ignore[reportPrivateUsage]
-        for definition in chain:
-            reference = _conftest_reference(definition)
-            if reference is not None:
-                found.add((reference[0], reference[1]))
+    for plugin in config.pluginmanager.get_plugins():
+        filename = getattr(plugin, "__file__", None)
+        relative = _closures.relative_file(filename)
+        if filename is None or relative is None or Path(relative).name != CONFTEST_NAME:
+            continue
+        for node in ast.parse(Path(filename).read_text(encoding="utf-8")).body:
+            name = _fixture_name(node)
+            if name is not None:
+                found.add((relative, name))
     return [list(pair) for pair in sorted(found)]
 
 
@@ -118,7 +145,7 @@ def pytest_sessionfinish(session: pytest.Session) -> None:
     _write_output(
         {
             "items": [_item_record(item) for item in session.items],
-            "conftest_fixtures": _defined_conftest_fixtures(session),
+            "conftest_fixtures": _defined_conftest_fixtures(session.config),
             "collection_errors": _collection_errors,
         }
     )
