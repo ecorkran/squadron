@@ -22,6 +22,22 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 - **Measured:** the three-commit patch pins took 9m32s; the two example pins took 33m16s (same machine, later in the session).
 - **Scope change:** Tasks 29 (steps 3–4) and 30 no longer rerun the whole history; the design walkthrough follows.
 
+### Slice 422: Verification walkthrough (Task 30)
+
+- **Step 1:** the design's grep finds 96 closing lines; the store holds 94 records (3 are `multiple_issues_closed`, so the counts agree within the design's tolerance).
+- **Steps 2 and 3:** `show` on 13e8381a (every hidden test `patches_project_code`) and on `case-85c975f100d51ec1`. The frozen text of the case contains issue #171's body; the issue has no comments, so the committer-date cutoff excluded nothing.
+- **Step 4:** reran three commits, not all 94 (5.8 s): 21013615 and 13e8381a print `reused`, d4850abc repeats `merge_commit`; the case set stayed `fix-squadron` v1. The design's "every line says `reused`" is not met (Context Summary gap 5): candidates rejected before the sandbox stage repeat their reason.
+- **Step 5:** the first other uv project with a `uv.lock` and a GitHub remote in `cf project list` order is context-visualizer. It has 1 closing commit and was built whole (3.5 s): 1 candidate, 0 qualified, `harness_error` (its start commit declares submodules, which the sandbox does not replay). Squadron n=1 of 94 (MDD 1.14), context-visualizer none, pooled n=1 of 95: all "not enough (need >= 33 cases)".
+- **Order decision implied (design line 28):** the qualified count cannot separate two configs, so 423 → 424 → 425 does not stand as is; fix cases are pooled across cf projects, or 426's case building moves ahead of 424. The data do not choose between the two. Where the yield goes: 546 of 553 rejected hidden tests are `patches_project_code`, and 21 of the 24 `harness_error` records across both projects are the submodule limitation of the history-free sandbox.
+- **Step 6:** `yield --json` lists `fix-squadron` v1; the step 4 rerun created no new version.
+
+### Slice 422: Final validation (Task 31)
+
+- **Validation:** ruff format and check clean, pyright 0 errors, full suite 9547 passed, 6 skipped (11m40s; the real-commit pins file was excluded from that run and passed separately: 4 passed in 9m32s, 2 passed in 33m16s).
+- **File size:** `metrology/benchmark_models.py` grew from 215 to 339 lines. It is 39 imports wide, so it stays unsplit; `github_cli.py` and `keys.py` were already over ~300 before this slice.
+- **Deviations from the approved Success Criteria and Walkthrough (gaps 4 and 5):** the Project Manager bounded the walkthrough. The full history is built once; step 4 reruns three commits and prints `reused` only for those that reached the sandbox; step 5 reads context-visualizer whole (1 commit). The design's Verification Walkthrough and implementation-order line were edited to match at the Project Manager's direction.
+- **Next:** 423. The order decision above (pool across projects, or 426 earlier) needs the Project Manager before 424.
+
 ## 20261107
 
 ### Release 0.24.24

@@ -6,8 +6,8 @@ parent: user/architecture/420-slices.model-benchmark.md
 dependencies: [421, 420]
 interfaces: [424, 425, 426]
 dateCreated: 20261104
-dateUpdated: 20261105
-status: not_started
+dateUpdated: 20261108
+status: complete
 ---
 
 # Slice Design: Fix Case Qualification and Yield Report (keystone)
@@ -76,22 +76,36 @@ src/squadron/
   codehost/
     protocol.py, github_cli.py   + get_issue(locator, number) -> IssueSnapshot
     models.py                    + IssueSnapshot, IssueComment
+    errors.py                    + IssueNotFoundError, ReferenceIsPullRequestError
   metrology/
     benchmark_models.py          + FixQualification, CandidateRejection, TestRejection,
-                                   HiddenTestVerdict
+                                   HiddenTestVerdict, HiddenTestVerdictKind, QualificationOutcome
     benchmark_store.py           + write/get/list for fix_qualification records
   benchmark/
     fix_discovery.py             git history -> FixCandidate list, discovery rejections
     issue_freeze.py              IssueSnapshot + optional cutoff -> issue text or rejection
+    diff_classify.py             name-status diff -> DiffClassification or DiffRejection,
+                                 before any sandbox exists (D3, D4)
     test_sets.py                 two collections -> hidden / superseded / added fixtures
-    fairness.py                  FixCaseAdapter protocol, FairnessVerdict, rule version
+    fairness.py                  FixCaseAdapter protocol, FairnessVerdict (the one verdict
+                                 type), rule version, BoundaryUndecidable, CollectionFailed,
+                                 HarnessFailure
     python_fairness.py           PythonFixCaseAdapter: collect, overlay, boundary, trace
+    python_boundary.py, python_tree_files.py   adapter helpers (resolver run; tree files)
     pytest_trace/                trace plugin source (stdlib + pytest), package data
-    qualify.py                   per-candidate pipeline (D9), writes FixQualification
+    trace_verdict.py             pure judge_trace(facts, allowed) -> FairnessVerdict (D6, D7)
+    file_states.py               the three file states of one parent sandbox (D4)
+    test_first.py                parent-plus-overlay judgement of a node's result (D5)
+    qualify.py                   qualify_candidate and qualification_for (D9, D10)
+    qualify_types.py             QualifyDeps, QualifyResult, record_outcome
+    qualify_stages.py            pre-sandbox stages (discovery to diff classification)
+    qualify_sandbox.py           qualify_in_sandbox: the sandbox stages through test-first
+    qualify_survivors.py         repeated reference runs, exclusions, case construction
+    build_errors.py              BuildHalted: the build cannot continue (logged at ERROR)
     case_build.py                orchestrates discovery -> qualify -> cases -> case set
     yield_report.py              aggregation and rendering
     separability.py              minimum detectable difference (D12)
-  cli/commands/benchmark.py      + fix-cases build, fix-cases show, yield
+  cli/commands/benchmark_fix_cases.py   + fix-cases build, fix-cases show, yield
 commands/sq/benchmark.md         new: the same subcommands
 ```
 
@@ -103,7 +117,7 @@ For one repository (`--repo`, default the current directory):
 
 1. **Discover** (`fix_discovery`). `git log --format=<sha, parents, committer date, body>` over every commit reachable from `HEAD`. A commit is a candidate when its message contains a GitHub closing keyword (D1). Discovery-stage rejections are written straight to the store.
 2. **Freeze issue text** (`issue_freeze`). `CodeHost.get_issue` returns the title, body, comments and edit timestamps. The frozen text is built from content that existed before the fix commit's committer date (D2).
-3. **Classify the diff.** `git diff --name-status parent..commit`. Test-side files are found with the adapter's rule (D3). A candidate with no test-side change is rejected. Non-Python test-side changes, support changes beyond added fixtures, and lockfile changes are rejected as well.
+3. **Classify the diff** (`diff_classify`). `git diff --name-status parent..commit`, with file text read from git: no tree exists yet. Test-side files are found with the adapter's rule (D3). A candidate with no test-side change is rejected. Non-Python test-side changes, support changes beyond added fixtures, and lockfile changes are rejected as well.
 4. **Sandbox.** One `BenchmarkSandbox` is built at the parent. Its `EnvironmentIdentity` is the record key (D10). An existing record with the same key and rule version is reused, and the candidate is skipped.
 5. **Parent state.** Collect through the trace plugin's collect mode, then run the boundary resolver under the sandbox's interpreter. It prints the allowed `(module, qualname)` set (D6).
 6. **Reference state** (D4). Collect again. `test_sets` produces the hidden candidates, the superseded set and the added fixtures (D3). One trace run on the hidden candidates (D6, D7).
@@ -194,6 +208,10 @@ Status: decided
 - **Known gaps** (recorded so the trace never claims more than it sees): reading a non-callable project constant through an allowed module, and module-level instances such as a Typer app, whose type is defined outside the project. Calls into project code made by dependencies (Typer invoking a command callback) are not crossings. That is what lets "drive the CLI" pass.
 - The resolver checks names as they stood at the parent. If the reference moved or renamed a definition, it fails the check, which errs toward exclusion.
 - Rejected: a static-only AST check, because it cannot follow fixtures and helpers to their real targets. Also rejected: perturbation, which the architecture already rejected.
+- **Reference and crossing kinds** (the trace plugin's output; `trace_verdict.py` judges them):
+  - A **reference** is `(kind, module, qualname)` with `kind` one of `module`, `class` or `function`. A `module` reference is a project module object read by a test, and it is `boundary_undecidable`. `class` and `function` references must be in the allowed set.
+  - A **crossing** is `(module, co_qualname, kind)`, with `module` the callee frame's `f_globals["__name__"]` (the same form as the resolver's `obj.__module__`) and `kind` one of `function`, `constructor` or `method`.
+  - **Constructor rule.** A crossing is a `constructor` when the callee's `co_name` is `__init__` or `__new__`. It is judged by its class: the `__init__`/`__new__` qualname minus its last component must be in the allowed set. A `function` crossing is judged by its own qualname. `method` crossings are not judged (see the Verdict list above). A function nested inside another function (`<locals>` before its name) has no class prefix, so it is a `function`.
 
 ### D7 — No patching project code
 Status: decided
@@ -262,6 +280,7 @@ Status: decided
   - `benchmark.planned_samples` (default 3)
   - `benchmark.target_pass_rate_difference` (default 0.20, a difference between configs big enough to change which alias the PM configures)
 - The significance level and power (0.05 and 0.80) are named constants in `separability.py`.
+- **Counting unit.** One candidate is one `(project, commit_sha)`. It is represented by its latest `FixQualification` by `created_at`, whatever its environment digest or rule version; earlier records for the commit are ignored. A commit with a `pre` record and a later record in an environment counts once, as the later one. `no_qualifying_hidden_test` candidates also contribute one count per hidden-test verdict (not one per candidate) to the per-`TestRejection` counts. Grouping is by enum value, never by message text.
 - Rejected: simulating a bootstrap here. With no real per-case data it adds only assumptions, not information.
 
 ### D13 — Any project, no configuration
@@ -291,13 +310,44 @@ Status: decided
 ```python
 class FixCaseAdapter(Protocol):
     language: SourceLanguage
-    def is_test_side(self, tree: Path, path: str) -> bool: ...
+    # Diff classification runs before any sandbox exists, so there is no tree to read:
+    # is_test_side takes the parent's pyproject.toml text (None when it has none).
+    def is_test_side(self, pyproject_text: str | None, path: str) -> bool: ...
+    def is_test_source(self, path: str) -> bool: ...                       # source code, not test data
+    def lockfile_names(self) -> tuple[str, ...]: ...                       # a diff touching one is rejected
     def collect(self, ctx: SandboxContext) -> CollectedTests: ...          # node id -> closure digest, fixtures
+                                                                           # raises CollectionFailed
     def overlay(self, ctx: SandboxContext, files: Mapping[str, bytes | None]) -> None: ...
     def boundary(self, ctx: SandboxContext) -> AllowedBoundary: ...        # raises BoundaryUndecidable
-    def trace(self, ctx: SandboxContext, node_ids: Sequence[str]) -> Mapping[str, TraceVerdict]: ...
+    def trace(
+        self, ctx: SandboxContext, node_ids: Sequence[str], allowed: AllowedBoundary
+    ) -> Mapping[str, FairnessVerdict]: ...                                # the verdict needs the boundary
     def grader_commands(self, tree: Path) -> tuple[GraderCommand, ...]: ...
 ```
+
+`FairnessVerdict` (`rejection: TestRejection | None`, `detail: str`) is the only verdict type; `None` means the test is fair. A harness problem (timeout, missing output, I/O error) is never a verdict: the adapter raises `HarnessFailure`, and qualification records `harness_error`. The `FixCaseAdapter` is reached only through `registry.py`.
+
+```python
+# benchmark/qualify.py
+def qualify_candidate(candidate: FixCandidate, deps: QualifyDeps) -> QualifyResult: ...
+def qualification_for(
+    case: BenchmarkCase, environment: EnvironmentIdentity, store: BenchmarkRecordStore
+) -> FixQualification | None: ...
+
+@dataclass(frozen=True)
+class QualifyResult:
+    record: FixQualification
+    reused: bool = False       # True when an earlier record with the same key and rule version was used
+
+# benchmark/qualify_sandbox.py: what QualifyDeps.sandbox_stages holds
+def qualify_in_sandbox(
+    candidate: FixCandidate, classification: DiffClassification, task_text: str, deps: QualifyDeps
+) -> QualifyResult: ...
+```
+
+`qualification_for` matches on project, the case's reference commit, the environment digest and the current rule version. It returns a rejected record (the reason the case no longer qualifies), and it returns `None` for a missing record, a stale rule version or a `harness_error`; the caller then runs `qualify_candidate` again. `store` is an argument because the function has no other way to reach the records.
+
+Errors: `IssueNotFoundError` and `ReferenceIsPullRequestError` (codehost) become the rejections `issue_not_found` and `reference_is_pull_request`. `BoundaryUndecidable` becomes `boundary_undecidable`, and `CollectionFailed` (it names the file) becomes `collection_failed`. `HarnessFailure` becomes a `harness_error` record. `BuildHalted` (`build_errors.py`) stops the whole build, after an ERROR log, for failures that apply to every candidate (for example `gh` missing); it is never used for one candidate's failure.
 
 **`sq benchmark fix-cases build --set NAME [--repo PATH] [--commit SHA …] [--keep]`**
 
@@ -355,7 +405,7 @@ class FixQualification(BaseModel, frozen=True):
 
 ### Provides to Other Slices
 
-- **424:** qualified fix cases and their case set, `qualification_for` and `qualify_candidate` for re-qualification in the run's environment, and frozen `task_text` to pass to `sq run fix`.
+- **424:** qualified fix cases and their case set, `qualification_for(case, environment, store)` and `qualify_candidate` for re-qualification in the run's environment, and frozen `task_text` to pass to `sq run fix`.
 - **425:** `hidden_tests`, `hidden_fixtures`, `superseded_tests`, `excluded_tests` and `grader_commands` on each case.
 - **426:** `test_sets` (superseded computation from closure digests) and the repeat-and-exclude step, reused for slice cases, which have no hidden set.
 - **Initiative ordering:** the yield report's separability answer.
