@@ -18,7 +18,7 @@ from squadron.metrology.snapshot_models import SourceLanguage
 
 #: Bumped whenever any fairness check changes: stored qualification records carry it, and
 #: a record with another version is re-qualified rather than reused (D10).
-FAIRNESS_RULE_VERSION = 1
+FAIRNESS_RULE_VERSION = 2
 
 
 @dataclass(frozen=True)

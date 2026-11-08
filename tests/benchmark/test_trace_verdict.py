@@ -117,6 +117,23 @@ def test_patching_something_foreign_is_allowed() -> None:
     assert judge_trace(facts(patches=(patch,)), ALLOWED).rejection is None
 
 
+def test_environment_isolation_patch_is_not_patching_project_code() -> None:
+    patch = PatchFact(
+        "monkeypatch.setattr", "project_module", "squadron.cli.app", "squadron.cli.app._load_env_file"
+    )
+    assert judge_trace(facts(patches=(patch,)), ALLOWED).rejection is None
+
+
+def test_environment_isolation_exemption_does_not_hide_another_project_patch() -> None:
+    isolation = PatchFact(
+        "monkeypatch.setattr", "project_module", "squadron.cli.app", "squadron.cli.app._load_env_file"
+    )
+    other = PatchFact("mock.patch", "project_module", "squadron.cli.app", "squadron.cli.app.run")
+    verdict = judge_trace(facts(patches=(isolation, other)), ALLOWED)
+    assert verdict.rejection is TestRejection.PATCHES_PROJECT_CODE
+    assert verdict.detail == "squadron.cli.app.run"
+
+
 def test_precedence_patching_then_past_boundary_then_undecidable() -> None:
     patch = PatchFact("mock.patch", "project_module", "fixpkg.mod", "fixpkg.mod.run")
     past = function_reference("fixpkg.internal", "internal_function")

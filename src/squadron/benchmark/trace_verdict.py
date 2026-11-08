@@ -20,6 +20,11 @@ CROSSING_METHOD = "method"
 PROJECT_OWNER_KINDS = frozenset({"project_module", "project_class", "project_instance"})
 UNRESOLVED_OWNER_KIND = "unresolved"
 
+#: Project patch targets that only isolate the environment (the checkout's .env must not
+#: reach tests) and change none of the behavior under test. They are not
+#: ``patches_project_code``. squadron's autouse conftest fixture patches this in every test.
+ENVIRONMENT_ISOLATION_PATCH_TARGETS = frozenset({"squadron.cli.app._load_env_file"})
+
 
 @dataclass(frozen=True)
 class Reference:
@@ -67,7 +72,12 @@ def _class_of_constructor(qualname: str) -> str:
 
 
 def _patching(facts: TraceFacts) -> str | None:
-    targets = sorted(patch.target for patch in facts.patches if patch.owner_kind in PROJECT_OWNER_KINDS)
+    targets = sorted(
+        patch.target
+        for patch in facts.patches
+        if patch.owner_kind in PROJECT_OWNER_KINDS
+        and patch.target not in ENVIRONMENT_ISOLATION_PATCH_TARGETS
+    )
     return targets[0] if targets else None
 
 
