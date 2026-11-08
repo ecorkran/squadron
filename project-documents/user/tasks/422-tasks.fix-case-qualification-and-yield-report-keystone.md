@@ -263,17 +263,19 @@ Two corrections to D6's mechanism: `packages_distributions()` returns nothing fo
 **Commit**: `feat: add packaging boundary resolver`
 
 ### Task 21: Trace verdict, `trace`, registry (D6, D7, D13)
-- [ ] `trace_verdict.py`: pure `judge_trace(facts, allowed) -> FairnessVerdict` per D6 and D7:
-  - [ ] a static reference, or a `function` or `constructor` crossing, not in `allowed` → `reaches_past_boundary` naming the symbol; for a `constructor` crossing the symbol checked is the class (`co_qualname` without its last segment); a `method` crossing is allowed
-  - [ ] a static `module` reference, `has_co_qualname: false`, or an `unresolved` patch → `boundary_undecidable`
-  - [ ] any `project_module`, `project_class` or `project_instance` patch → `patches_project_code` naming the target; `foreign` is allowed
-  - [ ] precedence when several apply: `patches_project_code`, then `reaches_past_boundary`, then `boundary_undecidable`
-- [ ] `PythonFixCaseAdapter.trace(ctx, node_ids, allowed)`: runs trace mode at the reference state with `node_ids` as pytest's positional arguments and applies `judge_trace` to each node's facts; a missing output file or `ProcessTimedOutError` is logged at ERROR and raised as `HarnessFailure`
-- [ ] Extend 421's `registry.py` with `fix_case_adapter_for(language: SourceLanguage) -> FixCaseAdapter` (Python only; other languages raise the same named error as `adapter_for`); it stays the only importer of concrete adapters (D13)
-- [ ] Tests
-  - [ ] `tests/benchmark/test_trace_verdict.py` (pure): one case per bullet, a constructor crossing into a non-exported class versus a method crossing on an allowed instance, plus precedence
-  - [ ] `tests/benchmark/test_python_trace.py` (module-scoped sandbox of `fixfair_project`, `network` marker): the test that calls the script target qualifies, a direct call to an internal function is `reaches_past_boundary` naming it, `patch("fixpkg.mod.run")` is `patches_project_code`; a scripted timeout and a missing output file each raise `HarnessFailure`
-  - [ ] `tests/benchmark/test_fix_registry.py`: Python returns the adapter, every other `SourceLanguage` raises, `pyright` accepts it as a `FixCaseAdapter` (the adapter is complete only now)
+- [x] `trace_verdict.py`: pure `judge_trace(facts, allowed) -> FairnessVerdict` per D6 and D7:
+  - [x] a static reference, or a `function` or `constructor` crossing, not in `allowed` → `reaches_past_boundary` naming the symbol; for a `constructor` crossing the symbol checked is the class (`co_qualname` without its last segment); a `method` crossing is allowed
+  - [x] a static `module` reference, `has_co_qualname: false`, or an `unresolved` patch → `boundary_undecidable`
+  - [x] any `project_module`, `project_class` or `project_instance` patch → `patches_project_code` naming the target; `foreign` is allowed
+  - [x] precedence when several apply: `patches_project_code`, then `reaches_past_boundary`, then `boundary_undecidable`
+- [x] `PythonFixCaseAdapter.trace(ctx, node_ids, allowed)`: runs trace mode at the reference state with `node_ids` as pytest's positional arguments and applies `judge_trace` to each node's facts; a missing output file or `ProcessTimedOutError` is logged at ERROR and raised as `HarnessFailure`
+- [x] Extend 421's `registry.py` with `fix_case_adapter_for(language: SourceLanguage) -> FixCaseAdapter` (Python only; other languages raise the same named error as `adapter_for`); it stays the only importer of concrete adapters (D13)
+- [x] Tests
+  - [x] `tests/benchmark/test_trace_verdict.py` (pure): one case per bullet, a constructor crossing into a non-exported class versus a method crossing on an allowed instance, plus precedence
+  - [x] `tests/benchmark/test_python_trace.py` (module-scoped sandbox of `fixfair_project`, `network` marker): the test that calls the script target qualifies, a direct call to an internal function is `reaches_past_boundary` naming it, `patch("fixpkg.mod.run")` is `patches_project_code`; a scripted timeout and a missing output file each raise `HarnessFailure`
+  - [x] `tests/benchmark/test_fix_registry.py`: Python returns the adapter, every other `SourceLanguage` raises, `pyright` accepts it as a `FixCaseAdapter` (the adapter is complete only now)
+
+`trace` accepts pytest exit 0 or 1 (a hidden test may fail at the reference and is still traced); any other exit code is a harness failure.
 
 **Commit**: `feat: add trace verdict, patch checks and fix-case registry`
 

@@ -20,6 +20,7 @@ from squadron.benchmark.fairness import (
     AllowedBoundary,
     CollectedTests,
     CollectionFailed,
+    FairnessVerdict,
     HarnessFailure,
 )
 from squadron.benchmark.python_adapter import LOCKFILE_NAME
@@ -31,6 +32,7 @@ from squadron.benchmark.python_tree_files import (
     grader_commands_for,
     overlay_files,
 )
+from squadron.benchmark.trace_verdict import TraceFacts, judge_trace
 from squadron.core.process_runner import ProcessNotFoundError, ProcessTimedOutError
 from squadron.metrology.benchmark_models import ConftestFixture, GraderCommand
 from squadron.metrology.snapshot_models import SourceLanguage
@@ -40,12 +42,16 @@ _logger = logging.getLogger(__name__)
 TRACE_MODULE = "squadron_fixcase_trace"
 TRACE_CONFIG_ENV = "SQUADRON_FIXCASE_TRACE_CONFIG"
 MODE_COLLECT = "collect"
+MODE_TRACE = "trace"
 CONFIG_FILE = "fixcase_trace_config.json"
 OUTPUT_FILE = "fixcase_trace_output.json"
 GIT_QUERY_TIMEOUT_S = 60
 #: pytest exit codes a collect-only run may end with: 0 collected, 2 collection errors,
 #: 5 nothing collected. Anything else (3 internal error, 4 usage) is a harness failure.
 _COLLECT_EXIT_CODES = (0, 2, 5)
+#: A trace run executes the tests: 0 all passed, 1 some failed (a hidden test may fail at the
+#: reference; it is still traced). Anything else, a usage error for one, is a harness failure.
+_TRACE_EXIT_CODES = (0, 1)
 _DEFAULT_TEST_DIRS = ("tests", "test")
 _DEFAULT_TEST_FILE_PATTERNS = ("test_*.py", "*_test.py", "conftest.py")
 
@@ -146,7 +152,32 @@ class PythonFixCaseAdapter:
         text = pyproject.read_text(encoding="utf-8") if pyproject.is_file() else None
         return [line for line in result.stdout.splitlines() if line and self.is_test_side(text, line)]
 
-    def _run_plugin(self, ctx: SandboxContext, mode: str, pytest_args: Sequence[str]) -> dict[str, Any]:
+    def trace(
+        self, ctx: SandboxContext, node_ids: Sequence[str], allowed: AllowedBoundary
+    ) -> Mapping[str, FairnessVerdict]:
+        """Run ``node_ids`` once with the trace plugin and judge each node's recorded facts.
+
+        Meant for the reference file state, where the hidden tests pass and their whole path
+        executes. A node the run did not report is a harness failure, not a verdict.
+        """
+        output = self._run_plugin(ctx, MODE_TRACE, list(node_ids), _TRACE_EXIT_CODES)
+        has_co_qualname = bool(output["has_co_qualname"])
+        nodes: dict[str, Any] = output["nodes"]
+        verdicts: dict[str, FairnessVerdict] = {}
+        for node_id in node_ids:
+            if node_id not in nodes:
+                raise _harness_failure(f"the trace run did not report {node_id}")
+            facts = TraceFacts.from_plugin(nodes[node_id], has_co_qualname=has_co_qualname)
+            verdicts[node_id] = judge_trace(facts, allowed)
+        return verdicts
+
+    def _run_plugin(
+        self,
+        ctx: SandboxContext,
+        mode: str,
+        pytest_args: Sequence[str],
+        exit_codes: tuple[int, ...] = _COLLECT_EXIT_CODES,
+    ) -> dict[str, Any]:
         """Run pytest in the sandbox with the trace plugin and return its parsed output."""
         plugin_dir = copy_trace_plugin(ctx)
         config = ctx.output_dir / CONFIG_FILE
@@ -189,7 +220,7 @@ class PythonFixCaseAdapter:
                 "the trace plugin never loaded (no output file); "
                 f"pytest stderr: {result.stderr.strip()}"
             )
-        if result.returncode not in _COLLECT_EXIT_CODES:
+        if result.returncode not in exit_codes:
             raise _harness_failure(
                 f"pytest exited {result.returncode}; stderr: {result.stderr.strip()}"
             )

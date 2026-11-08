@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from squadron.benchmark.adapter import BenchmarkAdapter
+from squadron.benchmark.fairness import FixCaseAdapter
 from squadron.benchmark.python_adapter import PythonBenchmarkAdapter
+from squadron.benchmark.python_fairness import PythonFixCaseAdapter
 from squadron.metrology.snapshot_models import SourceLanguage
 
 
@@ -19,4 +21,11 @@ def adapter_for(language: SourceLanguage) -> BenchmarkAdapter:
     """The adapter for ``language``; any language without one raises a named error."""
     if language is SourceLanguage.PYTHON:
         return PythonBenchmarkAdapter()
+    raise UnsupportedLanguageError(language)
+
+
+def fix_case_adapter_for(language: SourceLanguage) -> FixCaseAdapter:
+    """The fix-case (fairness) adapter for ``language``; any language without one raises."""
+    if language is SourceLanguage.PYTHON:
+        return PythonFixCaseAdapter()
     raise UnsupportedLanguageError(language)
