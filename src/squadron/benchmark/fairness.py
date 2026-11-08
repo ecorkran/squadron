@@ -29,8 +29,9 @@ class CollectedTests:
     digests: Mapping[str, str]
     #: node id -> the conftest fixtures its closure reaches.
     fixtures_reached: Mapping[str, tuple[ConftestFixture, ...]]
-    #: every conftest fixture defined, by path and name.
-    conftest_fixtures: frozenset[ConftestFixture]
+    #: every conftest fixture defined, by path and name. A tuple, not a set: pydantic models
+    #: do not type-check as hashable, so comparisons go through (path, name) keys.
+    conftest_fixtures: tuple[ConftestFixture, ...]
 
 
 @dataclass(frozen=True)

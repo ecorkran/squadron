@@ -42,13 +42,14 @@ def sort_tests(parent: CollectedTests, reference: CollectedTests) -> TestSets:
     superseded = (parent_nodes - reference_nodes) | changed
     unchanged = both - changed
 
-    added_fixtures = reference.conftest_fixtures - parent.conftest_fixtures
+    parent_keys = {_fixture_order(fixture) for fixture in parent.conftest_fixtures}
+    added_keys = {_fixture_order(fixture) for fixture in reference.conftest_fixtures} - parent_keys
     # Keyed by (path, name): deduplicates across hidden tests and gives the sort order.
     reached = {
         _fixture_order(fixture): fixture
         for node in hidden
         for fixture in reference.fixtures_reached.get(node, ())
-        if fixture in added_fixtures
+        if _fixture_order(fixture) in added_keys
     }
     return TestSets(
         hidden_candidates=tuple(sorted(hidden)),

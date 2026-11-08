@@ -16,7 +16,7 @@ def fixture(name: str, path: str = CONFTEST) -> ConftestFixture:
 def collected(
     digests: dict[str, str],
     reached: dict[str, tuple[ConftestFixture, ...]] | None = None,
-    defined: frozenset[ConftestFixture] = frozenset(),
+    defined: tuple[ConftestFixture, ...] = (),
 ) -> CollectedTests:
     return CollectedTests(digests=digests, fixtures_reached=reached or {}, conftest_fixtures=defined)
 
@@ -31,7 +31,7 @@ def test_a_fix_that_adds_changes_deletes_and_adds_a_fixture() -> None:
             "tests/test_a.py::test_changed": "d2",
             "tests/test_a.py::test_deleted": "d3",
         },
-        defined=frozenset({existing}),
+        defined=(existing,),
     )
     reference = collected(
         {
@@ -40,7 +40,7 @@ def test_a_fix_that_adds_changes_deletes_and_adds_a_fixture() -> None:
             "tests/test_a.py::test_added": "d4",
         },
         reached={"tests/test_a.py::test_added": (existing, added)},
-        defined=frozenset({existing, added}),
+        defined=(existing, added),
     )
     sets = sort_tests(parent, reference)
     assert sets.hidden_candidates == ("tests/test_a.py::test_added", "tests/test_a.py::test_changed")
@@ -69,7 +69,7 @@ def test_an_added_fixture_no_hidden_test_reaches_is_not_hidden() -> None:
     reference = collected(
         {"t.py::a": "x", "t.py::b": "y"},
         reached={"t.py::a": (added,)},  # reached only by an unchanged test
-        defined=frozenset({added}),
+        defined=(added,),
     )
     sets = sort_tests(parent, reference)
     assert sets.hidden_candidates == ("t.py::b",)
@@ -78,11 +78,11 @@ def test_an_added_fixture_no_hidden_test_reaches_is_not_hidden() -> None:
 
 def test_a_fixture_already_at_the_parent_is_not_hidden_even_when_reached() -> None:
     existing = fixture("workdir")
-    parent = collected({"t.py::a": "x"}, defined=frozenset({existing}))
+    parent = collected({"t.py::a": "x"}, defined=(existing,))
     reference = collected(
         {"t.py::a": "x", "t.py::b": "y"},
         reached={"t.py::b": (existing,)},
-        defined=frozenset({existing}),
+        defined=(existing,),
     )
     assert sort_tests(parent, reference).hidden_fixtures == ()
 
@@ -96,7 +96,7 @@ def test_fixtures_are_sorted_and_deduplicated_across_hidden_tests() -> None:
     reference = collected(
         {"t.py::a": "1", "t.py::b": "2"},
         reached={"t.py::a": (first, second), "t.py::b": (first,)},
-        defined=frozenset({first, second}),
+        defined=(first, second),
     )
     assert sort_tests(parent, reference).hidden_fixtures == (first, second)
 

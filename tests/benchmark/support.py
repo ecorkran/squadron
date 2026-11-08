@@ -102,7 +102,7 @@ CLOSING_COMMIT_MESSAGES: tuple[tuple[str, str], ...] = (
 )
 
 
-def _hermetic_git(path: Path, *args: str) -> str:
+def hermetic_git(path: Path, *args: str) -> str:
     env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
     result = subprocess.run(
         ["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t.invalid", *args],
@@ -118,14 +118,58 @@ def closing_commit_repo(tmp_path: Path) -> ClosingCommitRepo:
     """Build the discovery repository: linear history, then a side branch merged with a keyword."""
     path = tmp_path / "closing_commit_repo"
     path.mkdir()
-    _hermetic_git(path, "init", "-q", "-b", "main")
+    hermetic_git(path, "init", "-q", "-b", "main")
     shas: dict[str, str] = {}
     for name, message in CLOSING_COMMIT_MESSAGES:
-        _hermetic_git(path, "commit", "-q", "--allow-empty", "-m", message)
-        shas[name] = _hermetic_git(path, "rev-parse", "HEAD")
-    _hermetic_git(path, "checkout", "-q", "-b", "side")
-    _hermetic_git(path, "commit", "-q", "--allow-empty", "-m", "side work")
-    _hermetic_git(path, "checkout", "-q", "main")
-    _hermetic_git(path, "merge", "-q", "--no-ff", "-m", "Merge side\n\nFixes #16", "side")
-    shas["merge"] = _hermetic_git(path, "rev-parse", "HEAD")
+        hermetic_git(path, "commit", "-q", "--allow-empty", "-m", message)
+        shas[name] = hermetic_git(path, "rev-parse", "HEAD")
+    hermetic_git(path, "checkout", "-q", "-b", "side")
+    hermetic_git(path, "commit", "-q", "--allow-empty", "-m", "side work")
+    hermetic_git(path, "checkout", "-q", "main")
+    hermetic_git(path, "merge", "-q", "--no-ff", "-m", "Merge side\n\nFixes #16", "side")
+    shas["merge"] = hermetic_git(path, "rev-parse", "HEAD")
     return ClosingCommitRepo(path=path, shas=shas)
+
+
+CHANGES_DIR = FIXTURES_DIR / "fixfair_changes"
+DELETED_LIST = "deleted.txt"
+FIX_COMMIT_BODY = "Fixes #1"
+
+
+@dataclass(frozen=True)
+class FixHistory:
+    """A repository with a base commit and the commit a scenario applies on top of it."""
+
+    repo: Path
+    parent_sha: str
+    fix_sha: str
+
+
+def fix_history(fixture: str, scenario: str, tmp_path: Path) -> FixHistory:
+    """Commit 1 is the fixture project; commit 2 applies ``fixfair_changes/<scenario>/``.
+
+    Each file under the scenario directory is written at its relative path; paths listed
+    in ``deleted.txt`` are removed. Commit 2's message carries a closing keyword.
+    """
+    repo = tmp_path / f"{fixture}-{scenario}"
+    shutil.copytree(FIXTURES_DIR / fixture, repo)
+    hermetic_git(repo, "init", "-q", "-b", "main")
+    hermetic_git(repo, "add", "-A")
+    hermetic_git(repo, "commit", "-q", "-m", "base")
+    parent_sha = hermetic_git(repo, "rev-parse", "HEAD")
+
+    scenario_dir = CHANGES_DIR / scenario
+    for source in sorted(scenario_dir.rglob("*")):
+        if not source.is_file() or source.name == DELETED_LIST:
+            continue
+        destination = repo / source.relative_to(scenario_dir)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source, destination)
+    deleted = scenario_dir / DELETED_LIST
+    if deleted.exists():
+        for line in deleted.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                (repo / line.strip()).unlink()
+    hermetic_git(repo, "add", "-A")
+    hermetic_git(repo, "commit", "-q", "-m", f"fix: apply {scenario}", "-m", FIX_COMMIT_BODY)
+    return FixHistory(repo=repo, parent_sha=parent_sha, fix_sha=hermetic_git(repo, "rev-parse", "HEAD"))
