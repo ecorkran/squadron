@@ -325,10 +325,12 @@ Exclusions look only at unchanged tests (a new test the fix rejects does not exi
 **Commit**: `feat: add repeated qualification and case construction`
 
 ### Task 25: Real-fixture end-to-end qualification (success criteria)
-- [ ] Create these scenarios in `fixfair_changes/` and test them in `tests/benchmark/test_qualify_end_to_end.py` (`network` marker, real sandbox, scripted host serving fixture issues, history from `fix_history`): a qualifying crash fix, a coupled test (direct internal call), a patching test, a test using a symbol added by the fix, a flaky test (using a state file in a temp dir), a conftest-changing fix, and a lockfile-changing fix
-  - [ ] Each ends with the expected outcome and rejection; the qualifying one has the expected hidden node, task text and grader commands; the flaky node is on `excluded_tests`
-  - [ ] Running the qualifying scenario twice runs no suite the second time (assert with a counting runner wrapper); bumping `FAIRNESS_RULE_VERSION` in the test re-qualifies
-  - [ ] A fixture issue with a later comment gives the same `case_id` before and after the comment is added; an issue edited after the fix is `issue_edited_after_fix`
+- [x] Create these scenarios in `fixfair_changes/` and test them in `tests/benchmark/test_qualify_end_to_end.py` (`network` marker, real sandbox, scripted host serving fixture issues, history from `fix_history`): a qualifying crash fix, a coupled test (direct internal call), a patching test, a test using a symbol added by the fix, a flaky test (using a state file in a temp dir), a conftest-changing fix, and a lockfile-changing fix
+  - [x] Each ends with the expected outcome and rejection; the qualifying one has the expected hidden node, task text and grader commands; the flaky node is on `excluded_tests`
+  - [x] Running the qualifying scenario twice runs no suite the second time (assert with a counting runner wrapper); bumping `FAIRNESS_RULE_VERSION` in the test re-qualifies
+  - [x] A fixture issue with a later comment gives the same `case_id` before and after the comment is added; an issue edited after the fix is `issue_edited_after_fix`
+
+Findings: the trace runs before test-first, and a function or class the fix added is outside the parent's boundary, so a test using one is rejected as `reaches_past_boundary`, not `uses_symbol_added_by_fix`. That verdict is reachable only for symbols the trace does not track (a constant), and `AttributeError` on an instance attribute classifies as `other_exception`, so it is `undecidable_failure_at_parent`. Task 29's search for a real `uses_symbol_added_by_fix` example may find none.
 
 **Commit**: `test: add end-to-end fix qualification scenarios`
 

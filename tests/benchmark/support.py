@@ -149,19 +149,8 @@ class FixHistory:
     fix_sha: str
 
 
-def fix_history(fixture: str, scenario: str, tmp_path: Path) -> FixHistory:
-    """Commit 1 is the fixture project; commit 2 applies ``fixfair_changes/<scenario>/``.
-
-    Each file under the scenario directory is written at its relative path; paths listed
-    in ``deleted.txt`` are removed. Commit 2's message carries a closing keyword.
-    """
-    repo = tmp_path / f"{fixture}-{scenario}"
-    shutil.copytree(FIXTURES_DIR / fixture, repo)
-    hermetic_git(repo, "init", "-q", "-b", "main")
-    hermetic_git(repo, "add", "-A")
-    hermetic_git(repo, "commit", "-q", "-m", "base")
-    parent_sha = hermetic_git(repo, "rev-parse", "HEAD")
-
+def _apply_scenario(repo: Path, scenario: str) -> None:
+    """Write each file under ``fixfair_changes/<scenario>/`` at its path; apply ``deleted.txt``."""
     scenario_dir = CHANGES_DIR / scenario
     for source in sorted(scenario_dir.rglob("*")):
         if not source.is_file() or source.name == DELETED_LIST:
@@ -174,6 +163,25 @@ def fix_history(fixture: str, scenario: str, tmp_path: Path) -> FixHistory:
         for line in deleted.read_text(encoding="utf-8").splitlines():
             if line.strip():
                 (repo / line.strip()).unlink()
+
+
+def fix_history(
+    fixture: str, scenario: str, tmp_path: Path, base_scenario: str | None = None
+) -> FixHistory:
+    """Commit 1 is the fixture project; commit 2 applies ``fixfair_changes/<scenario>/``.
+
+    ``base_scenario`` is applied before commit 1, for a test that must already exist at the
+    parent (an unchanged test). Commit 2's message carries a closing keyword.
+    """
+    repo = tmp_path / f"{fixture}-{scenario}"
+    shutil.copytree(FIXTURES_DIR / fixture, repo)
+    if base_scenario is not None:
+        _apply_scenario(repo, base_scenario)
+    hermetic_git(repo, "init", "-q", "-b", "main")
+    hermetic_git(repo, "add", "-A")
+    hermetic_git(repo, "commit", "-q", "-m", "base")
+    parent_sha = hermetic_git(repo, "rev-parse", "HEAD")
+    _apply_scenario(repo, scenario)
     hermetic_git(repo, "add", "-A")
     hermetic_git(repo, "commit", "-q", "-m", f"fix: apply {scenario}", "-m", FIX_COMMIT_BODY)
     return FixHistory(repo=repo, parent_sha=parent_sha, fix_sha=hermetic_git(repo, "rev-parse", "HEAD"))
