@@ -118,6 +118,16 @@ def hermetic_git(path: Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def _write_commit_content(path: Path, name: str) -> None:
+    """Give each commit a change: a ``pyproject.toml`` first, then one new test file per commit."""
+    if name == "init":
+        (path / "pyproject.toml").write_text("[project]\nname = 'closing'\n", encoding="utf-8")
+        return
+    tests = path / "tests"
+    tests.mkdir(exist_ok=True)
+    (tests / f"test_{name}.py").write_text("def test_it():\n    assert True\n", encoding="utf-8")
+
+
 def closing_commit_repo(tmp_path: Path) -> ClosingCommitRepo:
     """Build the discovery repository: linear history, then a side branch merged with a keyword."""
     path = tmp_path / "closing_commit_repo"
@@ -125,6 +135,8 @@ def closing_commit_repo(tmp_path: Path) -> ClosingCommitRepo:
     hermetic_git(path, "init", "-q", "-b", "main")
     shas: dict[str, str] = {}
     for name, message in CLOSING_COMMIT_MESSAGES:
+        _write_commit_content(path, name)
+        hermetic_git(path, "add", "-A")
         hermetic_git(path, "commit", "-q", "--allow-empty", "-m", message)
         shas[name] = hermetic_git(path, "rev-parse", "HEAD")
     hermetic_git(path, "checkout", "-q", "-b", "side")

@@ -18,7 +18,7 @@ from squadron.benchmark.adapter import SandboxContext
 from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.diff_classify import DiffClassification
 from squadron.benchmark.fairness import FAIRNESS_RULE_VERSION, FixCaseAdapter
-from squadron.benchmark.fix_discovery import FixCandidate
+from squadron.benchmark.fix_discovery import DiscoveryRejection, FixCandidate
 from squadron.benchmark.test_first import SuiteRunner
 from squadron.codehost.protocol import CodeHost
 from squadron.core.process_runner import ProcessRunner
@@ -113,10 +113,32 @@ def record_outcome(
             "created_at": datetime.now(UTC),
         }
     )
+    return _store(deps, record)
+
+
+def record_discovery_rejection(deps: QualifyDeps, rejected: DiscoveryRejection) -> QualifyResult:
+    """Store the rejection of a closing commit that never became a candidate."""
+    record = FixQualification(
+        project_id=deps.project_id,
+        commit_sha=rejected.sha,
+        parent_sha=rejected.parent_sha,
+        issue_ref=rejected.issue_ref,
+        rule_version=FAIRNESS_RULE_VERSION,
+        environment=None,
+        repeats=deps.repeats,
+        outcome=QualificationOutcome.REJECTED,
+        rejection=rejected.rejection,
+        detail=rejected.detail,
+        created_at=datetime.now(UTC),
+    )
+    return _store(deps, record)
+
+
+def _store(deps: QualifyDeps, record: FixQualification) -> QualifyResult:
     try:
         deps.store.write_fix_qualification(record)
     except MetrologyStoreError as exc:
-        message = f"could not store the qualification of {candidate.sha[:12]}: {exc}"
+        message = f"could not store the qualification of {record.commit_sha[:12]}: {exc}"
         _logger.exception(message)
         raise BuildHalted(message) from exc
     return QualifyResult(record)

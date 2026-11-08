@@ -71,9 +71,17 @@ class FixCandidate:
 
 @dataclass(frozen=True)
 class DiscoveryRejection:
+    """Why a closing commit is not a candidate.
+
+    ``parent_sha`` (first parent, empty for a root commit) and ``issue_ref`` (the first
+    reference as written) let the rejection be stored as a ``FixQualification``.
+    """
+
     sha: str
     rejection: CandidateRejection
     detail: str
+    parent_sha: str = ""
+    issue_ref: str | None = None
 
 
 @dataclass(frozen=True)
@@ -161,18 +169,30 @@ def _rejection_for(
     """The one discovery rejection of a commit: merge, then several issues, then several closers."""
     if len(commit.parents) > 1:
         return DiscoveryRejection(
-            commit.sha, CandidateRejection.MERGE_COMMIT, f"{len(commit.parents)} parents"
+            commit.sha,
+            CandidateRejection.MERGE_COMMIT,
+            f"{len(commit.parents)} parents",
+            commit.parents[0],
+            commit.references[0][0],
         )
     # A commit is only built with at least one reference, so != 1 means several.
     if len(commit.references) != 1:
         named = ", ".join(written for written, _, _ in commit.references)
-        return DiscoveryRejection(commit.sha, CandidateRejection.MULTIPLE_ISSUES_CLOSED, named)
+        return DiscoveryRejection(
+            commit.sha,
+            CandidateRejection.MULTIPLE_ISSUES_CLOSED,
+            named,
+            commit.parents[0] if commit.parents else "",
+            commit.references[0][0],
+        )
     written, repository, number = commit.references[0]
     if closers[(repository, number)] > 1:
         return DiscoveryRejection(
             commit.sha,
             CandidateRejection.MULTIPLE_CLOSING_COMMITS,
             f"{written} is closed by {closers[(repository, number)]} commits",
+            commit.parents[0] if commit.parents else "",
+            written,
         )
     return None
 
