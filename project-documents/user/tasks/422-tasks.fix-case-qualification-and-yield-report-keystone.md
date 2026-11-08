@@ -96,15 +96,15 @@ Added `IssueTooLargeError` (page bound raises) and updated the error-class count
 **Commit**: `feat: add CodeHost.get_issue`
 
 ### Task 6: Frozen issue text (D2)
-- [ ] `src/squadron/benchmark/issue_freeze.py`: `render_issue(snapshot, cutoff: datetime | None) -> str` and `freeze_issue(snapshot, cutoff) -> FrozenIssue | CandidateRejection`; `FrozenIssue` is a frozen dataclass with one field, `task_text`
-  - [ ] No cutoff: title, body and every comment, rendered as markdown with a heading per comment (author and date); no edited-after check
-  - [ ] Cutoff: the title, the body, and each comment created before the cutoff in order; a comment created at or after the cutoff is omitted
-  - [ ] Cutoff and the body, or an included comment, with `last_edited_at` after the cutoff, or any title rename at or after the cutoff → `issue_edited_after_fix`. An omitted comment's edits are ignored
-  - [ ] Timestamps compare as timezone-aware values; a naive timestamp raises
-- [ ] Tests `tests/benchmark/test_issue_freeze.py`
-  - [ ] A late comment does not change the rendered text; a late comment's edit does not reject; an edited body rejects; a comment edited after the cutoff rejects; a title rename after the cutoff rejects and one before the cutoff does not
-  - [ ] No-cutoff rendering includes every comment and never rejects
-  - [ ] Heading format is pinned by one exact-string assertion
+- [x] `src/squadron/benchmark/issue_freeze.py`: `render_issue(snapshot, cutoff: datetime | None) -> str` and `freeze_issue(snapshot, cutoff) -> FrozenIssue | CandidateRejection`; `FrozenIssue` is a frozen dataclass with one field, `task_text`
+  - [x] No cutoff: title, body and every comment, rendered as markdown with a heading per comment (author and date); no edited-after check
+  - [x] Cutoff: the title, the body, and each comment created before the cutoff in order; a comment created at or after the cutoff is omitted
+  - [x] Cutoff and the body, or an included comment, with `last_edited_at` after the cutoff, or any title rename at or after the cutoff → `issue_edited_after_fix`. An omitted comment's edits are ignored
+  - [x] Timestamps compare as timezone-aware values; a naive timestamp raises
+- [x] Tests `tests/benchmark/test_issue_freeze.py`
+  - [x] A late comment does not change the rendered text; a late comment's edit does not reject; an edited body rejects; a comment edited after the cutoff rejects; a title rename after the cutoff rejects and one before the cutoff does not
+  - [x] No-cutoff rendering includes every comment and never rejects
+  - [x] Heading format is pinned by one exact-string assertion
 
 **Commit**: `feat: freeze issue text at the fix commit date`
 
