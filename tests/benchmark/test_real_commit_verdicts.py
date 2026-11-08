@@ -184,3 +184,39 @@ def test_each_hidden_test_is_rejected_for_patching_project_code(prefix: str, tmp
         node: (TestRejection.PATCHES_PROJECT_CODE, target)
         for node, target in PATCHING_COMMITS[prefix].items()
     }
+
+
+# --- Examples taken from the 2026-11-08 full run (94 records, 1 qualified) ---------------------
+# Categories with no instance in that history: a crash fix (no qualified case records
+# ``project_exception``), test-first by unknown symbol (no ``uses_symbol_added_by_fix``) and a
+# qualified CLI test (the one qualified case has no ``CliRunner``). Fixture projects cover them.
+
+QUALIFIED_COMMIT = "21013615"
+QUALIFIED_HIDDEN_TEST = (
+    "tests/providers/test_capabilities.py::TestAppliesEffort::test_codex_applies_effort"
+)
+BOUNDARY_COMMIT = "c45d28e9"
+BOUNDARY_TEST = (
+    "tests/providers/sdk/test_tool_less_live.py::"
+    "test_tool_less_sdk_step_runs_no_tools_and_loads_no_project_text"
+)
+BOUNDARY_SYMBOL = "squadron.pipeline.actions.dispatch.one_shot_dispatch_with_telemetry"
+
+
+def test_the_effort_fix_qualifies_with_its_test_failing_by_assertion_at_the_parent(
+    tmp_path: Path,
+) -> None:
+    record = qualify_directly(require_commit(QUALIFIED_COMMIT), tmp_path).record
+    assert record.outcome is QualificationOutcome.QUALIFIED, record.detail
+    verdicts = {v.node_id: v for v in record.hidden_verdicts}
+    qualified = verdicts[QUALIFIED_HIDDEN_TEST]
+    assert qualified.rejection is None
+    assert "assertion_failure" in qualified.detail
+    assert [v.node_id for v in record.hidden_verdicts if v.rejection is None] == [QUALIFIED_HIDDEN_TEST]
+
+
+def test_a_test_reaching_an_internal_symbol_is_rejected_past_the_boundary(tmp_path: Path) -> None:
+    record = qualify_directly(require_commit(BOUNDARY_COMMIT), tmp_path).record
+    assert record.outcome is QualificationOutcome.REJECTED, record.detail
+    verdicts = {v.node_id: (v.rejection, v.detail) for v in record.hidden_verdicts}
+    assert verdicts[BOUNDARY_TEST] == (TestRejection.REACHES_PAST_BOUNDARY, BOUNDARY_SYMBOL)

@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261107
+dateUpdated: 20261108
 ---
 
 # Development Log
@@ -10,6 +10,17 @@ dateUpdated: 20261107
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261108
+
+### Slice 422: Real-commit verdicts (Task 29)
+
+- **Full run (once):** `sq benchmark fix-cases build --set fix-squadron` over all 94 closing commits: 1 qualified (21013615, `case-85c975f100d51ec1`), 70 rejected, 23 `harness_error` (20 of them `submodule replay is not supported`, 1 trace timeout). Hidden verdicts: 553 `patches_project_code`, 3 `reaches_past_boundary`, 1 qualified. Squadron alone reads n=1, MDD 1.14, "not enough (need >= 33 cases)".
+- **D7 exemption:** squadron's autouse `tests/conftest.py` fixture patches `squadron.cli.app._load_env_file` (since 3ea67555); it is exempted as environment isolation (`ENVIRONMENT_ISOLATION_PATCH_TARGETS`, rule version 2).
+- **Pins:** ebd45f3f, 9fc4fc1c and d6535d62 are rejected for patching project code (deciding targets `BlockedTasksAction._read_markers`, `run._apply_param_overrides`, `run.load_pipeline`); 21013615 qualifies with its hidden test failing by assertion at the parent; c45d28e9 is rejected `reaches_past_boundary` at `one_shot_dispatch_with_telemetry`.
+- **No instance in the 94 records:** (a) crash fix (`project_exception`), (b) `uses_symbol_added_by_fix`, (d) qualified CLI test (`CliRunner`). Fixture projects cover them.
+- **Measured:** the three-commit patch pins took 9m32s; the two example pins took 33m16s (same machine, later in the session).
+- **Scope change:** Tasks 29 (steps 3–4) and 30 no longer rerun the whole history; the design walkthrough follows.
 
 ## 20261107
 
