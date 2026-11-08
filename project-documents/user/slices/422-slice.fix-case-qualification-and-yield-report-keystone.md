@@ -398,7 +398,7 @@ class FixQualification(BaseModel, frozen=True):
 
 These are draft commands. They do not exist until this slice is implemented.
 
-1. **Build squadron's fix cases.**
+1. **Build squadron's fix cases (once, whole history).** This is the only full-history run; later steps read its records.
    ```bash
    cd ~/source/repos/manta/squadron
    sq benchmark fix-cases build --set fix-squadron
@@ -414,9 +414,9 @@ These are draft commands. They do not exist until this slice is implemented.
 
 3. **Frozen text matches the cutoff.** For one qualified case, compare its task text with `gh issue view <n> --comments`. Comments dated after `git log -1 --format=%cI <commit>` are absent.
 
-4. **Reuse.** Run step 1 again. It runs installs but no tests, and every line says `reused`.
+4. **Reuse.** Rerun `build --commit <sha>` for three commits only: one qualified, one rejected at the sandbox stage, one rejected earlier. It runs installs but no tests; the first two say `reused` and the third repeats its rejection reason.
 
-5. **Second project.** Pick another cf project from `cf project list` (a uv Python project gives a non-trivial answer):
+5. **Second project.** Pick another cf project from `cf project list` (a uv Python project gives a non-trivial answer). Count its closing commits first; at 30 or fewer build it whole, above 30 build only its 10 most recent with repeated `--commit` and treat the result as a sample:
    ```bash
    sq benchmark fix-cases build --set fix-<name> --repo <path>
    sq benchmark yield --repo . --repo <path>
@@ -448,7 +448,7 @@ These are draft commands. They do not exist until this slice is implemented.
 3. The trace plugin's collect mode, closure digests and `test_sets`, against fixture projects.
 4. Overlay and the test-first mapping on top of 421's `run_suite`.
 5. The boundary resolver, crossings, static references and patch interception, against fixture projects.
-6. `qualify`, `FixQualification` records, `case_build` and the CLI. Run on squadron, and take the real-commit fairness examples (including the qualifying crash fix) from that run. If no squadron crash fix qualifies, write `BLOCKED:` with the evidence and take it to the PM.
+6. `qualify`, `FixQualification` records, `case_build` and the CLI. Run on squadron once over its whole history, and take the real-commit fairness examples from the records that run wrote; do not build again. A category with no instance among those records is noted in the DEVLOG, not a blocker.
 7. `separability` and `yield_report`. Run the walkthrough on squadron and a second project.
 
 Effort: 4/5.
