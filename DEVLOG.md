@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261106
+dateUpdated: 20261107
 ---
 
 # Development Log
@@ -10,6 +10,12 @@ dateUpdated: 20261106
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261107
+
+### Release 0.24.24
+
+- **Contents:** slice 421 (benchmark sandbox and case record), `sq runs list --json` and run working directory (#303), `pipeline.on_pause_command` (#302), tool-less `allowed_tools: []` dispatch on SDK models (#299).
 
 ## 20261106
 
