@@ -197,15 +197,17 @@ Two changes beyond the task text: `BenchmarkSandbox.context()` is a new public a
 **Commit**: `feat: add python fix-case adapter collection`
 
 ### Task 15: File states, overlay, grader commands (D4, D11)
-- [ ] `overlay(ctx, files)` on the adapter: writes each `path → bytes` and removes each `path → None`, creating directories; paths are validated to stay inside the tree; an `OSError` is logged at ERROR and raised as `HarnessFailure`
-- [ ] `src/squadron/benchmark/file_states.py`: `FileStates` built from the user's checkout with `git show <sha>:<path>`: `reference_files`, `overlay_files` (test-side only) and `parent_files` for the same paths, so the sandbox can be switched between parent, reference and parent-plus-overlay by rewriting whole files (D4). `FileState` is a `StrEnum` (`parent`, `reference`, `parent_plus_overlay`) and `FileStates.switch_to(ctx, adapter, state)` is the one operation that moves the sandbox to a state, by calling `adapter.overlay` with the right files; every later task calls it. Deleted-at-reference files map to `None`; files added by the diff map to `None` when restoring the parent. A `git show` that fails (path absent at the sha, timeout, non-zero exit) is logged at ERROR and raised as `HarnessFailure`
-- [ ] `grader_commands(tree)` per D11: `suite` always; `lint` only with `[tool.ruff]` or `ruff.toml`; `typecheck` only with `[tool.pyright]` or `pyrightconfig.json`. Nothing here runs them
-- [ ] Tests `tests/benchmark/test_file_states.py` (a module-scoped sandbox of `sort_sets`; `network` marker)
-  - [ ] `overlay` then `git status --porcelain` shows exactly the overlaid paths; `switch_to` parent → reference → parent leaves the tree byte-identical to the start; a path escaping the tree raises
-  - [ ] After `switch_to(reference)`, `collect` includes the test file the diff added (its path is in the config JSON's `test_side_files`)
-  - [ ] `EnvironmentIdentity.identity_digest` is unchanged across the switches (D4)
-  - [ ] `grader_commands` for four trees: neither tool configured, ruff only, pyright only, both
-  - [ ] Failure modes: a `FileStates` request for a path absent at the sha, and an overlay into a read-only directory, each raise `HarnessFailure` with an ERROR log (`caplog`)
+- [x] `overlay(ctx, files)` on the adapter: writes each `path → bytes` and removes each `path → None`, creating directories; paths are validated to stay inside the tree; an `OSError` is logged at ERROR and raised as `HarnessFailure`
+- [x] `src/squadron/benchmark/file_states.py`: `FileStates` built from the user's checkout with `git show <sha>:<path>`: `reference_files`, `overlay_files` (test-side only) and `parent_files` for the same paths, so the sandbox can be switched between parent, reference and parent-plus-overlay by rewriting whole files (D4). `FileState` is a `StrEnum` (`parent`, `reference`, `parent_plus_overlay`) and `FileStates.switch_to(ctx, adapter, state)` is the one operation that moves the sandbox to a state, by calling `adapter.overlay` with the right files; every later task calls it. Deleted-at-reference files map to `None`; files added by the diff map to `None` when restoring the parent. A `git show` that fails (path absent at the sha, timeout, non-zero exit) is logged at ERROR and raised as `HarnessFailure`
+- [x] `grader_commands(tree)` per D11: `suite` always; `lint` only with `[tool.ruff]` or `ruff.toml`; `typecheck` only with `[tool.pyright]` or `pyrightconfig.json`. Nothing here runs them
+- [x] Tests `tests/benchmark/test_file_states.py` (a module-scoped sandbox of `sort_sets`; `network` marker)
+  - [x] `overlay` then `git status --porcelain` shows exactly the overlaid paths; `switch_to` parent → reference → parent leaves the tree byte-identical to the start; a path escaping the tree raises
+  - [x] After `switch_to(reference)`, `collect` includes the test file the diff added (its path is in the config JSON's `test_side_files`)
+  - [x] `EnvironmentIdentity.identity_digest` is unchanged across the switches (D4)
+  - [x] `grader_commands` for four trees: neither tool configured, ruff only, pyright only, both
+  - [x] Failure modes: a `FileStates` request for a path absent at the sha, and an overlay into a read-only directory, each raise `HarnessFailure` with an ERROR log (`caplog`)
+
+`FileStates.build` reads through `ProcessRunner`, which decodes text: a file with non-UTF-8 bytes is refused as a `HarnessFailure` (it would be altered silently) and CRLF becomes LF; acceptable for the Python source and tests fix cases touch. Overlay and grader helpers live in `python_tree_files.py` to keep `python_fairness.py` under size.
 
 **Commit**: `feat: add file states, overlay and grader commands`
 
