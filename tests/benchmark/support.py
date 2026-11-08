@@ -76,3 +76,56 @@ def git_tree(fixture: str, tmp_path: Path) -> Path:
         env=env,
     )
     return tree
+
+
+@dataclass(frozen=True)
+class ClosingCommitRepo:
+    """A repository whose commits cover every discovery outcome; ``shas`` maps name to sha."""
+
+    path: Path
+    shas: dict[str, str]
+
+
+#: (name, commit message) in history order. Messages without a closing keyword are
+#: here too: they must not become candidates or rejections.
+CLOSING_COMMIT_MESSAGES: tuple[tuple[str, str], ...] = (
+    ("init", "init"),
+    ("suffix_only", "fix: handle empty input (#283)"),
+    ("body_line", "feat: add thing\n\nSome text.\nFixes #10"),
+    ("two_issues", "fix: two at once\n\nCloses #11 and resolves #12"),
+    ("split_one", "fix: part one\n\nFixes #13"),
+    ("split_two", "fix: part two\n\nFixes #13"),
+    ("same_twice", "fix: same twice\n\nFixes #14\nfixed #14"),
+    ("cross_repo", "fix: cross\n\nCloses other/repo#15"),
+    ("colon_form", "fix: colon form\n\nFixes: #17"),
+    ("tidy", "chore: tidy"),
+)
+
+
+def _hermetic_git(path: Path, *args: str) -> str:
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    result = subprocess.run(
+        ["git", "-C", str(path), "-c", "user.name=t", "-c", "user.email=t@t.invalid", *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    return result.stdout.strip()
+
+
+def closing_commit_repo(tmp_path: Path) -> ClosingCommitRepo:
+    """Build the discovery repository: linear history, then a side branch merged with a keyword."""
+    path = tmp_path / "closing_commit_repo"
+    path.mkdir()
+    _hermetic_git(path, "init", "-q", "-b", "main")
+    shas: dict[str, str] = {}
+    for name, message in CLOSING_COMMIT_MESSAGES:
+        _hermetic_git(path, "commit", "-q", "--allow-empty", "-m", message)
+        shas[name] = _hermetic_git(path, "rev-parse", "HEAD")
+    _hermetic_git(path, "checkout", "-q", "-b", "side")
+    _hermetic_git(path, "commit", "-q", "--allow-empty", "-m", "side work")
+    _hermetic_git(path, "checkout", "-q", "main")
+    _hermetic_git(path, "merge", "-q", "--no-ff", "-m", "Merge side\n\nFixes #16", "side")
+    shas["merge"] = _hermetic_git(path, "rev-parse", "HEAD")
+    return ClosingCommitRepo(path=path, shas=shas)

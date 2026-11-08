@@ -109,15 +109,17 @@ Added `IssueTooLargeError` (page bound raises) and updated the error-class count
 **Commit**: `feat: freeze issue text at the fix commit date`
 
 ### Task 7: Closing-commit discovery (D1)
-- [ ] `src/squadron/benchmark/build_errors.py`: `BuildHalted`, an error meaning the build cannot continue and the reason is in its message. It is raised only after an ERROR log
-- [ ] `src/squadron/benchmark/fix_discovery.py`: frozen `FixCandidate` (sha, parent_sha, committer_date, issue reference as written, owner/repo or `None`, number) and `DiscoveryResult` (`candidates`, `rejections` as `(sha, CandidateRejection, detail)`); `discover(runner, repo_root) -> DiscoveryResult`. It runs one `git log` over `HEAD` with an unambiguous record separator and parents in the format, through `ProcessRunner`. A `git log` that times out, is not found or exits non-zero is logged at ERROR and raised as `BuildHalted` naming the command
-- [ ] Closing keyword regex per D1, case-insensitive, followed by `#n` or `owner/repo#n`; one pattern constant, defined once. A bare `(#283)` suffix is not a reference. Parse leniently: keyword and number separated by any whitespace or a colon, any line of the body
-- [ ] Rejections: `merge_commit`; `multiple_issues_closed` (distinct issues, the same issue twice counts once); `multiple_closing_commits` applies to **every** commit that closes an issue closed by more than one commit. Each commit gets exactly one outcome, in this precedence: merge, multiple issues, multiple closing commits
-- [ ] Add `closing_commit_repo(tmp_path)` to `tests/benchmark/support.py`: a git repository whose commits cover every discovery reason, a `(#283)` suffix, a closing keyword in a body line other than the first, and one commit with no closing keyword. Task 26 reuses it
-- [ ] Tests `tests/benchmark/test_fix_discovery.py`
-  - [ ] On `closing_commit_repo`, each commit gets the expected candidate or rejection, and candidates plus rejections cover every closing commit exactly once
-  - [ ] Parser fixture from real history: capture the `git log` output of these real squadron commits into `tests/benchmark/fixtures/git_log_samples.txt`, in the exact format `discover` requests: 29850399 and 38060838 (#216), 9fc4fc1c and d6535d62 (#291), ebd45f3f (no closing keyword), the most recent commit whose body closes two distinct issues, and the three most recent commits with a `Fixes #n` body line. Assert the outcome of each
-  - [ ] Failure mode: with a scripted runner, a `git log` timeout and a non-zero exit each raise `BuildHalted` with an ERROR log (`caplog`)
+- [x] `src/squadron/benchmark/build_errors.py`: `BuildHalted`, an error meaning the build cannot continue and the reason is in its message. It is raised only after an ERROR log
+- [x] `src/squadron/benchmark/fix_discovery.py`: frozen `FixCandidate` (sha, parent_sha, committer_date, issue reference as written, owner/repo or `None`, number) and `DiscoveryResult` (`candidates`, `rejections` as `(sha, CandidateRejection, detail)`); `discover(runner, repo_root) -> DiscoveryResult`. It runs one `git log` over `HEAD` with an unambiguous record separator and parents in the format, through `ProcessRunner`. A `git log` that times out, is not found or exits non-zero is logged at ERROR and raised as `BuildHalted` naming the command
+- [x] Closing keyword regex per D1, case-insensitive, followed by `#n` or `owner/repo#n`; one pattern constant, defined once. A bare `(#283)` suffix is not a reference. Parse leniently: keyword and number separated by any whitespace or a colon, any line of the body
+- [x] Rejections: `merge_commit`; `multiple_issues_closed` (distinct issues, the same issue twice counts once); `multiple_closing_commits` applies to **every** commit that closes an issue closed by more than one commit. Each commit gets exactly one outcome, in this precedence: merge, multiple issues, multiple closing commits
+- [x] Add `closing_commit_repo(tmp_path)` to `tests/benchmark/support.py`: a git repository whose commits cover every discovery reason, a `(#283)` suffix, a closing keyword in a body line other than the first, and one commit with no closing keyword. Task 26 reuses it
+- [x] Tests `tests/benchmark/test_fix_discovery.py`
+  - [x] On `closing_commit_repo`, each commit gets the expected candidate or rejection, and candidates plus rejections cover every closing commit exactly once
+  - [x] Parser fixture from real history: capture the `git log` output of these real squadron commits into `tests/benchmark/fixtures/git_log_samples.txt`, in the exact format `discover` requests: 29850399 and 38060838 (#216), 9fc4fc1c and d6535d62 (#291), ebd45f3f (no closing keyword), the most recent commit whose body closes two distinct issues, and the three most recent commits with a `Fixes #n` body line. Assert the outcome of each
+  - [x] Failure mode: with a scripted runner, a `git log` timeout and a non-zero exit each raise `BuildHalted` with an ERROR log (`caplog`)
+
+`discover` takes `timeout_seconds` from the caller (no default); a root commit that closes an issue gets an empty `parent_sha` and the diff stage reports it as a failing git command.
 
 **Commit**: `feat: discover fix candidates from closing commits`
 

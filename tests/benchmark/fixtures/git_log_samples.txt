@@ -1,0 +1,68 @@
+29850399effad2c58d8060732c461b2e44ba3750a803c27e86c61224a10bc3f186af340275b959c72026-11-04T05:45:55-07:00fix: apply alias effort when opening the pipeline SDK session
+
+The session opens at the effort of its first SDK step; a later step asking
+for a different effort warns and runs at the session's. Usage records show
+the effort actually used.
+
+Fixes #216
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+380608380b221a1aaeb6ad2907f1bc886256355d29850399effad2c58d8060732c461b2e44ba37502026-11-04T05:55:04-07:00fix: test session effort wiring and warn once per alias
+
+Review follow-up for #216: tests that the startup and lazy session opens
+receive the first step's effort, the mismatch warning is keyed by alias,
+and the lazy hook resolves the SDK candidate once.
+
+Fixes #216
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+9fc4fc1cabe7d9a8fc855511bb0fd14932adc451ebd45f3f24ebb013517cace872fef610736d80792026-11-04T08:19:18-07:00fix: accept a space after the comma in sq run -p
+
+Fixes #291
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+d6535d628db296f1c4547e4e818ca5eb29cfc2519fc4fc1cabe7d9a8fc855511bb0fd14932adc4512026-11-04T08:24:25-07:00fix: narrow stray -p pairs, cover review commands, harden tests
+
+Fixes #291
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+ebd45f3f24ebb013517cace872fef610736d807906fec287c2872cb6d07c4e46f7caac87062a8d8b2026-11-04T06:53:55-07:00fix: resolve each-loop slice record in summary artifact lookup
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+627abe7e94f75e9f2fb5fe7493d6ae2be144eed74c0eedbfd08fce9afc41387de0d347f061fc54f62026-09-24T06:29:57-06:00fix: scope review-verdict-gate unreadable check to cf document root
+
+Vendored files outside project-documents/user/ (e.g. a tarball-installed
+guide's Claude agent definitions) carry frontmatter that is not strict YAML
+and blocked the guide install commit. Unreadable frontmatter now fails closed
+only under cf's document root; a readable docType: review is still checked
+anywhere. The root predicate moves to a shared module and resolves paths
+against the repo root, so absolute and ./ spellings classify correctly.
+
+Fixes #132
+Fixes #122
+
+Co-Authored-By: Claude Opus 5.5 (1M context) <noreply@anthropic.com>
+
+c45d28e9457477e6f959cac907bfe08d41cc10014a45d1a873d0abcdf677e3ac3f8234c72b7c82cc2026-11-07T18:44:37-07:00fix: run allowed_tools: [] dispatch steps tool-less on SDK models
+
+Fixes #299
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+4a45d1a873d0abcdf677e3ac3f8234c72b7c82ccc3f3a21192e26b0d192a817d5f9fd37f94383f072026-11-07T18:29:16-07:00feat: start a configured command when a run pauses
+
+Fixes #302
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+c3f3a21192e26b0d192a817d5f9fd37f94383f07905a86fd1eda024c146db73ab0f2c8c1059618962026-11-07T13:18:38-07:00feat: record run working directory and add sq runs list --json
+
+Fixes #303
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+
