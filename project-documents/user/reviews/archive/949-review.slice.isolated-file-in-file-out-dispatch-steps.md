@@ -6,7 +6,7 @@ slice: isolated-file-in-file-out-dispatch-steps
 conventionsSource: AGENTS.md
 projectRules: []
 project: squadron
-verdict: CONCERNS
+verdict: PASS
 verdictSource: stated
 sourceDocument: project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md
 aiModel: claude-sonnet-5-5
@@ -14,115 +14,114 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261102
 dateUpdated: 20261102
-reviewedSha: 00b531cc4493e5e1b8d8716aa019edb21eade294
-revision_number: 1
+reviewedSha: d2f0df4c6caf860cc357d896895b433209522c62
+revision_number: 2
 toolsGiven: [read_file, list_files, grep]
 toolCallsMade: 4
 turns: 5
-promptTokens: 247324
-cachedTokens: 161296
-cacheWriteTokens: 86020
-completionTokens: 3384
-durationSeconds: 32.9
-costUsd: 0.394832
+promptTokens: 171795
+cachedTokens: 86268
+cacheWriteTokens: 85521
+completionTokens: 3872
+durationSeconds: 34.0
+costUsd: 0.390209
 costBasis: provider
 runId: run-20261102-p4-037d1fcf
 squadronVersion: 0.24.13
 findings:
   - id: F001
-    severity: concern
+    severity: pass
     category: scope-alignment
-    summary: "Failed step can still change `delivered_prompt_file`, contradicting the plan entry"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D5 — Output files"
+    summary: "Scope matches slice plan entry 43 (949)"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#Technical Scope"
   - id: F002
-    severity: concern
-    category: proportionality
-    summary: "`replace_files_together` adds a two-phase mechanism that does not deliver the guarantee"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D5 — Output files"
+    severity: pass
+    category: boundaries
+    summary: "Layering and dependency direction"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#Architecture"
   - id: F003
-    severity: concern
-    category: scope-alignment
-    summary: "`reply_from` narrowed to top-level steps without the plan entry reflecting it"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D3 — Reply hand-off scope and lookup"
-  - id: F004
-    severity: concern
-    category: dependencies
-    summary: "Declared dependency differs from the plan entry"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md:7-8"
-  - id: F005
-    severity: concern
-    category: proportionality
-    summary: "Scope breadth: several mechanisms beyond the five plan items"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#Component Structure"
-  - id: F006
     severity: pass
     category: error-handling
-    summary: "Failure modes enumerated for each new I/O path"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#API Contracts"
+    summary: "Failure modes enumerated with observable signals"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#Failure surface"
+  - id: F004
+    severity: note
+    category: scope-creep
+    summary: "Prompt-only rejection (D9) and the `feedback` conflict rule go beyond the plan entry"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D9"
+  - id: F005
+    severity: note
+    category: proportionality
+    summary: "Two-file write rollback is the heaviest mechanism"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D5"
+  - id: F006
+    severity: note
+    category: interface-design
+    summary: "`--strict` now has two meanings"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D8"
   - id: F007
-    severity: pass
-    category: architecture
-    summary: "Layering and dependency direction"
-    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#Component Structure"
+    severity: note
+    category: behavior-change
+    summary: "No-tools guard is limited to dispatch steps and changes `allowed_tools: []` at run time"
+    location: "project-documents/user/slices/949-slice.isolated-file-in-file-out-dispatch-steps.md#D6"
 ---
 
 # Review: slice — slice 949
 
-**Verdict:** CONCERNS
+**Verdict:** PASS
 **Model:** claude-sonnet-5-5
 
 ## Findings
 
-### [CONCERN] Failed step can still change `delivered_prompt_file`, contradicting the plan entry
+### [PASS] Scope matches slice plan entry 43 (949)
 
-Plan item (3) says "a failed step writes nothing and leaves existing files alone". D5 accepts a window in which `os.replace` of `reply_file` fails after `delivered_prompt_file` was already replaced. Success criterion 4 carves out the same exception. This drops part of the scope the plan assigns to this slice. Amoeba is the stated consumer, and it may read the prompt file as evidence of what the failed step sent. The design says "no rollback" because the failure is rare, but it does not say what the consumer sees when it happens. Either close the window or get the plan entry amended. Closing it could mean keeping the old prompt-file bytes in memory and restoring them on failure. Amending it could mean narrowing plan item (3) to match D5.
+Each of the plan's five capabilities has a matching decision:
+1. File content in the prompt: D1 and D2.
+2. Reply hand-off: D3 and D4.
+3. Reply and delivered-prompt files: D5.
+4. No-tools guard: D6.
+5. `--validate --strict` with one known-keys list per step type: D7 and D8.
 
-### [CONCERN] `replace_files_together` adds a two-phase mechanism that does not deliver the guarantee
-
-The temp-all-then-replace-in-order helper is new shared API in `core/file_write.py`. It still leaves the partial-failure window described above. Calling the existing single-file `_replace_file` twice, with `reply_file` last, would give nearly the same guarantee. The only difference is that a temp-write failure on the second file would leave the first file already replaced. Either make the helper actually atomic, or drop it and reuse the existing function. Right now the extra mechanism costs more than it buys.
-
-### [CONCERN] `reply_from` narrowed to top-level steps without the plan entry reflecting it
-
-Plan item (2) says a step "names an earlier step in the same run". D3 supports only a top-level step naming an earlier top-level dispatch, and does not check nested use at load time. The reason is sound: loop, each and fan-out bodies use three different key schemes. It is still a deferral of plan scope. Nested use is documented as unsupported, but nothing validates it. A nested `reply_from` therefore fails only at run time, with a lookup error that does not say why. Add a load-time rejection for `reply_from` inside `ContainsSteps` bodies. The slice already walks `inner_steps` for strict mode, so this is cheap. Also update the plan entry to record the narrowing.
-
-### [CONCERN] Declared dependency differs from the plan entry
-
-Frontmatter lists 945 as a dependency, and the Dependencies section justifies it (`runs_squadron_tools`, `can_read_files`). The plan entry says "Dependencies: none". Reconcile the two. 945 is complete, so this is bookkeeping and does not block anything.
-
-### [CONCERN] Scope breadth: several mechanisms beyond the five plan items
-
-The plan names five capabilities. The design adds these on top:
-- a new `ContainsSteps` protocol
-- `EXECUTOR_STEP_KEYS`
-- `results_for_step` in `models.py`
-- two new `FailureKind` values
-- `contained_path_error`
-- the D9 prompt-only rejection
-
-Some are justified. `known_keys` is required by the plan, and D9 prevents a silent mode divergence. Others can be trimmed or merged:
-- `ContainsSteps` can be dropped if strict validation reuses the existing `inner_steps` check, since the three container types already implement it.
-- Fold `contained_path_error` into the dispatch validation module rather than `utils.py`, because only dispatch uses it.
-- Consider reusing an existing `FailureKind` for the `reply_format` failure.
-
-Effort 3/5 looks optimistic for this surface area. The four-step development order does help, because it ships the `--strict` probe first.
-
-### [PASS] Failure modes enumerated for each new I/O path
-
-The failure table covers every new I/O path:
-- prompt-file reads: non-regular files, so a FIFO cannot hang the read, plus `OSError` and invalid UTF-8
-- a missing or failed upstream reply
-- JSON extraction, run off the event loop
-- temp-write and replace errors
-
-Each has an explicit handling strategy and an observable signal (WARNING or ERROR log, or `failure_kind`). The Technical Requirements assert these signals in tests, which satisfies the failure-mode rule.
+The `reply_from` narrowing to top-level steps is already recorded in the plan entry, so the design does not drop or defer any assigned scope. Plan item 5 asks for a known-keys list "shared by `validate` and `expand`". The design does this for dispatch (D7, `DISPATCH_FORWARDED_KEYS`). The other step types only get a module constant, and criterion 8 (every built-in pipeline passes `--strict`) is the drift check there.
 
 ### [PASS] Layering and dependency direction
 
-File and reply logic goes in a new `dispatch_io` module, which keeps the ~1000-line `actions/dispatch.py` from growing. Guard logic tests `ProviderCapabilities.can_read_files` rather than provider identity. Key lists are defined once and shared by validate and expand. `--strict` is opt-in, so existing `sq run` and `--validate` behavior is unchanged.
+- File and reply logic goes into a new `actions/dispatch_io.py`, which keeps the ~1000-line `actions/dispatch.py` from growing much.
+- The guard tests the `can_read_files` capability and never tests provider identity.
+- `results_for_step` sits next to `prior_output_key`, so the key format is defined in one module.
+- Key names are constants, with no scattered literals.
+- Strict validation lives in the loader and reads `inner_steps`, so the loader does not hard-code step types.
+
+### [PASS] Failure modes enumerated with observable signals
+
+The failure table covers each new I/O path:
+- A missing, directory, FIFO, permission-denied or invalid-UTF-8 prompt file fails before any model call.
+- A failed or empty upstream reply is covered, including on resume.
+- A reply with no JSON object fails the step.
+- A write failure restores the prompt file.
+- A failed restore logs at ERROR.
+
+Each row names its signal: a WARNING or ERROR log, or `metadata["failure_kind"]`. The Technical Requirements section requires a test per signal. The model call's own hang and timeout behavior is unchanged and explicitly left to existing handling.
+
+### [NOTE] Prompt-only rejection (D9) and the `feedback` conflict rule go beyond the plan entry
+
+The plan entry does not list either item. Both are small and prevent silent divergence between `sq run` and prompt-only mode, so they are justified. Record them in the plan entry when the slice closes, as was done for the `reply_from` narrowing.
+
+### [NOTE] Two-file write rollback is the heaviest mechanism
+
+Capturing the prior bytes, restoring them, and handling a failed restore adds a code path for a rare case. The plan's "a failed step writes nothing and leaves existing files alone" justifies keeping some guarantee. If implementation cost grows, a lighter alternative is to write `reply_file` first, since it is the file consumers read, and document the residual window for the prompt file. As written it is acceptable and fully tested.
+
+### [NOTE] `--strict` now has two meanings
+
+Reusing the existing flag follows the exact command named in the issue, and the help text covers both meanings. The overload is an accepted trade-off.
+
+### [NOTE] No-tools guard is limited to dispatch steps and changes `allowed_tools: []` at run time
+
+The dispatch-only scope and the behavior change are stated openly in Excluded, Risk Assessment and the CHANGELOG requirement. The exclusion of `review` and `summary` steps is a reasonable reading of plan item 4. The design also checked `src/squadron/data/` for existing uses of `allowed_tools: []`.
 
 ### Run Digest
 
-- Response length: 5705 chars
+- Response length: 4276 chars
 - Response is newline-free: no
 - Tool calls made: 4
 - Tool calls failed: 0
@@ -133,8 +132,8 @@ File and reply logic goes in a new `dispatch_io` module, which keeps the ~1000-l
 - Reasoning characters: 0
 - Effort: backend default
 - Turns: 5
-- Tokens — prompt / cached / cache write / completion / reasoning: 247324 / 161296 / 86020 / 3384 / not computed
-- Duration: 32.9 s
+- Tokens — prompt / cached / cache write / completion / reasoning: 171795 / 86268 / 85521 / 3872 / not computed
+- Duration: 34.0 s
 - Cost: $0.39 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
