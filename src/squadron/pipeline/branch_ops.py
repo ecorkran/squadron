@@ -29,7 +29,7 @@ from squadron.pipeline.git_ops import (
 )
 from squadron.pr.branch import parse_slice_branch
 from squadron.pr.tasks import parse_task_items
-from squadron.review.git_utils import run_git
+from squadron.review.git_utils import AncestryUnknownError, is_ancestor, run_git
 from squadron.review.persistence import TASKS_DIR, CfClientProtocol, resolve_slice_info
 
 _logger = logging.getLogger(__name__)
@@ -385,8 +385,13 @@ def _require_checked_tasks(slice_index: int, cwd: str, cf_client: CfClientProtoc
 
 
 def _is_ancestor(branch: str, target: str, cwd: str) -> bool:
-    result = run_git(["merge-base", "--is-ancestor", branch, target], cwd=cwd)
-    return result is not None and result.returncode == 0
+    try:
+        return is_ancestor(branch, target, cwd=cwd)
+    except AncestryUnknownError:
+        # Unknown counts as "not merged yet", as it always has here: the caller then
+        # requires the slice branch to be checked out, so it raises rather than
+        # reporting an unconfirmed merge as already done.
+        return False
 
 
 def _abort_merge(

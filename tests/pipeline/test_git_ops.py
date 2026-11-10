@@ -313,8 +313,11 @@ def test_git_failure_raises_and_logs_error(
     outcome: subprocess.CompletedProcess[str] | None,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
+    stub = _git_stub(command, outcome)
     with (
-        patch("squadron.pipeline.git_ops.run_git", _git_stub(command, outcome)),
+        patch("squadron.pipeline.git_ops.run_git", stub),
+        # merge-base --is-ancestor runs through the shared helper in git_utils.
+        patch("squadron.review.git_utils.run_git", stub),
         caplog.at_level(logging.ERROR, logger="squadron.pipeline.git_ops"),
         pytest.raises(GitStateUnknownError),
     ):

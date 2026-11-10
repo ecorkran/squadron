@@ -14,7 +14,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
-from squadron.review.git_utils import DEFAULT_DIFF_BASE, INTEGRATION_BRANCH_KEY, run_git
+from squadron.review.git_utils import (
+    DEFAULT_DIFF_BASE,
+    INTEGRATION_BRANCH_KEY,
+    AncestryUnknownError,
+    is_ancestor,
+    run_git,
+)
 
 if TYPE_CHECKING:
     from squadron.integrations.context_forge import SliceEntry
@@ -223,26 +229,23 @@ def _first_parent_chain(target: str, cwd: str) -> set[str]:
 
 
 def _is_ancestor(tip: str, target: str, cwd: str) -> bool:
-    """``merge-base --is-ancestor``: exit 0 is yes, 1 is no, anything else is a failure.
+    """``review.git_utils.is_ancestor``, raising ``GitStateUnknownError`` when git cannot answer.
 
     Raises on a failure, unlike ``codehost.git_refs.is_ancestor``, which answers "no".
     A wrong "no" here would reopen a merged slice and reimplement it.
     """
-    result = _checked_git(
-        ["merge-base", "--is-ancestor", tip, target],
-        cwd,
-        f"cannot compare {tip} with {target} (git merge-base)",
-        accepted=(0, 1),
-    )
-    return result.returncode == 0
+    try:
+        return is_ancestor(tip, target, cwd=cwd)
+    except AncestryUnknownError as exc:
+        message = f"cannot compare {tip} with {target} (git merge-base): {_failure_text(exc.result)}"
+        _logger.error(message)
+        raise GitStateUnknownError(message) from exc
 
 
-def _checked_git(
-    args: list[str], cwd: str, failure: str, accepted: tuple[int, ...] = (0,)
-) -> subprocess.CompletedProcess[str]:
-    """Run git; log at ERROR and raise ``GitStateUnknownError`` unless it exits as accepted."""
+def _checked_git(args: list[str], cwd: str, failure: str) -> subprocess.CompletedProcess[str]:
+    """Run git; log at ERROR and raise ``GitStateUnknownError`` unless it exits 0."""
     result = run_git(args, cwd=cwd)
-    if result is None or result.returncode not in accepted:
+    if result is None or result.returncode != 0:
         message = f"{failure}: {_failure_text(result)}"
         _logger.error(message)
         raise GitStateUnknownError(message)

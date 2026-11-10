@@ -16,6 +16,7 @@ from squadron.review.git_utils import (
     DEFAULT_DIFF_BASE,
     GIT_COMMAND_TIMEOUT_SECONDS,
     INTEGRATION_BRANCH_KEY,
+    AncestryUnknownError,
     DiffRangeUnresolvedError,
     EmptyScopeCase,
     EmptyScopeError,
@@ -28,6 +29,7 @@ from squadron.review.git_utils import (
     _resolve_fork_point,
     assert_reviewable_scope,
     commit_diff_spec,
+    is_ancestor,
     normalize_diff_spec,
     parse_fork_point,
     parse_slice_branch,
@@ -36,6 +38,7 @@ from squadron.review.git_utils import (
     run_git,
     slice_merge_grep_pattern,
 )
+from tests.conftest import run_test_git
 
 _GIT_UTILS_SUBPROCESS = "squadron.review.git_utils.subprocess.run"
 
@@ -551,6 +554,45 @@ class TestRunGitTimeout:
                 assert run_git(["status"], cwd=".") is None
 
         assert [r for r in caplog.records if r.levelname == "WARNING"] == []
+
+
+class TestIsAncestor:
+    """``is_ancestor`` answers yes/no from exits 0/1 and raises when git cannot answer."""
+
+    @staticmethod
+    def _repo_with_two_commits(repo: Path) -> tuple[str, str]:
+        first = run_test_git(repo, "rev-parse", "HEAD").strip()
+        (repo / "second.txt").write_text("second\n")
+        run_test_git(repo, "add", "second.txt")
+        run_test_git(repo, "commit", "-q", "-m", "second")
+        return first, run_test_git(repo, "rev-parse", "HEAD").strip()
+
+    def test_older_commit_is_an_ancestor(self, temp_git_repo: Path) -> None:
+        first, second = self._repo_with_two_commits(temp_git_repo)
+        assert is_ancestor(first, second, cwd=str(temp_git_repo)) is True
+
+    def test_newer_commit_is_not_an_ancestor(self, temp_git_repo: Path) -> None:
+        first, second = self._repo_with_two_commits(temp_git_repo)
+        assert is_ancestor(second, first, cwd=str(temp_git_repo)) is False
+
+    def test_missing_object_raises_with_stderr(self, temp_git_repo: Path) -> None:
+        missing = "0" * 40
+        with pytest.raises(AncestryUnknownError) as raised:
+            is_ancestor(missing, "HEAD", cwd=str(temp_git_repo))
+
+        assert raised.value.result is not None
+        assert raised.value.result.returncode not in (0, 1)
+        assert raised.value.result.stderr.strip() in str(raised.value)
+        assert (raised.value.ancestor, raised.value.descendant) == (missing, "HEAD")
+
+    def test_git_that_cannot_answer_raises_without_a_result(self) -> None:
+        with (
+            patch("squadron.review.git_utils.run_git", return_value=None),
+            pytest.raises(AncestryUnknownError, match="timed out or could not run") as raised,
+        ):
+            is_ancestor("a", "b", cwd=".")
+
+        assert raised.value.result is None
 
 
 class TestNormalizeDiffSpec:

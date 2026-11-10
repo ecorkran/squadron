@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import TypedDict, cast
 
-from squadron.review.git_utils import run_git
+from squadron.review.git_utils import AncestryUnknownError, is_ancestor, run_git
 
 logger = logging.getLogger(__name__)
 
@@ -68,8 +68,13 @@ def _commits_behind(root: Path, commit: str) -> int | None:
         return None
     if head.stdout.strip() == commit:
         return 0
-    ancestor = run_git(["merge-base", "--is-ancestor", commit, "HEAD"], cwd=cwd)
-    if ancestor is None or ancestor.returncode != 0:
+    try:
+        ancestor = is_ancestor(commit, "HEAD", cwd=cwd)
+    except AncestryUnknownError as exc:
+        # Not swallowed: every unknown in this module is None plus a WARNING naming why.
+        logger.warning("commits_behind unknown: %s", exc)
+        return None
+    if not ancestor:
         logger.warning("commits_behind unknown: graph commit %s is not an ancestor of HEAD", commit)
         return None
     count = run_git(["rev-list", "--count", f"{commit}..HEAD"], cwd=cwd)
