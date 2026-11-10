@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261109
+dateUpdated: 20261110
 ---
 
 # Development Log
@@ -10,6 +10,12 @@ dateUpdated: 20261109
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261110
+
+### Release 0.24.26
+
+- **Contents:** code-review PASS capped when most of the diff went unseen (#309) or a large diff got too few tool calls (#311, ask 2 still open); `Evidence:` line in review artifacts; benchmark sandbox copies carried logins instead of symlinking (#301).
 
 ## 20261109
 

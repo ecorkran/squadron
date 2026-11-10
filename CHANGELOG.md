@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.26] - 20261110
+
 ### Fixed
 - A code review no longer keeps PASS when most of the diff never reached the model (#309), or when a large diff got fewer successful tool calls than a floor (#311). Either caps it at CONCERNS. Limits: `review.max_unseen_diff_fraction`, `review.large_diff_chars`, `review.min_tool_calls_large_diff`.
 - Review artifacts show an `Evidence:` line beside the verdict with tool calls made and diff characters seen (#311).
