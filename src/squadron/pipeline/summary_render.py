@@ -78,7 +78,7 @@ def gather_cf_params(cwd: str) -> dict[str, object]:
         info = ContextForgeClient(cwd=resolved_cwd).get_project()
     except (ContextForgeError, ContextForgeNotAvailable, OSError) as exc:
         # Best-effort by contract: the lenient renderer keeps placeholders.
-        _logger.warning("Context Forge params unavailable for %s: %s", resolved_cwd, exc)
+        _logger.debug("Context Forge params unavailable for %s: %s", resolved_cwd, exc)
         return {}
 
     # Only include non-empty values so that LenientDict leaves placeholders
