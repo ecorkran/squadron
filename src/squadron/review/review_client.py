@@ -35,7 +35,11 @@ from squadron.providers.loader import ensure_provider_loaded
 from squadron.providers.profiles import get_profile, profile_credentials
 from squadron.providers.registry import get_provider
 from squadron.review.categories import normalize_result_categories
-from squadron.review.coverage import impose_diff_coverage, impose_output_coverage
+from squadron.review.coverage import (
+    impose_diff_coverage,
+    impose_output_coverage,
+    load_coverage_limits,
+)
 from squadron.review.diff_files import cap_sections, describe_cut_files, omit_all, split_diff_by_file
 from squadron.review.git_utils import EmptyDiffError
 from squadron.review.models import DiffInjection, ReviewResult
@@ -379,7 +383,7 @@ async def run_review_with_profile(
 
     # Part B (slice 927 D4): a truncated diff with no successful tool call turns a
     # stated PASS into CONCERNS. Must run after tool_calls_made/failed_tool_calls above.
-    impose_diff_coverage(result)
+    impose_diff_coverage(result, load_coverage_limits(inputs.get("cwd", ".")))
     # Slice 196 D12 (#152): a PASS cut off at the output budget lost findings after the cutoff.
     impose_output_coverage(result)
 

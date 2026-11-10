@@ -202,6 +202,33 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "providers that can't read files directly."
         ),
     ),
+    "review.max_unseen_diff_fraction": ConfigKey(
+        name="review.max_unseen_diff_fraction",
+        type_=float,
+        default=0.5,
+        description=(
+            "A code review PASS is capped at CONCERNS when more than this fraction "
+            "(0 to 1) of the diff never reached the model, whatever tool calls it made."
+        ),
+    ),
+    "review.large_diff_chars": ConfigKey(
+        name="review.large_diff_chars",
+        type_=int,
+        default=100_000,
+        description=(
+            "Diff size (characters) from which a code review PASS needs at least "
+            "review.min_tool_calls_large_diff successful tool calls, if tools were offered."
+        ),
+    ),
+    "review.min_tool_calls_large_diff": ConfigKey(
+        name="review.min_tool_calls_large_diff",
+        type_=int,
+        default=3,
+        description=(
+            "Successful tool calls a code review PASS needs on a diff of "
+            "review.large_diff_chars or more; fewer caps the PASS at CONCERNS."
+        ),
+    ),
     "project_rules.max_chars": ConfigKey(
         name="project_rules.max_chars",
         type_=int,

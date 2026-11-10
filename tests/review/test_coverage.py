@@ -8,6 +8,7 @@ import pytest
 
 from squadron.review.coverage import (
     COVERAGE_CATEGORY,
+    CoverageLimits,
     impose_diff_coverage,
     impose_output_coverage,
 )
@@ -44,6 +45,11 @@ def _result(
     )
 
 
+# Limits that never fire, so the slice 927 cases below test the no-tool-call rule alone.
+_NEUTRAL_LIMITS = CoverageLimits(
+    max_unseen_fraction=1.0, large_diff_chars=10**9, min_tool_calls_large_diff=0
+)
+_LIMITS = CoverageLimits(max_unseen_fraction=0.5, large_diff_chars=100_000, min_tool_calls_large_diff=3)
 _TRUNCATED = DiffInjection(total_chars=1000, injected_chars=400)
 _NOT_TRUNCATED = DiffInjection(total_chars=1000, injected_chars=1000)
 
@@ -73,7 +79,7 @@ def test_impose_diff_coverage_matrix(
     successful_calls = (tool_calls_made or 0) - (failed_tool_calls or 0)
     should_cap = verdict is Verdict.PASS and truncated and successful_calls <= 0
 
-    impose_diff_coverage(result)
+    impose_diff_coverage(result, _NEUTRAL_LIMITS)
 
     if should_cap:
         assert result.verdict is Verdict.CONCERNS
@@ -98,7 +104,7 @@ def test_impose_diff_coverage_no_diff_injection_is_noop() -> None:
         tool_calls_made=None,
         failed_tool_calls=None,
     )
-    impose_diff_coverage(result)
+    impose_diff_coverage(result, _NEUTRAL_LIMITS)
     assert result.verdict is Verdict.PASS
     assert result.verdict_source is None
     assert result.findings == []
@@ -111,7 +117,7 @@ def test_impose_diff_coverage_finding_has_no_location() -> None:
         tool_calls_made=None,
         failed_tool_calls=None,
     )
-    impose_diff_coverage(result)
+    impose_diff_coverage(result, _NEUTRAL_LIMITS)
     assert result.findings[0].location is None
     assert result.findings[0].location_verified is None
 
@@ -132,12 +138,63 @@ def test_impose_diff_coverage_does_not_hide_derived_findings() -> None:
         verdict_source=VerdictSource.DERIVED,
     )
 
-    impose_diff_coverage(result)
+    impose_diff_coverage(result, _NEUTRAL_LIMITS)
 
     markdown = format_review_markdown(result, "code")
     assert COVERAGE_CATEGORY in markdown or "Diff truncated" in markdown
     assert "Looks fine" in markdown
     assert "Findings Not Parsed" not in markdown
+
+
+@pytest.mark.parametrize(
+    ("injected", "calls", "capped"),
+    [
+        (0, 9, True),  # #309: 0% of the diff seen, nine reads of a few files
+        (400, 5, True),  # 60% unseen
+        (600, 5, False),  # 40% unseen, tools used
+        (600, 0, True),  # 40% unseen, nothing read
+    ],
+)
+def test_mostly_unseen_diff_is_capped_whatever_tools_were_used(
+    injected: int, calls: int, capped: bool
+) -> None:
+    result = _result(
+        verdict=Verdict.PASS,
+        diff_injection=DiffInjection(total_chars=1000, injected_chars=injected),
+        tool_calls_made=calls,
+        failed_tool_calls=0,
+        tools_given=["read_file"],
+    )
+    impose_diff_coverage(result, _LIMITS)
+    assert (result.verdict is Verdict.CONCERNS) is capped
+    if capped:
+        assert result.verdict_source is VerdictSource.IMPOSED
+
+
+@pytest.mark.parametrize(
+    ("total", "calls", "failed", "tools_given", "capped"),
+    [
+        (150_000, 1, 0, ["read_file"], True),  # #311: 52-file diff, one call
+        (150_000, 3, 1, ["read_file"], True),  # failed calls do not count
+        (150_000, 3, 0, ["read_file"], False),
+        (99_999, 0, 0, ["read_file"], False),  # below the large-diff size
+        (150_000, 0, 0, None, False),  # no tools offered: the floor cannot apply
+    ],
+)
+def test_large_diff_needs_the_tool_call_floor(
+    total: int, calls: int, failed: int, tools_given: list[str] | None, capped: bool
+) -> None:
+    result = _result(
+        verdict=Verdict.PASS,
+        diff_injection=DiffInjection(total_chars=total, injected_chars=total),
+        tool_calls_made=calls,
+        failed_tool_calls=failed,
+        tools_given=tools_given,
+    )
+    impose_diff_coverage(result, _LIMITS)
+    assert (result.verdict is Verdict.CONCERNS) is capped
+    if capped:
+        assert "review.min_tool_calls_large_diff" in result.findings[0].description
 
 
 # ---------------------------------------------------------------------------

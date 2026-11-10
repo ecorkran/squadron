@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from squadron.config.keys import CONFIG_KEYS
-from squadron.review.coverage import impose_diff_coverage
+from squadron.review.coverage import CoverageLimits, impose_diff_coverage
 from squadron.review.diff_files import split_diff_by_file
 from squadron.review.models import (
     DiffFileInjection,
@@ -106,7 +106,10 @@ def _result_with_cut_file() -> ReviewResult:
 def test_pass_with_an_omitted_unread_file_is_capped_naming_it() -> None:
     result = _result_with_cut_file()
 
-    impose_diff_coverage(result)
+    impose_diff_coverage(
+        result,
+        CoverageLimits(max_unseen_fraction=1.0, large_diff_chars=10**9, min_tool_calls_large_diff=0),
+    )
 
     assert result.verdict is Verdict.CONCERNS
     assert "src/lost.py" in result.findings[0].description
