@@ -127,7 +127,7 @@ def test_grant_variable_valued_from_harness(tmp_path: Path, harness_env: dict[st
     assert env.variables(())["OPENAI_API_KEY"] == "k"
 
 
-def test_carried_file_is_symlink_to_source(
+def test_carried_file_is_a_copy_not_the_real_file(
     tmp_path: Path, harness_env: dict[str, str], real_home: Path
 ) -> None:
     source = real_home / ".codex" / "auth.json"
@@ -137,9 +137,12 @@ def test_carried_file_is_symlink_to_source(
     env = make_env(tmp_path, harness_env, grant)
     env.prepare()
     carried = env.home / ".codex" / "auth.json"
-    assert carried.is_symlink()
-    assert os.readlink(carried) == str(source)
-    assert env.carried_paths == [carried]
+    assert carried.is_file() and not carried.is_symlink()
+    assert carried.read_text() == "{}"
+    assert env.changed_carried_paths == []
+    carried.write_text("{rotated}")
+    assert source.read_text() == "{}"
+    assert env.changed_carried_paths == [carried]
 
 
 def test_sdk_grant_passes_oauth_token_when_set(tmp_path: Path, harness_env: dict[str, str]) -> None:

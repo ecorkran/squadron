@@ -122,7 +122,6 @@ def _replacer(probe_result: int):
             return ok(call.argv)
         assert call.env is not None
         carried = Path(call.env["HOME"]) / ".codex" / "auth.json"
-        carried.unlink()
         carried.write_text("{new}")
         if probe_result == 0:
             return ok(call.argv, stdout="ok")
@@ -131,7 +130,7 @@ def _replacer(probe_result: int):
     return handler
 
 
-def test_replaced_symlink_turns_yes_into_carryover_replaced(
+def test_rewritten_carried_file_turns_yes_into_carryover_replaced(
     tmp_path: Path, harness_env: dict[str, str]
 ) -> None:
     _carried_setup(harness_env)
@@ -140,7 +139,7 @@ def test_replaced_symlink_turns_yes_into_carryover_replaced(
     assert "auth.json" in rows[0].detail
 
 
-def test_failed_probe_with_replaced_symlink_stays_no(
+def test_failed_probe_with_rewritten_carried_file_stays_no(
     tmp_path: Path, harness_env: dict[str, str]
 ) -> None:
     _carried_setup(harness_env)
