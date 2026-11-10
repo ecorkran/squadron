@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.25] - 20261109
+
+### Added
+- `sq benchmark` sandboxes on the `sdk` profile now carry `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) when it is set, so a macOS Keychain login no longer leaves the sandbox without credentials.
+
+### Fixed
+- `read_file` no longer rejects a call that names the same file as both `path` and `paths` (#310). A call that names different files still errors, and the error now says what the call sent.
+
 ## [0.24.24] - 20261107
 
 ### Added

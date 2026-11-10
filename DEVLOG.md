@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261107
+dateUpdated: 20261109
 ---
 
 # Development Log
@@ -10,6 +10,12 @@ dateUpdated: 20261107
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261109
+
+### Release 0.24.25
+
+- **Contents:** `read_file` accepts `path` restated as single-entry `paths` (#310); Claude subscription token passed into sdk benchmark sandboxes; claude-agent-sdk 0.2.179.
 
 ## 20261107
 
