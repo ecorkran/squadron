@@ -780,6 +780,29 @@ class TestToolCoverageRendering:
         assert "**Coverage:**" not in self._render()
 
 
+class TestEvidenceRendering:
+    """#311: the **Evidence:** header line sits next to the verdict for tool-enabled diff reviews."""
+
+    def _render(self, **fields: object) -> str:
+        from squadron.review.models import DiffInjection
+
+        result = _make_result(verdict=Verdict.PASS)
+        result.diff_injection = DiffInjection(total_chars=5000, injected_chars=5000)
+        for name, value in fields.items():
+            setattr(result, name, value)
+        return format_review_markdown(result, "code", _make_slice_info())
+
+    def test_renders_calls_and_diff_size(self) -> None:
+        markdown = self._render(tools_given=["read_file"], tool_calls_made=4, failed_tool_calls=1)
+        assert (
+            "**Evidence:** 3 successful tool call(s) of 4 made; "
+            "5000 of 5000 diff characters reached the model"
+        ) in markdown
+
+    def test_no_tools_offered_omits_the_line(self) -> None:
+        assert "**Evidence:**" not in self._render()
+
+
 class TestDiffTruncationRendering:
     """Slice 927 Part A: diffTruncated frontmatter, the **Diff:** header line, and JSON."""
 

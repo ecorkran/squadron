@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261108
+dateUpdated: 20261110
 ---
 
 # Development Log
@@ -10,6 +10,18 @@ dateUpdated: 20261108
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261110
+
+### Release 0.24.26
+
+- **Contents:** code-review PASS capped when most of the diff went unseen (#309) or a large diff got too few tool calls (#311, ask 2 still open); `Evidence:` line in review artifacts; benchmark sandbox copies carried logins instead of symlinking (#301).
+
+## 20261109
+
+### Release 0.24.25
+
+- **Contents:** `read_file` accepts `path` restated as single-entry `paths` (#310); Claude subscription token passed into sdk benchmark sandboxes; claude-agent-sdk 0.2.179.
 
 ## 20261108
 

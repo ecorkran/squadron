@@ -691,6 +691,14 @@ def format_review_markdown(
                 f"  - {cut_file.path}: {state} "
                 f"({cut_file.injected_chars} of {cut_file.total_chars} characters)"
             )
+    if result.tools_given and result.diff_injection is not None:
+        # #311: what the verdict rests on, next to the verdict. Only for a tool-enabled
+        # review of a diff, so other artifacts are unchanged.
+        lines.append(
+            f"**Evidence:** {result.successful_tool_calls} successful tool call(s) of "
+            f"{result.tool_calls_made or 0} made; {result.diff_injection.injected_chars} of "
+            f"{result.diff_injection.total_chars} diff characters reached the model"
+        )
     if result.tools_given and result.successful_tool_calls <= 0:
         # #279. Only when tools were offered and nothing was read with them, so the
         # verdict is visibly resting on the prompt alone; other artifacts are unchanged.

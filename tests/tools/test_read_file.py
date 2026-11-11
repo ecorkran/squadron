@@ -354,8 +354,22 @@ async def test_oversize_first_file_is_read_with_normal_truncation(
 
 @pytest.mark.parametrize(
     "args",
-    [{"path": "a.txt", "paths": ["a.txt"]}, {}, {"paths": []}, {"paths": "a.txt"}, {"paths": [1]}],
-    ids=["both", "neither", "empty-paths", "paths-not-list", "paths-not-strings"],
+    [
+        {"path": "a.txt", "paths": ["b.txt"]},
+        {"path": "a.txt", "paths": ["a.txt", "b.txt"]},
+        {},
+        {"paths": []},
+        {"paths": "a.txt"},
+        {"paths": [1]},
+    ],
+    ids=[
+        "both-differ",
+        "both-several",
+        "neither",
+        "empty-paths",
+        "paths-not-list",
+        "paths-not-strings",
+    ],
 )
 async def test_malformed_path_arguments_are_errors_naming_the_rule(
     read_file: ToolExecutor, args: dict[str, object]
@@ -365,6 +379,25 @@ async def test_malformed_path_arguments_are_errors_naming_the_rule(
     assert result.is_error is True
     assert "paths" in result.content
     assert "unexpected failure" not in result.content
+
+
+async def test_path_restated_as_single_entry_paths_is_one_read(
+    tmp_path: Path, read_file: ToolExecutor
+) -> None:
+    """#310: a model sending the same file as both path and paths gets the file, not an error."""
+    (tmp_path / "a.txt").write_text("A\n")
+
+    result = await read_file({"path": "a.txt", "paths": ["a.txt"]})
+
+    assert result.is_error is False
+    assert result.content == (await read_file({"path": "a.txt"})).content
+
+
+async def test_conflicting_path_and_paths_error_says_what_was_sent(read_file: ToolExecutor) -> None:
+    result = await read_file({"path": "a.txt", "paths": ["b.txt"]})
+
+    assert result.is_error is True
+    assert "this call sent both" in result.content
 
 
 def test_full_batch_stays_under_the_per_result_floor() -> None:

@@ -114,10 +114,9 @@ def _probe_profile(
         return AuthCheckResult(profile, alias, AuthAnswer.NO, None, str(exc))
     try:
         environment.prepare()
-        carried = environment.carried_paths
         _preflight(runner, sq_path, environment, variables, timeout_s)
         result = _run_probe(profile, alias, runner, sq_path, environment, variables, timeout_s)
-        return _mark_replaced(result, carried)
+        return _mark_replaced(result, environment)
     finally:
         environment.cleanup()
 
@@ -177,14 +176,12 @@ def _run_probe(
     )
 
 
-def _mark_replaced(result: AuthCheckResult, carried: Sequence[Path]) -> AuthCheckResult:
-    """A carried symlink replaced by a regular file means the tool rewrote the login."""
-    replaced = [path for path in carried if not path.is_symlink() and path.exists()]
+def _mark_replaced(result: AuthCheckResult, environment: ScrubbedEnvironment) -> AuthCheckResult:
+    """A carried credential copy that changed means the tool rewrote the login."""
+    replaced = environment.changed_carried_paths
     if not replaced:
         return result
-    detail = "carried credential replaced by a regular file: " + ", ".join(
-        str(path) for path in replaced
-    )
+    detail = "carried credential rewritten by the probe: " + ", ".join(str(path) for path in replaced)
     answer = AuthAnswer.YES_CARRYOVER_REPLACED if result.answer is AuthAnswer.YES else result.answer
     return AuthCheckResult(
         result.profile, result.alias, answer, result.exit_code, result.stderr, detail

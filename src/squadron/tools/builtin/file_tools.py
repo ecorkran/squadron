@@ -144,8 +144,15 @@ def _requested_paths(args: dict[str, object]) -> str | list[str]:
     """``path`` or ``paths``, exactly one; raise ValueError naming the rule otherwise."""
     has_path = args.get("path") is not None
     has_paths = args.get("paths") is not None
+    # A model that sends the same single file both ways asked for one unambiguous thing.
+    if has_path and has_paths and args["paths"] == [args["path"]]:
+        has_paths = False
     if has_path == has_paths:
-        raise ValueError("give exactly one of 'path' (one file) or 'paths' (several files)")
+        received = "both" if has_path else "neither"
+        raise ValueError(
+            "give exactly one of 'path' (one file) or 'paths' (several files); "
+            f"this call sent {received}"
+        )
     if has_path:
         return require_str(args, "path")
     raw = args["paths"]

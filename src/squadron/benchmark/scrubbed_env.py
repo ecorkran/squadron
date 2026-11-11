@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
@@ -29,6 +30,10 @@ PASS_THROUGH_VARIABLES = (
     "TMPDIR",
 )
 _SQUADRON_CONFIG_RELATIVE = Path(".config") / "squadron"
+
+
+def _file_digest(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 class MissingCredentialError(Exception):
@@ -108,12 +113,19 @@ class ScrubbedEnvironment:
         self._grant = grant
         self._harness_env = harness_env
         self.home = root / f"{sandbox_id}.home"
+        self._carried_digests: dict[Path, str] = {}
 
     @property
-    def carried_paths(self) -> list[Path]:
-        """Home paths that are symlinks to a real carried credential file."""
+    def changed_carried_paths(self) -> list[Path]:
+        """Carried copies whose content differs from what was copied in, or that are gone.
+
+        A copy is never the real file, so a tool that rewrites its login (a refresh-token
+        rotation) changes only the copy; this reports it.
+        """
         return [
-            self.home / rel for rel in self._grant.carryover_files if (self.home / rel).is_symlink()
+            path
+            for path, digest in self._carried_digests.items()
+            if not path.is_file() or _file_digest(path) != digest
         ]
 
     def prepare(self) -> None:
@@ -196,4 +208,7 @@ class ScrubbedEnvironment:
                 continue
             target = self.home / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.symlink_to(source)
+            # A copy, not a symlink: a tool that opens the file for writing must not
+            # modify the real login (#301). copy2 keeps the file's mode (0600).
+            shutil.copy2(source, target)
+            self._carried_digests[target] = _file_digest(target)

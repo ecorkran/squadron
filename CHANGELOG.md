@@ -20,6 +20,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq benchmark yield` reports, per project and pooled, how many commits qualified, why the rest were rejected, and whether that many cases can tell two configurations apart.
 - `/sq:benchmark` runs these commands from Claude Code and Codex.
 
+## [0.24.26] - 20261110
+
+### Fixed
+- A code review no longer keeps PASS when most of the diff never reached the model (#309), or when a large diff got fewer successful tool calls than a floor (#311). Either caps it at CONCERNS. Limits: `review.max_unseen_diff_fraction`, `review.large_diff_chars`, `review.min_tool_calls_large_diff`.
+- Review artifacts show an `Evidence:` line beside the verdict with tool calls made and diff characters seen (#311).
+- `sq benchmark` copies carried login files into the sandbox instead of linking them, so a tool can no longer rewrite your real login (#301).
+
+## [0.24.25] - 20261109
+
+### Added
+- `sq benchmark` sandboxes on the `sdk` profile now carry `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`) when it is set, so a macOS Keychain login no longer leaves the sandbox without credentials.
+
+### Fixed
+- `read_file` no longer rejects a call that names the same file as both `path` and `paths` (#310). A call that names different files still errors, and the error now says what the call sent.
+
 ## [0.24.24] - 20261107
 
 ### Added
