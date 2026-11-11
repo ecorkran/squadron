@@ -19,7 +19,8 @@ from squadron.benchmark.sandbox import (
     sweep_benchmark_orphans,
 )
 from squadron.benchmark.yield_report import build_yield, render_json, render_text
-from squadron.cli.commands.benchmark_common import GIT_TIMEOUT_S, git_output, stderr_exit
+from squadron.cli.commands.benchmark_common import git_output, stderr_exit
+from squadron.codehost.git_refs import GIT_QUERY_TIMEOUT_SECONDS
 from squadron.codehost.github_cli import build_github_host
 from squadron.config.keys import (
     BENCHMARK_INSTALL_TIMEOUT_KEY,
@@ -122,6 +123,9 @@ def build_command(
         repeats = get_positive_int_config(BENCHMARK_QUALIFICATION_REPEATS_KEY, cwd=str(repo_root))
     except ValueError as exc:
         raise stderr_exit(str(exc)) from exc
+    # Validated with the other settings: a bad report setting must not surface after the
+    # build has already stored its results.
+    samples, target = _report_inputs(repo_root)
     store = _open_store(repo_root)
     deps = BuildDeps(
         host=build_github_host(runner),
@@ -133,7 +137,7 @@ def build_command(
         ),
         derive_project_id=derive_project_id,
         repeats=repeats,
-        git_timeout_seconds=GIT_TIMEOUT_S,
+        git_timeout_seconds=GIT_QUERY_TIMEOUT_SECONDS,
     )
     try:
         result = build_fix_cases(repo_root, set_name, tuple(commit or ()), deps, typer.echo)
@@ -144,7 +148,6 @@ def build_command(
     else:
         typer.echo(f"case set {result.case_set.name} v{result.case_set.version}")
     typer.echo("")
-    samples, target = _report_inputs(repo_root)
     report = build_yield(
         store.list_fix_qualifications(result.project_id), store.list_case_sets(), samples, target
     )

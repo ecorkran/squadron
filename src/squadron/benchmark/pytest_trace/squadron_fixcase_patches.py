@@ -21,6 +21,7 @@ from __future__ import annotations
 import functools
 import importlib
 import inspect
+import logging
 import sys
 import types
 import unittest.mock as mock
@@ -29,6 +30,8 @@ from typing import Any, cast
 
 import pytest
 import squadron_fixcase_closure
+
+_logger = logging.getLogger(__name__)
 
 OWNER_PROJECT_MODULE = "project_module"
 OWNER_PROJECT_CLASS = "project_class"
@@ -92,6 +95,7 @@ class PatchInterceptor:
             except (ImportError, AttributeError):
                 # The target did not resolve: record that, then let the failure through.
                 self._record(api, OWNER_UNRESOLVED, "", _unresolved_target(patcher))
+                _logger.exception("%s target did not resolve", api)
                 raise
             if isinstance(patcher, mock._patch_dict):  # pyright: ignore[reportPrivateUsage]
                 self._record_owner(api, patcher.in_dict, "")

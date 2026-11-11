@@ -7,14 +7,23 @@ build slice cases need none of these methods. Concrete adapters are reached only
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Protocol
 
 from squadron.benchmark.adapter import SandboxContext
+from squadron.core.process_runner import (
+    ProcessNotFoundError,
+    ProcessResult,
+    ProcessRunner,
+    ProcessTimedOutError,
+)
 from squadron.metrology.benchmark_models import ConftestFixture, GraderCommand, TestRejection
 from squadron.metrology.snapshot_models import SourceLanguage
+
+_logger = logging.getLogger(__name__)
 
 #: Bumped whenever any fairness check changes: stored qualification records carry it, and
 #: a record with another version is re-qualified rather than reused (D10).
@@ -76,8 +85,34 @@ class HarnessFailure(Exception):
         self.detail = detail
 
 
+def harness_failure(detail: str) -> HarnessFailure:
+    """Log ``detail`` at ERROR and return the failure to raise: the one harness-failure policy."""
+    _logger.error("fix-case harness failure: %s", detail)
+    return HarnessFailure(detail)
+
+
+def run_for_harness(
+    runner: ProcessRunner,
+    argv: Sequence[str],
+    what: str,
+    *,
+    cwd: str | None,
+    timeout: float,
+    env: Mapping[str, str] | None = None,
+    replace_env: bool = False,
+) -> ProcessResult:
+    """Run ``argv``; a timeout or a missing program is a ``HarnessFailure`` naming ``what``."""
+    try:
+        return runner.run(argv, cwd=cwd, timeout=timeout, env=env, replace_env=replace_env)
+    except (ProcessTimedOutError, ProcessNotFoundError) as exc:
+        _logger.exception("%s failed", what)
+        raise HarnessFailure(f"{what} failed: {exc}") from exc
+
+
 class FixCaseAdapter(Protocol):
     language: SourceLanguage
+    #: The project config file whose presence at a commit says this adapter can handle it.
+    project_config_name: str
 
     def is_test_side(self, pyproject_text: str | None, path: str) -> bool:
         """Whether ``path`` is a test-side file, per the parent's project config text."""

@@ -276,9 +276,9 @@ def test_testpaths_as_a_space_separated_string() -> None:
     assert ADAPTER.is_test_side(text, "tests/test_x.py") is False
 
 
-def test_an_unparsable_pyproject_warns_and_uses_defaults(caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.WARNING):
-        assert ADAPTER.is_test_side("[broken", "tests/test_a.py") is True
+def test_an_unparsable_pyproject_is_a_harness_failure(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.ERROR), pytest.raises(HarnessFailure, match="does not parse"):
+        ADAPTER.is_test_side("[broken", "tests/test_a.py")
     assert "does not parse" in caplog.text
 
 

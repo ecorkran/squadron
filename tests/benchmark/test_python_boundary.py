@@ -10,7 +10,7 @@ import logging
 import os
 import subprocess
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 
@@ -23,6 +23,7 @@ from squadron.benchmark.python_boundary import IMPORT_FAILURE_EXIT, RESOLVER_CON
 from squadron.benchmark.python_fairness import PythonFixCaseAdapter
 from squadron.benchmark.python_tree_files import trace_plugin_dir
 from squadron.benchmark.sandbox import BenchmarkSandbox
+from squadron.benchmark.scrubbed_env import CredentialGrant, ScrubbedEnvironment
 from squadron.core.process_runner import (
     ProcessNotFoundError,
     ProcessResult,
@@ -102,7 +103,7 @@ def test_a_package_that_will_not_import_is_undecidable(
 # --- Scripted failure modes: each is an ERROR log plus HarnessFailure ---------------------
 
 
-def scripted(tmp_path: Path, behaviour: object) -> SandboxContext:
+def scripted(tmp_path: Path, behaviour: ProcessResult | Exception) -> SandboxContext:
     ctx = bare_context(tmp_path)
     (tmp_path / "pyproject.toml").write_text(
         '[project]\nname = "p"\n[project.scripts]\nrun = "p.cli:main"\n', encoding="utf-8"
@@ -110,40 +111,34 @@ def scripted(tmp_path: Path, behaviour: object) -> SandboxContext:
     return SandboxContext(
         tree=ctx.tree,
         output_dir=ctx.output_dir,
-        env=ctx.env,
-        runner=_Runner(behaviour),  # type: ignore[arg-type]
+        env=ScrubbedEnvironment(tmp_path, "scripted", CredentialGrant.none(), {}),
+        runner=_Runner(behaviour),
         install_timeout_s=1,
         suite_timeout_s=1,
     )
 
 
 class _Runner:
-    def __init__(self, behaviour: object) -> None:
+    """A ``ProcessRunner`` that raises or returns one scripted behaviour for every call."""
+
+    def __init__(self, behaviour: ProcessResult | Exception) -> None:
         self._behaviour = behaviour
         self.calls: list[RunnerCall] = []
 
-    def run(self, argv, *, cwd, timeout, env=None, stdin=None, replace_env=False):  # type: ignore[no-untyped-def]
+    def run(
+        self,
+        argv: Sequence[str],
+        *,
+        cwd: str | None,
+        timeout: float,
+        env: Mapping[str, str] | None = None,
+        stdin: str | None = None,
+        replace_env: bool = False,
+    ) -> ProcessResult:
         self.calls.append(RunnerCall(tuple(argv), cwd, timeout, env, replace_env))
         if isinstance(self._behaviour, Exception):
             raise self._behaviour
         return self._behaviour
-
-
-class _Env:
-    def variables(self, path_entries):  # type: ignore[no-untyped-def]
-        return {"PATH": "/usr/bin"}
-
-
-def scripted_with_env(tmp_path: Path, behaviour: object) -> SandboxContext:
-    ctx = scripted(tmp_path, behaviour)
-    return SandboxContext(
-        tree=ctx.tree,
-        output_dir=ctx.output_dir,
-        env=_Env(),  # type: ignore[arg-type]
-        runner=ctx.runner,
-        install_timeout_s=1,
-        suite_timeout_s=1,
-    )
 
 
 def result(code: int, stdout: str = "", stderr: str = "") -> ProcessResult:
@@ -153,7 +148,7 @@ def result(code: int, stdout: str = "", stderr: str = "") -> ProcessResult:
 def test_a_resolver_bug_exit_is_a_harness_failure(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    ctx = scripted_with_env(tmp_path, result(1, stderr="Traceback ... KeyError"))
+    ctx = scripted(tmp_path, result(1, stderr="Traceback ... KeyError"))
     with caplog.at_level(logging.ERROR), pytest.raises(HarnessFailure, match="exited 1"):
         ADAPTER.boundary(ctx)
     assert any(record.levelno == logging.ERROR for record in caplog.records)
@@ -162,14 +157,14 @@ def test_a_resolver_bug_exit_is_a_harness_failure(
 def test_a_resolver_timeout_is_a_harness_failure(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    ctx = scripted_with_env(tmp_path, ProcessTimedOutError(["python"], 1))
+    ctx = scripted(tmp_path, ProcessTimedOutError(["python"], 1))
     with caplog.at_level(logging.ERROR), pytest.raises(HarnessFailure, match="exceeded"):
         ADAPTER.boundary(ctx)
     assert any(record.levelno == logging.ERROR for record in caplog.records)
 
 
 def test_a_missing_interpreter_is_a_harness_failure(tmp_path: Path) -> None:
-    ctx = scripted_with_env(tmp_path, ProcessNotFoundError("python"))
+    ctx = scripted(tmp_path, ProcessNotFoundError("python"))
     with pytest.raises(HarnessFailure, match="not found"):
         ADAPTER.boundary(ctx)
 
@@ -178,20 +173,20 @@ def test_a_missing_interpreter_is_a_harness_failure(tmp_path: Path) -> None:
 def test_exit_zero_with_garbage_output_is_a_harness_failure(
     tmp_path: Path, stdout: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    ctx = scripted_with_env(tmp_path, result(0, stdout=stdout))
+    ctx = scripted(tmp_path, result(0, stdout=stdout))
     with caplog.at_level(logging.ERROR), pytest.raises(HarnessFailure, match="does not parse"):
         ADAPTER.boundary(ctx)
     assert any(record.levelno == logging.ERROR for record in caplog.records)
 
 
 def test_the_import_failure_exit_code_is_undecidable_not_a_harness_failure(tmp_path: Path) -> None:
-    ctx = scripted_with_env(tmp_path, result(IMPORT_FAILURE_EXIT, stderr="ImportError: nope"))
+    ctx = scripted(tmp_path, result(IMPORT_FAILURE_EXIT, stderr="ImportError: nope"))
     with pytest.raises(BoundaryUndecidable, match="nope"):
         ADAPTER.boundary(ctx)
 
 
 def test_the_resolver_is_given_the_projects_name_and_script_targets(tmp_path: Path) -> None:
-    ctx = scripted_with_env(tmp_path, result(0, stdout='{"allowed": [["p.cli", "main"]]}'))
+    ctx = scripted(tmp_path, result(0, stdout='{"allowed": [["p.cli", "main"]]}'))
     allowed = ADAPTER.boundary(ctx)
     assert allowed.entries == {("p.cli", "main")}
     config = (ctx.output_dir / RESOLVER_CONFIG_FILE).read_text(encoding="utf-8")

@@ -13,7 +13,7 @@ from collections.abc import Mapping
 from pathlib import Path, PurePosixPath
 
 from squadron.benchmark.adapter import SandboxContext
-from squadron.benchmark.fairness import HarnessFailure
+from squadron.benchmark.fairness import HarnessFailure, harness_failure
 from squadron.metrology.benchmark_models import GraderCommand, GraderCommandKind
 
 _logger = logging.getLogger(__name__)
@@ -27,21 +27,16 @@ _RUFF_CONFIG_FILE = "ruff.toml"
 _PYRIGHT_CONFIG_FILE = "pyrightconfig.json"
 
 
-def _failure(detail: str) -> HarnessFailure:
-    _logger.error("fix-case harness failure: %s", detail)
-    return HarnessFailure(detail)
-
-
 def _resolve_inside(root: Path, relative: str) -> Path:
     """``root / relative`` with ``..`` folded away; a path that leaves ``root`` is a failure."""
     pure = PurePosixPath(relative)
     if not relative or pure.is_absolute() or ".." in pure.parts:
-        raise _failure(f"overlay path {relative!r} is not a path inside the tree")
+        raise harness_failure(f"overlay path {relative!r} is not a path inside the tree")
     target = Path(os.path.normpath(root / pure))
     try:
         target.relative_to(root)
     except ValueError:
-        raise _failure(f"overlay path {relative!r} escapes the tree") from None
+        raise harness_failure(f"overlay path {relative!r} escapes the tree") from None
     return target
 
 
@@ -81,7 +76,7 @@ def _read_toml(path: Path) -> dict[str, object]:
     except FileNotFoundError:
         return {}
     except tomllib.TOMLDecodeError as exc:
-        raise _failure(f"{path} does not parse: {exc}") from exc
+        raise harness_failure(f"{path} does not parse: {exc}") from exc
 
 
 def grader_commands_for(tree: Path) -> tuple[GraderCommand, ...]:

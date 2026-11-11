@@ -48,7 +48,7 @@ The slice also leaves the qualified fix cases and a versioned case set in the st
 - Injecting hidden tests into a producer's tree (425). This slice only overlays whole reference files onto the parent sandbox, where no producer output exists.
 - The leak scan, the producer-only run mode, and replays (424).
 - The paired bootstrap over real replay results (425). The yield report uses an analytic bound (D12).
-- Adapters for other languages (Future Work 1). A project with no adapter yields zero fix cases and gets one reason for all of them.
+- Adapters for other languages (Future Work 1). A project with no adapter yields zero fix cases and gets one reason for all of them. Choosing the adapters by project language, instead of the hard-coded Python in `case_build` and the benchmark commands, is deferred to #314.
 - Slice cases (426).
 
 ## Dependencies
@@ -218,6 +218,7 @@ Status: decided
 - During the reference trace run, the trace plugin wraps `unittest.mock._patch.__enter__` / `start` (which covers `patch`, `patch.object` and `patch.dict`), plus `pytest.MonkeyPatch.setattr`, `delattr`, `setitem` and `delitem`. For each, it resolves the owner object being modified.
 - A patch whose owner is a project module, a project class, or an instance of a project class is `patches_project_code`. This applies even when the replaced value comes from a dependency (`patch("pkg.mod.run")` after `from subprocess import run`), because the patch site still ties the test to the module where the fix put its call.
 - Patching anything owned outside the project (`subprocess.run`, `os.environ`, SDK classes) is allowed.
+- `ENVIRONMENT_ISOLATION_PATCH_TARGETS` exempts project targets that only keep the checkout's `.env` out of tests (today `squadron.cli.app._load_env_file`). It is hard-coded in `trace_verdict.py`; moving it to per-project configuration is deferred to #315.
 - A target string that does not resolve at the reference makes the test `boundary_undecidable`. The same failure at the parent is already `uses_symbol_added_by_fix` (D5).
 
 ### D8 — Verdicts are per test; a case needs one surviving hidden test
@@ -298,7 +299,7 @@ Status: decided
 ### Patterns and Conventions
 
 - `CandidateRejection`, `TestRejection`, `QualificationOutcome` and `HiddenTestVerdictKind` are `StrEnum`s defined once in `benchmark_models.py`. The report groups by these values, never by message text. The two rejection enums are:
-  - `CandidateRejection` (whole candidate): `merge_commit`, `multiple_closing_commits`, `multiple_issues_closed`, `no_issue_host`, `issue_not_found`, `reference_is_pull_request`, `issue_edited_after_fix`, `no_fix_case_adapter`, `no_test_change`, `test_data_changed`, `modifies_test_support`, `changes_lockfile`, `environment_unresolved` (421's `EnvironmentResolutionError`, its reason in `detail`), `collection_failed`, `no_packaging_boundary`, `boundary_undecidable` (resolver failure), `no_qualifying_hidden_test`.
+  - `CandidateRejection` (whole candidate): `merge_commit`, `root_commit` (no parent to diff against), `multiple_closing_commits`, `multiple_issues_closed`, `no_issue_host`, `issue_not_found`, `reference_is_pull_request`, `issue_edited_after_fix`, `no_fix_case_adapter`, `no_test_change`, `test_data_changed`, `modifies_test_support`, `changes_lockfile`, `environment_unresolved` (421's `EnvironmentResolutionError`, its reason in `detail`; the reasons `installer_missing` and `install_timeout` say nothing about the case and are `harness_error` records instead), `collection_failed`, `no_packaging_boundary`, `boundary_undecidable` (resolver failure), `no_qualifying_hidden_test`.
   - `TestRejection` (one hidden test, or an `excluded_tests` entry): `passes_at_parent`, `uses_symbol_added_by_fix`, `undecidable_failure_at_parent`, `reaches_past_boundary`, `patches_project_code`, `boundary_undecidable` (trace), `flaky`, `fails_at_reference`.
 - `FixCaseAdapter` is a separate protocol from 421's `BenchmarkAdapter` (ISP: slice-case languages need no fairness methods).
 - Harness failures (timeouts, `SuiteRunError`, `CodeHostError` other than not-found) are logged at ERROR and recorded as `harness_error` with the detail. They are never counted as a rejection reason that blames the case.

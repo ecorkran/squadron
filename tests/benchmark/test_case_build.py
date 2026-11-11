@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import NoReturn
 
 import pytest
 
@@ -23,6 +24,7 @@ from squadron.metrology.benchmark_models import (
     CandidateRejection,
     CaseKind,
     CaseProvenance,
+    CaseSet,
     GraderCommand,
     GraderCommandKind,
     HiddenTestVerdict,
@@ -140,7 +142,7 @@ def repo(tmp_path: Path) -> ClosingCommitRepo:
 
 
 class FailingCaseSets(BenchmarkRecordStore):
-    def write_case_set(self, name: str, case_ids: tuple[str, ...] | list[str]):  # type: ignore[no-untyped-def]
+    def write_case_set(self, name: str, case_ids: list[str] | tuple[str, ...]) -> CaseSet:
         raise MetrologyStoreError("disk full")
 
 
@@ -156,7 +158,7 @@ def deps_for(
             raise project
         return project
 
-    def no_sandbox(start_sha: str):  # type: ignore[no-untyped-def]
+    def no_sandbox(start_sha: str) -> NoReturn:
         raise AssertionError("the fake sandbox stages never build a sandbox")
 
     return BuildDeps(

@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from squadron.benchmark import qualify_sandbox, qualify_types
+from squadron.benchmark import qualify_types
 from squadron.benchmark.adapter import SandboxContext, SuiteRun, SuiteSelection
 from squadron.benchmark.fix_discovery import FixCandidate, discover
 from squadron.benchmark.python_adapter import PythonBenchmarkAdapter
@@ -174,8 +174,7 @@ def test_a_second_run_reuses_the_record_and_runs_no_suite(
     assert setup.suites.calls == suites_after_first, "a reused candidate runs no suite"
 
     # Bumping the rule version makes the stored record stale.
-    for module in (qualify_sandbox, qualify_types):
-        monkeypatch.setattr(module, "FAIRNESS_RULE_VERSION", qualify_types.FAIRNESS_RULE_VERSION + 1)
+    monkeypatch.setattr(qualify_types, "FAIRNESS_RULE_VERSION", qualify_types.FAIRNESS_RULE_VERSION + 1)
     third = setup.qualify()
     assert third.reused is False
     assert setup.suites.calls > suites_after_first

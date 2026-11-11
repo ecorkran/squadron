@@ -165,6 +165,7 @@ def qualification(**overrides: Any) -> FixQualification:
 def test_candidate_rejection_values_match_the_design() -> None:
     assert {member.value for member in CandidateRejection} == {
         "merge_commit",
+        "root_commit",
         "multiple_closing_commits",
         "multiple_issues_closed",
         "no_issue_host",

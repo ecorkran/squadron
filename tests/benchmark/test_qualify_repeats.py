@@ -282,29 +282,30 @@ def a_case() -> BenchmarkCase:
 def test_qualification_for_returns_the_record_on_a_full_match(tmp_path: Path) -> None:
     setup = world(tmp_path)
     record = stored(setup)
-    assert qualification_for(a_case(), environment(), setup.store) == record
+    assert qualification_for(a_case(), environment(), setup.store, setup.deps.repeats) == record
 
 
 @pytest.mark.parametrize(
-    ("changes", "digest_env"),
+    ("changes", "digest_env", "asked_repeats"),
     [
-        ({"rule_version": FAIRNESS_RULE_VERSION + 1}, None),
-        ({}, "m" * 64),
-        ({"outcome": QualificationOutcome.HARNESS_ERROR, "case_id": None}, None),
+        ({"rule_version": FAIRNESS_RULE_VERSION + 1}, None, 2),
+        ({}, "m" * 64, 2),
+        ({"outcome": QualificationOutcome.HARNESS_ERROR, "case_id": None}, None, 2),
+        ({}, None, 3),
     ],
-    ids=["bumped rule version", "other environment", "harness error"],
+    ids=["bumped rule version", "other environment", "harness error", "other repeat count"],
 )
 def test_qualification_for_returns_none_when_the_record_cannot_be_trusted(
-    tmp_path: Path, changes: dict[str, object], digest_env: str | None
+    tmp_path: Path, changes: dict[str, object], digest_env: str | None, asked_repeats: int
 ) -> None:
     setup = world(tmp_path)
     stored(setup, **changes)
     asked = environment(digest_env) if digest_env else environment()
-    assert qualification_for(a_case(), asked, setup.store) is None
+    assert qualification_for(a_case(), asked, setup.store, asked_repeats) is None
 
 
 def test_qualification_for_returns_none_when_nothing_is_stored(tmp_path: Path) -> None:
-    assert qualification_for(a_case(), environment(), world(tmp_path).store) is None
+    assert qualification_for(a_case(), environment(), world(tmp_path).store, 2) is None
 
 
 # --- Failure modes -----------------------------------------------------------------------

@@ -34,6 +34,7 @@ from tests.benchmark.support import (
     ScriptedRunner,
     closing_commit_repo,
     failed,
+    hermetic_git,
     ok,
 )
 from tests.codehost.fake_runner import FakeProcessRunner
@@ -130,6 +131,19 @@ def test_rejection_details_name_the_cause(repo: ClosingCommitRepo) -> None:
     assert details[repo.shas["two_issues"]] == "#11, #12"
     assert "#13" in details[repo.shas["split_one"]]
     assert details[repo.shas["merge"]] == "2 parents"
+
+
+def test_a_closing_root_commit_is_rejected_not_a_candidate(tmp_path: Path) -> None:
+    path = tmp_path / "root_only"
+    path.mkdir()
+    hermetic_git(path, "init", "-q", "-b", "main")
+    hermetic_git(path, "commit", "-q", "--allow-empty", "-m", "Fixes #5")
+    result = discover(SubprocessRunner(), path, timeout_seconds=TIMEOUT)
+    assert result.candidates == ()
+    (rejection,) = result.rejections
+    assert rejection.rejection is CandidateRejection.ROOT_COMMIT
+    assert rejection.parent_sha == ""
+    assert rejection.issue_ref == "#5"
 
 
 @pytest.mark.parametrize(

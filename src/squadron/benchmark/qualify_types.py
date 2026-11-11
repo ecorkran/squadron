@@ -12,7 +12,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from squadron.benchmark.adapter import SandboxContext
 from squadron.benchmark.build_errors import BuildHalted
@@ -95,43 +95,77 @@ def record_outcome(
     A result that cannot be stored is lost, so ``MetrologyStoreError`` is logged at ERROR and
     raised as ``BuildHalted``. ``environment`` is ``None`` for every outcome before a sandbox.
     """
+    return _new_record(
+        deps,
+        candidate.sha,
+        candidate.parent_sha,
+        issue_ref if issue_ref is not None else candidate.issue_ref,
+        environment=environment,
+        outcome=outcome,
+        case_id=case_id,
+        rejection=rejection,
+        detail=detail,
+        hidden_verdicts=hidden_verdicts,
+        excluded_with_reasons=excluded_with_reasons,
+    )
+
+
+def record_discovery_rejection(deps: QualifyDeps, rejected: DiscoveryRejection) -> QualifyResult:
+    """Store the rejection of a closing commit that never became a candidate."""
+    return _new_record(
+        deps,
+        rejected.sha,
+        rejected.parent_sha,
+        rejected.issue_ref,
+        outcome=QualificationOutcome.REJECTED,
+        rejection=rejected.rejection,
+        detail=rejected.detail,
+    )
+
+
+def _new_record(
+    deps: QualifyDeps, commit_sha: str, parent_sha: str, issue_ref: str | None, **fields: Any
+) -> QualifyResult:
+    """Build and store one ``FixQualification``; the fields every outcome shares are set here."""
     record = FixQualification.model_validate(
         {
             "project_id": deps.project_id,
-            "commit_sha": candidate.sha,
-            "parent_sha": candidate.parent_sha,
-            "issue_ref": issue_ref if issue_ref is not None else candidate.issue_ref,
+            "commit_sha": commit_sha,
+            "parent_sha": parent_sha,
+            "issue_ref": issue_ref,
             "rule_version": FAIRNESS_RULE_VERSION,
-            "environment": environment,
             "repeats": deps.repeats,
-            "outcome": outcome,
-            "case_id": case_id,
-            "rejection": rejection,
-            "detail": detail,
-            "hidden_verdicts": hidden_verdicts,
-            "excluded_with_reasons": excluded_with_reasons,
             "created_at": datetime.now(UTC),
+            "environment": None,  # only outcomes reached inside a sandbox carry one
+            **fields,
         }
     )
     return _store(deps, record)
 
 
-def record_discovery_rejection(deps: QualifyDeps, rejected: DiscoveryRejection) -> QualifyResult:
-    """Store the rejection of a closing commit that never became a candidate."""
-    record = FixQualification(
-        project_id=deps.project_id,
-        commit_sha=rejected.sha,
-        parent_sha=rejected.parent_sha,
-        issue_ref=rejected.issue_ref,
-        rule_version=FAIRNESS_RULE_VERSION,
-        environment=None,
-        repeats=deps.repeats,
-        outcome=QualificationOutcome.REJECTED,
-        rejection=rejected.rejection,
-        detail=rejected.detail,
-        created_at=datetime.now(UTC),
-    )
-    return _store(deps, record)
+def reusable_record(
+    store: BenchmarkRecordStore,
+    project_id: ProjectId,
+    commit_sha: str,
+    environment: EnvironmentIdentity,
+    repeats: int,
+) -> FixQualification | None:
+    """The stored result for this commit in this environment, or ``None`` when it must be redone.
+
+    The single reuse predicate: same project, fix commit, environment digest, current rule
+    version and repeat count (the flakiness verdicts depend on it). A ``harness_error`` is never
+    an answer; a rejected record is (it is the reason a case does not qualify). Store errors
+    propagate as ``MetrologyStoreError``.
+    """
+    record = store.get_fix_qualification(project_id, commit_sha, environment.identity_digest)
+    if (
+        record is None
+        or record.rule_version != FAIRNESS_RULE_VERSION
+        or record.repeats != repeats
+        or record.outcome is QualificationOutcome.HARNESS_ERROR
+    ):
+        return None
+    return record
 
 
 def _store(deps: QualifyDeps, record: FixQualification) -> QualifyResult:

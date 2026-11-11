@@ -315,6 +315,15 @@ def test_git_failures_are_harness_errors(
     assert_harness_error(setup, result, caplog, text)
 
 
+def test_an_unparseable_parent_pyproject_is_a_harness_error_not_a_rejection(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    world = GitWorld(files={(PARENT, "pyproject.toml"): "[broken"})
+    with caplog.at_level(logging.ERROR):
+        result, setup = run(tmp_path, ScriptedHost(snapshot()), world)
+    assert_harness_error(setup, result, caplog, "pyproject.toml does not parse")
+
+
 def test_a_missing_gh_halts_the_build_and_writes_no_record(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:

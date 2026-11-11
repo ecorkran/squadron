@@ -50,7 +50,12 @@ def _describe(outcomes: Sequence[NodeOutcome]) -> str:
 
 
 def _hidden_rejection(outcomes: Sequence[NodeOutcome]) -> TestRejection | None:
-    """A hidden test must pass at the reference in every run; disagreement is flakiness."""
+    """A hidden test must pass at the reference in every run; disagreement is flakiness.
+
+    Any outcome but ``passed`` (``skipped`` and ``not_run`` included) rejects it: a test that
+    did not pass shows nothing about the fix. Regression tests follow the other half of the
+    rule in ``_excluded_rejection``.
+    """
     if len(set(outcomes)) > 1:
         return TestRejection.FLAKY
     if outcomes[0] is not NodeOutcome.PASSED:
@@ -59,6 +64,12 @@ def _hidden_rejection(outcomes: Sequence[NodeOutcome]) -> TestRejection | None:
 
 
 def _excluded_rejection(outcomes: Sequence[NodeOutcome]) -> TestRejection | None:
+    """An unchanged test is excluded only when it fails (``failed``/``error``) or is flaky.
+
+    The rule differs from ``_hidden_rejection`` on purpose: a hidden test must pass to be
+    evidence, but a regression test only charges every configuration alike when it fails.
+    ``skipped``, ``xfailed``, ``xpassed`` and ``not_run`` are not failures, so those tests stay.
+    """
     if len(set(outcomes)) > 1:
         return TestRejection.FLAKY
     if outcomes[0] in _FAILING:

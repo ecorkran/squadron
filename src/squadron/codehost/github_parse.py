@@ -77,6 +77,10 @@ def require_int(payload: Mapping[str, Any], key: str, argv: Sequence[str]) -> in
         ) from exc
 
 
+#: Shown for a comment whose author account was deleted (GraphQL gives a null author).
+DELETED_AUTHOR_LOGIN = "[deleted account]"
+
+
 def _nested_str(node: Mapping[str, Any], key: str, inner: str) -> str:
     """Read ``node[key][inner]`` as text, tolerating either being absent."""
     value = node.get(key)
@@ -166,7 +170,7 @@ def to_issue_comment(node: Mapping[str, Any]) -> IssueComment:
     argv = ("gh", "graphql")
     return IssueComment(
         # A deleted account's comments carry a null author.
-        author_login=_nested_str(node, "author", "login"),
+        author_login=_nested_str(node, "author", "login") or DELETED_AUTHOR_LOGIN,
         body=str(node.get("body") or ""),
         created_at=to_timestamp(node, "createdAt", argv),
         last_edited_at=to_optional_timestamp(node, "lastEditedAt", argv),
@@ -184,8 +188,8 @@ def to_issue_snapshot(
     return IssueSnapshot(
         locator=locator,
         number=require_int(issue, "number", argv),
-        title=str(issue.get("title") or ""),
-        body=str(issue.get("body") or ""),
+        title=require_str(issue, "title", argv),
+        body=require_str(issue, "body", argv),
         created_at=to_timestamp(issue, "createdAt", argv),
         last_edited_at=to_optional_timestamp(issue, "lastEditedAt", argv),
         comments=tuple(to_issue_comment(comment) for comment in comments),

@@ -3,8 +3,13 @@
 ``qualify_in_sandbox`` is what ``QualifyDeps.sandbox_stages`` holds. It builds one sandbox at
 the parent, then runs the checks from cheapest to most expensive on what survived: collection
 and the boundary at the parent, collection and the trace at the reference, test-first at
-parent plus overlay. A rejection ends the candidate at once; a harness failure is a
-``harness_error`` record, never a verdict on the candidate.
+parent plus overlay. A rejection ends the candidate at once; a harness failure (including an
+installer that is missing or times out) is a ``harness_error`` record, never a verdict on the
+candidate.
+
+Reuse costs an environment: the reuse key includes the environment digest, which exists only
+once the sandbox has installed its environment. A reused candidate therefore still prepares
+the environment, and then skips every stage.
 """
 
 from __future__ import annotations
@@ -14,11 +19,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
 
-from squadron.benchmark.adapter import EnvironmentResolutionError, SandboxContext, SuiteRunError
+from squadron.benchmark.adapter import (
+    EnvironmentFailureReason,
+    EnvironmentResolutionError,
+    SandboxContext,
+    SuiteRunError,
+)
 from squadron.benchmark.build_errors import BuildHalted
 from squadron.benchmark.diff_classify import DiffClassification
 from squadron.benchmark.fairness import (
-    FAIRNESS_RULE_VERSION,
     AllowedBoundary,
     BoundaryUndecidable,
     CollectedTests,
@@ -35,6 +44,7 @@ from squadron.benchmark.qualify_types import (
     QualifyResult,
     QualifySandbox,
     record_outcome,
+    reusable_record,
 )
 from squadron.benchmark.scrubbed_env import MissingHarnessHomeError, MissingHarnessToolError
 from squadron.benchmark.test_first import run_test_first
@@ -55,6 +65,12 @@ _logger = logging.getLogger(__name__)
 
 _HARNESS_ERRORS = (HarnessFailure, ProcessTimedOutError, SuiteRunError)
 
+#: Resolution failures that say nothing about the candidate: the installer is not on PATH or
+#: ran out of time. Every other reason (no lockfile, stale lock, ...) is a property of the case.
+_HARNESS_RESOLUTION_REASONS = frozenset(
+    {EnvironmentFailureReason.INSTALLER_MISSING, EnvironmentFailureReason.INSTALL_TIMEOUT}
+)
+
 
 def qualify_in_sandbox(
     candidate: FixCandidate,
@@ -67,6 +83,14 @@ def qualify_in_sandbox(
         with deps.sandbox_factory(candidate.parent_sha) as sandbox:
             return _qualify_in(sandbox, candidate, classification, task_text, deps)
     except EnvironmentResolutionError as exc:
+        if exc.reason in _HARNESS_RESOLUTION_REASONS:
+            _logger.exception("environment tooling failed for %s", candidate.sha[:12])
+            return record_outcome(
+                deps,
+                candidate,
+                QualificationOutcome.HARNESS_ERROR,
+                detail=f"{exc.reason.value}: {exc.detail}",
+            )
         _logger.error("environment unresolved for %s: %s", candidate.sha[:12], exc)
         return record_outcome(
             deps,
@@ -85,22 +109,13 @@ def qualify_in_sandbox(
 def _reusable(
     deps: QualifyDeps, candidate: FixCandidate, environment: EnvironmentIdentity
 ) -> FixQualification | None:
-    """An earlier record for this exact key and rule version, unless it was a harness error."""
+    """The earlier record ``reusable_record`` accepts; an unreadable store halts the build."""
     try:
-        existing = deps.store.get_fix_qualification(
-            deps.project_id, candidate.sha, environment.identity_digest
-        )
+        return reusable_record(deps.store, deps.project_id, candidate.sha, environment, deps.repeats)
     except MetrologyStoreError as exc:
         message = f"unreadable qualification record for {candidate.sha[:12]}: {exc}"
         _logger.exception(message)
         raise BuildHalted(message) from exc
-    if (
-        existing is not None
-        and existing.rule_version == FAIRNESS_RULE_VERSION
-        and existing.outcome is not QualificationOutcome.HARNESS_ERROR
-    ):
-        return existing
-    return None
 
 
 def _qualify_in(

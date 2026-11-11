@@ -54,20 +54,22 @@ def render_issue(snapshot: IssueSnapshot, cutoff: datetime | None) -> str:
     return "\n\n".join(parts) + "\n"
 
 
-def _edited_after(edited: datetime | None, cutoff: datetime, what: str) -> bool:
-    return edited is not None and _require_aware(edited, what) > cutoff
+def _edited_at_or_after(edited: datetime | None, cutoff: datetime, what: str) -> bool:
+    """The same boundary as comment omission: a change at the cutoff instant is too late."""
+    return edited is not None and _require_aware(edited, what) >= cutoff
 
 
 def _edited_after_cutoff(snapshot: IssueSnapshot, cutoff: datetime) -> bool:
-    """Whether the title, the body or an included comment changed after ``cutoff``."""
+    """Whether the title, the body or an included comment changed at or after ``cutoff``."""
     if any(
-        _require_aware(renamed, "title rename time") >= cutoff for renamed in snapshot.title_renamed_at
+        _edited_at_or_after(renamed, cutoff, "title rename time")
+        for renamed in snapshot.title_renamed_at
     ):
         return True
-    if _edited_after(snapshot.last_edited_at, cutoff, "issue last_edited_at"):
+    if _edited_at_or_after(snapshot.last_edited_at, cutoff, "issue last_edited_at"):
         return True
     return any(
-        _edited_after(comment.last_edited_at, cutoff, "comment last_edited_at")
+        _edited_at_or_after(comment.last_edited_at, cutoff, "comment last_edited_at")
         for comment in _included_comments(snapshot, cutoff)
     )
 

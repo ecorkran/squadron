@@ -23,6 +23,7 @@ from squadron.codehost.errors import (
     ReferenceIsPullRequestError,
 )
 from squadron.codehost.github_cli import MAX_DISCUSSION_PAGES, GitHubCli
+from squadron.codehost.github_parse import DELETED_AUTHOR_LOGIN
 from squadron.codehost.models import RepositoryLocator
 from squadron.core.process_runner import ProcessResult, ProcessTimedOutError
 from tests.codehost.fake_runner import FakeProcessRunner
@@ -94,6 +95,15 @@ def test_edited_comment_fixture_maps_to_a_snapshot() -> None:
     assert snapshot.comments[1].last_edited_at is None
     assert snapshot.comments[0].created_at < snapshot.comments[1].created_at
     assert snapshot.title_renamed_at == ()
+
+
+def test_a_comment_from_a_deleted_account_carries_the_placeholder_login() -> None:
+    payload = fixture_json("issue-edited-comment.json")
+    issue_node(payload)["comments"]["nodes"][0]["author"] = None
+    cli, _ = host_with([(GH_GRAPHQL, ok(json.dumps(payload)))])
+    comments = cli.get_issue(LOCATOR, 126).comments
+    assert comments[0].author_login == DELETED_AUTHOR_LOGIN
+    assert comments[1].author_login not in ("", DELETED_AUTHOR_LOGIN)
 
 
 def test_never_edited_fixture_has_no_edit_timestamps() -> None:
@@ -201,6 +211,15 @@ def test_a_timestamp_without_a_timezone_is_reported_as_drift() -> None:
     issue_node(payload)["createdAt"] = "2026-11-07T04:17:42"
     cli, _ = host_with([(GH_GRAPHQL, ok(json.dumps(payload)))])
     with pytest.raises(HostResponseMalformedError, match="timezone"):
+        cli.get_issue(LOCATOR, 304)
+
+
+@pytest.mark.parametrize("field", ["title", "body"])
+def test_a_missing_title_or_body_is_reported_as_drift(field: str) -> None:
+    payload = fixture_json("issue-never-edited.json")
+    issue_node(payload)[field] = None
+    cli, _ = host_with([(GH_GRAPHQL, ok(json.dumps(payload)))])
+    with pytest.raises(HostResponseMalformedError, match=field):
         cli.get_issue(LOCATOR, 304)
 
 

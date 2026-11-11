@@ -18,6 +18,7 @@ from squadron.benchmark.diff_classify import (
     classify_diff,
     parse_name_status,
 )
+from squadron.benchmark.fairness import HarnessFailure
 from squadron.benchmark.fix_discovery import (
     DiscoveryRejection,
     FixCandidate,
@@ -41,8 +42,6 @@ from squadron.core.process_runner import (
 from squadron.metrology.benchmark_models import CandidateRejection, QualificationOutcome
 
 _logger = logging.getLogger(__name__)
-
-PYPROJECT_NAME = "pyproject.toml"
 
 
 class GitCommandFailed(Exception):
@@ -75,7 +74,7 @@ def _path_exists_at(deps: QualifyDeps, sha: str, path: str) -> bool:
     return bool(run_git(deps, ["git", "ls-tree", "--name-only", sha, "--", path]).stdout.strip())
 
 
-def _read_at(deps: QualifyDeps, sha: str, path: str) -> str | None:
+def _read_text_at_or_none(deps: QualifyDeps, sha: str, path: str) -> str | None:
     """File text at ``sha``, ``None`` when the path is absent there."""
     if not _path_exists_at(deps, sha, path):
         return None
@@ -114,11 +113,12 @@ def _fetch_and_freeze(
 
 
 def _classify(deps: QualifyDeps, candidate: FixCandidate) -> DiffClassification | _Rejected:
-    """Stage 2: the parent's ``pyproject.toml``, then the diff, classified."""
-    parent_pyproject = _read_at(deps, candidate.parent_sha, PYPROJECT_NAME)
+    """Stage 2: the parent's project config file, then the diff, classified."""
+    config_name = deps.adapter.project_config_name
+    parent_pyproject = _read_text_at_or_none(deps, candidate.parent_sha, config_name)
     if parent_pyproject is None:
         return _Rejected(
-            CandidateRejection.NO_FIX_CASE_ADAPTER, f"no {PYPROJECT_NAME} at the parent commit"
+            CandidateRejection.NO_FIX_CASE_ADAPTER, f"no {config_name} at the parent commit"
         )
     diff = run_git(
         deps,
@@ -128,8 +128,8 @@ def _classify(deps: QualifyDeps, candidate: FixCandidate) -> DiffClassification 
         parse_name_status(diff.stdout),
         deps.adapter,
         parent_pyproject,
-        lambda path: _read_at(deps, candidate.parent_sha, path),
-        lambda path: _read_at(deps, candidate.sha, path),
+        lambda path: _read_text_at_or_none(deps, candidate.parent_sha, path),
+        lambda path: _read_text_at_or_none(deps, candidate.sha, path),
     )
     if isinstance(classified, DiffRejection):
         return _Rejected(classified.rejection, classified.detail)
@@ -160,9 +160,10 @@ def _harness_error(
 def run_pre_sandbox_stages(deps: QualifyDeps, candidate: FixCandidate) -> QualifyResult:
     """Stages 1 and 2, then ``deps.sandbox_stages`` for a candidate that survived both.
 
-    Every outcome is stored. A ``CodeHostError`` other than not-found, and a failing git
-    command, are ``harness_error`` records (never a rejection that blames the case); a missing
-    ``gh`` halts the build because every later candidate would fail the same way.
+    Every outcome is stored. A ``CodeHostError`` other than not-found, a failing git command
+    and a project config the adapter cannot parse are ``harness_error`` records (never a
+    rejection that blames the case); a missing ``gh`` halts the build because every later
+    candidate would fail the same way.
     """
     issue_ref: str | None = None
     try:
@@ -182,5 +183,8 @@ def run_pre_sandbox_stages(deps: QualifyDeps, candidate: FixCandidate) -> Qualif
     except GitCommandFailed as exc:
         _logger.exception("git failure qualifying %s", candidate.sha[:12])
         return _harness_error(deps, candidate, str(exc), issue_ref)
+    except HarnessFailure as exc:
+        _logger.exception("classification failed for %s", candidate.sha[:12])
+        return _harness_error(deps, candidate, exc.detail, issue_ref)
     # The sandbox stages record the resolved reference, not the spelling in the commit message.
     return deps.sandbox_stages(replace(candidate, issue_ref=issue_ref), second, task_text, deps)

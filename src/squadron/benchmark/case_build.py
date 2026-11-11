@@ -12,7 +12,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from squadron.benchmark.build_errors import BuildHalted
+from squadron.benchmark.build_errors import BuildHalted, halt
 from squadron.benchmark.fix_discovery import DiscoveryResult, FixCandidate, discover
 from squadron.benchmark.qualify import qualify_candidate
 from squadron.benchmark.qualify_types import (
@@ -62,11 +62,6 @@ class BuildResult:
         return tuple(r.case_id for r in self.records if r.case_id is not None)
 
 
-def _halt(message: str) -> BuildHalted:
-    _logger.error(message)
-    return BuildHalted(message)
-
-
 def _selected(
     discovered: DiscoveryResult, prefixes: Sequence[str]
 ) -> tuple[list[FixCandidate], list[str]]:
@@ -76,7 +71,7 @@ def _selected(
     known = [c.sha for c in discovered.candidates] + [r.sha for r in discovered.rejections]
     unknown = [prefix for prefix in prefixes if not any(sha.startswith(prefix) for sha in known)]
     if unknown:
-        raise _halt(f"no closing commit matches: {', '.join(unknown)}")
+        raise halt(f"no closing commit matches: {', '.join(unknown)}")
 
     def wanted(sha: str) -> bool:
         return any(sha.startswith(prefix) for prefix in prefixes)
@@ -104,7 +99,7 @@ def _derive_project(repo_root: Path, deps: BuildDeps) -> ProjectId:
     try:
         return deps.derive_project_id(str(repo_root))
     except MetrologyIdentityError as exc:
-        raise _halt(f"cannot identify the project in {repo_root}: {exc}") from exc
+        raise halt(f"cannot identify the project in {repo_root}: {exc}") from exc
 
 
 def _write_case_set(deps: BuildDeps, set_name: str, case_ids: Sequence[str]) -> CaseSet:

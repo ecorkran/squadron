@@ -90,6 +90,7 @@ class ScriptedAdapter:
     """A ``FixCaseAdapter`` whose answers are scripted; every call lands in ``log``."""
 
     language = SourceLanguage.PYTHON
+    project_config_name = "pyproject.toml"
 
     def __init__(self, log: list[str]) -> None:
         self.log = log
@@ -439,6 +440,9 @@ def test_a_matching_record_is_reused_without_running_anything_past_the_sandbox(t
     assert result.reused is True
     assert result.record == record
     assert setup.log == []
+    # The reuse key includes the environment digest, so the sandbox (and its environment) is
+    # built even for a reused candidate; this pins that documented cost.
+    assert len(setup.handles) == 1
     assert setup.handles[0].exited
 
 
@@ -447,8 +451,9 @@ def test_a_matching_record_is_reused_without_running_anything_past_the_sandbox(t
     [
         {"rule_version": FAIRNESS_RULE_VERSION + 1},
         {"outcome": QualificationOutcome.HARNESS_ERROR, "case_id": None},
+        {"repeats": 3},
     ],
-    ids=["other rule version", "harness error"],
+    ids=["other rule version", "harness error", "other repeat count"],
 )
 def test_records_that_must_not_be_reused_requalify(
     tmp_path: Path, survivors_hook: Callable[[World], None], changes: dict[str, Any]
@@ -540,6 +545,22 @@ def test_an_unresolvable_environment_is_a_rejection_with_the_reason(tmp_path: Pa
     assert result.record.detail == "lock_stale_or_unresolvable: lock is stale"
     assert result.record.environment is None
     assert setup.log == []
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [EnvironmentFailureReason.INSTALLER_MISSING, EnvironmentFailureReason.INSTALL_TIMEOUT],
+)
+def test_an_installer_failure_is_a_harness_error_not_a_rejection(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, reason: EnvironmentFailureReason
+) -> None:
+    setup = world(tmp_path, enter_error=EnvironmentResolutionError(reason, "uv: not found"))
+    with caplog.at_level(logging.ERROR):
+        result = run(setup)
+    assert result.record.outcome is QualificationOutcome.HARNESS_ERROR
+    assert result.record.rejection is None
+    assert result.record.detail == f"{reason.value}: uv: not found"
+    assert any(record.levelno == logging.ERROR for record in caplog.records)
 
 
 @pytest.mark.parametrize("error", [SandboxError("git clone failed"), MissingHarnessHomeError()])

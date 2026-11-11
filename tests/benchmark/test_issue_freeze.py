@@ -101,6 +101,19 @@ def test_a_title_rename_after_the_cutoff_rejects_and_one_before_does_not() -> No
     assert isinstance(freeze_issue(snapshot(renamed=(BEFORE,)), CUTOFF), FrozenIssue)
 
 
+@pytest.mark.parametrize(
+    "at_cutoff",
+    [
+        snapshot(edited=CUTOFF),
+        snapshot((comment(BEFORE, edited=CUTOFF),)),
+        snapshot(renamed=(CUTOFF,)),
+    ],
+    ids=["body", "comment", "title"],
+)
+def test_a_change_exactly_at_the_cutoff_rejects_for_every_kind(at_cutoff: IssueSnapshot) -> None:
+    assert freeze_issue(at_cutoff, CUTOFF) is CandidateRejection.ISSUE_EDITED_AFTER_FIX
+
+
 def test_no_cutoff_renders_every_comment_and_never_rejects() -> None:
     issue = snapshot(
         (comment(BEFORE, "early", edited=AFTER), comment(AFTER, "late")),

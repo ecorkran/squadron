@@ -119,6 +119,20 @@ def test_build_reports_the_case_set_it_wrote(
     assert "case set fix-alpha v3" in result.output
 
 
+def test_an_invalid_report_setting_exits_one_before_the_build_runs(
+    repo: Path, store: BenchmarkRecordStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def invalid(key: str, cwd: str = ".") -> float:
+        raise ValueError(f"{key} must be greater than 0 and less than 1, got 1.5")
+
+    monkeypatch.setattr(cli_module, "get_open_unit_interval_config", invalid)
+    spy = fake_build(monkeypatch, BuildResult(PROJECT, (), None))
+    result = invoke("fix-cases", "build", "--set", "s", "--repo", str(repo))
+    assert result.exit_code == 1
+    assert "must be greater than 0" in result.output
+    assert spy.calls == [], "the build wrote nothing before the config error"
+
+
 def test_commit_is_repeatable_and_reaches_the_build(
     repo: Path, store: BenchmarkRecordStore, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -160,7 +174,8 @@ def test_keep_reaches_the_sandbox_factory(
     sandbox = FakeSandbox.created[0]
     assert sandbox.kept is kept
     assert sandbox.kwargs["start_sha"] == "a" * 40
-    assert sandbox.kwargs["repo_root"] == Path(repo).resolve() or sandbox.kwargs["repo_root"] == repo
+    # The root is what ``git rev-parse --show-toplevel`` prints: the symlink-resolved path.
+    assert sandbox.kwargs["repo_root"] == repo.resolve()
 
 
 def test_a_halted_build_exits_one_with_the_reason(

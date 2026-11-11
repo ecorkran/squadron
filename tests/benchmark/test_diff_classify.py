@@ -31,6 +31,7 @@ class StubAdapter:
     classification hooks do anything."""
 
     language = SourceLanguage.PYTHON
+    project_config_name = "pyproject.toml"
 
     def is_test_side(self, pyproject_text: str | None, path: str) -> bool:
         name = PurePosixPath(path).name
@@ -312,6 +313,21 @@ def test_quoted_paths_are_unquoted_leniently() -> None:
         "tests/café.py",
         "tests/plain.py",
     ]
+
+
+@pytest.mark.parametrize(
+    ("quoted", "decoded"),
+    [
+        ('"tests/a\\\\101.py"', "tests/a\\101.py"),
+        ('"tests/a\\\\n.py"', "tests/a\\n.py"),
+        ('"tests/a\\\\t.py"', "tests/a\\t.py"),
+        ('"tests/a\\\\\\tb.py"', "tests/a\\\tb.py"),
+    ],
+    ids=["digits", "n", "t", "backslash then real tab"],
+)
+def test_an_escaped_backslash_is_never_part_of_a_second_escape(quoted: str, decoded: str) -> None:
+    # git quotes the name `a\n.py` (backslash, n) as "a\\n.py"; it must not become a newline.
+    assert [c.path for c in parse_name_status(f"A\t{quoted}\n")] == [decoded]
 
 
 @pytest.mark.parametrize("text", ["", "\n", "garbage without a tab\n"])

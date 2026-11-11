@@ -9,7 +9,7 @@ import json
 from datetime import UTC, datetime, timedelta
 
 from squadron.benchmark.fairness import FAIRNESS_RULE_VERSION
-from squadron.benchmark.yield_report import build_yield, render_json, render_text
+from squadron.benchmark.yield_report import YieldReport, build_yield, render_json, render_text
 from squadron.metrology.benchmark_environment import EnvironmentIdentity
 from squadron.metrology.benchmark_models import (
     CandidateRejection,
@@ -104,7 +104,7 @@ def sample_records() -> list[FixQualification]:
     ]
 
 
-def report():  # type: ignore[no-untyped-def]
+def report() -> YieldReport:
     return build_yield(sample_records(), [], SAMPLES, TARGET)
 
 

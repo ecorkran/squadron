@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from squadron.benchmark.build_errors import BuildHalted
+from squadron.benchmark.build_errors import BuildHalted, halt
 from squadron.codehost.errors import (
     AmbiguousHostRemoteError,
     ForeignRepositoryError,
@@ -57,8 +57,7 @@ CLOSING_REFERENCE = re.compile(
 class FixCandidate:
     """A closing commit that reached the next stage.
 
-    ``parent_sha`` is empty for a root commit: there is nothing to diff against, and the
-    diff stage reports that as a failing git command.
+    ``parent_sha`` is the first parent; a root commit is rejected in discovery.
     """
 
     sha: str
@@ -99,11 +98,6 @@ class _ClosingCommit:
     references: tuple[tuple[str, str | None, int], ...]
 
 
-def _halt(message: str) -> BuildHalted:
-    _logger.error(message)
-    return BuildHalted(message)
-
-
 def _run_git_log(runner: ProcessRunner, repo_root: Path, timeout_seconds: float) -> ProcessResult:
     argv = ["git", "log", f"--format={GIT_LOG_FORMAT}", "HEAD"]
     command = " ".join(argv)
@@ -116,7 +110,7 @@ def _run_git_log(runner: ProcessRunner, repo_root: Path, timeout_seconds: float)
         _logger.exception("git is not available")
         raise BuildHalted(f"{command}: git is not on PATH") from exc
     if result.returncode != 0:
-        raise _halt(f"{command} exited {result.returncode} in {repo_root}: {result.stderr.strip()}")
+        raise halt(f"{command} exited {result.returncode} in {repo_root}: {result.stderr.strip()}")
     return result
 
 
@@ -133,7 +127,7 @@ def _references_in(message: str) -> tuple[tuple[str, str | None, int], ...]:
 def _parse_record(record: str) -> _ClosingCommit | None:
     fields = record.split(_FIELD_SEPARATOR, _FIELD_COUNT - 1)
     if len(fields) != _FIELD_COUNT:
-        raise _halt(f"git log record has {len(fields)} fields, expected {_FIELD_COUNT}: {record!r}")
+        raise halt(f"git log record has {len(fields)} fields, expected {_FIELD_COUNT}: {record!r}")
     sha, parents, date_text = fields[0].strip(), fields[1].strip(), fields[2].strip()
     message = fields[3]
     references = _references_in(message)
@@ -166,13 +160,21 @@ def _closers_by_issue(commits: Sequence[_ClosingCommit]) -> dict[tuple[str | Non
 def _rejection_for(
     commit: _ClosingCommit, closers: dict[tuple[str | None, int], int]
 ) -> DiscoveryRejection | None:
-    """The one discovery rejection of a commit: merge, then several issues, then several closers."""
+    """The one discovery rejection: root, merge, then several issues, then several closers."""
+    if not commit.parents:
+        return DiscoveryRejection(
+            commit.sha,
+            CandidateRejection.ROOT_COMMIT,
+            "no parent commit to diff against",
+            issue_ref=commit.references[0][0],
+        )
+    parent = commit.parents[0]
     if len(commit.parents) > 1:
         return DiscoveryRejection(
             commit.sha,
             CandidateRejection.MERGE_COMMIT,
             f"{len(commit.parents)} parents",
-            commit.parents[0],
+            parent,
             commit.references[0][0],
         )
     # A commit is only built with at least one reference, so != 1 means several.
@@ -182,7 +184,7 @@ def _rejection_for(
             commit.sha,
             CandidateRejection.MULTIPLE_ISSUES_CLOSED,
             named,
-            commit.parents[0] if commit.parents else "",
+            parent,
             commit.references[0][0],
         )
     written, repository, number = commit.references[0]
@@ -191,7 +193,7 @@ def _rejection_for(
             commit.sha,
             CandidateRejection.MULTIPLE_CLOSING_COMMITS,
             f"{written} is closed by {closers[(repository, number)]} commits",
-            commit.parents[0] if commit.parents else "",
+            parent,
             written,
         )
     return None
@@ -213,7 +215,7 @@ def discover(runner: ProcessRunner, repo_root: Path, *, timeout_seconds: float) 
             rejections.append(rejection)
             continue
         written, repository, number = commit.references[0]
-        parent = commit.parents[0] if commit.parents else ""
+        parent = commit.parents[0]  # a root commit was rejected above
         candidates.append(
             FixCandidate(commit.sha, parent, commit.committer_date, written, repository, number)
         )

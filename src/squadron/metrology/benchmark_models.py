@@ -225,6 +225,7 @@ class CandidateRejection(StrEnum):
     """Why a whole fix candidate is not a case (slice 422, Patterns and Conventions)."""
 
     MERGE_COMMIT = "merge_commit"
+    ROOT_COMMIT = "root_commit"
     MULTIPLE_CLOSING_COMMITS = "multiple_closing_commits"
     MULTIPLE_ISSUES_CLOSED = "multiple_issues_closed"
     NO_ISSUE_HOST = "no_issue_host"

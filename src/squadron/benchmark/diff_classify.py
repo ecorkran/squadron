@@ -60,21 +60,25 @@ class DiffAdapter(Protocol):
 
 ReadFile = Callable[[str], str | None]
 
-_OCTAL_ESCAPE = re.compile(r"\\([0-7]{3})")
-_SIMPLE_ESCAPES = {"\\\\": "\\", '\\"': '"', "\\t": "\t", "\\n": "\n"}
+_ESCAPE = re.compile(rb'\\([0-7]{3}|[\\"tn])')
+_SIMPLE_ESCAPES = {b"\\": b"\\", b'"': b'"', b"t": b"\t", b"n": b"\n"}
+
+
+def _decode_escape(match: re.Match[bytes]) -> bytes:
+    token = match.group(1)
+    return bytes([int(token, 8)]) if token[:1].isdigit() else _SIMPLE_ESCAPES[token]
 
 
 def _unquote(path: str) -> str:
-    """Undo git's C-style path quoting; an unquoted path is returned as is."""
+    """Undo git's C-style path quoting; an unquoted path is returned as is.
+
+    Escapes are decoded in one left-to-right pass so an escaped backslash can never combine
+    with the characters after it into a second escape. Octal escapes are UTF-8 bytes.
+    """
     if len(path) < 2 or not (path.startswith('"') and path.endswith('"')):
         return path
-    body = path[1:-1]
-    for escaped, plain in _SIMPLE_ESCAPES.items():
-        body = body.replace(escaped, plain)
-    if _OCTAL_ESCAPE.search(body):
-        raw = _OCTAL_ESCAPE.sub(lambda match: chr(int(match.group(1), 8)), body)
-        return raw.encode("latin-1").decode("utf-8", errors="replace")
-    return body
+    raw = _ESCAPE.sub(_decode_escape, path[1:-1].encode("utf-8"))
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse_name_status(text: str) -> tuple[FileChange, ...]:

@@ -20,8 +20,8 @@ from pathlib import Path
 
 from squadron.benchmark.adapter import SandboxContext
 from squadron.benchmark.diff_classify import DiffClassification
-from squadron.benchmark.fairness import FixCaseAdapter, HarnessFailure
-from squadron.core.process_runner import ProcessNotFoundError, ProcessRunner, ProcessTimedOutError
+from squadron.benchmark.fairness import FixCaseAdapter, harness_failure, run_for_harness
+from squadron.core.process_runner import ProcessRunner
 
 _logger = logging.getLogger(__name__)
 _REPLACEMENT_CHARACTER = "�"
@@ -33,23 +33,21 @@ class FileState(StrEnum):
     PARENT_PLUS_OVERLAY = "parent_plus_overlay"
 
 
-def _read_at(
+def _read_bytes_at(
     runner: ProcessRunner, repo_root: Path, sha: str, path: str, timeout_seconds: float
 ) -> bytes:
     argv = ["git", "show", f"{sha}:{path}"]
-    try:
-        result = runner.run(argv, cwd=str(repo_root), timeout=timeout_seconds)
-    except (ProcessTimedOutError, ProcessNotFoundError) as exc:
-        _logger.exception("git show %s:%s failed", sha, path)
-        raise HarnessFailure(f"git show {sha[:12]}:{path} failed: {exc}") from exc
+    result = run_for_harness(
+        runner, argv, f"git show {sha[:12]}:{path}", cwd=str(repo_root), timeout=timeout_seconds
+    )
     if result.returncode != 0:
-        detail = f"git show {sha[:12]}:{path} exited {result.returncode}: {result.stderr.strip()}"
-        _logger.error("fix-case harness failure: %s", detail)
-        raise HarnessFailure(detail)
+        raise harness_failure(
+            f"git show {sha[:12]}:{path} exited {result.returncode}: {result.stderr.strip()}"
+        )
     if _REPLACEMENT_CHARACTER in result.stdout:
-        detail = f"{path} at {sha[:12]} is not valid UTF-8 text, so it cannot be restored exactly"
-        _logger.error("fix-case harness failure: %s", detail)
-        raise HarnessFailure(detail)
+        raise harness_failure(
+            f"{path} at {sha[:12]} is not valid UTF-8 text, so it cannot be restored exactly"
+        )
     return result.stdout.encode("utf-8")
 
 
@@ -79,9 +77,9 @@ class FileStates:
         reference: dict[str, bytes | None] = {}
         parent: dict[str, bytes | None] = {}
         for path in (*classification.added, *classification.changed):
-            reference[path] = _read_at(runner, repo_root, fix_sha, path, timeout_seconds)
+            reference[path] = _read_bytes_at(runner, repo_root, fix_sha, path, timeout_seconds)
         for path in (*classification.changed, *classification.deleted):
-            parent[path] = _read_at(runner, repo_root, parent_sha, path, timeout_seconds)
+            parent[path] = _read_bytes_at(runner, repo_root, parent_sha, path, timeout_seconds)
         for path in classification.added:
             parent[path] = None
         for path in classification.deleted:
