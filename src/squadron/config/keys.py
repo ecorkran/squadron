@@ -22,6 +22,11 @@ CF_CLI_TIMEOUT_KEY = "cf.cli_timeout_s"
 BENCHMARK_AUTH_PROBE_TIMEOUT_KEY = "benchmark.auth_probe_timeout_s"
 BENCHMARK_INSTALL_TIMEOUT_KEY = "benchmark.install_timeout_s"
 BENCHMARK_SUITE_TIMEOUT_KEY = "benchmark.suite_timeout_s"
+# Slice 422 D9, D12: qualification repeats and the yield report's separability inputs.
+BENCHMARK_QUALIFICATION_REPEATS_KEY = "benchmark.qualification_repeats"
+BENCHMARK_PLANNED_SAMPLES_KEY = "benchmark.planned_samples"
+# Read through get_open_unit_interval_config: a float strictly between 0 and 1.
+BENCHMARK_TARGET_PASS_RATE_DIFFERENCE_KEY = "benchmark.target_pass_rate_difference"
 # Read by pipeline.run_spend.read_cost_cap (slice 947 D3); unset means no cap.
 COST_CAP_KEY = "pipeline.max_cost_usd"
 # Read by pipeline.pause_hook.start_pause_command (#302); unset means no command.
@@ -554,6 +559,37 @@ CONFIG_KEYS: dict[str, ConfigKey] = {
             "Wall-clock cap in seconds on one benchmark suite run (pytest in the "
             "sandbox). A run that exceeds it returns the results reported so far, "
             "with every unreported node marked not_run."
+        ),
+    ),
+    BENCHMARK_QUALIFICATION_REPEATS_KEY: ConfigKey(
+        name=BENCHMARK_QUALIFICATION_REPEATS_KEY,
+        type_=int,
+        default=3,
+        description=(
+            "How many times fix-case qualification repeats a check that can be "
+            "flaky: the test-first runs of the hidden tests and the full-suite runs "
+            "at the reference. Outcomes that differ across runs are rejected or "
+            "excluded as flaky."
+        ),
+    ),
+    BENCHMARK_PLANNED_SAMPLES_KEY: ConfigKey(
+        name=BENCHMARK_PLANNED_SAMPLES_KEY,
+        type_=int,
+        default=3,
+        description=(
+            "Samples per case (k) the benchmark plans to run per config. The "
+            "yield report uses it to say whether the qualified cases can "
+            "separate two configs."
+        ),
+    ),
+    BENCHMARK_TARGET_PASS_RATE_DIFFERENCE_KEY: ConfigKey(
+        name=BENCHMARK_TARGET_PASS_RATE_DIFFERENCE_KEY,
+        type_=float,
+        default=0.20,
+        description=(
+            "Smallest pass-rate difference between two configs, strictly between "
+            "0 and 1, that is big enough to change which alias you configure. The "
+            "yield report checks the qualified case count against it."
         ),
     ),
     "codex.turn_timeout_s": ConfigKey(

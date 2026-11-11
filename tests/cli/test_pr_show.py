@@ -34,6 +34,8 @@ from squadron.codehost.errors import (
     HostResponseMalformedError,
     HostUnauthenticatedError,
     HostUnreachableError,
+    IssueNotFoundError,
+    IssueTooLargeError,
     NoHostRemoteError,
     NoMergeBaseError,
     NoOpenPullRequestForBranchError,
@@ -41,6 +43,7 @@ from squadron.codehost.errors import (
     PullRequestCreationRejectedError,
     PullRequestHeadUnavailableError,
     PullRequestNotFoundError,
+    ReferenceIsPullRequestError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
     TargetSyntaxError,
@@ -318,6 +321,8 @@ _ALL_ERROR_CLASSES = [
     HostResponseMalformedError,
     HostUnauthenticatedError,
     HostUnreachableError,
+    IssueNotFoundError,
+    IssueTooLargeError,
     NoHostRemoteError,
     NoMergeBaseError,
     NoOpenPullRequestForBranchError,
@@ -325,6 +330,7 @@ _ALL_ERROR_CLASSES = [
     PullRequestCreationRejectedError,
     PullRequestHeadUnavailableError,
     PullRequestNotFoundError,
+    ReferenceIsPullRequestError,
     RefMovedSinceResolutionError,
     RefNotFetchableError,
     TargetSyntaxError,
@@ -339,7 +345,7 @@ def test_the_error_table_covers_every_subclass() -> None:
         for obj in vars(errors_module).values()
         if isinstance(obj, type) and issubclass(obj, CodeHostError) and obj is not CodeHostError
     }
-    assert len(_ALL_ERROR_CLASSES) == 20
+    assert len(_ALL_ERROR_CLASSES) == 23
     assert set(_ALL_ERROR_CLASSES) == declared
 
 

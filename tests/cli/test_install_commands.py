@@ -20,6 +20,7 @@ runner = CliRunner()
 EXPECTED_FILES = {
     "analysis.md",
     "auth.md",
+    "benchmark.md",
     "list.md",
     "onboard.md",
     "pr.md",
@@ -172,6 +173,7 @@ EXPECTED_COMMANDS = {
     "pr.md": "sq pr",
     "stats.md": "sq stats",
     "replay.md": "sq replay",
+    "benchmark.md": "sq benchmark",
 }
 
 

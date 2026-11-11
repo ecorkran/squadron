@@ -24,10 +24,13 @@ from squadron.codehost.errors import (
     HostResponseMalformedError,
     HostUnauthenticatedError,
     HostUnreachableError,
+    IssueNotFoundError,
+    IssueTooLargeError,
     NoOpenPullRequestForBranchError,
     OperatorUnidentifiedError,
     PullRequestCreationRejectedError,
     PullRequestNotFoundError,
+    ReferenceIsPullRequestError,
     TargetUnresolvableError,
 )
 from squadron.codehost.github_config import read_gh_hosts
@@ -38,9 +41,11 @@ from squadron.codehost.github_parse import (
     require_int,
     require_str,
     to_discussions,
+    to_issue_snapshot,
     to_resolved,
 )
 from squadron.codehost.github_queries import (
+    ISSUE_QUERY,
     PR_FOR_BRANCH_QUERY,
     PR_QUERY,
     REVIEW_THREADS_QUERY,
@@ -48,6 +53,7 @@ from squadron.codehost.github_queries import (
 from squadron.codehost.models import (
     FetchedRange,
     HostComment,
+    IssueSnapshot,
     OperatorIdentity,
     PullRequestRecord,
     RepositoryLocator,
@@ -79,6 +85,9 @@ DEFAULT_GITHUB_HOST = "github.com"
 
 #: ``gh`` exits 4 specifically for an authentication failure.
 _GH_AUTH_EXIT_CODE = 4
+
+#: ``gh api -F name=null`` sends a JSON null: the first page of a paged connection.
+_GRAPHQL_NULL = "null"
 
 #: Environment applied to every ``gh`` call. A wedged prompt blocks forever, and
 #: an update banner or colour codes land in output this module parses.
@@ -426,6 +435,66 @@ class GitHubCli:
                 )
         return discussions
 
+    def get_issue(self, locator: RepositoryLocator, number: int) -> IssueSnapshot:
+        """One issue with every comment and title-rename event, paged to a bounded depth.
+
+        Comments and rename events page independently, each from its own cursor. A
+        bound hit with pages remaining raises: a snapshot with missing comments
+        would freeze a different task text than the issue's.
+        """
+        comments: list[dict[str, Any]] = []
+        renames: list[dict[str, Any]] = []
+        issue: Mapping[str, Any] | None = None
+        comments_cursor = renames_cursor = _GRAPHQL_NULL
+        comments_done = renames_done = False
+        for _ in range(MAX_DISCUSSION_PAGES):
+            node = self._issue_node(locator, number, comments_cursor, renames_cursor)
+            issue = issue or node
+            if not comments_done:
+                comments.extend(dig_list(node, ("comments", "nodes")))
+                comments_done, comments_cursor = _next_page(node, "comments", comments_cursor)
+            if not renames_done:
+                renames.extend(dig_list(node, ("timelineItems", "nodes")))
+                renames_done, renames_cursor = _next_page(node, "timelineItems", renames_cursor)
+            if comments_done and renames_done:
+                return to_issue_snapshot(locator, issue, comments, renames)
+        _log_and_raise(
+            IssueTooLargeError(
+                f"{locator.owner}/{locator.repository}#{number} has more than "
+                f"{MAX_DISCUSSION_PAGES} pages of comments or title events"
+            )
+        )
+
+    def _issue_node(
+        self, locator: RepositoryLocator, number: int, comments_cursor: str, renames_cursor: str
+    ) -> Mapping[str, Any]:
+        """Fetch one page of an issue, mapping not-found and pull-request answers to typed errors."""
+        where = f"{locator.owner}/{locator.repository}#{number}"
+        try:
+            payload = self._graphql(
+                locator.host,
+                ISSUE_QUERY,
+                owner=locator.owner,
+                name=locator.repository,
+                number=str(number),
+                commentsCursor=comments_cursor,
+                renamesCursor=renames_cursor,
+            )
+        except HostRequestRejectedError as exc:
+            if exc.status == 404:
+                raise IssueNotFoundError(f"no issue or pull request {where}") from exc
+            raise
+        node = dig(payload, ("data", "repository", "issueOrPullRequest"))
+        if not isinstance(node, dict):
+            raise IssueNotFoundError(f"no issue or pull request {where}")
+        issue = cast(dict[str, Any], node)
+        typename = issue.get("__typename")
+        if typename == "PullRequest":
+            raise ReferenceIsPullRequestError(f"{where} is a pull request, not an issue")
+        if typename != "Issue":
+            raise HostResponseMalformedError(("gh", "graphql"), f"unknown __typename {typename!r}")
+        return issue
+
     def _graphql(self, host: str, query: str, **variables: str) -> Mapping[str, Any]:
         """Run a GraphQL query, returning the parsed payload."""
         args = ["api", "graphql"]
@@ -514,6 +583,22 @@ class GitHubCli:
                 extra={RENDERED_BY_CALLER: True},
             )
             raise HostCommandTimeoutError(exc.argv, exc.timeout) from exc
+
+
+def _next_page(node: Mapping[str, Any], connection: str, cursor: str) -> tuple[bool, str]:
+    """Whether ``connection`` has no further page, and the cursor to continue from."""
+    page_info = dig(node, (connection, "pageInfo"))
+    if not isinstance(page_info, dict):
+        raise HostResponseMalformedError(("gh", "graphql"), f"{connection}.pageInfo missing")
+    info = cast(dict[str, Any], page_info)
+    if not info.get("hasNextPage"):
+        return True, cursor
+    end_cursor = info.get("endCursor")
+    if not end_cursor:
+        raise HostResponseMalformedError(
+            ("gh", "graphql"), f"{connection} has a next page but no endCursor"
+        )
+    return False, str(end_cursor)
 
 
 def _body_payload(body: str) -> str:

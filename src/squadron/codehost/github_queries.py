@@ -48,3 +48,34 @@ query($owner:String!,$name:String!,$number:Int!,$cursor:String){
   }
 }
 """
+
+#: One issue with its comments and title-rename events, through
+#: ``issueOrPullRequest`` so a number that is a pull request answers with its
+#: ``__typename`` instead of failing. Both connections are paged by the caller,
+#: each with its own cursor (pass ``null`` for the first page), bounded by
+#: ``MAX_DISCUSSION_PAGES``. Rename events are the snapshot's only source for
+#: title edits: an issue title carries no ``lastEditedAt``.
+#:
+#: Fixtures in ``tests/codehost/fixtures/gh/issue-*.json`` were captured with:
+#:   gh api graphql -F owner=<owner> -F name=<repo> -F number=<n>
+#:     -F commentsCursor=null -F renamesCursor=null -f query="$ISSUE_QUERY"
+ISSUE_QUERY = """
+query($owner:String!,$name:String!,$number:Int!,$commentsCursor:String,$renamesCursor:String){
+  repository(owner:$owner,name:$name){
+    issueOrPullRequest(number:$number){
+      __typename
+      ... on Issue {
+        number title body createdAt lastEditedAt
+        comments(first:100,after:$commentsCursor){
+          pageInfo{hasNextPage endCursor}
+          nodes{author{login} body createdAt lastEditedAt}
+        }
+        timelineItems(itemTypes:[RENAMED_TITLE_EVENT],first:100,after:$renamesCursor){
+          pageInfo{hasNextPage endCursor}
+          nodes{... on RenamedTitleEvent{createdAt}}
+        }
+      }
+    }
+  }
+}
+"""

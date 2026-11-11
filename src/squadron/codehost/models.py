@@ -7,6 +7,7 @@ Field names are the architecture's — they are the contract slices 382, 384, an
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 
 
@@ -182,3 +183,31 @@ class OperatorIdentity:
 
     host: str
     login: str
+
+
+@dataclass(frozen=True)
+class IssueComment:
+    """One comment on an issue. Timestamps are timezone-aware."""
+
+    author_login: str
+    body: str
+    created_at: datetime
+    last_edited_at: datetime | None
+
+
+@dataclass(frozen=True)
+class IssueSnapshot:
+    """An issue as the host reports it now, with the edit history it exposes.
+
+    ``title_renamed_at`` holds the time of each title rename event: an issue title
+    carries no ``lastEditedAt``, so the events are the only record of title edits.
+    """
+
+    locator: RepositoryLocator
+    number: int
+    title: str
+    body: str
+    created_at: datetime
+    last_edited_at: datetime | None
+    comments: tuple[IssueComment, ...]
+    title_renamed_at: tuple[datetime, ...]

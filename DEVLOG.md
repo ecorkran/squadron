@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261110
+dateUpdated: 20261111
 ---
 
 # Development Log
@@ -10,6 +10,26 @@ dateUpdated: 20261110
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261111
+
+**p6: devlog-4**
+- branch-0:branch-0: PASS
+- implement-1:cf-op-0: PASS
+- implement-1:cf-op-1: PASS
+- implement-1:cf-op-2: PASS
+- implement-1:cf-op-3: PASS
+- implement-1:dispatch-4: PASS
+- implement-1:review-5: PASS (verdict: CONCERNS)
+- implement-1:checkpoint-6: PASS
+- implement-1:commit-7: PASS
+- close-out:dispatch-0: PASS
+- revise-code:dispatch-0: PASS
+- revise-code:review-1: PASS (verdict: CONCERNS)
+- revise-code:commit-2: PASS
+- revise-code:dispatch-3: PASS
+- revise-code:review-4: PASS (verdict: CONCERNS)
+- revise-code:commit-5: PASS
 
 ## 20261110
 
@@ -22,6 +42,40 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 ### Release 0.24.25
 
 - **Contents:** `read_file` accepts `path` restated as single-entry `paths` (#310); Claude subscription token passed into sdk benchmark sandboxes; claude-agent-sdk 0.2.179.
+
+## 20261108
+
+### Slice 422: Correction and outcome
+
+- **Correction:** the D7 exemption covered only `_load_env_file`. `tests/conftest.py` has two more autouse fixtures that patch project code in every test (`DispatchBranchWorkAction._count_work` and `BlockedTasksAction._read_markers`, standing in for git and the task files). Most of the 546 `patches_project_code` verdicts, and the deciding targets in the Task 29 pins, come from those, not from the tests' own patches.
+- **Re-measurement (uncommitted experiment, not kept):** exempting all three fixtures and re-judging the 10 most recent `no_qualifying_hidden_test` candidates under rule version 3 qualified 0 of 10 (35m48s). Project-wide `patches_project_code` fell 546 → 456 and `reaches_past_boundary` rose 2 → 92: squadron's tests call internals, which the fairness design rejects.
+- **Outcome:** fix-case yield on squadron is not enough to separate configs (PM kill rule: fewer than 3 of 10). The exemption edits were not committed because the Task 29 pins would then fail under rule version 3. Slices 423–427 as planned are not started and not recommended. Existing `sq replay` (design and tasks) and `sq stats producers` answer the model-comparison questions for those phases.
+- **Order decision above** (pool across projects, or 426 earlier) is superseded by this outcome.
+
+### Slice 422: Real-commit verdicts (Task 29)
+
+- **Full run (once):** `sq benchmark fix-cases build --set fix-squadron` over all 94 closing commits: 1 qualified (21013615, `case-85c975f100d51ec1`), 70 rejected, 23 `harness_error` (20 of them `submodule replay is not supported`, 1 trace timeout). Hidden verdicts: 553 `patches_project_code`, 3 `reaches_past_boundary`, 1 qualified. Squadron alone reads n=1, MDD 1.14, "not enough (need >= 33 cases)".
+- **D7 exemption:** squadron's autouse `tests/conftest.py` fixture patches `squadron.cli.app._load_env_file` (since 3ea67555); it is exempted as environment isolation (`ENVIRONMENT_ISOLATION_PATCH_TARGETS`, rule version 2).
+- **Pins:** ebd45f3f, 9fc4fc1c and d6535d62 are rejected for patching project code (deciding targets `BlockedTasksAction._read_markers`, `run._apply_param_overrides`, `run.load_pipeline`); 21013615 qualifies with its hidden test failing by assertion at the parent; c45d28e9 is rejected `reaches_past_boundary` at `one_shot_dispatch_with_telemetry`.
+- **No instance in the 94 records:** (a) crash fix (`project_exception`), (b) `uses_symbol_added_by_fix`, (d) qualified CLI test (`CliRunner`). Fixture projects cover them.
+- **Measured:** the three-commit patch pins took 9m32s; the two example pins took 33m16s (same machine, later in the session).
+- **Scope change:** Tasks 29 (steps 3–4) and 30 no longer rerun the whole history; the design walkthrough follows.
+
+### Slice 422: Verification walkthrough (Task 30)
+
+- **Step 1:** the design's grep finds 96 closing lines; the store holds 94 records (3 are `multiple_issues_closed`, so the counts agree within the design's tolerance).
+- **Steps 2 and 3:** `show` on 13e8381a (every hidden test `patches_project_code`) and on `case-85c975f100d51ec1`. The frozen text of the case contains issue #171's body; the issue has no comments, so the committer-date cutoff excluded nothing.
+- **Step 4:** reran three commits, not all 94 (5.8 s): 21013615 and 13e8381a print `reused`, d4850abc repeats `merge_commit`; the case set stayed `fix-squadron` v1. The design's "every line says `reused`" is not met (Context Summary gap 5): candidates rejected before the sandbox stage repeat their reason.
+- **Step 5:** the first other uv project with a `uv.lock` and a GitHub remote in `cf project list` order is context-visualizer. It has 1 closing commit and was built whole (3.5 s): 1 candidate, 0 qualified, `harness_error` (its start commit declares submodules, which the sandbox does not replay). Squadron n=1 of 94 (MDD 1.14), context-visualizer none, pooled n=1 of 95: all "not enough (need >= 33 cases)".
+- **Order decision implied (design line 28):** the qualified count cannot separate two configs, so 423 → 424 → 425 does not stand as is; fix cases are pooled across cf projects, or 426's case building moves ahead of 424. The data do not choose between the two. Where the yield goes is corrected in "Correction and outcome" below; the `patches_project_code` count here is mostly squadron's autouse conftest fixtures. 21 of the 24 `harness_error` records across both projects are the submodule limitation of the history-free sandbox.
+- **Step 6:** `yield --json` lists `fix-squadron` v1; the step 4 rerun created no new version.
+
+### Slice 422: Final validation (Task 31)
+
+- **Validation:** ruff format and check clean, pyright 0 errors, full suite 9547 passed, 6 skipped (11m40s; the real-commit pins file was excluded from that run and passed separately: 4 passed in 9m32s, 2 passed in 33m16s).
+- **File size:** `metrology/benchmark_models.py` grew from 215 to 339 lines. It is 39 imports wide, so it stays unsplit; `github_cli.py` and `keys.py` were already over ~300 before this slice.
+- **Deviations from the approved Success Criteria and Walkthrough (gaps 4 and 5):** the Project Manager bounded the walkthrough. The full history is built once; step 4 reruns three commits and prints `reused` only for those that reached the sandbox; step 5 reads context-visualizer whole (1 commit). The design's Verification Walkthrough and implementation-order line were edited to match at the Project Manager's direction.
+- **Next:** 423. The order decision above (pool across projects, or 426 earlier) needs the Project Manager before 424.
 
 ## 20261107
 

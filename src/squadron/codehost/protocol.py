@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Protocol
 from squadron.codehost.models import (
     FetchedRange,
     HostComment,
+    IssueSnapshot,
     OperatorIdentity,
     PullRequestRecord,
     RepositoryLocator,
@@ -119,3 +120,12 @@ class CodeHost(Protocol):
     ) -> PullRequestRecord: ...
 
     def identify_operator(self, hostname: str) -> OperatorIdentity: ...
+
+    def get_issue(self, locator: RepositoryLocator, number: int) -> IssueSnapshot:
+        """The issue with every comment, edit timestamp and title-rename event.
+
+        Raises ``IssueNotFoundError`` when no such number exists,
+        ``ReferenceIsPullRequestError`` when the number is a pull request, and
+        ``IssueTooLargeError`` rather than returning a truncated snapshot.
+        """
+        ...

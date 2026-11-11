@@ -7,16 +7,14 @@ rules and 425 hidden-test injection, each in its own slice.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol, Self
 
-from pydantic import BaseModel, ConfigDict, computed_field
-
 from squadron.benchmark.scrubbed_env import ScrubbedEnvironment
 from squadron.core.process_runner import ProcessRunner
+from squadron.metrology.benchmark_environment import EnvironmentIdentity
 from squadron.metrology.snapshot_models import SourceLanguage
 
 
@@ -57,35 +55,6 @@ class EnvironmentResolutionError(Exception):
 
 class SuiteRunError(Exception):
     """The suite run produced no usable report; carries pytest's stderr."""
-
-
-class EnvironmentIdentity(BaseModel):
-    """A grader identity: what a qualification or replay result depended on (D6)."""
-
-    model_config = ConfigDict(frozen=True)
-
-    language: SourceLanguage
-    lockfile_path: str
-    lockfile_sha256: str
-    interpreter_version: str
-    installer_version: str
-    platform: str
-    scrub_spec_version: int
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def identity_digest(self) -> str:
-        """sha256 over every other field, in declared order."""
-        parts = [
-            self.language.value,
-            self.lockfile_path,
-            self.lockfile_sha256,
-            self.interpreter_version,
-            self.installer_version,
-            self.platform,
-            str(self.scrub_spec_version),
-        ]
-        return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()
 
 
 @dataclass(frozen=True)

@@ -57,7 +57,7 @@ The fix-case path stays the keystone (421 → 422 → 423 → 424 → 425). It i
 
 ## Feature Slices (in implementation order)
 
-3. [ ] **(422) Fix Case Qualification and Yield Report (keystone)** — Candidate discovery from commits that close an issue and add tests. Each candidate gets:
+3. [x] **(422) Fix Case Qualification and Yield Report (keystone)** — Candidate discovery from commits that close an issue and add tests. Each candidate gets:
    - Frozen issue text, captured when the case is created.
    - Per-test hidden and superseded sets, taken from the reference diff.
    - The Python fairness rule: test-first at the parent, reaches project code only through what packaging declared at the parent, and does not patch project code. A check that cannot decide excludes the case.

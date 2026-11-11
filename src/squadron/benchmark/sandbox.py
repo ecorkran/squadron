@@ -128,6 +128,10 @@ class BenchmarkSandbox:
         if not self._kept:
             self._cleanup()
 
+    def context(self) -> SandboxContext:
+        """The context adapters take: tree, output directory, scrubbed environment, runner."""
+        return self._context()
+
     def run_suite(self, selection: SuiteSelection) -> SuiteRun:
         """Run the project's tests under the scrubbed environment."""
         return self._adapter.run_suite(self._context(), selection)

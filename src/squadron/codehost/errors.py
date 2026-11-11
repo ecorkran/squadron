@@ -204,3 +204,22 @@ class HostResponseMalformedError(CodeHostError):
 
 class OperatorUnidentifiedError(CodeHostError):
     """The operator's identity on the host could not be determined."""
+
+
+# --- Issues ----------------------------------------------------------------
+
+
+class IssueNotFoundError(CodeHostError):
+    """No issue or pull request has that number in the repository."""
+
+
+class ReferenceIsPullRequestError(CodeHostError):
+    """The number names a pull request, not an issue."""
+
+
+class IssueTooLargeError(CodeHostError):
+    """An issue's comments or title events exceed the page bound.
+
+    Raised rather than returning a truncated snapshot: frozen task text built from
+    a short comment list would silently differ from the issue it claims to freeze.
+    """
