@@ -16,6 +16,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from squadron.integrations.context_forge import ContextForgeError, ContextForgeNotAvailable
+from squadron.pipeline.branch_squash import squash_slice_branch
 from squadron.pipeline.git_ops import (
     GitEnvironmentError,
     GitStateUnknownError,
@@ -292,7 +293,8 @@ def _write_or_unknown(args: list[str], cwd: str, expected_branch: str, label: st
 def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) -> MergeResult:
     """Merge slice ``slice_index``'s branch into the target with a merge commit (D6).
 
-    A merge that fails is aborted, so the target is never left mid-merge and the slice
+    The branch's own commits are first squashed into one (unless already pushed). A
+    merge that fails is aborted, so the target is never left mid-merge and the slice
     branch stays unmerged for the PM. Nothing is deleted or pushed.
 
     Raises:
@@ -319,6 +321,7 @@ def merge_slice_branch(slice_index: int, cwd: str, cf_client: CfClientProtocol) 
         )
 
     _require_checked_tasks(slice_index, cwd, cf_client)
+    squash_slice_branch(slice_index, name, branch, target, cwd)
 
     _checkout(["checkout", target], cwd, branch)
     merged = run_git(

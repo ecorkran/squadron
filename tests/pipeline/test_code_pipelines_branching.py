@@ -168,12 +168,14 @@ async def test_p6_runs_on_the_slice_branch_and_ends_merged_on_the_target(
     assert observed["branch_during_implement"] == _BRANCH
     assert observed["found_branch"] == _BRANCH
     assert str(observed["diff_range"]).endswith(f"...{_BRANCH}")
-    # The run ends on the target with the slice merged and its DEVLOG entry on the branch.
+    # The run ends on the target with the slice merged as one squashed commit that
+    # carries the implementation and the DEVLOG entry.
     assert run_test_git(repo, "branch", "--show-current").strip() == "main"
     subjects = run_test_git(repo, "log", "main", "--format=%s").splitlines()
     assert subjects[0] == "merge: slice 105 — stub"
-    assert "docs: add DEVLOG entry for slice 105" in subjects
-    assert "feat: implement slice 105 (review: PASS)" in subjects
+    assert "feat: implement slice 105 — stub" in subjects
+    assert "docs: add DEVLOG entry for slice 105" not in subjects
+    assert "feat: implement slice 105 (review: PASS)" not in subjects
     assert (repo / "feature.py").exists()
     assert run_test_git(repo, "status", "--porcelain") == ""
 

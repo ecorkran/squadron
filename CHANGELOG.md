@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq benchmark fix-cases build --set NAME` turns a project's issue-closing commits into fix cases: each commit is checked and either qualified (a real bug fix with hidden tests that fail before the fix and pass after it, written against the packaged API and without patching project code) or rejected with a named reason. `sq benchmark fix-cases show COMMIT|CASE` prints the verdict for each test.
 - `sq benchmark yield` reports, per project and pooled, how many commits qualified, why the rest were rejected, and whether that many cases can tell two configurations apart.
 - `/sq:benchmark` runs these commands from Claude Code and Codex.
+- The `branch: merge` step squashes a slice branch's commits (implement passes, review fixes, DEVLOG entry) into one `feat: implement slice N` commit before merging. A branch with only one commit, or with commits already pushed, is left as it is.
 
 ## [0.24.26] - 20261110
 
