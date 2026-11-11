@@ -140,6 +140,9 @@ class PatchInterceptor:
         try:
             owner = _resolve_dotted(owner_path)
         except (ImportError, AttributeError, ValueError):
+            # Swallowing is correct: the target is recorded as unresolved (which the
+            # verdict rejects), and the wrapper then calls the original setattr/delattr,
+            # which raises the real error for the test itself.
             self._record(api, OWNER_UNRESOLVED, "", dotted)
             return
         self._record_owner(api, owner, attribute)
@@ -189,6 +192,8 @@ def _resolve_dotted(path: str) -> Any:
         try:
             current: Any = importlib.import_module(".".join(parts[:split]))
         except ImportError:
+            # Swallowing is correct: this prefix is not a module, so try a shorter one;
+            # the ImportError after the loop reports a path with no importable prefix.
             continue
         for attribute in parts[split:]:
             current = getattr(current, attribute)
