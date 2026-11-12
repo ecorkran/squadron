@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A review or summary step with `allowed_tools: []` now fails before its model call, with `tool_isolation`, when its provider would still run tools (an SDK summary's shared session, or a provider that cannot drop its own tools), as dispatch steps already do (#306).
 - The findings-addressed judge's spend now counts toward the run's totals, `sq stats` and `pipeline.max_cost_usd`, and `sq review resolve` prints what its judge call cost (#294).
 - A planning pipeline (design, tasks or architecture commit) started from the wrong branch now stops before its first step, naming the branch it expected, instead of spending a dispatch and review and failing at the final commit (#277).
 - `sq run --resume --item` on a `tasks-plan` or `slices-plan` run no longer flags an item "dependency N not complete" because the dependency isn't implemented yet; only `implement-plan` needs that (#298).

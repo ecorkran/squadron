@@ -7,7 +7,11 @@ import time
 
 from squadron.core.models import Effort
 from squadron.pipeline.actions import ActionType, register_action
-from squadron.pipeline.actions.tool_support import resolve_allowed_tools
+from squadron.pipeline.actions.tool_support import (
+    DispatchRoute,
+    resolve_allowed_tools,
+    tool_isolation_failure,
+)
 from squadron.pipeline.emit import EmitDestination, EmitKind, get_emit, parse_emit_list
 from squadron.pipeline.failure_kind import usage_limit_stamp
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
@@ -294,6 +298,25 @@ async def _execute_summary(
             outputs={},
             error="rotate emit requires an SDK session",
         )
+
+    # `allowed_tools: []` asks for a tool-less summary. An SDK summary runs in the shared
+    # session, whose tools are fixed; a provider that brings its own tools cannot drop
+    # them. Refuse both before any model call (#306).
+    if (
+        resolve_allowed_tools(context, action_type) == []
+        and profile is not None
+        and model_id is not None
+        and (
+            refusal := tool_isolation_failure(
+                action_type=action_type,
+                step_name=context.step_name,
+                model=model_id,
+                profile_name=profile,
+                route=DispatchRoute.SESSION if is_sdk_profile(profile) else DispatchRoute.AGENT,
+            )
+        )
+    ):
+        return refusal
 
     # Empty unless a non-SDK run was given tools; splatted into metadata below.
     tool_telemetry: dict[str, object] = {}

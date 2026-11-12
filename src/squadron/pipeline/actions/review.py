@@ -16,7 +16,11 @@ from squadron.pipeline.actions import ActionType, register_action
 from squadron.pipeline.actions.judge import Provenance, judge_verdict
 from squadron.pipeline.actions.review_fold import fold_review_parts
 from squadron.pipeline.actions.review_outputs import ReviewOutputKey
-from squadron.pipeline.actions.tool_support import resolve_allowed_tools
+from squadron.pipeline.actions.tool_support import (
+    DispatchRoute,
+    resolve_allowed_tools,
+    tool_isolation_failure,
+)
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.resolver import (
     ModelPoolNotImplemented,
@@ -283,6 +287,18 @@ class ReviewAction:
         # A step-level allowed_tools overrides the template's default; None leaves the
         # template authoritative (slice 265).
         allowed_tools = resolve_allowed_tools(context, self.action_type)
+        # `allowed_tools: []` asks for a tool-less review; refuse it before any model call
+        # when the provider would still bring tools of its own (#306).
+        if allowed_tools == [] and (
+            refusal := tool_isolation_failure(
+                action_type=self.action_type,
+                step_name=context.step_name,
+                model=resolved.model_id,
+                profile_name=profile_name,
+                route=DispatchRoute.AGENT,
+            )
+        ):
+            return refusal
         settings = _PartSettings(
             template=template,
             template_name=template_name,

@@ -53,7 +53,7 @@ from squadron.pipeline.actions.tool_support import (
     DispatchRoute,
     declares_no_tools,
     resolve_allowed_tools,
-    tool_isolation_error,
+    tool_isolation_failure,
 )
 from squadron.pipeline.control_params import OVERRIDE_INSTRUCTIONS, RESUMED_FROM_HANDOFF
 from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind, usage_limit_stamp
@@ -618,24 +618,12 @@ class DispatchAction:
             if route is DispatchRoute.SESSION
             else self._agent_profile_name(context, alias_profile)
         )
-        provider_name = get_profile(profile_name).provider
-        ensure_provider_loaded(provider_name)
-        error = tool_isolation_error(
+        return tool_isolation_failure(
+            action_type=self.action_type,
             step_name=context.step_name,
             model=model_id,
-            provider=provider_name,
+            profile_name=profile_name,
             route=route,
-            capabilities=get_provider(provider_name).capabilities,
-        )
-        if error is None:
-            return None
-        _logger.warning("dispatch: step %s: %s", context.step_name, error)
-        return ActionResult(
-            success=False,
-            action_type=self.action_type,
-            outputs={},
-            error=error,
-            metadata={FAILURE_KIND_KEY: FailureKind.TOOL_ISOLATION.value},
         )
 
     @staticmethod

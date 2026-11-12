@@ -14,10 +14,11 @@ import pytest
 from squadron.core.models import Effort
 from squadron.pipeline.actions.protocol import Action
 from squadron.pipeline.actions.review import ReviewAction
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolutionError, ModelResolver, ResolvedModel
 from squadron.pipeline.usage_capture import UsageCapture
-from squadron.providers.base import ProfileName
+from squadron.providers.base import ProfileName, ProviderCapabilities
 from squadron.review.models import (
     ReviewFinding,
     ReviewResult,
@@ -1881,3 +1882,54 @@ class TestReviewProfileCascade:
         ctx, profile = await self._run({"profile": "openai"}, "openrouter", "local", monkeypatch)
         assert profile == "openai"
         assert ctx.resolver.resolve_full.call_args.kwargs["profile_source"] is True
+
+
+class TestReviewToolIsolation:
+    """`allowed_tools: []` on a review step refuses a provider that brings its own tools (#306)."""
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_provider_that_cannot_drop_its_tools_fails_before_the_model_call(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        provider = MagicMock()
+        provider.capabilities = ProviderCapabilities(can_read_files=True, honors_empty_tools=False)
+        ctx = _make_context(params={"template": "code", "allowed_tools": [], "profile": "sdk"})
+
+        with patch("squadron.pipeline.actions.tool_support.get_provider", return_value=provider):
+            result = await ReviewAction().execute(ctx)
+
+        assert result.success is False
+        assert result.metadata[FAILURE_KIND_KEY] == FailureKind.TOOL_ISOLATION.value
+        assert "cannot run with none" in (result.error or "")
+        mock_run_review.assert_not_called()
+
+    @pytest.mark.asyncio
+    @patch(f"{_P}.save_review_result", return_value=Path("/tmp/reviews/review.md"))
+    @patch(f"{_P}.run_review_with_profile")
+    @patch(f"{_P}.get_template")
+    @patch(f"{_P}.load_all_templates")
+    async def test_provider_that_honors_an_empty_tool_list_runs_the_review(
+        self,
+        mock_load: MagicMock,
+        mock_get_template: MagicMock,
+        mock_run_review: MagicMock,
+        mock_save: MagicMock,
+    ) -> None:
+        mock_get_template.return_value = _mock_template()
+        mock_run_review.return_value = _make_review_result()
+        provider = MagicMock()
+        provider.capabilities = ProviderCapabilities(can_read_files=True, honors_empty_tools=True)
+        ctx = _make_context(params={"template": "code", "allowed_tools": [], "profile": "sdk"})
+
+        with patch("squadron.pipeline.actions.tool_support.get_provider", return_value=provider):
+            result = await ReviewAction().execute(ctx)
+
+        assert result.success is True
+        mock_run_review.assert_awaited_once()

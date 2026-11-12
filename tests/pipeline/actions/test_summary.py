@@ -1281,3 +1281,63 @@ async def test_session_failure_without_telemetry_stamps_the_session_effort() -> 
     assert result.success is False
     assert USAGE_KEY not in result.metadata
     assert result.metadata[EFFORT_SENT_KEY] == Effort.medium.value
+
+
+# ---------------------------------------------------------------------------
+# allowed_tools: [] guard (#306)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_empty_allowed_tools_on_an_sdk_summary_fails_before_the_session_call() -> None:
+    """An SDK summary runs in the shared session, whose tools are fixed."""
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
+
+    session = MagicMock()
+    session.capture_summary = AsyncMock()
+    ctx = _make_context(params={"allowed_tools": []}, sdk_session=session)
+    ctx.resolver.resolve_full.return_value = ResolvedModel("claude-sonnet-5-5", "sdk")
+
+    result = await _execute_summary(
+        context=ctx,
+        instructions="summarize",
+        summary_model_alias="sonnet",
+        emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+        action_type="summary",
+    )
+
+    assert result.success is False
+    assert result.metadata[FAILURE_KIND_KEY] == FailureKind.TOOL_ISOLATION.value
+    assert "persistent session" in (result.error or "")
+    session.capture_summary.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_empty_allowed_tools_on_a_provider_that_cannot_drop_tools_fails() -> None:
+    from squadron.pipeline.actions.summary import _execute_summary
+    from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
+    from squadron.providers.base import ProviderCapabilities
+
+    ctx = _make_context(params={"allowed_tools": []})
+    ctx.resolver.resolve_full.return_value = ResolvedModel("minimax-01", "openrouter")
+    provider = MagicMock()
+    provider.capabilities = ProviderCapabilities(can_read_files=True, honors_empty_tools=False)
+    with (
+        patch("squadron.pipeline.actions.tool_support.get_provider", return_value=provider),
+        patch(
+            "squadron.pipeline.actions.summary.capture_summary_via_profile_with_telemetry",
+            new=AsyncMock(return_value=("SHOULD NOT REACH", {})),
+        ) as mock_oneshot,
+    ):
+        result = await _execute_summary(
+            context=ctx,
+            instructions="summarize",
+            summary_model_alias="minimax",
+            emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
+            action_type="summary",
+        )
+
+    assert result.success is False
+    assert result.metadata[FAILURE_KIND_KEY] == FailureKind.TOOL_ISOLATION.value
+    mock_oneshot.assert_not_called()

@@ -9,12 +9,19 @@ drift apart in how they read the same field.
 
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import cast
 
 from squadron.pipeline.actions import ActionType
-from squadron.pipeline.models import ActionContext
+from squadron.pipeline.failure_kind import FAILURE_KIND_KEY, FailureKind
+from squadron.pipeline.models import ActionContext, ActionResult
 from squadron.providers.base import ProviderCapabilities
+from squadron.providers.loader import ensure_provider_loaded
+from squadron.providers.profiles import get_profile
+from squadron.providers.registry import get_provider
+
+_logger = logging.getLogger(__name__)
 
 
 class DispatchRoute(StrEnum):
@@ -58,6 +65,40 @@ def tool_isolation_error(
         f"Step '{step_name}' declares 'allowed_tools: []' but cannot be isolated on model "
         f"'{model}': {missing}. Use a model whose provider can run without tools, or remove "
         "'allowed_tools'."
+    )
+
+
+def tool_isolation_failure(
+    *,
+    action_type: str,
+    step_name: str,
+    model: str,
+    profile_name: str,
+    route: DispatchRoute,
+) -> ActionResult | None:
+    """The failed result for a no-tools step on a route that runs tools, else ``None``.
+
+    Shared by dispatch, review and summary so the refusal reads the same on all three
+    (#306). The step fails before its model call, stamped ``TOOL_ISOLATION``.
+    """
+    provider_name = get_profile(profile_name).provider
+    ensure_provider_loaded(provider_name)
+    error = tool_isolation_error(
+        step_name=step_name,
+        model=model,
+        provider=provider_name,
+        route=route,
+        capabilities=get_provider(provider_name).capabilities,
+    )
+    if error is None:
+        return None
+    _logger.warning("%s: step %s: %s", action_type, step_name, error)
+    return ActionResult(
+        success=False,
+        action_type=action_type,
+        outputs={},
+        error=error,
+        metadata={FAILURE_KIND_KEY: FailureKind.TOOL_ISOLATION.value},
     )
 
 

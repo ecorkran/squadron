@@ -25,6 +25,7 @@ from tests.pipeline.actions.dispatch_helpers import openrouter_profile as _openr
 from tests.pipeline.actions.dispatch_helpers import sdk_profile as _sdk_profile
 
 _MODEL_ID = "claude-sonnet-4-20250514"
+_TS = "squadron.pipeline.actions.tool_support"
 
 
 def _capabilities(*, can_read_files: bool, honors_empty_tools: bool = False) -> ProviderCapabilities:
@@ -212,8 +213,8 @@ async def test_provider_that_cannot_drop_its_tools_fails_before_any_model_call(
         patch(f"{_P}.get_registry", return_value=registry),
         patch(f"{_P}.get_profile", return_value=_sdk_profile()),
         patch(f"{_P}.ensure_provider_loaded"),
-        patch(f"{_P}.get_provider", return_value=_provider_stub(can_read_files=True)),
-        caplog.at_level(logging.WARNING, logger=_P),
+        patch(f"{_TS}.get_provider", return_value=_provider_stub(can_read_files=True)),
+        caplog.at_level(logging.WARNING, logger=_TS),
     ):
         result = await action.execute(ctx)
 
@@ -313,6 +314,6 @@ async def test_absent_allowed_tools_is_not_guarded(action: DispatchAction) -> No
 
 
 def test_review_step_with_empty_allowed_tools_is_unchanged() -> None:
-    """Excluded in the design: only dispatch steps are guarded."""
+    """Load-time validation stays dispatch-only; review and summary are guarded at run time (#306)."""
     step = StepConfig(step_type="review", name="r", config={"template": "code", "allowed_tools": []})
     assert ReviewStepType().validate(step) == []
