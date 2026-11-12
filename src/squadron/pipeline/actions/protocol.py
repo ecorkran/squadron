@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol, runtime_checkable
 
+from squadron.pipeline.git_ops import ConfigReader
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 
 
@@ -37,6 +38,6 @@ class Action(Protocol):
 class RunPreflight(Protocol):
     """An action that can refuse a fresh run at its start, before any step spends (#256)."""
 
-    def preflight(self, params: Mapping[str, object], cwd: str) -> None:
+    def preflight(self, params: Mapping[str, object], cwd: str, cf_client: ConfigReader) -> None:
         """Raise ValueError when this action would fail on the run's starting state."""
         ...

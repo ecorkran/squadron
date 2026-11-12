@@ -24,7 +24,12 @@ from squadron.pipeline.branch_ops import (
     merge_slice_branch,
 )
 from squadron.pipeline.commit_plan import SLICE_PARAM
-from squadron.pipeline.git_ops import NoDesignFileError, SliceNotInPlanError, parse_slice_index
+from squadron.pipeline.git_ops import (
+    ConfigReader,
+    NoDesignFileError,
+    SliceNotInPlanError,
+    parse_slice_index,
+)
 from squadron.pipeline.models import ActionContext, ActionResult, ValidationError
 from squadron.pipeline.steps.branch import OP_PARAM, WHEN_PARAM, BranchOp
 
@@ -56,7 +61,7 @@ class BranchAction:
         """The step type validates ``op``; nothing more is checkable before run time."""
         return []
 
-    def preflight(self, params: Mapping[str, object], cwd: str) -> None:
+    def preflight(self, params: Mapping[str, object], cwd: str, cf_client: ConfigReader) -> None:
         """Refuse a fresh run whose enter would meet a dirty tree, before any step spends (#256).
 
         Raises:

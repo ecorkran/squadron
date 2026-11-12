@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- A planning pipeline (design, tasks or architecture commit) started from the wrong branch now stops before its first step, naming the branch it expected, instead of spending a dispatch and review and failing at the final commit (#277).
 - `sq run --resume --item` on a `tasks-plan` or `slices-plan` run no longer flags an item "dependency N not complete" because the dependency isn't implemented yet; only `implement-plan` needs that (#298).
 
 ## [0.24.27] - 20261111

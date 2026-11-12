@@ -59,7 +59,7 @@ from squadron.pipeline.failure_kind import (
     FailureKind,
     pauses_run,
 )
-from squadron.pipeline.git_ops import GitEnvironmentError
+from squadron.pipeline.git_ops import ConfigReader, GitEnvironmentError
 from squadron.pipeline.head_stamp import execute_stamped, read_head
 from squadron.pipeline.loop_collapse import collapse_completed_loop
 from squadron.pipeline.loop_commit import CommitScopeUnknownError, round_commit_params
@@ -278,6 +278,7 @@ def _preflight(
     definition: PipelineDefinition,
     params: dict[str, object],
     cwd: str,
+    cf_client: ConfigReader,
     get_step_type_fn: Any,
     get_action_fn: Any,
 ) -> None:
@@ -291,7 +292,7 @@ def _preflight(
         for action_type, action_params in get_step_type_fn(step.step_type).expand(resolved):
             action = get_action_fn(action_type)
             if isinstance(action, RunPreflight):
-                action.preflight(action_params, cwd)
+                action.preflight(action_params, cwd, cf_client)
 
 
 def resolve_placeholders(
@@ -607,7 +608,7 @@ async def execute_pipeline(
         # A test registry may hold only the actions its run reaches; an action it
         # lacks has no preflight to run.
         find_action = _action_registry.get if _action_registry else get_action
-        _preflight(definition, merged_params, effective_cwd, get_step_type, find_action)
+        _preflight(definition, merged_params, effective_cwd, cf_client, get_step_type, find_action)
 
     step_results: list[StepResult] = []
     # prior_outputs accumulates across all steps

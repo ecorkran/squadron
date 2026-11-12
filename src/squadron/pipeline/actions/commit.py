@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import subprocess
+from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
@@ -47,6 +48,9 @@ _logger = logging.getLogger(__name__)
 # The ``sha`` output of a commit that landed but whose new HEAD could not be read.
 UNKNOWN_SHA = "unknown"
 
+# Commits that belong on the integration target; code and DEVLOG commits go on the slice branch.
+_PLANNING_SUBJECTS = frozenset({CommitSubject.DESIGN, CommitSubject.TASKS, CommitSubject.ARCHITECTURE})
+
 
 class CommitAction:
     """Pipeline action that stages the planned files and creates a git commit."""
@@ -58,6 +62,27 @@ class CommitAction:
     def validate(self, config: dict[str, object]) -> list[ValidationError]:
         """Validate config structure. Actual cwd check happens at execute time."""
         return []
+
+    def preflight(self, params: Mapping[str, object], cwd: str, cf_client: ConfigReader) -> None:
+        """Refuse a fresh run whose planning commit would land off the target (#277).
+
+        Design, tasks and architecture commits belong on the integration target, so a
+        run started anywhere else would spend its dispatch and review and then fail at
+        this commit. Code and DEVLOG commits are placed by the slice branch, which the
+        run enters itself, so they are not checked here.
+
+        Raises:
+            ValueError: the commit is a planning commit and the checkout is off the target.
+        """
+        # Only the subject is read from params: a slice may still be an unresolved
+        # placeholder at the start of the run, and the check does not need it.
+        if params.get(SUBJECT_PARAM) not in _PLANNING_SUBJECTS:
+            return
+        integration = read_integration_target(cf_client)
+        branch = current_branch(cwd)
+        if branch != integration:
+            scope = _planning_scope(params.get(SLICE_PARAM), params.get(PLAN_PARAM))
+            raise ValueError(_planning_refusal(scope, branch, integration))
 
     async def execute(self, context: ActionContext) -> ActionResult:
         # git and cf run as subprocesses; keep them off the event loop.
@@ -264,10 +289,17 @@ def _check_placement(target: CommitTarget, cwd: str, cf_client: ConfigReader) ->
         and on_slice == target.slice_index
     ):
         return None
-    scope = (
-        f"slice {target.slice_index}" if target.slice_index is not None else f"initiative {target.plan}"
-    )
-    raise GitEnvironmentError(f"planning commit for {scope} on {branch}; expected {integration}")
+    scope = _planning_scope(target.slice_index, target.plan)
+    raise GitEnvironmentError(_planning_refusal(scope, branch, integration))
+
+
+def _planning_scope(slice_index: object, plan: object) -> str:
+    """What a planning commit is for: its slice, else its initiative."""
+    return f"slice {slice_index}" if slice_index not in (None, "") else f"initiative {plan}"
+
+
+def _planning_refusal(scope: str, branch: str, integration: str) -> str:
+    return f"planning commit for {scope} on {branch}; expected {integration}"
 
 
 def _run_or_unknown(args: list[str], cwd: str, label: str) -> subprocess.CompletedProcess[str]:

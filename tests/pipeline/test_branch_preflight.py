@@ -24,18 +24,18 @@ def test_branch_action_is_a_run_preflight() -> None:
 
 def test_dirty_tree_with_an_enter_is_refused(temp_git_repo: Path) -> None:
     with pytest.raises(ValueError, match=r"working tree not clean: 262-slice\.other\.md"):
-        BranchAction().preflight({"op": "enter"}, str(_dirty(temp_git_repo)))
+        BranchAction().preflight({"op": "enter"}, str(_dirty(temp_git_repo)), MagicMock())
 
 
 def test_clean_tree_with_an_enter_passes(temp_git_repo: Path) -> None:
-    BranchAction().preflight({"op": "enter"}, str(temp_git_repo))
+    BranchAction().preflight({"op": "enter"}, str(temp_git_repo), MagicMock())
 
 
 @pytest.mark.parametrize("params", [{"op": "merge"}, {"op": "enter", "when": "false"}])
 def test_dirty_tree_without_an_enabled_enter_passes(
     temp_git_repo: Path, params: dict[str, object]
 ) -> None:
-    BranchAction().preflight(params, str(_dirty(temp_git_repo)))
+    BranchAction().preflight(params, str(_dirty(temp_git_repo)), MagicMock())
 
 
 def _definition() -> PipelineDefinition:
