@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.28] - 20261112
+
 ### Fixed
 - A review or summary step with `allowed_tools: []` now fails before its model call, with `tool_isolation`, when its provider would still run tools (an SDK summary's shared session, or a provider that cannot drop its own tools), as dispatch steps already do (#306).
 - The findings-addressed judge's spend now counts toward the run's totals, `sq stats` and `pipeline.max_cost_usd`, and `sq review resolve` prints what its judge call cost (#294).

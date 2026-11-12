@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261111
+dateUpdated: 20261112
 ---
 
 # Development Log
@@ -10,6 +10,12 @@ dateUpdated: 20261111
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261112
+
+### Release 0.24.28
+
+- **Contents:** resuming a planning-plan item no longer flags an unimplemented dependency (#298); a planning pipeline started off the target stops before it spends (#277); the findings-addressed judge's spend is counted and `sq review resolve` prints it (#294); `allowed_tools: []` guarded on review and summary steps (#306). The 42-minute `real_history` tests are out of the default run (nightly job tracked in #319).
 
 ## 20261111
 
