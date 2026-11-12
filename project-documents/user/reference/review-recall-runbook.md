@@ -34,7 +34,9 @@ A bug counts only if a later commit or issue shows it was real. Do not add a bug
 
 ## Cases
 
-See [review-recall-cases.md](review-recall-cases.md): one verified case (trading-data 307) and four mined candidates (188, 921, 225, 227), plus leads. A case's `base` is the parent of the earliest buggy commit, so it can include a few unrelated commits.
+See [review-recall-cases.md](review-recall-cases.md): one verified case (trading-data 307) and 11 mined candidates: trading-data 188, 921, 225, 227; amoeba 122; trading-ui 103, 301; squadron 913, 932, 175, 197. Some also carry "controls", bugs the saved review did report. A case's `base` is the parent of the earliest buggy commit, so it can include a few unrelated commits. Candidates need their fix diffs read before first use.
+
+First configs to run, per the #311 data: the default sdk sonnet, then the same with effort `high` (sonnet-high). In the 307 experiment, effort high alone took tool calls from 2 to 6, and effort high plus the verification prompt gave 26 calls and the only nonzero reasoning count. Effort changes thinking length, tool calls and self-checking without changing the model, so it is the cheapest lever to test. Add a non-Anthropic reviewer (deepseek) as the depth reference.
 
 ## Finding more cases
 

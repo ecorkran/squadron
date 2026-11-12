@@ -8,7 +8,7 @@ status: draft
 
 # Review Recall Cases
 
-Case records for [review-recall-runbook.md](review-recall-runbook.md). Repo for all cases below: `manta-digital/trading-data` (local `~/source/repos/manta/trading-data`). Review diff is `base..head`.
+Case records for [review-recall-runbook.md](review-recall-runbook.md). The first section is `manta-digital/trading-data` (local `~/source/repos/manta/trading-data`); later sections name their repo. Review diff is `base..head`.
 
 Status: `verified` means the bug description was confirmed by reading the fix diff. `candidate` means found by mining (see "How these were found") and checked only against the fix commit message and the saved review's finding titles. Verify a candidate by reading its fix diff before its first run.
 
@@ -49,6 +49,57 @@ For each `fix:` commit since 2026-09-01 (excluding "address review" commits), `g
 - B2: `archive_command` was not persisted on a cluster that never archived (`d14f8a60`).
 - B3: rclone stderr leaked into the B2 lifecycle rule parse (`0ccf9b00`).
 - Review reported six concerns (provisioning drops the 226 database, reconcile after a skipped run, silent production URL, ...). None of B1-B3.
+
+## Cases from other repos (mined 20261112, same method, since 2026-08-01)
+
+Local repos under `~/source/repos/manta/`. `controls` are bugs the saved review did report; a reviewer that finds them shows it can find the easy ones.
+
+### amoeba-122 — candidate
+- repo `amoeba`, base `f8097604697cfefb5fb7313d29648a1c6c22b221`, head `e07f13739a5c7cd88c04fe2dffcc57b2a1eb5793` (15 commits, 173,979 code chars: over the PASS floor). Saved review: 122, CONCERNS, deepseek/deepseek-v4.1-flash.
+- B1: the runner passed `-p slice=N` to `sq run`, which squadron rejects ("requires a 'slice' argument"); the slice is the positional target (`a62043f`, "found by the slice 125 live walkthrough"). Introduced in `90841a0` (detached launch and launch tracker). This is a producer/consumer shape mismatch, the same kind as trading-data-307.
+- B2 (check first): a review the store refuses failed the whole ingest and repeated every tick (`5d0ea2e`); only part of the buggy code (`1da826e`) is in this range.
+- Controls (reported by the review): a malformed `issued_at` aborting the whole tick (`0514c62`); an unexpected fault on a node blocked on a non-human kind recorded nowhere (`66ee3c4`).
+- Not reported: B1.
+
+### trading-ui-103 — candidate
+- repo `trading-ui`, base `a4f9b6cf446929d056689df48082a701467d74e7`, head `d56c493f769d429a40f9e8052eba04ad6254e8c2` (7 commits, 92,642 code chars). Saved review: 103, CONCERNS, deepseek/deepseek-v4-flash-0731.
+- B1: the visible range was not applied when the first series landed (`f0ebfb4`); a second range-seam fix followed (`eb74ef8`). Introduced in `0050c49`, `d20d3ce`.
+- Control: the hook never re-mounting when the container ref resolves late (`e4632c1`); the review reported it.
+- B1 is a UI timing bug; a diff-only review may not reach it. Keep the case anyway as a measure of that limit.
+
+### trading-ui-301 — candidate
+- repo `trading-ui`, base `e6aa7676af5c4f110dde58cdc94a22f6bc1dcf86`, head `f02809dbd640f98416ec2bf8ebb18af6abe58a0d` (4 commits, 69,960 code chars). Saved review: 301, CONCERNS, claude-sonnet-5-5.
+- B1: Kalshi candles were selected into windows by something other than their open time (`42a2752`, 50 lines changed in code introduced by `c436a1a`). Same boundary-semantics family as trading-data-188 (`ec8be864`).
+- Review reported: a 135-line function, a misleading error name, a schema `.and()` use. None about window selection.
+
+### Cases from squadron (mined 20261112, fixes since 2026-09-15)
+
+Fixes whose message or body mentions a review, concern or finding were excluded (they answer a review). Squadron diffs are large; only 913 is small. All code sizes below are in characters.
+
+### squadron-913 — candidate (smallest case in the set)
+- base `a90d5e01b12aad98a6c726e30e85bcad4acb57b8`, head `245b3aa349a23b238d2520abb75062abdcb09ea5` (1 commit, 33,295). Saved review: 913 (ruff rule set adoption), PASS, minimax. All findings were `pass`.
+- B1: resuming a run did not restore earlier step results (`cc34d3de`, 2026-10-17).
+- A PASS review followed by a real resume bug, in one commit. Best first run for checking the harness.
+
+### squadron-932 — candidate
+- base `262d0ba064dcc6fa09efb5908eecc1447fd0582b`, head `d89cc060d2fe3033ed479d7e4eb69aadc779bd97` (27 commits, 143,088). Saved review: 932 (pipeline SDK session), PASS, sonnet-5-5.
+- B1: an unusable SDK session was not replaced and provider errors logged a traceback (`4df2035f`). The review's note "a failed disconnect in `_reconnect` does not mark the session unusable" may be a hit; read both before scoring.
+- B2: SDK session dispatches did not end on the CLI idle state (`5e384226`, #239). The review's note "idle timeout can also catch an unrelated TimeoutError" is adjacent.
+
+### squadron-175 — candidate
+- base `3812c815b377eadfd7741ab1734c350c73789e2b`, head `1cbd6be4317f37498b07a31cd9cb64562fdb9d0a` (16 commits, 222,088). Saved review: 175 (usage and cost tracking), CONCERNS, sonnet-5-5.
+- B1: SDK cost was charged as the session's running total instead of the delta (`0a850c0a`, 2026-10-15). Not reported.
+- B2: the alias effort was not applied when opening the pipeline SDK session (`29850399`); B3: session effort not recorded on compaction (`fed05c66`).
+- Review reported error-path logging, stats JSON output, pricing-warning dedupe, a broad exception tuple.
+
+### squadron-197 — candidate
+- base `e0dc580dc806b526ab6fa57ccc2d381ca9b7eece`, head `90a40dbf40289fd46b99e999c957a6e9295545be` (23 commits, 181,789). Saved review: a 197 (implementation batch) code review of this head, CONCERNS, sonnet-5-5 (a second 197 review of a different head, `19d83bf`, also exists).
+- Six fixes landed after the review: item resume trusts git for merged slices and batch selection treats merged slices as complete (`366250ba`, `af50b937`, #188); refuse a slice merge with unchecked task items (`e602d4e5`); pause the run when the merge finds unfinished tasks (`6ffa6fab`); retry every flagged batch item with `sq run --resume --flagged` (`610f0bfa`); commit an interrupted batch edit before an item resume (`593483ef`).
+- Many bugs in one case; decide which count after reading the review's findings against each diff.
+
+### Checked and dropped
+- **trading-engine-105:** the first review reported `as_real` rounding large integers, so `6078e2b` answered it; nothing was missed. Only a positive control.
+- **trading-engine-102:** the only mined fix (`ccae5e3`) is "harden market validation and share type guards", likely a review answer; not read.
 
 ## Leads, not yet cases
 
