@@ -20,6 +20,7 @@ from squadron.pipeline.actions.findings_addressed.screens import (
 )
 from squadron.pipeline.actions.judge import Provenance
 from squadron.pipeline.models import ActionContext, ActionResult
+from squadron.pipeline.usage_capture import stamp
 from squadron.review.addressed.models import (
     FindingRecord,
     concern_plus,
@@ -96,6 +97,8 @@ class FindingsAddressedPolicy:
             judge_model=judge.model,
             judge_template=judge.template,
         )
+        metadata = evidence.to_metadata()
+        stamp(metadata, judge.usage)
         evidence_path = save_gate_evidence(
             evidence,
             step_name=context.step_name,
@@ -114,7 +117,7 @@ class FindingsAddressedPolicy:
             verdict=reduced,
             provenance=Provenance.COMPOSED,
             # Same record object as the artifact — the facts are assembled once.
-            metadata=evidence.to_metadata(),
+            metadata=metadata,
         )
 
     def _run_screens(

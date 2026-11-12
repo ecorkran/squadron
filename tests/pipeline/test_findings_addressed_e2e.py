@@ -16,6 +16,7 @@ import pytest
 
 import squadron.pipeline.steps.gate  # noqa: F401 — register the gate step type
 import squadron.pipeline.steps.loop  # noqa: F401 — register the loop step type
+from squadron.core.usage import CostBasis
 from squadron.pipeline.actions.checkpoint import CheckpointAction
 from squadron.pipeline.actions.commit import CommitAction
 from squadron.pipeline.actions.gate import GateAction
@@ -28,6 +29,7 @@ from tests.pipeline.conftest import phase_artifact_cf_client
 _JUDGE_TRANSPORT = "squadron.review.addressed.judge.run_review_with_profile"
 _TARGET_FILE = "src/x.py"
 _SLICE = 305
+_JUDGE_COST_USD = 0.25
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -97,6 +99,9 @@ def _judge_output(text: str) -> ReviewResult:
         template_name="judge.findings-addressed",
         input_files={},
         raw_output=text,
+        turns=2,
+        cost_usd=_JUDGE_COST_USD,
+        cost_basis=CostBasis.PROVIDER,
     )
 
 
@@ -245,6 +250,10 @@ async def test_three_rounds_screen0_then_fail_then_pass(repo: Path) -> None:
     assert transport.await_count == 1
     assert gate_metadata[-1]["revision_number"] == 3
     assert gate_metadata[-1]["prior_round_sha"] is not None
+    # The judge's spend rides the gate result, so run totals and the cost cap see it (#294).
+    usage = gate_metadata[-1]["usage"]
+    assert isinstance(usage, dict)
+    assert usage["cost_usd"] == _JUDGE_COST_USD
 
 
 @pytest.mark.asyncio

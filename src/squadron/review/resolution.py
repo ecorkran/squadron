@@ -48,6 +48,7 @@ from squadron.review.resolution_evidence import (
     review_type_of,
     screen_review_diff,
 )
+from squadron.review.run_cost import RunCost
 
 _logger = logging.getLogger(__name__)
 
@@ -214,6 +215,8 @@ class SettledFindings:
     base: str | None
     base_source: DiffBaseSource | None
     judge_model: str | None = None
+    #: What the judge call cost; None when no judge call returned (#294).
+    judge_cost: RunCost | None = None
 
 
 async def settle_findings(
@@ -288,6 +291,7 @@ async def settle_findings(
         base=base,
         base_source=base_source,
         judge_model=leg.model,
+        judge_cost=None if leg.review_result is None else leg.review_result.run_cost,
     )
 
 
@@ -301,6 +305,7 @@ class ResolutionResult:
     outcomes: list[FindingOutcome]
     base: str | None
     base_source: DiffBaseSource | None
+    judge_cost: RunCost | None = None
 
 
 def _frontmatter_str(frontmatter: dict[str, object], key: str, fallback: str) -> str:
@@ -388,4 +393,5 @@ async def resolve_review(
         outcomes=settled.outcomes,
         base=settled.base,
         base_source=settled.base_source,
+        judge_cost=settled.judge_cost,
     )

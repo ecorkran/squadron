@@ -1508,6 +1508,8 @@ def _display_resolution(result: ResolutionResult, verbosity: int) -> None:
     base = result.base or "unresolved"
     source = result.base_source.value if result.base_source is not None else "not needed"
     console.print(f"  measured against {escape(str(base))} ({escape(str(source))})", style="dim")
+    if result.judge_cost is not None:
+        console.print(f"  judge: {escape(result.judge_cost.summary_line())}", style="dim")
     rprint(f"[green]Wrote resolution to {escape(str(result.artifact_path))}[/green]")
     rprint(f"resolution: {escape(str(result.resolution.value))}")
 

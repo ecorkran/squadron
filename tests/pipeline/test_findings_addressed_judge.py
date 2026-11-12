@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from squadron.core.models import Effort
+from squadron.core.usage import CostBasis
 from squadron.pipeline.actions.findings_addressed import judge_residue
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
@@ -445,3 +446,48 @@ async def test_multi_line_finding_text_stays_on_one_prompt_line() -> None:
     rendered = transport.call_args.args[1]["prior_findings"]
     assert rendered.count("\n") == 0
     assert "first line F002: addressed third line" in rendered
+
+
+@pytest.mark.asyncio
+async def test_the_judge_call_is_recorded_as_usage_for_the_run_totals() -> None:
+    """The gate's judge spend must reach the run's totals and cost cap (#294)."""
+    priced = ReviewResult(
+        verdict=Verdict.UNKNOWN,
+        findings=[],
+        template_name="judge.findings-addressed",
+        input_files={},
+        raw_output="F001: addressed",
+        turns=3,
+        cost_usd=0.12,
+        cost_basis=CostBasis.PROVIDER,
+    )
+
+    with patch(_JUDGE_TRANSPORT, AsyncMock(return_value=priced)):
+        leg = await judge_residue(
+            _context(),
+            residue=[_finding("F001")],
+            fresh_findings=[],
+            diff=_diff("src/x.py"),
+        )
+
+    assert leg.usage is not None
+    assert (leg.usage.turns, leg.usage.cost_usd, leg.usage.cost_basis) == (
+        3,
+        0.12,
+        CostBasis.PROVIDER,
+    )
+    assert leg.usage.profile == "sdk"
+
+
+@pytest.mark.asyncio
+async def test_a_judge_call_that_failed_records_no_usage() -> None:
+    with patch(_JUDGE_TRANSPORT, AsyncMock(side_effect=RuntimeError("down"))):
+        leg = await judge_residue(
+            _context(),
+            residue=[_finding("F001")],
+            fresh_findings=[],
+            diff=_diff("src/x.py"),
+        )
+
+    assert leg.failed is True
+    assert leg.usage is None

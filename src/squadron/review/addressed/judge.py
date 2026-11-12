@@ -18,6 +18,7 @@ import logging
 from dataclasses import dataclass, field
 
 from squadron.core.models import Effort
+from squadron.core.usage import UsageRecord
 from squadron.review.addressed.models import FindingOutcome, FindingRecord
 from squadron.review.addressed.parsing import (
     is_parse_failure,
@@ -25,6 +26,7 @@ from squadron.review.addressed.parsing import (
     statuses_to_outcomes,
 )
 from squadron.review.addressed.screens import RoundDiff
+from squadron.review.models import ReviewResult
 from squadron.review.review_client import run_review_with_profile
 from squadron.review.templates import get_template, load_all_templates
 
@@ -43,6 +45,12 @@ class JudgeLegResult:
     failed: bool = False
     model: str | None = None
     template: str | None = None
+    # What the judge call returned, so the caller can account for its spend (#294).
+    # None when no call was made or the transport failed.
+    review_result: ReviewResult | None = None
+    # The same spend as a usage record; set by a caller that has the run's model
+    # resolution (the pipeline gate). The interactive path reads ``review_result``.
+    usage: UsageRecord | None = None
 
 
 def _one_line(value: str) -> str:
@@ -132,10 +140,13 @@ async def judge_residue_core(
             "%d residue finding(s); leg fails closed",
             len(residue),
         )
-        return JudgeLegResult(failed=True, model=model_id, template=JUDGE_TEMPLATE_NAME)
+        return JudgeLegResult(
+            failed=True, model=model_id, template=JUDGE_TEMPLATE_NAME, review_result=result
+        )
 
     return JudgeLegResult(
         outcomes=statuses_to_outcomes(residue, statuses),
         model=model_id,
         template=JUDGE_TEMPLATE_NAME,
+        review_result=result,
     )

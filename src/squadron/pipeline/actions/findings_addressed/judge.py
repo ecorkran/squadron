@@ -9,10 +9,13 @@ resolver cascade off an ``ActionContext``.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
+from squadron.pipeline.actions import ActionType
 from squadron.pipeline.actions.findings_addressed.screens import RoundDiff
 from squadron.pipeline.models import ActionContext
 from squadron.pipeline.resolver import ModelResolutionError, ResolvedModel
+from squadron.pipeline.usage_capture import require_capture
 from squadron.providers.base import ProfileName
 from squadron.review.addressed.judge import (
     JUDGE_TEMPLATE_NAME,
@@ -86,7 +89,7 @@ async def judge_residue(
         _logger.exception("findings-addressed: could not resolve a judge model; leg fails closed")
         return JudgeLegResult(failed=True, template=JUDGE_TEMPLATE_NAME)
 
-    return await judge_residue_core(
+    leg = await judge_residue_core(
         residue=residue,
         fresh_findings=fresh_findings,
         diff=diff,
@@ -95,3 +98,9 @@ async def judge_residue(
         cwd=context.cwd,
         effort=resolved.effort,
     )
+    if leg.review_result is None:
+        return leg
+    # The judge's spend counts toward the run's totals and cost cap (#294).
+    capture = require_capture(context.usage_capture, ActionType.GATE)
+    record = capture.record_from_review(leg.review_result, resolved, leg.review_result.effort)
+    return replace(leg, usage=record)

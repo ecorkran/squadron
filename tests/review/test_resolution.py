@@ -349,6 +349,41 @@ class TestScreensNeverReachTheJudge:
         assert settled.diff.changed_paths == frozenset({"src/foo.py"})
         assert settled.resolution == Resolution.ADDRESSED
 
+    async def test_the_judge_call_cost_is_reported(self, git_repo: Path) -> None:
+        """The spend of the one judge call reaches the caller, never $0 by omission (#294)."""
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+        priced = _judge_output("F001: addressed — guarded")
+        priced.turns = 2
+        priced.cost_usd = 0.31
+
+        with patch(_JUDGE_TRANSPORT, AsyncMock(return_value=priced)):
+            settled = await settle_findings(
+                load_review(path), model_id=None, profile="sdk", effort=None, cwd=str(git_repo)
+            )
+
+        assert settled.judge_cost is not None
+        assert (settled.judge_cost.turns, settled.judge_cost.cost_usd) == (2, 0.31)
+
+    async def test_no_judge_call_reports_no_cost(self, git_repo: Path) -> None:
+        base_sha = _commit_work(git_repo)
+        path = _stamped_review(git_repo, base_sha)
+        (git_repo / "src" / "foo.py").write_text("def save():\n    try:\n        ...\n")
+        _commit(git_repo, "guard the write")
+
+        settled = await settle_findings(
+            load_review(path),
+            model_id=None,
+            profile="sdk",
+            effort=None,
+            cwd=str(git_repo),
+            no_judge=True,
+        )
+
+        assert settled.judge_cost is None
+
 
 _NO_FINDINGS_REVIEW = """\
 ---
