@@ -98,11 +98,13 @@ probe_value="$(sed -E -e "s/${esc}\[[0-9;]*m//g" -e 's/^[^=]*=[[:space:]]*([^[:s
 [[ "$probe_value" == "1" ]] || { echo "$probe" >&2; fail "hostile-config-probe"; }
 
 # 5. Run the suite. host_cf tests need cf's real registry, so they are left
-#    to the main CI job. --color=no keeps the log readable; the hostile
-#    FORCE_COLOR still reaches the code under test.
+#    to the main CI job. real_history tests take ~42 minutes and are excluded
+#    from the default run in pyproject addopts; passing -m here replaces that
+#    expression, so it must be repeated. --color=no keeps the log readable; the
+#    hostile FORCE_COLOR still reaches the code under test.
 echo "hostile-env: running pytest at $sha"
 set +e
-(cd "$clone" && "${hostile_env[@]}" pytest -q -p no:cacheprovider --color=no -m "not host_cf") 2>&1 \
+(cd "$clone" && "${hostile_env[@]}" pytest -q -p no:cacheprovider --color=no -m "not host_cf and not real_history") 2>&1 \
     | tee "$work/pytest.log"
 status="${PIPESTATUS[0]}"
 set -e
