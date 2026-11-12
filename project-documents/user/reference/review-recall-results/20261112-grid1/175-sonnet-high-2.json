@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Provider failure in a review step is logged as an \"unexpected error\" with a full traceback",
+      "description": "The new `except ProviderError` branch in `_run_part` no longer re-raises. It builds the failed result itself. Before this change the re-raise reached `execute`'s catch-all at line 181, which is the only place that logs \"unexpected error\". Moving that log call into the branch carries the wording over, but a `ProviderError` is a named, expected failure. The dispatch and summary actions log named provider failures at ERROR with no traceback (\"issue 200\" convention, `dispatch.py:457`, `summary.py`). Here the same event now produces two lines: a WARNING a few lines up that names the failure artifact, then an ERROR with a traceback saying \"unexpected\". That is misleading in diagnostics and inconsistent with the sibling actions. Use `_logger.error(\"review: step %s failed: %s\", ...)`, or drop the extra line, since the WARNING already covers the event.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failed-review cost is resolved twice, and the second pass ignores the first result",
+      "description": "`review_client.py:315` resolves cost for a failed review and stores it on `exc.cost_usd` and `exc.cost_basis`. The failure artifact renders those values through `RunCost.from_error`. `record_from_error` then ignores them and calls `_build`, which runs `resolve_cost` again from `telemetry.cost_usd`. This breaks the \"one place the precedence lives\" intent. The persisted `UsageRecord` and the failure artifact are computed on separate paths, so they can drift apart. The second pass also emits the alias-pricing warning a second time for the same failure. `record_from_review` already reuses `result.cost_usd` and `result.cost_basis`. `record_from_error` should do the same with `exc.cost_usd` and `exc.cost_basis`.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.record_from_error"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-run pricing-warning dedup is bypassed for reviews",
+      "description": "`run_review_with_profile` calls `resolve_cost(..., set())` with a fresh set on every call, at lines 315 and 321. The executor comment (`executor.py`, \"One per run: its pricing-warning set makes each WARNING once per alias\") and `test_pricing_warning_once_per_capture` promise one warning per alias per run. A pipeline with several reviews, or split-review parts, on an alias with incomplete pricing now warns once per review instead of once per alias. Standalone `sq review` is unaffected. Accept an optional `warned` set from the caller, and have `ReviewAction` pass the capture's set.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:315"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq stats reviews --json` emits non-JSON text when the review directory is missing",
+      "description": "The `missing_dir` check runs before the `as_json` branch. With `--json` and no review directory, stdout is the plain string `No review directory at ...` with exit code 0. Any script piping it into `json.loads` will fail. The missing-directory case should produce an empty JSON report (`rows: []`, with the report's `missing_dir` flag in the payload) under `--json`. The plain-text message should be used only for the table output. `reviews_report_json` also does not serialize `missing_dir`, so it should be added. No test covers `--json` with a missing directory.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/stats.py:60-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`_row` raises a `ValueError` only to catch it two lines later",
+      "description": "The `raise ValueError(...)` inside the `try` is caught by the immediately following `except ValueError`. It works, but a plain `isinstance` guard that returns the unreadable row would be clearer and would avoid the raise-to-catch pattern.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:129-136"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`UsageCapture(set())` constructor leaks an implementation detail",
+      "description": "Every caller, including about 25 test sites and the executor, passes a bare `set()`. A default (`warned: set[str] | None = None`, creating an empty set) or an internal-only set would remove the repetition. This also ties into the dedup finding above, because ownership of that set should be explicit.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py:80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`dispatch.py` keeps growing past the file-size guideline",
+      "description": "The file is well over the ~300-line guideline, and `_dispatch_session` and `_dispatch_agent` each now carry a near-identical `try/except ProviderError \u2192 capture.record_from_telemetry \u2192 _provider_failure` block. The `_one_shot` extraction helps. Consider moving the shared failure-to-record step into a helper on `UsageCapture` or `DispatchAction`, which would also keep these functions within the ~50-line target.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage capture design and test coverage",
+      "description": "Record building is centralized, cancellation propagates without writing a record, and missing capture fails explicitly through `UsageCaptureMissingError` instead of silently skipping. Unreported values stay `None` rather than becoming 0, and malformed SDK values warn and fall back to `None`. Tests cover the real-fixture reader, the multi-result sum, the stall and drain partial case, the pre-slice state round-trip, and the CLI table and JSON output. I read `review.py` and `dispatch.py` around the changed hunks, and the except-clause ordering in `dispatch.execute` is sound. None of the exceptions that follow `ProviderError` are its subclasses.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Provider failure in a review step is logged as an \"unexpected error\" with a full traceback",
+      "location": "src/squadron/pipeline/actions/review.py:486",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Failed-review cost is resolved twice, and the second pass ignores the first result",
+      "location": "src/squadron/pipeline/usage_capture.py#UsageCapture.record_from_error",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Per-run pricing-warning dedup is bypassed for reviews",
+      "location": "src/squadron/review/review_client.py:315",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`sq stats reviews --json` emits non-JSON text when the review directory is missing",
+      "location": "src/squadron/cli/commands/stats.py:60-62",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`_row` raises a `ValueError` only to catch it two lines later",
+      "location": "src/squadron/stats/usage_report.py:129-136",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`UsageCapture(set())` constructor leaks an implementation detail",
+      "location": "src/squadron/pipeline/usage_capture.py:80",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "`dispatch.py` keeps growing past the file-size guideline",
+      "location": "src/squadron/pipeline/actions/dispatch.py",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Usage capture design and test coverage",
+      "location": "src/squadron/pipeline/usage_capture.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:02:20.914361",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 513330,
+  "cached_tokens": 501626,
+  "cache_write_tokens": 11694,
+  "completion_tokens": 5345,
+  "reasoning_tokens": null,
+  "duration_seconds": 43.18080145888962,
+  "cost_usd": 0.16041740000000002,
+  "cost_basis": "provider"
+}

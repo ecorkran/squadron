@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Provider-failure handler logs a misleading \"unexpected error\" traceback and can mask the original error",
+      "description": "`_run_part` used to re-raise `ProviderError`, so `execute`'s catch-all produced the single ERROR log. The handler now returns `_exception_result` directly. To keep that log line, it copies `_logger.exception(\"review: unexpected error in step ...\")` into the handler. A named `ProviderError` is not unexpected, and the handler has already logged a WARNING with the artifact path. Each provider failure therefore gets two log lines at different levels, and the second says \"unexpected\". `dispatch` and `summary` log a named provider failure as one ERROR line with no traceback (`dispatch.py` `_provider_failure`, `summary.py`), so this is also inconsistent with them.\n\nSeparately, `effort_sent_by_profile` calls `get_profile`, `ensure_provider_loaded` and `get_provider` inside the `except` block. If any of them raises, the `ProviderError` that explains the failure is replaced, and nothing at that point records the usage. The effort is already known at the start of `_run_part`. Computing it before the `try`, or reading it from the profile the caller already resolved, would avoid the extra lookups on the failure path.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486-493"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "LLM spend from the findings-addressed judge is not captured, so run totals undercount",
+      "description": "`judge_residue_core` calls `run_review_with_profile` without `alias`, and nothing stamps its spend into any `ActionResult`. `LLM_ACTION_TYPES` in `src/squadron/stats/usage_report.py` lists only dispatch, summary, compact and review. `sq stats run` therefore omits the judge's tokens and cost, and the \"N of M priced\" and \"no usage recorded\" lines do not mention it. If this is out of scope for slice 175, record it as a known gap in the slice docs or CHANGELOG. As it stands, \"totals\" can read lower than the real spend with no signal to the reader.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/review/addressed/judge.py:107-112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review-client cost resolution bypasses the run's pricing-warning dedup",
+      "description": "`resolve_cost(alias, ..., set())` passes a fresh `warned` set on every call. `UsageCapture` exists so that each pricing warning fires once per alias per run, and `test_executor_gives_every_step_one_capture` asserts exactly that. Reviews in a looped pipeline step still warn every time, because the review path resolves cost in `review_client` and `record_from_review` then reuses the result. `record_from_error` also recomputes cost from telemetry and ignores the `exc.cost_usd` and `exc.cost_basis` that `review_client` set on the error. The D3 cost precedence is therefore applied in two places for failed reviews. Pass the run's `warned` set into the review path, or have `record_from_error` use `exc.cost_usd` and `exc.cost_basis`.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:313-321"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `\"subscription\"` cost-tier literal is redefined in the stats views",
+      "description": "`SUBSCRIPTION_TIER = \"subscription\"` is a new constant that decides whether a cost is labelled \"api-rate equiv.\" (money or not). The same literal appears in `src/squadron/pipeline/intelligence/pools/strategies.py:39` and `src/squadron/cli/commands/models.py:33`, and `cost_tier` has no shared enum or constant. This breaks the project rule that a comparison value is defined once. Move the tier values to a single definition in `squadron.models.aliases` and import it.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`get_all_aliases()` is rebuilt per call on per-row and per-resolution paths",
+      "description": "`get_all_aliases()` merges the built-in and user alias tables on every call (`aliases.py:217-224`). `_is_subscription` calls it once per rendered row, and `resolver._resolved` now calls it once per resolution. This is probably negligible at current row counts, but loading the table once per render is easy.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/squadron/cli/stats_views.py:140-144"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Broad `AttributeError` catch in the run loader",
+      "description": "Catching `AttributeError` to cover \"top-level value is not an object\" is commented and re-raised as a named `RunUsageLoadError`, so it complies with the exception rules. It would be tighter to validate the shape inside `StateManager.load`, so an unrelated `AttributeError` bug cannot be reported as a corrupt file.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/stats/usage_report.py:101-104"
+    },
+    {
+      "severity": "PASS",
+      "title": "Usage capture design, SDK telemetry folding, and test coverage",
+      "description": "`UsageCapture` is the single place a `UsageRecord` is built. `require_capture` fails explicitly rather than skipping capture. The SDK reader (`providers/sdk/usage.py`) validates each value defensively, with a WARNING on malformed input and a real-CLI fixture test. Telemetry is summed over every `ResultMessage`, including injected follow-ups and interrupt drains, and rides `ProviderError.telemetry` on failure. The `except ProviderError` reordering in `DispatchAction.execute` is safe: `ModelResolutionError`, `ModelPoolNotImplemented` and `GitEnvironmentError` are plain `Exception` subclasses, and `DispatchStalledError` is a `ProviderError`, so the stall result now flows through `_provider_failure`. New tests cover success, failure, cancellation, partial records, the missing-capture error, schema back-compat, and the stats CLI and report cores. The 104-character line length in `pyproject.toml` explains the lines over 88 characters.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/usage_capture.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Provider-failure handler logs a misleading \"unexpected error\" traceback and can mask the original error",
+      "location": "src/squadron/pipeline/actions/review.py:486-493",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "LLM spend from the findings-addressed judge is not captured, so run totals undercount",
+      "location": "src/squadron/review/addressed/judge.py:107-112",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Review-client cost resolution bypasses the run's pricing-warning dedup",
+      "location": "src/squadron/review/review_client.py:313-321",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "The `\"subscription\"` cost-tier literal is redefined in the stats views",
+      "location": "src/squadron/cli/stats_views.py:29",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`get_all_aliases()` is rebuilt per call on per-row and per-resolution paths",
+      "location": "src/squadron/cli/stats_views.py:140-144",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Broad `AttributeError` catch in the run loader",
+      "location": "src/squadron/stats/usage_report.py:101-104",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Usage capture design, SDK telemetry folding, and test coverage",
+      "location": "src/squadron/pipeline/usage_capture.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:02:21.846729",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 784009,
+  "cached_tokens": 767296,
+  "cache_write_tokens": 16699,
+  "completion_tokens": 6682,
+  "reasoning_tokens": null,
+  "duration_seconds": 55.854353290982544,
+  "cost_usd": 0.22038240000000003,
+  "cost_basis": "provider"
+}

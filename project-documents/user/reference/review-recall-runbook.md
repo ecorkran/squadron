@@ -98,3 +98,12 @@ Hosted tools review pull requests, so each case needs a PR with base and head. T
 Append one dated line per batch: cases, configs, runs per config, recall, link to the saved outputs.
 
 - 20261112: setup only. Thirteen runs on trading-data-307 (see #311): 0 of 13 found either bug. Outputs: `review-recall-results/20261112-311/` (A-F sdk sonnet knob variants, G deepseek, H sonnet via openrouter, I-K with the verification prompt). The verification prompt is the text appended in runs I-K: for every changed function that parses or judges another program's output, locate the producer in the repo, compare the emitted shape, key nesting and enumerated values with what the code reads, report mismatches, and say so if the producer is not found.
+- 20261112 grid 1: cases trading-data-921 (3 bugs), trading-data-225 (1), squadron-175 (1); configs sdk sonnet, sdk sonnet-high, openrouter deepseek4-flash; 3 runs each, 27 runs, hits scored by reading each finding against the bug. Outputs: `review-recall-results/20261112-grid1/`.
+
+  | Config | Runs with a hit | Median tool calls | Reported cost/run | Time/run |
+  |---|---|---|---|---|
+  | sonnet | 1 of 9 | 2 | $0.20 (subscription) | 25 s |
+  | sonnet-high | 4 of 9 | 11 | $0.27 (subscription) | 61 s |
+  | deepseek4-flash | 2 of 9 | 39 | $0.14 | 634 s |
+
+  By case: 921 sonnet 0/3, sonnet-high 2/3, deepseek 1/3 (hits: the blocking `mt-run` that stops `fire_unit_until` from ever stopping early, found twice by reading `deploy/mt-run`; and an empty session judged partial and refetched until retries run out, found once); 225 sonnet 1/3, sonnet-high 2/3, deepseek 1/3 (the raw-count scan not scoped to the product); 175 all 0/9 (the running-total cost bug was never found). 921's seed-floor bug was never found. One sonnet run on 225 returned PASS. Hit counts are small and each is one run; the ordering sonnet-high first is a lead, not a result. Precision not scored yet.

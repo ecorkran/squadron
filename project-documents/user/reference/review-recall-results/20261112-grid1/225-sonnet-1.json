@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Runtime invariant enforced with a module-level `assert`",
+      "description": "The check that `_BUCKET_ROWS` covers every `TickSessionStatus` uses `assert`. Python strips asserts under `-O`, so a bucket added to the enum later would go unreported in optimized runs without any error. The project says to fail explicitly. Replace it with an explicit `if ... raise RuntimeError(...)`, or add a unit test that compares the two sets.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:27-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exception-to-exit-code mapping depends on a caller-supplied tuple",
+      "description": "`run_mapped` checks `isinstance(exc, storage)` before `exit_code_for`. This lets `TickDatabaseUnreachable` override the \"preflight\" mapping for the read verbs only. It works, and `tick_exit.py` already maps `TickCalendarError` and `psycopg.OperationalError` to storage. However, exit-code policy is now split between `tick_exit.py`, which the design says defines it once, and a per-verb parameter. `_read_storage()` also needs a function-local import just to build a one-element tuple. A cleaner option is a dedicated `TickReadUnreachable` exception, or a `read_only` flag passed to `exit_code_for`. As written, the \"one place\" invariant is weakened.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:67-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Long functions and mixed responsibilities in the status builder and renderer",
+      "description": "`_product_status` is about 45 lines. It builds the wanted range, verdicts, contract lines, buckets and the DTO in one body. `_product_lines` in `tick_status_render.py` is about 60 lines, over the ~50-line guideline. `tick_status_build.py` is also about 245 lines and defines a generic `jsonable` helper. `tick_coverage.py` imports `jsonable` and other shared helpers from this module, so those helpers belong in a smaller shared module. This isn't blocking.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_status_build.py:_product_status"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`raw_counts` full-range scan",
+      "description": "The scan is bounded by the range's first open and last close, and the one-scan design is documented. The join to `unnest` uses `BETWEEN` on both bounds, so a trade at exactly a session boundary shared by two adjacent sessions would be counted in both. That is unlikely on real calendars, but I didn't verify it. The mismatch test only covers the midnight-crossing case.",
+      "file_ref": null,
+      "category": "performance-resource",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/status_reads.py:raw_counts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Positive observations",
+      "description": "The SQL is parameterized throughout. The tests use throwaway databases and don't read the production URL variable, and they delete by primary key rather than `ctid`. The `utc_midnight` and `days_touched` extraction removes duplicated logic from `ingest_plan.py` and `session_days.py`. The new `status` and `coverage` verbs have unit, integration and CLI coverage, including exit codes 1, 3 and 4.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "src/manta_trading/data/tick/tick_coverage.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Runtime invariant enforced with a module-level `assert`",
+      "location": "src/manta_trading/cli/commands/tick_status_render.py:27-29",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "Exception-to-exit-code mapping depends on a caller-supplied tuple",
+      "location": "src/manta_trading/cli/commands/tick_store_cmds.py:67-80",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Long functions and mixed responsibilities in the status builder and renderer",
+      "location": "src/manta_trading/data/tick/tick_status_build.py:_product_status",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "performance-resource",
+      "raw_category": null,
+      "summary": "`raw_counts` full-range scan",
+      "location": "src/manta_trading/data/tick/status_reads.py:raw_counts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Positive observations",
+      "location": "src/manta_trading/data/tick/tick_coverage.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-225",
+    "diff": "09106ab48bda1b7397cfefa0145928a82e3056ac...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:00:06.088983",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 58383,
+  "diff_chars_injected": 58383,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 102014,
+  "cached_tokens": 53650,
+  "cache_write_tokens": 48360,
+  "completion_tokens": 2001,
+  "reasoning_tokens": null,
+  "duration_seconds": 17.730881999945268,
+  "cost_usd": 0.2221214,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Provider failure in review is logged as \"unexpected error\" with a traceback",
+      "description": "The `except ProviderError` branch used to re-raise to `execute`'s catch-all. It now returns directly, and it calls `_logger.exception(\"review: unexpected error in step %s\")`. A `ProviderError` is a named, expected failure. The branch already logged a WARNING that includes the artifact path. The new call adds a misleading \"unexpected\" message and a full traceback. It also duplicates the log that the old catch-all produced. `dispatch.py` handles the same class of error with a single `_logger.error` and no traceback (issue 200). Log one line here and drop `logger.exception`.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:486"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Usage-record lookup inside the `except` handler can mask the original provider error",
+      "description": "`effort_sent_by_profile` calls `get_profile`, `ensure_provider_loaded` and `get_provider` inside the handler. If any of these raises, the new exception replaces the `ProviderError`. `execute`'s catch-all then reports it, so the step's recorded error is the wrong one. The failure artifact is already saved by that point, but the step error would be wrong. Compute the effort before the `try`, or wrap the usage capture so it can never mask the real failure.",
+      "file_ref": null,
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:487-492"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Compact failure drops the spend that the error carries",
+      "description": "D5 says a failed call still records what it spent. `dispatch`, `summary` and `review` all do this. In `compact`, `SDKExecutionSession.dispatch` attaches `exc.telemetry` to the `ProviderError`, but the failure path returns no `metadata` and never stamps usage. A compact that spent tokens in its capture turn and then failed (for example a reconnect failure after capture) shows up in `sq stats run` as unrecorded. A failure after capture is exactly the case where the spend is already known. Stamp the error's telemetry the same way the other actions do.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/compact.py:79-90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`review_client` prices with a throwaway warning set, bypassing the per-run dedup",
+      "description": "`resolve_cost(alias, ..., set())` is called with a fresh set on both the success and failure paths. The executor builds one `UsageCapture` per run so that each alias pricing warning fires once. A pipeline review for an alias with partial pricing therefore warns on every review. The success path prices in `review_client`, and `record_from_review` then reuses that result. There are two pricing call sites with different dedup behavior. `record_from_error` also re-prices from telemetry and ignores the `exc.cost_usd` and `exc.cost_basis` that `review_client` already set. Pick one place that prices.",
+      "file_ref": null,
+      "category": "consistency-rot",
+      "raw_category": null,
+      "location": "src/squadron/review/review_client.py:310-321"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Repeated failure-record blocks and awkward `UsageCapture` API",
+      "description": "The \"if `exc.telemetry` is not None, build a record, then `_provider_failure`\" block appears twice in `dispatch.py` and once more in `summary.py`. A helper such as `capture.record_from_exception` would remove it. `effort_for_session` is named like a getter but always returns `None` and logs as a side effect. `UsageCapture(set())` forces every caller and test to pass an implementation detail. `summary.py` carries two similar dicts, `usage_metadata` and `usage_metadata_out`, which are easy to confuse.",
+      "file_ref": null,
+      "category": "architectural-decay",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/dispatch.py:575-590"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tests cover the new paths well",
+      "description": "Tests accompany the implementation. The SDK usage reader is tested against a captured real `ResultMessage`. Unreadable, partial and pre-slice runs are covered, as are cancellation, the missing-capture error and the dedup of warnings per run. I found no gaps worth flagging. The one exception is the compact failure path noted above, which has no test.",
+      "file_ref": null,
+      "category": "test-debt",
+      "raw_category": null,
+      "location": "tests/pipeline/test_usage_capture.py"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Provider failure in review is logged as \"unexpected error\" with a traceback",
+      "location": "src/squadron/pipeline/actions/review.py:486",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling-observability",
+      "raw_category": null,
+      "summary": "Usage-record lookup inside the `except` handler can mask the original provider error",
+      "location": "src/squadron/pipeline/actions/review.py:487-492",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Compact failure drops the spend that the error carries",
+      "location": "src/squadron/pipeline/actions/compact.py:79-90",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency-rot",
+      "raw_category": null,
+      "summary": "`review_client` prices with a throwaway warning set, bypassing the per-run dedup",
+      "location": "src/squadron/review/review_client.py:310-321",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-decay",
+      "raw_category": null,
+      "summary": "Repeated failure-record blocks and awkward `UsageCapture` API",
+      "location": "src/squadron/pipeline/actions/dispatch.py:575-590",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-debt",
+      "raw_category": null,
+      "summary": "Tests cover the new paths well",
+      "location": "tests/pipeline/test_usage_capture.py",
+      "location_verified": null
+    }
+  ],
+  "template_name": "code",
+  "input_files": {
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/0805d86d-8435-4d98-bf07-042000f9e694/scratchpad/grid/wt-175",
+    "diff": "3812c815b377eadfd7741ab1734c350c73789e2b...HEAD",
+    "diff_exclude_patterns": "*.md,*.yaml,*.yml,*.toml,*.json,*.txt,*.lock,*.csv,*.svg,*.png,*.jpg,*.gif,*.ico"
+  },
+  "timestamp": "2026-11-12T16:01:24.855940",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": true,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": 222088,
+  "diff_chars_injected": 222088,
+  "diff_truncated": false,
+  "diff_cut_files": [],
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.28",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": null,
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 247498,
+  "cached_tokens": 123673,
+  "cache_write_tokens": 123819,
+  "completion_tokens": 3355,
+  "reasoning_tokens": null,
+  "duration_seconds": 29.044643667060882,
+  "cost_usd": 0.5512140999999999,
+  "cost_basis": "provider"
+}
