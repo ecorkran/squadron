@@ -13,6 +13,10 @@ Older entries: project-documents/user/archive/devlog/ (one file per quarter).
 
 ## 20261111
 
+### Release 0.24.27
+
+- **Contents:** slice 422 (fix-case qualification and yield report; squadron's yield was too low to separate configurations, 423–427 not recommended); `branch: merge` squashes a slice branch to one commit before merging; patch-recorder exception comments (#315, #316, #317 filed from the 422 review).
+
 **p6: devlog-4**
 - branch-0:branch-0: PASS
 - implement-1:cf-op-0: PASS
