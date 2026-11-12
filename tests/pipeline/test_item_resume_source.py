@@ -122,6 +122,21 @@ async def test_a_dependency_still_open_on_the_target_flags_without_running(
 
 
 @pytest.mark.asyncio
+async def test_a_source_that_needs_no_implemented_dependencies_runs_the_item(
+    project: Project, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Planning sources (tasks-plan, slices-plan) skip the dependency check (#298)."""
+    from squadron.pipeline import item_resume
+
+    monkeypatch.setattr(item_resume, "source_needs_implemented_dependencies", lambda _: False)
+    body = AsyncMock()
+
+    await _resume(project, "402", body)
+
+    body.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_resume_hands_the_source_the_run_cwd(
     project: Project, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -53,7 +53,7 @@ from squadron.pipeline.item_eligibility import (
 from squadron.pipeline.loader import load_pipeline
 from squadron.pipeline.models import StepConfig
 from squadron.pipeline.run_lock import RunLockError, project_run_lock
-from squadron.pipeline.sources import CfSliceStatus
+from squadron.pipeline.sources import CfSliceStatus, source_needs_implemented_dependencies
 from squadron.pipeline.state import SchemaVersionError, StateManager
 from squadron.pr.branch import parse_slice_branch
 
@@ -157,7 +157,10 @@ async def _resume_locked(
     if item is None:  # reconciled
         return _outcome(run, request.index)
     rerun = ItemRerun(item, run.report, request.decision, datetime.now(UTC).isoformat())
-    if (reason := _open_dependencies(item, run.report.plan, cf_client, target, cwd)) is not None:
+    needs_implemented = source_needs_implemented_dependencies(str(run.each.config.get("source", "")))
+    if needs_implemented and (
+        reason := _open_dependencies(item, run.report.plan, cf_client, target, cwd)
+    ):
         rerun.replace(BatchItemRecord.from_item(item, 0, [], reason, flag_kind=FlagKind.DEPENDENCY))
         run.report.write(run.report_path.parent)
         return _outcome(run, request.index)

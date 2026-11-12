@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `sq run --resume --item` on a `tasks-plan` or `slices-plan` run no longer flags an item "dependency N not complete" because the dependency isn't implemented yet; only `implement-plan` needs that (#298).
+
 ## [0.24.27] - 20261111
 
 ### Added

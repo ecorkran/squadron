@@ -403,6 +403,22 @@ SOURCE_REGISTRY[("cf", "slices_needing_tasks")] = _cf_slices_needing_tasks
 SOURCE_REGISTRY[("cf", "slices_ready_to_implement")] = _cf_slices_ready_to_implement
 
 
+#: Sources whose items run only after their in-plan dependencies are implemented. The
+#: planning sources (designs, tasks) need only a dependency's design or tasks, so they
+#: are not listed (#298).
+_IMPLEMENTED_DEPENDENCY_SOURCES = frozenset({("cf", "slices_ready_to_implement")})
+
+
+def source_needs_implemented_dependencies(source_str: str) -> bool:
+    """Whether an item from *source_str* must wait for its dependencies to be implemented.
+
+    Raises:
+        ValueError: *source_str* is malformed or names an unknown source.
+    """
+    namespace, function, _ = parse_source(source_str)
+    return (namespace, function) in _IMPLEMENTED_DEPENDENCY_SOURCES
+
+
 def parse_source(
     source_str: str,
 ) -> tuple[str, str, list[str]]:
