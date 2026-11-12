@@ -89,7 +89,12 @@ select = ["E", "F", "W", "I", "UP", "BLE", "ASYNC", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# ``real_history`` tests take about 42 minutes (they build and trace squadron's own suite at
+# real commits), so the default run skips them. Run them with ``pytest -m real_history``.
+# TODO: consider a nightly or weekly CI job that runs them (#319).
+addopts = "-m 'not real_history'"
 markers = [
+    "real_history: pins verdicts on squadron's real commits; about 42 minutes, so not in the default run (run with '-m real_history')",
     "network: marks tests that require network access (deselect with '-m \"not network\"')",
     "host_cf: test needs cf's real project registry under the host's home (deselect with '-m \"not host_cf\"')",
 ]

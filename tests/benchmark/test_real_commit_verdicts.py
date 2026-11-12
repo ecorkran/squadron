@@ -35,7 +35,9 @@ from squadron.metrology.benchmark_store import BenchmarkRecordStore
 from squadron.metrology.project_id import ProjectId, ProjectIdSource
 from squadron.metrology.store import MetrologyStore
 
-pytestmark = pytest.mark.network
+# ``real_history`` keeps this file out of the default run (about 42 minutes: it builds and
+# traces squadron's own suite at real commits). Run it with ``pytest -m real_history``.
+pytestmark = [pytest.mark.network, pytest.mark.real_history]
 
 REPO = Path(__file__).resolve().parents[2]
 RUNNER = SubprocessRunner()
