@@ -330,6 +330,9 @@ async def test_dispatch_gate_empties_tools_for_denied_model(tmp_path: Path) -> N
         patch("squadron.pipeline.actions.dispatch.get_registry", return_value=registry),
         patch("squadron.pipeline.actions.dispatch.get_profile", return_value=profile),
         patch("squadron.pipeline.actions.dispatch.ensure_provider_loaded"),
+        # The real registry has no "openai" provider (only another test's leftover
+        # registration made this pass in a full run), so the lookup is stubbed too.
+        patch("squadron.pipeline.actions.dispatch.get_provider"),
     ):
         await one_shot_dispatch_with_telemetry(
             prompt="hi",
