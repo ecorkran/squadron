@@ -20,7 +20,7 @@ Origin: #311. Thirteen runs on slice 307 showed that verdict, tool-call count an
 
 ## Case record
 
-One record per case, kept in this directory as `review-recall-cases.md` (add rows; do not rewrite history).
+One record per case, kept in `review-recall-cases.md` in this directory (add cases; do not rewrite history).
 
 | Field | Meaning |
 |---|---|
@@ -34,10 +34,7 @@ A bug counts only if a later commit or issue shows it was real. Do not add a bug
 
 ## Cases
 
-1. **trading-data-307** (repo `manta-digital/trading-data`, base `dcfb86f1`, head `b5c3d781`)
-   - Bug 1: the purchase script judged the whole `pass --estimate-only --json` payload as the plan summary. The plan is nested under `phases[purchase].summary`, so the first key lookup raised `KeyError`. Location: `scripts/cutover_304_checks.py` (`judge_estimate`).
-   - Bug 2: the judge required verdict `allowed`, but `--estimate-only` reports `estimate_only` whenever there is something to buy, so the buy step was unreachable.
-   - Proof: both fixed in `a7c5e36f` ("unwrap the purchase phase and accept estimate_only, answer second 307 review"). DeepSeek's FAIL review of `b5c3d781` is the archived finding (`project-documents/user/reviews/archive/307-review.code.futures-history-acquisition.md`).
+See [review-recall-cases.md](review-recall-cases.md): one verified case (trading-data 307) and four mined candidates (188, 921, 225, 227), plus leads. A case's `base` is the parent of the earliest buggy commit, so it can include a few unrelated commits.
 
 ## Finding more cases
 
