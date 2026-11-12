@@ -34,7 +34,9 @@ A bug counts only if a later commit or issue shows it was real. Do not add a bug
 
 ## Cases
 
-See [review-recall-cases.md](review-recall-cases.md): one verified case (trading-data 307) and 11 mined candidates: trading-data 188, 921, 225, 227; amoeba 122; trading-ui 103, 301; squadron 913, 932, 175, 197. Some also carry "controls", bugs the saved review did report. A case's `base` is the parent of the earliest buggy commit, so it can include a few unrelated commits. Candidates need their fix diffs read before first use.
+See [review-recall-cases.md](review-recall-cases.md): 10 cases and 14 bugs: trading-data 307 (verified), 921, 188, 225, 227; amoeba 122; trading-ui 103; squadron 932, 175, 197 (the rest were read by a separate pass against the validity rules in that file). Three bugs are "controls", ones the saved review did report. A case's `base` is the parent of the earliest buggy commit, so it can include a few unrelated commits.
+
+Validity rule, learned the hard way: mining finds many false cases. Of 34 fixes read, only 13 were unreported bugs. A fix does not count if it adds a capability, gate or option, if it follows a later spec or contract change, or if the fixed code predates `base`. Mine, then read the fix diff; never score on mined output.
 
 First configs to run, per the #311 data: the default sdk sonnet, then the same with effort `high` (sonnet-high). In the 307 experiment, effort high alone took tool calls from 2 to 6, and effort high plus the verification prompt gave 26 calls and the only nonzero reasoning count. Effort changes thinking length, tool calls and self-checking without changing the model, so it is the cheapest lever to test. Add a non-Anthropic reviewer (deepseek) as the depth reference.
 
